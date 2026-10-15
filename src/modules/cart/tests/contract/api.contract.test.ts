@@ -236,6 +236,22 @@ describe('POST /cart/merge', () => {
         expect(response.body.data.cart.items).toHaveLength(1);
     });
 
+    it('takes 100 guest lines and refuses 101 with a 422', async () => {
+        const { bearer } = await authenticateAs('user');
+        const product = await createProduct();
+        const line = { productId: String(product._id), quantity: 1 };
+        const merge = (count: number) =>
+            api()
+                .post('/cart/merge')
+                .set('Authorization', bearer)
+                .send({ lines: Array.from({ length: count }, () => line) });
+
+        const accepted = await merge(100);
+        const refused = await merge(101);
+
+        expect([accepted.status, refused.status]).toEqual([200, 422]);
+    });
+
     it('matches the contract for every reason a line can carry, one result per line in request order', async () => {
         const { bearer } = await authenticateAs('user');
         const held = await createProduct();

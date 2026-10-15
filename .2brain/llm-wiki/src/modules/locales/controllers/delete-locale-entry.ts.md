@@ -1,30 +1,32 @@
 ---
 source: src/modules/locales/controllers/delete-locale-entry.ts
-sha256: 9342e830f3a07360bf2021937b41dca4f9fb4d23fdb36a15a643d4ce839ed7cc
-generated_at: 2026-09-27T14:57:57.534179+00:00
+sha256: 4ed8a2e498a08853c14ba2f9bc75f7f7315ac7f8d9cc552444a6c4ffed7447d7
+generated_at: 2026-10-15T10:41:53.802999+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/locales/controllers/delete-locale-entry.ts
 
 ## Purpose
-Thin HTTP adapter that handles `DELETE /locales/:locale/entries/:entryId` (admin). It extracts route params and caller context from the Express request, delegates to `localeService.deleteEntry`, and writes the HTTP response — no business logic lives here.
+
+Thin HTTP adapter for the admin `DELETE /locales/:locale/apps/:app/entries/:entryId` route. It validates the path parameter, delegates to `localeService.deleteEntry`, and maps the result onto an HTTP response. Exists to keep the route table free of business logic.
 
 ## Key elements
-- **`deleteLocaleEntry`** — exported Express handler. Calls `localeService.deleteEntry(locale, entryId, callerContext)`, then either:
-  - short-circuits via `refused(response, result)` (handles "not found" / permission denials), or
-  - sends a `successResponse` with an empty body.
-  Errors are funnelled through `catchAs(response, 'deleteLocaleEntry')`.
+
+- **`deleteLocaleEntry`** (exported) — Express handler. Validates `entryId` via `requireId` (short-circuits with a 404 if missing), calls `localeService.deleteEntry(locale, app, entryId, callerContext)`, then either signals refusal or sends a body-less `200`. Errors are funneled through `catchAs`.
 
 ## Relationships
-- **`@infrastructure/http/response`** — provides `successResponse` used for the 2xx reply.
-- **`@infrastructure/http/request`** — provides `callerContextOf(request)` to derive the authenticated actor for the service call.
-- **`@infrastructure/http/controller`** — provides `refused` (short-circuit on non-success result) and `catchAs` (unified error-to-HTTP mapping).
-- **`src/modules/locales/routes.ts`** — registers `deleteLocaleEntry` on the DELETE route (implied by the module doc comment and route param shape).
-- **`src/modules/locales/services/index.ts`** — exports `localeService`, whose `.deleteEntry` method performs the actual removal.
+
+- **`src/modules/locales/services/index.ts`** — Provides `localeService.deleteEntry`, the actual deletion logic (including overlay refresh and audit-trail recording).
+- **`src/modules/locales/routes.ts`** — Wires this handler to the `DELETE` route (admin-protected).
+- **`src/infrastructure/http/ids.ts`** — `requireId` validates and coerces the `entryId` param, writing a 404 on failure.
+- **`src/infrastructure/http/request.ts`** — `callerContextOf` extracts the authenticated caller's identity for the service call.
+- **`src/infrastructure/http/response.ts`** — `successResponse` emits the empty 200 body.
+- **`src/infrastructure/http/controller.ts`** — `refused` and `catchAs` centralise error/refusal response mapping.
 
 ## Notes
-- Success response carries **no body**; the removed key is recorded in the audit trail instead (per the module doc comment).
-- The service layer refreshes the locale overlay on success (`services/overlay.ts`); the controller does not.
-- Deleting an entry affects only the given language — other languages retain their own row for the same key.
-- Follows the standard `refused → catchAs` control-flow pattern used by other controllers in this codebase.
+
+- The success response carries **no body**; the removed key is only visible in the audit trail.
+- Deletion is scoped to a single language row; other languages retain their own entry for the same key.
+- The overlay refresh is handled inside the service layer (see `services/overlay.ts`), not here.
+- If `requireId` fails, the handler returns `Promise.resolve()` without invoking the service — no catch/finally side-effects to worry about.

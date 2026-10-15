@@ -92,6 +92,18 @@ const backdate = (payment: PaymentDocument, minutesAgo: number) =>
 const idsOf = (filters: Parameters<typeof listPayments>[0]): Promise<string[]> =>
     listPayments(filters, asAdmin()).then(({ items }) => items.map((item) => item.id));
 
+/** A payment whose one refund failed `hoursAgo` hours ago — a stale-refund problem. */
+const staleRefund = (hoursAgo: number) =>
+    seedPayment({
+        amountRefunded: 10,
+        refunds: [
+            refundRecord({
+                status: 'failed',
+                createdAt: new Date(Date.now() - hoursAgo * 3_600_000)
+            })
+        ]
+    });
+
 /** The rows an attention read returns. */
 const attentionRows = (): Promise<PaymentAttentionItem[]> =>
     listAttention().then(({ items }) => items);
@@ -293,6 +305,27 @@ describe('listAttention', () => {
             expect(await retryOpenRefunds()).toBe(1);
             expect(await attentionRows()).toEqual([]);
         }));
+
+    it(
+        'lists the oldest problem first, and no more than 100 from one source',
+        () =>
+            withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+                // Oldest of all, then 100 younger ones: 101 in the source, 100 may come back.
+                const oldest = await staleRefund(500);
+                await Promise.all(
+                    Array.from({ length: 100 }, (_, index) => staleRefund(index + 1))
+                );
+
+                const rows = await attentionRows();
+
+                expect(rows).toHaveLength(100);
+                const sinces = rows.map(({ since }) => since);
+                expect(sinces).toEqual(sinces.toSorted());
+                // The cap cuts the YOUNGEST: the oldest problem is the one that must not be dropped.
+                expect(rows[0]).toMatchObject({ paymentId: String(oldest.payment._id) });
+            }),
+        60_000
+    );
 
     it('leaves a refund still inside the threshold alone', async () => {
         await seedPayment({ amountRefunded: 10, refunds: [refundRecord({ status: 'pending' })] });

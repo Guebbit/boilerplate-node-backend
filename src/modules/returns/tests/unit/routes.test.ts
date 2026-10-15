@@ -66,4 +66,11 @@ describe('returns routes — rate limiting and idempotency', () => {
         expect(chainOf(router, 'POST /')).toContain('returns-write');
         expect(chainOf(router, 'GET /')).not.toContain('returns-write');
     });
+
+    it.each(['POST /', 'POST /:id/receive'])(
+        '%s replays a retried request through the idempotency ledger',
+        (signature) => {
+            expect(chainOf(router, signature)).toContain('idempotencyKey');
+        }
+    );
 });

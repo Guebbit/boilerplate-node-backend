@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/services/translatables.ts
-sha256: 4d4e10b2c2c86f9a232b50b2f788ec327fdda8fa77aef5152249932973d915b9
-generated_at: 2026-09-27T15:01:52.751987+00:00
+sha256: fc8d1faea22654ad641bb2403770b1f487fa72068fe2601af123c7c930b4772b
+generated_at: 2026-10-15T10:46:38.529270+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Holds a process-wide, mutable lookup from `entityType` to a `TranslatableTarget`, populated once at boot and read throughout the `locales` services. It exists because `locales` cannot import from `src/modules/*` to gather each module's manifest entry (the same circular-dependency wall the `kernel/translation` port works around), so the registry is assembled externally and injected here.
+Holds a single in-memory lookup table that maps an `entityType` string to its `TranslatableTarget` descriptor. It exists because the `locales` module cannot import other feature modules to discover their translatable manifests (circular-dependency constraint); instead the app tier assembles the full registry at boot and injects it here via a one-time setter.
 
 ## Key elements
 
-- **`translatables`** (module-level `let`) — the actual `Record<string, TranslatableTarget | undefined>` map; starts empty.
-- **`setTranslatables(registry)`** — replaces the entire registry in one shot. Called once at boot (via `../module.ts`'s `onRegistered` hook) and again by tests to install/restore fixtures. No merging logic.
-- **`translatableTarget(entityType)`** — reads a single entry by `entityType`; returns `undefined` if nothing was registered for that type.
+- **`setTranslatables(registry)`** — Module-level setter. Replaces the internal `translatables` record. Called once during boot (via `../module.ts`'s `onRegistered` hook after `resolveTranslatables(modules)` runs); tests call it again to install/restore fixtures.
+- **`translatableTarget(entityType)`** — Getter. Returns the registered `TranslatableTarget` for the given key, or `undefined` if the key was never registered. Uses `Object.hasOwn` to restrict lookup to own properties, guarding against prototype-pollution lookups (e.g. `"constructor"` arriving from a URL parameter).
+- **`translatables`** (module-local, not exported) — The backing `Readonly<Record<string, TranslatableTarget | undefined>>`, initialized to an empty object until `setTranslatables` is called.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — source of the `TranslatableTarget` type imported here; defines the shape each registry value must conform to.
-- **`src/modules/locales/services/index.ts`** — barrel for the `services` subdirectory; re-exports this module so consumers import from the services index rather than a deep path.
-- **`src/modules/locales/services/translations.ts`** — sibling service that consumes `translatableTarget()` to resolve which target a given `entityType` should be translated into.
+- **`src/kernel/registry.ts`** — Provides the `TranslatableTarget` type used as the value type of the registry.
+- **`src/modules/locales/services/index.ts`** — Re-exports this module's public API (`setTranslatables`, `translatableTarget`) so consumers import from the services barrel rather than the file directly.
+- **`src/modules/locales/services/translations.ts`** — Sibling service that likely calls `translatableTarget` to resolve the target descriptor before performing the actual translation lookup.
 
 ## Notes
 
-- The registry is **empty by default**. Calling `translatableTarget()` before the boot hook runs (e.g., in an isolated unit test that forgets to call `setTranslatables`) silently returns `undefined` for every key — there is no guard or warning.
-- `setTranslatables` **replaces** the map wholesale; there is no incremental registration or merge API. If multiple modules contribute entries, the caller must pre-assemble the full object (as `resolveTranslatables(modules)` does).
-- The value type uses `| undefined` in the `Record` signature, meaning a key can be present but mapped to `undefined` — distinct from a missing key, though `translatableTarget()` treats both identically.
+- The registry is **injected, never self-assembled**. If a new module is added but its translatable manifest is not picked up by the boot hook, `translatableTarget` will silently return `undefined`—there is no error or warning path.
+- `entityType` values are treated as opaque strings (originating from URLs). The `Object.hasOwn` guard is load-bearing; do not replace it with a plain `in` or bracket lookup.
+- The record is typed `Readonly` externally, but `setTranslatables` accepts any `Readonly` record—mutating the object *after* injection is possible at the call-site and would not be caught by the type system here.

@@ -1,28 +1,24 @@
 ---
 source: src/modules/locales/services/overlay.ts
-sha256: e06cad591ff60df4d280e9953946a16ae684a110faa8a5076148f2ae4cd01519
-generated_at: 2026-09-27T15:01:42.663128+00:00
+sha256: 4b49c9600cc40898f13596913ce4445b64d95dd000cab1fa14c71b1f367e0196
+generated_at: 2026-10-15T10:46:29.737213+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/locales/services/overlay.ts
 
 ## Purpose
-
-A single-purpose wrapper that triggers a database overlay refresh after any write that may have changed locale overrides. By centralising the refresh call here, every write path in `entries.ts` and `languages.ts` picks it up by construction, so a future write path can't silently forget the refresh.
+Single-purpose wrapper module that ensures the i18n overlay is re-read after any write that may have changed locale overrides. It exists so that write paths in `entries.ts` and `languages.ts` call one stable entry point (`refreshOverlay`) rather than each remembering to invoke the infrastructure refresh directly.
 
 ## Key elements
-
-- **`refreshOverlay(): void`** — The sole export. Calls `refreshLocaleOverrides()` (imported from `@infrastructure/i18n`) and discards the result. Fire-and-forget: the calling worker sees the edit immediately; other workers pick it up on their next scheduled refresh.
+- **`refreshOverlay(): void`** – The sole export. Fire-and-forget wrapper around `refreshLocaleOverrides()` from `@infrastructure/i18n`. Makes the edit immediately visible on the worker that served the write; other workers catch up on their next scheduled refresh.
 
 ## Relationships
-
-- **`src/infrastructure/i18n/index.ts`** — Source of the `refreshLocaleOverrides` import (re-exported from the i18n infrastructure module).
-- **`src/infrastructure/i18n/overrides.ts`** — Underlying implementation of the override refresh logic that `refreshLocaleOverrides` delegates to.
-- **`src/modules/locales/services/entries.ts`** — Calls `refreshOverlay()` at the end of its write paths.
-- **`src/modules/locales/services/languages.ts`** — Calls `refreshOverlay()` at the end of its write paths.
+- **`src/infrastructure/i18n/index.ts`** – Imports `refreshLocaleOverrides`, the function actually executed inside `refreshOverlay`.
+- **`src/infrastructure/i18n/overrides.ts`** – Likely home of the `refreshLocaleOverrides` implementation (re-reads the API's own overrides from the database).
+- **`src/modules/locales/services/entries.ts`** – Calls `refreshOverlay` after its write paths complete.
+- **`src/modules/locales/services/languages.ts`** – Calls `refreshOverlay` after its write paths complete.
 
 ## Notes
-
-- `refreshOverlay` intentionally fires for frontend-tenant writes as well, even though those writes cannot affect the overlay. The rationale (stated in the file comment) is that threading a tenant check through every call site is more cost than the wasted call.
-- The function is `void` and never awaited at call sites; it is a side-effect trigger, not a data-returning operation.
+- `refreshOverlay` is also invoked on **frontend-app** writes, even though those writes cannot affect the overlay. The trade-off is deliberate: calling it unconditionally is cheaper than threading the app identifier through every call site to conditionally skip it.
+- The refresh is fire-and-forget; it does not block the response. Consumers should not await or chain further logic off of it.

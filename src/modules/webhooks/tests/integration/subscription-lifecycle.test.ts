@@ -20,7 +20,7 @@ import {
     rotateSecret,
     update
 } from '../../services/subscriptions';
-import { webhookSubscriptionRepository } from '../../repository';
+import { webhookSubscriptionRepository, webhookDeliveryRepository } from '../../repository';
 import { webhooksAuditActions } from '../../audit';
 import type { WebhookSubscriptionDocument } from '../../model';
 import { mintRingSecret } from '../../secrets';
@@ -477,6 +477,23 @@ describe('removing', () => {
             404, 404
         ]);
         expect(await stored(String(foreign._id))).not.toBeNull();
+    });
+
+    it('keeps the delivery log of the subscription it deletes', async () => {
+        const created = await subscribe();
+        const delivery = await webhookDeliveryRepository.create({
+            tenant: created.tenant,
+            subscriptionId: created._id,
+            eventId: 'evt_kept',
+            eventType: 'order.paid',
+            payload: { orderId: 'order_1' },
+            attempt: 1,
+            status: 'succeeded'
+        });
+
+        await remove(String(created._id), context);
+
+        expect(await webhookDeliveryRepository.findById(String(delivery._id))).not.toBeNull();
     });
 
     it('deletes the row and audits it', async () => {

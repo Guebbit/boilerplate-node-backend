@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/tests/unit/routes.test.ts
-sha256: 819ee90a4435fb55551a1ed5e1cf03d1b2c2a66ce44e8eae8ba3e27c49347d9f
-generated_at: 2026-09-27T15:03:38.391938+00:00
+sha256: 86b0ae87a74ddc2be07e3f326b8e4da21302c6c931304a99ee517760d319d915
+generated_at: 2026-10-15T10:48:48.096708+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the locales router that lock down three invariants: the exact set and order of mounted routes, the per-route authorization guard chain, and the caching strategy. Each assertion exists so that a well-intentioned "fix" (adding a router-level auth gate, reordering routes, changing cache tags) fails loudly rather than silently breaking anonymous clients, Express first-match routing, or translator feedback loops.
+Unit test for the locales module's Express router. It locks in three architectural invariants so that a future refactor fails loudly rather than silently: the exact set and order of mounted routes, the per-route guard composition (public reads are ungated, admin routes self-declare all three guards), and the caching contract (shared public cache with browser revalidation, uncached editing-screen reads, and tag-based invalidation on writes).
 
 ## Key elements
 
-- **`PUBLIC`** – array of the four unauthenticated read signatures (`GET /`, `GET /tenants`, `GET /:locale/messages`, `GET /:locale`).
-- **`ADMIN`** – array of all write/entry/translation signatures that require `getAuth` + identity guard + `requirePermissionGuard`.
-- **`TRANSLATIONS`** – subset of `ADMIN` (the three `/translations/:entityType/:id` routes) that are uncached and clear their own registry-declared cache tag inside the service rather than via route-level `invalidateCache`.
-- **`describe('what is mounted')`** – asserts the full signature list in order and that `/tenants` appears before `/:locale` (Express first-match).
-- **`describe('authorization')`** – verifies public routes carry no identity/permission guard, that `GET /` has `getAuth` but no identity guard (optional auth), that every `ADMIN` route names all three guards in the correct order, and that no route is left ungoverned.
-- **`describe('caching')`** – verifies public routes use `setCache(3600…)` with `tags: ['locales']` and `browserRevalidate: true`; that entry-list and translation routes are uncached; that all other admin routes call `invalidateCache([locales])`; and that translation routes do *not* invalidate the `locales` tag.
-- **`jest.mock` for `@infrastructure/http/middlewares/cache`** – replaced via `cacheMock()` from the shared test support so assertions can inspect the chain without a live Redis.
+- **`PUBLIC`** — The four anonymous-read routes (`GET /`, `GET /apps`, `GET /:locale/messages`, `GET /:locale`). Used as the expected set in mount-order, authorization, and cache assertions.
+- **`ADMIN`** — The fourteen admin routes (CRUD on locales, per-app entries, and the `/:entityType/:id` translation endpoints). Expected to carry the full `getAuth → identityGuard → requirePermissionGuard` chain.
+- **`ENTRY_READS`** / **`TRANSLATIONS`** — Two `Set` collections marking routes that are *uncached* by design (editing screens) and, for `TRANSLATIONS`, that clear a registry-declared tag inside the service rather than calling `invalidateCache(['locales'])`.
+- **`describe('…what is mounted…')`** — Asserts `routeSignatures` equals `[...PUBLIC, ...ADMIN]` and that `/apps` appears before `/:locale` (Express first-match ordering).
+- **`describe('…authorization…')`** — Verifies no identity guard on public reads; `GET /` carries `getAuth` but no identity guard; every admin route has all three guards in the correct order; a sweep confirms no route is left ungoverned.
+- **`describe('…caching…')`** — Asserts `setCache(3600, { tags: ['locales'], browserRevalidate: true })` on public reads; absence of any `setCache` on entry/translation reads; `invalidateCache([locales])` on write routes; and *absence* of that call on translation routes (their tag is service-owned).
+- **Mock** — `@infrastructure/http/middlewares/cache` is replaced with `cacheMock()` from `@tests/routes` before the router import, so cache assertions read the declared options without hitting a real cache layer.
 
 ## Relationships
 
-- **`src/modules/locales/routes.ts`** – the module under test; the file imports its `router` export and inspects every mounted handler's middleware chain.
-- **`tests/support/routes.ts`** – supplies the route-introspection helpers (`routeTable`, `routeSignatures`, `guardsOn`, `optionsOf`, `identityGuardIndex`, `chainOf`) and the `cacheMock` factory used to stub the cache middleware.
+- **`src/modules/locales/routes.ts`** — Module under test. The test imports its `router` export and asserts against its route table, guard chains, and middleware options.
+- **`tests/support/routes.ts`** — Provides every inspection helper used here: `routeTable`, `routeSignatures`, `guardsOn`, `optionsOf`, `identityGuardIndex`, `chainOf`, and `cacheMock()`. The test has no other dependency on this file.
 
 ## Notes
 
-- **Route ordering is a contract.** `GET /tenants` must precede `GET /:locale`; reversing them makes `/tenants` match as a locale lookup and 404. The test asserts the index ordering, not just membership.
-- **`GET /` is deliberately the only public route with `getAuth`.** It still has no identity guard, so anonymous calls succeed; the guard is optional and lets the manifest branch on caller role.
-- **Translation routes clear their cache tag in the service layer**, not via `invalidateCache` middleware, because the tag name varies with `entityType` and the fixed-tag middleware cannot express that. The test explicitly asserts the *absence* of `invalidateCache([locales])` on those routes to prevent a "helpful" refactor from adding it.
-- **The "no ungoverned route" sweep** (`describe('authorization')` → last `it`) is the safety net for future additions: with no router-level gate, a new mount is unguarded by default, and this test is what would catch it.
+- There is **no router-level auth middleware**; authorization is expressed per-route. The "ungoverned route" sweep test is the safety net for this choice—a newly added route that forgets its guards will be caught here, not at runtime.
+- `GET /` is the one public route that calls `getAuth` (to enrich the manifest with inactive languages for an authenticated admin) while still remaining reachable anonymously. It is explicitly tested to have `getAuth` but *not* an identity guard.
+- The ordering assertion (`/apps` < `/:locale`) is a regression guard: reversing them would cause `GET /locales/apps` to be captured by the `/:locale` parameter and 404.
+- Translation routes (`/translations/:entityType/:id`) are excluded from the `invalidateCache(['locales'])` assertion because their cache tag is dynamic (varies with `entityType`) and is cleared inside the service layer, not via route middleware.

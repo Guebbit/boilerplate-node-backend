@@ -112,6 +112,17 @@ describe('order routes — authorization', () => {
     );
 });
 
+describe('order routes — the export budget', () => {
+    it('GET /export spends its budget after the permission check and before the controller', () => {
+        const chain = chainOf(router, 'GET /export');
+
+        expect(chain).toContain('orders-export');
+        expect(chain.indexOf('requirePermissionGuard')).toBeLessThan(
+            chain.indexOf('orders-export')
+        );
+    });
+});
+
 describe('order routes — caching', () => {
     // An order's answer depends on who is asking (non-admins see only their own), so none of the
     // reads may go through the shared Redis cache — RFC 9111 §3.5. `privateNoCache` lets the

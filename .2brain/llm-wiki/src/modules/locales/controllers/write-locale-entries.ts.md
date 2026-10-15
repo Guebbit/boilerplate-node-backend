@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/controllers/write-locale-entries.ts
-sha256: 24d068b605ffafd7ad42e8dd058beff49a37a47b3d1b6a885f60e01ca87a9ac6
-generated_at: 2026-09-27T14:59:02.586401+00:00
+sha256: 80319b38750d6e8cde8406309932a75cf2fc43be38232171b60a3e3bb96428b5
+generated_at: 2026-10-15T10:43:09.630321+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP controller layer for the four mutating locale-entry routes: create one entry, update one entry's value, replace all entries (PUT), and merge/upsert a subset (PATCH). Sits between the Express router and `localeService`, handling body validation, caller-context extraction, and response shaping.
+HTTP controller handlers for all write operations on an app's locale entries: single-entry create/update, and two bulk-import modes (full replace vs. partial merge). Exists to keep Express routing logic, input validation, and response shaping in one place, delegating actual data mutations to the locale service.
 
 ## Key elements
 
-- **`createLocaleEntry`** — `POST /locales/:locale/entries`. Validates body via `CreateLocaleEntryBody`, delegates to `localeService.createEntry`, returns `201` with the new `LocaleEntry`.
-- **`updateLocaleEntry`** — `PUT /locales/:locale/entries/:entryId`. Edits the *value* of one entry; the key itself is immutable. Delegates to `localeService.updateEntry`.
-- **`importEntries`** (private) — Shared implementation for both bulk routes. Accepts a `mode: 'replace' | 'merge'` argument and calls `localeService.importEntries`.
-- **`replaceLocaleEntries`** — `PUT /locales/:locale/entries`. Full replacement: entries not in the payload are deleted. Delegates with `mode = 'replace'`.
-- **`mergeLocaleEntries`** — `PATCH /locales/:locale/entries`. Upsert-only: entries not in the payload are left untouched. Delegates with `mode = 'merge'`.
+- **`createLocaleEntry`** — `POST /locales/:locale/apps/:app/entries`. Validates the body via `CreateLocaleEntryBody`, calls `localeService.createEntry`, responds `201` with a Location header pointing to the new entry's URI.
+- **`updateLocaleEntry`** — `PUT /locales/:locale/apps/:app/entries/:entryId`. Validates `entryId` through `requireId`, calls `localeService.updateEntry`, responds `200` with the updated entry.
+- **`importEntries`** (private factory) — Builds a handler for bulk operations. Accepts a `mode` (`'replace' | 'merge'`) and a Zod schema, returns an Express handler that calls `localeService.importEntries` with the entries array and mode.
+- **`replaceLocaleEntries`** — `PUT /locales/:locale/apps/:app/entries`. Produced by `importEntries('replace', …)`. Entries not present in the payload are **deleted**.
+- **`mergeLocaleEntries`** — `PATCH /locales/:locale/apps/:app/entries`. Produced by `importEntries('merge', …)`. Entries not present in the payload are **left untouched**.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — Supplies `rejectValidation`, `refused`, and `catchAs` helpers used by every handler for the validation-failure, tenant-refusal, and exception paths.
-- **`@infrastructure/http/request`** — `callerContextOf(request)` extracts the tenant/caller identity passed to every service call.
-- **`@infrastructure/http/response`** — `successResponse` builds the JSON envelope for 2xx replies.
-- **`@types`** — Provides the wire/DTO types (`LocaleEntry`, `LocaleEntryInput`, `LocaleImportResult`, `LocaleTenant`, etc.) used in handler signatures and response generics.
-- **`@api/schemas.zod`** — Zod schemas (`CreateLocaleEntryBody`, `UpdateLocaleEntryBody`, `ReplaceLocaleEntriesBody`, `MergeLocaleEntriesBody`) drive runtime body validation before the service is called.
-- **`../services`** — `localeService` is the sole domain-service dependency; every handler delegates actual data work to it.
-- **`src/modules/locales/routes.ts`** — Registers these four exports as the route callbacks.
+- **`src/infrastructure/http/controller.ts`** — Supplies the three shared handler utilities used by every route here: `parseBody` (Zod validation + 400), `refused` (authorization-failure short-circuit), and `catchAs` (typed catch that tags the operation name for logging).
+- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` extracts the authenticated caller context passed to every service call.
+- **`src/infrastructure/http/response.ts`** — `successResponse` and `createdResponse` shape the JSON envelope and status code.
+- **`src/infrastructure/http/ids.ts`** — `requireId` validates the `entryId` path parameter (format check + 404 via the `notFound` i18n key).
+- **`src/modules/locales/services/index.ts`** — `localeService` performs the actual data operations (`createEntry`, `updateEntry`, `importEntries`); this file never touches storage directly.
+- **`src/modules/locales/presenters.ts`** — `presentLocaleEntry` transforms the service's domain object into the API wire shape before it is sent back.
+- **`src/modules/locales/routes.ts`** — Consumer of this file's five exports; registers them on the Express router (not imported here, but wired there).
+- **`src/types/index.ts`** — Source of the domain types (`LocaleEntry`, `LocaleEntryInput`, `LocaleImportResult`, the per-route request types) used for type annotations throughout.
 
 ## Notes
 
-- The two bulk routes are intentionally split into separate handlers (PUT vs PATCH) rather than one route with a boolean flag, so a mis-set flag cannot silently empty a dictionary.
-- `.toJSON()` is called on the Mongoose document before returning it, applying the model's `_id → id` and date-to-ISO-string transform; the returned object is then cast to the `LocaleEntry` wire type.
-- The entry key (its `entryId`) is treated as identity and is not editable via `updateLocaleEntry`; changing a key is a delete + create, not an update.
-- All handlers follow the same pattern: `safeParse` → early `rejectValidation` → service call → `refused` check → `successResponse` → `catchAs` on the catch branch.
+- **Replace vs. merge is a deliberate two-route split**, not a query flag. The file header explains: a single boolean on one route could silently empty a dictionary if set incorrectly. Splitting into `PUT` (destructive) and `PATCH` (non-destructive) makes the intent explicit in the HTTP verb.
+- **Entry keys are immutable.** `updateLocaleEntry` only changes the value; the key is the lookup identity, so "changing" it is semantically a delete + create, not an update.
+- **`importEntries` returns a function** (curried factory), so the two bulk exports share one implementation. The `catchAs` tag is interpolated (`${mode}LocaleEntries`) to keep logs distinguishable.
+- All five handlers follow the same skeleton: parse body → guard → service call → `refused` check → shape response → `catchAs` in `.catch`. New write routes should mirror this pattern.

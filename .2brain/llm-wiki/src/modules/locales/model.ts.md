@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/model.ts
-sha256: a65c5f782d0f8e11ba353509e8cb0cecd27b4679606d71be82674dea4fd9d782
-generated_at: 2026-09-27T14:59:23.456244+00:00
+sha256: b64daeb4e5106632155abbb78f6d361f0b599106a69e33ba7265ccde2ee458dd
+generated_at: 2026-10-15T10:43:39.839198+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schemas, models, document types, and shared validation helpers for the three collections behind the i18n OVERRIDE tier: registered languages, per-tenant dictionary entries, and per-entity translations. This file is the single source of truth for shape, indexes, and derivation logic; nothing here is awaited on the request path — `t()` resolves via a boot/timer/after-write overlay.
+Defines the three Mongoose schemas and models behind the OVERRIDE tier of i18n (languages, dictionary entries, entity translations). All lookup and write paths in the locales module read through these models; nothing here is awaited on the hot request path—`t()` resolves from an in-memory overlay that `@infrastructure/i18n` rebuilds at boot, on a timer, and after a write.
 
 ## Key elements
 
-- **`localeDisplayName`** — Zod schema (`string().trim().min(1)`) shared by create/update locale routes; catches the single-space edge case before Mongoose's `required` check.
-- **`normalizeTag(tag)`** — Trim + lowercase a BCP 47 tag. The one canonical normalization used by every lookup and write in this module.
-- **`deriveBaseLanguage(tag)`** — Extracts the ISO 639-1 primary subtag (e.g. `pt-BR` → `pt`). Called both by the `pre('validate')` hook and directly by seeds.
-- **`localeSchema` / `localeModel`** — Languages collection. Unique index on `tag` (lowercased). `baseLanguage` is derived in a `pre('validate')` hook so it cannot drift from `tag`.
-- **`localeEntrySchema` / `localeEntryModel`** — One row per (language, tenant, key). Compound unique index `{locale, tenant, key}` doubles as a serving index for both per-tenant and per-language reads. `key` is a flat dotted string, not a nested object. `value` defaults to `''` (empty translation is valid).
-- **`translationSchema` / `translationModel`** — One entity's translated fields in one locale. `fields` is `Schema.Types.Mixed` (validated by the service, not the schema). Compound unique index `{entityType, entityId, locale}`.
-- **`applyLocaleTransform` / `applyLocaleEntryTransform` / `applyTranslationTransform`** — Serialization transforms built from `applySerialization` (maps `_id` → `id`, strips `__v`).
-- **Document/Model type interfaces** — `LocaleDocument`, `LocaleEntryDocument`, `TranslationDocument` and their `Model<…>` type aliases for typed Mongoose usage.
+- **`localeDisplayName`** – A `trimmedInto`-wrapped Zod field (reused by create/update locale routes) that rejects blank display names at validation with a field-named error.
+- **`normalizeTag`** – Single source of truth for BCP 47 tag normalization (`trim().toLowerCase()`). All lookups and writes must compare through this.
+- **`deriveBaseLanguage`** – Extracts the ISO 639-1 primary subtag from a normalized tag. Called by the `pre('validate')` hook and by seed scripts directly.
+- **`localeSchema` / `localeModel`** – Languages collection. Unique index on `tag`. `baseLanguage` is auto-derived on every save. `revision` is a monotonic counter bumped exclusively via `$inc` in the repository.
+- **`localeEntrySchema` / `localeEntryModel`** – Dictionary words, one row per (locale, app, key). Unique compound index `{ locale, app, key }` also serves `{ locale }` prefix queries. `value` defaults to `''` (empty translation is a valid row).
+- **`translationSchema` / `translationModel`** – Per-entity translated fields. `fields` is `Schema.Types.Mixed`; shape is validated by the service, not the schema. Unique compound index `{ entityType, entityId, locale }`.
+- **`applyLocaleTransform` / `applyLocaleEntryTransform` / `applyTranslationTransform`** – Serialization helpers (via `applySerialization`) that map `_id` → `id` and strip `__v` for lean query results.
+- **Document / Model type exports** (`LocaleDocument`, `LocaleEntryDocument`, `TranslationDocument`, `LocaleModel`, `LocaleEntryModel`, `TranslationModel`) – Shared type contracts consumed by repository, services, factories, and tests.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/serialize.ts`** — Imports `applySerialization` to build the three transform functions.
-- **`src/types/index.ts`** — Supplies `LocaleDirection`, `TranslationOrigin`, `Language`, `LocaleEntry`, `Translation` used in schema definitions and document interfaces.
-- **`src/modules/locales/repository.ts`** — Consumes the three models for CRUD; owns the `revision` bump on entry writes.
-- **`src/modules/locales/factories.ts`** — Instantiates documents via the models/schemas defined here.
-- **`src/modules/locales/services/languages.ts` / `entries.ts` / `capabilities.ts`** — Validate inputs against `localeDisplayName` / `normalizeTag` and read/write through the models.
-- **`src/modules/locales/index.ts`** — Re-exports the models, schemas, and helpers for the module's public surface.
-- **`src/modules/locales/tests/unit/schema-contract.test.ts`** — Asserts schema shapes, indexes, and defaults defined here.
-- **`src/modules/locales/tests/unit/service.test.ts` / `tests/factories.ts`** — Use the models and document types in unit tests.
-- **`src/modules/locales/tests/integration/repository.test.ts`** — Exercises repository CRUD against these schemas (unique-index collisions, revision bumps).
-- **`tests/integration/app/demo-restore.test.ts`** — Integration path that exercises the full stack including these collections.
+- **`@types`** (`src/types/index.ts`) – Imports `LocaleDirection`, `TranslationOrigin`, and the `Language`, `LocaleEntry`, `Translation` base types that the document interfaces extend (omitting `id`/timestamps, re-adding optional `createdAt`/`updatedAt`).
+- **`@api/schemas.zod`** – Imports `CreateLocaleBody` to derive the `localeDisplayName` validator.
+- **`src/infrastructure/http/schemas.ts`** – Imports `trimmedInto` for the display-name field.
+- **`src/infrastructure/persistence/serialize.ts`** – Imports `applySerialization` to build the three transform functions.
+- **`src/modules/locales/repository.ts`** – Consumes `localeModel`, `localeEntryModel`, `translationModel` for all CRUD; owns the `revision` bump logic.
+- **`src/modules/locales/services/languages.ts`**, **`services/entries.ts`**, **`services/capabilities.ts`** – Read/write through the models; validate `fields` shape before writing translations.
+- **`src/modules/locales/factories.ts`** – Uses the models and `deriveBaseLanguage` to build test/seed documents.
+- **`src/modules/locales/tests/unit/schema-contract.test.ts`** – Asserts schema fields, defaults, and index shapes.
+- **`src/modules/locales/tests/unit/service.test.ts`**, **`tests/integration/repository.test.ts`**, **`tests/factories.ts`** – Exercise the models end-to-end or in isolation.
 
 ## Notes
 
-- **Index ordering is load-bearing.** `localeEntrySchema` places `tenant` before `key` so a single compound index serves both `find({locale, tenant})` and `find({locale})` by prefix. Same pattern in `translationSchema`: `entityId` sits before `locale` to serve `{entityType, entityId}` lookups.
-- **`pre('validate')`, not `pre('save')`.** The `baseLanguage` derivation hook runs at validation time because `required: true` is checked there; a `pre('save')` hook would fire too late.
-- **String foreign keys, not ObjectIds.** `locale` in entries/translations and `entityId` in translations are plain strings. Referential integrity is enforced by repository-level cascade, not by Mongo refs.
-- **Mongoose pluralization quirk.** `LocaleEntry` becomes the collection `localeentries` (no hyphen) on disk, same as `AuditLog` → `auditlogs`.
-- **`translationSchema.fields` is untyped.** It is `Schema.Types.Mixed` by design — the valid key set depends on the `translatables` registry for `entityType`, which the schema cannot reference. Validation lives in the service layer.
-- **`value: ''` is intentional.** An empty string represents "key exists, not yet translated." Using `required: true` on a String would reject it.
+- **Normalization is centralized.** `normalizeTag` is the *only* place trim+lowercase is decided. Any caller that compares tags without it is a bug. The schemas also set `lowercase: true` / `trim: true` as a DB-level safety net, but the service contract expects pre-normalized input.
+- **`baseLanguage` is never set by callers.** The `pre('validate')` hook derives it from `tag`. Supplying it manually will be overwritten on save.
+- **`revision` has no `min` constraint on purpose.** Mongoose skips `min`/`max` validation for `$inc` operators; the field is monotonic by construction (starts at 0, only ever +1).
+- **String cross-references, not ObjectId FKs.** `localeEntry.locale` and `translation.locale` store the tag string; `translation.entityId` stores a string. Referential integrity is enforced by cascade-delete in the repository, not by Mongo.
+- **`translationSchema.fields` is `Schema.Types.Mixed`.** The valid key set depends on the `translatables` registry for the given `entityType`; the schema cannot express that, so the service validates before write.
+- **Index key order is intentional for prefix queries.** `localeEntrySchema` index `{ locale, app, key }` serves both `{ locale }` and `{ locale, app }` lookups. `translationSchema` index `{ entityType, entityId, locale }` serves `{ entityType, entityId }` (one entity, all locales). Do not reorder without checking every query path.
+- **Unique indexes are the concurrency guard.** Check-then-insert races (two concurrent `createLanguage('es')`, two concurrent imports of the same key) are refused by the DB, not by application logic.

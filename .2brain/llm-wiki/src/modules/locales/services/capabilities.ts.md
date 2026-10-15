@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/services/capabilities.ts
-sha256: fc4ab91d917c81d5bb458b9dbe461eb0e1cb3bb4b573c9fcbc042afee60fc815
-generated_at: 2026-09-27T15:00:39.885772+00:00
+sha256: 98c86b336d02d7bf181e2923a04ee77cf78712dc9afe02481bfcb8e611e65bb9
+generated_at: 2026-10-15T10:45:07.971851+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Builds the locale manifest for a deployment: which languages are available and what each can do. Merges two tiers — statically deployed language files and dynamically registered database rows — into a single, stable `LocaleCapability[]` without conflating their sources. Also exposes the access-control scope that gates which rows a caller may read.
+The locale manifest service. It assembles the single capabilities list returned by `GET /locales` by merging two tiers — languages shipped as deployment files (static) and languages registered as database rows (dynamic) — into one sorted array that states which apps can serve each language, its direction, and its activity status.
 
 ## Key elements
 
-- **`isRightToLeft(tag)`** – Returns whether a tag's base language is RTL, checked against a hardcoded `Set` of base codes.
-- **`describeLanguage(tag, inLanguage)`** – Returns a language's display name via `Intl.DisplayNames`; falls back to the raw tag on invalid input or missing ICU data.
-- **`staticCapability(tag)`** – Builds a `LocaleCapability` for a file-deployed language (always active, backend tenant only, `source: static`).
-- **`dynamicCapability(language, entryCount)`** – Builds a `LocaleCapability` from a `LocaleDocument` row (frontend tenant, `source: dynamic`).
-- **`mergeCapabilities(staticTags, dynamicLanguages, entryCounts)`** – Combines both tiers into one tag-keyed list. Overlapping tags yield a single row with both tenants and `source: both`, using the dynamic side's display fields. Result is sorted by tag.
-- **`readDynamicTier(scope?)`** – Reads dynamic languages and per-locale entry counts via the repositories. Catches and swallows any DB error (logs at `warn`, returns empty) so a Mongo outage degrades to static-only rather than failing entirely.
-- **`callerScope(context?)`** – Delegates to `accessibleFilter(context, 'Locale')`; returns `undefined` for admins (no filter) or an active-only filter for everyone else.
-- **`listCapabilities(scope?)`** – Top-level orchestrator: calls `readDynamicTier`, merges with `listSupportedLocales()`, and attaches `default`/`fallback` locales.
+- **`isRightToLeft(tag)`** — checks a tag's base language against a hardcoded `Set` of RTL codes (avoids `Intl.Locale.prototype.getTextInfo` for portability).
+- **`describeLanguage(tag, inLanguage)`** — resolves a human-readable language name via `Intl.DisplayNames`; falls back to the raw tag on malformed input or missing ICU data.
+- **`staticCapability(tag)`** — builds a `LocaleCapability` for a file-based language: always `active`, `apps: [backendApp()]`, `entryCount: 0`.
+- **`dynamicCapability(language, entryCount)`** — builds a `LocaleCapability` for a row-based language: `apps: [frontendApp()]`, carries the row's `active` flag and `revision`.
+- **`mergeCapabilities(staticTags, dynamicLanguages, entryCounts)`** — combines both tiers into a tag-keyed `Map`. A tag present in both tiers gets `apps: [backend, frontend]` and `source: both`, using the dynamic side's display fields. Returns an array sorted by tag.
+- **`readDynamicTier(scope?)`** — runs `localeRepository.list` + `localeEntryRepository.countEntriesByLocale` in parallel; catches and logs DB failures at `warn`, returning empty results so the static tier still ships.
+- **`callerScope(context?)`** — delegates to `accessibleFilter(context, 'Locale')`; `undefined` for admins (unrestricted), `{active: true}` for visitors.
+- **`listCapabilities(scope?)`** — top-level entry point: calls `readDynamicTier`, then `mergeCapabilities` with `listSupportedLocales()`, and attaches `default`/`fallback` locales.
 
 ## Relationships
 
-- **`@infrastructure/i18n`** (`catalog.ts`, `index.ts`) – Supplies `getDefaultLocale`, `getFallbackLocale`, `listSupportedLocales` used to seed the static tier and the response's default/fallback fields.
-- **`@infrastructure/adapters/logger.ts`** – `logger.warn` is the sole output when the dynamic tier read fails.
-- **`@kernel/access/query.ts`** – `accessibleFilter` provides the row-level scope applied in `readDynamicTier`.
-- **`../model.ts`** – `deriveBaseLanguage` (used by `isRightToLeft`) and the `LocaleDocument` type (consumed by `dynamicCapability` / `mergeCapabilities`).
-- **`../repository.ts`** – `localeRepository.list` and `localeEntryRepository.countEntriesByLocale` are the two DB calls in `readDynamicTier`.
-- **`../tenants.ts`** – `backendTenant()` and `frontendTenant()` produce the tenant descriptors attached to each capability.
-- **`@types`** (`index.ts`, `auth-context.ts`) – `LocaleCapability`, `LocaleCapabilities`, `LocaleDirection`, `LocaleSource`, `AuthContext`.
-- **`services/index.ts`** – Barrel that re-exports this module for external consumers.
-- **`tests/unit/service.test.ts`** – Unit tests for the functions above.
+- **`src/modules/locales/model.ts`** — provides `deriveBaseLanguage` and the `LocaleDocument` type used by `dynamicCapability` and `mergeCapabilities`.
+- **`src/modules/locales/repository.ts`** — `localeRepository.list` and `localeEntryRepository.countEntriesByLocale` are the data sources for the dynamic tier.
+- **`src/modules/locales/apps.ts`** — supplies `backendApp()` and `frontendApp()` identifiers stamped onto each capability row.
+- **`src/infrastructure/i18n/index.ts`** (re-exports `catalog.ts`) — provides `listSupportedLocales`, `getDefaultLocale`, `getFallbackLocale` consumed by `listCapabilities`.
+- **`src/kernel/access/query.ts`** — `accessibleFilter` enforces the visitor-vs-admin visibility rule on the `scope` parameter.
+- **`src/infrastructure/adapters/logger.ts`** — `logger.warn` emits the diagnostic when the dynamic tier is unavailable.
+- **`src/types/index.ts`** — defines `LocaleCapability`, `LocaleCapabilities`, `LocaleDirection`, `LocaleSource`, and `AuthContext` used throughout.
+- **`src/modules/locales/services/index.ts`** — barrel that re-exports this module's public API.
+- **`src/modules/locales/tests/unit/service.test.ts`** — unit-tests the functions in this file.
 
 ## Notes
 
-- **Deliberate error swallowing in `readDynamicTier`:** A database failure must never prevent the static (file-based) tier from being served. The catch returns `{ languages: [], entryCounts: new Map() }` and logs a `warn`. Stryker mutation annotations suppress mutations on this path so the tests don't flag it as dead code.
-- **RTL determination avoids `Intl.Locale.prototype.getTextInfo`** because its availability varies across Node/deployment targets; a plain `Set` lookup is used instead.
-- **Merge semantics:** When a tag exists in both tiers, the dynamic side's `name`/`nativeName`/`direction`/`active`/`revision` win (the static side has no real display metadata). Tenants are `[backend, frontend]` and `source` is set to `LocaleSource.both`.
-- **`active` vs. admin visibility:** The `active` flag gates what a visitor may select. Admins (scope `undefined`) see all rows regardless of the flag.
-- **`describeLanguage` is best-effort:** It wraps `Intl.DisplayNames` in a try/catch because the constructor throws on malformed BCP-47 tags; the tag itself is the guaranteed fallback.
+- Static languages have no off-switch: `active` is always `true` and `apps` is backend-only. There is no client-facing dictionary to download.
+- A database outage intentionally degrades to static-only output (empty `languages`, empty `entryCounts`). The catch block is annotated with `// Stryker disable all` to prevent mutation-testing from "fixing" the deliberate empty-return.
+- `active` gates what a *visitor* may select; the admin reads all rows regardless. This is the same convention as other entities (products, users).
+- `describeLanguage` catches `Intl.DisplayNames` exceptions rather than validating the tag beforehand — a manifest that reads `es` is preferred over a 500.
+- The merged list is sorted by `tag.localeCompare` to guarantee a stable ordering across API responses.

@@ -321,6 +321,22 @@ describe('a 500 response', () => {
         expect(reloadedSubscription?.consecutiveFailures).toBe(0);
     });
 
+    it('sends a retry with the same webhook-id and the same body timestamp as the first attempt', async () => {
+        const subscription = await createSubscription(`${server.url}/hook`);
+        const job = await createPendingDelivery(subscription);
+
+        await processDeliveryJob({ deliveryId: job.deliveryId });
+        await processDeliveryJob({ deliveryId: job.deliveryId });
+
+        const [first, second] = server.requests();
+        expect(second).toBeDefined();
+        // What a consumer dedupes on: a retry is the same event, not a new one.
+        expect(second.headers['webhook-id']).toBe(first.headers['webhook-id']);
+        expect((JSON.parse(second.body) as { timestamp: string }).timestamp).toBe(
+            (JSON.parse(first.body) as { timestamp: string }).timestamp
+        );
+    });
+
     it('a retry that succeeds leaves no next attempt, and no error, from the failure before it', async () => {
         const subscription = await createSubscription(`${server.url}/hook`);
         const job = await createPendingDelivery(subscription);

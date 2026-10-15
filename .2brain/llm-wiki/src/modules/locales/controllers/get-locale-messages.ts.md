@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/controllers/get-locale-messages.ts
-sha256: cdf34cf8c7d2f11a9399759000711ef99b4d9c022691d7e68797aa4d95dc32e8
-generated_at: 2026-09-23T18:48:39.742510+00:00
+sha256: de23d687e41754c03bde948132383ca9d2e1bf8c7b7355882a6a78d6316214b6
+generated_at: 2026-10-15T10:42:31.174562+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter that exposes `GET /locales/:locale/messages`. It delegates all business logic to `localeService.readMessages` and only handles parameter extraction, response shaping, and error forwarding.
+Thin HTTP controller (Express handler) for `GET /locales/:locale/messages`. It validates query parameters, delegates to `localeService.readMessages`, and shapes the response. All business logic lives in the service layer; this file is purely an adapter between the HTTP boundary and the locale service.
 
 ## Key elements
 
-- **`getLocaleMessages`** (exported) — Express handler. Reads `request.params.locale` and optional `request.query.tenant`, calls `localeService.readMessages`, then routes the result through `refused` / `successResponse` / `catchAs` to produce the HTTP reply.
+- **`getLocaleMessages`** (exported) — The Express route handler. Parses `request.query` through the `GetLocaleMessagesQueryParams` Zod schema, calls `localeService.readMessages(locale, query.app)`, then returns `successResponse` or a `refused` status depending on the result. Errors are funneled through `catchAs`.
+- **`parseBody(GetLocaleMessagesQueryParams, …)`** — Validates the query string before any service call; if validation fails the function returns early after `parseBody` writes the error response.
+- **`refused(response, result)`** — Short-circuits on a domain "refused" outcome (e.g. unknown locale), writing an appropriate HTTP error.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — supplies `refused` (detects a refusal in the result) and `catchAs` (wraps unhandled errors into a standardized HTTP error response).
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse`, which serialises the payload and sets status headers.
-- **`src/modules/locales/services/index.ts`** — source of `localeService`; its `readMessages(locale, tenant?)` method contains the actual data-fetching logic.
-- **`src/modules/locales/routes.ts`** — registers `getLocaleMessages` as the handler for the `GET /locales/:locale/messages` route.
-- **`src/types/index.ts`** — exports the `LocaleMessages` interface used as the response payload type.
+- **`src/infrastructure/http/controller.ts`** — Provides the `parseBody`, `refused`, and `catchAs` utilities used for input validation, domain-error mapping, and error serialization.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, which wraps service data in the standard success envelope.
+- **`src/modules/locales/routes.ts`** — Registers `getLocaleMessages` as the handler for the `GET /locales/:locale/messages` route.
+- **`src/modules/locales/services/index.ts`** — Exports `localeService`; this controller calls `readMessages(locale, app?)` on it.
+- **`src/types/index.ts`** — Supplies the `LocaleMessages` type used as the generic parameter of `successResponse`.
 
 ## Notes
 
-- The `?tenant=` query parameter selects a per-frontend copy of the dictionary; when absent the deployment's default tenant is used. The value is trimmed before being forwarded.
-- The endpoint is public and intended to be cacheable. Cache invalidation is tag-based (`locales` tag) and is triggered externally by admin write operations — this controller does not manage caching itself.
-- No business logic or validation lives in this file; it is deliberately a one-liner call wrapped in the standard `.then` / `.catch` pattern shared across the codebase's HTTP controllers.
+- `?app=` with an empty value is **refused (422)** by design, not treated as "default." Omitting the `app` parameter entirely is the way to request the deployment's default frontend copy.
+- The endpoint is public and intended to be cacheable. Cache freshness relies on a `locales` tag being invalidated on every admin write (that invalidation lives elsewhere, not in this file).
+- The handler is intentionally free of business logic; any change to message assembly belongs in `localeService.readMessages`.

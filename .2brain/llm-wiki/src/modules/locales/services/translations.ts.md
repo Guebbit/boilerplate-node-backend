@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/services/translations.ts
-sha256: 304b6abf025508712dfcc4521fb69effb99a4e0958f35b1c67c358a8f9415d65
-generated_at: 2026-09-27T15:02:13.290381+00:00
+sha256: 036ede5a4e30b507d3a3b011e09072f2ec5b305c0efe85b02aaab98d8f153b1e
+generated_at: 2026-10-15T10:47:00.934182+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer that reads and writes translation data for translatable entities. It enforces a strict **plan-then-apply** pattern: a batch of locale slots is fully validated (field names, locale existence, fallback-locale delete guard) before any single write executes, so a malformed slot can never leave a partial edit. It is generic across whatever the `translatables` registry declares and never touches an entity's own collection except through the derived-index-column write.
+The service layer for reading and writing locale translations on any translatable entity. It owns the validate-then-apply pipeline for PUT (replace) and PATCH (merge) translation payloads, enforcing per-slot rules (locale exists and is active, fields are registered, fallback-locale cannot be deleted, entity-level field checks) before any repository write occurs. It also exposes two thin port adapters (`planForPort`, `writeForPort`) so the kernel translation port can drive the same logic without importing this module's internal types.
 
 ## Key elements
 
-- **`EntityTranslationsResult`** – wire-shaped response interface for GET/PUT/PATCH (entity type, id, translations array, declared field names).
-- **`planSlot`** – validates a single locale slot: null → delete (blocked for fallback), non-null → field-existence + registry-check → upsert plan. Looks up the `locales` collection for non-fallback locales to confirm the language exists and is active.
-- **`planTranslationWrites`** – validates an entire `UpsertTranslationsRequest` batch; returns the resolved `TranslatableTarget`, fallback locale, and array of `PlannedWrite` slots, or the first rejection.
-- **`writePlannedTranslations`** – applies an already-validated plan (upserts, deletes, source-digest linking) and performs the single derived-index-column write (`target.writeDerived`) that syncs fallback-locale fields onto the entity's own document.
-- **`planForPort` / `writeForPort`** – exported adapters that reshape the internal plan into `TranslationWritePlan` / `TranslationWriteSlot` for the `@kernel/translation` port (which cannot import this module's internal types). `origin` is dropped in the plan and hard-coded to `'human'` in the write.
-- **`applyTranslationBatch`** – shared internal used by both the PATCH and PUT handlers: plans the batch, checks `target.exists` for a 404, writes, invalidates cache tags, and emits an audit record.
-- **`isRejection`** – type guard that narrows the `PlannedWrite | ResponseReject` union.
+- **`EntityTranslationsResult`** — the admin-facing GET/PUT/PATCH response shape; `translations` is already wire-shaped (no `.toJSON()` needed by controllers).
+- **`planSlot`** *(private)* — validates a single locale entry: `null` → delete (blocked for fallback), otherwise checks field count, unknown-field detection, entity-level `checkFields`, and (non-fallback) locale existence/active status via `localeRepository`.
+- **`planTranslationWrites`** *(private)* — iterates all slots, returns the first rejection or the full `PlannedWrite[]` plus the resolved `TranslatableTarget` and fallback locale.
+- **`writePlannedTranslations`** *(private)* — applies an already-validated plan: upserts/removes rows via `translationRepository`, computes a source digest for the fallback row, and performs the single derived-index write (`target.writeDerived`) as a central invariant.
+- **`planForPort`** *(exported)* — maps the internal plan to `TranslationWritePlan`, stripping `origin` to satisfy the kernel port's type wall.
+- **`writeForPort`** *(exported)* — maps `TranslationWriteSlot[]` back to internal `PlannedWrite[]`, defaulting `origin` to `'human'`.
+- **`isRejection`** *(private)* — type guard narrowing the `ResponseReject | PlannedWrite` union.
+- **`upsertEntityTranslations` / `replaceEntityTranslations`** *(truncated, exported)* — the PATCH and PUT entry points that call `planTranslationWrites` + `writePlannedTranslations`, wrapped in `withTransaction`, cache invalidation, and `recordAudit`.
+- **`slotRejection`, `entityTypeUnknown`, `entityNotFound`** *(private)* — standardised 422/404 rejection builders.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** – provides the `TranslatableTarget` type; `translatableTarget(entityType)` (from `./translatables`) resolves the registry entry whose `fields` and `writeDerived` this file uses.
-- **`src/kernel/translation.ts`** – defines `TranslationWritePlan` / `TranslationWriteSlot`; `planForPort` and `writeForPort` exist solely to satisfy that port's interface.
-- **`src/modules/locales/repository.ts`** – supplies `translationRepository` (upsert/remove/findEntityLocale), `localeRepository` (locale existence + active check), and `deriveSourceDigest`.
-- **`src/modules/locales/services/translatables.ts`** – `translatableTarget` maps an entity type to its registry declaration.
-- **`src/infrastructure/i18n/index.ts`** – `getFallbackLocale()` and `t()` for fallback-locale resolution and i18n error messages.
-- **`src/infrastructure/http/response.ts`** – `generateReject` / `generateSuccess` / `ResponseReject` / `ResponseSuccess` for the standard response envelope.
-- **`src/infrastructure/adapters/cache.ts`** – `invalidateCacheTagsLogged` called after a successful write.
-- **`src/infrastructure/observability/audit.ts`** + **`src/modules/locales/audit.ts`** – `recordAudit` and `localeAuditActions` for the `ADMIN_TRANSLATION_UPDATED` audit emit.
-- **`src/types/index.ts`** / **`src/types/auth-context.ts`** – type definitions for `Translation`, `TranslationFields`, `TranslationOrigin`, `UpsertTranslationsRequest`, `CallerContext`.
-- **`src/modules/locales/services/index.ts`** – barrel that re-exports this module's public surface.
-- **`src/modules/locales/module.ts`** – wires this service into the locales module's lifecycle.
+- **`src/kernel/translation.ts`** — provides the `TranslationWritePlan` / `TranslationWriteSlot` types and `clearOmittedFields`; this file is the concrete implementation behind that port (the "wall" the kernel cannot cross in the other direction).
+- **`src/kernel/registry.ts`** — supplies the `TranslatableTarget` type; the concrete target is resolved via `./translatables`.
+- **`src/infrastructure/i18n/index.ts`** (→ `catalog.ts`, `context.ts`) — `getFallbackLocale()` and `t()` for locale resolution and user-facing error messages.
+- **`src/infrastructure/http/response.ts`** — `generateReject`, `generateSuccess`, `fieldError` for all response shapes.
+- **`src/infrastructure/adapters/cache.ts`** — `invalidateCacheTagsLogged` called after successful writes (truncated section).
+- **`src/infrastructure/runtime/database.ts`** — `withTransaction` wraps the write phase.
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` for audit trail entries.
+- **`src/modules/locales/repository.ts`** — `translationRepository` (upsert/remove/find), `localeRepository` (findByTag), `deriveSourceDigest`.
+- **`src/modules/locales/audit.ts`** — `localeAuditActions` enum for audit action identifiers.
+- **`src/modules/locales/controllers/write-entity-translations.ts`** — HTTP controller that delegates to this service's exported write functions.
+- **`src/modules/locales/services/index.ts`** — barrel re-export for downstream consumers.
 
 ## Notes
 
-- **Single derived-write point.** The fallback-locale → entity document sync (`target.writeDerived`) lives only inside `writePlannedTranslations`. Callers that own their own document write (e.g. `productService.write`) still route through `writeForPort`, so there is exactly one place that decides when the derived columns update.
-- **Fallback locale is special.** It can never be deleted, and writing it skips the `locales`-collection lookup entirely. Once a `locales` collection is removed, the fallback path still works because `kernel/translation.ts` owns that fallback.
-- **`origin` is internal.** The port-facing API (`planForPort` / `writeForPort`) omits `origin` from the plan and hard-codes `'human'` on write, since port callers are editors/translators. Internal callers (e.g. machine imports) use `applyTranslationBatch` directly and can pass a different origin per slot.
-- **Validation is entity-agnostic.** `planTranslationWrites` never checks whether a specific entity row exists; the 404 check happens in `applyTranslationBatch` *after* validation but *before* any write. This lets the same plan run during a `POST /products` create where the entity does not yet exist.
-- **`origin` defaults to `'human'`** in `planSlot` when the request omits it (`value.origin ?? 'human'`).
+- **Validate-all-then-write:** every slot is validated before any repository call, so a single bad locale never leaves a partial edit.
+- **`writePlannedTranslations` never validates.** Calling it without a prior `planTranslationWrites` (or `planForPort`) can write invalid data.
+- **Fallback-locale delete is hard-blocked** at the slot level; the `locales` collection is not consulted for the fallback locale at all (it survives even if `locales` is uninstalled).
+- **The derived-index write is centralised** in `writePlannedTranslations` via `target.writeDerived` — callers must not duplicate it.
+- **Port adapters strip `origin`:** the kernel port's type intentionally omits it; `writeForPort` re-injects `'human'` as a fixed default.
+- **`translatableTarget` comes from `./translatables`**, not directly from the registry — the registry only contributes the `TranslatableTarget` type.

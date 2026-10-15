@@ -1,34 +1,35 @@
 ---
 source: src/modules/locales/controllers/get-locale-entries.ts
-sha256: 6d1a427afa75c17ad6a8edf174aed382f55351602d4b00bc1de620beea8f78b6
-generated_at: 2026-09-27T14:58:29.238754+00:00
+sha256: d3dc2ad192aa4298d2f06b1e295565d4e5afd68cadb0e93e79ebf0643b99f8ad
+generated_at: 2026-10-15T10:42:22.208592+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/locales/controllers/get-locale-entries.ts
 
 ## Purpose
-
-Thin HTTP adapter that exposes `GET /locales/:locale/entries` (admin). It validates query params, delegates to `localeService.searchEntries`, and shapes the response as `LocaleEntriesResponse`. Exists so the translation-editing screen can list flat, paginated dictionary rows for a single locale — deliberately uncached because a translator is actively typing into this data.
+Thin HTTP adapter exposing two GET endpoints for listing locale dictionary entries — all apps or a single app — by delegating to `localeService.searchEntries`. It exists to keep route registration (in `routes.ts`) decoupled from the actual request-parsing and response-shaping logic.
 
 ## Key elements
-
-- **`listLocaleEntriesQuerySchema`** — Extends the generated `ListLocaleEntriesQueryParams` with two relaxations: `page`/`pageSize` replaced by the coercing infra pair (`pageSchema`, `pageSizeSchema`), and `text` wrapped in `z.preprocess(blankToUndefined, …)` so an empty `?text=` is treated as "no filter" instead of tripping `.min(1)`.
-- **`getLocaleEntries`** (export) — The Express handler. Parses only query params (no body on GET), calls `localeService.searchEntries`, and returns `result.data` directly as the response body (the wire type `LocaleEntry` already matches `LocaleEntriesResponse.items`, so no mapping step is needed).
+- **`relaxedQuery(generated)`** — internal helper that takes a generated list-query zod schema and (1) replaces `page`/`pageSize` with the coercing infra versions, (2) preprocesses `text` with `blankToUndefined` so an empty `?text=` is treated as "no filter", (3) makes all fields optional via `.partial()`. Serves both list routes because they share the same three filters.
+- **`listLocaleEntriesQuerySchema`** — the relaxed query schema for the all-apps route. Strict: a stray `?app=` in the query will 422.
+- **`listAppLocaleEntriesQuerySchema`** — the relaxed query schema for the single-app route (app comes from the path, not the query).
+- **`listEntries(request, response, schema, app?)`** — shared handler body. Reads query-only input via `readInput(request, { surface: 'list' })`, parses it, calls `localeService.searchEntries(locale, filters)`, and returns `successResponse<LocaleEntriesResponse>`. The `app` parameter is injected into the service call when present.
+- **`getLocaleEntries`** (exported) — handles `GET /locales/:locale/entries`; calls `listEntries` without an app filter.
+- **`getAppLocaleEntries`** (exported) — handles `GET /locales/:locale/apps/:app/entries`; passes `request.params.app` through.
 
 ## Relationships
-
-- **`src/modules/locales/services/index.ts`** — Imports `localeService`; calls `.searchEntries(locale, parsed)` and consumes the resulting `.data` / `.ok` / `.refused` fields.
-- **`src/infrastructure/http/controller.ts`** — Imports `parseBody`, `refused`, `catchAs` for the standard parse → guard → catch pipeline.
-- **`src/infrastructure/http/request.ts`** — Imports `readInput` to extract query params under the `'list'` surface.
-- **`src/infrastructure/http/response.ts`** — Imports `successResponse` to serialize the validated result.
-- **`src/infrastructure/http/schemas.ts`** — Imports `blankToUndefined`, `pageSchema`, `pageSizeSchema` for query-param coercion.
-- **`src/types/index.ts`** — Imports `LocaleEntriesResponse` as the response type parameter.
-- **`src/modules/locales/routes.ts`** — Graph neighbor; expected to wire this controller to the `/locales/:locale/entries` route (not imported directly by this file).
+- **`src/modules/locales/routes.ts`** — registers the two exported handlers as Express route callbacks.
+- **`src/modules/locales/services/index.ts`** — provides `localeService.searchEntries`, the sole business-logic call this controller makes.
+- **`src/infrastructure/http/controller.ts`** — supplies `parseBody`, `refused`, and `catchAs` for the parse-act-respond lifecycle.
+- **`src/infrastructure/http/request.ts`** — `readInput` extracts the query-string payload with the `'list'` surface.
+- **`src/infrastructure/http/response.ts`** — `successResponse` serialises the result into the HTTP response.
+- **`src/infrastructure/http/schemas.ts`** — `pageSchema`, `pageSizeSchema`, `blankToUndefined` used to build the relaxed query schemas.
+- **`src/types/index.ts`** — provides the `LocaleEntriesResponse` wire type used as the generic on `successResponse`.
 
 ## Notes
-
-- **Not cached by design.** The docblock explicitly contrasts this with `GET /locales/:locale/messages` (nested tree for display). This endpoint serves the editing surface, so cache invalidation would race with the translator's keystrokes.
-- **Tenant validation is split.** A *malformed* tenant (violating `^[a-z0-9][a-z0-9-]*$`) is rejected with 422 at the schema layer. A *well-formed but unrecognised* tenant passes through to the repository and simply matches zero rows — no special-casing in the controller.
-- **GET, so query-params only.** There is intentionally no body; the comment references `docs/theory/request-input.md` for the convention.
-- **No mapping/cast step.** Before `createRepository` carried `TWire = LocaleEntry`, an explicit shape conversion was needed; now `result.data` is already the wire shape, so the handler just passes it to `successResponse`.
+- Query params only — no body is read. A GET carries no search payload (see `docs/theory/request-input.md`).
+- Both schemas are **strict** after `.partial()`: any unknown query key (e.g. `?app=` on the all-apps route) produces a 422 rather than being silently ignored.
+- Deliberately **not cached**: this endpoint backs the translator's active editing screen.
+- `result.data.items` is already the `LocaleEntry` wire shape; no casting is needed (unlike the pre-`createRepository` pattern).
+- The nested message tree consumed by clients is a separate endpoint (`GET /locales/:locale/messages`); this controller only handles flat, paginated dictionary rows.

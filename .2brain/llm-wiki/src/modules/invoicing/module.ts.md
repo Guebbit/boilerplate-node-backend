@@ -1,7 +1,7 @@
 ---
 source: src/modules/invoicing/module.ts
-sha256: f88e09d1df3479c85db331a03a43ce89f2d810c7a2d6279a5a56e1846e47542f
-generated_at: 2026-10-14T16:07:06.405649+00:00
+sha256: 900b37e6751fe3b79e55cdd0d4482b0465b0ba009052a26dbb608e28266ab738
+generated_at: 2026-10-15T10:38:43.060213+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the invoicing domain (frozen tax invoices and credit notes). It registers the module's routes, event subscriptions, config, rate limits, personal-data collection, and static asset paths with the application kernel. It exists so that invoicing is a self-contained module that **reacts** to facts recorded by `orders` and `payments` rather than being created by route requests.
+The module manifest for the Invoicing module. It declares the module's identity (`AppModule`) and wires together its routes, config, rate limits, PII hooks, and the two event-driven listeners that freeze invoices and credit notes. No HTTP request ever creates a document; both are produced solely in reaction to domain events published by `orders` and `payments`.
 
 ## Key elements
 
-- **Default export (`AppModule` manifest)** — the single object the kernel reads to wire the module into the app.
-  - `name: 'invoicing'`, `basePath: '/orders'` — shares the `/orders` URL prefix with the orders module.
-  - `routes` — Hono router from `./routes`.
-  - `config` — config slices from `invoicingConfig` and `invoicingProviderProbe`.
-  - `rateLimits` — rate-limit rules from `./rate-limits`.
-  - `personalData` — a single `collect` hook (`collectPersonalData`); deliberately **no** `erase`.
-  - `subscribe()` — registers two event listeners (see below).
-  - `locales` / `templates` — filesystem paths for i18n strings and document templates.
-- **`subscribe()` listeners**
-  - `ORDER_STATUS_CHANGED` (filtered to `to === 'paid'`): re-reads the order via `getById`, then calls `issueInvoice`.
-  - `PAYMENT_REFUNDED`: calls `issueCreditNote` with the refund payload.
+- **`export default` (satisfies `AppModule`)** — the single manifest object the kernel registers. Sets `name: 'invoicing'`, `basePath: '/orders'`, and points at the module's `locales` and `templates` directories.
+- **`subscribe()`** — registers two `onDomainEvent` handlers:
+  - `ORDER_STATUS_CHANGED` → if `to === OrderStatus.paid`, re-reads the full order via `getOrderById` and calls `issueInvoice`.
+  - `PAYMENT_REFUNDED` → calls `issueCreditNote` with the event payload (`orderId`, `refundId`, `amount`, `full`, optional `goods`).
+- **`reencrypt: reencryptInvoices`** — hook the kernel calls to re-encrypt PII (buyer addresses) on invoices and credit notes.
+- **`personalData`** — registers a `collect` callback (`collectPersonalData`) for GDPR data-export. No `erase` is registered; documents are never deleted.
+- **`config`** — array of config slices from `invoicingConfig` and `invoicingProviderProbe`, exposed to the kernel's config system.
+- **`rateLimits`** — the module's rate-limit definitions from `./rate-limits`.
+- **`routes`** — the Hono (or equivalent) router from `./routes`, mounted under the shared `/orders` prefix.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — imports the `AppModule` type; the default export `satisfies` it.
-- **`src/kernel/events.ts`** — imports `onDomainEvent` used by both `subscribe()` listeners.
-- **`src/modules.ts`** — registers this module in the application's module list.
-- **`src/modules/orders/index.ts`** — provides `ORDER_STATUS_CHANGED`, `getById`, and `OrderStatus` consumed by the `paid` listener.
-- **`src/modules/invoicing/services/index.ts`** — barrel re-exporting `issueInvoice` and `issueCreditNote`.
-- **`src/modules/invoicing/services/issue-invoice.ts`** / **`issue-credit-note.ts`** — the two service functions the listeners invoke.
-- **`src/modules/invoicing/services/personal-data.ts`** — `collectPersonalData` used in the `personalData` entry.
-- **`src/modules/invoicing/routes.ts`** — the Hono router exposed as `routes`.
-- **`src/modules/invoicing/config.ts`** — `invoicingConfig` (config slice).
-- **`src/modules/invoicing/providers/index.ts`** — `invoicingProviderProbe` (provider probe slice).
-- **`src/modules/invoicing/rate-limits.ts`** — `invoicingRateLimits`.
-- **`src/modules/invoicing/tests/integration/*.test.ts`** — integration tests that exercise the event-driven invoice / credit-note / re-encryption flows wired here.
+- **`src/kernel/events.ts`** — provides `onDomainEvent`, the subscription mechanism used inside `subscribe()`.
+- **`src/kernel/registry.ts`** — provides the `AppModule` type that the default export satisfies.
+- **`src/modules.ts`** — imports this module's default export to register it in the application's module list.
+- **`src/modules/invoicing/config.ts`** — source of `invoicingConfig.slice` included in the manifest's `config` array.
+- **`src/modules/invoicing/providers/index.ts`** — source of `invoicingProviderProbe.slice` in the manifest.
+- **`src/modules/invoicing/rate-limits.ts`** — source of `invoicingRateLimits`.
+- **`src/modules/invoicing/routes.ts`** — source of the `router` mounted at `basePath`.
+- **`src/modules/invoicing/services/index.ts`** — re-exports `issueInvoice`, `issueCreditNote`, `reencryptInvoices` consumed by this file.
+- **`src/modules/invoicing/services/issue-invoice.ts`** — called by the `ORDER_STATUS_CHANGED` listener after a fresh order read.
+- **`src/modules/invoicing/services/issue-credit-note.ts`** — called by the `PAYMENT_REFUNDED` listener.
+- **`src/modules/invoicing/services/personal-data.ts`** — provides `collectPersonalData` used in the `personalData` hook.
+- **`src/modules/invoicing/services/reencrypt.ts`** — provides `reencryptInvoices` for the PII re-encryption hook.
+- **Integration tests** (`tests/integration/issue-invoice.test.ts`, `issue-credit-note.test.ts`, `reencrypt.test.ts`) — exercise the services this manifest wires up.
 
 ## Notes
 
-- **No delete path.** Neither `Invoice` nor `CreditNote` can be deleted, updated, or re-rendered from live config through this module.
-- **Event listeners are fire-and-forget.** A failure in `issueInvoice` or `issueCreditNote` is logged by `emitDomainEvent` but never rolls back the triggering write (e.g. an order stays `paid` even if the invoice freeze fails).
-- **A missing invoice is possible; a skipped invoice number is not.** The numbering series is owned by this module.
-- **`ORDER_STATUS_CHANGED` carries only `{ orderId, from, to }`.** The `paid` listener issues a fresh `getById` read to obtain the full order (lines, address, currency) needed for the freeze.
-- **`basePath: '/orders'` is intentional** URL sharing with the orders module (precedent: `account`/`addresses`). See `docs/api/contract-fragmentation.md`.
+- **Shared `/orders` prefix.** Invoicing routes live under the same URL prefix as the `orders` module. This is intentional (precedent: `account`/`addresses`) and documented in `docs/api/contract-fragmentation.md`.
+- **Event listeners never roll back the source write.** If `issueInvoice` throws, the order stays `paid`; a missing invoice is acceptable, a skipped invoice number is not.
+- **No delete/erase path.** Neither invoices nor credit notes can be deleted or erased. The `personalData` entry deliberately omits `erase`.
+- **Fresh read, not event payload.** The `ORDER_STATUS_CHANGED` event carries only `{ orderId, from, to }`; the listener issues a full `getOrderById` read to obtain frozen lines, address, and currency.

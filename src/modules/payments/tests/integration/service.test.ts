@@ -1336,6 +1336,17 @@ describe('recordOfflinePayment', () => {
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
     });
 
+    it('dates the receipt now when the request names no date', async () => {
+        const { order } = await placedOrder(10, 1);
+        const before = Date.now();
+
+        await recordOfflinePayment(String(order._id), { method: 'cash' }, callerContextAs('admin'));
+
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.receivedAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
+        expect(payment!.receivedAt!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    });
+
     // Nobody handles their own money: an administrator who raised an order for themselves cannot
     // also record the cash for it.
     it('refuses the buyer recording cash on their own order, and leaves it pending', async () => {

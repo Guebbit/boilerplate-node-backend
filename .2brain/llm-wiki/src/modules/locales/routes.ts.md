@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/routes.ts
-sha256: d7fd5a20676c3ea211b2da84d220b1f16dd2cd2e6c209affa507c7b114066c30
-generated_at: 2026-09-27T15:00:21.600138+00:00
+sha256: e2ac63a53c539da349a086828474243abb6c1d85c3ba7d74303040a4bbc0902e
+generated_at: 2026-10-15T10:44:52.522910+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express router mounted at `/locales` that wires every locale and translation endpoint to its controller. It splits the surface into a small set of public GET reads (open to unauthenticated clients) and a larger set of admin-gated writes, applying per-route authorization middleware and Redis cache invalidation inline rather than via a shared `router.use`.
+Express router mounted at `/locales` that exposes locale discovery (public dictionary reads) and full translation administration (CRUD on languages, per-app entries, and entity translations). It exists as the single HTTP surface for all locale-related endpoints, wiring together authorization guards, Redis cache configuration, and controller handlers.
 
 ## Key elements
 
-- **`router`** (default export) — the Express `Router` instance; this is what `module.ts` mounts.
-- **`publicLocaleCache`** — a `setCache(3600, …)` preset used by all four public GETs. Configures a 1-hour Redis TTL, the `'locales'` tag, `browserRevalidate: true`, and a `scopeKey` that calls `hasAnonymousReadScope` so the admin manifest (`GET /locales`) bypasses Redis while guest reads do not.
-- **Public read routes** — `GET /`, `GET /tenants`, `GET /:locale/messages`, `GET /:locale`. Only `GET /` mounts `getAuth`; the other three are fully public.
-- **Locale CRUD routes** — `POST /`, `PUT /:locale`, `PATCH /:locale`, `DELETE /:locale`. Each spells `getAuth → isAuthOrCredential → requirePermission('locales.any.*') → invalidateCache(['locales'])` before the controller.
-- **Locale-entry routes** — `GET /:locale/entries` (deliberately uncached), plus `POST`, `PUT`, `PATCH`, and per-entry `PUT`/`DELETE` under `/:locale/entries/:entryId`. All gated by `locales.any.*` permissions and invalidate the `'locales'` cache tag.
-- **Entity-translation routes** — `GET`, `PUT`, `PATCH` on `/translations/:entityType/:id`. Gated by `translations.any.*` permissions. No route-level `invalidateCache`; the service layer invalidates the entity-specific tag (e.g. `'products'`) because the tag varies with `entityType`.
+- **`router`** — the exported Express `Router` instance. Mount order is load-bearing: `/apps` and `/:locale/messages` are declared before `/:locale` so Express's first-match doesn't swallow them with the wildcard.
+- **`publicLocaleCache`** — `setCache(3600, …)` with empty `keyParameters`, `browserRevalidate: true`, and a `scopeKey` that calls `hasAnonymousReadScope` to bypass Redis for authenticated admins (who see inactive languages). Applied to `GET /`, `/apps`, and `/:locale`.
+- **`messagesCache`** — same 3600 s / `browserRevalidate` shape but adds `app` to `keyParameters` so each app's dictionary is cached separately. Applied to `GET /:locale/messages`.
+- **Public reads (4 routes)** — `GET /`, `GET /apps`, `GET /:locale/messages`, `GET /:locale`. All anonymous-accessible; only `GET /` also takes `getAuth` so the admin manifest can include inactive languages.
+- **Locale CRUD (4 routes)** — `POST /`, `PUT /:locale`, `PATCH /:locale`, `DELETE /:locale`. Each spells `getAuth, isAuthOrCredential, requirePermission('locales.any.*')` inline (no shared `router.use`) and calls `invalidateCache(['locales'])`.
+- **Locale-entry routes (7 routes)** — GET/POST/PUT/PATCH on `/:locale/entries` and `/:locale/apps/:app/entries`, plus PUT/DELETE on `/:entryId`. All gated with `locales.any.*` permissions; writes invalidate the `locales` tag. The two entry GETs are deliberately **uncached** (editing-screen reads).
+- **Entity-translation routes (3 routes)** — `GET/PUT/PATCH /translations/:entityType/:id`. Permission domain is `translations.any.*`. Cache invalidation is handled **inside the service** (dynamic tag per `entityType`), not by route-level `invalidateCache`.
 
 ## Relationships
 
-- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuthOrCredential`, `requirePermission`; every admin route chains all three before the handler.
-- **`src/infrastructure/http/middlewares/cache.ts`** — provides `setCache` (used to build `publicLocaleCache`) and `invalidateCache` (called on every write route for the `'locales'` tag).
-- **`src/kernel/access/query.ts`** — provides `hasAnonymousReadScope`, consumed by `publicLocaleCache`'s `scopeKey` to distinguish guest from admin callers.
-- **`src/modules/locales/module.ts`** — imports `router` and mounts it at `/locales`.
-- **Locale controllers** (`create-locale`, `update-locale`, `delete-locale`, `get-locales`, `get-locale-messages`, `get-locale-tenants`, `get-locale-entries`, `write-locale-entries`, `delete-locale-entry`, `get-entity-translations`, `write-entity-translations`) — each route's terminal handler; this file contains no business logic.
+- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuthOrCredential`, `requirePermission`, the three guards spelled on every write route and on `GET /`.
+- **`src/infrastructure/http/middlewares/cache.ts`** — provides `setCache` (two instances here) and `invalidateCache` (called on every write route except entity-translation writes).
+- **`src/kernel/access/query.ts`** — `hasAnonymousReadScope` is invoked inside both cache `scopeKey` callbacks to decide whether an authenticated admin should bypass Redis.
+- **`src/modules/locales/controllers/*`** — each imported handler (`getLocales`, `getLocaleDictionary`, `getLocaleApps`, `getLocaleMessages`, `createLocale`, `replaceLocale`, `updateLocale`, `deleteLocale`, `getLocaleEntries`, `getAppLocaleEntries`, `createLocaleEntry`, `replaceLocaleEntries`, `mergeLocaleEntries`, `updateLocaleEntry`, `deleteLocaleEntry`, `getEntityTranslations`, `replaceEntityTranslations`, `upsertEntityTranslations`) is the terminal handler for its route.
+- **`src/modules/locales/module.ts`** — mounts this `router` onto the application's `/locales` path.
 
 ## Notes
 
-- **Route order is load-bearing.** `/tenants` and `/:locale/messages` are declared before `/:locale` because Express uses first-match-wins for path parameters. Reordering would shadow the literal routes with the `:locale` wildcard.
-- **`browserRevalidate: true`** on the public cache is not cosmetic. Without it, a successful save clears Redis but leaves the browser's stale copy intact, making the UI appear broken. The flag forces a conditional revalidation request (answered `304` when unchanged).
-- **`GET /:locale/entries` is intentionally uncached.** It backs the admin editing screen and must always reflect the current state; the required permission is `locales.any.update` (not a read permission) because it exposes every stored string, including those no page has requested yet.
-- **Entity-translation cache invalidation lives in the service, not the route.** The tag is registry-declared and varies with `entityType`, which the fixed-array `invalidateCache(['locales'])` cannot express.
-- **`PUT` vs `PATCH` semantics differ per route pair.** For locale entries and entity translations, `PUT` replaces (omitted rows are deleted) while `PATCH` merges. This is documented on each route and in the respective controller.
+- **Route ordering is a contract.** Adding a new `/:param` route after `/:locale` will be shadowed. `/apps` and `/:locale/messages` must stay above `/:locale`.
+- **Auth is per-route, not per-namespace.** There is no `router.use(getAuth)` — the four public reads rely on the absence of a guard. Adding a blanket guard will break anonymous dictionary access.
+- **`browserRevalidate` is intentional and non-negotiable.** Without it, an editor's save clears Redis but the browser keeps its stale copy, making saves appear broken. The cost is one conditional `304` round-trip per read.
+- **Entity-translation cache invalidation lives in the service, not the route.** The tag is dynamic (registry-declared per `entityType`), so `invalidateCache`'s fixed-string array cannot express it. Do not add `invalidateCache` to those routes.
+- **`/:locale/entries` reads use `locales.any.update`, not `locales.self.read`.** The read key is held by every visitor (it's how the shop renders); the edit-screen listing must be restricted to the update permission.

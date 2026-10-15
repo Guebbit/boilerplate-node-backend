@@ -159,6 +159,31 @@ describe('create', () => {
         expect(await countOrders()).toBe(1);
     });
 
+    // The open-order cap is a checkout rule (`cart/services/checkout.ts`): an operator raising an
+    // order for a customer is not the shopper the cap exists to stop.
+    it('skips the open-order cap that guards checkout', () =>
+        withEnvironment('NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT', '1', async () => {
+            const user = await createUser();
+            const product = await createProduct({ price: 25 });
+            const items = [{ productId: String(product._id), quantity: 1 }];
+
+            const first = await create(
+                String(user._id),
+                user.email,
+                items,
+                callerContextAs('admin')
+            );
+            const second = await create(
+                String(user._id),
+                user.email,
+                items,
+                callerContextAs('admin')
+            );
+
+            expect([first.success, second.success]).toEqual([true, true]);
+            expect(await countOrders()).toBe(2);
+        }));
+
     it('assigns each new order its own sequential order number', async () => {
         // Mid-year and frozen: two orders straddling a real UTC New Year would get numbers from
         // two different yearly sequences, both correctly, and fail the "one apart" check below.
