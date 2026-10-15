@@ -9,7 +9,7 @@
 // `@opentelemetry/api` is the *interface* package, separate from the SDK — trace/SpanStatusCode/
 // Span/Attributes. Importing it when no SDK is registered is harmless: every call becomes a
 // no-op, which is what lets tests run without booting OpenTelemetry.
-import { trace, SpanStatusCode, type Span, type Attributes } from '@opentelemetry/api';
+import { trace, SpanStatusCode, type Span } from '@opentelemetry/api';
 // js-toolkit: consults a bare string, an `Error`, then a `message` on the value itself, so a
 // rejection that is not an `Error` still yields its message. `String(error)` is the fallback
 // rather than the toolkit's default empty string. https://github.com/Guebbit/js-toolkit
@@ -34,20 +34,14 @@ export const getTracer = () => trace.getTracer(TRACER_NAME);
  * Run an async function inside a named OTel span: opens a child span under the active context,
  * records any thrown error on it, and ends it whether the call succeeds or fails.
  */
-export const withSpan = <T>(
-    spanName: string,
-    callback: (span: Span) => Promise<T>,
-    attributes?: Attributes
-): Promise<T> => {
+export const withSpan = <T>(spanName: string, callback: (span: Span) => Promise<T>): Promise<T> => {
     const tracer = getTracer();
     // startActiveSpan (vs startSpan) makes the span *current* for the callback's duration, so
     // anything called inside — a Mongoose query, `getActiveSpanContext()` — attaches as a child
     // automatically, with no span threaded through the call stack.
     return tracer.startActiveSpan(spanName, (span) => {
-        // Attributes known up front. The callback can add more via its `span` argument once it
-        // has computed values worth recording.
-        if (attributes) span.setAttributes(attributes);
-
+        // Attributes are the callback's to set, through its `span` argument, once it has computed
+        // values worth recording.
         // Two-callback `.then(onFulfilled, onRejected)` rather than `.then().catch()`: it keeps
         // the success and failure paths mutually exclusive, so a throw inside the success
         // handler could not end the span twice.

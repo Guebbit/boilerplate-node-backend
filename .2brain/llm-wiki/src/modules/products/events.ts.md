@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/events.ts
-sha256: 599028fbf6ee43c3399fbea81d6396259fcb98bfa699f5bf9c90395a4d871485
-generated_at: 2026-09-23T19:26:34.057014+00:00
+sha256: 0d17d63ea57e8dfecaff2b45ddb7f8f7bd47dda161db64ca1b729fbc77de0415
+generated_at: 2026-10-15T11:41:46.056785+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the domain events the products module emits and exports their name constants. It augments the kernel's `DomainEventMap` via TypeScript module declaration so the event catalogue grows with each owning module rather than living in a shared enumeration file.
+Declares the products module's domain events by augmenting the kernel's `DomainEventMap` interface (type-level only, no runtime logic), and exports one string constant per event name so emitters and listeners share a single spelling instead of independent literals.
 
 ## Key elements
 
-- **`declare module '@kernel/events'` block** — Augments `DomainEventMap` with three payload types:
-    - `'product.deleted'` — `{ productId: string; hardDelete: boolean }`. Emitted and awaited _before_ the write; `hardDelete` tells listeners whether to drop inventory counters.
-    - `'product.deactivated'` — `{ productId: string }`. Fired only on a `true → false` flip of the `active` flag, not on an unchanged repeat write.
-    - `'product.created'` — `{ productId: string; onHand: number }`. Carries the requested opening stock; the document itself is initially written with `onHand: 0`.
-- **`PRODUCT_DELETED`** — String constant `'product.deleted'` for use as a shared spelling between emitter and listeners.
-- **`PRODUCT_CREATED`** — String constant `'product.created'`.
-- **`PRODUCT_DEACTIVATED`** — String constant `'product.deactivated'`.
+- **`declare module '@kernel/events'`** — extends `DomainEventMap` with three entries:
+  - `product.deleted` — payload `{ productId, hardDelete, titles }`; emitted (via outbox) when a product is soft- or hard-deleted. Carries multi-language titles captured before translation rows are dropped; `hardDelete` flag lets `inventory` distinguish reversible from destructive deletion.
+  - `product.created` — payload `{ productId, onHand }`; emitted in the create transaction so `inventory` can set the counter and write its ledger row in one step, avoiding a direct import that would cycle.
+  - `product.release_date_changed` — payload `{ productId, from?, to? }`; emitted when `releaseDate` is set, moved, or cleared; consumed by `delivery` to assess buyer notifications.
+- **`PRODUCT_DELETED`**, **`PRODUCT_CREATED`**, **`PRODUCT_RELEASE_DATE_CHANGED`** — `export const` string constants for the three event names, exported through the barrel for shared use.
 
 ## Relationships
 
-- **`src/modules/products/service.ts`** — The emitter. Its `createById` fires `product.created`; its `deleteById` fires `product.deleted`; its `updateById` fires `product.deactivated` (only on an actual flip).
-- **`src/modules/products/index.ts`** — Barrel file that re-exports the three `PRODUCT_*` constants so external modules import a single spelling.
-- **`src/modules/products/module.ts`** — Module registration; imports the event constants to wire up listeners at boot.
+- **`src/modules/products/index.ts`** — re-exports the three `PRODUCT_*` constants as part of the module's public barrel.
+- **`src/modules/products/module.ts`** — registers this module's event subscriptions (which listeners fire on which event names).
+- **`src/modules/products/services/crud.ts`** — emits `product.created` and `product.release_date_changed` within its write transactions.
+- **`src/modules/products/services/remove.ts`** — emits `product.deleted` (soft or hard) in the delete transaction, populating `titles` before any row is dropped.
+- **`src/modules/products/tests/integration/delete-outbox.test.ts`** — verifies the outbox write pattern for `product.deleted`.
+- **`src/modules/products/tests/integration/delete-titles.test.ts`** — verifies that `titles` in the event payload is captured pre-deletion.
+- **`src/modules/products/tests/integration/preorder.test.ts`** — exercises `product.release_date_changed` in a preorder scenario.
 
 ## Notes
 
-- **Avoids a circular import:** `product.created` exists so `products` can trigger `inventory`'s `receive()` without importing it (since `inventory` already imports `products`). A failed listener leaves `onHand` at the honest `0`, recoverable via `POST /inventory/receipts`.
-- **`product.deleted` is awaited before the write**, ensuring listeners see a consistent DB state; `inventory` deletes its level row only when `hardDelete` is `true`.
-- **`product.deactivated` ≠ out-of-stock.** It means "gone for a long time"; `onHand: 0` with `active: true` is merely out of stock and does _not_ fire this event.
-- Constants exist so an emitter and its listeners share one literal rather than two independently typosable strings.
+- The file contains **no runtime logic** beyond three `const` declarations; all behavioral contracts live in the docblock comments on the type augmentation.
+- All three events go through the **transactional outbox** (same DB transaction as the triggering write) and the relay guarantees redelivery, so listeners must be idempotent on `meta.eventId`.
+- `product.deleted` deliberately does **not** fire on restore; past side-effects (emptied carts/wishlists) are not rolled back.
+- `product.created` is intentionally a one-shot creation signal, **not** repeated on stock updates, to avoid the inconsistent state a separate counter-change + ledger-write pair could produce.

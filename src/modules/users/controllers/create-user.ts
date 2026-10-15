@@ -6,7 +6,6 @@
  */
 
 import type { Request, Response } from 'express';
-import type { ParamsDictionary } from 'express-serve-static-core';
 import { userService } from '../services';
 import { rejectResponse, createdResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
@@ -21,7 +20,7 @@ import type { CreateUserRequest, CreateUserRequestMultipart, User } from '@types
  */
 export const createUser = (
     request: Request<
-        ParamsDictionary,
+        Record<string, string>,
         unknown,
         | CreateUserRequest
         | CreateUserRequestMultipart

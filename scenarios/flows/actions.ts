@@ -231,24 +231,18 @@ const inSequence = async <T>(
 
 /**
  * Record a shipment's handover to the carrier: every physical fulfillment order of the order, in
- * full, one shipment each — the door that moves an order `processing → shipped`. `trackingCode` is
- * only required for a `tracked` method; every order this scenario ships uses one that is not, so it
- * stays unset.
+ * full, one shipment each — the door that moves an order `processing → shipped`. Every order this
+ * scenario ships uses a method that is not `tracked`, so no tracking code is sent.
  *
  * @param owner - a caller holding `delivery.any.update`
  */
-export const shipOrder = (owner: Caller, orderId: string, trackingCode?: string): Promise<void> =>
+export const shipOrder = (owner: Caller, orderId: string): Promise<void> =>
     readFulfillment(owner, orderId).then(({ fulfillmentOrders }) =>
         inSequence(
             fulfillmentOrders.filter(
                 ({ kind, status }) => kind === 'physical' && status === 'open'
             ),
-            ({ id }) =>
-                owner.call(
-                    'POST',
-                    `/delivery/fulfillment-orders/${id}/shipments`,
-                    trackingCode ? { trackingCode } : {}
-                )
+            ({ id }) => owner.call('POST', `/delivery/fulfillment-orders/${id}/shipments`, {})
         )
     );
 
@@ -335,10 +329,8 @@ export const cancelRemainder = (caller: Caller, orderId: string): Promise<string
  * Cancel an order. `refund` is the operator's choice alone — a customer cancelling their own paid
  * order is always refunded, whatever this says.
  */
-export const cancelOrder = (caller: Caller, orderId: string, refund?: boolean): Promise<void> =>
-    caller
-        .call('POST', `/orders/${orderId}/cancel`, refund === undefined ? {} : { refund })
-        .then(() => undefined);
+export const cancelOrder = (caller: Caller, orderId: string): Promise<void> =>
+    caller.call('POST', `/orders/${orderId}/cancel`, {}).then(() => undefined);
 
 /**
  * Open a return on a delivered order — `POST /returns`, the customer's own door. Every line, since
@@ -346,16 +338,17 @@ export const cancelOrder = (caller: Caller, orderId: string, refund?: boolean): 
  *
  * @param caller - the order's own buyer; staff cannot exercise a consumer's right for them
  * @param reason - `defective`, `wrong_item`, `other` or `withdrawal`
+ * @param note - what the customer writes beside the request
  * @returns the return's id
  */
 export const requestReturn = (
     caller: Caller,
     orderId: string,
     reason: string,
-    note?: string
+    note: string
 ): Promise<string> =>
     caller
-        .call<{ id: string }>('POST', '/returns', { orderId, reason, ...(note ? { note } : {}) })
+        .call<{ id: string }>('POST', '/returns', { orderId, reason, note })
         .then((opened) => opened.id);
 
 /**

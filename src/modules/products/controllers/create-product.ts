@@ -6,7 +6,6 @@
  */
 
 import type { Request, Response } from 'express';
-import type { ParamsDictionary } from 'express-serve-static-core';
 import { productService } from '../services';
 import { rejectResponse, createdResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
@@ -23,7 +22,7 @@ import type { CreateProductRequest, CreateProductRequestMultipart, Product } fro
  */
 export const createProduct = (
     request: Request<
-        ParamsDictionary,
+        Record<string, string>,
         unknown,
         CreateProductRequest | CreateProductRequestMultipart
     >,

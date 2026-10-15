@@ -11,7 +11,7 @@
  * credential and key rotation" is the operator-facing runbook this exists for.
  */
 
-import { createCipheriv, createDecipheriv, randomBytes, type KeyObject } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { deriveSubkey } from './subkey';
 
 /** An operator-configured encryption key, tagged with the version stamped on ciphertext it produces. */
@@ -59,16 +59,6 @@ export interface SecretBinding {
     aad: string;
 }
 
-/**
- * AES-256-GCM needs a 32-byte key; the configured value is an operator-chosen string of any
- * length, so it is stretched with HKDF-SHA256 ({@link deriveSubkey}) rather than a
- * single hash pass. HKDF does not add work against a weak secret (RFC 5869); the boot check
- * demands key-sized entropy for that.
- * `purpose` is the HKDF `info`: domain separation between rings.
- */
-const deriveKey = (secret: string, purpose: SecretPurpose): KeyObject =>
-    deriveSubkey(secret, purpose);
-
 /** GCM authentication tag length, in bytes — the full 128 bits, and the only length accepted back. */
 const AUTH_TAG_BYTES = 16;
 
@@ -89,7 +79,10 @@ export const encryptVersionedSecret = (
 ): string => {
     const { version, key } = ring[0];
     const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', deriveKey(key, binding.purpose), iv);
+    // AES-256-GCM needs a 32-byte key; the configured value is an operator-chosen string of any
+    // length, so it is stretched with HKDF-SHA256 (`purpose` is the HKDF `info`, the domain
+    // separation between rings) — see `./subkey`.
+    const cipher = createCipheriv('aes-256-gcm', deriveSubkey(key, binding.purpose), iv);
     // Associated data: authenticated but not stored, so it must be re-supplied to decrypt.
     cipher.setAAD(Buffer.from(binding.aad, 'utf8'));
     const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
@@ -126,7 +119,7 @@ export const decryptVersionedSecret = (
 
     const decipher = createDecipheriv(
         'aes-256-gcm',
-        deriveKey(configured.key, binding.purpose),
+        deriveSubkey(configured.key, binding.purpose),
         Buffer.from(ivHex, 'hex'),
         // The full 16-byte tag `encryptVersionedSecret` writes. Unset, Node also accepts a tag
         // truncated to as little as 4 bytes, which is far easier to forge.

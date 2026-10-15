@@ -92,13 +92,6 @@ describe('withSpan — success', () => {
         const spans = exporter.getFinishedSpans();
         expect(spans.some((s) => s.name === 'export-test')).toBe(true);
     });
-
-    it('sets attributes passed as third argument', async () => {
-        await withSpan('attr-test', async () => {}, { testKey: 'testValue' });
-        const spans = exporter.getFinishedSpans();
-        const span = spans.find((s) => s.name === 'attr-test');
-        expect(span?.attributes.testKey).toBe('testValue');
-    });
 });
 
 // ---------------------------------------------------------------------------
