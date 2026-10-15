@@ -23,6 +23,7 @@ flowchart LR
     orders["orders"]
     products["products"]
     returns["returns"]
+    shop["shop"]
 
     cart --> delivery
     notifications --> delivery
@@ -30,6 +31,7 @@ flowchart LR
     delivery --> inventory
     delivery --> orders
     delivery --> products
+    delivery --> shop
     inventory -. "inventory.preorder_allocated" .-> delivery
     orders -. "order.cancelled" .-> delivery
     orders -. "order.status_changed" .-> delivery
@@ -43,7 +45,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
-    class inventory,notifications,returns supporting;
+    class inventory,notifications,returns,shop supporting;
     class delivery centre;
 ```
 
@@ -501,11 +503,9 @@ trail.
 
 ## The return address
 
-The return address is [`orders`'s](./orders.md#shop-identity), not this module's: the placed-order
-email must name where goods go, and `orders` cannot import `delivery`. `returnAddress()` is the
-configured `NODE_RETURN_ADDRESS_*`, or the shop's legal address when none is fully set, so it is
-never absent. `GET /delivery/methods` serves it as `returnAddress` (beside `shipToCountries`), and [`returns`](./returns.md)
-names it in the approval notice.
+The return address is [`shop`'s](./shop.md), not this module's: the placed-order email must name
+where goods go. `GET /shop` serves it as `returnAddress` (beside `shipToCountries`), and
+[`returns`](./returns.md) names it in the approval notice.
 
 The same module answers "what would standard delivery have cost?" (`cheapestStandardShipping`,
 `domain/rates.ts`): a withdrawal refunds delivery only up to that, and `pickup` — collection, not

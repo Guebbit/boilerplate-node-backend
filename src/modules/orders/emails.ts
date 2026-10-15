@@ -8,16 +8,10 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
-import {
-    orderFrontendLink,
-    returnAddress,
-    returnPostagePayer,
-    shopIdentity,
-    withdrawalPeriodDays,
-    type ReturnAddress
-} from './config';
+import { orderFrontendLink, withdrawalPeriodDays } from './config';
 import { isExcludedFromWithdrawal, isShippedItem, orderTotal } from './domain';
 import type { OrderTransferInstructions } from '@types';
+import { returnAddress, returnPostagePayer, shopIdentity, type ReturnAddress } from '@modules/shop';
 
 /**
  * The minimum either document needs from an order: a title and a price per line.

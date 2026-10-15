@@ -25,6 +25,7 @@ flowchart LR
     payments["payments"]
     products["products"]
     returns["returns"]
+    shop["shop"]
     stats["stats"]
     users["users"]
 
@@ -37,6 +38,7 @@ flowchart LR
     orders --> access
     orders --> inventory
     orders --> products
+    orders --> shop
     orders --> users
     inventory -. "inventory.reservation_expired" .-> orders
     orders -. "order.cancelled" .-> delivery
@@ -51,7 +53,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
-    class delivery,inventory,invoicing,payments,returns,stats supporting;
+    class delivery,inventory,invoicing,payments,returns,shop,stats supporting;
     class access,users generic;
     class orders centre;
 ```
@@ -575,17 +577,8 @@ money moved.
 
 ## Shop identity
 
-`orders` owns who the shop is, because `invoicing`, `delivery` and `returns` all import `orders` and
-`orders` may not import them back. One slice (`config.ts`), three getters:
-
-| Getter                 | Returns                                                                      | Read by                                   |
-| ---------------------- | ---------------------------------------------------------------------------- | ----------------------------------------- |
-| `shopIdentity()`       | legal name, VAT number (if set), address, country, email, phone              | `invoicing` (the seller block), the email |
-| `returnAddress()`      | the configured return address, or the legal address when it is not fully set | `delivery`, `returns`, the email          |
-| `returnPostagePayer()` | `consumer` (default) or `shop`                                               | `returns`, the email                      |
-
-Everything but the VAT number and the return address is required at boot, so a getter never answers
-`undefined`. A partly-set return address counts as none.
+Who the shop is — the legal identity, the return address, who pays the return postage — belongs to
+[shop](./shop.md), which `orders` reads. A partly-set return address counts as none.
 
 ### What the placed-order emails carry
 
@@ -610,26 +603,16 @@ when the shop offers a longer withdrawal period.
 
 ## Configuration
 
-| Variable                                                           | Default             | Meaning                                                                                                                                                                                                                             |
-| ------------------------------------------------------------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_SHOP_COUNTRY`                                                | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; its slice (`config.ts`) refuses to start without it                                                                     |
-| `NODE_SHOP_TIMEZONE`                                               | —                   | The shop's IANA time zone (`Europe/Rome`); a fixed offset is refused. Required. The year of order, invoice and credit-note numbers and a document's printed date follow it, so a sale at 00:30 on 1 January lands in the new series |
-| `NODE_SHOP_LEGAL_NAME`                                             | —                   | The shop's legal name. Required. Printed on invoices and in the withdrawal notice                                                                                                                                                   |
-| `NODE_SHOP_STREET`, `_CITY`, `_ZIP`                                | —                   | The shop's postal address. Required                                                                                                                                                                                                 |
-| `NODE_SHOP_EMAIL`                                                  | —                   | Where a customer writes to (checked as an email). Required. Not the no-reply sender                                                                                                                                                 |
-| `NODE_SHOP_PHONE`                                                  | —                   | The shop's telephone number. Required                                                                                                                                                                                               |
-| `NODE_SHOP_VAT_NUMBER`                                             | —                   | VAT identification number. Optional: a shop below the registration threshold prints none                                                                                                                                            |
-| `NODE_RETURN_ADDRESS_NAME`, `_STREET`, `_CITY`, `_ZIP`, `_COUNTRY` | —                   | Where returned goods go. Optional; street, city, zip and country must all be set, or the shop's own address is used                                                                                                                 |
-| `NODE_RETURN_POSTAGE_PAYER`                                        | `consumer`          | Who pays to send the goods back: `consumer` or `shop`. Said in the order email, frozen on each return                                                                                                                               |
-| `NODE_SHIP_TO_COUNTRIES`                                           | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone                                    |
-| `NODE_WITHDRAWAL_PERIOD_DAYS`                                      | `30`                | Days a consumer has to withdraw. The legal 14 plus the margin in [the withdrawal window](#the-withdrawal-window) gives a floor of 21, so a smaller value is refused at read; the default is 30                                      |
-| `NODE_ORDER_PII_RETENTION_DAYS`                                    | `3650`              | Days after an order's `createdAt` (or account erasure or inactivity minimisation, if later) before `reap:orders` replaces its remaining personal data with placeholders                                                             |
-| `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`                             | `1095`              | Days after a timeline row's own instant before `reap:orders` unsets the free text staff wrote on it (an override's reason). The row stays                                                                                           |
-| `NODE_ORDER_EXPORT_MAX_ROWS`                                       | `20000`             | Most orders one `GET /orders/export` may carry. Over it: `422` `ORDER_EXPORT_TOO_LARGE`, before any byte of the file                                                                                                                |
-| `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`                                 | `10`                | Exports allowed per window, per ACCOUNT                                                                                                                                                                                             |
-| `NODE_ADMIN_ORDER_MAX_LINES`                                       | `100`               | Most lines an admin-created order (`POST /orders`) may carry. Over it: `422` `ORDER_LINE_LIMIT_EXCEEDED`. The contract's own ceiling is 1000; a larger value has no effect                                                          |
-| `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`                               | `99999`             | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                                                              |
-| `NODE_ORDER_EFFECT_RETRY_MINUTES`                                  | `5`                 | Grace window after a cancel before `sweep:order-effects` retries an unsettled refund                                                                                                                                                |
+| Variable                               | Default | Meaning                                                                                                                                                                                        |
+| -------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_WITHDRAWAL_PERIOD_DAYS`          | `30`    | Days a consumer has to withdraw. The legal 14 plus the margin in [the withdrawal window](#the-withdrawal-window) gives a floor of 21, so a smaller value is refused at read; the default is 30 |
+| `NODE_ORDER_PII_RETENTION_DAYS`        | `3650`  | Days after an order's `createdAt` (or account erasure or inactivity minimisation, if later) before `reap:orders` replaces its remaining personal data with placeholders                        |
+| `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS` | `1095`  | Days after a timeline row's own instant before `reap:orders` unsets the free text staff wrote on it (an override's reason). The row stays                                                      |
+| `NODE_ORDER_EXPORT_MAX_ROWS`           | `20000` | Most orders one `GET /orders/export` may carry. Over it: `422` `ORDER_EXPORT_TOO_LARGE`, before any byte of the file                                                                           |
+| `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`     | `10`    | Exports allowed per window, per ACCOUNT                                                                                                                                                        |
+| `NODE_ADMIN_ORDER_MAX_LINES`           | `100`   | Most lines an admin-created order (`POST /orders`) may carry. Over it: `422` `ORDER_LINE_LIMIT_EXCEEDED`. The contract's own ceiling is 1000; a larger value has no effect                     |
+| `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`   | `99999` | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                         |
+| `NODE_ORDER_EFFECT_RETRY_MINUTES`      | `5`     | Grace window after a cancel before `sweep:order-effects` retries an unsettled refund                                                                                                           |
 
 The VAT RATES charged against an order line are a different thing with a different owner — see
 [products](./products.md#configuration); this module only freezes onto the order the rate `products`

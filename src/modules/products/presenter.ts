@@ -10,8 +10,9 @@ import type { Product } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { availableStock, stockFlags } from './domain/stock';
 import { isPreorder, type PreorderFacts } from './domain/preorder';
-import { lowStockThreshold, productCurrency } from './config';
+import { lowStockThreshold } from './config';
 import type { ProductDocument } from './model';
+import { shopCurrency } from '@modules/shop';
 
 /**
  * The block of a product's response that is derived, never stored: `available`, the `inStock` /
@@ -34,7 +35,7 @@ export const derivedStockFields = (
         // A preorder waits for stock that does not exist yet: it is not "running low".
         ...(preorder ? { lowStock: false } : {}),
         preorder,
-        currency: productCurrency()
+        currency: shopCurrency()
     };
 };
 

@@ -41,7 +41,6 @@ import { analyticsConfig } from '@infrastructure/observability/config';
 import { persistenceConfig } from '@infrastructure/persistence/config';
 import {
     clusterConfig,
-    currencyConfig,
     databaseConfig,
     loggingConfig,
     nodeEnvironmentConfig,
@@ -104,7 +103,6 @@ export const APP_CONFIG_SLICES: readonly ConfigSlice[] = [
     loggingConfig,
     serverConfig,
     clusterConfig,
-    currencyConfig,
     stockConfig,
     databaseConfig,
     tracingConfig,

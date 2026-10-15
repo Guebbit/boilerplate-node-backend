@@ -67,13 +67,13 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
     }
 };
 
-/** This module's manifest entry: routes, the shop-identity config gate, event subscriptions, and locales. */
+/** This module's manifest entry: routes, the order config gate, event subscriptions, and locales. */
 export default {
     name: 'orders',
     basePath: '/orders',
     routes: router,
     publicEvents,
-    // Jurisdiction, currency, bank transfer and the order link: see `./config`.
+    // Bank transfer, the order rules and the order link: see `./config`.
     config: [ordersConfig.slice],
     rateLimits: ordersRateLimits,
     // The frozen addresses and the notes are PII-encrypted.

@@ -9,9 +9,10 @@
 
 import type { TFunction } from 'i18next';
 import { translator } from '@infrastructure/i18n';
-import { lineTaxFromRateTotals, shopTimezone } from '@modules/orders';
+import { lineTaxFromRateTotals } from '@modules/orders';
 import type { EInvoicingDocument } from './providers';
 import type { InvoiceLine } from './model';
+import { shopTimezone } from '@modules/shop';
 
 /**
  * EN 16931's VAT category codes — `S`tandard, `Z`ero-rated goods, `E`xempt from tax. This

@@ -6,3 +6,4 @@ dependsOn:
     - inventory # putting received goods back on sale
     - orders # the order a return is about: its lines, its owner, and the cancel a pre-dispatch withdrawal becomes
     - payments # the refund for received goods, and PAYMENT_REFUNDED — the fact that closes a return
+    - shop # where goods come back to, and who pays the postage

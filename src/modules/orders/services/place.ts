@@ -27,10 +27,10 @@ import { allocateOrderNumber } from './order-numbering';
 import { orderRepository } from '../repository';
 import { createdEvent } from './announce';
 import { appendTimeline } from './timeline';
-import { shopCurrency } from '../config';
 // `userId` is stored as an ObjectId, so writes have to coerce it — same rule `crud.ts`'s `create`
 // follows for its own writes.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
+import { shopCurrency } from '@modules/shop';
 
 /**
  * One line ready to be written: the request's own `{productId, quantity}` plus its resolved

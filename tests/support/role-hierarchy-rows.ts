@@ -19,7 +19,7 @@ import { createShipmentFor, fulfillmentOrdersOf } from '@modules/delivery/tests/
 import { OrderStatus } from '@types';
 import { returnModel } from '@modules/returns/model';
 import { createExample } from '@modules/example/tests/factories';
-import { RETURN_POSTAGE_PAYERS } from '@modules/orders';
+import { RETURN_POSTAGE_PAYERS } from '@modules/shop';
 
 /** A person the request is aimed at: their account and the tenant role they hold, if any. */
 export interface Owner {

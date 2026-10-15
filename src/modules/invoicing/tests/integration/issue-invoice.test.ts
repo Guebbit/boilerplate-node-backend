@@ -15,7 +15,7 @@ import productsModule from '@modules/products/module';
 import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
 import invoicingModule from '@modules/invoicing/module';
-import { markPaid, shopTimezone, yearInZone } from '@modules/orders';
+import { markPaid, yearInZone } from '@modules/orders';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, timelineOf, toOrderItem } from '@modules/orders/tests/factories';
@@ -23,6 +23,7 @@ import { invoiceNumberCounterModel } from '../../model';
 import { decryptInvoiceParty } from '../../pii';
 import { invoicingRepository } from '../../repository';
 import { issueInvoice } from '../../services';
+import { shopTimezone } from '@modules/shop';
 
 setupTestDb();
 

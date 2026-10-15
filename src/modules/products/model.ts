@@ -19,8 +19,8 @@ import type { TranslationFieldIssue } from '@kernel/registry';
 import { fitsCurrency, minorUnitExponent } from '@shared-kernel/money';
 import { latestReleaseDate } from './domain/preorder';
 import { derivedStockFields } from './presenter';
-import { productCurrency } from './config';
 import { RateType, TaxClass, type Product } from '@types';
+import { shopCurrency } from '@modules/shop';
 
 /**
  * A product's stored fields, without Mongoose's document machinery — `Product` from
@@ -174,7 +174,7 @@ const refineReleaseDate = (
  */
 const refinePricePlaces = (price: number | undefined, context: z.RefinementCtx): void => {
     if (price === undefined) return;
-    const currency = productCurrency();
+    const currency = shopCurrency();
     if (!fitsCurrency(price, currency))
         context.addIssue({
             code: 'custom',

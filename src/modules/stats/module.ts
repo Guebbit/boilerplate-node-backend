@@ -6,7 +6,7 @@
  * Owns:        nothing stored. No collection, no cache.
  * Depends on:  `invoicing` (every money figure), `orders`, `payments` and `returns`, each through
  *              its own barrel, each answering already grouped.
- * Config:      none of its own; days follow `NODE_SHOP_TIMEZONE`, which `orders` owns.
+ * Config:      none of its own; days follow `NODE_SHOP_TIMEZONE`, which `shop` owns.
  */
 
 import path from 'node:path';

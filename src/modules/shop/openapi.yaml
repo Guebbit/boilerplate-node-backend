@@ -1,0 +1,122 @@
+openapi: 3.1.0
+info:
+    title: shop — module contract
+    version: '0.1.0'
+
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Shop
+      description: The shop itself — who it is, where it ships, and what it trades in.
+
+paths:
+    /shop:
+        get:
+            tags: [Shop]
+            summary: The shop's identity, currency, ship-to countries and return address
+            description: >-
+                Everything a visitor is entitled to know before a sale: the seller's legal identity
+                (Consumer Rights Directive Art. 6(1), e-Commerce Directive Art. 5), the one currency
+                every price is quoted in, the countries the shop ships to, and where returned goods
+                go. Public and cheap to read; it never changes without a redeploy. Not published:
+                the shop's time zone, and the bank-transfer details, which travel on each order.
+            operationId: getShop
+            security: []
+            responses:
+                '200':
+                    description: The shop
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShopEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- shop — the schemas only this module's paths reference. ----------
+        ShopAddress:
+            type: object
+            additionalProperties: false
+            required: [street, city, zip, country]
+            description: >-
+                Where returned goods are sent: the configured return address
+                (`NODE_RETURN_ADDRESS_*`), or the shop's legal address when none is fully set.
+            properties:
+                name:
+                    type: string
+                    description: Who the parcel is addressed to.
+                street:
+                    type: string
+                city:
+                    type: string
+                zip:
+                    type: string
+                country:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
+
+        Shop:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    legalName,
+                    street,
+                    city,
+                    zip,
+                    country,
+                    email,
+                    phone,
+                    currency,
+                    shipToCountries,
+                    returnAddress,
+                    returnPostagePayer
+                ]
+            properties:
+                legalName:
+                    type: string
+                    description: The seller's name, as registered.
+                vatNumber:
+                    type: string
+                    description: VAT identification number; absent for a shop below the registration threshold.
+                street:
+                    type: string
+                city:
+                    type: string
+                zip:
+                    type: string
+                country:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                phone:
+                    type: string
+                currency:
+                    type: string
+                    description: ISO-4217 currency code (e.g. EUR) — the shop's one currency, the same one `Product.currency` reports.
+                shipToCountries:
+                    type: array
+                    items:
+                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
+                    description: >-
+                        Every country this deployment ships a physical order to
+                        (`NODE_SHIP_TO_COUNTRIES`) — checkout refuses a method that
+                        `requiresAddress` once the resolved address falls outside it.
+                returnAddress:
+                    $ref: '#/components/schemas/ShopAddress'
+                returnPostagePayer:
+                    type: string
+                    enum: [consumer, shop]
+                    description: Who pays to send returned goods back (`NODE_RETURN_POSTAGE_PAYER`).
+
+        ShopEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Shop'

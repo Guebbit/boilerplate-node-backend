@@ -25,18 +25,20 @@ flowchart LR
     orders["orders"]
     payments["payments"]
     returns["returns"]
+    shop["shop"]
 
     stats --> invoicing
     stats --> orders
     stats --> payments
     stats --> returns
+    stats --> shop
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
-    class invoicing,payments,returns supporting;
+    class invoicing,payments,returns,shop supporting;
     class stats centre;
 ```
 

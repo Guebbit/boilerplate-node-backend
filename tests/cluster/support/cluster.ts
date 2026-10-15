@@ -187,7 +187,7 @@ const startCluster = ({
                             'bdb9857044f9d079163b02211f0c7415a971033780165f3e37667a0a2fe01359',
                         /*
                          * The shop's identity and VAT rates are required at boot too
-                         * (`orders/config.ts`) — the invoice and the withdrawal notice print them. Same
+                         * (`shop/config.ts`) — the invoice and the withdrawal notice print them. Same
                          * values `.env-example` ships, so the child boots the way a fresh checkout does.
                          */
                         NODE_SHOP_COUNTRY: 'IT',

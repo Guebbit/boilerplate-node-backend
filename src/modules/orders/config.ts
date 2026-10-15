@@ -1,12 +1,11 @@
 /**
  * @module
- * The shop's identity (who it is, where it is, how to reach it, where returned goods go), the
- * bank-transfer payment method's deployment config, and this module's one link into the paired
- * frontend. All read per call rather than captured at import, the pattern `inventory/config.ts`
- * sets, so a test can vary any of them per case. A deployment corrects one with a restart.
+ * The bank-transfer payment method's deployment config, the order rules (withdrawal window,
+ * retention, line caps) and this module's one link into the paired frontend. All read per call
+ * rather than captured at import, the pattern `inventory/config.ts` sets, so a test can vary any
+ * of them per case. A deployment corrects one with a restart.
  *
- * Owner of the identity:  `orders`, because `invoicing`, `delivery` and `returns` all import
- *                         `orders` and `orders` may not import them back.
+ * The shop's own identity, currency and return address live in `shop`.
  * Bank transfer:          owned here, since `orders` renders `transferInstructions`.
  *                         `payments` and `cart` read it through
  *                         `services/index.ts` (a barrel may never publish a bare `config`).
@@ -17,44 +16,15 @@
  * See: docs/modules/orders.md
  */
 
-import { ConfigError, defineConfig } from '@infrastructure/config/define';
-import { choice, csv, email, int, text, timeZone } from '@infrastructure/config/fields';
-import { currencyConfig } from '@infrastructure/runtime/config';
+import { defineConfig } from '@infrastructure/config/define';
+import { int, text } from '@infrastructure/config/fields';
 import { frontendLink } from '@infrastructure/http/frontend-link';
 import type { OrderTransferInstructions } from '@types';
 
-/** Who pays to send returned goods back. */
-export const RETURN_POSTAGE_PAYERS = ['consumer', 'shop'] as const;
-
-/** Who pays to send returned goods back: the customer, or the shop. */
-export type ReturnPostagePayer = (typeof RETURN_POSTAGE_PAYERS)[number];
-
-/**
- * What the shop is, where it is, and how it takes a transfer.
- *
- * The legal name, address, email and phone are required at boot: the invoice and the withdrawal
- * notice both print them, and a notice with no address on it is not one (CRD Art. 6(1)(c)). The VAT
- * number and the return address stay optional.
- */
+/** How the shop takes a transfer, and the rules an order lives by. */
 export const ordersConfig = defineConfig({
     name: 'orders',
     shape: {
-        NODE_SHOP_COUNTRY: text({ required: { minLength: 1 } }),
-        NODE_SHOP_TIMEZONE: timeZone({ required: { minLength: 1 } }),
-        NODE_SHOP_LEGAL_NAME: text({ required: { minLength: 1 } }),
-        NODE_SHOP_VAT_NUMBER: text(),
-        NODE_SHOP_STREET: text({ required: { minLength: 1 } }),
-        NODE_SHOP_CITY: text({ required: { minLength: 1 } }),
-        NODE_SHOP_ZIP: text({ required: { minLength: 1 } }),
-        NODE_SHOP_EMAIL: email({ required: { minLength: 1 } }),
-        NODE_SHOP_PHONE: text({ required: { minLength: 1 } }),
-        NODE_RETURN_ADDRESS_NAME: text(),
-        NODE_RETURN_ADDRESS_STREET: text(),
-        NODE_RETURN_ADDRESS_CITY: text(),
-        NODE_RETURN_ADDRESS_ZIP: text(),
-        NODE_RETURN_ADDRESS_COUNTRY: text({ case: 'upper' }),
-        NODE_RETURN_POSTAGE_PAYER: choice(RETURN_POSTAGE_PAYERS, { default: 'consumer' }),
-        NODE_SHIP_TO_COUNTRIES: csv({ case: 'upper' }),
         NODE_BANK_TRANSFER_BENEFICIARY: text(),
         NODE_BANK_TRANSFER_IBAN: text(),
         NODE_BANK_TRANSFER_BIC: text(),
@@ -69,151 +39,6 @@ export const ordersConfig = defineConfig({
         NODE_FRONTEND_LINK_ORDER: text({ default: 'orders/{id}' })
     }
 });
-
-/**
- * The shop's own country — the ONLY jurisdiction VAT is ever charged at: no destination lookup,
- * no per-customer address, legal below the EU's €10,000 distance-selling threshold. Required at
- * boot via this module's manifest; read defensively regardless, since `NODE_ENV=test` skips that
- * check — the demo profile does not: it sets `NODE_SHOP_COUNTRY` itself, the same as any other
- * deployment must.
- * @returns the configured ISO-3166 country code, or `undefined`
- */
-export const shopCountry = (): string | undefined => ordersConfig().NODE_SHOP_COUNTRY;
-
-/**
- * The shop's own time zone — whose calendar every year-numbered series, and every "day" a report
- * counts, follows. One named zone (not a fixed offset, which ignores summer time) so a sale at
- * 00:30 on 1 January in Rome lands in the new year's series. Required at boot via this module's
- * manifest; the throw is the same `NODE_ENV=test` backstop {@link shopIdentity} has.
- * @returns the canonical IANA zone name, e.g. `Europe/Rome`
- * @throws {ConfigError} when it is unset (only possible under `NODE_ENV=test`)
- */
-export const shopTimezone = (): string =>
-    requiredValue('NODE_SHOP_TIMEZONE', ordersConfig().NODE_SHOP_TIMEZONE);
-
-/**
- * A required variable's value. `NODE_ENV=test` skips the boot check, so a suite that forgot to
- * set one gets this refusal instead of a silent `undefined` on a legal notice.
- * @param name - the variable, for the message
- * @param value - what the slice parsed
- * @returns the value
- * @throws {ConfigError} when it is unset
- */
-const requiredValue = (name: string, value: string | undefined): string => {
-    if (value === undefined)
-        throw new ConfigError(`Invalid configuration (orders): ${name} is required`);
-    return value;
-};
-
-/** Where and who the shop is: the trader identity of CRD Art. 6(1)(b)-(c) and an invoice's seller block. */
-export interface ShopIdentity {
-    /** The legal name, as registered. */
-    legalName: string;
-    /** VAT identification number; absent for a shop below the registration threshold. */
-    vatNumber?: string;
-    street: string;
-    city: string;
-    zip: string;
-    /** ISO-3166 alpha-2. */
-    country: string;
-    /** Where a customer writes to. */
-    email: string;
-    /** Telephone number. */
-    phone: string;
-}
-
-/**
- * The shop's identity — every required field present, the VAT number only when set.
- * @returns the identity
- * @throws {ConfigError} when a required variable is unset (only possible under `NODE_ENV=test`)
- */
-export const shopIdentity = (): ShopIdentity => {
-    const config = ordersConfig();
-    const vatNumber = config.NODE_SHOP_VAT_NUMBER;
-    return {
-        legalName: requiredValue('NODE_SHOP_LEGAL_NAME', config.NODE_SHOP_LEGAL_NAME),
-        ...(vatNumber ? { vatNumber } : {}),
-        street: requiredValue('NODE_SHOP_STREET', config.NODE_SHOP_STREET),
-        city: requiredValue('NODE_SHOP_CITY', config.NODE_SHOP_CITY),
-        zip: requiredValue('NODE_SHOP_ZIP', config.NODE_SHOP_ZIP),
-        country: requiredValue('NODE_SHOP_COUNTRY', config.NODE_SHOP_COUNTRY),
-        email: requiredValue('NODE_SHOP_EMAIL', config.NODE_SHOP_EMAIL),
-        phone: requiredValue('NODE_SHOP_PHONE', config.NODE_SHOP_PHONE)
-    };
-};
-
-/** Where returned goods go. */
-export interface ReturnAddress {
-    /** Who the parcel is addressed to. */
-    name?: string;
-    street: string;
-    city: string;
-    zip: string;
-    /** ISO-3166 alpha-2. */
-    country: string;
-}
-
-/**
- * Where returned goods are sent: the configured return address, or the shop's legal address when
- * none is fully set. Partial config reads as none rather than guessed at: a customer told to post
- * a parcel to "Via Roma, " is worse off than one sent to the legal address.
- * @returns the address; never `undefined`
- */
-export const returnAddress = (): ReturnAddress => {
-    const {
-        NODE_RETURN_ADDRESS_STREET: street,
-        NODE_RETURN_ADDRESS_CITY: city,
-        NODE_RETURN_ADDRESS_ZIP: zip,
-        NODE_RETURN_ADDRESS_COUNTRY: country,
-        NODE_RETURN_ADDRESS_NAME: name
-    } = ordersConfig();
-    if (street && city && zip && country)
-        return { ...(name ? { name } : {}), street, city, zip, country };
-
-    const legal = shopIdentity();
-    return {
-        name: legal.legalName,
-        street: legal.street,
-        city: legal.city,
-        zip: legal.zip,
-        country: legal.country
-    };
-};
-
-/**
- * Who bears the direct cost of returning the goods. The consumer by default — Consumer Rights
- * Directive Art. 14(1) permits it, IF they were told beforehand, which is why this value also
- * drives the wording of the placed-order email and the withdrawal acknowledgement. A deployment
- * that offers free returns sets it to `shop`.
- * @returns `consumer` (default) or `shop`
- */
-export const returnPostagePayer = (): ReturnPostagePayer =>
-    ordersConfig().NODE_RETURN_POSTAGE_PAYER;
-
-/**
- * Which ISO-3166 countries this deployment will ship a physical order to — checkout refuses
- * (422) any method that `requiresAddress` once the resolved address's country falls outside it.
- * Comma-separated; each code is upper-cased so a deployment typing `it` still matches an address
- * stored as `IT`. Defaults to the shop's own country alone: ship only where the VAT assumption in
- * this file's own docblock already holds, until a deployment explicitly widens it.
- * @returns the configured list, upper-cased; empty when neither this nor `NODE_SHOP_COUNTRY` is set
- */
-export const shipToCountries = (): string[] => {
-    const configured = ordersConfig().NODE_SHIP_TO_COUNTRIES;
-    if (configured.length > 0) return configured;
-    const shop = shopCountry();
-    return shop ? [shop] : [];
-};
-
-/**
- * The one ISO-4217 currency this deployment trades in — frozen onto every order, and every
- * payment `payments` stamps at intent time. The variable itself is the infrastructure's
- * `currencyConfig`, shared with `products`; this getter is the order-side door to it. `invoicing` freezes the SAME value again from its own event listener,
- * never re-reading this getter once an invoice is issued. A shop that ever needs a second
- * currency needs a real design, not several modules quietly reading the same env var.
- * @returns the configured ISO-4217 currency code
- */
-export const shopCurrency = (): string => currencyConfig().NODE_DEFAULT_CURRENCY;
 
 /**
  * The account name a transfer should be made out to. Unset means transfer is not offered at all.

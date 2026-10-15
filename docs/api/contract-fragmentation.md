@@ -226,8 +226,8 @@ Its `openapi.yaml` holds every operation under `/products`:
 
 ```
 /products                /products/search      /products/categories
-/products/settings       /products/{id}        /products/{id}/admin
-/products/{id}/restore   /products/{id}/hard
+/products/{id}           /products/{id}/admin  /products/{id}/restore
+/products/{id}/hard
 ```
 
 At which point the goal test the whole module architecture exists to satisfy finally includes the

@@ -27,7 +27,7 @@ import { callerForSubject, systemCallerContext } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
 import { cancelRemainder, remainderOptions, waitHasExpired, ActRefusal } from '@modules/delivery';
 import { inventoryService } from '@modules/inventory';
-import { orderService, isExcludedFromWithdrawal, returnPostagePayer } from '@modules/orders';
+import { orderService, isExcludedFromWithdrawal } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import { FulfillmentCancelReason } from '@types';
@@ -52,6 +52,7 @@ import {
     type CreateReturnInput,
     type CreateReturnOutcome
 } from './outcome';
+import { returnPostagePayer } from '@modules/shop';
 
 /** What the cancellation is made from, once the transaction has decided it. */
 interface Cancelled {

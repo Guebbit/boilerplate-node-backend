@@ -77,18 +77,6 @@ export const databaseConfig = defineConfig({
 });
 
 /**
- * The one currency the shop trades in. Infrastructure, not a module's, because `orders` and
- * `products` both read it and neither may import the other's config (`products` is imported by
- * `orders`, so the reverse would close a module cycle).
- */
-export const currencyConfig = defineConfig({
-    name: 'currency',
-    shape: {
-        NODE_DEFAULT_CURRENCY: text({ default: 'EUR' })
-    }
-});
-
-/**
  * The restock mark, declared once. Infrastructure, not a module's, because `inventory` (its stock
  * board) and `products` (the storefront's `lowStock` flag) both read it, and `inventory` depends
  * on `products`, so neither may import the other's config. One declaration keeps the badge and

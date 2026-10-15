@@ -9,7 +9,7 @@
  * cart, never a 404.
  */
 
-import { orderTotal, sumLineItems, shopCurrency } from '@modules/orders';
+import { orderTotal, sumLineItems } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
@@ -24,6 +24,7 @@ import {
 import type { CartDocument } from '../model';
 import { basketWeight, lineAvailability, needsShipping } from '../domain';
 import { availabilityProductOf, preorderIdsOf } from './preorder';
+import { shopCurrency } from '@modules/shop';
 
 /**
  * A cart line joined with the product it references.

@@ -27,6 +27,7 @@ flowchart LR
     inventory["inventory"]
     orders["orders"]
     payments["payments"]
+    shop["shop"]
     stats["stats"]
 
     stats --> returns
@@ -34,6 +35,7 @@ flowchart LR
     returns --> inventory
     returns --> orders
     returns --> payments
+    returns --> shop
     delivery -. "fulfillment_order.wait_expired" .-> returns
     payments -. "payment.refunded" .-> returns
 
@@ -42,7 +44,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
-    class delivery,inventory,payments,stats supporting;
+    class delivery,inventory,payments,shop,stats supporting;
     class returns centre;
 ```
 

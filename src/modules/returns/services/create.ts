@@ -25,9 +25,7 @@ import {
     orderService,
     orderTotal,
     isBeforeDispatch,
-    isExcludedFromWithdrawal,
-    returnAddress,
-    returnPostagePayer
+    isExcludedFromWithdrawal
 } from '@modules/orders';
 import { shippedQuantities } from '@modules/delivery';
 import type { OrderDocument } from '@modules/orders';
@@ -58,6 +56,7 @@ import {
     type CreateReturnInput,
     type CreateReturnOutcome
 } from './outcome';
+import { returnAddress, returnPostagePayer } from '@modules/shop';
 
 export type { CreateReturnInput, CreateReturnOutcome } from './outcome';
 

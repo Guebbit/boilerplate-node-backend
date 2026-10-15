@@ -11,7 +11,7 @@
 
 import { defineConfig } from '@infrastructure/config/define';
 import { decimal } from '@infrastructure/config/fields';
-import { currencyConfig, stockConfig } from '@infrastructure/runtime/config';
+import { stockConfig } from '@infrastructure/runtime/config';
 
 /**
  * The two VAT rates.
@@ -51,13 +51,6 @@ export const vatRateDefault = (): number => productsConfig().NODE_VAT_RATE_DEFAU
  * @returns the configured decimal rate (0.1 for 10%)
  */
 export const vatRateReduced = (): number => productsConfig().NODE_VAT_RATE_REDUCED;
-
-/**
- * The one ISO-4217 currency this deployment trades in — the infrastructure's `currencyConfig`,
- * which `orders` reads too.
- * @returns the configured ISO-4217 currency code
- */
-export const productCurrency = (): string => currencyConfig().NODE_DEFAULT_CURRENCY;
 
 /**
  * The availability at or under which a product reads as low on stock — the infrastructure's

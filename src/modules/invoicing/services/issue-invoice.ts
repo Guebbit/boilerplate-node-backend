@@ -13,18 +13,13 @@
 import { Types } from 'mongoose';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { withTransaction } from '@infrastructure/runtime/database';
-import {
-    orderService,
-    orderTaxBreakdown,
-    orderTotal,
-    shopIdentity,
-    billingAddressOf
-} from '@modules/orders';
+import { orderService, orderTaxBreakdown, orderTotal, billingAddressOf } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { invoicingRepository } from '../repository';
 import { encryptInvoiceParty } from '../pii';
 import { allocateInvoiceNumber } from './numbering';
 import type { InvoiceDocument, InvoiceLine, InvoiceSeller } from '../model';
+import { shopIdentity } from '@modules/shop';
 
 /**
  * The seller's own identity, frozen fresh at every issue — never re-read once an invoice exists.

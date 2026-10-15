@@ -16,7 +16,7 @@ import {
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { orderService, returnAddress } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import type { CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository, type ReturnStamp } from '../repository';
@@ -25,6 +25,7 @@ import { returnsAuditActions } from '../audit';
 import { DECIDABLE_RETURN_STATUSES } from '../domain';
 import { mailReturnNotice } from './notify';
 import { syncReturnStatus } from './projection';
+import { returnAddress } from '@modules/shop';
 
 /**
  * What a lost race, or a request already answered, looks like: 404 for a return that does not

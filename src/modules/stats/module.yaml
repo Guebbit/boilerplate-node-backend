@@ -7,3 +7,4 @@ dependsOn:
     - orders # counts, units, products, customers and the open pipeline
     - payments # the payments mix
     - returns # units that came back
+    - shop # the zone whose days the numbers are counted in, and the currency they are in

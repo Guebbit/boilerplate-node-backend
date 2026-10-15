@@ -15,7 +15,7 @@ import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
 import paymentsModule from '@modules/payments/module';
 import invoicingModule from '@modules/invoicing/module';
-import { shopTimezone, yearInZone } from '@modules/orders';
+import { yearInZone } from '@modules/orders';
 import { createIntent, confirmPayment, refundForOrder, paymentService } from '@modules/payments';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
@@ -25,6 +25,7 @@ import { creditNoteNumberCounterModel } from '../../model';
 import { decryptInvoiceParty } from '../../pii';
 import { invoicingRepository } from '../../repository';
 import { issueCreditNote } from '../../services';
+import { shopTimezone } from '@modules/shop';
 
 /** The fake PSP's "always succeeds" reference (`scenarios/support/doubles/payments/fake.ts`). */
 const FAKE_SUCCESS_METHOD = 'pm_card_visa';

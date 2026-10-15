@@ -164,7 +164,6 @@ export type {
 } from './stats';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
 // barrel may only publish services/domain/events/emails/model — see `local/barrel-allowed-sources`.
-// The shop's identity and return address are read by `invoicing`, `delivery` and `returns` from here.
 export {
     bankTransferBeneficiary,
     bankTransferBic,
@@ -173,17 +172,8 @@ export {
     bankTransferIban,
     bankTransferIbanFriendly,
     orderFrontendLink,
-    shopCurrency,
-    shopCountry,
-    shopIdentity,
-    shopTimezone,
-    withdrawalPeriodDays,
-    shipToCountries,
-    returnAddress,
-    returnPostagePayer,
-    RETURN_POSTAGE_PAYERS
+    withdrawalPeriodDays
 } from '../config';
-export type { ShopIdentity, ReturnAddress, ReturnPostagePayer } from '../config';
 
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const orderService = {

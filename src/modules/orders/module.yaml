@@ -5,4 +5,5 @@ dependsOn:
     - access # the rank rule: staff change only the orders of people below them
     - inventory # a claim on units, released on cancel or RESERVATION_EXPIRED
     - products # a line copies the catalogue row's fields at purchase time
+    - shop # the currency a total is frozen in, and the seller on its emails
     - users # a buyer's stored locale for emails; its hard delete runs the erase hook

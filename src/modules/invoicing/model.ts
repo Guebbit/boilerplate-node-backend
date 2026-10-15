@@ -15,7 +15,7 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import { RateType, type OrderTaxSummaryRow } from '@types';
-import type { ShopIdentity } from '@modules/orders';
+import type { ShopIdentity } from '@modules/shop';
 
 /**
  * One frozen line — a product's title, quantity and the price/rate it was actually sold at. No

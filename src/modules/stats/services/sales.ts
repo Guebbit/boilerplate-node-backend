@@ -6,11 +6,12 @@
  */
 
 import { invoicingService } from '@modules/invoicing';
-import { orderService, shopCurrency } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import { returnService } from '@modules/returns';
 import type { SalesStats } from '@types';
 import { addRawFigures, emptyRawFigures, figuresOf, type RawFigures } from './figures';
 import type { Period } from './range';
+import { shopCurrency } from '@modules/shop';
 
 /** Raw figures per currency, then per bucket (keyed by the bucket's ISO instant). */
 type ByCurrency = Map<string, Map<string, RawFigures>>;

@@ -73,15 +73,6 @@ describe('GET /delivery/methods', () => {
         expect(ids).toContain('express');
     });
 
-    // The answer names which countries this deployment ships to — the frontend reads it here
-    // rather than guessing.
-    it('lists the configured ship-to countries', async () => {
-        const response = await api().get('/delivery/methods');
-
-        // `tests/support/setup-environment.ts` sets `NODE_SHOP_COUNTRY=IT`; `NODE_SHIP_TO_COUNTRIES` is unset.
-        expect(response.body.data.shipToCountries).toEqual(['IT']);
-    });
-
     // Every method carries the shop's own currency — the frontend reads it here rather
     // than guessing a fixed default.
     it('stamps every method with the shop currency', async () => {

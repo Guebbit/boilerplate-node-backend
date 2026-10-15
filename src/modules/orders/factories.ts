@@ -15,7 +15,7 @@ import { identityOf, toDate, type OverridesFor } from '@infrastructure/persisten
 import { stripUndefined } from '@infrastructure/object-guards';
 import type { Id, Order, OrderItem, Product } from '@types';
 import type { FrozenOrderLineProduct, OrderDocument } from './model';
-import { shopCurrency } from './config';
+import { shopCurrency } from '@modules/shop';
 
 /**
  * The product as it was when the order was placed — the generated `Product`, with the three

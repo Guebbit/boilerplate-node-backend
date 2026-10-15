@@ -5,10 +5,11 @@
  * same one `$dateTrunc` buckets in, so a bucket edge and a bound can never disagree about a day.
  */
 
-import { shopTimezone, zonedStartOfDay } from '@modules/orders';
+import { zonedStartOfDay } from '@modules/orders';
 import type { ReportWindow } from '@infrastructure/persistence/report';
 import { addDays, formatDay, type CalendarDay, type CalendarInterval } from '../domain/calendar';
 import { checkRange, previousOf, type RangeRefusal } from '../domain/range';
+import { shopTimezone } from '@modules/shop';
 
 /** A period the owners can be asked about. */
 export interface Period {

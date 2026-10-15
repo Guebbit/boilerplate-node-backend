@@ -338,7 +338,7 @@ const shopperFor = (base: ReadonlyMap<string, Caller>, who: string): Caller => {
  * Refuse to seed a shop the `order.awaitingTransfer` guarantee cannot hold in.
  *
  * Bank transfer is offered only once the deployment names a beneficiary and an IBAN
- * (`src/modules/orders/config.ts`), and the `shop` scenario declares a row that
+ * (`src/modules/shop/config.ts`), and the `shop` scenario declares a row that
  * needs it — so an unconfigured deployment has to fail here, naming the two variables, rather
  * than three hundred requests later on a 409 that says `CART_PAYMENT_METHOD_NOT_AVAILABLE`.
  *

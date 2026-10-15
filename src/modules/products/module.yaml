@@ -1,4 +1,5 @@
 summary: 'The catalogue, its search surface and its cache.'
 subdomain: core
 group: shop
-dependsOn: []
+dependsOn:
+    - shop # the currency every price is quoted in

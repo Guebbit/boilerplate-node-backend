@@ -7,7 +7,6 @@
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
-import { shipToCountries, shopCurrency } from '@modules/orders';
 import {
     fieldError,
     generateSuccess,
@@ -51,6 +50,7 @@ import {
 } from './view';
 import { availabilityProductOf, preorderIdsOf } from './preorder';
 import { ERROR_CODES } from '@api/error-codes';
+import { shipToCountries, shopCurrency } from '@modules/shop';
 
 /**
  * The snapshot an order embeds, from a book entry — as its shipping or its billing address: the

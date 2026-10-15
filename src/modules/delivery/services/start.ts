@@ -12,30 +12,29 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { orderService, shopCurrency, shipToCountries, returnAddress } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import { OrderStatus } from '@types';
 import type { AuthContext, CallerContext, Order, ShippingMethodsResponse } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { deliveryAuditActions } from '../audit';
 import { SHIPPING_METHODS } from '../domain';
 import { ensureFulfillmentOrders } from './ensure';
+import { shopCurrency } from '@modules/shop';
 
 /**
  * The full methods list, for the checkout page's selector. Static, so always a success.
  * Unfiltered — `cart`'s `PUT /cart/shipping-method` and checkout are what check a method against
  * the caller's real basket, server-side.
  *
- * `currency` and `shipToCountries` are read fresh per call, not baked into `SHIPPING_METHODS`
- * itself — both are live deployment config (`NODE_DEFAULT_CURRENCY`/`NODE_SHIP_TO_COUNTRIES`),
- * and a static array would freeze whichever value happened to be set at import time.
+ * `currency` is read fresh per call, not baked into `SHIPPING_METHODS` itself — it is live
+ * deployment config (`NODE_DEFAULT_CURRENCY`), and a static array would freeze whichever value
+ * happened to be set at import time.
  */
 export const listMethods = (): ResponseSuccess<ShippingMethodsResponse> => {
     const currency = shopCurrency();
     return generateSuccess({
         // Spread: `SHIPPING_METHODS` itself is `readonly`, and the response type isn't.
-        methods: SHIPPING_METHODS.map((method) => ({ ...method, currency })),
-        shipToCountries: shipToCountries(),
-        returnAddress: returnAddress()
+        methods: SHIPPING_METHODS.map((method) => ({ ...method, currency }))
     });
 };
 

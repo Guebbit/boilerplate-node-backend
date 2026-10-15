@@ -9,8 +9,9 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { shopTimezone, yearInZone } from '@modules/orders';
+import { yearInZone } from '@modules/orders';
 import { invoicingRepository } from '../repository';
+import { shopTimezone } from '@modules/shop';
 
 /** How wide the sequence portion of a number is padded, e.g. `000041` — matches `orders`' own. */
 const SEQUENCE_WIDTH = 6;

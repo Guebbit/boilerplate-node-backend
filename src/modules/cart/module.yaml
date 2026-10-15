@@ -8,4 +8,5 @@ dependsOn:
     - orders # placeOrder — the one function every order is written through
     - payments # listPaymentMethods, to validate the requested method
     - products # prices and availability
+    - shop # the currency and the countries the shop ships to
     - users # the buyer

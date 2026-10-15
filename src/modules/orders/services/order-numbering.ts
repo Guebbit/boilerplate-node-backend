@@ -6,9 +6,9 @@
  * (`orderRepository.incrementOrderNumberCounter`) — this file only decides the string.
  */
 
-import { shopTimezone } from '../config';
 import { yearInZone } from '../domain/shop-time';
 import { orderRepository } from '../repository';
+import { shopTimezone } from '@modules/shop';
 
 /**
  * How wide the sequence portion of an order number is padded, e.g. `000041`. A gap in the

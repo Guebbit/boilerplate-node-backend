@@ -21,11 +21,13 @@ flowchart LR
     invoicing["invoicing<br/><i>this module</i>"]
     orders["orders"]
     payments["payments"]
+    shop["shop"]
     stats["stats"]
 
     stats --> invoicing
     invoicing --> orders
     invoicing --> payments
+    invoicing --> shop
     orders -. "order.status_changed" .-> invoicing
     payments -. "payment.refunded" .-> invoicing
 
@@ -34,7 +36,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
-    class payments,stats supporting;
+    class payments,shop,stats supporting;
     class invoicing centre;
 ```
 

@@ -14,9 +14,8 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
-import { RETURN_POSTAGE_PAYERS } from '@modules/orders';
-import type { ReturnPostagePayer } from '@modules/orders';
 import { ReturnKind, ReturnReason, ReturnStatus } from '@types';
+import { RETURN_POSTAGE_PAYERS, type ReturnPostagePayer } from '@modules/shop';
 
 /** One line of a return — a snapshot of what is coming back, so it reads the same later. */
 export interface ReturnLine {

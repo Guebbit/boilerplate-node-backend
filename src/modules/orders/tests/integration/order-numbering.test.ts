@@ -6,10 +6,10 @@
  * `findOneAndUpdate` against a real Mongo — nothing here is provable against a mock.
  */
 import { setupTestDb } from '@tests/setup-test-db';
-import { shopTimezone } from '../../config';
 import { yearInZone } from '../../domain/shop-time';
 import { allocateOrderNumber } from '../../services/order-numbering';
 import { freezeDate } from '@tests/clock';
+import { shopTimezone } from '@modules/shop';
 
 setupTestDb();
 
