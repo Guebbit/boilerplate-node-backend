@@ -70,25 +70,35 @@ const appendSections = async (
 };
 
 /**
- * Mail the link for a row that has just become `ready`. The greeting names the account only when
- * the mail goes to its verified address (`greetableName`).
+ * Mail the requester about their export, when there is still someone to mail: the account may have
+ * been erased between the request and now. The greeting names the account only when the mail goes
+ * to its verified address (`greetableName`).
+ *
+ * @param job - the job, for the address and the language
+ * @param build - the mail's copy for the greeting name
+ */
+const mailRequester = (
+    job: AccountExportJobPayload,
+    build: (name: string) => ReturnType<typeof exportReadyEmail>
+): Promise<void> =>
+    userService.getById(job.userId).then((user) => {
+        // Erased in the meantime: nobody is left to tell.
+        if (!user) return;
+
+        const name = job.emailVerified ? greetableName(user, job.email) : '';
+        return sendAccountMail(job.email, build(name), 'high');
+    });
+
+/**
+ * Mail the link for a row that has just become `ready`.
  *
  * @param job - the job, for the address and the language
  * @param row - the settled row
  */
-const mailLink = (job: AccountExportJobPayload, row: AccountExportRow): Promise<void> =>
-    userService.getById(job.userId).then((user) => {
-        // The account was erased between the build and the mail: nobody is left to tell.
-        if (!user) return;
-
-        const days = Math.round(exportRetentionMs() / 86_400_000);
-        const name = job.emailVerified ? greetableName(user, job.email) : '';
-        return sendAccountMail(
-            job.email,
-            exportReadyEmail(job.locale, name, String(row._id), days),
-            'high'
-        );
-    });
+const mailLink = (job: AccountExportJobPayload, row: AccountExportRow): Promise<void> => {
+    const days = Math.round(exportRetentionMs() / 86_400_000);
+    return mailRequester(job, (name) => exportReadyEmail(job.locale, name, String(row._id), days));
+};
 
 /**
  * Build the file, then move the row to `ready`.
@@ -164,17 +174,9 @@ const afterBuild = (
  * @param job - the job, for the address and the language
  */
 const mailFailure = (job: AccountExportJobPayload): Promise<void> =>
-    userService
-        .getById(job.userId)
-        .then((user) => {
-            if (!user) return;
-
-            const name = job.emailVerified ? greetableName(user, job.email) : '';
-            return sendAccountMail(job.email, exportFailedEmail(job.locale, name), 'high');
-        })
-        .catch((error: unknown) => {
-            logger.error({ message: 'account export failure mail not queued', error });
-        });
+    mailRequester(job, (name) => exportFailedEmail(job.locale, name)).catch((error: unknown) => {
+        logger.error({ message: 'account export failure mail not queued', error });
+    });
 
 /**
  * Mark the row `failed`, take the half-built file away and tell the requester. The error is logged here, so the

@@ -914,15 +914,15 @@ describe('POST /account/export', () => {
 });
 
 describe('POST /account/export for an account that is gone', () => {
-    // A valid session whose account vanished (deleted between the session check and the export):
-    // the contract declares this 404 rather than leaving it undocumented.
-    it('answers 404', async () => {
+    // A valid session whose account vanished (deleted between the session check and the export) is
+    // unauthenticated, as it is on every other self-service route; the contract declares no 404.
+    it('answers 401', async () => {
         const { bearer } = await loginWithCookie();
         jest.spyOn(userService, 'getById').mockResolvedValueOnce(undefined);
 
         const response = await api().post('/account/export').set('Authorization', bearer).send();
 
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(401);
         jest.restoreAllMocks();
     });
 });

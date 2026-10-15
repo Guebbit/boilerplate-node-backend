@@ -22,7 +22,7 @@
 import { Types } from 'mongoose';
 import type { ClientSession } from 'mongoose';
 import type { Readable } from 'node:stream';
-import { generateSuccess, generateReject } from '@infrastructure/http/response';
+import { generateSuccess } from '@infrastructure/http/response';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { openExport, removeExport } from '@infrastructure/adapters/export-store';
@@ -32,6 +32,7 @@ import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { t } from '@infrastructure/i18n';
 import { userService } from '@modules/users';
+import { withOwnAccount } from './caller';
 import { WORKER_CHANNELS } from '@types';
 import type { AccountExportJobPayload, CallerContext } from '@types';
 import type { AfterErase } from '@kernel/registry';
@@ -177,49 +178,50 @@ const isRow = (outcome: ExportRowChoice | ResponseReject): outcome is ExportRowC
  * is mailed when it is ready.
  *
  * @param userId - the authenticated caller's own id; this never reads anyone else's data
- * @param email - the caller's own email, the key the `feedback` section matches by — handed to the
- *   job together with whether the account has proved it, since an unproven address is anyone's
  * @param context - for the audit event this call itself is, and the request's language
- * @returns `202` with the export's `id` and `status`, `404` when the account is gone, or `429`
+ * @returns `202` with the export's `id` and `status`, `401` when the account is gone, or `429`
  *   when a new build would exceed the mailbox budget
  */
 export const requestExport = (
     userId: string,
-    email: string,
     context: CallerContext
 ): Promise<ResponseSuccess<AccountExportRequestResult> | ResponseReject> =>
-    userService.getById(userId).then((user) => {
-        if (!user) return generateReject(404, [t('users.not-found')]);
+    withOwnAccount(
+        userId,
+        (user) =>
+            rowOrRefusal(userId, user.email).then((outcome) => {
+                if (!isRow(outcome)) return outcome;
+                const { row, created } = outcome;
 
-        return rowOrRefusal(userId, user.email).then((outcome) => {
-            if (!isRow(outcome)) return outcome;
-            const { row, created } = outcome;
+                recordAudit(context, {
+                    action: accountAuditActions.AUTH_DATA_EXPORT_REQUESTED,
+                    outcome: 'success',
+                    targetType: 'account_export',
+                    targetId: String(row._id),
+                    ...(created ? {} : { metadata: { reused: true } })
+                });
 
-            recordAudit(context, {
-                action: accountAuditActions.AUTH_DATA_EXPORT_REQUESTED,
-                outcome: 'success',
-                targetType: 'account_export',
-                targetId: String(row._id),
-                ...(created ? {} : { metadata: { reused: true } })
-            });
+                // `email` is the key the `feedback` section matches by, handed to the job together
+                // with whether the account has proved it, since an unproven address is anyone's.
+                const job: AccountExportJobPayload = {
+                    exportId: String(row._id),
+                    userId,
+                    email: user.email,
+                    emailVerified: Boolean(user.verifiedAt),
+                    locale: recipientLocale(user.locale, context)
+                };
 
-            const job: AccountExportJobPayload = {
-                exportId: String(row._id),
-                userId,
-                email,
-                emailVerified: Boolean(user.verifiedAt),
-                locale: recipientLocale(user.locale, context)
-            };
-
-            return (created ? dispatch(job) : Promise.resolve()).then(() =>
-                generateSuccess<AccountExportRequestResult>(
-                    { id: String(row._id), status: row.status },
-                    202,
-                    t('account.export.requested')
-                )
-            );
-        });
-    });
+                return (created ? dispatch(job) : Promise.resolve()).then(() =>
+                    generateSuccess<AccountExportRequestResult>(
+                        { id: String(row._id), status: row.status },
+                        202,
+                        t('account.export.requested')
+                    )
+                );
+            }),
+        // No credentials needed: the export reads the profile, never a secret.
+        userService.getById
+    );
 
 /**
  * Open the caller's finished export for download. The ownership check is the query, so another

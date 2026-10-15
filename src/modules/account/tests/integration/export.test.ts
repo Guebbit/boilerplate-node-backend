@@ -125,7 +125,7 @@ const requestFor = async (overrides: Parameters<typeof createUser>[0] = {}) => {
         verifiedAt: new Date(),
         ...overrides
     });
-    const result = await requestExport(user.id, user.email, testCallerContext);
+    const result = await requestExport(user.id, testCallerContext);
     if (!result.success) throw new Error('the request was refused');
     return { user, result };
 };
@@ -159,7 +159,7 @@ const gate = () => {
 const exportDueIn = async (email: string, millis: number) => {
     setPersonalDataSections(basicSections());
     const user = await createUser({ email });
-    const result = await requestExport(user.id, user.email, testCallerContext);
+    const result = await requestExport(user.id, testCallerContext);
     await settleInlineExports();
     await accountExportModel.updateOne(
         { userId: user.id },
@@ -183,7 +183,7 @@ describe('what the export holds of the notifications module', () => {
         });
         await createNotification({ userId: stranger.id });
 
-        const result = await requestExport(user.id, user.email, testCallerContext);
+        const result = await requestExport(user.id, testCallerContext);
         await settleInlineExports();
 
         if (!result.success) throw new Error('the request was refused');
@@ -217,7 +217,7 @@ describe('what the export holds of the users module', () => {
             connectedAt: new Date('2026-03-01T10:00:00.000Z')
         });
 
-        const result = await requestExport(user.id, user.email, testCallerContext);
+        const result = await requestExport(user.id, testCallerContext);
         await settleInlineExports();
 
         if (!result.success) throw new Error('the request was refused');
@@ -319,11 +319,11 @@ describe('requestExport', () => {
         );
     });
 
-    it('answers 404 for an account that is gone', async () => {
-        const result = await requestExport('0'.repeat(24), 'gone@example.com', testCallerContext);
+    it('answers 401 for an account that is gone: a valid token for nobody is unauthenticated', async () => {
+        const result = await requestExport('0'.repeat(24), testCallerContext);
 
         expect(result.success).toBe(false);
-        expect(result.status).toBe(404);
+        expect(result.status).toBe(401);
     });
 });
 
@@ -334,8 +334,8 @@ describe('one live export per account', () => {
         setPersonalDataSections([held]);
         const user = await createUser({ email: 'ada@example.com' });
 
-        const first = await requestExport(user.id, user.email, testCallerContext);
-        const second = await requestExport(user.id, user.email, testCallerContext);
+        const first = await requestExport(user.id, testCallerContext);
+        const second = await requestExport(user.id, testCallerContext);
 
         expect(first.success && second.success).toBe(true);
         expect(second.data?.id).toBe(first.data?.id);
@@ -352,7 +352,7 @@ describe('one live export per account', () => {
         const { user, result: first } = await requestFor();
         await settleInlineExports();
 
-        const second = await requestExport(user.id, user.email, testCallerContext);
+        const second = await requestExport(user.id, testCallerContext);
         await settleInlineExports();
 
         expect(second.data?.id).not.toBe(first.data.id);
@@ -364,14 +364,14 @@ describe('one live export per account', () => {
         const { held, release } = gate();
         setPersonalDataSections([held]);
         const user = await createUser({ email: 'ada@example.com' });
-        const first = await requestExport(user.id, user.email, testCallerContext);
+        const first = await requestExport(user.id, testCallerContext);
         // Age the row past the limit, as a build lost with its process would be.
         await accountExportModel.updateOne(
             { userId: user.id },
             { $set: { createdAt: new Date(Date.now() - EXPORT_BUILD_LIMIT_MS - 1000) } }
         );
 
-        const second = await requestExport(user.id, user.email, testCallerContext);
+        const second = await requestExport(user.id, testCallerContext);
 
         expect(second.data?.id).not.toBe(first.data?.id);
         release();
@@ -383,8 +383,8 @@ describe('one live export per account', () => {
         const user = await createUser({ email: 'ada@example.com' });
 
         const [one, two] = await Promise.all([
-            requestExport(user.id, user.email, testCallerContext),
-            requestExport(user.id, user.email, testCallerContext)
+            requestExport(user.id, testCallerContext),
+            requestExport(user.id, testCallerContext)
         ]);
 
         expect(one.data?.id).toBe(two.data?.id);
@@ -404,7 +404,7 @@ describe('the mailbox budget', () => {
             const { user, result: first } = await requestFor({ email: 'budget@example.com' });
             await settleInlineExports();
 
-            const refused = await requestExport(user.id, user.email, testCallerContext);
+            const refused = await requestExport(user.id, testCallerContext);
 
             expect(asReject(refused).status).toBe(429);
             expect(asReject(refused).errors[0].code).toBe('RATE_LIMITED');
@@ -417,8 +417,8 @@ describe('the mailbox budget', () => {
             setPersonalDataSections([held]);
             const user = await createUser({ email: 'building@example.com' });
 
-            const first = await requestExport(user.id, user.email, testCallerContext);
-            const second = await requestExport(user.id, user.email, testCallerContext);
+            const first = await requestExport(user.id, testCallerContext);
+            const second = await requestExport(user.id, testCallerContext);
 
             expect(first.success && second.success).toBe(true);
             expect(second.status).toBe(202);
@@ -511,7 +511,7 @@ describe('a build that fails', () => {
         await settleInlineExports();
         setPersonalDataSections(basicSections());
 
-        const retry = await requestExport(user.id, user.email, testCallerContext);
+        const retry = await requestExport(user.id, testCallerContext);
         await settleInlineExports();
 
         expect(retry.data?.id).not.toBe(failed.data.id);
@@ -526,7 +526,7 @@ describe('running a job twice', () => {
         const { held, release } = gate();
         setPersonalDataSections([held]);
         const user = await createUser({ email: 'ada@example.com' });
-        const requested = await requestExport(user.id, user.email, testCallerContext);
+        const requested = await requestExport(user.id, testCallerContext);
         const job = {
             exportId: String(requested.data?.id),
             userId: user.id,
@@ -567,7 +567,7 @@ describe('running a job twice', () => {
         const { held, release } = gate();
         setPersonalDataSections([held]);
         const user = await createUser({ email: 'ada@example.com' });
-        const first = await requestExport(user.id, user.email, testCallerContext);
+        const first = await requestExport(user.id, testCallerContext);
         // The row goes away mid-build, as an erasure (or a replacement) would do it.
         await accountExportModel.deleteOne({ userId: user.id });
 
@@ -610,7 +610,7 @@ describe('openOwnExport', () => {
         const { held, release } = gate();
         setPersonalDataSections([held]);
         const user = await createUser({ email: 'ada@example.com' });
-        const requested = await requestExport(user.id, user.email, testCallerContext);
+        const requested = await requestExport(user.id, testCallerContext);
 
         await expect(downloadOf(user.id, String(requested.data?.id))).resolves.toBeUndefined();
 

@@ -18,9 +18,9 @@ import { callerContextOf } from '@infrastructure/http/request';
  */
 export const postAccountExport = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id, email } = request.authContext!;
+    const { id } = request.authContext!;
 
-    return requestExport(id, email, callerContextOf(request))
+    return requestExport(id, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             successResponse(response, result.data, result.status, result.message);

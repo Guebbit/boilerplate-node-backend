@@ -29,7 +29,9 @@ export const withOwnAccount = <T>(
     action: (
         user: UserDocument
     ) => ResponseSuccess<T> | ResponseReject | Promise<ResponseSuccess<T> | ResponseReject>,
-    load: (id: string) => Promise<UserDocument | null> = userService.findByIdWithCredentials
+    load: (
+        id: string
+    ) => Promise<UserDocument | null | undefined> = userService.findByIdWithCredentials
 ): Promise<ResponseSuccess<T> | ResponseReject> =>
     load(userId).then((user) => (user ? action(user) : generateReject(401, [])));
 
