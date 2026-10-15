@@ -774,11 +774,19 @@ components:
                 # (`observability/analytics/index.ts`).
                 analyticsConsent:
                     type: boolean
-                # Enforced at signup only (`SignupRequest.termsAccepted`, required there) — every
-                # account in the database has this `true` by construction.
-                # Informational from here on: there is no re-acceptance flow.
-                termsAccepted:
-                    type: boolean
+                # When the visitor chose, for the record GDPR Art. 7(1) asks a controller to be able
+                # to show. Absent until they answer; a later answer moves it, repeating one does not.
+                analyticsConsentAt:
+                    type: string
+                    format: date-time
+                # When the account accepted the terms, and which text (`NODE_TERMS_VERSION` at that
+                # moment). Stamped by a signup, or by the first sign-in with a provider; absent on
+                # an account an administrator created. There is no re-acceptance flow.
+                termsAcceptedAt:
+                    type: string
+                    format: date-time
+                termsVersion:
+                    type: string
                 # Present only once POST /account/2fa/confirm has armed a secret — a pending,
                 # unconfirmed one never reaches here. The secret and backup codes themselves are
                 # never part of this schema; see `users/model.ts`'s asymmetric storage.

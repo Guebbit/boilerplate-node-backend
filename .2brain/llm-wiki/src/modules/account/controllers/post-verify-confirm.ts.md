@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-verify-confirm.ts
-sha256: 565f22c2c301de21f6666d56b869dc5522811a963b38f20639a7e2cfd1aa6101
-generated_at: 2026-10-14T08:37:54.674022+00:00
+sha256: a21d4cfb9240f6eac29532330da79efd35bd7e646933b82bc4ec5321c254d036
+generated_at: 2026-10-15T09:56:27.215823+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handler for `POST /account/verify-confirm`. Receives a one-time email-verification token in the request body, validates it, atomically redeems it, and marks the account's email as verified. It is deliberately public (no auth middleware) because the token itself is the credential—same pattern as `reset-confirm` and `delete-confirm`.
+HTTP controller for `POST /account/verify-confirm`. It validates a one-time verification token from the request body, delegates the actual email-verification spend to the account service, and returns a structured success/failure response. Exists as the thin transport layer in the route → controller → service pipeline for email verification confirmation.
 
 ## Key elements
 
-- **`postVerifyConfirm(request, response)`** – The sole export. Validates the body with the `ConfirmEmailVerificationBody` Zod schema, calls `accountService.redeemLiveToken` to atomically spend the token, then calls `accountService.completeEmailVerification` on success. Emits `authEmailVerifyTotal` metrics (`success` / `failure`) on every path.
-- **Find-then-spend pattern** – The "find" (read) step allows two simultaneous clicks to both pass; the atomic "spend" step picks a winner. The loser receives the same 422 "token not found" response as an invented token. This logic lives in `services/tokens.ts`.
-- **`EMAIL_VERIFY_TOKEN_TYPE`** – Constant imported from `services/index` that scopes `redeemLiveToken` to email-verification tokens specifically.
+- **`postVerifyConfirm`** (exported function) — The sole export. Accepts Express `Request`/`Response`. Pipeline:
+  1. `ConfirmEmailVerificationBody.safeParse(request.body)` — Zod validation; on failure calls `rejectValidation` and returns.
+  2. `accountService.confirmEmailVerification(token, callerContextOf(request))` — the only business call; service owns the find-then-spend logic.
+  3. Success path → `successResponse(response, undefined, result.status, result.message)`.
+  4. Refusal path (`refused`) or exception path (`catchAs`) → short-circuit with appropriate HTTP error.
+  - `authEmailVerifyTotal` is incremented on **every** exit path (validation failure, refusal, success, exception) with a `status` label.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** – Provides `accountService` (both `redeemLiveToken` and `completeEmailVerification` calls) and the `EMAIL_VERIFY_TOKEN_TYPE` constant.
-- **`src/modules/account/metrics.ts`** – Provides `authEmailVerifyTotal`, a Prometheus counter incremented on every success/failure outcome.
-- **`src/infrastructure/http/controller.ts`** – Provides `rejectValidation` (Zod failure → 400) and `catchAs` (catches unexpected errors, logs, and returns 500).
-- **`src/infrastructure/http/response.ts`** – Provides `successResponse` and `rejectResponse` for consistent response shaping.
-- **`src/infrastructure/http/request.ts`** – Provides `callerContextOf(request)`, passed to `recordOneTimeTokenRejected` and `completeEmailVerification` for audit/telemetry context.
-- **`src/infrastructure/i18n/index.ts`** – Provides `t()` for all user-facing messages (token-not-found, success).
-- **`src/types/index.ts`** – Provides the `VerifyEmailConfirmRequest` type used to shape the Express `Request` generic.
-- **`src/modules/account/routes.ts`** – Registers this handler on the `POST /account/verify-confirm` route (no auth guard).
+- **`src/infrastructure/http/controller.ts`** — Source of the `rejectValidation`, `refused`, and `catchAs` helpers used for every error branch.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)` to extract caller metadata passed into the service.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for the happy-path reply.
+- **`src/modules/account/metrics.ts`** — Exports the `authEmailVerifyTotal` counter incremented on each outcome.
+- **`src/modules/account/services/index.ts`** — Exports `accountService`; its `confirmEmailVerification` method performs the token spend and DB update.
+- **`src/modules/account/routes.ts`** — Registers `postVerifyConfirm` as the handler for the `POST /account/verify-confirm` route (this file is the callee, not the caller).
+- **`src/types/index.ts`** — Supplies the `VerifyEmailConfirmRequest` body type used in the Express `Request` generic.
 
 ## Notes
 
-- **Public by design.** There is intentionally no session/JWT check; the token in the body *is* the authentication. Do not add an auth guard here.
-- **Race safety is delegated.** The controller does not implement idempotency or locking. The "spend" atomicity is owned by `services/tokens.ts`; the controller simply propagates the `null` return as a 422.
-- **`recordOneTimeTokenRejected` is called only in the "token not found" branch**, not in the validation-failure or catch branches—meaning a malformed body or an unexpected server error will *not* trigger that audit event.
-- **Zod parse failure short-circuits before any service call**, so a bad request never touches the token store.
+- **Deliberately unauthenticated.** No auth middleware guards this route; the token in the body *is* the credential (same pattern as `reset-confirm` / `delete-confirm`). Don't add an auth check here.
+- **No logic in the controller.** All find-then-spend semantics live in `accountService.confirmEmailVerification`. The controller only validates, forwards, and formats the response.
+- **Metric on every path.** If you add a new early-return, make sure `authEmailVerifyTotal` is still incremented, or the success/failure ratio will skew.

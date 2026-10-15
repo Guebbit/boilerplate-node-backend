@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/listing.ts
-sha256: a722c02fd6045ba702c19efe667c6e99d26d872c324638ce2d9925e501435ccb
-generated_at: 2026-10-14T09:01:21.981316+00:00
+sha256: 077fc7cea39e529c36e9c01e67260cb8017d19457307b20f3efe240b7febb65a
+generated_at: 2026-10-15T10:07:56.924681+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Renders an account's live sessions as the wire `Session` list for a single session mode. It deduplicates JWT families that can hold two live rows simultaneously (grace-window refreshes) and marks which session is the caller's current one. Both cookie and JWT session modes share this code; they differ only in which rows are queried and how the caller identifies itself.
+Provides the account's live-session list (the wire `Session` array) shared across both session modes. It fetches live rows, filters out rows invalidated by a ban (epoch) or by an idle-timeout, deduplicates JWT-family rows that can hold two live refreshes simultaneously, and marks the caller's own session as `current`.
 
 ## Key elements
 
-- **`newestPerFamily(rows: readonly SessionRow[]): SessionRow[]`** — Pure function. Given live rows (newest sign-in first), collapses them to one row per `familyId`, keeping the one with the largest `_id`. Preserves input order.
-- **`listSessions(mode, userId, credential): Promise<Session[]>`** — The main entry point. Fetches live rows via `sessionRepository.listLive`, hashes the caller's credential to determine which `familyId`s are "current", deduplicates families, and maps each surviving row to the wire shape.
-- **`toSession(row, currentFamilies)`** — (private) Maps a `SessionRow` to the `Session` wire object. `lastUsedAt` and `device` are omitted (not `null`) when absent. `current` is true only when the row's `familyId` is in the caller's credential set.
+- **`newestPerFamily(rows)`** – exported. Given live rows (newest sign-in first), returns one row per `familyId` by keeping the row with the largest `_id` (time-ordered). Prevents a JWT grace-window duplicate from appearing twice.
+- **`toSession(row, currentFamilies)`** – private. Maps a `SessionRow` to the wire `Session` shape; `lastUsedAt` and `device` are omitted when absent so an unused session reads as unused.
+- **`listSessions(mode, userId, credential)`** – exported. The main entry point. Runs three lookups in parallel (live rows, user record, roles), filters rows by session-epoch and idle-timeout, digests the caller's credential with `hashToken` to identify `current` families, deduplicates per family, and returns `Session[]`.
 
 ## Relationships
 
-- **`src/modules/account/repository.ts`** — Calls `sessionRepository.listLive(userId, mode, date)` to fetch rows; consumes the `SessionRow` type.
-- **`src/infrastructure/security/hash-token.ts`** — Calls `hashToken(credential)` to produce the digest matched against `row.tokenHash` for the `current` flag.
-- **`src/modules/account/session-mode.ts`** — Imports the `SessionMode` type used as the first parameter of `listSessions`.
-- **`src/types/index.ts`** — Imports the `Session` wire type that `toSession` produces.
-- **`src/modules/account/services/sessions.ts`** — Graph neighbor; the service layer that likely invokes `listSessions` as part of the session endpoint.
-- **`src/modules/account/session/cookie-strategy.ts` / `jwt-strategy.ts`** — The two session modes whose rows this module lists. The "two rows per family" deduplication exists specifically for the JWT grace-window case.
-- **`src/modules/audit-logs/tests/integration/incidents.test.ts`** — Integration test that exercises this code path.
+- **`src/modules/account/repository.ts`** — calls `sessionRepository.listLive(userId, mode, now)` and consumes the `SessionRow` type.
+- **`src/modules/account/session/epoch.ts`** — calls `predatesSessionEpoch` to drop rows stamped before the user's `tokensValidAfter`.
+- **`src/modules/account/session/idle.ts`** — calls `hasIdledOut` to drop staff sessions past their idle limit.
+- **`src/infrastructure/security/hash-token.ts`** — calls `hashToken(credential)` to produce the digest matched against `row.tokenHash` for `current` marking.
+- **`src/modules/users/index.ts`** — calls `userService.findAuthenticatableById(userId)` to obtain `tokensValidAfter` (the session epoch).
+- **`src/modules/access/index.ts`** — calls `rolesOf(userId, DEPLOYMENT_TENANT_ID)` to supply roles into the idle-timeout check.
+- **`src/kernel/access/tenant.ts`** — imports `DEPLOYMENT_TENANT_ID` used in the `rolesOf` call.
+- **`src/modules/account/session-mode.ts`** — imports the `SessionMode` type for the `mode` parameter.
+- **`src/types/index.ts`** — imports the `Session` wire type.
+- **`src/modules/account/tests/unit/session-listing.test.ts`** — unit-tests the functions exported by this file.
 
 ## Notes
 
-- `newestPerFamily` compares `_id` as a **string** (`String(row._id) > String(kept._id)`), relying on `_id` being time-ordered (e.g. ObjectId). This is an intentional assumption, not a general sort.
-- `lastUsedAt` is spread conditionally so the key is **absent** (not `null`/`undefined`) for a session that has never been used — the API contract distinguishes "unused" from "used at the same instant as creation."
-- A caller that presents no credential (API key, bare access token) gets `current: false` on every row; there is no fallback to "the most recent."
-- The `current` check is per-family, not per-row: if two live rows share a `familyId` and the credential matches one of them, both map to the same `Session.id` and the dedup step ensures only the newest survives.
+- **Family deduplication is order-sensitive.** `newestPerFamily` relies on rows arriving newest-sign-in-first; it then uses lexicographic `_id` comparison (`String` compare) to pick the most recent row per family. If the repository ever returns rows in a different order the "largest `_id` wins" rule still holds, but the final order follows the *input* order, not the dedup winner's position.
+- **`current` requires the caller to present a credential.** A key-based or bare-access-token caller (no `credential`) will have every row as `current: false` — by design, not a bug.
+- **`lastUsedAt` is optional on the wire.** The spread conditional means the field is entirely absent (not `null`) when the session has never been used.
+- **Idle filtering uses `lastUsedAt ?? startedAt`.** A row that was never used is judged against its issue time, so a very old never-touched session can be filtered out even without an explicit idle expiry.
+- **Row rows stamped before `authTime` existed are kept** (`row.authTime === undefined` short-circuits the epoch check) to avoid false-positive deletions for legacy data.

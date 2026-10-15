@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/mint-guard.ts
-sha256: 99a2a48754f57d4575549aafa38a0d13c609dbeaad1f60b5e37c2aad77bd2b5e
-generated_at: 2026-10-14T09:01:56.426599+00:00
+sha256: c16c25d296555128b38e48c603ed79453e8aa9831cb8930fa27c9fe439402a03
+generated_at: 2026-10-15T10:08:19.144705+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Enforces "no first session without a second factor" at the point where a session token is minted. Rather than relying on every login branch to check the 2FA challenge, this guard sits inside `issue` so that any present or future login path that skips the challenge still cannot hand out a first session.
+Defines the two invariants a **first** session must satisfy at mint time: the proof must evidence an armed second factor, and it must not predate the account's current session epoch. These checks run inside `issue` (the mint path) rather than in login-branching logic, so a code path that forgets to branch to a challenge or re-validate after an epoch change is still refused at the point of no return.
 
 ## Key elements
 
-- **`SecondFactorRequiredError`** — Error subclass carrying the `userId` of the refused account. Thrown when the mint guard rejects a first session.
-- **`assertSecondFactor(user, amr)`** — Synchronous guard. Given an account object (`id`, `twoFactorEnabledAt?`) and the `amr` claims array, it calls `firstSessionRefused` and throws `SecondFactorRequiredError` if the account has 2FA armed but the proof lacks the `otp` attestation.
+- **`SecondFactorRequiredError`** — thrown when the account has a second factor armed but the proof's `amr` array lacks one. Carries `userId` for logging/context.
+- **`assertSecondFactor(user, amr)`** — calls `firstSessionRefused` from the domain layer; throws `SecondFactorRequiredError` if the account is armed and the proof carries no second-factor marker.
+- **`StaleProofError`** — thrown when the proof's check timestamp precedes the account's `tokensValidAfter` epoch (e.g., a password change or global logout landed mid-login).
+- **`assertProofCurrent(user, provedAt)`** — calls `proofPredatesEpoch` from `epoch.ts`; throws `StaleProofError` if the epoch moved after the proof was verified.
 
 ## Relationships
 
-- **`src/modules/account/domain/session-proof.ts`** — Supplies `firstSessionRefused`, the pure predicate that decides whether the mint is refused. This file adds the *throwing* wrapper around it.
-- **`src/modules/account/session/jwt.ts`** / **`cookie-strategy.ts`** — The two session modes that call `assertSecondFactor` from their `issue` (first-session) path, per the module doc. They do **not** call it from a re-mint path.
-- **`src/modules/account/tests/integration/session-mint-guard.test.ts`** — Integration test that exercises the guard end-to-end.
-- **`src/modules/account/tests/integration/session-modes.test.ts`** — Covers both session modes, implicitly exercising the guard via `issue`.
+- **`session-proof.ts`** — provides `firstSessionRefused`, the pure domain predicate that decides whether a given `amr` list satisfies a two-factor requirement. This file is its only caller in the session module.
+- **`epoch.ts`** — provides `proofPredatesEpoch`, the comparison that decides whether a timestamp falls before an epoch boundary.
+- **`jwt.ts`** — the `issue` function (both session modes) calls `assertSecondFactor` and `assertProofCurrent` as a gate before creating the token. The file's module doc explicitly states these guards are invoked from `issue`, never from re-mint.
+- **`cookie-strategy.ts`** — shares the session-issuance flow; both are exercised together in integration tests.
+- **`session-mint-guard.test.ts` / `session-modes.test.ts`** — integration tests that verify the guards fire on both session modes and on the re-mint exemption.
 
 ## Notes
 
-- The guard is invoked **only on first-session minting**, never on re-mint. A session that already exists is not re-checked here.
-- The `amr` parameter is a `readonly string[]`; the expected 2FA attestation is the literal token `'otp'`.
-- This is a defense-in-depth check: login paths are still expected to branch to the challenge before calling `issue`. The guard exists to catch a path that *forgot* to branch.
+- The guards are intentionally called only on **first** mints. Re-mints (e.g., sliding expiration) skip them; do not add a call to `issue`-equivalent paths that are not first-time.
+- `assertProofCurrent` reads `tokensValidAfter` off the freshly loaded account object, so it catches epoch changes committed between the initial proof check and the mint commit — it does **not** re-read from the same snapshot used to verify the proof.
+- Both error classes carry `userId` as a public readonly field, making them easy to log or map to a 403 response without message-parsing.

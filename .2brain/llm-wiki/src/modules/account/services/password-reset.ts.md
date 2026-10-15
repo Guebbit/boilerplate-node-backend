@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/password-reset.ts
-sha256: 3e41be065a4b4ea1d908ca1881197bf081fa1c73886e1966c7a8edf90d1b3f64
-generated_at: 2026-10-14T08:50:37.406689+00:00
+sha256: 797935ea45d847e698233eb03c78b9d66c68fad1a5ec9ff139acd357a0b4adff
+generated_at: 2026-10-15T10:01:18.179100+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles the confirmation side of a password reset: the user clicks the mailed link, supplies a new password, and the system validates, spends the one-time token, writes the new password, marks the email address verified, records an audit row, and sends a confirmation mail. The request side lives in `./password-reset-request`.
+Implements the **completion** half of a password reset (the `POST /account/reset-confirm` handler). Given the token from a mailed link, it validates the new password, checks it against breach lists, atomically spends the token, writes the new password, clears MFA state, records an audit row, and sends a confirmation email. The *request* (link generation and mailing) lives in `./password-reset-request`.
 
 ## Key elements
 
-- **`completePasswordReset`** (exported) — `POST /account/reset-confirm` entry point. Validates password shape/match, finds the live token, then delegates to `resetWith`. Returns a shared 422 for unknown, expired, or already-spent links (indistinguishable on purpose).
-- **`passwordResetChange`** (exported) — Alternative path that already has the user document; wraps `passwordChange` with `markResetCompleted` as the `beforeSave` hook, then calls `afterReset`.
-- **`afterReset`** (internal) — Post-success shared tail: fire-and-forget audit row (with role lookup via `isUnrestrictedCaller`) and fire-and-forget confirmation mail via `sendAccountMail`.
-- **`resetWith`** (internal) — Breach check → atomic token spend → `writePassword`. Spend is last so a refused password never burns the link.
-- **`resetLinkRefused`** (internal) — Records a one-time-token rejection and returns a 422 with the i18n "token not found" message.
-- **`markResetCompleted`** (internal) — Clears `mfaFailures`/`mfaLockedUntil` and calls `markVerified`. Injected as the `beforeSave` callback so verification and password land in one write.
+- **`completePasswordReset`** (exported) — Entry point. Order: shape/match validation → `findLiveToken` → `resetWith`. Catches DB errors into `rejectDatabaseEnvelope`.
+- **`resetWith`** (internal) — Post-find pipeline: `assertPasswordNotBreached` → `spendLiveToken` (atomic delete) → `writePassword` → `afterReset`. The spend is deliberately last so a rejected password never burns the link.
+- **`afterReset`** (internal) — Fire-and-forget follow-ups on success: `recordAccountAudit` (warn-logged on failure) and `sendAccountMail` (confirmation). Neither can flip a successful reset into an error.
+- **`markResetCompleted`** (internal) — Callback passed to `writePassword`: resets `mfaFailures`/`mfaLockedUntil` and calls `markVerified`.
+- **`resetLinkRefused`** (internal) — Builds the 422 `ResponseReject` for unknown, expired, or already-used tokens; all three are intentionally indistinguishable to the caller.
 
 ## Relationships
 
-- **`./password`** — Imports `validatePasswordChange`, `passwordChange`, `writePassword`. `passwordResetChange` delegates to `passwordChange`; `resetWith` calls `writePassword` directly after the spend.
-- **`./tokens`** — `findLiveToken` resolves the token to a user; `spendLiveToken` is the atomic delete that settles races; `recordOneTimeTokenRejected` logs the audit trail for a dead link.
-- **`./verification`** — `markVerified` is called (via `markResetCompleted`) so a successful reset also verifies the mailbox, since the token was delivered to that inbox.
-- **`./mail`** — `sendAccountMail` publishes the confirmation email job.
-- **`../emails`** — `resetConfirmEmail`, `greetableName`, `recipientLocale` build the mail content and resolve the recipient's language.
-- **`@infrastructure/security/breached-passwords`** — `assertPasswordNotBreached` gates the write.
-- **`@infrastructure/observability/audit`** + **`../audit`** — `recordAudit` with `accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED`.
-- **`../roles`** — `isUnrestrictedCaller` determines the actor role for the audit row.
-- **`@infrastructure/http/response`** — `generateReject` and the `ResponseSuccess`/`ResponseReject` envelope types.
-- **`@infrastructure/http/errors`** — `rejectDatabaseEnvelope` wraps unexpected DB errors.
-- **`@infrastructure/i18n`** — `t()` for user-facing error strings.
-- **`@infrastructure/adapters/logger`** — Warn-level log when the audit role lookup fails.
-- **`../token-types`** — `PASSWORD_RESET_TOKEN_TYPE` constant for token lookups.
+| Neighbor | Interaction |
+|---|---|
+| `services/tokens.ts` | `findLiveToken` (read), `spendLiveToken` (atomic delete), `refuseLink` (shared 422 shape) |
+| `services/password.ts` | `validatePasswordChange` (shape/match), `writePassword` (persist new hash + run callback) |
+| `services/verification.ts` | `markVerified` — promotes the account's email-verified flag |
+| `services/mail.ts` | `sendAccountMail` — publishes the confirmation to the mail queue |
+| `emails.ts` | `resetConfirmEmail`, `greetableName`, `recipientLocale` — compose the confirmation body |
+| `services/caller.ts` | `recordAccountAudit` — writes the `AUTH_PASSWORD_RESET_COMPLETED` audit row |
+| `audit.ts` | `accountAuditActions` — enum values for the audit action |
+| `token-types.ts` | `PASSWORD_RESET_TOKEN_TYPE` — the discriminator passed to token find/spend |
+| `infrastructure/security/breached-passwords` | `assertPasswordNotBreached` — HIBP-style check before the write |
+| `infrastructure/http/response.ts` | `generateReject`, `ResponseSuccess`, `ResponseReject` |
+| `infrastructure/http/errors.ts` | `rejectDatabaseEnvelope` — wraps unexpected DB errors |
+| `infrastructure/adapters/logger.ts` | `logger.warn` — audit-row failure trail |
+| `modules/users` (index / model) | `UserDocument` type for the account record |
+| `services/index.ts` | Re-exports `completePasswordReset` for route handlers |
 
 ## Notes
 
-- **Spend order is a deliberate invariant.** Everything before `spendLiveToken` is a read (shape check, token find, breach check). The atomic spend is last so a refused password never consumes the link.
-- **Verification is conditional on a successful write.** `markVerified` rides in as the `beforeSave` hook, which runs after the final password-validation refusal. A too-weak or breached password cannot verify the address "on its way out."
-- **`passwordChangeWithCurrent` does NOT get verification.** An already-authenticated caller typing their current password proves nothing about mailbox possession; only the reset path (where the token was mailed to that inbox) earns it.
-- **Fire-and-forget audit and mail.** Both the audit role lookup and the mail publish are `void`-ed promises. A queue or lookup hiccup after a successful password change must not turn the response into an error.
-- **Locale resolution.** The confirmation mail uses `recipientLocale(user.locale, context)` — the user's stored preference first, the request's `Accept-Language` only as fallback — because the link is often clicked from a shared or borrowed device.
-- **`oauthAccounts` type lie.** The schema types mark it as always loaded, but it is `select: false`. The code uses `?? []` with an eslint-disable to work around the false type assertion.
+- **Spending is last.** `findLiveToken` is a read; `spendLiveToken` is the atomic delete that resolves two simultaneous uses of one link. A breached or mismatched password exits *before* the spend, so the link survives and the user can retry.
+- **Fire-and-forget post-actions.** Both the audit write and the confirmation mail use `void … .catch(…)` — a queue or lookup hiccup degrades to a missing audit row or a missed email, never a failed reset.
+- **`oauthAccounts` is `select: false`.** The Mongoose schema hides it from default queries, but the TypeScript types still mark it as always-present. The code uses `user.oauthAccounts ?? []` with an eslint-disable to acknowledge the type/schema mismatch.
+- **Locale resolution.** The confirmation mail uses `recipientLocale(user.locale, context)` — the *user's* stored locale is primary; the request's `Accept-Language` is only a fallback because the link is often clicked on a shared or borrowed device.
+- **MFA reset is bundled.** `markResetCompleted` clears `mfaFailures` and `mfaLockedUntil` as part of the password write; the rationale is that possession of the recovery mailbox implies legitimate access.

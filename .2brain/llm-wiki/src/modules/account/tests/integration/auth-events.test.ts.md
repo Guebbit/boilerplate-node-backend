@@ -1,36 +1,41 @@
 ---
 source: src/modules/account/tests/integration/auth-events.test.ts
-sha256: cf8d3226d75442ebf47d42833a45a954c3631a53e0264b3a71976f84befc5d2d
-generated_at: 2026-10-14T09:07:09.774468+00:00
+sha256: 19cd22af1ad7af4e8d4411e301dcbf2f2541923a03a5ac242d3c24442a55bd78
+generated_at: 2026-10-15T10:10:09.326733+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/tests/integration/auth-events.test.ts
 
 ## Purpose
-Integration tests that verify the audit-trail entries and Prometheus counter produced when a one-time token is rejected (unknown or expired) and when a login attempt fails. They confirm that audit actions use the `auth.*` namespace (not `security.*`) and that the login-failure target is a normalised keyed pseudonym digest rather than the raw address.
+
+Integration tests that assert what the audit trail and metrics record when a one-time link token is rejected (unknown or expired) and when a login attempt fails. Confirms the events use `auth.*` actions (customer-facing, not `security.*`), that the rejected-token counter is incremented per flow, and that a failed-login target is stored as a normalised pseudonymised digest rather than the raw address.
 
 ## Key elements
-- **`Entry`** – local interface describing the shape the audit logger receives (`action`, `targetId`, `metadata`).
-- **`auditSpy`** – `jest.spyOn(auditLogger, 'log')` captured in `beforeEach`, restored in `afterEach`.
-- **`entries()`** – helper that returns all captured `Entry` objects from the spy.
-- **`rejectedFlows()`** – filters entries to `AUTH_ONE_TIME_TOKEN_REJECTED` and extracts `metadata.flow`.
-- **`describe('an unknown one-time token')`** – four `it.each` cases (password_reset, email_verify, email_change, account_delete) asserting a 422 response, the correct audit flow label, and an incremented `authOneTimeTokenRejectedTotal` counter. Also covers an *expired* token (via `plantToken` + `advanceDate`) and a *password-mismatch* case that must **not** produce a rejected-token entry.
-- **`describe('a failed login')`** – asserts `targetId` equals `pseudonymise('log', 'victim@example.com')`, that the raw email never appears in serialised entries, and that a non-string email yields no `targetId`.
+
+- **`Entry` interface** — the shape of a single audit log call as `auditLogger.log` receives it (`action`, `targetId`, `metadata`).
+- **`entries()`** — helper that maps `auditSpy.mock.calls` into `Entry[]`.
+- **`rejectedFlows()`** — filters entries to `AUTH_ONE_TIME_TOKEN_REJECTED` and extracts `metadata.flow`.
+- **`describe('an unknown one-time token')`** — `it.each` across 5 flows (`password_reset`, `email_verify`, `email_change`, `email_change_undo`, `account_delete`); asserts 422, the correct `flow` label in the audit entry, and that `authOneTimeTokenRejectedTotal` carries `{ flow }` = 1.
+- **Expired-token test** — plants a 60 s token, advances the clock 1 h, expects the same `password_reset` rejection path.
+- **Password-mismatch test** — valid token, mismatched password pair → *no* `AUTH_ONE_TIME_TOKEN_REJECTED` entry (it's a different failure).
+- **`describe('a failed login')`** — verifies `targetId` equals `pseudonymise('log', 'victim@example.com')` (normalised, lower-cased) and that the raw email string never appears anywhere in the serialised entries. Also covers a non-string email (`{ $ne: '' }`) yielding `targetId: undefined`.
 
 ## Relationships
-- **`@tests/http` → `api`** – provides the supertest-style HTTP client used to hit the real account routes.
-- **`@tests/setup-test-db` → `setupTestDb`** – initialises a test database for the module (called once at top level).
-- **`@tests/clock` → `freezeDate`, `advanceDate`** – control time so an expired-token scenario can be exercised deterministically.
-- **`@infrastructure/adapters/logger` → `auditLogger`** – the spy target; tests read calls from this logger rather than querying a DB table.
-- **`@infrastructure/security/pseudonymise` → `pseudonymise`** – used to compute the *expected* digest value for assertions.
-- **`@modules/account/audit` → `accountAuditActions`** – supplies the canonical action-string constants (`AUTH_ONE_TIME_TOKEN_REJECTED`, `AUTH_LOGIN`).
-- **`@modules/account/metrics` → `authOneTimeTokenRejectedTotal`** – the counter under test; `.reset()` is called before each flow assertion.
-- **`../factories` (account test factories) → `plantToken`** – seeds a token with a short TTL so the expiry path can be triggered.
-- **`@modules/users/tests/factories` → `createUser`, `PLAIN_PASSWORD`** – creates a real user and provides the canonical password string for contract bodies.
+
+- **`@tests/http`** (`api`) — issues the actual HTTP requests against the account routes.
+- **`@tests/setup-test-db`** (`setupTestDb`) — initialises the test database (called at module top-level).
+- **`@tests/clock`** (`freezeDate`, `advanceDate`) — controls time in the expired-token test.
+- **`@infrastructure/adapters/logger`** (`auditLogger`) — spied on in `beforeEach`; all assertions read from its mock calls.
+- **`@infrastructure/security/pseudonymise`** (`pseudonymise`) — used to compute the expected digest for the failed-login target assertion.
+- **`@modules/users/tests/factories`** (`createUser`, `PLAIN_PASSWORD`) — creates a real user and supplies the password constant.
+- **`@modules/account/audit`** (`accountAuditActions`) — provides the action-name constants the tests filter on.
+- **`@modules/account/metrics`** (`authOneTimeTokenRejectedTotal`) — the counter under test; reset before each flow case.
+- **`../factories`** (`plantToken`) — inserts a token row directly into the DB for the expiry scenario.
 
 ## Notes
-- The spy is on `auditLogger.log`; no audit rows are written to (or read from) the test database. Restore + `jest.useRealTimers()` runs in `afterEach`.
-- The password-mismatch test (valid token, mismatched confirm password) intentionally expects **zero** rejected-token entries—this distinguishes "token rejected" from "credentials rejected" in the audit log.
-- The failed-login test sends a non-string email (`{$ne: ''}`) to exercise the branch where `targetId` is left `undefined` rather than crashing.
-- `authOneTimeTokenRejectedTotal` is a Prometheus counter; the test calls `.reset()` per case and reads `.get().values` to assert a single increment with the correct `flow` label.
+
+- The spy is on `auditLogger.log`'s **third positional argument** (the `Entry` object); the first two are assumed to be logger context. Changing the logger's call signature will silently break every assertion.
+- `authOneTimeTokenRejectedTotal.reset()` is called inside the `it.each` body, so the metric is isolated per case but **not** reset for the expired-token or password-mismatch tests (they rely on the `rejectedFlows()` helper instead of the metric).
+- The password-mismatch test expects *zero* rejected-token entries — the refusal is categorised differently (password validation, not token rejection) and is intentionally excluded here.
+- `jest.useRealTimers()` in `afterEach` guards against the frozen clock leaking into sibling tests.

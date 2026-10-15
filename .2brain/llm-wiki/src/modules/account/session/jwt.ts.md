@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/jwt.ts
-sha256: 6cd3ec6bb9709c6f9de2709d9dab4d0e8a7f0127504d2dad9cce7840a9ce6886
-generated_at: 2026-10-14T14:39:31.487853+00:00
+sha256: 4b737d725957861c8d9c1ce4d1d8d73501ae7fc1464a5115bd4dd7e2d11631bc
+generated_at: 2026-10-15T10:07:42.987775+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central JWT issuance and verification for the account module, built on `jose`. It signs access and refresh tokens with the key rings and TTLs owned by `./config`, verifies them against the correct ring and token type, and (for refresh tokens) cross-checks against the live session row and the user's authentication state. It is the concrete implementation of "issuing and verifying this application's tokens" for the `account` module.
+Creates and verifies the application's access and refresh JWTs (HS256, built on `jose`). Policy (secrets, TTLs, audiences, issuer) is owned by `./config`; this file is the signing and verification logic itself. It was app-level middleware until the domain split made it part of the `account` module, since issuing/verifying tokens is what `account` does.
 
 ## Key elements
 
-- **`TokenData`** (interface) — the OIDC-aligned claims (`id`, `auth_time`, `amr`, `remember?`, `sid?`) this app signs into every token.
-- **`AccessTokenData`** — `TokenData & { sid: string }`; the guaranteed shape after verifying an access token.
-- **`RotatedSession`** — `{ accessToken, refreshToken, refreshMaxAgeMs }`, the payload handed back to the controller after a rotation.
-- **`TokenRejection`** (class) — an `Error` subclass carrying a `ResolveMissReason`; the single rejection type the kernel resolver translates into a `{ miss }` response.
-- **`verifyAccessToken(token)`** (exported) — stateless verification against the access ring; returns `AccessTokenData`.
-- **`verifyRefreshToken(token)`** (exported) — JWT verification **plus** DB lookup of the live session row and a scoped check that the account may still sign in.
-- **`signToken(claims, ring, kind, lifetimeSeconds, jti?)`** (internal) — signs a payload with the ring's current key, stamps `kid`, `typ`, `exp`, and optionally `jti`.
-- **`rejectionOf(error)`** (internal) — maps `jose` error classes to `TokenRejection` with the appropriate reason (`expired`, `invalid_signature`, `malformed`); non-jose errors pass through as-is.
-- **`carriesTokenClaims(payload, kind)`** (internal) — runtime shape guard that a verified payload actually carries this app's claims before any field is read.
-- **`ringKeyLookup(ring)`** (internal) — the `jwtVerify` key resolver; looks up `kid` in the ring and returns HMAC bytes or throws `TokenRejection('invalid_signature')`.
+- **`TokenData`** (interface) — the app-specific claims stamped into every token: `sub`, `auth_time`, `amr`, optional `remember`, optional `sid`, optional `client_id`.
+- **`AccessTokenData`** (type) — `TokenData` with `sid` required.
+- **`FIRST_PARTY_CLIENT_ID`** — constant `'first-party'`; the sole `client_id` value (no client registry exists).
+- **`RotatedSession`** (interface) — `{ accessToken, refreshToken, refreshMaxAgeMs }` handed to the controller after rotation.
+- **`TokenRejection`** (class extends `Error`) — carries a `ResolveMissReason` so the kernel's resolver can distinguish actionable rejections from outages/bugs.
+- **`verifyAccessToken(token)`** — stateless verification against the access ring; returns `AccessTokenData`.
+- **`verifyRefreshWithRow(token)`** — verification against the refresh ring **plus** a DB lookup via `sessionRepository.findByHash(hashToken(token))` to confirm the row is live; returns `{ data, row }`.
+- **`carriedClaims`** (internal) — picks only `sub`, `auth_time`, `amr`, and `remember` (if set) to copy forward across mints/rotations.
+- **`verifyAgainstRing`** (internal) — single `jwtVerify` call pinned to HS256, the kind's `typ`, `iss`, `aud`, and `requiredClaims`; then shape-checks via `carriesTokenClaims`.
+- **`rejectionOf`** (internal) — maps `jose` error types to `TokenRejection` reasons (`expired`, `invalid_signature`, `malformed`).
+- **`ringKeyLookup`** (internal) — resolves a `kid` against a ring via `keyForId`; throws `TokenRejection('invalid_signature')` for unknown keys.
+- **`TOKEN_TYPE_HEADER`** / **`AUDIENCE_OF`** / **`REQUIRED_CLAIMS`** — per-kind (`access` | `refresh`) verification constraints that cross-reject tokens of the wrong kind.
 
 ## Relationships
 
-- **`./config`** — source of all rings (`getAccessTokenRing`, `getRefreshTokenRing`), TTLs (`getExpiryTime`, `getAccessExpiryTime`), rotation grace, and reuse-detection window.
-- **`./key-ring`** — provides `keyId` (stamp `kid` at sign time) and `keyForId` (resolve a ring member at verify time).
-- **`./epoch`** — `predatesSessionEpoch` is called during refresh verification to reject tokens whose `auth_time` predates the user's `tokensValidAfter` watermark.
-- **`./activity`** — `recordActivity` is invoked when a valid token is presented (access-token verification path).
-- **`./mint-guard`** — `assertSecondFactor` gates token minting behind a verified second factor.
-- **`../services/revocation`** — `revokeFor` is called when reuse detection or a security event requires killing the session family.
-- **`../repository`** — `sessionRepository.findByHash` is used to confirm a refresh token maps to a live, non-superseded row; `SessionRow` type is consumed throughout.
-- **`@infrastructure/security/hash-token`** — `hashToken` produces the lookup key for the session table (tokens are never stored in plaintext).
-- **`@kernel/authentication`** — `ResolveMissReason` union defines the vocabulary of `TokenRejection.reason`.
-- **`@modules/users`** — `userService.findAuthenticatableById` scopes refresh-token validity to the account's current authentication state.
-- **`./strategy`** — `SessionSnapshot` type is imported (used by the higher-level strategy orchestration that calls into this file).
-- **`./jwt-strategy`** — the strategy adapter that wires this file's exports into the `SessionStrategy` interface consumed by the kernel.
-- **Tests** — `jwt.test.ts`, `revocation-causes.test.ts`, and `service-flows.test.ts` exercise the full sign/verify/rotate/revoke lifecycle end-to-end.
+- **`./config`** — all TTL, audience, issuer, ring, grace-period, and reuse-window values are read from the config getters at call time (no module-level caching of secrets).
+- **`./key-ring`** — `keyId` / `keyForId` resolve a token's `kid` to an HMAC secret within the ordered ring.
+- **`./epoch`** — `predatesSessionEpoch` is imported (used in the truncated signing/rotation section).
+- **`./activity`** — `recordActivity` is called when a token is verified (activity tracking).
+- **`./mint-guard`** — `assertProofCurrent` / `assertSecondFactor` gate minting operations (used in the truncated section).
+- **`../repository`** — `sessionRepository.findByHash` performs the DB revocation/supersession check for refresh tokens; `SessionRow` is the returned type.
+- **`../services/revocation`** — `revokeFor` is called when a token is rejected (e.g., reuse detection).
+- **`@infrastructure/security/hash-token`** — `hashToken` hashes the raw refresh token before the DB lookup.
+- **`@kernel/authentication`** — `ResolveMissReason` type shapes the `TokenRejection.reason` field.
+- **`./strategy`** — `SessionSnapshot` type imported (used in the truncated section).
+- **Tests** — covered by `tests/integration/jwt.test.ts`, `revocation-causes.test.ts`, and `service-flows.test.ts`.
 
 ## Notes
 
-- **Token type is enforced structurally.** Each token kind carries a distinct `typ` header (`at+jwt` / `rt+jwt`, RFC 9068 / RFC 8725 §3.11). A refresh token presented as a Bearer is refused even if both rings share the same secret — the check happens after signature verification, per the RFC.
-- **`auth_time` is copy-forward, never re-stamped.** It is set once at login and carried through every access-token mint and rotation. There is no code path that re-reads the clock for this claim.
-- **`remember` is optional in the payload.** An `undefined` value is omitted from the JSON to avoid a spurious `null` claim; `carriedClaims` spreads conditionally.
-- **Reuse detection is deferred to rotation.** `verifyRefreshWithRow` explicitly does *not* flag a superseded row as reuse — it only checks `mode`, `supersededAt`, and `expiresAt`. The actual RFC 9700 §4.14.2 reuse detection lives in the rotation service.
-- **`sid` is access-token only.** Refresh tokens never carry `sid`; the type guard (`carriesTokenClaims`) enforces this per-kind.
-- **Algorithm confusion is closed at the verify options level** (`algorithms: ['HS256']`), not by key inspection.
-- The file was previously app-level middleware; it moved into the `account` module when the domain was extracted (see `docs/modules/account-sessions.md`).
+- The file is truncated in the snapshot; the signing/minting and rotation paths (which consume `mint-guard`, `epoch`, `activity`, `revokeFor`) live below the cut.
+- `auth_time` and `amr` are **copied forward** from the original login on every mint/rotation — they are never re-stamped from the clock.
+- `remember` is **omitted** (not set to `undefined`) in the payload when the user did not tick "remember me"; `carriedClaims` spreads it conditionally.
+- `sid` exists **only** on access tokens; refresh tokens are the session credential itself.
+- The `typ` header (`at+jwt` / `rt+jwt`) plus distinct `aud` values cross-reject a token presented as the wrong kind, even if both rings share a secret.
+- `rejectionOf` passes through non-`jose` errors unchanged (outage, bug) so the caller can distinguish them from a `TokenRejection`.
+- `verifyRefreshWithRow` rejects a superseded (rotated-away) token at the credential level, but the rotation endpoint itself still reads that row for reuse detection and the two-tab grace window.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/tokens.ts
-sha256: 6c6e963f07e34d4ad5f7e76e7bf769990727c94524deb6937d1d8adc156e7c76
-generated_at: 2026-10-14T08:54:44.146351+00:00
+sha256: 31fcf2ece0332cdb8a92957d9dc8db19ab144914fc09a0a0a02951c072a398bd
+generated_at: 2026-10-15T10:03:18.333182+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central service for all one-time verification tokens an account holds in the `verificationtokens` collection — password reset, email verification, email change (and undo), account deletion, and the MFA login challenge. It owns the "live" definition (exists, correct type, not expired), the find/spend/redeem split, and the rejection audit+metric path. Plaintext tokens are generated here and returned to the caller for the emailed link or challenge response; only the hash is persisted.
+Manages the full lifecycle of one-time verification tokens (password reset, email verify, email change + undo, account-delete confirm, MFA login challenge) stored in the `verificationtokens` collection. Defines what "live" means, provides issue / find / spend / redeem primitives, and produces the uniform 422 refusal every dead-link controller returns.
 
 ## Key elements
 
-- **`issueToken(userId, type, ttlMs, amr?)`** — Generates a 128-bit hex token, stores its hash with `sentAt`/`expiresAt` (and optional `amr` for MFA), and returns the plaintext. A kind that allows one live link replaces the prior one in the same atomic write.
-- **`removeTokens(userId, types)`** — Deletes every token of the given kinds for an account.
-- **`tokenSentAt(userId, type)`** — Returns the last `sentAt` for a kind, used by resend-cooldown logic.
-- **`findLiveTokenEntry(type, token)`** — Looks up the live token row and the owning user (with credentials). Returns `{ user, entry }` or `undefined`. The `entry` exposes fields like `amr` needed by the MFA challenge flow.
-- **`findLiveToken(type, token)`** — Thin wrapper around `findLiveTokenEntry` that returns only the user.
-- **`spendLiveToken(type, token)`** — Atomically deletes the token row. Returns `true` only for the request whose write actually removed it (the race loser gets `false` and is indistinguishable from a missing token).
-- **`redeemLiveToken(type, token)`** — Composes `findLiveToken` → `spendLiveToken` for confirm controllers with no work between the two halves.
-- **`OneTimeTokenFlow`** (type) — Union of the four flows that spend a link token: `password_reset | email_verify | email_change | account_delete`.
-- **`recordOneTimeTokenRejected(context, flow)`** — Increments the `auth_one_time_token_rejected_total` counter and writes an audit entry.
+- **`issueToken(userId, type, ttlMs, amr?)`** — Generates a 128-bit hex token, stores its hash via `hashToken`, and returns the plaintext for the caller to email or display. A kind that allows only one live link replaces the previous row atomically.
+- **`removeTokens(userId, types)`** — Deletes every token of the given types for an account.
+- **`tokenSentAt(userId, type)`** — Returns the `sentAt` date of the most recent token of that type (used for resend cooldowns).
+- **`findLiveTokenEntry(type, token)`** — Locates the user **and** the raw row holding a live token (exists, correct type, not expired) without spending it. Intended for `verifyLoginChallenge`, which reads `entry.amr`.
+- **`findLiveToken(type, token)`** — Thinner wrapper over `findLiveTokenEntry`; returns only the `UserDocument`.
+- **`spendLiveToken(type, token)`** — Atomically deletes the token row. Returns `true` only for the request whose own write removed it; `false` means a race loser (indistinguishable from "never existed").
+- **`redeemLiveToken(type, token)`** — Composes `findLiveToken` + `spendLiveToken` for confirm controllers that have no intervening work (email verify, email change, delete confirm).
+- **`OneTimeTokenFlow`** (type) — Union of the five confirm flows: `password_reset | email_verify | email_change | email_change_undo | account_delete`.
+- **`recordOneTimeTokenRejected(context, flow)`** — Increments `authOneTimeTokenRejectedTotal` and writes an audit event with actor `anonymous`.
+- **`refuseLink(context, flow, messageKey)`** — Calls `recordOneTimeTokenRejected`, then returns a `generateReject(422, …)` with an i18n-translated message. Unknown, expired, and already-used all produce the identical response.
 
 ## Relationships
 
-- **`src/modules/account/repository.ts`** — All token reads/writes go through `verificationTokenRepository` (`issue`, `removeOfTypes`, `lastSentAt`, `findLive`, `spend`). This file never touches the collection directly.
-- **`src/infrastructure/security/hash-token.ts`** — Every token value is passed through `hashToken` before being stored or compared; plaintext never hits the DB.
-- **`src/modules/users/index.ts`** — `findLiveTokenEntry` / `redeemLiveToken` resolve the owning user via `userService.findByIdWithCredentials`.
-- **`src/modules/account/token-types.ts`** — Provides the `VerificationTokenType` enum used as the discriminant throughout.
-- **`src/modules/account/services/password-reset.ts`** — Uses `findLiveTokenEntry` + `spendLiveToken` *separately* (needs the user for a breach check before spending), not `redeemLiveToken`.
-- **`src/modules/account/services/two-factor-challenge.ts`** — Uses `findLiveTokenEntry` to read `entry.amr`, then `spendLiveToken` independently.
-- **`src/modules/account/services/email-change.ts`**, **`verification.ts`**, **`deletion-request.ts`** — Issue tokens via `issueToken`; confirm via `redeemLiveToken`.
-- **`src/modules/account/services/revocation.ts`** — Calls `removeTokens` to invalidate outstanding links.
-- **`src/modules/account/services/index.ts`** — Re-exports this module for consumers.
-- **`src/infrastructure/observability/audit.ts`** + **`src/modules/account/audit.ts`** + **`src/modules/account/metrics.ts`** — `recordOneTimeTokenRejected` writes an audit line and increments a Prometheus counter.
+- **`src/infrastructure/security/hash-token.ts`** — `hashToken` is applied to every token before storage or lookup; the file never stores or compares plaintext tokens.
+- **`src/modules/account/repository.ts`** — `verificationTokenRepository` is the sole data-access layer; all `issue`, `removeOfTypes`, `lastSentAt`, `findLive`, and `spend` calls go through it.
+- **`src/modules/account/audit.ts`** — Supplies the `accountAuditActions.AUTH_ONE_TIME_TOKEN_REJECTED` constant used in audit records.
+- **`src/modules/account/metrics.ts`** — Supplies `authOneTimeTokenRejectedTotal` (the `auth.` prefix is deliberate: a stale link is a customer event, not a platform incident).
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` writes the audit event on every refusal.
+- **`src/infrastructure/http/response.ts`** — `generateReject` builds the 422 `ResponseReject` returned to callers.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — `t` translates the per-flow "token not found" message key.
+- **Consumer services** (`password-reset.ts`, `email-change.ts`, `self-delete.ts`, `revocation.ts`, `deletion-request.ts`, `password-reset-request.ts`, `services/index.ts`) import the primitives above. `password-reset.ts` calls `findLiveToken` + `spendLiveToken` separately (it runs a breach check between them); the rest use `redeemLink` or `redeemLiveToken`.
 
 ## Notes
 
-- **Deliberate refusal ambiguity.** Every failure mode (wrong type, expired, wrong hash, already spent) returns `undefined` / `false` with no reason. Do not add distinguishing error messages here.
-- **`redeemLiveToken` is not universal.** The password-reset and two-factor flows intentionally call `findLiveTokenEntry` and `spendLiveToken` separately because they need the user/entry *before* the spend. Only "dumb" confirm controllers should use the composed helper.
-- **Race safety.** `spendLiveToken` is the only point where a token is deleted; the repository guarantees that of N simultaneous spends, exactly one returns `true`.
-- **Metric prefix.** Rejections use `auth.` (not `security.`) because the expected cause is a customer following a stale or mistyped link, not an attack — it should not page the platform operator.
-- **`amr` is optional and MFA-only.** It records how the first factor was proven during the login challenge; it is absent on all other token types.
+- `findLiveToken`/`spendLiveToken` are intentionally separate: `two-factor-challenge.ts` and `completePasswordReset` do extra work (read `amr`, breach-check) between the two halves. `redeemLiveToken` exists only for the flows that don't.
+- The 422 body is identical whether the token is unknown, expired, or already spent — a caller cannot distinguish the three cases.
+- `spendLiveToken` returning `false` is a lost race, not an error; it is handled exactly like a non-existent token.
+- Token entropy is 128 bits (`randomBytes(16)`); the design relies on `hashToken`'s digest being secure given that entropy.
+- The `amr` field is set only for the MFA-login-challenge token type and is read back by `verifyLoginChallenge` via `findLiveTokenEntry`.

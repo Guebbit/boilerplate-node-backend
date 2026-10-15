@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-login-2fa.ts
-sha256: f3906b59da25d593a563468ed6f10b926426b5753d060a5599128bdf908e2a3e
-generated_at: 2026-10-14T14:36:03.813021+00:00
+sha256: 7f44db29a2626465cb58fd6be3f24c8e37a6b17647396ef753fd503185fc14c3
+generated_at: 2026-10-15T09:55:05.300359+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP handler for `POST /account/login/2fa`, the second step of a two-factor login. It validates the request body, resolves the pending 2FA challenge (from the body or an OAuth-originated cookie), delegates verification to the two-factor service, and—on success—issues a session with an `amr: ['pwd', 'otp']` proof array so downstream guards recognize the second factor as satisfied.
+Controller for `POST /account/login/2fa`, the second step of a two-factor login. It validates the submitted code against the challenge issued by `POST /account/login`, then mints a full session (with `amr: ['pwd', 'otp']`) identical to a no-2FA login. It exists so the 2FA completion step can be routed independently and share the session-issuance path with `postLogin`.
 
 ## Key elements
 
-- **`postLoginTwoFactor`** (default and only export) – Express route handler. Parses the body with `LoginTwoFactorBody` (Zod), resolves the challenge, calls `twoFactorService.verifyLoginChallenge`, then chains `issueSession` → `isUnrestrictedCaller` → `rememberDevice` → `successResponse`. Emits `authTwoFactorChallengeTotal` on every terminal path.
-- **Challenge resolution** – The challenge is taken from `request.body.challenge` when present; otherwise it falls back to `readMfaChallengeCookie(request)`, which covers the OAuth-redirect flow where the challenge was never sent to the client.
-- **AMR / session proofs** – `withProofs(amr, AMR.otp)` appends the OTP factor to the session's `amr` array; this is what later `AMR` checks rely on.
-- **`rememberDevice` / `destroyMfaChallengeCookie`** – Only called after a fully successful login; the device cookie is "baked in" at this step, and the one-time MFA cookie is removed.
+- **`postLoginTwoFactor`** (exported) – The sole handler. Parses the body via `LoginTwoFactorBody` (Zod), resolves the challenge from the body or the MFA-challenge cookie, calls `twoFactorService.verifyLoginChallenge`, then chains `issueSession` → `recordLoginSuccess` → `rememberDevice` → `destroyMfaChallengeCookie` → `successResponse`. All paths (validation failure, service refusal, DB error) increment `authTwoFactorChallengeTotal` before responding.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** – Imports `twoFactorService`; the only domain logic this controller delegates (challenge verification, code matching, factor type).
-- **`src/modules/account/oauth/mfa-redirect.ts`** – Provides `readMfaChallengeCookie` / `destroyMfaChallengeCookie` for the OAuth-redirect 2FA path.
-- **`src/modules/account/domain/session-proof.ts`** – Supplies `AMR.otp` and `withProofs` to build the session's attestation array.
-- **`src/modules/account/roles.ts`** – `isUnrestrictedCaller(userId)` is queried post-session to record the correct tier in observability.
-- **`src/modules/account/metrics.ts`** – `authTwoFactorChallengeTotal` counter is incremented on every success/failure branch.
-- **`src/modules/account/session/device-cookie.ts`** – `rememberDevice` sets the "this browser is familiar" cookie exactly once, at final login completion.
-- **`src/modules/account/session/config.ts`** – `toRememberTier` maps the client's `remember` flag to the internal tier enum passed to `issueSession`.
-- **`src/infrastructure/http/controller.ts`** – `rejectValidation` (Zod parse failure) and `refused` (service-level rejection) shape early-exit responses.
-- **`src/infrastructure/http/errors.ts`** – `rejectDatabaseError` handles the catch-all for unexpected throws.
-- **`src/infrastructure/http/response.ts`** – `successResponse` / `rejectResponse` build the final JSON envelope.
-- **`src/infrastructure/http/request.ts`** – `callerContextOf(request)` extracts caller metadata for the service call.
-- **`src/infrastructure/i18n/context.ts` / `index.ts`** – `t()` localizes all user-facing error/success strings.
+- **`services/index.ts`** – Calls `twoFactorService.verifyLoginChallenge(challenge, code, callerContext)`; the service decides which factor (armed factor vs. backup code) the code belongs to.
+- **`session/session.ts`** (via `issueSession`) – Mints tokens/cookies; receives `amr` (with `AMR.otp` proof), `provedAt`, `remember` tier, and `transport`.
+- **`session-proof.ts`** – Provides `AMR.otp` constant and `withProofs()` to append the OTP proof to the inherited `pwd` AMR entry.
+- **`oauth/mfa-redirect.ts`** – `readMfaChallengeCookie` recovers the challenge for OAuth-originated logins (where it was never sent in the body); `destroyMfaChallengeCookie` clears it on success.
+- **`session/device-cookie.ts`** – `rememberDevice` is called *after* 2FA completes, not after the initial password step.
+- **`session/config.ts`** – `toRememberTier` maps the client's `remember` flag to the tier passed to `issueSession`.
+- **`session/login-observability.ts`** – `recordLoginSuccess` fires only after the session is issued.
+- **`metrics.ts`** – `authTwoFactorChallengeTotal` (Prometheus counter) is incremented on every terminal path with `status: 'success' | 'failure'`.
+- **`infrastructure/http/controller.ts`** – `rejectValidation` (Zod parse errors) and `refused` (service-level rejection) short-circuit the response.
+- **`infrastructure/http/response.ts`** – `successResponse` / `rejectResponse` shape the final HTTP reply.
+- **`infrastructure/http/errors.ts`** – `rejectDatabaseError` is the catch-all for unexpected failures.
+- **`infrastructure/http/request.ts`** – `callerContextOf(request)` extracts IP/user-agent for the service's verification.
+- **`infrastructure/i18n/index.ts`** – `t()` supplies all user-facing message strings.
 
 ## Notes
 
-- The controller intentionally contains **no factor-type logic**; whether the code is an OTP, TOTP, or backup code is entirely the service's concern. The controller just forwards `code` and `challenge`.
-- `challenge` is **optional** in the Zod schema (`parseResult.data.challenge ?? …`), not required—this is what enables the OAuth cookie path.
-- `rememberDevice` is called here (not in `postLogin`) because for a 2FA account the login is only *complete* after the second factor is verified; the device cookie is the "familiar browser" marker and must not be set earlier.
-- The `isUnrestrictedCaller` lookup is a **fresh membership read** (the session document itself carries no role), so it is an async step nested inside the `issueSession` chain rather than a pre-check.
-- Metrics are incremented in **every** terminal branch (validation failure, missing challenge, service refusal, success, catch) to keep the counter exhaustive.
+- **Challenge source is conditional:** password-originated logins carry the challenge in the JSON body; OAuth-originated logins store it in a cookie (`mfa-challenge`). The controller tries the body first, then the cookie. If neither yields a value, it returns 401.
+- **`provedAt` is captured *before* the async `verifyLoginChallenge` call.** The doc comment explains that a password changed mid-flight must cause a refusal; the timestamp is what the service checks against.
+- **AMR is an array, not a single value.** Downstream guards read `amr` to decide whether a second factor has already been satisfied. The controller relies on `withProofs` to merge `AMR.otp` into the existing `['pwd']` entry without overwriting.
+- **Device familiarization is deferred to this step.** A browser that passed the password step is *not* yet "known" until 2FA succeeds, preventing an attacker from marking a device as remembered with only a valid password.
+- **`refused(response, result)` is a boolean guard, not a throw.** The service returns a structured refusal (e.g. wrong code, expired challenge) and the helper writes the response and returns `true` so the chain stops without entering the `.catch` path.

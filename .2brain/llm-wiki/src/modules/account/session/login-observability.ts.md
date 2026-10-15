@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/login-observability.ts
-sha256: 7a06860abad37cce9d3ae40c0cbbddc04ee8ec73d072cb88606200c5bd80bff4
-generated_at: 2026-10-14T09:01:40.577149+00:00
+sha256: d11e2bb91ed458d3d68d52d5ea9874c795e335521b2b9947aefda5975b17e8b3
+generated_at: 2026-10-15T10:08:09.177779+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared observability tail (metrics + audit + analytics) fired when a login attempt completes. Extracted from `post-login.ts` so that `post-login-2fa.ts` can reuse the same "a login happened" signal without re-implementing it. Deliberately lives in the controller/session layer rather than `services/login.ts` because the success emit must fire only after a session actually exists (cookies, access token)—a fact only the controllers can confirm.
+Fires the metrics, audit, and analytics signals for a completed (successful or failed) login. Extracted from `post-login.ts` so that `post-login-2fa.ts` reuses the same "a login happened" tail without re-implementing it. Lives at the controller/session layer — not in `services/login.ts` — because the success emit is only valid once a session actually exists (cookies, access token), which is a controller-layer fact.
 
 ## Key elements
 
-- **`attemptedIdentity`** (private helper) — Normalises an email string (`trim` → `toLowerCase`) and passes it through `pseudonymise('log', …)`. Returns `undefined` for non-string inputs. Used solely in failure-path audit records.
-- **`recordLoginFailure(request)`** — Increments the `authLoginTotal` counter with `status: 'failure'` and writes an audit record with actor `anonymous` and, when present, a pseudonymised `targetId`.
-- **`recordLoginSuccess(request, userId, requireUnrestricted, metadata?)`** — Increments `authLoginTotal` with `status: 'success'`, writes an audit record (role derived from `requireUnrestricted`, optional `metadata` e.g. `{ via: 'google' }`), and emits a `USER_LOGGED_IN` analytics event.
+- **`attemptedIdentity`** (private) – Normalises and pseudonymises an email string (purpose `'log'`) for use as an audit `targetId`; returns `undefined` for non-string input.
+- **`recordLoginFailure(request: Request): void`** – Increments the `authLoginTotal` failure counter and writes an audit record with `actorUserId: 'anonymous'`. Synchronous.
+- **`recordLoginSuccess(request: Request, userId: string, metadata?: Record<string, unknown>): Promise<void>`** – Resolves the caller's role via `isUnrestrictedCaller`, increments the success counter, writes an audit record (with optional `metadata` for e.g. OAuth `via`), and emits a `USER_LOGGED_IN` analytics event.
 
 ## Relationships
 
-- **`src/modules/account/controllers/post-login.ts`** — Original owner of this logic; now calls `recordLoginFailure` / `recordLoginSuccess`.
-- **`src/modules/account/controllers/post-login-2fa.ts`** — Second step of a 2FA login; imports and reuses both functions so the success signal fires exactly once.
-- **`src/modules/account/controllers/get-oauth-callback.ts`** — Calls `recordLoginSuccess` with channel-specific `metadata` (e.g. `{ via: 'google' }`).
-- **`src/modules/account/audit.ts`** — Provides the `accountAuditActions.AUTH_LOGIN` enum used in audit records.
-- **`src/modules/account/analytics.ts`** — Provides the `accountAnalyticsEvents.USER_LOGGED_IN` event name.
-- **`src/modules/account/metrics.ts`** — Provides the `authLoginTotal` Prometheus counter.
-- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf(request)` for audit/analytics context.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` sink.
-- **`src/infrastructure/observability/analytics/index.ts`** — `emitAnalyticsEvent` / `buildAnalyticsBase` sinks.
-- **`src/infrastructure/security/pseudonymise.ts`** — Hashes the attempted email for correlation without storing it.
+- **`post-login.ts` / `post-login-2fa.ts` / `get-oauth-callback.ts`** (controllers) – Call `recordLoginFailure` / `recordLoginSuccess`; this file is their shared observability tail.
+- **`src/infrastructure/observability/audit.ts`** – `recordAudit` writes every audit line produced here.
+- **`src/infrastructure/observability/analytics/index.ts`** – `emitAnalyticsEvent` + `buildAnalyticsBase` power the success analytics emission.
+- **`src/infrastructure/http/request.ts`** – `callerContextOf` extracts IP/user-agent context from the Express `Request` for both audit and analytics payloads.
+- **`src/infrastructure/security/pseudonymise.ts`** + **`src/infrastructure/persistence/normalize-email.ts`** – Combined in `attemptedIdentity` to produce a safe, case-insensitive identifier for audit.
+- **`src/modules/account/audit.ts`** – Supplies the `accountAuditActions.AUTH_LOGIN` action constant.
+- **`src/modules/account/analytics.ts`** – Supplies the `accountAnalyticsEvents.USER_LOGGED_IN` event name.
+- **`src/modules/account/metrics.ts`** – Supplies the `authLoginTotal` counter.
+- **`src/modules/account/roles.ts`** – `isUnrestrictedCaller` determines whether the logged-in user is an admin for the audit/analytics role field.
 
 ## Notes
 
-- The `log` purpose passed to `pseudonymise` is specifically for correlating with hashed addresses in stdout log lines; it is not a storage hash.
-- `attemptedIdentity` normalises case *before* hashing so that `Admin@x.com` and `admin@x.com` produce the same digest—without this, a case-spray hides behind the hash.
-- `requireUnrestricted` is a boolean that maps to the `'admin'` / `'user'` role string in both the audit record and the analytics event properties; the file does not define what "unrestricted" means beyond that mapping.
-- The `metadata` parameter on `recordLoginSuccess` is intentionally optional and untyped (`Record<string, unknown>`) to keep the function generic across login channels (password, 2FA, OAuth).
+- `recordLoginSuccess` is **async** (returns `Promise<void>`) solely because role resolution via `isUnrestrictedCaller` is asynchronous; callers must `await` it.
+- `recordLoginFailure` is synchronous.
+- The `pseudonymise('log', …)` purpose tag is deliberate: it makes the audit `targetId` correlate with the same hashed value in stdout log lines, without persisting the raw email.
+- `recordLoginSuccess`'s `metadata` param is the intended extension point for login-method-specific detail (e.g. `{ via: 'google' }` from the OAuth callback controller); omit it for plain password logins.

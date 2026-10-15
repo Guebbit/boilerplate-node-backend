@@ -246,6 +246,16 @@ describe('userService.create', () => {
         expect(user.email).toBe('created@example.com');
     });
 
+    it('records no acceptance of the terms: an administrator showed nobody the text', async () => {
+        const user = await expectCreated(
+            { email: 'staffmade@example.com', username: 'staffmade' },
+            callerContextAs('admin')
+        );
+
+        expect(user.termsAcceptedAt).toBeUndefined();
+        expect(user.termsVersion).toBeUndefined();
+    });
+
     it('creates a user in the role the request names', async () => {
         const user = await expectCreated(
             {
@@ -400,6 +410,29 @@ describe('userService.updateById', () => {
         expect(updated.username).toBe('new-name');
         const roles = await rolesOf(String(updated._id), DEPLOYMENT_TENANT_ID);
         expect(roles.tenant).toBe('admin');
+    });
+
+    it('dates the analytics choice when it is first made and when it changes, not when it repeats', async () => {
+        const created = await createUser();
+        const id = created._id.toString();
+        const owner = callerContextAs('customer');
+        /** Answer through the profile door, on a freshly loaded account, and read the date back. */
+        const answer = async (consent: boolean): Promise<Date | undefined> => {
+            const loaded = await userRepository.findById(id);
+            await userService.update(loaded!, { analyticsConsent: consent }, owner);
+            const stored = await userRepository.findById(id);
+            return stored?.analyticsConsentAt;
+        };
+
+        const first = await answer(false);
+        expect(first).toBeInstanceOf(Date);
+
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        expect(await answer(false)).toEqual(first);
+
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        const changed = await answer(true);
+        expect(changed!.getTime()).toBeGreaterThan(first!.getTime());
     });
 
     it('stores phone encrypted, never as the plaintext submitted, and decrypts it back through presentUser', async () => {

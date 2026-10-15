@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/model.ts
-sha256: ffb384596b61290b521a9ce7f8896c8c5333d79e521d3172d138e5a481a72a47
-generated_at: 2026-10-14T08:41:25.076565+00:00
+sha256: e402c086d6cf9ed62efbf992effe01b366af24b3c2f7b3aa51d9d44337fd47ca
+generated_at: 2026-10-15T09:57:26.317666+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schemas, TypeScript document interfaces, and compiled models for the three MongoDB collections owned by the account module: `accountexports`, `sessions`, and `verificationtokens`. The file is purely declarative—no query logic lives here (that is `./repository`)—and it enforces structural invariants (unique indexes, partial-index constraints, TTL-style expiry) at the database level.
+Defines the three Mongoose schemas, document interfaces, and compiled models that make up the account module's persistence layer: `accountexports` (data-export progress), `sessions` (signed-in sessions or refresh tokens), and `verificationtokens` (one-time links/challenges in flight). This file is the single source of truth for the shape of those collections; all queries live elsewhere in `./repository`.
 
 ## Key elements
 
-- **`EXPORT_STATUSES` / `ExportStatus`** – Closed set (`'building' | 'ready' | 'failed'`) for the export lifecycle.
-- **`AccountExportDocument` / `accountExportSchema` / `accountExportModel`** – Schema for one data-export request per user. `userId` is `unique: true` so two concurrent requests cannot both insert. Indexed on `expiresAt` for the reaper's sweep.
-- **`SessionDocument` / `sessionSchema` / `sessionModel`** – Schema for signed-in sessions (cookie mode) or refresh tokens (JWT mode). Fields are mode-conditional (`authTime`, `amr`, `remember`, `device` are cookie-only; `supersededAt` is JWT-only). `tokenHash` is `unique` and omitted from serialization. TTL via `expireAfterSeconds: 0` on `purgeAt`. Compound index `{userId, familyId}` for listing and revocation.
-- **`VerificationTokenDocument` / `verificationTokenSchema` / `verificationTokenModel`** – Schema for one-time links/challenges. `tokenHash` is `unique` and omitted from serialization. TTL via `expireAfterSeconds: 0` on `expiresAt`. A **partial** unique index on `{userId, type}` constrains only the types in `ONE_LIVE_TOKEN_TYPES`.
-- All three schemas set `{ timestamps: false }`; dates are set explicitly by application code.
+- **`EXPORT_STATUSES` / `ExportStatus`** – Closed union of the three states an export row can be in: `building`, `ready`, `failed`.
+- **`AccountExportDocument` / `accountExportSchema` / `accountExportModel`** – One row per account that requested a data export. `userId` is `unique` so a second concurrent request cannot create a duplicate row. `expiresAt` drives both the reaper and a plain index (no TTL).
+- **`SessionDocument` / `sessionSchema` / `sessionModel`** – One row per active session (cookie mode) or per refresh token (jwt mode). Carries `familyId` (stable across rotation), `tokenHash` (sha256 digest, never the raw credential), `mode`, `authTime`, `amr`, `remember`, `supersededAt`, `expiresAt`, and `purgeAt`. `tokenHash` is `unique`. Uses a per-row TTL index (`expireAfterSeconds: 0` on `purgeAt`) instead of an env-driven TTL.
+- **`VerificationTokenDocument` / `verificationTokenSchema` / `verificationTokenModel`** – One row per in-flight one-time link or MFA challenge. `tokenHash` is `unique`; spending the token deletes the row (no "used" state). A **partial** unique index on `{ userId, type }` enforces "one live token per account" only for types listed in `ONE_LIVE_TOKEN_TYPES`, leaving types that allow multiples unconstrained.
+- **`applySerialization` calls** – Both the session and verification-token schemas strip `tokenHash` from `toJSON` output so the digest never leaks through an accidental `JSON.stringify`.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/serialize.ts`** – Imports `applySerialization`, which strips `tokenHash` from the JSON output of the session and verification-token schemas.
-- **`src/modules/account/session-mode.ts`** – Supplies `SESSION_MODES` (enum values) and the `SessionMode` type used by the `mode` field on `sessionSchema`.
-- **`src/modules/account/token-types.ts`** – Supplies `VERIFICATION_TOKEN_TYPES` (enum values), `ONE_LIVE_TOKEN_TYPES` (subset for the partial index), and the `VerificationTokenType` type.
-- **`src/modules/account/repository.ts`** – Imports the three compiled models (`accountExportModel`, `sessionModel`, `verificationTokenModel`) to run all CRUD and query operations.
-- **`src/modules/account/index.ts`** – Barrel file; re-exports the public types and models defined here.
-- **`src/modules/account/tests/factories.ts`** – Test factories construct `AccountExportDocument`, `SessionDocument`, and `VerificationTokenDocument` instances for seeding.
-- **`src/modules/account/tests/unit/auth-schemas.test.ts`** – Unit-tests the schema definitions (required fields, enum enforcement, serialization omission).
-- **`src/modules/account/tests/integration/auth-storage.test.ts`** – Integration tests exercising session and verification-token persistence.
-- **`src/modules/account/tests/integration/export.test.ts`** – Integration tests for the `accountexports` collection lifecycle.
+- **`./token-types.ts`** – Supplies `VERIFICATION_TOKEN_TYPES` (enum values), `ONE_LIVE_TOKEN_TYPES` (subset for the partial index), and the `VerificationTokenType` type used in the verification-token schema.
+- **`./session-mode.ts`** – Supplies `SESSION_MODES` (enum values) and the `SessionMode` type for the session schema's `mode` field.
+- **`@infrastructure/persistence/serialize.ts`** – Provides `applySerialization`, called to configure the `omit` list on `sessionSchema` and `verificationTokenSchema`.
+- **`./repository.ts`** – The sole consumer of the compiled models (`accountExportModel`, `sessionModel`, `verificationTokenModel`) for all CRUD operations; this file intentionally contains no query logic.
+- **`./index.ts`** – Re-exports the public surface of this module (interfaces, models, enums) to the rest of the codebase.
+- **Test files** (`tests/factories.ts`, `tests/unit/auth-schemas.test.ts`, `tests/integration/*.test.ts`) – Build fixture documents from these interfaces and exercise the schemas' validation, serialization, and TTL behavior.
 
 ## Notes
 
-- **Raw tokens never leave the server.** All three token-bearing fields are sha256 digests (`tokenHash`), and `applySerialization` removes them from any `toJSON`/`toObject` output. The module doc comment stresses that wire shapes are built by hand, not from the row directly.
-- **TTL is per-row, not env-driven.** The `expireAfterSeconds: 0` index pattern means changing a session lifetime is a data change, not an index rebuild.
-- **`timestamps: false` everywhere.** `createdAt`/`startedAt`/`sentAt` are set at request time, and `expiresAt`/`purgeAt`/`lastUsedAt` are mutated intentionally. Mongoose's automatic `updatedAt` would be noise.
-- **Partial index on `verificationtokens`.** The unique constraint on `{userId, type}` applies *only* to types listed in `ONE_LIVE_TOKEN_TYPES`; types like delete-confirmation or MFA-challenge can have multiple live rows per user.
+- **`timestamps: false`** is set on all three schemas. The `createdAt`/`startedAt`/`sentAt` fields are set intentionally at creation time, and `expiresAt`/`purgeAt` are mutated on purpose; Mongoose's automatic `updatedAt` would be a misleading "edit" signal.
+- **Per-row TTL over env TTL.** Sessions and verification tokens use `expireAfterSeconds: 0` with a per-document date field, so changing a lifetime setting does not require rebuilding the index. Reads still check `expiresAt` in application code because the TTL monitor can lag by up to a minute.
+- **Token digests are never stored in plaintext.** Only sha256 hashes are persisted; the raw credential (refresh JWT or opaque session id) exists only in memory or in the cookie/JWT itself.
+- **No wire serialization.** The doc block explicitly states these rows are never sent as-is; API contract shapes are built from these fields by hand in the repository/service layer.
+- **`familyId` is stable across rotation.** In jwt mode, every rotation successor copies the same `familyId`, so the session list and "log out that device" operate on the family, not on a single token row.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/reauth.ts
-sha256: ce509dd8dca922608aeefa240b5a501891bdd2423caa6a3cfc55f3b84ba14775
-generated_at: 2026-10-14T08:52:20.568131+00:00
+sha256: bbec75795b64aff1f1b612be5952aa3c3c176e933c7fc1ca213dc4b54da16d3c
+generated_at: 2026-10-15T10:02:33.699314+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,42 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements step-up re-authentication for an already-signed-in caller: deciding which proof methods an account can use, mailing a one-time code to a password-less account, and verifying the proof behind `POST /account/reauth`. It deliberately stops at returning the earned `amr` values; re-minting the session (a fresh `auth_time`) is the controller's job.
+Implements step-up re-authentication for an already-authenticated caller: determining which proof methods an account can use, mailing a one-time code for password-less (OAuth-only) accounts, and verifying the submitted proof (password or code, plus an optional second-factor code). It returns the `amr` claim the controller should stamp on the re-minted session; the session itself is re-minted by the controller, not here.
 
 ## Key elements
 
-- **`amrAfterReauth(method, otpProven)`** – Computes the `amr` array the session earns from *this* re-auth only (primary method ± `otp`). Login-time proofs are intentionally not carried forward.
-- **`ReauthProven`** – Narrow interface (`{ amr: string[] }`) handed back to the controller on success.
-- **`reauthMethods(userId)`** – Handler for `GET /account/reauth`; returns the ordered list of methods the account can use right now (`['password']`, `['email']`, or `[]`).
-- **`sendReauthCode(userId, method, context)`** – Handler for `POST /account/reauth/methods/{method}/send`; enforces method availability and a resend cooldown, then mints a code, mails it, and persists its digest. Audits the attempt.
-- **`reauth(userId, proof, context)`** – Handler for `POST /account/reauth`; verifies the primary method (password or code), optionally verifies a second-factor `otp`, audits the attempt, and returns `ReauthProven`.
-- **`methodsOf(user)`** (private) – Resolves available methods from the user document: password if set, otherwise email if the address is verified *and* the deployment can deliver mail.
-- **`withCaller(userId, action)`** (private) – Loads the user with `select:false` credentials; 401 on a vanished token, DB-envelope reject on infrastructure failure.
-- **`deliverCode(user, context)`** (private) – Generates the code, arms the in-memory slot, queues the mail, then persists the digest. Mail is queued *before* the write so a refused queue arms nothing.
-- **`proveMethod` / `proveOtp`** (private) – Split the verification: primary proof must pass before the optional `otp` is even evaluated.
+- **`amrAfterReauth(method, otpProven)`** – Computes the `amr` array for the new session. Includes the method's value (`password` or `email`) and appends `otp` only if a second-factor code was verified in the same call.
+- **`ReauthProven`** (interface) – The success payload handed back to the controller: `{ amr: string[] }`.
+- **`reauthMethods(userId)`** – `GET /account/reauth`. Returns the ordered list of methods the account can answer with (`['password']` or `['email']` or `[]`).
+- **`sendReauthCode(userId, method, context)`** – `POST /account/reauth/methods/{method}/send`. Guards method availability and cooldown, then mails a code via `deliverEmailCode` and arms it in the DB. Audits the send.
+- **`reauth(userId, proof, context)`** – Verification half of `POST /account/reauth`. Proves the named method (password hash compare or code match), optionally proves a second-factor code, audits the attempt, and returns `ReauthProven`.
+- **`AMR_OF_METHOD`** – Maps each `ReauthMethod` to its RFC 8176 `amr` string.
+- **Internal helpers** – `methodsOf`, `rejectAuthFailure`, `deliverCode`, `passwordMatches`, `codeMatches`, `proveMethod`, `proveOtp`.
 
 ## Relationships
 
-- **`@infrastructure/security/password-hash`** – `verifyPassword` (argon2id) for the password path.
-- **`@infrastructure/i18n`** – `t()` for all user-facing error/copy strings.
-- **`@infrastructure/http/response`** – `generateSuccess` / `generateReject` for the response envelope.
-- **`@infrastructure/http/errors`** – `rejectDatabaseEnvelope` to wrap Mongoose/database failures.
-- **`@infrastructure/observability/audit`** – `recordAudit` after `sendReauthCode` and `reauth`.
-- **`../audit`** – `accountAuditActions` enum values for the audit log.
-- **`../emails`** – `reauthCodeEmail`, `recipientLocale`, `greetableName` to compose and localise the code email.
-- **`../cooldown`** – `resendTooSoon` / `cooldownRemaining` to rate-limit code resends.
-- **`../two-factor`** – `generateDeliveredCode`, `armDeliveredCode`, `verifyDeliveredCode`, `twoFactorMethod`, `DELIVERED_CODE_TTL_MS`, `DELIVERED_CODE_RESEND_SECONDS`.
-- **`../two-factor/methods/email`** – `maskEmail` for the `sentTo` field in the response.
-- **`./mail`** – `sendAccountMail` to queue the outbound message.
-- **`./two-factor-lockout`** – `proveSecondFactor` for the optional `otp` verification.
-- **`../domain/session-proof`** – `AMR` constants (`AMR.password`, `AMR.email`, `AMR.otp`) used by `amrAfterReauth`.
-- **`services/index.ts`** – Barrel re-export; this file is the implementation behind those exports.
+- **`src/infrastructure/security/password-hash.ts`** – Calls `verifyPassword` (argon2id) to compare a submitted password against the stored hash.
+- **`src/infrastructure/http/response.ts`** – Uses `generateSuccess` / `generateReject` and the `ResponseSuccess` / `ResponseReject` types for all return values.
+- **`src/infrastructure/http/errors.ts`** – `rejectAuthFailure` wraps unexpected errors in `rejectDatabaseEnvelope('auth', error)` so callers never see a bare 500.
+- **`src/infrastructure/i18n/index.ts`** – `t()` provides localized user-facing error messages (wrong password, method unavailable, wrong code, etc.).
+- **`src/infrastructure/observability/audit.ts`** – `recordAudit` logs `AUTH_REAUTH_CODE_SENT` and `AUTH_REAUTHENTICATED` events with outcome and method.
+- **`src/modules/account/audit.ts`** – Supplies the `accountAuditActions` enum values used in those audit records.
+- **`src/modules/account/domain/session-proof.ts`** – Exports the `AMR` constant (`AMR.password`, `AMR.email`, `AMR.otp`) used to build the post-reauth claim.
+- **`src/modules/account/emails.ts`** – Provides `reauthCodeEmail`, the email template passed to `deliverEmailCode`.
+- **`src/modules/account/services/caller.ts`** – `withOwnAccount` resolves the caller's user document and enforces the "own account" guard before any logic runs.
+- **`src/modules/account/services/two-factor-lockout.ts`** – `proveSecondFactor` verifies the optional `otp` field and enforces the attempt ceiling.
+- **`src/modules/account/services/two-factor-outcomes.ts`** – `tooSoon(wait)` builds the standard "cooldown not elapsed" reject response.
+- **`src/modules/account/services/index.ts`** – Re-exports the public surface of this module for consumers.
+- **`src/modules/account/tests/unit/reauth-policy.test.ts`** – Unit tests covering the re-auth decision logic.
 
 ## Notes
 
-- **AMR is reset, not accumulated.** A re-auth earns only what it proved *this* time. A password-only re-auth will *not* carry `otp` from the original login, preventing a route that demands a second factor from being satisfied by a stale proof.
-- **`email` AMR is app-specific.** It is not a registered RFC 8176 value; the code comment notes that `otp` in this codebase means a true second factor, which a mailed step-up code is not.
-- **No dummy-compare.** Unlike the login path (which fakes a hash check to mask "account not found"), the caller is already identified by their access token, so no timing oracles to hide.
-- **`proof.otp === undefined` is success, not failure.** The session simply earns no `otp`; a downstream route that requires one will ask again.
-- **Mail-before-write ordering.** `sendAccountMail` is awaited before `userService.armReauthCode`; a queue rejection therefore leaves no armed code in the DB.
-- **Mongoose subdocument gotcha.** `user.reauthCode = {}` followed by `user.reauthCode` re-read is required so helpers mutate the hydrated subdocument, not the raw assigned object.
+- **AMR is intentionally narrow.** After re-auth the session carries *only* what this call proved. Login-time proofs (e.g. an `otp` earned at sign-in) are dropped because `auth_time` is refreshed; a stale `otp` would let a password-only re-auth satisfy a route that demands a second factor.
+- **`email` is an app-specific AMR value.** RFC 8176 permits context-specific values; here it distinguishes a mailed step-up code from `otp` (which is reserved for a true second factor).
+- **Mail-before-write ordering.** `deliverCode` queues the email before persisting the code digest, so a queue rejection leaves no armed code in the database.
+- **Mongoose subdocument hydration.** `deliverCode` assigns `user.reauthCode = {}` then re-reads it; the re-read subdocument is the one passed to `deliverEmailCode` for mutation. Skipping the re-read would let the helper write to a detached object.
+- **No dummy-compare (unlike `login`).** The caller is already authenticated (access token verified upstream), so there is no anonymous-identity timing oracle to mask.
+- **Missing `otp` is not a failure.** If `proof.otp` is `undefined`, `proveOtp` succeeds with an `amr` that simply omits `otp`; downstream routes that require `otp` will prompt again.
+- **Method gating before comparison.** `proveMethod` rejects a method the account cannot use *before* any credential check, so a password account can never be passed with a mailed code and vice-versa.

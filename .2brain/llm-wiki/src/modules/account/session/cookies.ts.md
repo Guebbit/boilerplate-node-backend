@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/cookies.ts
-sha256: 80ce3c56f06fd2ca24e34f5a125cb8b8eaee2f96e4865cea4c42e246b1c94b52
-generated_at: 2026-10-14T08:59:14.641250+00:00
+sha256: 2919888d2855f3bbe1e99d9eb0c5e68aa61a069d79d19a37a767d5aa1d0d433f
+generated_at: 2026-10-15T10:06:11.110581+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Centralizes HTTP cookie creation and destruction for the account session, decoupled from *how* the session is maintained (JWT vs. cookie mode). Two cookies serve two jobs: `__Host-session` carries the credential (refresh token or session ID), and `isAuth` is a non-secret flag the client shell reads to render auth chrome before the first API call resolves.
+HTTP cookie creation and destruction for the account session layer. Manages two cookies — `__Host-session` (carries the credential: a refresh token in `jwt` mode or a `ses_…` id in `cookie` mode) and `isAuth` (a non-secret, readable-by-JS hint so the client shell can render auth chrome before its first API response arrives). Decoupled from *how* the session is kept; only handles the transport.
 
 ## Key elements
 
-- **`secureCookieOptions()`** (exported) — Returns shared flag set (`httpOnly`, `secure` (conditional on env), `sameSite: 'lax'`, `path: '/'`) used by every credential-bearing cookie in the app. A function, not a constant, so `NODE_ENV` is read at call time.
-- **`hostCookieOptions()`** (internal) — `secureCookieOptions()` with `secure: true` forced, satisfying the `__Host-` prefix requirement.
-- **`createSessionCookie(response, credential, maxAgeMs?)`** (exported) — Sets the `__Host-session` cookie. `maxAgeMs` omitted → browser-session cookie (no `Max-Age`/`Expires`); the server-side TTL remains the real limit.
-- **`destroySessionCookie(response)`** (exported) — Clears the `__Host-session` cookie. Must pass the same flags used to set it.
-- **`createLoggedCookie(response, maxAgeMs?)`** (exported) — Sets the `isAuth` hint cookie (no `httpOnly`/`secure`). Always set alongside `createSessionCookie` with the same `maxAgeMs`.
-- **`destroyLoggedCookie(response)`** (exported) — Clears the `isAuth` cookie.
+- **`secureCookieOptions()`** — shared flag object for credential cookies: `httpOnly`, `secure` (off only in relaxed envs), `sameSite: 'lax'`, `path: '/'`. Exported so OAuth state/verifier/MFA cookies can reuse it.
+- **`hostCookieOptions()`** (private) — extends the above, forcing `secure: true` unconditionally as the `__Host-` prefix requires.
+- **`createSessionCookie(response, credential, maxAgeMs?)`** — sets `__Host-session` via `res.cookie` and *always* sets `isAuth` with the same lifetime alongside it.
+- **`destroySessionCookie(response)`** — clears both cookies with matching flags so the browser actually removes them.
+- **`createLoggedCookie` / `destroyLoggedCookie`** (private) — set/clear the `isAuth` hint; deliberately no `httpOnly` or `secure`.
 
 ## Relationships
 
-- **`src/kernel/cookies.ts`** — Source of the `SESSION_COOKIE` constant (the literal `__Host-session` name) used by both create and destroy.
-- **`src/infrastructure/runtime/config.ts`** — Provides `isRelaxedEnvironment()` so `secure` is dropped only in dev/test.
-- **`src/modules/account/session/jwt-strategy.ts`** — Calls `createSessionCookie` with the refresh token (jwt mode) and `destroySessionCookie` on revocation.
-- **`src/modules/account/session/cookie-strategy.ts`** — Calls `createSessionCookie` with the `ses_…` ID (cookie mode).
-- **`src/modules/account/controllers/post-logout.ts`**, **`post-logout-everywhere.ts`**, **`delete-account-confirm.ts`**, **`post-reset-confirm.ts`** — Call the destroy pair to clear cookies on account-mutating actions.
-- **`src/modules/account/controllers/get-refresh-token.ts`** — Calls the create pair after token rotation, passing the rotated token's own remaining lifetime as `maxAgeMs`.
-- **`src/modules/account/oauth/state.ts`**, **`mfa-redirect.ts`** — Import `secureCookieOptions()` for their state/verifier/MFA-challenge cookies.
-- **`src/modules/account/tests/unit/cookies.test.ts`** — Unit tests for the flag sets and Express call signatures.
+- **`src/kernel/cookies.ts`** — provides the `SESSION_COOKIE` name constant used here.
+- **`src/infrastructure/runtime/config.ts`** — `isRelaxedEnvironment()` gates the `secure` flag in `secureCookieOptions`.
+- **`src/modules/account/oauth/state.ts` / `mfa-redirect.ts`** — import `secureCookieOptions` to stamp the same credential-grade flags on OAuth state, PKCE verifier, and MFA-challenge cookies.
+- **Controllers** (`post-logout`, `post-logout-everywhere`, `delete-session`, `delete-account-confirm`, `post-reset-confirm`, `get-refresh-token`) — call `createSessionCookie` or `destroySessionCookie` to set or clear the session on the wire.
+- **`src/modules/account/session/resolver.ts` / `jwt-strategy.ts` / `cookie-strategy.ts`** — determine *which* credential value is passed to `createSessionCookie`; this file is agnostic to that choice.
+- **`src/modules/account/session/device-cookie.ts`** — sibling cookie concern (device identity) kept separate from the auth credential cookie.
+- **`src/modules/account/tests/unit/cookies.test.ts`** — unit tests for the create/destroy pairs.
 
 ## Notes
 
-- `secureCookieOptions` is a **function**, not an object literal, intentionally: freezing `NODE_ENV` at import time would break environments that change it mid-process (e.g. tests that toggle env vars between suites).
-- `__Host-` prefix mandates `Secure`, `Path=/`, and no `Domain`. The `hostCookieOptions` wrapper enforces the first two; the browser rejects the cookie if `Domain` is present, so it is simply never set.
-- `destroySessionCookie` must pass the same `path`/`sameSite`/`secure` flags used at creation — a browser matches a clear by those attributes, not by cookie name alone.
-- `isAuth` is deliberately **not** `httpOnly` and **not** `secure`: it carries no credential and must be readable by client-side JS even over `http://` in local dev.
+- `secureCookieOptions` is a **function**, not a frozen constant — it re-reads `NODE_ENV` on every call, so tests can flip the environment without re-importing.
+- The `__Host-` prefix **requires** `Secure` in all environments. `http://localhost` still works in modern browsers, but a LAN-IP dev server over plain HTTP will be rejected by the browser.
+- Clearing a cookie must repeat the `path`/`domain`/`sameSite` attributes it was set with; `destroySessionCookie` does this deliberately.
+- `isAuth` has **no** `httpOnly` or `secure` by design — it is a readable, non-sensitive UI flag. Do not put credential data in it.
+- Passing `maxAgeMs = undefined` produces a browser-session cookie (no `Max-Age`/`Expires`); the server-side session TTL remains the real expiration limit.

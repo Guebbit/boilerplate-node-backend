@@ -24,7 +24,14 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
  */
 export interface UserRecord extends Omit<
     User,
-    'createdAt' | 'updatedAt' | 'deletedAt' | 'twoFactorEnabledAt' | 'verifiedAt' | 'role'
+    | 'createdAt'
+    | 'updatedAt'
+    | 'deletedAt'
+    | 'twoFactorEnabledAt'
+    | 'verifiedAt'
+    | 'analyticsConsentAt'
+    | 'termsAcceptedAt'
+    | 'role'
 > {
     /**
      * Hashed by the pre-save hook below before it ever reaches Mongo. Absent for an OAuth-only
@@ -118,6 +125,12 @@ export interface UserRecord extends Omit<
      * field's own doc comment. Same ISO-string-vs-`Date` redeclaration as `createdAt`/`updatedAt`.
      */
     verifiedAt?: Date | null;
+
+    /** Same ISO-string-vs-`Date` redeclaration; see the schema field. */
+    analyticsConsentAt?: Date;
+
+    /** Same ISO-string-vs-`Date` redeclaration; see the schema field. */
+    termsAcceptedAt?: Date;
 
     /** The provider identities linked to this account — see `OAuthAccount` below. */
     oauthAccounts: OAuthAccount[];
@@ -332,25 +345,31 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             type: String
         },
         /*
-         * "Never asked" and "denied" are the same answer, arrived at differently — the gate is
-         * opt-in, so only `true` captures. Read off `AuthContext` (threaded through `resolve()`
-         * in `account/module.ts`), never the document directly.
+         * "Never asked" and "denied" are the same answer for the gate — it is opt-in, so only
+         * `true` captures. Read off `AuthContext` (threaded through `resolve()` in
+         * `account/module.ts`), never the document directly. No default: `analyticsConsentAt`
+         * says whether the choice was ever made, and an unmade one has no value to restate.
          */
         analyticsConsent: {
-            type: Boolean,
-            default: false
+            type: Boolean
         },
         /*
-         * Enforced at signup, not here: `accountService.signup`'s local schema rejects anything
-         * but `true`, so every self-signup that reaches this default already validated it.
-         * `default: true` is for every OTHER creation path — OAuth linking, the admin `/users`
-         * route, test fixtures — none of which shows the checkbox, so none should have to restate
-         * it. A row with no value reads as `undefined`, which every consumer treats as not
-         * accepted.
+         * When the choice above was last made or changed — what GDPR Art. 7(1) asks a controller
+         * to be able to show. Unset until the account answers once.
          */
-        termsAccepted: {
-            type: Boolean,
-            default: true
+        analyticsConsentAt: {
+            type: Date
+        },
+        /*
+         * When the account accepted the terms, and which text (`NODE_TERMS_VERSION` then). Set by
+         * a signup and by a first sign-in through a provider; left unset for every other creation
+         * path (the admin `/users` route, fixtures), which show nobody the terms.
+         */
+        termsAcceptedAt: {
+            type: Date
+        },
+        termsVersion: {
+            type: String
         },
         /*
          * Whether the account is enabled — independent of `deletedAt`, matching `products`:

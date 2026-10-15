@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-reset-confirm.ts
-sha256: 938dbdf24668ad62d8cdb25ea4115063ceb6cefc01547c7a9ff7e544b1a4f4e1
-generated_at: 2026-10-14T08:36:53.714026+00:00
+sha256: 9f4c372a6f387ec66d55595df53dca9d717959fc711b27152b2516801a575943
+generated_at: 2026-10-15T09:55:53.010911+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller for `POST /account/reset-confirm`. Receives a one-time reset token (from the email link, passed as a URL param) plus the new password in the request body, delegates validation and the atomic token-spend to the account service, and on success clears session cookies and returns a localised success message.
+Controller for `POST /account/reset-confirm`. Validates the request body against a Zod schema, then delegates the actual token-spend and password-set logic to `accountService.completePasswordReset`. Handles metric recording, session-cookie destruction on success, and structured error/refusal responses.
 
 ## Key elements
 
-- **`postResetConfirm(request, response)`** — The sole export. Parses the body against `ConfirmPasswordResetBody` (zod), extracts `token`, `password`, `passwordConfirm`, calls `accountService.completePasswordReset`, then either destroys session/logged cookies + sends a 200 success response, or increments the failure metric / re-throws via `catchAs`.
+- **`postResetConfirm`** (exported function) — The sole export. Accepts an Express `Request`/`Response`, parses the body with `ConfirmPasswordResetBody`, destructures `{ token, password, passwordConfirm }`, and calls `accountService.completePasswordReset(token, password, passwordConfirm, callerContextOf(request))`. On success it increments the `success` metric, destroys the session cookie, and returns a 200 with the i18n string `account.reset.success`. On refusal or thrown error it increments the `failure` metric and responds via `refused` / `catchAs` respectively.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Provides `parseBody` (schema validation), `refused` (normalised error short-circuit), and `catchAs` (error → HTTP mapping).
-- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` extracts caller metadata passed into the service call.
-- **`src/infrastructure/http/response.ts`** — `successResponse` builds the 200 JSON reply.
-- **`src/infrastructure/i18n/index.ts`** — `t('account.reset.success')` supplies the localised success string.
-- **`src/modules/account/services/index.ts`** — `accountService.completePasswordReset` performs the actual token validation, password check, and atomic spend.
-- **`src/modules/account/session/cookies.ts`** — `destroySessionCookie` / `destroyLoggedCookie` are called on success to force re-authentication.
-- **`src/modules/account/metrics.ts`** — `authPasswordResetConfirmTotal` is incremented with `status: 'success' | 'failure'` on every code path.
-- **`src/modules/account/routes.ts`** — Registers this handler at the `POST /account/reset-confirm` route (graph neighbour; not imported here).
-- **`src/types/index.ts`** — `PasswordResetConfirmRequest` types the request body for the Express generic.
+- **`@infrastructure/http/controller`** — Provides the `parseBody`, `refused`, and `catchAs` helpers used for input validation and uniform error/refusal handling.
+- **`@infrastructure/http/request`** — `callerContextOf(request)` extracts caller metadata passed to the service.
+- **`@infrastructure/http/response`** — `successResponse` builds the 200 JSON envelope.
+- **`@infrastructure/i18n`** — `t('account.reset.success')` localises the success message.
+- **`src/modules/account/services/index.ts`** — `accountService.completePasswordReset` performs the real token-spend + password-set (atomic per the inline comment).
+- **`src/modules/account/session/cookies.ts`** — `destroySessionCookie(response)` clears the session cookie after a successful reset.
+- **`src/modules/account/metrics.ts`** — `authPasswordResetConfirmTotal` Prometheus counter, incremented with `status: 'success'` or `'failure'`.
+- **`src/modules/account/routes.ts`** — Registers this handler on the `POST /account/reset-confirm` route.
+- **`src/types/index.ts`** — Supplies the `PasswordResetConfirmRequest` type for the request body parameter.
 
 ## Notes
 
-- The token arrives as a **URL parameter** (set by the email link), not from the body — the Express generic encodes this as `Request<{ token?: string }, …>`.
-- All token-validity and password-strength checks live in the service (`completePasswordReset`), guaranteeing that a weak/refused password **cannot** burn the one-time link. The controller only orchestrates I/O.
-- On success *both* `destroySessionCookie` and `destroyLoggedCookie` are called; forgetting either would leave a stale auth session after a password change.
-- Metrics are incremented in all three branches (refused, success, caught error) so the failure gauge covers both application-level rejections and unexpected exceptions.
+- The token arrives as a **URL parameter** (from the email link), not from the body. The Zod-parsed body carries `token`, `password`, and `passwordConfirm`; the route param is typed `token?: string` on the Request generic but is not read separately — the body's `token` field is what's passed to the service.
+- The order of operations (validation → atomic spend) is deliberately encapsulated in the service layer so that a refused password never burns the one-time link. The controller only handles I/O, metrics, and session cleanup.
+- The controller returns the Promise chain (`.then`/`.catch`) rather than using `async/await`, consistent with the `catchAs` helper's expectations.

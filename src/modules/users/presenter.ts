@@ -51,7 +51,13 @@ export const presentUser = (document: UserWire, role: string | null, actions?: U
         ...(document.analyticsConsent === undefined
             ? {}
             : { analyticsConsent: document.analyticsConsent }),
-        ...(document.termsAccepted === undefined ? {} : { termsAccepted: document.termsAccepted }),
+        ...(document.analyticsConsentAt
+            ? { analyticsConsentAt: document.analyticsConsentAt.toISOString() }
+            : {}),
+        ...(document.termsAcceptedAt
+            ? { termsAcceptedAt: document.termsAcceptedAt.toISOString() }
+            : {}),
+        ...(document.termsVersion === undefined ? {} : { termsVersion: document.termsVersion }),
         ...(document.twoFactorEnabledAt
             ? { twoFactorEnabledAt: document.twoFactorEnabledAt.toISOString() }
             : {}),

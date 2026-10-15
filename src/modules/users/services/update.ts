@@ -90,8 +90,14 @@ export const update = (
         user.phone = data.phone === null ? undefined : encryptPii(data.phone, phoneAad(user.id));
     if (data.website !== undefined) user.website = clearedOrValue(data.website);
     // Absent leaves the stored choice alone, same as every field above; only an explicit
-    // boolean changes it.
-    if (data.analyticsConsent !== undefined) user.analyticsConsent = data.analyticsConsent;
+    // boolean changes it. The date moves with the answer: the first one, or a different one.
+    if (
+        data.analyticsConsent !== undefined &&
+        (user.analyticsConsentAt === undefined || data.analyticsConsent !== user.analyticsConsent)
+    ) {
+        user.analyticsConsent = data.analyticsConsent;
+        user.analyticsConsentAt = new Date();
+    }
 
     return saveWithRole(user, { active: data.active, role }, context, oldImageUrl);
 };

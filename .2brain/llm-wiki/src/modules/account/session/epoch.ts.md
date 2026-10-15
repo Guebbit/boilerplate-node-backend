@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/epoch.ts
-sha256: dfd22f1c2cefccf63f812a72ddc26e12ca285a8d0da8f4759888a9f16f3711c4
-generated_at: 2026-10-14T08:59:53.019164+00:00
+sha256: 39059feec683a6993527a247f739830935ac610964ef5a577b01d832787d81bc
+generated_at: 2026-10-15T10:06:39.090022+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single-source-of-truth rule for session-epoch validation: given a token's `auth_time` and the account's `tokensValidAfter` date, decide whether the token predates the epoch and must be refused. Extracted as a pure function so the resolver path and the refresh path can never drift apart.
+Single source of truth for the session-epoch rule: a token or a login's proof is refused when it predates the account's `tokensValidAfter`. Both checks live here as pure functions so the resolver, the refresh path, and the mint path cannot drift apart.
 
 ## Key elements
 
-- **`predatesSessionEpoch(authTime, tokensValidAfter)`** — returns `true` when `authTime` (epoch seconds, from the token's `auth_time` claim) is strictly less than the epoch seconds of `tokensValidAfter`. Returns `false` when `tokensValidAfter` is `undefined` (no epoch has ever been set) or when the token was stamped in the same second as the bump (strict `<`, not `<=`).
+- **`predatesSessionEpoch(authTime, tokensValidAfter)`** — Returns `true` when a token's `auth_time` claim (epoch **seconds**) is strictly less than `tokensValidAfter` truncated to whole seconds. A token stamped in the same second as the epoch bump is *kept* (same-second grace).
+- **`proofPredatesEpoch(provedAt, tokensValidAfter)`** — Returns `true` when a login-proof check began (epoch **milliseconds**) strictly before `tokensValidAfter`. No same-second grace: there is no re-minted caller session to protect at mint time.
 
 ## Relationships
 
-- **`src/modules/account/session/auth-context.ts`** — consumer; applies `predatesSessionEpoch` during the resolver/refresh decision to reject stale tokens.
-- **`src/modules/account/session/jwt.ts`** — supplies the `auth_time` claim value passed as the first argument; also the path that re-mints tokens after an epoch bump.
-- **`src/modules/account/tests/unit/epoch.test.ts`** — unit tests for `predatesSessionEpoch`.
+- **`auth-context.ts`** — Supplies the account record (including `tokensValidAfter` and the token's `auth_time`) that callers pass into these predicates.
+- **`jwt.ts`** — The refresh / re-mint path; after a `/refresh` resets `iat` but copies `auth_time` forward, the resolver re-checks via `predatesSessionEpoch`.
+- **`mint-guard.ts`** — The mint path; invokes `proofPredatesEpoch` to reject a login whose proof was verified before a concurrent password change moved the epoch.
+- **`src/modules/account/tests/unit/epoch.test.ts`** — Unit tests covering both predicates, including the same-second boundary.
 
 ## Notes
 
-- Compares in **whole seconds** (floors the `Date` to seconds). A token stamped in the very second of the epoch bump is *kept*, which is intentional: it lets a caller's re-minted session survive its own epoch move.
-- Deliberately uses the `auth_time` claim, **not** `iat`. `iat` is reset on every `/refresh`; `auth_time` is copied forward from the original login, so only a re-login (or an explicit re-mint after the epoch moves) can clear a predating `auth_time`.
-- The function is pure and side-effect-free; it performs no I/O and reads no globals, making it trivially testable and safe to call from any code path.
+- The two functions intentionally use **different time resolutions** (seconds vs. milliseconds). This is not a bug: `predatesSessionEpoch` grants same-second grace so a caller's re-minted session survives its own bump, while `proofPredatesEpoch` has no such grace because at mint time there is no prior session to keep.
+- Comparison uses `auth_time`, **not** `iat`. `iat` is reset on every `/refresh`; `auth_time` is copied forward from the original login, so only a re-login or a post-epoch re-mint clears it.
+- Both functions are pure and side-effect-free; they never mutate the token or the account record.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/module.ts
-sha256: 7ca8162664c553bf32530ba853aede897e95ed506bb7aab83f49a51fad13b7f8
-generated_at: 2026-10-14T14:37:02.006757+00:00
+sha256: 6dc651a62d7dd2af668b85a27c683ca56489b28c972c5f4fd7f90e9aac1cbc86
+generated_at: 2026-10-15T09:57:46.513433+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The module manifest (default export) for the `account` mount. It wires together the auth resolver, HTTP routes, rate limits, personal-data export declarations, the export-worker consumer, config slices, and a single domain-event subscription—so that `registerModules` can install the entire account surface in one pass. It exists as a single declarative object satisfying `AppModule` rather than scattered registration calls.
+Module entry point for the `account` domain: authentication, signup, login, token refresh, password reset, logout, two-step account deletion, and personal-data export. It wires the auth resolver into the kernel, declares the module's `personalData` erase/export contract, registers the export-queue consumer, and subscribes to the `USER_SETUP_REQUESTED` domain event. It deliberately keeps the `User` document on the `users` module rather than merging them, so that an identity-provider swap stays possible.
 
 ## Key elements
 
-- **Default export** (`satisfies AppModule`) — the manifest: `name`, `basePath: '/account'`, `routes`, `rateLimits`, `personalData`, `consumers`, `config`, `onRegistered`, `subscribe`, `locales`, `templates`.
-- **`onRegistered(modules)`** — called once after every enabled module is known. Registers `accountAuthResolver` via `registerAuthResolver` and resolves all modules' `personalData` sections into `setPersonalDataSections`. Placing this here (rather than at import time) means merely importing the file has no side effects.
-- **`personalData`** — two entries: `accountExports` (collect returns `undefined`, i.e. self-excluded from exports; `erase` calls `eraseExports`) and `sessions` (collect reads session metadata for export; `erase` calls `eraseSessionsAndTokens`).
-- **`consumers`** — declares the `worker.account.export` queue handler (`runExportJob`) with `prefetch: 1` to serialize export builds per worker.
-- **`subscribe()`** — listens for the `USER_SETUP_REQUESTED` domain event; looks up the user and, if it still exists, calls `requestAccountSetup` to send setup tokens/mail.
-- **`config`** — flat-merges slices from `accountConfig`, `sessionConfig`, and `oauthConfig`.
+- **Default export (`AppModule`)** — the full module manifest: `name`, `basePath` (`/account`), `routes`, `rateLimits`, `personalData`, `consumers`, `config` slices, `reencrypt` hook, `onRegistered`, `subscribe`, `locales`, `templates`.
+- **`onRegistered(modules)`** — installs the app-wide auth resolver (`accountAuthResolver`) and resolves every enabled module's `personalData` sections into the export registry. Runs once via the kernel's registration pass, not at import time.
+- **`personalData` array** — two sections: `accountExports` (erase-only; `collect` returns `undefined` so it contributes no data) and `sessions` (exports session metadata; erases sessions *and* one-time verification tokens).
+- **`consumers`** — subscribes the `worker.account.export` queue to `runExportJob` with `prefetch: 1`.
+- **`subscribe()`** — listens for `USER_SETUP_REQUESTED`; looks up the user and fires `requestAccountSetup` (token + email). Silently drops if the user no longer exists.
+- **`config`** — concatenates `accountConfig.slice`, `sessionConfig.slice`, and `oauthConfig.slice`.
+- **`reencrypt`** — hook pointing to `reencryptTotpSecrets` for key-rotation of TOTP secrets stored on the `users` document.
 
 ## Relationships
 
-- **`src/kernel/authentication.ts`** — calls `registerAuthResolver` inside `onRegistered` to install `accountAuthResolver` app-wide.
-- **`src/kernel/events.ts`** — calls `onDomainEvent` in `subscribe()` to react to `USER_SETUP_REQUESTED`.
-- **`src/kernel/registry.ts`** — imports the `AppModule` type and `resolvePersonalDataSections`; the resolved list is fed to the personal-data registry.
-- **`src/modules/account/config.ts`** — imports `accountConfig` and includes its `.slice` in the manifest `config` array.
-- **`src/modules/account/oauth/config.ts`** — imports `oauthConfig` and includes its `.slice` in the manifest `config` array.
-- **`src/modules/account/rate-limits.ts`** — imports `accountRateLimits` and assigns it to the manifest's `rateLimits` field.
-- **`src/modules/account/routes.ts`** — imports `router` and assigns it to the manifest's `routes` field.
-- **`src/modules/account/services/export-job.ts`** — imports `runExportJob`; it is the handler for the export queue consumer.
-- **`src/modules/account/services/export.ts`** — imports `eraseExports`, used as the `erase` function for the `accountExports` personal-data section.
-- **`src/modules/account/services/password-reset-request.ts`** — imports `requestAccountSetup`, invoked in the `USER_SETUP_REQUESTED` subscription.
-- **`src/modules/account/services/personal-data-registry.ts`** — imports `setPersonalDataSections`, called in `onRegistered` with the resolved cross-module section list.
+- **`src/kernel/registry.ts`** — imports the `AppModule` type (satisfies check) and `resolvePersonalDataSections` to build the export section list at registration time.
+- **`src/kernel/authentication.ts`** — imports `registerAuthResolver`; this module is the one that installs the resolver the whole app's guards depend on.
+- **`src/kernel/events.ts`** — imports `onDomainEvent` to subscribe to `USER_SETUP_REQUESTED`.
+- **`src/modules.ts` (users module)** — imports `userService` and the `USER_SETUP_REQUESTED` event constant; the two modules share the `User` document (the kernel-level shared contract, invisible to the import graph).
+- **`src/modules/account/routes.ts`** — provides the Hono/express `router` mounted at `/account`.
+- **`src/modules/account/rate-limits.ts`** — supplies credential/signup/reset/MFA budget definitions.
+- **`src/modules/account/config.ts`** — account-specific configuration slice.
+- **`src/modules/account/oauth/config.ts`** — OAuth provider configuration slice.
+- **`src/modules/account/services/personal-data-registry.ts`** — `setPersonalDataSections` stores the resolved section list for the export worker.
+- **`src/modules/account/services/export.ts`** — `eraseExports` implements the `accountExports` erase action.
+- **`src/modules/account/services/export-job.ts`** — `runExportJob` is the queue consumer handler that assembles the export from the resolved sections.
+- **`src/modules/account/services/password-reset-request.ts`** — `requestAccountSetup` creates the verification token and sends the email when a new (or reset) account needs a way in.
+- **`src/modules/account/module.yaml` / `openapi.yaml`** — declarative manifest and API spec for this module; not imported at runtime but consumed by tooling.
+- **`src/modules/access/module.ts`** — peer module; its `personalData` section is resolved by `onRegistered` and included in exports, but there is no direct import.
 
 ## Notes
 
-- The auth resolver is registered in `onRegistered`, **not** at module top-level. Importing this file (e.g. for types in a test) does not install the resolver—only an actual `registerModules` run does.
-- The `accountExports` section intentionally returns `undefined` from `collect`: the export row is a *copy* of what other modules' sections already describe, so including it would be circular.
-- `prefetch: 1` on the export consumer is deliberate—each export build reads every other module's section for one account; serializing prevents a burst from starving other work on the same worker.
-- The `USER_SETUP_REQUESTED` handler tolerates a missing user (deleted between creation and event delivery) by resolving `undefined` and dropping the request silently.
+- **Resolver registration is deferred.** `registerAuthResolver` is called inside `onRegistered`, not at module import. Importing this file (e.g., for a type in a test) does *not* install the resolver. Only the kernel's `registerModules` pass triggers it.
+- **`accountExports` contributes no export data.** Its `collect` resolves `undefined`, which the export builder treats as "omit this section." The section exists solely to declare how to *erase* the export row and file when an account is deleted.
+- **Session tokens have no section of their own.** Verification tokens are erased alongside sessions because they are "links in flight," not something an export describes.
+- **Prefetch 1 on the export worker.** A burst of export requests must not starve other queue consumers; one-in-flight-per-worker is the throttle.
+- **TOTP secrets are cross-module.** They live on the `users` document but are encrypted under this module's key, so `reencryptTotpSecrets` is declared here even though the data is not owned by this module.

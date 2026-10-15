@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-logout-everywhere.ts
-sha256: c3b3ae456a608f6d952c2f795835fe4f7bcaea7ab2f8fd2a2a8818139971d127
-generated_at: 2026-10-14T14:36:40.125184+00:00
+sha256: 4d7cf336a707426870ac95cb145e646491410b9bfdc2853072317ad500517de2
+generated_at: 2026-10-15T09:55:33.005389+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP adapter for `POST /account/logout-all`. It revokes every refresh token in the database, advances the session epoch (invalidating already-issued access tokens), and destroys the caller's own cookies — a full sign-out from all devices with no re-mint.
+Thin HTTP adapter for `POST /account/logout-all`. It delegates to `accountService.logoutEverywhere`, then destroys the caller's session cookie and returns a translated success or rejection response. Exists so the route layer stays declarative and all HTTP I/O lives in one small handler.
 
 ## Key elements
 
-- **`postLogoutEverywhere(request, response)`** — The sole export. Calls `accountService.logoutEverywhere(userId, callerContext)`. On success, destroys the session and logged cookies and returns a `200` with an i18n-ized message. On a failed revocation result, returns the error status and messages via `rejectResponse` instead of a success. Unhandled exceptions are delegated to `catchAs`.
+- **`postLogoutEverywhere(request, response)`** – The sole export. Calls `accountService.logoutEverywhere` with the authenticated user's ID and the caller context, then either:
+  - Rejects with `result.status` and `result.errors` when `result.success` is falsy, **or**
+  - Calls `destroySessionCookie(response)` and returns `successResponse` with the i18n key `account.logout.all-success`.
+  - All unhandled promise rejections are funneled through `catchAs(response, 'postLogoutEverywhere')`.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — Source of `accountService.logoutEverywhere`, the actual business logic (token revocation, epoch bump).
-- **`src/modules/account/session/cookies.ts`** — Supplies `destroySessionCookie` and `destroyLoggedCookie`, which clear the cookies on the response.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` and `rejectResponse` for shaped JSON replies.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)` to extract IP/user-agent for the service call.
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, the standard async error-catcher wrapper.
-- **`src/infrastructure/i18n/index.ts`** (and `context.ts`) — Supplies the `t()` function used for the localized success message.
-- **`src/modules/account/routes.ts`** — The route table that wires this handler to the `POST /account/logout-all` path.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/account/services/index.ts` | Imports `accountService`; calls `.logoutEverywhere(userId, callerContext)`. |
+| `src/modules/account/session/cookies.ts` | Imports `destroySessionCookie`; invoked on the success path to clear the refresh cookie. |
+| `src/infrastructure/http/request.ts` | Imports `callerContextOf` to extract the caller's IP/UA context from the Express request. |
+| `src/infrastructure/http/response.ts` | Imports `rejectResponse` and `successResponse` for the two terminal paths. |
+| `src/infrastructure/http/controller.ts` | Imports `catchAs` to convert an unhandled rejection into a structured HTTP error. |
+| `src/infrastructure/i18n/index.ts` | Imports `t` to resolve the user-facing success message. |
+| `src/modules/account/routes.ts` | Consumes this controller and binds it to `POST /account/logout-all`. |
 
 ## Notes
 
-- `request.authContext!.id` uses a non-null assertion; the route is expected to be behind an auth middleware that populates `authContext`.
-- The code deliberately treats a *failed* revocation as an error response rather than a success, so a client never believes all devices are logged out while a stolen refresh token remains valid.
-- No new access token or cookie is issued — the caller is signed out and must re-authenticate.
+- **Security invariant:** if `result.success` is false the handler returns a rejection *before* touching the cookie. The inline comment makes explicit that letting a failed revocation read as success would leave a stolen device still authenticated.
+- **Caller is also signed out.** There is intentionally no "re-mint" path; the session cookie is destroyed and the session epoch is advanced (inside the service) so previously issued access tokens are invalidated too.
+- `request.authContext!.id` uses a non-null assertion — the route is expected to be behind an auth middleware that populates `authContext`; the controller does not guard against it being absent.

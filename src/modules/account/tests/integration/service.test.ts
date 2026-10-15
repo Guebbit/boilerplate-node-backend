@@ -24,7 +24,7 @@ import { asReject, asSuccess } from '@tests/response';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { accountAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
-import { setEnvironment } from '@tests/environment';
+import { setEnvironment, withEnvironment } from '@tests/environment';
 
 /*
  * The analytics port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
@@ -244,7 +244,7 @@ describe('signup', () => {
         expect(stored).toBeNull();
     });
 
-    it('persists an explicit analyticsConsent alongside the required termsAccepted', async () => {
+    it('records when the terms were accepted and which text, and when consent was answered', async () => {
         await accountService.signup(
             {
                 email: 'consenting@example.com',
@@ -258,8 +258,32 @@ describe('signup', () => {
         );
 
         const stored = await userRepository.findOne({ email: 'consenting@example.com' });
-        expect(stored?.termsAccepted).toBe(true);
+        expect(stored?.termsAcceptedAt).toBeInstanceOf(Date);
+        expect(stored?.termsVersion).toBe('1');
         expect(stored?.analyticsConsent).toBe(true);
+        expect(stored?.analyticsConsentAt).toBeInstanceOf(Date);
+    });
+
+    it('stamps the configured terms version, and records no consent date when none was asked', async () => {
+        await withEnvironment('NODE_TERMS_VERSION', '2026-10', () =>
+            accountService
+                .signup(
+                    {
+                        email: 'unasked@example.com',
+                        username: 'unasked',
+                        password: PLAIN_PASSWORD,
+                        passwordConfirm: PLAIN_PASSWORD,
+                        analyticsConsent: undefined,
+                        termsAccepted: true
+                    },
+                    testCallerContext
+                )
+                .then(() => undefined)
+        );
+
+        const stored = await userRepository.findOne({ email: 'unasked@example.com' });
+        expect(stored?.termsVersion).toBe('2026-10');
+        expect(stored?.analyticsConsentAt).toBeUndefined();
     });
 });
 

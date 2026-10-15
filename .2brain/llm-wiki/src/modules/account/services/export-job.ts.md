@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/export-job.ts
-sha256: d45c7a041b37b9e4b68297dbc40a0d1e929006dc75ff247004e362cfb714ede5
-generated_at: 2026-10-14T08:47:41.505835+00:00
+sha256: 00de9c7f2f740012fd50ab598c04c3bddae4102fcfc0677061bbdee625b3b3ab
+generated_at: 2026-10-15T09:59:51.680843+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The export worker for GDPR/Art. 15 data requests. It builds one account's export file by collecting every registered `PersonalDataSection` sequentially (one at a time to cap peak memory), writes it to the private export store, and mails the download link to the requester. Invoked from the `worker.account.export` queue or inline via `export.ts` when no broker is present.
+The export worker for a single account's Art. 15 data export. It collects every registered `PersonalDataSection` **sequentially** (one at a time, appending to the file as each arrives), writes the result to the private export store, and mails the download link to the requester. Invoked from the `worker.account.export` queue or inline via `./export.ts` when no broker is present. Its core design goal is bounding peak memory to the largest single section rather than the full export object.
 
 ## Key elements
 
-- **`runExportJob(job)`** — Main entry point. Looks up the row, verifies it is still `building`, then orchestrates build → settle → mail-or-cleanup. Always resolves `true` (queue ack) for both success and failure; only a database-level throw rejects (transient requeue).
-- **`appendSections(sections, subject, append)`** — Iterates sections in order, calls `section.collect()`, and appends each result as a JSON member. A section resolving `undefined` is skipped (opt-out); one that *rejects* throws and fails the entire build. Requires at least one `profile` section.
-- **`buildAndSettle(job, row)`** — Wraps `writeExport` + `appendSections`, then calls `accountExportRepository.settleBuilding` to transition the row to `ready`. Returns `null` if a sibling run already settled or the row was erased.
-- **`afterBuild(job, row, settled)`** — If this run settled the row, mails the link (`mailLink`). Otherwise, removes the orphaned file (`removeFileIfRowGone`).
-- **`fail(job, row, error)`** — Logs the error, settles the row to `failed`, increments `accountExportFailedTotal`, deletes the half-built file, and mails a no-link notice.
-- **`mailLink(job, row)`** / **`mailFailure(job)`** — Resolve the user (bail if deleted), pick a greeting via `greetableName`, and queue a high-priority mail via `sendAccountMail`. Mail-queue failures are logged, not rethrown.
-- **`PROFILE_SECTION`** — Constant (`'profile'`); the one section whose absence throws.
+- **`runExportJob(job)`** *(exported)* — Entry point. Loads the row; if it is not `building`, acks immediately. Otherwise calls `buildAndSettle` and wires `afterBuild` / `fail` via a two-argument `.then`. Always resolves `true` (ack) unless a transient DB error rejects.
+- **`appendSections(sections, subject, append)`** — Iterates registered sections in declaration order, calling `section.collect(subject)`. Skips `undefined` (opt-out), throws on reject. Requires at least one `profile` section to have answered. Writes a single JSON object with an `exportedAt` timestamp.
+- **`buildAndSettle(job, row)`** — Calls `writeExport` + `appendSections`, then settles the row to `ready` with a retention deadline.
+- **`afterBuild(job, row, settled)`** — If this run settled the row, mails the link; otherwise calls `removeFileIfRowGone` (sibling already settled or row erased).
+- **`fail(job, row, error)`** — Logs the error, settles the row to `failed`, increments `accountExportFailedTotal`, removes the half-built file, and mails a failure notice.
+- **`mailRequester(job, build)`** — Resolves the user via `userService`; if the account is gone, skips. Otherwise sends via `sendAccountMail` at `high` priority.
+- **`removeFileIfRowGone(row)`** — Checks whether the row still exists; only deletes the file if it does not (orphaned by replacement/erasure).
+- **`PROFILE_SECTION`** — Constant (`'profile'`); the one section whose absence makes the export invalid.
 
 ## Relationships
 
-- **`export-store.ts`** — `writeExport` streams the file; `removeExport` deletes it; `AppendExport` is the write callback signature.
-- **`repository.ts`** — `accountExportRepository.findById` / `.settleBuilding` manage the row's lifecycle state (`building` → `ready` | `failed`).
-- **`personal-data-registry.ts`** — `personalDataSections()` provides the ordered list of collectors passed to `appendSections`.
-- **`config.ts`** — `exportRetentionMs()` determines how long the export file and row persist.
-- **`emails.ts`** — `exportReadyEmail`, `exportFailedEmail`, `greetableName` produce the user-facing message bodies and greeting logic.
-- **`mail.ts`** — `sendAccountMail` is the transport for both success and failure notices.
-- **`metrics.ts`** — `accountExportFailedTotal` incremented once per confirmed failure.
-- **`logger.ts`** — Error logging in `fail`, `mailFailure`, and `afterBuild` catch paths.
-- **`registry.ts`** — Source of the `PersonalDataSection` and `PersonalDataSubject` types.
-- **`users/index.ts` / `users/services/index.ts`** — `userService.getById` resolves the user for greeting and deletion checks.
-- **`export.ts`** — The inline (no-broker) path that calls `runExportJob` after the HTTP response is sent.
-- **`export.test.ts`** — Integration tests exercising the full build/settle/mail/fail cycle.
-- **`incidents.test.ts`** (audit-logs) — Verifies that export failures surface in the incident/audit stream.
+- **`export-store.ts`** — `writeExport` / `removeExport` / `AppendExport` are the sole I/O primitives for the export file.
+- **`personal-data-registry.ts`** — `personalDataSections()` supplies the ordered list of sections to collect.
+- **`repository.ts`** — `accountExportRepository` handles row lookups, `settleBuilding`, and status transitions.
+- **`config.ts`** — `exportRetentionMs()` drives both the `ready`/`failed` retention timestamps and the "expires in N days" copy in the ready email.
+- **`emails.ts`** — Provides `exportReadyEmail`, `exportFailedEmail`, and `greetableName` for the mail bodies.
+- **`mail.ts`** — `sendAccountMail` is the transport for all outbound mail.
+- **`metrics.ts`** — `accountExportFailedTotal` incremented on each failed build.
+- **`logger.ts`** — Structured error logging for build failures and mail-queue failures.
+- **`registry.ts`** — Source of the `PersonalDataSection` / `PersonalDataSubject` type contracts.
+- **`users/index.ts`** — `userService.getById` used to check whether the requester still exists before mailing.
+- **`types/index.ts`** — `AccountExportJobPayload` is the queue message shape consumed by `runExportJob`.
+- **`export.ts`** — The inline (no-broker) path that ultimately calls `runExportJob`.
+- **`module.ts`** — Registers the export worker in the account module's dependency graph.
+- **`export.test.ts`** — Integration test covering the full build → settle → mail flow.
 
 ## Notes
 
-- **Two-argument `.then(onFulfilled, onRejected)`** is used deliberately at the top level (not `.catch()`) so that a post-settle failure (e.g. mail not queued) never routes into `fail`, which would delete a good file.
-- **Idempotency guard**: only a row still in `building` status is processed. A second delivery of the same job is a no-op that acks immediately.
-- **`undefined` vs. rejection semantics**: a section returning `undefined` is a legitimate opt-out (omitted from the file); a section *throwing* means the export is incomplete and the whole job must fail—never present a partial Art. 15 answer as complete.
-- **Mail failure is non-fatal**: if the link email can't be queued, the file still exists and the row stays `ready`; the user can re-request to get a fresh link. The log entry is the only record of the missed mail.
-- **`greetableName`** is only used when `job.emailVerified` is true; unverified requests get an empty greeting string.
+- **Two-argument `.then` is deliberate.** `buildAndSettle.then(onFulfilled, onRejected)` ensures a mail-queue failure in `afterBuild` does *not* reach `fail`, which would delete an already-good export file. A trailing `.catch` would conflate the two.
+- **Failure is a row state, not an exception.** A build that throws settles the row to `failed`, logs, increments the metric, and mails a short notice. The queue acks (`true`) so it is not redelivered. Only a *database* rejection propagates and triggers requeue.
+- **`undefined` vs. rejection.** A section resolving `undefined` is silently omitted (opt-out pattern); a section that *rejects* fails the entire build. An incomplete Art. 15 answer must never be presented as complete.
+- **Idempotency guard.** `runExportJob` checks `row.status !== 'building'` before doing any work, making duplicate delivery safe.
+- **Mail failure is non-fatal.** If the ready/failure email cannot be queued, it is logged and the row/file stay intact—the user can still request again to get a fresh link.

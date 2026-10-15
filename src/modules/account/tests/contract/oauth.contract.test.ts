@@ -177,6 +177,9 @@ describe('GET /account/oauth/:provider/callback', () => {
         const created = await userRepository.findOne({ email: 'oauth.demo@example.com' });
         expect(created).not.toBeNull();
         expect(created?.verifiedAt).toBeInstanceOf(Date);
+        // The notice beside the provider buttons is the acceptance, so the record carries it.
+        expect(created?.termsAcceptedAt).toBeInstanceOf(Date);
+        expect(created?.termsVersion).toBe('1');
     });
 
     it('clears the state and verifier cookies after a successful callback', async () => {

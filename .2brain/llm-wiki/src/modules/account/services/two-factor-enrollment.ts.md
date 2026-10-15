@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/two-factor-enrollment.ts
-sha256: 70b7ce86548c273b360e27f5035b9ebf8a03e5d12e83916bf58afe24285711c1
-generated_at: 2026-10-14T08:55:50.475863+00:00
+sha256: a736bebb25b5850d6a5eee0b2e55ece5c1c180b4b594532cfd2e4948527500ed
+generated_at: 2026-10-15T10:03:59.626399+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Orchestrates the full lifecycle of a user's second-factor methods: querying status, starting enrollment, delivering codes, confirming (arming) a method, and minting backup codes. It sits between the route layer and the per-method handlers in `../two-factor/`, enforcing auth gates (fresh password vs. an armed factor), cooldowns, and audit logging. The file owns *when* the account-level `twoFactorEnabledAt` flag flips; each method's own protocol (what to send, how to verify) lives in its handler.
+Orchestrates the full lifecycle of second-factor methods on an account: status query, enrollment setup, code delivery, confirmation/arming, and removal. It owns the security invariants around each step (fresh-auth preconditions, code verification, delivery cooldowns, disarming-before-restart) and delegates method-specific rules to the handler registry in `../two-factor`.
 
 ## Key elements
 
-- **`entryFor(user, method)`** *(private)* — Finds or appends the `TwoFactorMethodRecord` for a method on the user document. Reads back the last array element after a push because Mongoose hydrates it into a subdocument.
-- **`twoFactorStatus(userId)`** *(exported)* — `GET /account/2fa`. Returns armed methods (with `enrolledAt`), eligible-but-unenrolled methods with their eligibility info, and remaining backup-code count.
-- **`setupTwoFactorMethod(userId, method, code, context)`** *(exported)* — `POST …/setup`. Starts or restarts enrollment. Requires fresh password for the first factor; requires a verified armed factor (or backup code) once anything is already armed.
-- **`beginSetup(user, handler, context)`** *(private)* — Disarms the method's entry, checks delivery cooldown, calls `handler.setup`, then persists.
-- **`sendMethodCode(userId, method, context)`** *(exported)* — `POST …/send`. Delivers a one-time code for an already-armed delivered method so the user can prove identity before modifying factors.
-- **`confirmTwoFactorMethod(userId, method, code, context)`** *(exported)* — `POST …/confirm`. Verifies the pending code via `handler.verify`, then arms the method. Mints backup codes (returned in the clear once) only if the account has none.
-- **`armMethod(user, entry)`** *(private)* — Sets `enrolledAt`, persists the write (conditionally minting hashed backup codes), marks sessions ended, and revokes active sessions via `revokeFor`.
+- **`entryFor`** – Returns the account's `TwoFactorMethodRecord` for a method, creating an empty entry if absent. Reads back the last element of the Mongoose array so the handler mutates the hydrated subdocument.
+- **`twoFactorStatus`** – `GET /account/2fa`. Returns armed methods (with `enrolledAt`), eligible-but-not-yet-enrolled methods, and the remaining backup-code count.
+- **`setupTwoFactorMethod`** – `POST …/setup`. Starts or restarts enrollment for one method. First factor needs only fresh password; any subsequent change requires a valid factor/backup code via `verifyArmedFactor`.
+- **`beginSetup`** *(internal)* – Enforces the delivery cooldown, disarms the prior entry (`enrolledAt = undefined`, clears delivered code), then calls `handler.setup`.
+- **`sendMethodCode`** – `POST …/send`. Delivers a code to a signed-in caller for an already-armed delivered method; audit-logged.
+- **`confirmTwoFactorMethod`** – `POST …/confirm`. Verifies the presented code against the pending entry, arms the method, and fires change notification; audit-logged.
+- **`armMethod`** *(internal)* – Sets `enrolledAt`, persists via `persistTwoFactorWrite` (conditionally mints backup codes), marks sessions ended, and revokes existing sessions.
+- **`removeTwoFactorMethod`** – `DELETE …/methods/{method}`. Drops one armed factor; removing the last one turns 2FA off entirely.
 
 ## Relationships
 
-- **`@infrastructure/http/response`** — All functions return `generateSuccess` / `generateReject` envelopes.
-- **`@infrastructure/http/errors`** — `rejectDatabaseEnvelope('auth', error)` wraps unexpected DB/async failures.
-- **`@infrastructure/i18n`** — `t()` produces localized error messages for unknown methods, missing codes, cooldown, etc.
-- **`../two-factor` (barrel: `two-factor/index.ts`)** — Supplies `twoFactorMethod` (handler lookup), `availableTwoFactorMethods`, `generateBackupCodes`, `hashBackupCodes`, `generateBackupCodeSalt`, `clearDeliveredCode`, `deliveryCooldownRemaining`, and the `TwoFactorMethodHandler` type. Backing modules: `backup-codes.ts`, `delivered-codes.ts`.
-- **`./two-factor-outcomes`** — Reusable outcome helpers: `audited` (wraps a promise with an audit log), `notifyChange`, `rejectWrongCode`, `summarize`, `tooSoon`.
-- **`./two-factor-lockout`** — `armedEntries` (filter to confirmed methods), `verifyArmedFactor` (check a code against an armed factor), `settleVerdict` (resolve a verification verdict), `withVerifiedCode`.
-- **`../audit`** — `accountAuditActions` enum values passed to `audited` for `AUTH_2FA_CODE_SENT` and `AUTH_2FA_ENROLLED` events.
-- **`./revocation`** — `revokeFor('two-factor-change', user.id)` kills live sessions when a factor is added or changed.
+- **`../two-factor` (index)** – Provides `twoFactorMethod`, `availableTwoFactorMethods`, `deliveryCooldownRemaining`, and the `TwoFactorMethodHandler` type; also re-exports `generateBackupCodes`, `generateBackupCodeSalt`, `hashBackupCodes` (from `backup-codes.ts`) and `clearDeliveredCode` (from `delivered-codes.ts`).
+- **`./two-factor-outcomes`** – Supplies shared outcome helpers: `armedEntries`, `audited`, `deliverArmedCode`, `notifyChange`, `tooSoon`, `rejectWrongCode`, `summarize`.
+- **`./two-factor-lockout`** – Supplies `verifyArmedFactor`, `settleVerdict`, `withVerifiedCode` for the "prove a factor before changing factors" path.
+- **`./caller`** – `withOwnAccount` wraps every mutation to load and lock the caller's own user document.
+- **`./revocation`** – `revokeFor('two-factor-change', …)` tears down existing sessions after a confirm write.
+- **`../audit`** – `accountAuditActions` enum values used with `audited` for `AUTH_2FA_CODE_SENT` and `AUTH_2FA_ENROLLED`.
+- **`@infrastructure/http/response` / `errors`** – `generateSuccess`/`generateReject` for shaping replies; `rejectDatabaseEnvelope` as the catch-all error mapper.
+- **`@infrastructure/i18n`** – `t()` for all user-facing error strings.
+- **`./index`** – Barrel re-export so routes import from the services namespace.
 
 ## Notes
 
-- **Mongoose subdocument gotcha:** `entryFor` pushes a plain object then reads back `user.twoFactorMethods.at(-1)` because Mongoose replaces the literal with a hydrated subdocument. Reusing the original literal would mutate a detached copy.
-- **Disarm-before-setup:** On a restart, `entry.enrolledAt` is cleared *before* `handler.setup` runs. If the handler fails, the old secret is already disarmed rather than coexisting with a stale pending one.
-- **Backup-code minting is conditional on the account, not the method:** The first *armed* factor on an account with zero codes mints a set; a second factor never does. The condition is `user.twoFactorBackupCodes.length === 0`, not "is this the first entry."
-- **Account flag is write-derived:** `twoFactorEnabledAt` is set inside `persistTwoFactorWrite` (the DB layer), not explicitly in this file. This file never writes the flag directly.
-- **Cooldown nuance:** `beginSetup` skips the cooldown check for non-delivered methods (`handler.delivers ? … : 0`). A delivered method that was just verified to allow the restart has its cooldown already spent, so the check is still meaningful for subsequent sends.
-- **File is the service-layer "glue":** it does not implement any factor-specific protocol (TOTP, SMS, etc.). That logic lives in the per-method handlers registered under `../two-factor/`.
+- **Mongoose subdocument hydration:** `entryFor` deliberately reads back `user.twoFactorMethods.at(-1)` after pushing, because handlers that mutate the entry need the hydrated subdocument, not the plain object that was pushed.
+- **Disarm-before-setup invariant:** `beginSetup` clears `enrolledAt` and the delivered code *before* calling `handler.setup`, so a mid-flight failure cannot leave a stale armed secret next to a new pending one.
+- **Backup-code minting condition:** Codes are minted when `twoFactorBackupCodes.length === 0`, *not* when "this is the first factor." After a re-enrollment or the tenth code being spent, the distinction matters. The response only returns the clear codes if the stored salt matches this request's salt (guards against two concurrent first-confirms).
+- **Derived armed flag:** `twoFactorEnabledAt` is set as a side-effect of `persistTwoFactorWrite`, not directly in this file; an abandoned "I lost my phone" attempt that never confirms leaves the flag untouched.
+- **Session revocation is atomic with the write:** `markSessionsEnded` and `revokeFor` run inside the same persistence flow so a second-write failure cannot leave old sessions alive.
+- Method-specific rules (what codes look like, how delivery works, eligibility) live in `../two-factor/registry`; this file only enforces *when* and *under what auth* those rules may be invoked.

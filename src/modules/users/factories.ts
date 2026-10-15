@@ -56,6 +56,8 @@ export const makeUser = ({
     deletedAt,
     twoFactorEnabledAt,
     verifiedAt,
+    analyticsConsentAt,
+    termsAcceptedAt,
     ...fields
 }: UserOverrides = {}): UserFixture => ({
     ...identityOf({ id, createdAt, updatedAt }),
@@ -66,6 +68,8 @@ export const makeUser = ({
         ...fields,
         deletedAt: toDate(deletedAt),
         twoFactorEnabledAt: toDate(twoFactorEnabledAt),
-        verifiedAt: toDate(verifiedAt)
+        verifiedAt: toDate(verifiedAt),
+        analyticsConsentAt: toDate(analyticsConsentAt),
+        termsAcceptedAt: toDate(termsAcceptedAt)
     })
 });

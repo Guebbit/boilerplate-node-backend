@@ -112,18 +112,12 @@ describe('user credential exposure', () => {
             // the caller's current role as an explicit parameter instead of reading one off the schema.
             expect(Object.keys(user.toJSON() as object).toSorted()).toEqual([
                 'active',
-                // Now defaulted like `active` rather than tri-state, so it is always present
-                // rather than omitted when unset.
-                'analyticsConsent',
                 'createdAt',
                 'email',
                 'id',
                 // The user's preferred language. Public rather than stripped: the client shows
                 // it in the profile and writes it back, and it is in the `User` contract.
                 'locale',
-                // Defaulted `true` like `active`, always present — enforced at signup,
-                // informational everywhere else (see `users/model.ts`).
-                'termsAccepted',
                 'updatedAt',
                 'username',
                 // WHEN the address was confirmed, or `null` until it is — in the `User` contract,

@@ -19,6 +19,7 @@ import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import { recordAccountAudit } from './caller';
 import type { OAuthIdentity } from '../oauth/providers/port';
+import { termsAcceptance } from '../consent-record';
 import { assignRole, VERIFIED_CUSTOMER_ROLE } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
@@ -163,6 +164,8 @@ const signupFromOAuth = (
                         verifiedAt: new Date(),
                         active: true,
                         locale: getCurrentLocale(),
+                        // The sign-in notice beside the provider buttons is the acceptance.
+                        ...termsAcceptance(),
                         oauthAccounts: [
                             { provider, providerId: identity.providerId, connectedAt: new Date() }
                         ]

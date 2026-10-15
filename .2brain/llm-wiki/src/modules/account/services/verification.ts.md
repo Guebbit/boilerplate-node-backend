@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/verification.ts
-sha256: 456727e90301dea429284db6a51f6c7ee37baba1242e3e733153325246195628
-generated_at: 2026-10-14T08:57:24.095592+00:00
+sha256: c449a07d79db2521cf832509a27389257014f130840117b6158c4b2976e1eb22
+generated_at: 2026-10-15T10:05:12.631369+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single implementation point for issuing email-verification tokens and enqueuing the mail that carries them. Unifies two flows — signup/re-send and `PUT /account` email-change — behind one `sendVerificationEmail` so the two cannot drift. Issuing a token atomically replaces the same-kind previous token, guaranteeing "the newest email is the one that works."
+Centralises email-verification for two flows—proving an account's existing address (signup / explicit re-send) and proving a pending address requested via `PUT/PATCH /account`—so that token issuance, email composition, cooldown pacing, and audit logging all live in one place and cannot drift. Every verification flow in the codebase calls into this module and nothing else.
 
 ## Key elements
 
-- **`sendVerificationEmail(user, context, type?)`** — Core: looks up the target address via `VERIFICATION_TARGETS`, issues a token (replacing the kind's prior one), builds the localized mail body, and enqueues via `sendAccountMail`. Returns once the job is queued.
-- **`requestEmailVerification(user, context)`** — Wraps `sendVerificationEmail` and records the `AUTH_EMAIL_VERIFY_REQUESTED` audit action. Used only for the explicit user-initiated re-send, not for signup side-effects.
-- **`requestEmailVerificationFor(userId, context)`** — End-to-end `POST /account/verify-request`: loads the user, rejects if already verified (409), enforces cooldown, checks mail-budget, then delegates to `requestEmailVerification`.
-- **`resendPendingEmailVerificationFor(userId, context)`** — End-to-end `POST /account/pending-email/resend`: mails only the *new* (pending) address, no-ops with `resendAfter: 0` when no change is in flight, audits `AUTH_EMAIL_CHANGE_RESENT`.
-- **`resendCooldownRemaining(user, type, now?)`** — Reads the live token's `sentAt` and returns seconds remaining before another send is allowed (or 0).
-- **`VERIFY_RESEND_SECONDS`** — Exported constant (60 s) the client uses for its countdown UI.
-- **`VerifyLinkType`** — Union of `EMAIL_VERIFY_TOKEN_TYPE | EMAIL_CHANGE_TOKEN_TYPE`; prevents a third kind from being passed.
-- **`VERIFICATION_TARGETS`** — Record mapping each token kind to its frontend route (`'verify'` / `'email-change'`) and the user-field that holds the target address.
-- **`emailVerifyTokenTtlMs()`** — Reads `NODE_EMAIL_VERIFY_TTL_MS` from `accountConfig()`.
-- **Truncated tail** — A function (partially visible) that sets `verifiedAt` on the document and calls `promoteVerifiedCustomer` for the `unverified → customer` role promotion; the promotion is an async membership write, not a plain field set.
+- **`VERIFY_RESEND_SECONDS`** (const, 60) — cooldown between two verification emails for the same account; returned to the client so it can drive a countdown button.
+- **`VerifyLinkType`** (type) — strict union of `EMAIL_VERIFY_TOKEN_TYPE | EMAIL_CHANGE_TOKEN_TYPE`; prevents a third token kind from slipping in.
+- **`VERIFICATION_TARGETS`** (const map) — maps each link type to its frontend route (`'verify'` vs `'email-change'`) and the address-extraction function (`user.email` vs `user.pendingEmail`).
+- **`sendVerificationEmail`** (exported) — the core primitive: issues a token (atomically replacing the prior one of the same kind), composes a localised email, and enqueues it via `sendAccountMail`. Returns when the job is queued.
+- **`requestEmailVerification`** (exported) — wrapper around `sendVerificationEmail` that adds an `AUTH_EMAIL_VERIFY_REQUESTED` audit record; used only for the explicit user-initiated re-send, not for signup or email-change side effects.
+- **`resendCooldownRemaining`** (exported) — reads the live token's `sentAt` and returns seconds still to wait before another send of that kind is permitted.
+- **`pacedSend`** (private) — shared pacing pipeline: cooldown check → per-recipient mailbox-budget check → actual send. Used by both public handlers.
+- **`requestEmailVerificationFor`** (exported) — full `POST /account/verify-request` handler: loads the user, rejects 404/409 (already verified), runs `pacedSend`, and returns `resendAfter`.
+- **`resendPendingEmailVerificationFor`** (exported) — full `POST /account/pending-email/resend` handler: no-ops gracefully when nothing is pending; otherwise mails only the pending (new) address and audits `AUTH_EMAIL_CHANGE_RESENT`.
+- **Truncated export (likely `markEmailVerified` or similar)** — sets `verifiedAt` on the document and calls `promoteVerifiedCustomer` to move the role from `unverified` to `customer` in the same step.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/account/emails.ts` | Provides `verifyRequestEmail`, `recipientLocale`, `greetableName` for building the mail body. |
-| `src/modules/account/config.ts` | `accountConfig()` supplies the token-TTL env var. |
-| `src/modules/account/cooldown.ts` | `cooldownRemaining` computes the wait; `resendTooSoon` builds the structured 429 response. |
-| `src/modules/account/domain/index.ts` (→ `email-change.ts`) | `emailChangeNext`, `emailChangeStateOf`, `undoRestoresPreviousEmail` drive the pending-email state machine. |
-| `src/modules/account/audit.ts` | `accountAuditActions` supplies the audit-action constants for `recordAudit`. |
-| `src/infrastructure/observability/audit.ts` | `recordAudit` and `AuditAction` type for audit logging. |
-| `src/infrastructure/http/response.ts` | `generateSuccess` / `generateReject` and their return types shape every response. |
-| `src/infrastructure/i18n/index.ts` | `t()` for all user-facing strings. |
-| `src/modules/access/index.ts` | `promoteVerifiedCustomer` performs the `unverified → customer` role write on successful verification. |
-| `src/kernel/access/tenant.ts` | `DEPLOYMENT_TENANT_ID` (used in the truncated portion, likely for tenant-scoped access checks during promotion). |
-| `src/modules/account/controllers/post-signup.ts` | **Caller/consumer**: triggers `sendVerificationEmail` as a signup side-effect (not an import from this file's side). |
-| `src/infrastructure/runtime/database.ts` | Indirect: `userService.findByIdWithCredentials` (from `@modules/users`) reads the user document. |
+- **`@infrastructure/http/response`** — builds all `ResponseSuccess` / `ResponseReject` return values via `generateSuccess` and `generateReject`.
+- **`@infrastructure/i18n`** — localises every user-facing string through `t()`.
+- **`@infrastructure/observability/audit`** — records audit entries via `recordAudit` with actions sourced from `../audit`.
+- **`../config`** (`accountConfig`) — supplies `NODE_EMAIL_VERIFY_TTL_MS` for token lifetime.
+- **`../cooldown`** — provides `cooldownRemaining` and `resendTooSoon` helpers used inside `pacedSend`.
+- **`../domain`** (incl. `email-change.ts`) — `emailChangeNext`, `emailChangeStateOf`, and `undoRestoresPreviousEmail` drive the pending-email state machine.
+- **`../emails`** — `verifyRequestEmail`, `recipientLocale`, `greetableName` compose the outgoing mail body.
+- **`@modules/access`** — calls `promoteVerifiedCustomer` to perform the role-promotion side effect on successful verification.
+- **`@kernel/access/tenant`** — imports `DEPLOYMENT_TENANT_ID` (tenant-scoped guard in the promotion path).
+- **`../audit`** — supplies the `accountAuditActions` enum used as audit action keys.
+- **`src/modules/account/controllers/post-signup.ts`** (caller) — invokes `sendVerificationEmail` as a side effect of signup; does not audit it as a "request."
 
 ## Notes
 
-- **Cooldown is enforced in the service, not only by the route limiter.** `credentialLimiters` uses `skipSuccessfulRequests`, so a *successful* resend would not spend limiter budget — but each successful press publishes real mail, so the service checks `cooldownRemaining` independently.
-- **No enumeration blurring on re-send.** The caller is authenticated and asking about their own account, so an already-verified user gets an honest `409`, not a soothing `200`.
-- **`VERIFY_RESEND_TOO_SOON_CODE` is module-private** (like the 2FA equivalent). Clients identify the error by reading the code off the response body, not by importing the constant.
-- **Role promotion is async and orthogonal to the document save.** `verifiedAt` is mutated on the (unpersisted) document for the caller's `save`; the `promoteVerifiedCustomer` call is a separate membership write with no document field to ride along on.
-- **The resend endpoint mails only the pending (new) address.** The old address was already notified at change-request time; re-mailing it would read like a takeover alert.
-- **File is truncated** in the source provided; the verification-completion function (mark verified + promote role) and any further exports below that point are not fully visible.
+- **Atomic replacement, not security.** Re-issuing a token of the same kind replaces the previous one so the user always has exactly one working link. The comment explicitly states this is a UX guarantee, not a security boundary, because spending *any* token of that kind proves the same mailbox.
+- **Cooldown is enforced at the service layer, not only by middleware.** `credentialLimiters` sets `skipSuccessfulRequests`, so a 200 response consumes no rate-limit budget. That is correct for login guesses but wrong here, where the success path *is* the expensive operation (sending mail). Hence `pacedSend` checks cooldown before calling `send`.
+- **Email-change resend mails only the new address.** The old address is intentionally not re-notified on resend to avoid it reading as a takeover alert to the legitimate holder.
+- **Already-verified → honest 409.** Because the caller is authenticated and acting on their own account, an already-verified state returns a `409` rather than a soothing `200` that silently re-sends nothing.
+- **The role-promotion write is asynchronous** (membership change, not a document field), so the verify-completion function is inherently async even though `verifiedAt` itself could be set synchronously.

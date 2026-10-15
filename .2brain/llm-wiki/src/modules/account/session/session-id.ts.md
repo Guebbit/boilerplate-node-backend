@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/session-id.ts
-sha256: b0cde8e9740e4134f2bffe723589abca2e8f27d57bd8e72e7fdd792848eba674
-generated_at: 2026-10-14T09:02:15.425308+00:00
+sha256: 23bf0900c548d61c605ee90fae88b7703673f0fe282bcb1be81a1a43ed5a946d
+generated_at: 2026-10-15T10:08:35.489649+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generates and identifies the opaque session ID used in `cookie` authentication mode. The ID is a `ses_`-prefixed string of 32 random bytes (base64url), 256 bits of entropy. Because only its SHA-256 hash is persisted, a database breach yields nothing a client could present, and the high entropy makes a fast hash sufficient—no signing secret is required.
+Generates and classifies opaque session IDs used in `cookie` mode. The ID is 32 random bytes in base64url under the `ses_` prefix; only its SHA-256 is persisted, so a database leak never yields a usable credential. The file also exports cheap shape-checks that let the authentication kernel reject non-matching tokens before any database lookup.
 
 ## Key elements
 
-- **`newSessionId(): string`** — Returns a fresh session ID (`ses_` + 32 random bytes, base64url). This is the only point where the plaintext token exists server-side.
-- **`looksLikeSessionId(token: string): boolean`** — Cheap prefix check (does `token` start with `SESSION_TOKEN_PREFIX`?) used to reject non-session credentials before any database lookup.
+- **`newSessionId(): string`** — Returns a fresh `ses_…` identifier (32 random bytes, base64url). This is the sole moment the plaintext ID exists server-side.
+- **`looksLikeSessionId(token: string): boolean`** — `true` when the token starts with `SESSION_TOKEN_PREFIX`. Used as a pre-lookup gate so JWTs, API keys, or noise are rejected without a query.
+- **`looksLikeJwt(token: string): boolean`** — `true` when the token matches a three-segment base64url JWT shape (first segment begins with `eyJ`). Shape check only; actual verification belongs to `jwt` mode.
 
 ## Relationships
 
-- **`src/kernel/authentication.ts`** — Supplies the `SESSION_TOKEN_PREFIX` constant that both exports reference, keeping the `ses_` prefix definition in one place.
-- **`src/modules/account/session/cookie-strategy.ts`** — The cookie-mode strategy that calls `newSessionId` to mint a session and `looksLikeSessionId` to filter incoming credentials before performing a hash lookup.
-- **`src/modules/account/tests/unit/session-id.test.ts`** — Unit tests covering generation shape and the `looksLikeSessionId` prefix guard.
+- **`src/kernel/authentication.ts`** — Supplies `SESSION_TOKEN_PREFIX`, the constant that defines the `ses_` prefix used by both `newSessionId` and `looksLikeSessionId`.
+- **`src/modules/account/session/cookie-strategy.ts`** — Consumes `newSessionId` to mint a session and `looksLikeSessionId` to decide whether a presented credential should be routed to cookie-mode handling.
+- **`src/modules/account/session/jwt-strategy.ts`** — Consumes `looksLikeJwt` as the triage predicate that routes a credential into the JWT verification path.
+- **`src/modules/account/tests/unit/session-id.test.ts`** — Unit-tests the three exports above.
 
 ## Notes
 
-- The `ses_` prefix is deliberately the same structural shape as `sk_…` API keys; the kernel dispatches on the prefix to route the credential to the correct strategy.
-- `looksLikeSessionId` is intentionally a string-prefix check only—it does **not** validate length or alphabet. It is a pre-filter, not a validator.
+- The `ses_` prefix is the same shape family as the `sk_…` API-key prefix; the kernel dispatches on prefix, so these checks are intentionally prefix-based rather than full-regex.
+- `looksLikeJwt` does **not** validate signatures or expiry — it only confirms the three-segment `eyJ…` shape. Actual verification is the responsibility of the JWT strategy.
+- Because only 256 bits of entropy back the ID, a fast hash (SHA-256) is sufficient at storage time; no HMAC or signing secret is involved.

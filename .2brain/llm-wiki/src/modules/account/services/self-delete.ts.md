@@ -1,33 +1,41 @@
 ---
 source: src/modules/account/services/self-delete.ts
-sha256: 635a8f6160a08c5cb495582705e5ea76fbd65d7de242951d2b43fec91c32f6b5
-generated_at: 2026-10-14T08:53:32.416379+00:00
+sha256: 7f53fcd537d46c0e95ab9036ae1cd4ad199588e4c3bd025b080e90f042fe4be9
+generated_at: 2026-10-15T10:02:47.534111+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/services/self-delete.ts
 
 ## Purpose
-Performs a hard (irreversible) deletion of the caller's own account after the one-time confirmation link has been spent. It exists as a thin wrapper around `userService.remove` so that audit and analytics events carry the deleted user's identity as the actor — distinct from the admin-initiated `DELETE /users/:id` path that also calls `remove` internally.
+Hard-deletes the caller's own account after a one-time confirmation token has been redeemed. This is the self-service "delete my account" flow, distinct from an admin-initiated user deletion.
 
 ## Key elements
-- **`removeOwnAccount(user, context)`** – The sole export. Accepts the already-fetched `UserDocument` and `CallerContext`, then:
-  1. Captures `email`, `locale`, `_id`, and the greeting name *before* the write (the document no longer exists after the delete).
-  2. Resolves the caller's role via `isUnrestrictedCaller` (membership store, not the document) so the audit record is accurate even if the erasure cascade has already revoked the membership.
-  3. Calls `userService.remove(user, true)` (hard-delete flag).
-  4. On success: records an `AUTH_ACCOUNT_DELETE_COMPLETED` audit event, emits an `ACCOUNT_DELETED` analytics event, and fires a "goodbye" email (`deleteConfirmEmail`) at `normal` priority.
+
+- **`removeOwnAccount(user, context)`** — Core delete. Calls `userService.remove(user, true)` (hard delete), then—only on success—records an audit event, emits an analytics event, and sends a goodbye email. Reads `email`, `locale`, `_id`, and the greetable name **before** the write, because the document no longer exists after the delete resolves. Determines `actorRole` via `isUnrestrictedCaller` from the membership store (not the document, whose membership may already be cascaded away).
+- **`confirmAccountDeletion(token, context)`** — HTTP handler for `DELETE /account/delete-confirm`. Redeems the `ACCOUNT_DELETE_TOKEN_TYPE` token via `redeemLiveToken`; on success delegates to `removeOwnAccount` and returns `generateSuccess(…, 200, t('account.delete.success'))`. On a missing/expired/used token, calls `refuseLink` to produce a 422.
 
 ## Relationships
-- **`../emails`** – Pulls `deleteConfirmEmail`, `greetableName`, and `recipientLocale` to compose and address the post-deletion farewell mail.
-- **`./mail`** – Uses `sendAccountMail` to dispatch that email.
-- **`@modules/users`** – Calls `userService.remove` and consumes the `UserDocument` type.
-- **`../roles`** – `isUnrestrictedCaller` determines whether the deleted user held an admin role (written into the audit `actorRole`).
-- **`../analytics` / `../audit`** – Supplies the concrete event-name and action-name constants (`accountAnalyticsEvents.ACCOUNT_DELETED`, `accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED`).
-- **`@infrastructure/observability/analytics` & `audit`** – Generic `emitAnalyticsEvent` / `recordAudit` sinks.
-- **`@types`** – Provides the `CallerContext` type (request-level locale, IP, etc.).
+
+| Neighbor | Interaction |
+|---|---|
+| `modules/users/index.ts` | Consumes `userService.remove` and the `UserDocument` type. |
+| `modules/account/emails.ts` | Builds the goodbye email via `deleteConfirmEmail`, resolves the name with `greetableName`, and picks the locale with `recipientLocale`. |
+| `modules/account/services/mail.ts` | Delivers the goodbye mail through `sendAccountMail` at `'normal'` priority. |
+| `modules/account/services/tokens.ts` | Redeems the one-time token (`redeemLiveToken`) and produces the 422 on failure (`refuseLink`). |
+| `modules/account/token-types.ts` | Supplies the `ACCOUNT_DELETE_TOKEN_TYPE` constant. |
+| `modules/account/roles.ts` | Queries `isUnrestrictedCaller` to stamp the correct `actorRole` in audit. |
+| `modules/account/analytics.ts` | Provides the `ACCOUNT_DELETED` event name. |
+| `modules/account/audit.ts` | Provides the `AUTH_ACCOUNT_DELETE_COMPLETED` action name. |
+| `infrastructure/observability/audit.ts` | Calls `recordAudit` for the audit log entry. |
+| `infrastructure/observability/analytics/index.ts` | Calls `emitAnalyticsEvent` + `buildAnalyticsBase`. |
+| `infrastructure/http/response.ts` | Uses `generateSuccess` and the `ResponseSuccess`/`ResponseReject` types for the HTTP shape. |
+| `infrastructure/i18n/index.ts` | Calls `t('account.delete.success')` for the response message. |
+| `modules/account/services/index.ts` | Re-exports the two functions so other services/routes can import them from the barrel. |
 
 ## Notes
-- Events are emitted *here*, not inside `userService.remove`, specifically to avoid double-firing when the admin `removeById` path calls `remove` as its last step. The admin path already reports `ADMIN_USER_ERASED` / `ADMIN_USER_SOFT_DELETED` with the admin as actor.
-- All display data (name, locale, email) is snapshotted **before** `remove` resolves; any code that reads the document after the write will find nothing.
-- The goodbye email uses the recipient's stored locale first, falling back to the request locale — the same two-tier pattern as `passwordResetChange`.
-- Mail priority is `normal` (not high/critical): it is informational, not a code or link the user is blocked on.
+
+- **Events are emitted here, not inside `userService.remove`.** `remove` is also the final step of the admin `DELETE /users/:id` path, which reports its own `ADMIN_USER_ERASED` / `ADMIN_USER_SOFT_DELETED` events with the *admin's* actor identity. Emitting inside `remove` would double-count and misattribute the actor. The comment in the source calls this out explicitly.
+- **Read-before-write is mandatory.** The goodbye email needs `email`, `locale`, and a display name. All are captured from the `UserDocument` *before* `remove` runs, because a hard delete leaves nothing to read. The role is similarly read from the membership store before the cascade can revoke it.
+- **Locale fallback order:** the recipient's stored `locale` is primary; the request context locale is only a fallback (same rationale as in `completePasswordReset`).
+- **Mail priority is `'normal'`.** This is a farewell, not a time-sensitive link or code, so it is deliberately not elevated.

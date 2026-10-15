@@ -1,40 +1,45 @@
 ---
 source: src/modules/account/services/email-change.ts
-sha256: ba0714b081ce21fe6e2552a6abd4339c11a2de156f4a382151d4cd2ce6239b8a
-generated_at: 2026-10-14T08:47:16.718401+00:00
+sha256: 23d9c8900bca61b446b5299137c83158d2d30684c36e89330918e65fefb373a7
+generated_at: 2026-10-15T09:59:34.273592+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/services/email-change.ts
 
 ## Purpose
-Handles the request and cancellation phases of a two-step email change: applying a new address to `user.pendingEmail` (never directly to `user.email`), sending the notice + verification mails, and explicitly revoking a pending change. The state-machine rules for *when* each action applies live in `domain/email-change`; confirming and undoing live in `./verification`.
+
+Handles the **request** and **cancellation** sides of an email-change flow: evaluating a `PUT/PATCH /account` `email` field against pending-change rules, persisting it to `pendingEmail`, sending the two outgoing mails (old-address undo notice + new-address verification link), and revoking the live token on explicit cancel. Confirming and undoing live in `./verification`.
 
 ## Key elements
-- **`EmailChangeOutcome`** — `{ conflict, requested }` result type. `requested: true` means *this call* set `pendingEmail`, which is the sole gate for sending the old-address notice and the new verification link.
-- **`applyEmailChangeRequest(user, requestedEmail)`** — Core evaluator for `PUT/PATCH /account`'s `email` field. No-ops for absent, current, or already-pending addresses. For any other address, checks `emailOrPendingEmailTaken` (request-time collision) before writing `user.pendingEmail`. Mutates `user` in place; persistence is the caller's `save()`.
-- **`cancelPendingEmailChange(userId, context)`** — `DELETE /account/pending-email` handler. Loads only `pendingEmail`, cancels, revokes the live change token, and audits. Idempotent: a no-op cancel neither revokes nor logs.
-- **`revokeCancelledChange(hadPending, user, context)`** *(private)* — Conditionally removes the `EMAIL_CHANGE_TOKEN_TYPE` token and records `AUTH_EMAIL_CHANGE_CANCELLED`.
-- **`sendEmailChangeMail(user, context)`** *(private)* — Issues the undo token, mails the old address a 7-day undo notice, then calls `sendVerificationEmail` for the new address. **Awaited** to avoid racing the token with subsequent client actions.
-- **`notifyEmailChangeRequested(user, context)`** — Public wrapper: sends both mails, then records `AUTH_EMAIL_CHANGE_REQUESTED`. Audit follows delivery, not the field write.
+
+- **`EmailChangeOutcome`** – `{ conflict, requested }` discriminant returned by `applyEmailChangeRequest`. `requested: true` means *this* call set `pendingEmail`, which gates the downstream mail-sending.
+- **`applyEmailChangeRequest(user, requestedEmail)`** – Core state-transition guard. Returns a no-op outcome when the field is absent, equals the current email, or equals the already-pending email. Otherwise checks `emailOrPendingEmailTaken` for cross-account collision, then mutates `user.pendingEmail` in place (caller's `save()` persists).
+- **`cancelPendingEmailChange(userId, context)`** – `DELETE /account/pending-email` handler. Idempotent when nothing is pending; when something *was* pending, revokes the `EMAIL_CHANGE_TOKEN_TYPE` token and records an audit event before returning the saved document.
+- **`notifyEmailChangeRequested(user, context)`** – Awaits the two outbound mails (undo notice to old address, verification link to new address), then fires the `AUTH_EMAIL_CHANGE_REQUESTED` audit.
+- **`revokeCancelledChange`** *(private)* – Removes the change token and records `AUTH_EMAIL_CHANGE_CANCELLED`; skips both when nothing was pending.
+- **`sendEmailChangeMail`** *(private)* – Issues the undo token (7-day TTL), sends the notice email via `sendAccountMail`, then delegates to `sendVerificationEmail` for the new-address link.
 
 ## Relationships
-- **`../domain` (`email-change.ts`)** — `emailChangeStateOf` / `emailChangeNext` drive the state-transition check inside `cancelPendingEmailChange` (determines whether a cancel is a no-op).
-- **`../emails`** — Provides `emailChangeNoticeEmail`, `greetableName`, `recipientLocale` for composing the old-address notice.
-- **`./mail`** — `sendAccountMail` is the transport for the notice email.
-- **`./verification`** — `sendVerificationEmail` delivers the new-address link; `EMAIL_CHANGE_TOKEN_TYPE` is shared for token revocation on cancel.
-- **`./tokens`** — `issueToken` (undo token, change token) and `removeTokens` (revoke on cancel).
-- **`./profile`** — Upstream caller that invokes `applyEmailChangeRequest` and `notifyEmailChangeRequested` as part of the `PUT/PATCH /account` flow.
-- **`./services/index.ts`** — Re-exports the public API of this file.
-- **`@infrastructure/i18n`** — `t()` for the localized "cancelled" success message.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` for the HTTP envelope.
-- **`@infrastructure/http/errors`** — `rejectDatabaseEnvelope` for the error path in `cancelPendingEmailChange`.
-- **`@infrastructure/observability/audit`** + **`../audit`** — `recordAudit` + `accountAuditActions` for the two audit events.
-- **`@infrastructure/persistence/normalize-email`** — `normalizeEmail` for case/format-insensitive comparisons.
+
+| Neighbor | Interaction |
+|---|---|
+| `domain/email-change.ts` (via `domain/index`) | `emailChangeStateOf` + `emailChangeNext` drive the state machine that decides whether a cancel is meaningful. |
+| `emails.ts` | Provides `emailChangeNoticeEmail`, `greetableName`, `recipientLocale` for composing the old-address notice. |
+| `services/mail.ts` | `sendAccountMail` is the transport for the notice email. |
+| `services/verification.ts` | `sendVerificationEmail` delivers the new-address link (not in the neighbor list but imported directly). |
+| `services/tokens.ts` | `issueToken` (undo + change tokens) and `removeTokens` (cancel revocation). |
+| `infrastructure/persistence/normalize-email.ts` | `normalizeEmail` used for all address comparisons (case/trim). |
+| `infrastructure/http/response.ts` | `generateSuccess` / `generateReject` shape the cancel endpoint's response. |
+| `infrastructure/http/errors.ts` | `rejectDatabaseEnvelope` wraps DB errors on the cancel path. |
+| `infrastructure/observability/audit.ts` | `recordAudit` logs request and cancel events. |
+| `modules/account/audit.ts` | `accountAuditActions` supplies the typed action constants. |
+| `infrastructure/i18n/index.ts` | `t()` localises the cancel success message. |
 
 ## Notes
-- **Never touches `user.email` directly.** The proven address only changes via the confirm endpoint in `./verification`.
-- **`requested` is the mail gate.** A plain profile save that omits or repeats the current address must not cancel a pending change or re-send mails; only a genuinely new address triggers `notifyEmailChangeRequested`.
-- **Collision is checked twice.** Request-time (`emailOrPendingEmailTaken`) and swap-time (unique indexes `users_email` / `users_pending_email`), because the two steps can be up to 24 h apart.
-- **Undo token is single-instance.** Issuing a new one silently replaces any older undo token, since the older one would restore an address the current change no longer leaves behind.
-- **`sendEmailChangeMail` is intentionally awaited** (unlike most account mail) so the client does not race the freshly issued token with a follow-up request.
+
+- **In-place mutation:** `applyEmailChangeRequest` writes directly to `user.pendingEmail`; the caller (profile service) is responsible for persisting via its own `save()`. Don't call it in isolation expecting a DB write.
+- **Awaited mail:** `sendEmailChangeMail` is deliberately awaited (unlike most account mail) because the verification half issues its token synchronously; responding before it finishes would race the token with the client's next action.
+- **Collision split:** Request-time checks both `email` and `pendingEmail` columns across accounts; swap-time (confirm/undo) relies on the unique indexes `users_email` / `users_pending_email`, which remain valid for up to 24 h apart.
+- **Audit-after-mail:** The `AUTH_EMAIL_CHANGE_REQUESTED` audit fires only *after* both mails are dispatched—the audited fact is "a confirmation is in someone's inbox," not "a field was set."
+- **Cancel idempotency:** Calling cancel with nothing pending is a safe no-op (200, no token removal, no audit). This lets clients call it unconditionally after a profile save.

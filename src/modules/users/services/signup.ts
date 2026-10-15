@@ -10,7 +10,14 @@ import { userRepository } from '../repository';
 /** The fields signup's anti-automation decoy path may set — never `verifiedAt`, which is never persisted anyway. */
 export type SignupDecoyFields = Pick<
     UserDocument,
-    'email' | 'username' | 'imageUrl' | 'thumbnailUrl' | 'analyticsConsent' | 'termsAccepted'
+    | 'email'
+    | 'username'
+    | 'imageUrl'
+    | 'thumbnailUrl'
+    | 'analyticsConsent'
+    | 'analyticsConsentAt'
+    | 'termsAcceptedAt'
+    | 'termsVersion'
 >;
 
 /**
@@ -34,7 +41,9 @@ export type SelfServiceSignupFields = Pick<
     | 'pendingImageKey'
     | 'password'
     | 'analyticsConsent'
-    | 'termsAccepted'
+    | 'analyticsConsentAt'
+    | 'termsAcceptedAt'
+    | 'termsVersion'
     | 'locale'
 >;
 
@@ -60,6 +69,8 @@ export type OAuthSignupFields = Pick<
     | 'verifiedAt'
     | 'active'
     | 'locale'
+    | 'termsAcceptedAt'
+    | 'termsVersion'
     | 'oauthAccounts'
 >;
 

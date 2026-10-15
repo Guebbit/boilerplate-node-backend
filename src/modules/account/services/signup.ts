@@ -26,6 +26,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
+import { analyticsAnswer, termsAcceptance } from '../consent-record';
 import { assignDefaultRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
@@ -54,9 +55,8 @@ export interface SignupInput {
     analyticsConsent: boolean | undefined;
 
     /**
-     * Not a stored default: the contract requires it, and `signup`'s schema rejects anything but
-     * `true`. Validated there rather than on `userSchema` so OAuth linking and the admin `/users`
-     * route — neither of which shows this checkbox — aren't forced to restate it.
+     * The checkbox itself. `signup`'s schema rejects anything but `true`; what is stored is the
+     * moment and the text version (`termsAcceptance`), not this boolean.
      */
     termsAccepted: boolean;
 }
@@ -86,8 +86,8 @@ const guardEmailPolicy = (input: SignupInput): Promise<ResponseSuccess<UserDocum
                   userService.buildSignupDecoy({
                       email: input.email,
                       username: input.username,
-                      analyticsConsent: input.analyticsConsent,
-                      termsAccepted: input.termsAccepted
+                      ...analyticsAnswer(input.analyticsConsent),
+                      ...termsAcceptance()
                   })
               )
             : undefined
@@ -117,8 +117,8 @@ const createAccountIfEmailFree = (
                             username: input.username,
                             email: input.email,
                             password: input.password,
-                            analyticsConsent: input.analyticsConsent,
-                            termsAccepted: input.termsAccepted,
+                            ...analyticsAnswer(input.analyticsConsent),
+                            ...termsAcceptance(),
                             // The language they signed up in, kept for work that happens later without a
                             // request to read `Accept-Language` from — a queued email, a nightly job.
                             // Editable afterwards from the user endpoints.

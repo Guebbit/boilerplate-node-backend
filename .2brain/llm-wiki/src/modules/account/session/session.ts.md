@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/session.ts
-sha256: 971dc6476c628d6a33020bd7da24711a60e13f1e5fd9b66a488e2768d7225348
-generated_at: 2026-10-14T09:02:31.105837+00:00
+sha256: 43f534d7ba0f32ef1364b7bb3dd1085585110c547a2fd32e3b17a0ab99627eb9
+generated_at: 2026-10-15T10:08:45.724025+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Facade layer that exposes the session-lifecycle operations every flow needs (mint, re-mint, snapshot, credential lookup) as stable, strategy-agnostic functions. Controllers call these and never discover which session mode is active — that decision is encapsulated behind `activeStrategy()` in `strategy.ts`.
+Facade module that gives every session-minting controller a single, mode-agnostic API. Controllers call these five functions and never learn whether the system is in `cookie` or token mode — that decision is delegated entirely to `activeStrategy()` in `strategy.ts`.
 
 ## Key elements
 
-- **`issueSession`** — Mints a new session for `userId` and sets its credential on `response`. Delegates to `activeStrategy().issue()`. Throws on persistence/signing failure or `SecondFactorRequiredError`.
-- **`sessionSnapshotOf`** — Reads the caller's current session metadata (persistence tier, device identity) *before* a destructive change, so a subsequent re-mint can preserve them.
-- **`reissueSession`** — Replaces the caller's session while preserving its persistence tier (e.g. "remember me"). Used after reauth or password change.
-- **`remintSession`** — Re-mints only the session cookie after a change that revoked *all* sessions (e.g. 2FA factor change). Deliberately never rejects: a failure degrades to "sign in again" rather than reporting the already-completed change as failed.
-- **`sessionCredentialOf`** — Returns the credential string naming the caller's own session on this request (what `current` matches, what logout deletes). Returns `undefined` if the caller is authenticated by another mechanism.
+- **`issueSession(request, response, userId, options)`** — Mints a brand-new session for a successful auth event (login, signup, OAuth callback, 2FA confirm) and writes the credential onto the response. Throws `SecondFactorRequiredError` or `StaleProofError` on failure.
+- **`sessionSnapshotOf(request, userId)`** — Captures the caller's current session state (persistence tier, identity) *before* a change that will delete that session, so a subsequent re-mint can restore it.
+- **`reissueSession(request, response, userId, options)`** — Replaces the caller's live session after a password change or reauth, preserving its persistence tier.
+- **`remintSession(request, response, userId, amr, snapshot?)`** — Re-mints after a 2FA factor change that revoked *all* sessions. Deliberately never propagates an error to the response; a failed re-mint degrades to "sign in again."
+- **`sessionCredentialOf(request)`** — Returns the credential string that identifies the caller's own session on this request (used by logout and `current` matching). Returns `undefined` if the caller authenticated via another mechanism.
+- **`SessionCaller`** (internal type) — `SessionRequest & Pick<Request, 'get'>`, the request shape every function here expects.
 
 ## Relationships
 
-- **`strategy.ts`** — Sole implementation target. Every exported function is a one-line delegation to `activeStrategy().<method>()`. This file imports `activeStrategy` and the shared type re-exports (`IssuedSession`, `IssueOptions`, `ReissueOptions`, `SessionRequest`, `SessionSnapshot`) from that module.
-- **Controllers** (`post-login`, `post-signup`, `post-2fa-confirm`, `post-login-2fa`, `delete-2fa`, `delete-2fa-method`, `get-oauth-callback`, `post-reauth`, `post-password-change`, `post-logout`) — All import the functions above and are the *only* callers. They pass in an Express `Request`/`Response` pair plus `userId` and options; they never import `strategy.ts` directly.
+- **`./strategy`** — Every exported function is a thin delegation to the corresponding method on `activeStrategy()`. This file adds no logic of its own; it exists so that the eleven controller files below can import one stable symbol list instead of reaching into the strategy layer.
+- **Controllers** (`post-login`, `post-signup`, `post-login-2fa`, `post-2fa-confirm`, `get-oauth-callback`, `post-reauth`, `post-password-change`, `delete-2fa`, `delete-2fa-method`, `delete-session`, `post-logout`) — Each imports only the functions it needs from this module (e.g., login calls `issueSession`; password-change calls `sessionSnapshotOf` then `reissueSession`; 2FA factor change calls `sessionSnapshotOf` then `remintSession`; logout calls `sessionCredentialOf`). No controller imports `strategy.ts` directly.
 
 ## Notes
 
-- `remintSession` and `reissueSession` are distinct: `reissueSession` replaces a single session and preserves its persistence tier; `remintSession` runs after a full revocation (all sessions destroyed) and only restores the acting device's cookie.
-- `sessionSnapshotOf` must be called **before** the destructive operation (password change, factor change); the snapshot is then passed into `reissueSession` or `remintSession`.
-- The local type `SessionCaller` (`SessionRequest & Pick<Request, 'get'>`) is the minimal request shape every function accepts — it is not exported.
-- Design intent (stated in the module doc-block): controllers should never branch on session mode. If a controller needs to, that is a boundary violation.
+- Callers must invoke `sessionSnapshotOf` **before** the destructive operation (password change, factor change); the snapshot is then passed to `reissueSession` or `remintSession` to restore persistence and identity.
+- `remintSession` swallows re-mint failures internally — the controller should treat the response as successful even if the session was not actually renewed.
+- The module doc comment references `docs/modules/account-sessions.md` and `docs/theory/sessions.md` for the broader session model.
