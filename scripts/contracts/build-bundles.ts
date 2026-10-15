@@ -71,6 +71,36 @@ const fail = (message: string): never => {
     process.exit(1);
 };
 
+/**
+ * Say how a build went: under `--check`, fail on any stale bundle and name the fix; otherwise
+ * report what was written.
+ *
+ * @param total - how many bundles were asked for
+ * @param stale - those that did not match what they are built from
+ * @param problem - what "stale" means for this run, completing `STALE — …`
+ * @param advice - how to fix it
+ */
+const report = (
+    total: number,
+    stale: readonly ContractBundle[],
+    problem: string,
+    advice: string
+): void => {
+    if (checkOnly && stale.length > 0)
+        fail(
+            `[contracts] STALE — ${problem}:\n` +
+                stale.map(({ label }) => `  ${label}`).join('\n') +
+                `\n  ${advice}`
+        );
+    console.info(
+        checkOnly
+            ? `[contracts] ${total} bundles are up to date with their fragments.`
+            : stale.length === 0
+              ? `[contracts] ${total} bundles already matched their fragments; nothing written.`
+              : `[contracts] rebuilt ${stale.map(({ output }) => relative(output)).join(', ')}.`
+    );
+};
+
 /** The whole run — async because a generated bundle (the client collections) loads modules by scan. */
 const run = async (): Promise<void> => {
     if (named.length > 0) {
@@ -96,21 +126,11 @@ const run = async (): Promise<void> => {
             );
         }
 
-        const stale = await bundle(selected);
-
-        if (checkOnly && stale.length > 0) {
-            fail(
-                `[contracts] STALE — these do not match the fragments they are built from:\n` +
-                    stale.map(({ label }) => `  ${label}`).join('\n') +
-                    `\n  Fix with: npm run contracts:bundle`
-            );
-        }
-        console.info(
-            checkOnly
-                ? `[contracts] ${selected.length} bundles are up to date with their fragments.`
-                : stale.length === 0
-                  ? `[contracts] ${selected.length} bundles already matched their fragments; nothing written.`
-                  : `[contracts] rebuilt ${stale.map(({ output }) => relative(output)).join(', ')}.`
+        report(
+            selected.length,
+            await bundle(selected),
+            `these do not match the fragments they are built from`,
+            `Fix with: npm run contracts:bundle`
         );
         process.exit(0);
     }
@@ -121,27 +141,14 @@ const run = async (): Promise<void> => {
      * ever reads; `-- bruno` is how you get one.
      */
     const authored = CONTRACT_BUNDLES.filter((item) => !isGenerated(item));
-    const stale = await bundle(authored);
-
-    if (checkOnly) {
-        if (stale.length > 0) {
-            fail(
-                `[contracts] STALE — these do not match what they are built from:\n` +
-                    stale.map(({ label }) => `  ${label}`).join('\n') +
-                    `\n  A fragment was edited without re-bundling, or a bundle was hand-edited.\n` +
-                    `  Fix with: npm run contracts:bundle\n` +
-                    `  Every authored bundle is byte-identical with the paired repo — copy the result` +
-                    ` over there too.`
-            );
-        }
-        console.info(`[contracts] ${authored.length} bundles are up to date with their fragments.`);
-        process.exit(0);
-    }
-
-    console.info(
-        stale.length === 0
-            ? `[contracts] ${authored.length} bundles already matched their fragments; nothing written.`
-            : `[contracts] rebuilt ${stale.map(({ output }) => relative(output)).join(', ')}.`
+    report(
+        authored.length,
+        await bundle(authored),
+        `these do not match what they are built from`,
+        `A fragment was edited without re-bundling, or a bundle was hand-edited.\n` +
+            `  Fix with: npm run contracts:bundle\n` +
+            `  Every authored bundle is byte-identical with the paired repo — copy the result` +
+            ` over there too.`
     );
 };
 

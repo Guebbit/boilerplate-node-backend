@@ -21,11 +21,12 @@
  * See: docs/api/contract-fragmentation.md, docs/theory/authorization.md
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { orderSections } from './section-order';
 import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
 import { readAuthorizationFragment } from './fragments';
+import { writeOrCheck } from './generated-file';
 
 /** The root residual file: everything no module owns — preamble, `version`, `actions`, `scopes`, the closing note. */
 const ROOT_FILE = path.join(REPO_ROOT, 'shared', 'contracts', 'authorization-keys.root.yaml');
@@ -115,28 +116,10 @@ export const assembleAuthorizationKeys = (): string => {
     return `${before.replace(/\n+$/, '')}\nkeys:\n${keys}\n${after.replace(/^\n+/, '\n')}`;
 };
 
-/** `authorization:bundle` writes the committed file; `--check` only compares against it. */
-const checkOnly = process.argv.includes('--check');
-
-/** The bundle as the fragments say it should read. */
-const assembled = assembleAuthorizationKeys();
-
-/** The bundle as it is on disk now; empty when the file does not exist yet. */
-const committed = existsSync(OUTPUT_FILE) ? readFileSync(OUTPUT_FILE, 'utf8') : '';
-
-// Three outcomes: in sync, drifted under `--check` (fail), or drifted so rewrite it.
-if (assembled === committed) {
-    console.info(
-        '[authorization] shared/authorization-keys.yaml is up to date with its fragments.'
-    );
-} else if (checkOnly) {
-    console.error(
-        '[authorization] STALE — shared/authorization-keys.yaml does not match its fragments.\n' +
-            '  A fragment was edited without re-bundling, or the bundle was hand-edited.\n' +
-            '  Fix with: npm run authorization:bundle'
-    );
-    process.exit(1);
-} else {
-    writeFileSync(OUTPUT_FILE, assembled);
-    console.info('[authorization] rebuilt shared/authorization-keys.yaml.');
-}
+/** The bundle as the fragments say it should read: written, or under `--check` compared. */
+writeOrCheck(
+    OUTPUT_FILE,
+    assembleAuthorizationKeys(),
+    'its fragments',
+    'npm run authorization:bundle'
+);

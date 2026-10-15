@@ -23,11 +23,12 @@
  * See: docs/api/asyncapi-workflow.md#generated-typescript-types
  */
 import { TypeScriptGenerator, typeScriptDefaultModelNameConstraints } from '@asyncapi/modelina';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import { requiredPath } from '../cli';
+import { writeOrCheck } from './generated-file';
 
 /** The slice of an AsyncAPI 3.0 channel this generator reads. */
 interface AsyncApiChannel {
@@ -89,9 +90,6 @@ const INPUT = path.resolve(ROOT, 'asyncapi.yaml');
 
 /** Absolute path of the file to generate, from `--out`. */
 const OUTPUT = requiredPath('out', ROOT);
-
-/** `--check` compares and reports; without it the file is written. */
-const checkOnly = process.argv.includes('--check');
 
 /*
  * Converts source names into `PascalCase`.
@@ -577,24 +575,7 @@ generator
         );
         const output = buildOutput(modelBlocks);
 
-        if (!checkOnly) {
-            writeFileSync(OUTPUT, output, 'utf8');
-            console.log(`✓ Generated ${OUTPUT}`);
-            return;
-        }
-
-        if (existsSync(OUTPUT) && readFileSync(OUTPUT, 'utf8') === output) {
-            console.log(`✓ ${OUTPUT} is current with asyncapi.yaml`);
-            return;
-        }
-
-        // Names the one command that fixes it: the file is an output, so there is nothing to decide.
-        console.error(
-            `${OUTPUT} is not what asyncapi.yaml generates.\n` +
-                `  Run: npm run gen:asyncapi\n` +
-                `  Then commit the result.`
-        );
-        process.exit(1);
+        writeOrCheck(OUTPUT, output, 'asyncapi.yaml', 'npm run gen:asyncapi');
     })
     .catch((error: unknown) => {
         console.error(error);

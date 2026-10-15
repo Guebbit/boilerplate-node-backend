@@ -13,8 +13,14 @@ import path from 'node:path';
  * @param output - absolute path of the generated file
  * @param text - the file's full expected text
  * @param label - what the file is generated from, for the messages (`openapi.yaml`)
+ * @param fixCommand - the one command that regenerates it, named in the failure message
  */
-export const writeOrCheck = (output: string, text: string, label: string): void => {
+export const writeOrCheck = (
+    output: string,
+    text: string,
+    label: string,
+    fixCommand = 'npm run gen:api'
+): void => {
     if (!process.argv.includes('--check')) {
         // The folder may not exist yet: `regenerate` writes some of these BEFORE orval creates `api/`.
         mkdirSync(path.dirname(output), { recursive: true });
@@ -28,7 +34,7 @@ export const writeOrCheck = (output: string, text: string, label: string): void 
     }
     console.error(
         `${output} is not what ${label} generates.\n` +
-            `  Run: npm run gen:api\n` +
+            `  Run: ${fixCommand}\n` +
             `  Then commit the result.`
     );
     process.exitCode = 1;

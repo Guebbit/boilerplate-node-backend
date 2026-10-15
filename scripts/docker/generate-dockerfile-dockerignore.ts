@@ -20,12 +20,10 @@
  * `--check` reports drift instead of rewriting, for `complete`.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
-
-/** Report drift instead of rewriting the file — what `complete` runs. */
-const checkOnly = process.argv.includes('--check');
+import { writeOrCheck } from '../contracts/generated-file';
 
 /** The root `.dockerignore`, which this file is derived from. */
 const SOURCE = path.join(ROOT, '.dockerignore');
@@ -64,17 +62,4 @@ const derive = (): string => {
 /** What the override should contain, derived from the root file. */
 const next = derive();
 
-// `--check`: exit 0 when the file on disk matches, 1 when it has drifted.
-if (checkOnly) {
-    const current = readFileSync(TARGET, 'utf8');
-    if (current === next) process.exit(0);
-    console.error(
-        `[docker] ${path.relative(ROOT, TARGET)} is out of date with ${path.relative(ROOT, SOURCE)}.\n` +
-            '         Run `npm run docker:dockerignore` and commit the result.'
-    );
-    process.exit(1);
-}
-
-// Not a check: rewrite the file and say so.
-writeFileSync(TARGET, next);
-console.log(`[docker] ${path.relative(ROOT, TARGET)} updated.`);
+writeOrCheck(TARGET, next, '.dockerignore', 'npm run docker:dockerignore');
