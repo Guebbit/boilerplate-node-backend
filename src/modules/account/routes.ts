@@ -13,6 +13,7 @@ import { Router } from 'express';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import {
     credentialLimiters,
+    sessionCredentialLimiters,
     signupLimiters,
     resetRequestLimiters,
     passwordCheckLimiter,
@@ -174,7 +175,7 @@ router.delete('/pending-email', isAuth, cancelPendingEmail);
 // fresh-auth gate: the address was already asked for under one, and nothing about the account
 // changes. `credentialLimiters` and the service's cooldown are `/verify-request`'s, for the same
 // reason: each success publishes mail. `isAuth` runs first so the identity budget is per account.
-router.post('/pending-email/resend', isAuth, credentialLimiters, postPendingEmailResend);
+router.post('/pending-email/resend', isAuth, sessionCredentialLimiters, postPendingEmailResend);
 
 // DELETE /account — request account deletion (requires auth). Critical: destruction. An account
 // with a second factor must also have proved a code in that fresh session.
@@ -224,13 +225,13 @@ router.post('/reset-confirm', credentialLimiters, postResetConfirm);
 // POST /account/password — change password by proving the current one (requires auth). An account
 // with a second factor must also have a fresh session that proved a code; one without is asked
 // nothing new.
-// `isAuth` runs BEFORE `credentialLimiters` here, on /reauth and on /verify-request: the body
-// names no account, so the identity budget can only be per account if it reads the session's.
+// `isAuth` runs BEFORE `sessionCredentialLimiters` here, on /reauth and on /verify-request: the
+// body names no account, so the per-account budget can only be per account if it reads the session's.
 router.post(
     '/password',
     isAuth,
     requireFreshAuthWhen(callerHasTwoFactor, 'sensitive', OTP_PROOF),
-    credentialLimiters,
+    sessionCredentialLimiters,
     postPasswordChange
 );
 
@@ -246,7 +247,7 @@ router.get('/reauth', isAuth, getReauthMethods);
 
 // POST /account/reauth — step-up: re-prove a password or a mailed code, refresh auth_time
 // (requires auth)
-router.post('/reauth', isAuth, credentialLimiters, postReauth);
+router.post('/reauth', isAuth, sessionCredentialLimiters, postReauth);
 
 // POST /account/reauth/methods/:method/send — mail the step-up code to an account with no
 // password. No fresh-auth guard (it is what earns one); the delivery budget is the 2FA send's,
@@ -291,7 +292,7 @@ router.post('/session/touch', isAuth, postSessionTouch);
 router.delete('/sessions/:sessionId', isAuth, requireFreshAuth('sensitive'), deleteSession);
 
 // POST /account/verify-request — re-send the verification email (requires auth)
-router.post('/verify-request', isAuth, credentialLimiters, postVerifyRequest);
+router.post('/verify-request', isAuth, sessionCredentialLimiters, postVerifyRequest);
 
 // POST /account/verify-confirm — spend the emailed token; public, the token is the credential
 router.post('/verify-confirm', credentialLimiters, postVerifyConfirm);

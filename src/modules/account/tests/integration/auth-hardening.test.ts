@@ -158,6 +158,41 @@ describe('credential endpoints are rate limited separately', () => {
     });
 });
 
+describe('loginChallengeGate — rung 3 on the block budget too', () => {
+    afterEach(() => {
+        jest.resetModules();
+    });
+
+    it('arms on failures spread over many accounts from one block: credential stuffing', async () => {
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
+        const { credentialLimiters, loginChallengeGate } = await withReloadedRateLimits(
+            () => import('@modules/account/rate-limits'),
+            {
+                // Room on every per-account and per-address budget: only the block can arm it.
+                NODE_AUTH_RATE_LIMIT_MAX: '100',
+                NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '100',
+                NODE_AUTH_RATE_LIMIT_BLOCK_MAX: '4'
+            },
+            (rateLimits) => rateLimits
+        );
+        const app = express();
+        app.use(express.json());
+        app.post('/login', ...credentialLimiters, loginChallengeGate, (_request, response) => {
+            response.status(401).json({ success: false });
+        });
+        const attempt = (email: string) => supertest(app).post('/login').send({ email });
+
+        // One guess per account: no account's budget moves, but the block's does.
+        const first = await attempt('a@example.com');
+        const second = await attempt('b@example.com');
+        expect([first.status, second.status]).toEqual([401, 401]);
+        const response = await attempt('c@example.com');
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('ANTIBOT_VERIFICATION_FAILED');
+    });
+});
+
 describe('loginChallengeGate — rung 3 only once the identity budget is mostly spent', () => {
     afterEach(() => {
         jest.resetModules();

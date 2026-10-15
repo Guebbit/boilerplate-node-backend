@@ -12,6 +12,8 @@ import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { setCookie } from '@tests/cookies';
+import { asStub } from '@tests/stub';
+import type { AuthContext } from '@types';
 import { appAnswering, statusOf, withReloadedRateLimits } from '@tests/rate-limit-harness';
 
 setupTestDb();
@@ -100,6 +102,34 @@ describe('the per-account credential budget', () => {
             (module) => module.credentialLimiters
         );
         const app = appAnswering(401, true, ...limiters);
+
+        for (let attempt = 0; attempt < 3; attempt++)
+            await statusOf(guess(app, 'victim@example.com', cookie));
+
+        expect(await statusOf(guess(app, 'victim@example.com', cookie))).toBe(429);
+    });
+
+    it('does not excuse a signed-in owner’s guesses at someone else’s account', async () => {
+        await createUser({ email: 'owner@example.com' });
+        const cookie = await deviceCookieAfterLogin('owner@example.com');
+        const limiters = await withAccountRateLimits(
+            SMALL_ACCOUNT_BUDGET,
+            (module) => module.credentialLimiters
+        );
+        // The attacker is the owner of one account and names ANOTHER in the body: their own
+        // session and their own device cookie must not turn the victim's budget off.
+        const app = appAnswering(
+            401,
+            true,
+            (request, _response, next) => {
+                request.authContext = asStub<AuthContext>({
+                    id: 'owner',
+                    email: 'owner@example.com'
+                });
+                next();
+            },
+            ...limiters
+        );
 
         for (let attempt = 0; attempt < 3; attempt++)
             await statusOf(guess(app, 'victim@example.com', cookie));

@@ -32,21 +32,21 @@ const asAccount: RequestHandler = (request, _response, next) => {
     next();
 };
 
-describe('credentialLimiters on an authenticated route', () => {
+describe('sessionCredentialLimiters on an authenticated route', () => {
     afterEach(() => jest.resetModules());
 
     it('spends one budget per ACCOUNT, however many address blocks the guesses come from', async () => {
-        const credentialLimiters = await withAccountRateLimits(
+        const sessionCredentialLimiters = await withAccountRateLimits(
             {
-                NODE_AUTH_RATE_LIMIT_MAX: '2',
+                NODE_AUTH_RATE_LIMIT_SESSION_MAX: '2',
                 NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '50',
                 NODE_AUTH_RATE_LIMIT_BLOCK_MAX: '50'
             },
-            (module) => module.credentialLimiters
+            (module) => module.sessionCredentialLimiters
         );
 
         // 401: a wrong password, the only answer that spends `skipSuccessfulRequests` budgets.
-        const app = appAnswering(401, true, asAccount, ...credentialLimiters);
+        const app = appAnswering(401, true, asAccount, ...sessionCredentialLimiters);
         const guess = (account: string, ip: string) =>
             supertest(app).post('/route').set('X-Forwarded-For', ip).set('x-test-account', account);
 
@@ -57,6 +57,53 @@ describe('credentialLimiters on an authenticated route', () => {
 
         // Another account, from the very address already refused for the first, is untouched.
         expect(await statusOf(guess('account-b', '203.0.113.5'))).toBe(401);
+    });
+});
+
+describe('credentialLimiters on a public route', () => {
+    afterEach(() => jest.resetModules());
+
+    it('spends the budget of the account a signed-in caller NAMES, not their own', async () => {
+        const credentialLimiters = await withAccountRateLimits(
+            {
+                NODE_AUTH_RATE_LIMIT_MAX: '2',
+                NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '50',
+                NODE_AUTH_RATE_LIMIT_BLOCK_MAX: '50'
+            },
+            (module) => module.credentialLimiters
+        );
+
+        // The attacker holds a session of their own and guesses the victim's password through
+        // `/login`: the per-account budget is the victim's, not the attacker's.
+        const app = appAnswering(401, true, asAccount, ...credentialLimiters);
+        const guess = () =>
+            supertest(app)
+                .post('/route')
+                .set('x-test-account', 'attacker')
+                .send({ email: 'victim@example.com' });
+
+        expect(await statusOf(guess())).toBe(401);
+        expect(await statusOf(guess())).toBe(401);
+        expect(await statusOf(guess())).toBe(429);
+    });
+
+    it('does not count a request that names no account: neighbours in one /24 stay unaffected', async () => {
+        const credentialLimiters = await withAccountRateLimits(
+            {
+                NODE_AUTH_RATE_LIMIT_MAX: '2',
+                NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '50',
+                NODE_AUTH_RATE_LIMIT_BLOCK_MAX: '50'
+            },
+            (module) => module.credentialLimiters
+        );
+
+        const app = appAnswering(401, true, ...credentialLimiters);
+        const badToken = (ip: string) =>
+            supertest(app).post('/route').set('X-Forwarded-For', ip).send({ token: 'wrong' });
+
+        for (let attempt = 0; attempt < 5; attempt += 1)
+            expect(await statusOf(badToken('203.0.113.5'))).toBe(401);
+        expect(await statusOf(badToken('203.0.113.77'))).toBe(401);
     });
 
     it('still keys an unauthenticated attempt on the email it names', async () => {

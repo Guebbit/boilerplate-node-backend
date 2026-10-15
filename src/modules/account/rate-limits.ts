@@ -49,44 +49,68 @@ const CREDENTIAL_WINDOW_MS = 15 * 60_000;
  */
 const IDENTITY_RATE_LIMIT_PROPERTY = 'credentialIdentityRateLimit';
 
-/** `keyedBy` label for the credential identity budget — see {@link credentialIdentityOf}. */
-const KEYED_BY_ACCOUNT_OR_SUBMITTED_EMAIL =
-    'the authenticated account when there is one, else the submitted email (normalised and ' +
-    'pseudonymised; falls back to address block when absent)';
+/** The same, for the address-block limiter — `loginChallengeGate` reads it too (credential stuffing). */
+const BLOCK_RATE_LIMIT_PROPERTY = 'credentialBlockRateLimit';
+
+/** `keyedBy` label for the public routes' identity budget — see {@link namesAnAccount}. */
+const KEYED_BY_SUBMITTED_ACCOUNT =
+    'the submitted email or username (normalised and pseudonymised); not counted when the body ' +
+    'names none';
 
 /**
- * Who a credential attempt is aimed at. A signed-in caller (`POST /account/password`, `/reauth`,
- * `/verify-request`, which run `isAuth` first) is keyed on their account id: those bodies name no
- * email, so the submitted-email key would fall back to the address block and the "per account"
- * budget would not be per account at all. Everyone else — login, reset-confirm — is still keyed
- * on the account they name.
- *
- * The id is prefixed so it can never collide with a pseudonymised email. It is already an opaque
- * id, the same value `payments` keys its per-account budgets on.
+ * Whether a request's body names the account it is aimed at — an `email` or a `username`. The
+ * per-account budget exists for exactly that case: guessing at ONE account. A confirm that carries
+ * only a token (a reset link, a 2FA code, an OAuth callback) names nobody, and keying it anyway
+ * would put every neighbour in one /24 into one shared bucket; the address and block budgets
+ * already bound those routes.
  */
-const credentialIdentityOf = (request: Request): string =>
-    request.authContext ? `account:${request.authContext.id}` : identityOf(request);
+const namesAnAccount = (request: Request): boolean =>
+    (readBodyField(request, 'email') ?? readBodyField(request, 'username')) !== undefined;
 
-/** Failed attempts against ONE account — the smallest of the three credential budgets. */
+/** Failed attempts against ONE named account — the smallest of the credential budgets. */
 const CREDENTIAL_IDENTITY_BUDGET: RateLimitBudget = {
     name: 'Credential guesses — per account',
     namespace: 'credentials-identity',
     environmentVariable: 'NODE_AUTH_RATE_LIMIT_MAX',
     defaultMax: 10,
     windowMs: CREDENTIAL_WINDOW_MS,
-    keyedBy: KEYED_BY_ACCOUNT_OR_SUBMITTED_EMAIL,
+    keyedBy: KEYED_BY_SUBMITTED_ACCOUNT,
     bounds:
-        'Failed attempts against ONE account — defeats a botnet spreading guesses. The smallest ' +
-        'of the three, since guessing at one account is the attack and someone signing in on ' +
-        'several devices is not. A repeated lockout of the same account lasts twice as long as ' +
-        "the last (up to 8x), and a browser carrying the account's familiar-device cookie skips " +
-        'this budget, so spending it cannot lock the owner out.',
+        'Failed attempts against ONE named account — defeats a botnet spreading guesses. The ' +
+        'smallest of the credential budgets, since guessing at one account is the attack and ' +
+        'someone signing in on several devices is not. A repeated lockout of the same account ' +
+        "lasts twice as long as the last (up to 8x), and a browser carrying the account's " +
+        'familiar-device cookie skips this budget, so spending it cannot lock the owner out. ' +
+        'A request that names no account is not counted here: the address budgets bound it.',
     audited: true,
-    keyGenerator: credentialIdentityOf,
+    keyGenerator: identityOf,
     skipSuccessfulRequests: true,
     requestPropertyName: IDENTITY_RATE_LIMIT_PROPERTY,
     escalation: { doublings: 3 },
-    skip: holdsDeviceCookie
+    skip: (request) => !namesAnAccount(request) || holdsDeviceCookie(request)
+};
+
+/**
+ * Failed attempts a SIGNED-IN caller makes on the routes that re-prove them (`POST /account/password`,
+ * `/reauth`, `/verify-request`, `/pending-email/resend`). Those bodies name no account, so the key
+ * is the session's own: a hijacked session guessing the password cannot spread across addresses.
+ * Never keyed on a body field — those routes validate after their limiter, so an injected `email`
+ * would rotate the bucket — and never excused by a device cookie: the session is the proof here.
+ */
+const SESSION_CREDENTIAL_BUDGET: RateLimitBudget = {
+    name: 'Credential guesses — per signed-in account',
+    namespace: 'credentials-session',
+    environmentVariable: 'NODE_AUTH_RATE_LIMIT_SESSION_MAX',
+    defaultMax: 10,
+    windowMs: CREDENTIAL_WINDOW_MS,
+    keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
+    bounds:
+        'Failed attempts a signed-in caller makes to re-prove themselves — a stolen session ' +
+        'guessing the password, or spamming the verification mail. Keyed on the session, so ' +
+        'changing address does not refill it.',
+    audited: true,
+    keyGenerator: accountIdOf,
+    skipSuccessfulRequests: true
 };
 
 /**
@@ -136,18 +160,27 @@ const CREDENTIAL_BLOCK_BUDGET: RateLimitBudget = {
         "CGNAT pool, one IPv6 customer's whole allocation), not by one.",
     audited: true,
     keyGenerator: addressBlockOf,
-    skipSuccessfulRequests: true
+    skipSuccessfulRequests: true,
+    requestPropertyName: BLOCK_RATE_LIMIT_PROPERTY
 };
 
 /**
- * The credential budgets, for the routes that accept a password or mint a token.
+ * The limiters every credential route shares, built once so an address or block spends ONE counter
+ * whichever route it fails on: a forged device cookie, one address, one address BLOCK. Keying on any
+ * pair instead is weaker still — a bucket refreshes the moment any one key of the tuple changes.
+ */
+const SHARED_CREDENTIAL_LIMITERS: RequestHandler[] = [
+    buildRateLimiter(CREDENTIAL_DEVICE_BUDGET),
+    buildRateLimiter(CREDENTIAL_ADDRESS_BUDGET),
+    buildRateLimiter(CREDENTIAL_BLOCK_BUDGET)
+];
+
+/**
+ * The credential budgets for the PUBLIC routes that accept a password or mint a token: login, the
+ * token confirms, the second-factor login, OAuth. The per-account budget counts only a request
+ * whose body names an account.
  *
- * Four independent limiters: one bounds failed attempts against ONE account, one bounds a forged
- * device cookie, one bounds attempts
- * from ONE address, one bounds attempts from ONE address BLOCK. Keying on any pair instead is
- * weaker still — a bucket refreshes the moment any one key of the tuple changes.
- *
- * `skipSuccessfulRequests` on all three: only FAILURES spend the budget, so a shared address (an
+ * `skipSuccessfulRequests` on all of them: only FAILURES spend the budget, so a shared address (an
  * office, CI, the e2e suite) is never locked out by people getting it right. Exported as an array
  * because Express flattens one, so a route cannot apply part of the set.
  *
@@ -155,38 +188,46 @@ const CREDENTIAL_BLOCK_BUDGET: RateLimitBudget = {
  */
 export const credentialLimiters: RequestHandler[] = [
     buildRateLimiter(CREDENTIAL_IDENTITY_BUDGET),
-    buildRateLimiter(CREDENTIAL_DEVICE_BUDGET),
-    buildRateLimiter(CREDENTIAL_ADDRESS_BUDGET),
-    buildRateLimiter(CREDENTIAL_BLOCK_BUDGET)
+    ...SHARED_CREDENTIAL_LIMITERS
 ];
 
 /**
- * Fraction of the per-account failure budget that must already be spent before an otherwise
- * honest login attempt starts carrying rung 3's challenge. Never on a first, or even second,
- * mistyped password — but before a script gets to spend the rest of the budget unchallenged.
+ * {@link credentialLimiters} for the routes that run `isAuth` FIRST and re-prove the signed-in
+ * caller: the per-account budget is the session's own, not a body field.
  */
-const CHALLENGE_AFTER_IDENTITY_BUDGET_SPENT = 0.5;
+export const sessionCredentialLimiters: RequestHandler[] = [
+    buildRateLimiter(SESSION_CREDENTIAL_BUDGET),
+    ...SHARED_CREDENTIAL_LIMITERS
+];
 
 /**
- * Whether this login attempt has already burned enough of its account's failure budget that
- * rung 3's challenge should apply. Missing rate-limit info (the identity limiter didn't run) reads
- * as "not yet". During a Redis outage the budget counts in memory (`failoverStore`), so this gate
- * reads the fallback's numbers rather than going blind.
+ * Fraction of a failure budget that must already be spent before an otherwise honest login
+ * attempt starts carrying rung 3's challenge. Never on a first, or even second, mistyped password
+ * — but before a script gets to spend the rest of the budget unchallenged.
  */
-const identityBudgetMostlySpent = (request: Request): boolean => {
-    const info = rateLimitInfoOf(request, IDENTITY_RATE_LIMIT_PROPERTY);
-    if (!info) return false;
-    return priorHits(info) >= info.limit * CHALLENGE_AFTER_IDENTITY_BUDGET_SPENT;
+const CHALLENGE_AFTER_BUDGET_SPENT = 0.5;
+
+/**
+ * Whether the budget behind `property` has at least half its failures on record. Missing
+ * rate-limit info (that limiter didn't run) reads as "not yet". During a Redis outage the budget
+ * counts in memory (`failoverStore`), so this reads the fallback's numbers rather than going blind.
+ */
+const budgetMostlySpent = (request: Request, property: string): boolean => {
+    const info = rateLimitInfoOf(request, property);
+    return info !== undefined && priorHits(info) >= info.limit * CHALLENGE_AFTER_BUDGET_SPENT;
 };
 
 /**
- * Mounted between `credentialLimiters` and the login handler: passes through while the account's
- * failure budget is mostly unspent, delegates to `humanChallengeGate` once it is not. Keeps rung 3
- * off an honest first attempt while still gating a credential-stuffing run before it exhausts the
- * budget rung 1 already bounds.
+ * Mounted between `credentialLimiters` and the login handler: passes through while neither the
+ * named account's failure budget nor the caller's address block's is half spent, delegates to
+ * `humanChallengeGate` once either is. The block half is what meets credential stuffing: one guess
+ * per account never spends any single account's budget, but it does spend the block's.
  */
 export const loginChallengeGate: RequestHandler = (request, response, next) =>
-    identityBudgetMostlySpent(request) ? humanChallengeGate(request, response, next) : next();
+    budgetMostlySpent(request, IDENTITY_RATE_LIMIT_PROPERTY) ||
+    budgetMostlySpent(request, BLOCK_RATE_LIMIT_PROPERTY)
+        ? humanChallengeGate(request, response, next)
+        : next();
 
 /**
  * `POST /account/password/check`'s own budget — unauthenticated, and every call may trigger an
@@ -424,6 +465,7 @@ export const accountRateLimits: readonly RateLimitBudget[] = [
     CREDENTIAL_DEVICE_BUDGET,
     CREDENTIAL_ADDRESS_BUDGET,
     CREDENTIAL_BLOCK_BUDGET,
+    SESSION_CREDENTIAL_BUDGET,
     PASSWORD_CHECK_BUDGET,
     SIGNUP_IDENTITY_BUDGET,
     SIGNUP_ADDRESS_BUDGET,

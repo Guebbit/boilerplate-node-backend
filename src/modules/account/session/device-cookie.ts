@@ -60,13 +60,13 @@ const presentedTokens = (request: Request): string[] => {
 };
 
 /**
- * The account a request is about, for the cookie's purposes: a signed-in caller's own address, else
- * the address a login body names. Reads the same two places the credential budget's key does.
+ * The account a request is about, for the cookie's purposes: the address its body NAMES, and only
+ * that. A signed-in caller's own address must not stand in for it: their own device cookie would
+ * then excuse guesses at someone else's account, which they name in the body.
  *
  * @param request - the incoming request
  */
-const subjectOf = (request: Request): string | undefined =>
-    request.authContext?.email ?? readBodyField(request, 'email');
+const subjectOf = (request: Request): string | undefined => readBodyField(request, 'email');
 
 /**
  * Whether this browser is familiar for the account the request is about.
@@ -91,7 +91,10 @@ export const holdsDeviceCookie = (request: Request): boolean => {
  * @param request - the incoming request
  */
 export const presentsFailingDeviceCookie = (request: Request): boolean =>
-    presentedTokens(request).length > 0 && !holdsDeviceCookie(request);
+    // A request naming no account has nothing for a cookie to vouch for, so nothing it can fail.
+    subjectOf(request) !== undefined &&
+    presentedTokens(request).length > 0 &&
+    !holdsDeviceCookie(request);
 
 /**
  * Mark this browser familiar for `email` — after a login that fully succeeded. Keeps the other
