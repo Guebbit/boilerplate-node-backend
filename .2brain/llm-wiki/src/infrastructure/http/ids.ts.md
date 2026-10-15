@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/ids.ts
-sha256: 2c27f8bf65225373047938c1f93c4d94294efb73d426cb763fe1af41b95d7e0c
-generated_at: 2026-10-14T07:54:32.585507+00:00
+sha256: a084f8aabbed30c3a18a5621969b7552da4221cd136a5eeb7ad9835ef245599a
+generated_at: 2026-10-15T09:49:53.164969+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single source of truth for how the API answers a malformed identifier. It distinguishes two positions—path params (404, indistinguishable from an unknown id) versus body/query fields (422 `VALIDATION_ERROR` naming the field)—and provides both the runtime guard (`requireId`) and the schema-aware bulk check (`malformedIdIssues`) that controllers and surfaces call instead of re-implementing the rule.
+Centralises the one-answer-per-position rule for malformed IDs: an ID in a URL path is indistinguishable from an unknown resource (404), while an ID in a body field or query parameter is a bad argument (422). It also inspects a request's Zod schema to locate every `Id`-typed field so controllers can produce the correct validation errors without re-deriving field paths on each request.
 
 ## Key elements
 
-- **`CONTRACT_ID_PATTERN`** (exported) – The shared, storage-neutral `Id` regex (`^[0-9A-Za-z_-]+$`) as it appears in generated Zod schemas. Used to *recognise* which fields are ids; not the validity check itself.
-- **`isValidObjectId(id: unknown): id is string`** (exported) – Type guard: exactly 24 hex characters (`/^[\da-f]{24}$/i`). Anything non-string is immediately "not an id."
-- **`RequiredId`** (exported interface) – Config for `requireId`: `notFound` (i18n key, copy-builder function, or `null`), `name` (param/field, default `"id"`), `surface` (`"path"` | `"query"` | `"body"`, default `"path"`).
-- **`requireId(request, response, config)`** (exported) – Reads one id via `readInput`; on success returns the string. On failure sends 404 (path) or 422 (body/query) and returns `undefined`.
-- **`malformedIdIssues(schema, input, flagged?)`** (exported) – Walks a Zod schema to find every field whose contract pattern marks it as an `Id`, then inspects the raw request value at that position. Returns one `ResponseErrorItem` per string value that fails `isValidObjectId`. Skips fields already in `flagged` to avoid double-reporting.
-- **`collectIdPaths` / `idPathsOf`** (internal) – Depth-first walk over Zod 4's `_zod.def` tree (objects, arrays, unions, intersections, pipes, transparent wrappers) to enumerate id positions. Results are memoised in a `WeakMap` keyed by schema instance.
-- **`carriedAt`** (internal) – Resolves a schema path (with `'*'` for array indices) against the actual request input to produce dotted field names and their values.
-- **`fieldIdIssue`** (internal) – Builds the 422 `ResponseErrorItem` (code, i18n message, `details.field`).
+- **`CONTRACT_ID_PATTERN`** (exported) – The regex string the OpenAPI contract uses for its shared `Id` scalar; a string field carrying this pattern in its Zod `string_format` check is recognised as an ID.
+- **`isValidObjectId(id: unknown): id is string`** (exported) – Type guard asserting exactly 24 hex characters; intentionally stricter than the contract's looser `Id` bound.
+- **`RequiredId`** (exported interface) – Configuration object for `requireId`: the not-found copy (i18n key, builder function, or `null`), the param/field name, and the `RequestSurface`.
+- **`requireId(request, response, opts)`** (exported) – Reads a single ID via `readInput`; on failure sends 404 (path) or 422 (body/query) and returns `undefined`.
+- **`malformedIdIssues(schema, input, flagged?)`** (exported) – Walks a Zod schema to find ID fields, extracts the corresponding values from raw input, and returns one `ResponseErrorItem` per string value that fails `isValidObjectId`. Skips fields already flagged by the schema.
+- **`collectIdPaths` / `carriedAt` / `idPathsOf`** (internal) – Depth-first Zod schema walker (objects, arrays, unions, intersections, pipes, transparent wrappers) and the corresponding input-value navigator. Results are memoised in a `WeakMap` keyed by the schema object.
 
 ## Relationships
 
-- **`request.ts`** – Imports `readInput` and the `RequestSurface` type; `requireId` delegates all input extraction to it.
-- **`response.ts`** – Imports `rejectResponse` and `ResponseErrorItem`; every failure path funnels through `rejectResponse`.
-- **`validation-messages.ts`** – Imports `attributeOf` to turn a dotted field path into a human-readable attribute for i18n messages.
-- **`i18n/index.ts` / `i18n/context.ts`** – Imports the `t` translator for `"validation.required"` and `"validation.invalid-format"` messages.
-- **`object-guards.ts`** – Imports `isPlainObject` used inside `carriedAt` to safely descend into nested request bodies.
-- **`surfaces/create-*-controller.ts`** (delete, item, restore, update) – Call `requireId` to gate their route handlers before the controller body executes.
-- **Module controllers** (`delete-session`, `get-account-export`, `delete-address`, `put-address-default`) – Either call `requireId` for path ids or `malformedIdIssues` for body/query id fields, passing their own `notFound` copy and the relevant Zod schema.
-- **`controller.ts`** – The generic controller factory that these surfaces build on; it is the layer that invokes the id checks before delegating to module-specific logic.
+- **`src/infrastructure/http/request.ts`** – Imports `readInput` and the `RequestSurface` type; `requireId` delegates ID extraction to `readInput`.
+- **`src/infrastructure/http/response.ts`** – Imports `rejectResponse`, `fieldError`, and `ResponseErrorItem`; all 404/422 responses and per-field error items are built through these.
+- **`src/infrastructure/http/validation-messages.ts`** – Imports `attributeOf` to turn a dotted field name into the i18n `attribute` token.
+- **`src/infrastructure/i18n/index.ts`** – Imports `t` for translating `validation.required` / `validation.invalid-format` messages.
+- **`src/infrastructure/object-guards.ts`** – Imports `isPlainObject` used by `carriedAt` to safely descend into nested input objects.
+- **`src/infrastructure/surfaces/create-{delete,item,restore,update}-controller.ts`** and **`src/infrastructure/http/controller.ts`** – Surface factories and the generic controller consume `requireId` and/or `malformedIdIssues` to enforce the ID rule at their respective entry points.
+- **`src/modules/account/controllers/*.ts`**, **`src/modules/addresses/controllers/*.ts`** – Concrete module controllers pass their own `notFound` copy and field name into `requireId`, or feed their request schema into `malformedIdIssues`.
 
 ## Notes
 
-- **Two different regexes, two different jobs.** `CONTRACT_ID_PATTERN` is deliberately permissive (the OpenAPI contract's shared scalar). `OBJECT_ID_PATTERN` is the strict 24-hex check this backend actually issues. A value can pass the contract and still be rejected here.
-- **Mongoose's 12-byte binary form is excluded.** `isValidObjectId` uses a regex, not `mongoose.Types.ObjectId.isValid`, so the 12-character binary form (which no route ever produces) is not accepted.
-- **Zod 4 internals are walked.** `collectIdPaths` reads `_zod.def`, which the Zod docs explicitly designate as the supported hook for library tooling. If Zod bumps its major version, the `SchemaNode` shape and the `TRANSPARENT` set may need updating.
-- **Only strings are judged malformed by `malformedIdIssues`.** Non-string values (missing, numbers, objects) are left to the schema's own validation; re-reporting them here would duplicate error items on the same field.
-- **404 for path ids is intentional.** The module's docblock states the design goal: a malformed path id is *indistinguishable* from an unknown one, so an attacker cannot probe which ids are syntactically valid.
-- **Schema walk is cached per schema instance** via `WeakMap`, so a controller's schema is traversed once at first use, not on every request.
+- `CONTRACT_ID_PATTERN` (`^[0-9A-Za-z_-]+$`) is deliberately looser than `OBJECT_ID_PATTERN` (`^[\da-f]{24}$/i`). A value can satisfy the contract's `Id` scalar and still be rejected by `isValidObjectId`; this file is the single place that draws that line.
+- `idPathsOf` caches the schema walk in a `WeakMap`, so a controller's schema is traversed once at first use, not per request. The cache is tied to the schema object's identity.
+- `malformedIdIssues` only judges values that are already strings. Missing or mistyped fields are left to the Zod schema's own error output to avoid emitting two items on the same field.
+- The Zod walk reads the internal `_zod.def` structure. The file cites Zod's library-author documentation as the sanctioned hook for this kind of inspection; the traversal is intentionally shallow and only reads keys it explicitly tests.
+- `isValidObjectId` rejects the 12-byte binary ObjectId form that Mongoose's `isValid` accepts, because no route in this API ever issues that form.

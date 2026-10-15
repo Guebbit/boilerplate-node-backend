@@ -1,7 +1,7 @@
 ---
 source: shared/contracts/openapi.root.yaml
-sha256: 62a1b95a83c7d02a745b4cf536b41bb225058473f0e27e21646f5521936e53e2
-generated_at: 2026-10-14T07:36:05.241139+00:00
+sha256: 9f4f6dd58faea83b7d40af15e0725b555f443dc5fecaa54c206eaf91bd0ca5c5
+generated_at: 2026-10-15T09:49:13.587143+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The root OpenAPI 3.1.0 document that defines the API's global metadata, shared security schemes, cross-module error-code catalogue, and application-level responses that apply to every operation. Module-specific `openapi.yaml` fragments (one per `src/modules/*` directory) are merged into this document by the bundler to produce the final published contract. It exists so that multi-project, multi-language codegen targets (client stubs, DTOs, SDKs) have a single, stable schema source.
+Root OpenAPI 3.1.0 document that defines the global contract surface shared across all module fragments: the API's identity, the universal error-code catalogue (`x-error-codes`), the app-level responses injected by cross-cutting middlewares (`x-app-level-responses`), common security schemes, and shared parameters. Module-level `openapi.yaml` files are merged into this root by the bundler to produce the single published spec.
 
 ## Key elements
 
-- **`info`** — Title ("Boilerplate API"), version `0.1.0` (alpha per SemVer), AGPL-3.0-or-later license, and a prose description that doubles as the contract for `Accept-Language` handling (applies to all operations, never declared per-operation).
-- **`x-error-codes`** — A custom extension listing every cross-module error code (`BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `OUTRANKED`, `NOT_FOUND`, `CONFLICT`, `PRECONDITION_FAILED`, `VALIDATION_ERROR`, `REQUEST_ERROR`, `INVALID_REQUEST`, `INTERNAL_ERROR`, `PAYLOAD_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`, multer `LIMIT_*` codes, `MISSING_FIELD_NAME`, `SERVICE_UNAVAILABLE`, `RATE_LIMITED`, `IDEMPOTENCY_*`, `REAUTH_REQUIRED`). The bundler collects these (plus each module's own `x-error-codes`) and publishes them as `examples` on `errors[].code` — intentionally not an `enum` so adding a code is non-breaking.
-- **`x-app-level-responses`** — Declares the five statuses (400, 413, 415, 429, 503) that middleware in front of every route can return. Each entry carries an `appliesTo` scope (`all` or `requestBody`). The bundler merges these into every matching operation rather than hand-copying them into fragments.
-- **`components.securitySchemes`** — Four schemes: `bearerAuth` (JWT or `ses_…` session id), `apiKeyAuth` (opaque `sk_…` key), `cookieAuth` (`__Host-session` cookie, used for SSE or cookie-mode auth), and `metricsBearer` (static Prometheus scrape token).
-- **`components.parameters`** — Reusable parameters: `PageParam`, `PageSizeParam`, `TextParam`, and `AntibotChallengeTokenHeader` (the `x-antibot-challenge-token` header, optional at contract level, required server-side once an antibot provider is configured).
-- **`servers`** — Local (`http://localhost:3000`) and production (`https://api.example.com`).
-- **`tags`** — A single `System` tag for public health-check endpoints.
+- **`info`** — API title, AGPL-3.0 license, version `0.1.0` (pre-1.0 development per SemVer §4), and a multi-paragraph description covering language negotiation (`Accept-Language` / `Content-Language` / `Vary`) and codegen intent.
+- **`x-error-codes`** — A flat map of ~25 error codes (e.g. `VALIDATION_ERROR`, `OUTRANKED`, `IDEMPOTENCY_KEY_MISMATCH`, `RATE_LIMITED`, multer `LIMIT_*` codes) that belong to no single module. Collected by the bundler into `errors[].code` examples (not an enum) so new codes are additive.
+- **`x-app-level-responses`** — Declares the four responses (400, 413, 415, 429, 503) that the global body-parser and rate-limiter middlewares can produce on *any* operation, tagged with `appliesTo: all | requestBody`. Merged into every matching operation by the bundler rather than hand-copied per module.
+- **`components.securitySchemes`** — Four schemes: `bearerAuth` (session JWT / opaque session id / API key), `apiKeyAuth` (opaque `sk_…` M2M credential), `cookieAuth` (`__Host-session` HttpOnly cookie), `metricsBearer` (static Prometheus scrape token).
+- **`components.parameters`** — Reusable query params (`PageParam`, `PageSizeParam`, `TextParam`) and `AntibotChallengeTokenHeader` (optional anti-bot token, required only when a provider is active).
+- **`servers`** — Two declared targets: `http://localhost:3000` (Local) and `https://api.example.com` (Production).
+- **`tags`** — A single `System` tag for public endpoints (ping, liveness).
 
 ## Relationships
 
-- **`scripts/contracts/openapi-bundle.ts`** — Consumes this file and every module `openapi.yaml` fragment. Merges `x-error-codes` from all fragments into one catalogue and injects `x-app-level-responses` into each operation per its `appliesTo` scope.
-- **`src/modules/*/openapi.yaml`** (account, addresses, antibot, api-keys, audit-logs, cart, delivery, feedback, …) — The per-module fragments that the bundler combines with this root document. Each may declare its own `x-error-codes`; the antibot module references the `AntibotChallengeTokenHeader` parameter defined here; the api-keys module references `apiKeyAuth`.
-- **`shared/contracts/spectral.modules.yaml`** — Spectral linting rules applied to this file and all module fragments during contract validation.
-- **`src/infrastructure/http/middlewares/idempotency.ts`** — Implements the runtime behavior behind the three `IDEMPOTENCY_*` codes declared here.
-- **`src/infrastructure/http/middlewares/upload.ts`** — Implements the runtime behavior behind the multer `LIMIT_*` and `MISSING_FIELD_NAME` codes declared here.
-- **`shared/contracts/asyncapi.root.yaml`** — Sibling root document for the async (message-broker) side of the API; shares the same module directory structure but a different protocol spec.
+- **`scripts/contracts/openapi-bundle.ts`** — Reads this file as the merge base, combines every module's `openapi.yaml` fragment into it, collects all `x-error-codes` into one catalogue, and injects `x-app-level-responses` into each operation. The output is the published spec.
+- **Module `openapi.yaml` files** (account, addresses, antibot, api-keys, audit-logs, cart, delivery, feedback, …) — Each declares its own paths, schemas, and module-specific `x-error-codes`; none of them redeclare the global schemes, parameters, or app-level responses defined here.
+- **`src/infrastructure/http/middlewares/idempotency.ts`** — Produces the `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_IN_FLIGHT`, and `IDEMPOTENCY_KEY_MISMATCH` codes catalogued in `x-error-codes`.
+- **`src/infrastructure/http/middlewares/upload.ts`** — Produces the multer `LIMIT_*` and `MISSING_FIELD_NAME` codes catalogued in `x-error-codes`.
+- **`shared/contracts/spectral.modules.yaml`** — Spectral lint rules applied to the merged spec (this file and all fragments) during CI.
+- **`shared/contracts/asyncapi.root.yaml`** — Sibling root for the async/event side of the contract; independent of this file but published alongside it.
 
 ## Notes
 
-- `Accept-Language` is deliberately **not** declared as a parameter on any operation or in `components.parameters`. The paragraph in `info.description` is its contract. Do not add it per-operation; clients set it once via an interceptor.
-- `errors[].code` is published as `examples`, not `enum`. Adding a new code to any `x-error-codes` block is additive and non-breaking (Zalando guideline #112).
-- `bearerFormat` is intentionally omitted on all bearer schemes — the credential shape varies by deployment session mode, and declaring `JWT` would be a false claim for cookie-mode or API-key credentials.
-- `OUTRANKED` (403) is a domain-specific code distinct from `FORBIDDEN`: the caller has the permission but the target person ranks at or above them. The four money-moving steps (manual payment, refund, return approval, return receipt) refuse the caller's *own* order with plain `FORBIDDEN`.
-- The `antibot` parameter is `required: false` at the contract level; the server enforces it once `NODE_ANTIBOT_PROVIDER` is set to a real provider.
+- `Accept-Language` is **deliberately not declared** as a parameter or header on any operation. Its contract is stated entirely in `info.description`. Do not add it to individual operations or to `components.parameters` — the bundler and codegen treat that paragraph as the single source of truth.
+- `x-error-codes` is published as `examples` on `errors[].code`, **not** as an `enum`. This is intentional (Zalando API guideline #112): adding a new code must never be a breaking response change.
+- `x-app-level-responses` exists to avoid hand-copying the same four/five responses into every module fragment. If you add a new global middleware that can reject any request, add its status here rather than in each module.
+- `bearerAuth` and `apiKeyAuth` are both `type: http, scheme: bearer` but are **distinct schemes** in the spec; operations opt into one or the other. Do not collapse them.
+- The `AntibotChallengeTokenHeader` parameter is `required: false` at the contract level; the server enforces it only when `NODE_ANTIBOT_PROVIDER` is set to a real provider. Codegen should emit it as optional.

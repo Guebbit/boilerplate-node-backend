@@ -1,7 +1,7 @@
 ---
 source: scripts/scaffold/templates-contract.ts
-sha256: 320323e946e242cfdc5e6b3bf94e419aa0286f4a09d26c193fc35a6eabb542ea
-generated_at: 2026-10-14T07:31:37.877371+00:00
+sha256: 9251888ca4e90b89eb9522485ecfe44c98fc65ee81a2736d25dba9adc0af2553
+generated_at: 2026-10-15T09:47:50.999333+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generates the complete `openapi.yaml` contract fragment for a scaffolded CRUD module. Given a set of entity names, it emits a self-contained OpenAPI 3.1 document (paths, responses, and component schemas) that references shared definitions (envelope fields, pagination, standard errors) from a root OpenAPI file. The output is designed to be assembled by a root bundler without further modification.
+Generates the per-module `openapi.yaml` fragment for a scaffolded entity module. It produces a self-contained OpenAPI 3.1.0 document (paths + local component schemas) that a root assembler can merge into the top-level bundle without further modification. The file exists so that each generated module ships a valid, spec-complete contract out of the box.
 
 ## Key elements
 
-- **`openapiFragment(names: ModuleNames): string`** — the sole export. Returns the full YAML text for a module's `openapi.yaml`, containing five paths (list, create, replace, patch, delete) and the component schemas those paths reference.
-- **`ROOT`** — relative path (`../../../shared/contracts/openapi.root.yaml`) to the shared OpenAPI components that all `$ref`s point into.
-- **`errorResponse(status, component)`** — builds a single indented `$ref` line for a standard error response.
-- **`KEYED_ERRORS`** — pre-joined 401/403/422/500 response block for routes with a request body or query params.
-- **`KEYED_ERRORS_WITH_NOT_FOUND`** — same as above plus a 404, for `{id}`-parameterized routes.
-- **`PATH_ONLY_ERRORS`** — 401/403/404/500 (no 422) for the `DELETE` route, which has no body or query to validate.
+- **`openapiFragment(names: ModuleNames): string`** — The sole export. Takes the module's naming spellings and returns the full YAML text for the module's `openapi.yaml`.
+- **`ROOT`** (const) — Relative path (`../../../shared/contracts/openapi.root.yaml`) used in every `$ref` that points to shared components (parameters, responses, headers, base schemas).
+- **`errorResponse(status, component)`** (const helper) — Produces a single indented `$ref` line for an error response entry.
+- **`KEYED_ERRORS`** — 401 / 403 / 422 / 500 response block, used by list, create, replace, and update.
+- **`KEYED_ERRORS_WITH_NOT_FOUND`** — Same plus 404; used by replace and update (routes with an `{id}` parameter).
+- **`PATH_ONLY_ERRORS`** — 401 / 403 / 404 / 500 (no 422, no body to validate); used by delete.
+- **Generated paths** — `GET {basePath}` (list), `POST {basePath}` (create), `PUT {basePath}/{id}` (replace), `PATCH {basePath}/{id}` (update), `DELETE {basePath}/{id}` (delete).
+- **Generated component schemas** — `{Entity}Envelope`, `{Plural}ResponseEnvelope`, `{Plural}Response`, `{Entity}`, `Create{Entity}Request`, `Replace{Entity}Request`, `Update{Entity}Request`.
 
 ## Relationships
 
-- **`scripts/scaffold/names.ts`** — imports the `ModuleNames` type; all template substitutions (`names.kebab`, `names.entity`, `names.basePath`, etc.) come from that type.
-- **`scripts/scaffold/plan.ts`** — consumes `openapiFragment` as the contract template when producing the scaffold plan for a new module.
+- **`scripts/scaffold/names.ts`** — Provides the `ModuleNames` type (imported via `import type`). All name interpolations (`names.kebab`, `names.entity`, `names.plural`, `names.basePath`, etc.) come from that module.
+- **`scripts/scaffold/plan.ts`** — Consumes the string returned by `openapiFragment` and writes it to disk as the module's `openapi.yaml` during the scaffold run.
 
 ## Notes
 
-- The template literal's own indentation *is* the YAML indentation. If you reflow the source, the emitted YAML will break.
-- `PATCH` accepts both `application/json` and `application/merge-patch+json` with the same schema (RFC 7396 semantics); `PUT` uses RFC 9110 full-replacement semantics where `name` is genuinely required.
-- The `notes` field uses `type: [string, 'null']` in both `Replace*Request` and `Update*Request`, so an explicit `null` clears it while omission leaves it unchanged.
-- All `components.schemas` use `additionalProperties: false`; the shared root file is the only place where envelope fields (`success`, `status`, `message`) and `PaginationMeta` are defined.
+- The PATCH route declares **two** `requestBody` content types: `application/json` and `application/merge-patch+json`, both pointing to the same `Update{Entity}Request` schema.
+- PUT semantics are documented as RFC 9110 §9.3.4 (omitted optional field is cleared); PATCH semantics as RFC 7396 (omitted = unchanged, `null` clears `notes`). The request schemas encode this: `Replace*Request` requires `name` and allows `null` for `notes`; `Update*Request` requires nothing and also allows `null` for `notes`.
+- All `$ref`s to shared components use a **relative** path (`ROOT`), not an absolute or workspace URL. The fragment is expected to be placed two levels below the `shared/contracts/` directory.
+- The `notes` field in `Update{Entity}Request` and `Replace{Entity}Request` uses the YAML type union `[string, 'null']`; the create request does not allow `null` (field is simply omitted or a string).
+- Every schema sets `additionalProperties: false`, making the generated contract strict.

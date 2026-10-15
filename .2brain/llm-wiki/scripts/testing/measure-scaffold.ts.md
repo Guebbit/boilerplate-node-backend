@@ -1,7 +1,7 @@
 ---
 source: scripts/testing/measure-scaffold.ts
-sha256: 5e934dda0708c1fabd2cc01fd0a14d11c030b1a1d896a75d6bbfbcf54582b9d0
-generated_at: 2026-10-14T14:33:46.168284+00:00
+sha256: 40cc145cce4887160e07ba5af1c139af8369c1dbb9a6f2b50dc90845678d539e
+generated_at: 2026-10-15T09:48:33.965659+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Report-only integration check that verifies a freshly scaffolded module passes the repo's own quality gates (type-check, lint, prettier, unit tests, cross-cutting tests, docs build, idempotency). It runs entirely in a scratch copy of the repo so the real checkout is never mutated. Because it takes minutes, it is excluded from the commit gate; run it manually after touching `scripts/scaffold/` or a shared file the scaffolder edits.
+Report-only integration check (invoked via `npm run measure:scaffold`) that confirms a freshly scaffolded module passes the repo's full quality gate. It copies the checkout to a scratch directory, runs the scaffolder on two probe modules, then executes the same commands a developer would run next (type-check, lint, prettier, unit tests, docs build, cross-cutting rules) inside that copy. Because it takes minutes, it is excluded from the commit gate; run it after touching `scripts/scaffold/` or any shared file the scaffolder edits.
 
 ## Key elements
 
-- **`PROBE` / `QUIET`** – two module names scaffolded in the copy; `PROBE` (`measure-probes`) exercises hyphenated-plural casing, `QUIET` (`quiet-things`) exercises the `--no-audit`, `--group`, and `--entity` switches.
-- **`CHECKS: readonly Check[]`** – ordered list of every command to run in the scratch tree, from the two scaffold invocations through ts-check, eslint, prettier, jest, docs-graph, cross-cutting tests, docs build, and finally an idempotency refusal (`--no-regenerate` expecting a non-zero exit).
-- **`Check` interface** – `label`, `command`, `args`, and optional `expectFailure` (true when a non-zero exit is the *passing* answer).
-- **`run(check)`** – delegates to `runIn` from `scratch-copy.ts`; compares exit status against the expected value and logs a one-line result.
-- **`assembleScratchCopy(REPO_ROOT, SCRATCH)`** – copies the entire repo into `SCRATCH` before any check runs.
-- **Exit handling** – sets `process.exitCode` (not `process.exit()`) so pending stdout flushes; CI treats this as report-only.
+- **`SCRATCH`** – Destination path under `os.tmpdir()` where the full repo copy lives; must be outside the source tree because `fs.cpSync` refuses a destination nested inside its own source.
+- **`PROBE` / `QUIET`** – Two module names (`measure-probes`, `quiet-things`) scaffolded into the copy. `PROBE` exercises hyphenated-plural casing; `QUIET` is scaffolded with `--no-audit --group shop --entity QuietThing` to cover the alternate template branch.
+- **`FOLDERS`** – Both `src/modules/<name>` paths, reused by the lint, prettier, and jest checks.
+- **`Check`** (interface) – Describes one command run: `label`, `command`, `args`, and optional `expectFailure` (a non-zero exit is the *passing* answer).
+- **`CHECKS`** – Ordered list of 10 checks: two scaffold invocations, `ts-check`, ESLint, Prettier, Jest on the new modules, `check:docs-graph`, `test:cross-cutting`, `docs:build`, and a final idempotency refusal (`--no-regenerate` on an existing module, `expectFailure: true`).
+- **`run(check)`** – Calls `runIn(SCRATCH, …)` and compares the exit code against the expected outcome.
+- **`assembleScratchCopy(REPO_ROOT, SCRATCH)`** – Creates the scratch copy (called once before the check loop).
+- **Summary / exit** – Prints a `PASS`/`FAIL` line per check, a verdict sentence, and sets `process.exitCode` (0 or 1).
 
 ## Relationships
 
-- **`scripts/testing/scratch-copy.ts`** – provides `assembleScratchCopy` (copies the repo into a temp directory) and `runIn` (executes a command with `cwd` set to the scratch root). This file is the sole consumer of both in this script.
+- **`scripts/testing/scratch-copy.ts`** – Supplies `assembleScratchCopy` (creates the full-repo copy) and `runIn` (executes a command inside the scratch directory). All checks in this file run through those two helpers; nothing executes in the live checkout.
+- **`scripts/modules-on-disk.ts`** – Supplies `REPO_ROOT`, the absolute path to the repository root that gets copied.
 
 ## Notes
 
-- `SCRATCH` lives under `os.tmpdir()` specifically because `fs.cpSync` refuses a destination inside its own source tree.
-- The last check (`a second scaffold is refused`) uses `expectFailure: true`; a *non-zero* exit is the correct answer there.
-- Unit tests under `tests/unit/scripts/scaffold/` cover the pure-logic half of the scaffolder; this script covers what only a whole checkout can verify (generated code compiles, lints, its tests pass, no cross-cutting violations, docs build).
-- The lint check targets both module folders *plus* `src/modules.ts` and `tests/cross-cutting` to catch registration and cross-cutting rule regressions.
-- See `docs/tools/module-scaffolder.md` for the broader scaffolder contract.
+- The script uses `process.exitCode` rather than `process.exit()` so that buffered stdout/stderr flushes before the process terminates.
+- The last check (`expectFailure: true`) asserts that re-scaffolding the same module with `--no-regenerate` exits non-zero; the `run` helper inverts the comparison accordingly.
+- Unit tests under `tests/unit/scripts/scaffold/` cover the pure logic; this script covers only what requires a whole working tree (compilation, lint, docs build, cross-cutting rules).
+- Intended as a report for CI or manual use after scaffold changes—not a merge gate.

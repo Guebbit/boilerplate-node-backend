@@ -1,7 +1,7 @@
 ---
 source: src/kernel/authentication.ts
-sha256: 0e0102f4f47a9e8b9ec34102b790a523f5b77c79fe8bbdb1202809f70e588af8
-generated_at: 2026-10-14T14:35:02.396473+00:00
+sha256: 513b107044f646b4d91aac2ff02d7be404de01191d09d4969b3632fd343891c6
+generated_at: 2026-10-15T09:51:17.774535+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Kernel-level port that declares the authentication contract: how a bearer token or session cookie is turned into a resolved caller (or an explicit miss). The kernel owns the dispatch logic (prefix-based) and the resolution type; concrete modules (`account`, `api-keys`) register their implementations at boot. This separation lets the kernel guard treat "no module registered" and "bad token" uniformly without importing any module code.
+Declares the kernel's authentication port — the contract that maps a credential (bearer token, session cookie, or machine key) to the caller it names — and provides the thin dispatch layer the guard middleware uses to answer "who is making this request?" It exists so the kernel depends on an abstraction while `account` and `api-keys` each supply a concrete implementation at boot.
 
 ## Key elements
 
-- **`Resolution<T>`** — discriminated union: `{ ok: T }` or `{ miss: ResolveMissReason }`. Every resolver answer is one of these two shapes.
-- **`ResolveMissReason`** — `'invalid_signature' | 'malformed' | 'revoked' | 'expired'`. Distinguishes attack vectors from stale-credential misses for audit purposes.
-- **`AuthResolver`** (interface) — `fromBearer`, `fromCookie`, `cookieAuthenticates`. Implemented by `account`.
-- **`CredentialResolver`** (interface) — `fromBearerToken`. Implemented by `api-keys`.
-- **`ResolvedCredential`** — `{ caller: Caller; credentialId: string }`. The machine-to-machine resolution shape.
-- **`SESSION_TOKEN_PREFIX`** (`'ses_'`) / **`API_KEY_TOKEN_PREFIX`** (`'sk_'`) — dispatch constants. A JWT always starts `eyJ`; these prefixes can never collide with it, so the guard can branch on the first characters alone.
-- **`registerAuthResolver`** / **`registerCredentialResolver`** — one-shot installers called from each module's `onRegistered`.
-- **`resolveBearer`** / **`resolveCookie`** — thin async wrappers that delegate to the registered `AuthResolver`. Throws via `requireResolver` if no module registered one.
-- **`cookieAuthenticatesRequests`** — per-call query; returns `false` when no resolver exists.
-- **`resolveCredential`** — delegates to the registered `CredentialResolver`, or returns `{ miss: 'malformed' }` if `api-keys` is absent (deliberately *not* a throw).
-- **`requireResolver`** (module-private) — throws a plain `Error` when `resolver` is `undefined`. A plain `Error` is never an infra failure, so the guard still proceeds anonymous.
+- **`AuthResolver`** (interface) — the port `account` implements. Exposes `fromBearer`, `fromCookie`, `watchCookie`, `cookieAuthenticates`, and `clearDeadCookie`.
+- **`CredentialResolver`** (interface) — the port `api-keys` implements. Single method `fromBearerToken` that resolves an `sk_…` token to a `ResolvedCredential`.
+- **`StreamWatch`** (interface) — what an SSE stream holds: the current `AuthContext` plus a `recheck()` that survives credential rotation within a session family.
+- **`ResolvedCredential`** (interface) — `{ caller, credentialId }` returned for the machine-to-machine path.
+- **`SESSION_TOKEN_PREFIX`** (`'ses_'`) / **`API_KEY_TOKEN_PREFIX`** (`'sk_'`) — string prefixes used for prefix-based dispatch without attempting a JWT parse.
+- **`resolveBearer` / `resolveCookie` / `watchCookie`** — convenience wrappers that delegate to the registered `AuthResolver`; throw if none is registered.
+- **`resolveCredential`** — delegates to the registered `CredentialResolver`; returns `{ miss: 'malformed' }` instead of throwing when no `api-keys` module is present.
+- **`registerAuthResolver` / `registerCredentialResolver`** — one-time installers called from each module's `onRegistered`.
+- **`cookieAuthenticatesRequests` / `clearDeadSessionCookie`** — safe no-op wrappers when no resolver is registered.
+- **`Resolution` / `ResolveMissReason`** — re-exported from `@types`; the three-valued outcome (ok / miss / reject).
 
 ## Relationships
 
-- **`src/types/auth-context.ts`** — supplies `AuthContext` and `Caller`, the types `Resolution` wraps and `ResolvedCredential` embeds.
-- **`src/kernel/middlewares/authorizations.ts`** — the guard that calls `resolveBearer` / `resolveCookie` / `resolveCredential` and maps both `miss` and `ok: undefined` to a 401.
-- **`src/modules/account/module.ts`** — calls `registerAuthResolver` during `onRegistered`, installing the account resolver.
-- **`src/modules/account/session/resolver.ts`** — the concrete `AuthResolver` implementation that delegates to strategies.
-- **`src/modules/account/session/strategy.ts`** — strategy interface that `jwt-strategy` and `cookie-strategy` implement.
-- **`src/modules/account/session/jwt-strategy.ts`** / **`cookie-strategy.ts`** — the two strategies the resolver dispatches between.
-- **`src/modules/account/session/jwt.ts`** — JWT sign/verify used by the JWT strategy.
-- **`src/modules/account/session/session-id.ts`** — mints and validates `ses_…` opaque ids (the `cookie` path).
-- **`src/modules/account/tests/unit/session-id.test.ts`** — unit tests for session-id behaviour that feeds `resolveCookie`.
+- **`src/kernel/middlewares/authorizations.ts`** — the 401/403 guard calls `resolveBearer`, `resolveCookie`, `resolveCredential`, and `cookieAuthenticatesRequests` to decide authentication and authorisation on every request.
+- **`src/modules/account/module.ts`** — calls `registerAuthResolver` during `onRegistered`, supplying the `AuthResolver` implementation built from the session strategies.
+- **`src/modules/account/session/jwt-strategy.ts` / `cookie-strategy.ts` / `resolver.ts`** — the concrete strategies that back `fromBearer` and `fromCookie` under the `AuthResolver` contract.
+- **`src/modules/account/session/family-liveness.ts`** — powers the `StreamWatch.recheck` logic so an SSE stream outlives individual credential rotations.
+- **`src/modules/account/session/jwt.ts` / `session-id.ts`** — provide the token-format helpers (`ses_` prefix, JWT claims) that the kernel's prefix dispatch relies on.
 - **`src/modules/api-keys/module.ts`** — calls `registerCredentialResolver` during `onRegistered`.
-- **`src/modules/api-keys/services/resolver.ts`** — the concrete `CredentialResolver` implementation.
-- **`src/modules/api-keys/credentials.ts`** — credential validation logic used by that resolver.
-- **`src/modules/api-keys/tests/integration/api-keys.test.ts`** / **`activity.test.ts`** — integration tests exercising the `sk_…` path end-to-end.
+- **`src/modules/api-keys/credentials.ts` / `services/resolver.ts`** — implement `CredentialResolver.fromBearerToken` for the `sk_…` machine path.
 
 ## Notes
 
-- **Three outcomes, two visible to callers.** `miss` (bad token) and `ok: undefined` (user deleted) both surface as 401 to the client; only the miss *reason* is logged/audited. A rejection (thrown) signals infra outage (Mongo/Redis down) and is the only path that yields a 5xx.
-- **Asymmetric unregistered-resolver handling.** `resolveBearer`/`resolveCookie` throw when `account` is absent (a hard requirement for any build). `resolveCredential` returns `{ miss: 'malformed' }` when `api-keys` is absent (a soft, deletable module). Do not "fix" this asymmetry — it is intentional.
-- **Prefix constants live here, not in the owning module.** The dispatch decision (which resolver to call) is a kernel concern; the modules only *implement* the resolution.
-- **Module-level `let` bindings.** Resolvers are mutable singletons with no deregistration path. Registration is idempotent only in the sense that a second call overwrites the first; the codebase assumes exactly one call per resolver per process.
+- **Three distinct failure modes, two of which look identical to the caller.** *Miss* (`{ miss: reason }`) and *Nobody* (`{ ok: undefined }`) both yield 401; only the *reason* string differs in audit logs. *Outage* (rejected promise) is the only case that is **not** a 401 — it signals infrastructure failure (Mongo/Redis down) and must surface differently.
+- **Unregistered resolvers are valid states, not bugs.** `account` is load-bearing (its absence throws on the first authed request), but `api-keys` is optional. `resolveCredential` intentionally returns a `malformed` miss rather than throwing when absent, so the guard needs no special-case branch.
+- **Prefix dispatch, not parse.** The kernel distinguishes `ses_…`, `sk_…`, and JWT (`eyJ…`) credentials purely by string prefix before invoking any resolver. This is why the prefix constants live here rather than in the modules that consume them.
+- **`cookieAuthenticates` is dynamic.** Its return value tracks the deployment's session mode at call time, not at registration time — do not cache it.
+- **`clearDeadCookie` is fire-and-forget.** It sets response headers on a refused session cookie so the browser stops sending it; it does not throw and does not return a value.

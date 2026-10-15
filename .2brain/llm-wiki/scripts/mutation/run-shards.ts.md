@@ -1,7 +1,7 @@
 ---
 source: scripts/mutation/run-shards.ts
-sha256: edca3957271d47fb4774c032340a860444346e9079b5cd5597d6b5a43bd0974a
-generated_at: 2026-10-01T12:33:42.977303+00:00
+sha256: fef11c465667726567ca665bbdffe4f6da117826c146514ab58228eee9e69ad0
+generated_at: 2026-10-15T09:43:32.814400+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CLI entry point (`npm run mutation:full`) that runs the entire mutation scope in bin-packed shards, one at a time, banking each shard's report to disk after it completes. It exists because Stryker writes no report when killed mid-run; an unsharded multi-hour pass would lose everything on interruption, whereas per-shard reports survive and can be resumed across sessions.
+CLI entry point for `npm run mutation:full`. Splits the full mutation scope into bin-packed shards (by line count) and runs them sequentially, copying each completed shard's Stryker report to a persistent directory before starting the next. Exists because Stryker writes no report when killed mid-run; sharding guarantees partial progress is preserved on disk. When every shard has a report, the scope is "closed" and all shard reports are merged into the per-file baseline ratchet.
 
 ## Key elements
 
-- **`main`** — Orchestrates the sweep: prints the plan, runs each outstanding shard sequentially, checks whether all shards now have a report, and either merges into the baseline or reports the scope as still open.
-- **`runShard(name, mutate, index)`** — Runs Stryker for one shard via `runStryker`, verifies a report file appeared (mtime ≥ start), then copies it into the shard's directory under `reportRoot`. Returns a boolean for "banked or not."
-- **`mergeAll()`** — Spawns `check-baseline.ts --merge --merge-dir=…` to fold all shard reports into the per-file ratchet. Only called when every shard has a report.
-- **`selectShards`** (from `local-policy.ts`) — Filters the shard list by `--only`, `--limit`, `--force`, and already-completed state, returning `{ run, done }`.
-- **`packIntoShards`** (from `sharding.ts`) — Bin-packs the full scope (from `scopeWithLines()`) into shards of ~`shardLines` lines each.
-- **`listArgument` / `numberArgument`** — Minimal `--flag=value` CLI parsers used at module scope to derive `shardLines`, `--limit`, `--only`, `--force`.
-- **`printPlan`** — `--list` mode; prints a table of shards with line count, file count, and recorded/outstanding status.
-- **`elapsed(since)`** — Formats a duration as `XmYYs` for log lines.
+- **`main()`** — Top-level orchestrator. Handles `--list` (print plan and exit), otherwise iterates `runShard` over selected shards, checks coverage, and either exits (scope not closed) or calls `mergeAll`. Returns an exit code that becomes `process.exit`.
+- **`runShard(name, mutate, index)`** — Spawns Stryker via `runStryker` with a narrowed `--mutate` list and a per-shard `--incrementalFile`. After Stryker finishes, verifies a report appeared (via `stat` mtime > start time) and copies it into `reportRoot/<name>/`.
+- **`mergeAll()`** — Spawns `npx tsx scripts/mutation/check-baseline.ts --merge --merge-dir=<reportRoot>`. Uses `--merge` (not `--update`) so files absent from the combined report are not dropped from the baseline.
+- **`selectShards(shards, { completed, only, limit, force })`** — Imported from `local-policy.ts`; decides which shards this invocation will actually run.
+- **`packIntoShards(scopeWithLines(), shardLines)`** — Imported from `sharding.ts`; produces the bin-packed shard list at module load.
+- **`printPlan()`** — `--list` mode: prints shard names, line counts, file counts, and recorded/outstanding state.
+- **`listArgument()` / `numberArgument()`** — Small CLI-flag parsers built on `flagValue` from `cli.ts`.
+- **`reportRoot`** — `tmp/reports/mutation-shards/<shardLines>/`; the per-size directory where shard reports are banked. Gitignored via `tmp/`.
 
 ## Relationships
 
-- **`baseline.ts`** — Imports `BASELINE_PATH` (where the final ratchet lives) and `REPORT_PATH` (where Stryker writes its report before it is copied). The merge step ultimately writes through to `BASELINE_PATH`.
-- **`local-policy.ts`** — Imports `selectShards` to decide which shards this invocation will run versus skip.
-- **`mutate-scope.ts`** — Imports `scopeWithLines` to obtain the full mutation scope with per-file line counts, the input to bin-packing.
-- **`sharding.ts`** — Imports `TARGET_LINES_PER_SHARD` (default shard size) and `packIntoShards` (the packing algorithm).
-- **`stryker-run.ts`** — Imports `REPO_ROOT` (repo root for path construction) and `runStryker` (the wrapper that actually spawns Stryker for each shard).
+- **`scripts/mutation/mutate-scope.ts`** — Supplies `scopeWithLines()`, the full scope (files + line counts) that gets sharded.
+- **`scripts/mutation/sharding.ts`** — Supplies `packIntoShards` (bin-packing algorithm) and `TARGET_LINES_PER_SHARD` (default shard size).
+- **`scripts/mutation/local-policy.ts`** — Supplies `selectShards`, which applies `--only`, `--limit`, `--force`, and already-completed filtering.
+- **`scripts/mutation/stryker-run.ts`** — Supplies `runStryker`, which actually spawns the Stryker process with the given args and label.
+- **`scripts/mutation/baseline.ts`** — Supplies `BASELINE_PATH` (where the merged ratchet lives) and `REPORT_PATH` (where Stryker's output lands before copying).
+- **`scripts/modules-on-disk.ts`** — Supplies `REPO_ROOT` used for all path construction.
+- **`scripts/cli.ts`** — Supplies `flagValue`, the shared CLI flag-value reader.
 
 ## Notes
 
-- **Shard reports are keyed by size.** `reportRoot` is `tmp/reports/mutation-shards/{shardLines}/`. Changing `--shard-lines` changes both the shard partition and the directory, so reports from one size never mix with another.
-- **Success ≠ exit 0.** `runStryker` can exit non-zero when `thresholds.break` fires on the shard's average, yet the report is still valid. The script treats "a report file appeared" as the success signal.
-- **Baseline is written only on full closure.** If even one shard lacks a report, the baseline is left untouched and the script exits with a hint to re-run. `--merge` (never `--update`) is used because `--update` would drop files the current report doesn't mention.
-- **Per-shard incremental cache.** Each shard gets its own `--incrementalFile` under its own subdirectory; a shared cache would be clobbered by whichever shard ran last.
-- **State is purely on-disk.** There is no lockfile or DB; "completed" means the report file exists under `reportRoot`. Resuming is just running the same command again.
-- **`--no-merge`** lets you close the scope (all reports present) without touching the baseline — useful for dry validation.
+- **Shard-size keying:** The report directory is `…/<shardLines>/`. Changing `--shard-lines` changes every shard's name and contents, so a sweep at one size will not accidentally fold a different size's reports into the merge.
+- **Success ≠ exit 0:** A shard is considered banked only if a report file appeared (checked via `stat` mtime). Stryker may exit non-zero due to `thresholds.break` on the shard's average, but the per-file ratchet at merge time is the real verdict.
+- **Baseline written only on full coverage:** If even one shard lacks a report, the baseline file is left untouched and the script exits 0 (if all *selected* shards ran successfully) or 1 (if one failed). No partial baseline is ever written.
+- **Per-shard incremental cache:** Each shard gets its own `incremental.json` under its report subdirectory; a shared cache would cause each shard to discard the previous shard's mutation results.
+- **`--no-merge`** skips the final merge step entirely, useful for collecting data without touching the recorded baseline.

@@ -1,7 +1,7 @@
 ---
 source: scripts/scaffold/demo-remove-modules.ts
-sha256: 3b83400e6cff83398abd1f29d918053f5d9dd508eb53b0288ef0373492e5b729
-generated_at: 2026-10-14T14:31:11.584253+00:00
+sha256: 3e5c6bfa9b68238defd86ffc48fdfc58addc21cf60c6ba1fd77d7e5d3a1b60c4
+generated_at: 2026-10-15T09:45:42.924115+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-General-purpose module removal from a source tree. Given a list of module folder names, it deletes the folders, strips their registry entries, shared authorization references, owned ops scripts, test doubles, scenario entries, and residue tests. It is module-agnostic (doesn't know *which* modules), so both the shop-removal flow and the locale-strip flow share the exact same sequence, preventing drift between the two.
+Single orchestration point for removing a set of modules from the repo tree. It coordinates the cross-cutting removal steps (folders, registry, authorization, alert rules, validation labels, test doubles, residue tests) so that callers (`demo-remove.ts`, `measure-demo-strip.ts`) share one implementation and cannot drift apart.
 
 ## Key elements
 
-- **`removeModules(repoRoot, names): RemovalNote[]`** — the sole export. Orchestrates eight sub-operations in a fixed order and returns one `RemovalNote` per edit, in execution order.
+- **`removeModules(repoRoot, names): RemovalNote[]`** — the sole export. Reads permission keys, metrics, and request fields from the target modules *before* deleting their folders, then performs the deletion and all downstream stripping in a fixed order. Returns one `RemovalNote` per edit, in execution order.
 
 ## Relationships
 
-- **`demo-remove-authorization.ts`** — provides `readRemovedAuthorization`, `stripRoleGrants`, `stripConformanceCases`. The authorization read runs *first* (before folders vanish); the two strip calls run near the end, consuming the authorization data captured earlier.
-- **`demo-remove-registry.ts`** — provides `removeModuleFolders`, `removeShopOwnedOpsScripts`, `stripModuleRegistry`, and the `RemovalNote` type used as the return element.
-- **`demo-remove-scenarios.ts`** — provides `stripScenarioModuleEntries` and `stripModuleDoubles` (test-double cleanup).
-- **`demo-remove-tests.ts`** — provides `removeResidueTests`, called last.
-- **`demo-remove.ts`** — caller for `group: shop` modules; performs additional shop-specific work (catalogue, scenarios) after `removeModules` returns.
-- **`measure-demo-strip.ts`** — caller for `locales` modules in its second recipe.
+- **`demo-remove-registry.ts`** — provides `removeModuleFolders`, `stripModuleRegistry`, `removeShopOwnedOpsScripts`, and the `RemovalNote` type used as the return element.
+- **`demo-remove-authorization.ts`** — provides `readRemovedAuthorization` (pre-delete read) plus `stripRoleGrants` and `stripConformanceCases` (post-delete edits).
+- **`demo-remove-alert-rules.ts`** — provides `readRemovedMetrics` (pre-delete read) and `stripAlertRules` (post-delete edit).
+- **`demo-remove-validation-labels.ts`** — provides `readRemovedFields` (pre-delete read) and `stripValidationLabels` (post-delete edit).
+- **`demo-remove-scenarios.ts`** — provides `stripModuleDoubles` and `stripScenarioModuleEntries`.
+- **`demo-remove-tests.ts`** — provides `removeResidueTests`, the final cleanup step.
+- **`demo-remove.ts`** — upstream caller; invokes `removeModules` with all `group: shop` modules, then performs shop-specific work (catalogue, scenarios) itself.
+- **`measure-demo-strip.ts`** — upstream caller; invokes `removeModules` with `locales` for its second recipe.
 
 ## Notes
 
-- **Ordering invariant:** `readRemovedAuthorization` must execute before `removeModuleFolders`, because permission keys are read from fragments inside the module folders being deleted. Reordering the array would silently break authorization stripping.
-- The `names` parameter is typed `readonly string[]`; callers pass immutable arrays.
-- The function is deliberately named "modules" (not "shop") so the locale-strip caller reads naturally; shop-specific concerns are handled *outside* this file by `demo-remove.ts`.
+- **Ordering is intentional and not refactoring-safe.** The three `readRemoved*` calls must complete before `removeModuleFolders` runs, because they read from the module folders themselves. Moving the folder deletion above them breaks the logic silently.
+- The function is deliberately generic in *which* modules it removes; it carries no shop-specific logic. Any shop-only work stays in `demo-remove.ts`.
+- All steps return `RemovalNote[]` (or a single `RemovalNote`), and the results are concatenated into one flat array — callers can iterate uniformly without knowing which sub-step produced a given note.

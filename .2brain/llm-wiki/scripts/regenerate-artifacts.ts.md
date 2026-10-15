@@ -1,7 +1,7 @@
 ---
 source: scripts/regenerate-artifacts.ts
-sha256: 46e0bf244dc7a95d9849e59c06e790137e07299c298d04365031e78901166a1b
-generated_at: 2026-10-01T12:37:52.919072+00:00
+sha256: 1b9bcfa68b0e218e914b862f63420be045f0b806e57e10fa7ab704c98fa3ed2b
+generated_at: 2026-10-15T09:44:47.265371+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Sequentially regenerates every derived artifact in the repo (API client, typed schemas, AsyncAPI bundles, docs pages, Docker ignore) in a strict dependency order, then optionally hands backend-owned files to a paired frontend checkout. Exists as a single ordered script because the step order is non-obvious and must live in one place; also invoked automatically by `.husky/pre-commit` with `--no-sync` so `npm run complete` only ever *verifies*.
+Entry point for `npm run regenerate`. Rebuilds every generated artifact (typed API client, zod schemas, AsyncAPI bundles, OpenAPI bundle, docs pages, dockerignore) in the one order that satisfies inter-step imports, then optionally hands the rebuilt specs to a paired frontend repo. Exists as a single script rather than a shell `&&` chain because the dependency ordering is non-obvious and needs a home.
 
 ## Key elements
 
-- **`REPO_ROOT`** – Resolves the repo root (parent of `scripts/`) so every child `npm run` executes from a fixed cwd regardless of caller location.
-- **`skipSync`** – Boolean from `--no-sync` in `process.argv`; suppresses the final paired-frontend handoff.
-- **`Step` interface** – `{ script: string; because: string }`; pairs an npm script name with a one-line justification shown at runtime.
-- **`STEPS` (readonly array, 12 entries)** – The ordered chain: `authorization:bundle` → `gen:permission-actions` → `contracts:bundle` → `gen:api` → `gen:asyncapi` → five `docs:*` steps → `docker:dockerignore`. Order encodes real import/boot dependencies (e.g. `api/` must exist before the app boots to read docs).
-- **`run(script)`** – Wraps `execFileSync('npm', ['run', script], { cwd: REPO_ROOT, stdio: 'inherit' })`; child output streams directly to the terminal as the progress report.
-- **Main loop** – Iterates `STEPS`, prints index/total + the `because` line, then calls `run`.
-- **Paired-frontend tail** – After all STEPS, checks `existsSync(resolveFrontendPath())`; if present and not `skipSync`, runs `sync:frontend`. Absent checkout is a skip, not an error (solo-clone safety).
+- **`STEPS`** — `readonly Step[]` defining the ordered chain of 11 npm scripts (`authorization:bundle` → `gen:permission-actions` → `contracts:bundle` → `gen:api` → `gen:asyncapi` → five `docs:*` steps → `docker:dockerignore`). Each entry carries a `because` string explaining the ordering constraint.
+- **`Step`** — interface with `script` (npm script name) and `because` (one-line rationale shown during execution).
+- **`run(script)`** — wrapper around `execFileSync('npm', ['run', script])` with `stdio: 'inherit'` and `cwd: REPO_ROOT`.
+- **Main loop** — iterates `STEPS`, prints `[regenerate] i/N  script` + `because`, then calls `run`.
+- **Final `sync:frontend` block** — conditional on `--no-sync` flag, then on `existsSync(resolveFrontendPath())`. Skips gracefully (non-fatal) when the sibling repo is absent.
+- **`skipSync`** — boolean set from `process.argv.includes('--no-sync')`; used by `.husky/pre-commit`.
 
 ## Relationships
 
-- **`scripts/pairing/paired-frontend-path.ts`** – Imports `resolveFrontendPath()` (returns the resolved sibling-frontend directory) and `DEFAULT_FRONTEND_PATH` (used in the "skipped" diagnostic message). This is the sole cross-file dependency; the script does not otherwise import from the codebase.
+- **`scripts/modules-on-disk.ts`** — imports `REPO_ROOT` to set the working directory for every `execFileSync` call.
+- **`scripts/pairing/paired-frontend-path.ts`** — imports `resolveFrontendPath()` and `DEFAULT_FRONTEND_PATH` to locate the paired frontend checkout and to print a helpful hint when it is missing.
 
 ## Notes
 
-- **Order is load-bearing.** `gen:permission-actions` must precede `contracts:bundle` because the bundler boots the kernel, which imports the generated permission-actions file. Reordering or removing steps will break a clean checkout.
-- **`--no-sync` is not "skip everything."** All 12 STEPS still run; only the final `sync:frontend` is skipped. The closing message reminds the user to run without the flag when they intend to hand files over.
-- **Paired repo is optional.** The script never fails if the sibling directory is missing; it prints the expected path (or the `FRONTEND_PATH` override hint) and continues. `npm run sync:frontend` run in isolation *does* fail loudly.
-- **Not a chain of `&&`.** Deliberately a loop so the `because` rationale is co-located with each step and the count is derived from the array length.
-- **Idempotent by design.** Safe to run repeatedly; `npm run complete` (the verify path) is a separate, cheaper check.
+- Order is load-bearing: `api/` must exist before any step that boots the app (e.g. the `docs:*` steps that read permissions), and `gen:permission-actions` must precede the first bundle that loads the kernel.
+- Most outputs are gitignored (`api/`, `src/types/asyncapi.generated.ts`, `openapi.yaml`); only the two AsyncAPI bundles and the `docs:*` pages are committed.
+- The sync step is lenient (skips, doesn't fail) so a solo clone can regenerate; `npm run sync:frontend` run directly still fails loudly.
+- The closing console message changes wording depending on whether `skipSync` was set, reminding the operator to re-run without `--no-sync` if they meant to push to the frontend.

@@ -1,7 +1,7 @@
 ---
 source: scripts/scaffold/registry.ts
-sha256: 915121b6d205c238812d533229220a4627efa22ca109c0e4ebd11bcce0ec4a17
-generated_at: 2026-10-01T12:39:50.071979+00:00
+sha256: 0dd63b89c69c1f02c0e6b734e18a47ee2be352d1a8597b329f4e2f8b855ee04d
+generated_at: 2026-10-15T09:47:17.523396+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the single central edit a new module requires in `src/modules.ts` — its import line, its `enabledModules` array entry, and its `ModuleName` union member. The functions are pure text-in/text-out so the edit can be unit-tested without a working checkout.
+Provides a single pure text-transformation (`registerModule`) that inserts the three required lines for a new module into `src/modules.ts` — the import, the `enabledModules` array entry, and the `ModuleName` union member — each kept in alphabetical order. Because it operates on raw source text rather than the filesystem, it is unit-testable without a repository checkout.
 
 ## Key elements
 
-- **`insertInRun`** – inserts a new line into the first consecutive run of lines matching a predicate, keeping the run ordered by a sort-key function. Throws if no run is found.
-- **`importKey` / `memberKey` / `entryKey`** – extract the sort key (folder name, quoted name, or bare identifier) from each of the three line shapes.
-- **`isRegistered`** *(exported)* – returns `true` if the source text already contains the import line for a given kebab folder name.
-- **`retermRun`** – after an insertion, rewrites the trailing terminator (`,` / `;` / empty) of every line in a run so the new last line gets the correct one.
-- **`isEntry` / `isMember`** – predicates that identify 4-space-indented array-entry lines and `| '…'` union-member lines respectively.
-- **`splitAfter`** – splits the line array at the first line starting with a given marker string (used to isolate the array and union regions).
-- **`registerModule`** *(exported)* – orchestrates the three insertions (import → array entry → union member), each kept alphabetically sorted by its own key, and returns the edited source text.
+- **`registerModule(source, names)`** *(exported)* — The public entry point. Accepts the full text of `src/modules.ts` and a `ModuleNames` object; returns the edited text with all three registrations inserted in sorted position.
+- **`isRegistered(source, kebab)`** *(exported)* — Returns `true` if the kebab-case folder name already has an import line in the source.
+- **`importKey(line)`** *(exported)* — Extracts the folder name from an `import … from './modules/<name>/module'` line (empty string if not an import).
+- **`entryKey(line)`** *(exported)* — Normalises an array-entry line (strips whitespace/commas) to yield the identifier for sorting.
+- **`memberKey(line)`** *(exported)* — Extracts the quoted name from a `| 'name'` union-member line.
+- **`insertInRun(lines, belongs, keyOf, line, key)`** *(internal)* — Inserts `line` into the first consecutive run where `belongs` is true, positioning it by `keyOf`. Throws if no such run exists.
+- **`retermRun(lines, belongs, ending, last)`** *(internal)* — Rewrites line terminators on a run so non-final lines get `ending` and the final line gets `last` (handles trailing-comma / semicolon bookkeeping).
+- **`splitAfter(lines, marker)`** *(internal)* — Splits the array at the first line beginning with `marker`; throws if not found.
+- **`isEntry`, `isMember`** *(internal)* — Predicates identifying `enabledModules` array lines and `ModuleName` union-member lines by their indentation/shape.
 
 ## Relationships
 
-- **`scripts/scaffold/names.ts`** – supplies the `ModuleNames` type (kebab, identifier, etc.) consumed by `registerModule` and `isRegistered`.
-- **`scripts/scaffold/apply.ts`** – the scaffold runner that calls `isRegistered` to skip already-registered modules and `registerModule` to produce the edit.
-- **`scripts/scaffold/central-edits.ts`** – sibling module handling other cross-cutting file edits; `registry.ts` covers only the `src/modules.ts` edit.
-- **`tests/unit/scripts/scaffold/registry.test.ts`** – unit tests exercising `isRegistered` and `registerModule` against representative `src/modules.ts` fixtures.
+- **`scripts/scaffold/names.ts`** — Supplies the `ModuleNames` type (the `identifier` / `kebab` pair) consumed by `registerModule`.
+- **`scripts/scaffold/apply.ts`** — Orchestrates scaffold steps; calls `registerModule` (and likely `isRegistered` to skip already-present modules) as part of the apply pipeline.
+- **`scripts/scaffold/central-edits.ts`** — Aggregates or re-exports the central-edit functions; this module is one of the edits it manages.
+- **`scripts/scaffold/demo-remove-registry.ts`** — Demo/CLI that reverses the registration (removes the three lines); pairs with this file's insert logic.
+- **`tests/unit/scripts/scaffold/registry.test.ts`** — Unit tests exercising `registerModule`, `isRegistered`, and the key-extraction helpers against in-memory source strings.
 
 ## Notes
 
-- **Three different sort keys.** Import lines are ordered by kebab folder name, array entries by identifier, union members by kebab. For hyphenated names (e.g. `api-keys` → `apiKeys`) these differ, and each list stays sorted by what it literally prints.
-- **Terminator rewriting is separate from insertion.** `insertInRun` does not touch commas or semicolons; `retermRun` runs afterwards because the "last line" of a run shifts after insertion.
-- **Structural assumptions are hard-coded.** The functions expect 4-space indentation for entries/members, the markers `export const enabledModules` and `export type ModuleName`, and the import path pattern `./modules/<name>/module`. If `src/modules.ts` is restructured, the predicates and markers here must change in lock-step.
-- **No filesystem access.** The module is deliberately side-effect-free; callers read the file, pass the string in, and write the string back.
+- **Different sort keys per list:** imports are sorted by kebab folder name, array entries by identifier, and union members by kebab name. For hyphenated names (e.g. `api-keys`) these differ, and each list stays sorted by what it prints.
+- **Terminator handling is post-insertion:** `retermRun` is called *after* `insertInRun` because the insertion can shift which line is last; tracking terminators during insertion would be fragile.
+- **Structural assumptions:** The file must contain a contiguous run of `import … from './modules/…'` lines, an `export const enabledModules` array, and an `export type ModuleName` union. If any are missing or reshaped, the functions throw with a descriptive `src/modules.ts: …` error.
+- **No I/O:** The module never reads or writes files; callers are responsible for reading `src/modules.ts` and writing the result back.

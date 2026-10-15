@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/middlewares/rate-limit.ts
-sha256: da43dea215b4da2e8060000a7cb472a7a02697597b067f4d3569d7c65185ccce
-generated_at: 2026-10-14T07:58:11.765086+00:00
+sha256: cf6560b79bf10bd792cf88189c3cf4aa12ea3cf0368c569ecf975f9e3381b141
+generated_at: 2026-10-15T09:50:29.546764+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central factory and shared constants for all rate-limit budgets in the codebase. Every module's `rate-limits.ts` budget and the three infrastructure-owned budgets (global burst brake, api-key, image-upload) are built through the single `buildRateLimiter` factory defined here. The file also provides `chargeBudget`, which lets non-Express service code spend a unit of a budget against the same store the middleware uses.
+Shared rate-limiting factory and the three infrastructure-owned budgets (global per-address brake, api-key credential budget, image-upload budget). Every module that declares its own `RateLimitBudget` calls `buildRateLimiter` here, so all limiters—regardless of which route mounts them—share the same store, response shape, metrics, and audit trail. Also exposes `chargeBudget` for non-Express code paths that need to spend a budget unit programmatically.
 
 ## Key elements
 
-- **`buildRateLimiter(budget)`** — The sole factory that turns a `RateLimitBudget` into an Express `RequestHandler`. Configures store, window, headers (`draft-7`), `passOnStoreError`, handler, and optional `keyGenerator`/`skip`/`requestWasSuccessful`.
-- **`refuseRateLimited(budget)`** — The 429 handler. Increments the `rateLimitRefusalsTotal` metric, records an audit event if `budget.audited` is true, and delegates to `refuseAntibot` so the refusal is logged even when it short-circuits before the request logger.
-- **`chargeBudget(budget, key)`** — Async helper for service code to spend one unit of a budget outside an Express route. Returns `{ allowed, retryAfterSeconds }`. Uses a per-namespace cached store (`chargedStores`) so a budget charged from multiple call sites counts in one tally.
-- **`budgetLimit(budget)`** — Reads the runtime limit from the budget's environment variable (via a cached config reader in `limitReaders`), falling back to the budget's declared default.
-- **`DEFAULT_RATE_LIMIT_MAX` (100), `DEFAULT_UPLOAD_RATE_LIMIT_MAX` (20), `DEFAULT_API_KEY_RATE_LIMIT_MAX` (120)** — Default ceilings for the three infrastructure-owned budgets.
-- **`KEYED_BY_*` constants** — Human-readable labels for each keying strategy, used by the docs generator to render a consistent column in the budgets table.
-- **`accountIdOf(request)`** — Key generator that resolves the authenticated account ID from `request.authContext!.id`.
-- **`readBodyField(request, field)`** — Type-safe reader for a single string field off a JSON request body; returns `undefined` when the body or field is absent/wrong-typed.
-- **`limiterLogger`** — Redirects express-rate-limit's internal `warn`/`error` to the app logger (catches misconfigurations like `X-Forwarded-For` with `trust proxy` off).
+- **`buildRateLimiter(budget)`** — Factory. Takes a `RateLimitBudget` descriptor and returns an Express `RequestHandler` built on `express-rate-limit`. Wires in the shared store, window, `draft-7` headers, fail-closed store policy, and the standard 429 handler.
+- **`chargeBudget(budget, key)`** — Programmatic charge for service-layer code (e.g. "recipient of a notification"). Returns `{ allowed, retryAfterSeconds }`. Counts in the same store the budget's middleware would use, so one budget = one tally regardless of entry point.
+- **`refuseRateLimited(budget)`** — The 429 handler. Increments the `rateLimitRefusalsTotal` metric, optionally records an audit event (for `audited` budgets like credential stuffing), then delegates the response to `refuseAntibot` so the body is always the shared error envelope.
+- **`DEFAULT_RATE_LIMIT_MAX` / `DEFAULT_API_KEY_RATE_LIMIT_MAX` / `DEFAULT_UPLOAD_RATE_LIMIT_MAX`** — Fallback limits (100 / 120 / 20) used when the corresponding env variable is unset.
+- **`KEYED_BY_*` constants** — Human-readable labels (address, address block, submitted email, authenticated account, challenge) used in the generated security docs table.
+- **`accountIdOf(request)`** — `keyGenerator` for account-keyed budgets; reads `request.authContext!.id` (guaranteed present by `isAuth`).
+- **`readBodyField(request, field)`** — Safe extraction of a single string field from a JSON body; returns `undefined` on any shape mismatch. Used by keying functions that bucket on submitted values.
+- **`limitReaders`** (module-private) — Caches the typed config reader per budget namespace so the limit is read at call time (honouring late env changes) without re-defining a config slice on every call.
+- **`chargedStores`** (module-private) — Caches the `Store` instance for hand-charged budgets, initialising `windowMs` once, since no `rateLimit()` instance triggers `store.init` in that path.
 
 ## Relationships
 
-- **`rate-limit-store.ts`** — Provides `rateLimitStore(namespace, onStoreError, escalation?)`, the Redis-or-memory backing store every limiter uses.
-- **`src/infrastructure/http/config.ts`** — Source of `rateLimitBudgetConfig` (per-budget env-variable reader) and `rateLimitConfig` (global window size).
-- **`src/infrastructure/http/middlewares/antibot-log.ts`** — `refuseAntibot` builds the actual 429 response envelope and writes the security log line.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf` extracts identity/route metadata for the audit record on refusal.
-- **`src/infrastructure/i18n/index.ts`** — `t()` translates the `generic.error-rate-limited` message in the 429 body.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` + `coreAuditActions.SECURITY_RATE_LIMIT_HIT` for audited budgets.
-- **`src/infrastructure/observability/metrics-rate-limit.ts`** — `rateLimitRefusalsTotal` Prometheus counter, labelled by budget namespace.
-- **`src/infrastructure/persistence/normalize-email.ts` / `src/infrastructure/security/pseudonymise.ts`** — Used by keying helpers (e.g. submitted-email budgets) to normalise and pseudonymise the key before it hits the store.
-- **`src/kernel/middlewares/authorizations.ts`** — Mounts account-keyed budgets (via `accountIdOf`) after `getAuth` has populated `authContext`.
-- **`scripts/docs/generate-rate-limit-budgets.ts`** — Reads the `KEYED_BY_*` labels and budget declarations to render the `docs/tools/security.md` budgets table.
-- **`src/app/security.ts`** — Orchestrator that installs the three infrastructure-owned limiters and wires `installSecurity` before the request-context middleware.
+- **`rate-limit-store.ts`** — Supplies `rateLimitStore`, the Redis-or-memory backing store. This file passes the namespace, failure policy, and optional escalation config to it.
+- **`src/infrastructure/http/config.ts`** — `rateLimitBudgetConfig` provides the env-var-backed limit reader; `rateLimitConfig` supplies the shared `NODE_RATE_LIMIT_WINDOW_MS` when a budget uses `windowMs: 'shared'`.
+- **`antibot-log.ts`** — `refuseAntibot` is called by the 429 handler to emit the response (status, error envelope, structured log). This file does not format the body itself.
+- **`src/infrastructure/observability/metrics-rate-limit.ts`** — `rateLimitRefusalsTotal` is incremented on every refusal, labelled by budget namespace.
+- **`src/infrastructure/observability/audit.ts`** — `recordAudit` + `coreAuditActions.SECURITY_RATE_LIMIT_HIT` are called for audited budgets (credential-keyed ones).
+- **`src/infrastructure/http/request.ts`** — `callerContextOf` provides the identity metadata for audit records.
+- **`src/infrastructure/adapters/logger.ts`** — The app `logger` replaces `express-rate-limit`'s default `console` for internal misconfiguration warnings.
+- **`src/infrastructure/i18n/`** — `t` translates the `RATE_LIMITED` error message.
+- **`src/infrastructure/persistence/normalize-email.ts` / `src/infrastructure/security/pseudonymise.ts`** — Used by the keying helpers to normalise and pseudonymise email/username buckets before they hit the store.
+- **`scripts/docs/generate-rate-limit-budgets.ts`** — Consumes the `KEYED_BY_*` labels and budget descriptors to render the table in `docs/tools/security.md`.
 
 ## Notes
 
-- **Ordering matters:** `installSecurity` (which mounts these limiters) runs *before* `installRequestContext` (which mounts the request logger). The `refuseAntibot` call in `refuseRateLimited` exists specifically so a 429 is still logged even though it short-circuits before any other middleware fires.
-- **`passOnStoreError` is opt-in:** Only budgets whose `onStoreError` is `'pass'` let a request through when the store is unreachable. All others fall back to in-process counting so a Redis blip is neither an outage nor an open door.
-- **`skipSuccessfulRequests`** defaults to `false`. The upload budget explicitly keeps it off because a *well-formed* upload (the expensive CPU case) must still be counted, unlike a rejected one.
-- **`limitReaders` is a module-level `Map` cache:** defining a config slice has a cost, and a budget's limit is read more than once during limiter construction. Readers are created once per namespace and reused.
-- **`chargedStores` vs. the middleware's internal store:** A budget charged via `chargeBudget` must use the *same* store instance the middleware uses, or an in-process (memory) store would maintain separate tallies per call site. `chargedStoreOf` guarantees one store per namespace.
-- **`standardHeaders: 'draft-7'`** — Emits `RateLimit-*` headers (IETF draft) rather than the deprecated `X-RateLimit-*` set.
+- **Fail-closed by default.** `passOnStoreError` is `false` unless a budget explicitly opts into `'pass'`. On a Redis outage, non-pass budgets fall back to in-process memory counting; `pass` budgets let the request through. The choice is per-budget, not global.
+- **`skipSuccessfulRequests` defaults to `false`.** Even well-formed uploads (the expensive case) consume the budget, by design for the upload budget.
+- **Headers are `draft-7` (`RateLimit-*`).** The deprecated `X-RateLimit-*` set is explicitly disabled.
+- **The 429 short-circuits before the request logger.** Because `installSecurity` mounts limiters before `installRequestContext`, the only trace of a global-brake refusal is the `refuseAntibot` call itself—there is no separate access-log line.
+- **`windowMs: 'shared'` is a sentinel string**, not a number. It resolves to the global `NODE_RATE_LIMIT_WINDOW_MS` at build time, so all budgets that use it share one window regardless of their own limit.
+- **`chargedStores` must outlive a single request.** A budget charged from multiple service paths (e.g. notification fan-out) must hit the same `Store` instance, which is why the cache is module-level rather than per-middleware.

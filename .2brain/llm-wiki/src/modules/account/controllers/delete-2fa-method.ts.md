@@ -1,44 +1,36 @@
 ---
 source: src/modules/account/controllers/delete-2fa-method.ts
-sha256: b2b4e1a4876b115166068dae97aa6ca8edc5e6541b379f8e2e40bfb936fc2f73
-generated_at: 2026-10-14T08:28:56.933830+00:00
+sha256: 1339e8cd0827949816583761902b840f063f20da7eb599e4374ab095558bdedb
+generated_at: 2026-10-15T09:53:06.174280+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/controllers/delete-2fa-method.ts
 
 ## Purpose
-
-HTTP adapter for `DELETE /account/2fa/methods/{method}`. Validates a two-factor code, delegates to `twoFactorService.removeTwoFactorMethod`, and then remints the caller's session (which was revoked by the removal) so the user stays logged in. Requires both a fresh critical-auth session *and* a valid one-time code to prevent a hijacked session from stripping factors individually.
+Thin HTTP adapter for `DELETE /account/2fa/methods/{method}`. It validates the request, delegates to `twoFactorService.removeTwoFactorMethod`, remints the caller's session (since removal revokes all sessions), and returns the updated auth tokens.
 
 ## Key elements
-
-- **`delete2faMethod`** *(exported const, function)* — The sole export. Accepts Express `Request`/`Response`; the request's generic params expose `method: string` and the body is `TwoFactorCodeRequest`.
-  - Validates path param via `RemoveTwoFactorMethodParams.safeParse` and body via `RemoveTwoFactorMethodBody.safeParse` (Zod schemas from `@api/schemas.zod`).
-  - Calls `sessionSnapshotOf(request, id)` **before** the service call to capture the current session state.
-  - Calls `twoFactorService.removeTwoFactorMethod(id, method, code, callerContextOf(request))`.
-  - On success: increments `authTwoFactorDisableTotal{method, status='success'}`, then `remintSession` with `withProofs(amr, AMR.otp)` to restore the caller's session.
-  - On refusal/failure: increments the same metric with `status='failure'` and returns a `refused` response.
-  - Wraps the whole chain in `.catch(catchAs(response, 'delete2faMethod'))`.
+- **`delete2faMethod`** — sole export; the Express handler for the endpoint. Performs:
+  - Path-param and body validation via Zod schemas (`RemoveTwoFactorMethodParams`, `RemoveTwoFactorMethodBody`).
+  - Delegation to `twoFactorService.removeTwoFactorMethod(id, method, code, callerContext)`.
+  - On success, remints the session with the snapshot taken *before* deletion and extended AMR proof (`AMR.otp`).
+  - Emits `authTwoFactorDisableTotal` metric on both success and failure paths.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `infrastructure/http/controller.ts` | Source of `rejectValidation`, `refused`, `catchAs` — standard guard/error helpers. |
-| `infrastructure/http/request.ts` | `callerContextOf(request)` extracts caller metadata passed to the service. |
-| `infrastructure/http/response.ts` | `successResponse` formats the 200 reply. |
-| `infrastructure/i18n/` | `t('account.two-factor.method-removed')` localises the success message. |
-| `modules/account/services/index.ts` | `twoFactorService.removeTwoFactorMethod` performs the actual factor removal. |
-| `modules/account/session/session.ts` | `sessionSnapshotOf` captures pre-deletion session; `remintSession` re-establishes it afterward. |
-| `modules/account/domain/session-proof.ts` | `AMR.otp` enum value and `withProofs` helper used when reminting. |
-| `modules/account/metrics.ts` | `authTwoFactorDisableTotal` Prometheus counter, tagged by `method` and `status`. |
-| `modules/account/routes.ts` | Registers `delete2faMethod` on the `DELETE /account/2fa/methods/:method` route. |
-| `types/index.ts` | `TwoFactorCodeRequest` — the expected body shape (contains the one-time code). |
+- **`src/modules/account/services/index.ts`** — imports `twoFactorService` to perform the actual method removal.
+- **`src/modules/account/session/session.ts`** — imports `sessionSnapshotOf` (captures session state before revocation) and `remintSession` (re-issues tokens post-deletion).
+- **`src/modules/account/domain/session-proof.ts`** — imports `AMR` and `withProofs` to stamp the `otp` proof onto the remitted session.
+- **`src/modules/account/metrics.ts`** — imports `authTwoFactorDisableTotal` counter (shared with the full-disable endpoint).
+- **`src/infrastructure/http/controller.ts`** — imports `rejectValidation`, `refused`, `catchAs` for unified error handling.
+- **`src/infrastructure/http/request.ts`** — imports `callerContextOf` to extract IP/UA for the service call.
+- **`src/infrastructure/http/response.ts`** — imports `successResponse` for the final 200 reply.
+- **`src/infrastructure/i18n/index.ts`** — imports `t` for the localized "method-removed" message.
+- **`src/types/index.ts`** — imports `AuthTokens` and `TwoFactorCodeRequest` types.
+- **`src/modules/account/routes.ts`** — registers this handler on the `DELETE /account/2fa/methods/:method` route.
 
 ## Notes
-
-- **Snapshot-before-mutation is load-bearing.** Removing a factor revokes *all* sessions, including the one handling this request. `sessionSnapshotOf` is called first so `remintSession` can restore the caller; reversing the order would 401 the user.
-- The metric name (`authTwoFactorDisableTotal`) is shared with the full-disable endpoint; distinguish by the `method` label.
-- `request.authContext!` is asserted non-null upstream (by route-level auth middleware); this file does not guard against it being absent.
-- The body schema (`RemoveTwoFactorMethodBody`) is expected to contain at least the verification `code`; the exact field names live in `@api/schemas.zod`.
+- The session snapshot is captured **before** calling the service because `removeTwoFactorMethod` revokes *all* sessions, including the one handling this request.
+- The metric label is `authTwoFactorDisableTotal` (same as full disable), not a per-method variant.
+- On validation failure the method label in the metric comes from `pathParameters.data.method` (path) rather than the body, since the body may be unparseable.
+- The remitted session carries `withProofs(amr, AMR.otp)`, signalling to downstream strategy logic that an OTP was just verified in this request.

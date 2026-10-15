@@ -1,7 +1,7 @@
 ---
 source: scripts/scaffold/demo-remove-authorization.ts
-sha256: 1f5cbb87460ba9822c1e2d96f683fb2a50d7dc7afad077019fcd76c50fa48a49
-generated_at: 2026-10-14T14:30:56.280870+00:00
+sha256: eb27ad41441cefc71edcdf61028e26aeb1da10dec4768aa9079c5ad7cf6a39e9
+generated_at: 2026-10-15T09:45:35.571018+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Removes a deleted module's authorization traces from the two shared, hand-maintained YAML files (`authorization-roles.yaml` and `authorization-conformance.yaml`). It reads the modules' `authorization.yaml` fragments **before** their folders are deleted, computes which permission keys and CASL subjects become orphaned, then applies targeted text edits to strip those entries. It exists because the shared files are edited by hand from the fragments (unlike `authorization-keys.yaml`, which is auto-assembled), and must be cleaned up explicitly when a module goes away.
+Removes a deleted module's authorization traces from the two shared YAML files that reference permission keys by hand: `shared/authorization-roles.yaml` and `shared/authorization-conformance.yaml`. It performs targeted text edits (not a YAML parse/stringify round-trip) to keep the files byte-identical to their PHP twins.
 
 ## Key elements
 
-- **`RemovedAuthorization`** (interface) — the output of the read step: a `ReadonlySet` of removed permission keys and a `ReadonlySet` of subjects no surviving fragment still declares.
-- **`readRemovedAuthorization(repoRoot, names)`** — scans the `authorization.yaml` fragment of every module in `names` (plus all surviving modules and the core fragment) to determine which keys are unique to the removed set and which subjects become unused.
-- **`stripRoleGrants(repoRoot, removed)`** — line-filters `shared/authorization-roles.yaml` to drop list items matching a removed key; inserts ` []` after a `permissions:` heading whose last item was removed so the mapping still parses. Returns a `RemovalNote`.
-- **`stripConformanceCases(repoRoot, removed)`** — splits `shared/authorization-conformance.yaml` at the `cases:` heading, filters the shared admin key list, then prunes individual case chunks (removes whole cases whose subject is gone or whose only held keys are removed; otherwise strips removed keys from inline `permissions: [...]` lists). Returns a `RemovalNote`.
-- **`pruneCase`** (internal) — applies the per-case decision logic: drop the chunk, or rewrite its inline permission lists.
-- **`splitCases` / `INLINE_PERMISSIONS` / `KEY_LINE`** (internal) — regex helpers for chunking case blocks and identifying key list items.
+- **`RemovedAuthorization`** (interface) — the output of the read phase: the set of permission keys the removed modules declared, plus the set of CASL subjects that no surviving fragment or core fragment still uses.
+- **`readRemovedAuthorization(repoRoot, names)`** — reads each removed module's `authorization.yaml` fragment *while its folder still exists*, compares against surviving fragments and the core fragment, and returns the `RemovedAuthorization` pair.
+- **`stripRoleGrants(repoRoot, removed)`** — filters out `- <key>` list items matching removed keys from `authorization-roles.yaml`; if a role's `permissions:` block is left empty it appends ` []` so the file still parses. Returns a `RemovalNote`.
+- **`stripConformanceCases(repoRoot, removed)`** — splits `authorization-conformance.yaml` into a head (shared admin key list) and a `cases:` section, prunes removed keys from the head, and drops or prunes individual case chunks via `pruneCase`. Returns a `RemovalNote`.
+- **`pruneCase(chunk, removed)`** *(internal)* — returns `undefined` (drop the case) when the case targets a removed subject or its caller held *only* removed keys; otherwise returns the chunk with removed keys excised from inline `permissions: [...]` lists.
+- **`splitCases`**, **`KEY_LINE`**, **`INLINE_PERMISSIONS`** *(internal)* — regex helpers for line-level key matching, case-block splitting (including preceding comment lines), and inline permissions-list extraction.
 
 ## Relationships
 
-- **`scripts/scaffold/demo-remove-registry.ts`** — provides the `RemovalNote` type imported by this module; the two "strip" functions return that type.
-- **`scripts/scaffold/demo-remove-modules.ts`** — sibling in the same scaffold directory; the likely orchestrator that sequences the authorization cleanup relative to folder deletion and registry removal.
-- **`tests/unit/scripts/scaffold/demo-remove-authorization.test.ts`** — unit tests for the functions exported here.
-- **`src/modules/feedback/tests/integration/export.test.ts`** — integration test in a module whose authorization entries would be affected by this script's edits; appears in the dependency graph as a consumer of the resulting file state.
+- **`scripts/contracts/fragments.ts`** — imports `readAuthorizationFragment` to parse each module's `authorization.yaml` and the shared `authorization-keys.core.yaml` into key/subject entries.
+- **`scripts/modules-on-disk.ts`** — imports `modulesWith` to discover which surviving modules still carry an `authorization.yaml` fragment.
+- **`scripts/scaffold/demo-remove-registry.ts`** — imports the `RemovalNote` type used as the return type of both strip functions, so the caller can collect per-file edit summaries.
+- **`tests/unit/scripts/scaffold/demo-remove-authorization.test.ts`** — unit-tests the three exported functions against fixture YAML files.
 
 ## Notes
 
-- **Call order matters:** `readRemovedAuthorization` must run *before* the module folders are deleted, because it reads their `authorization.yaml` files. The sibling orchestration script is responsible for sequencing this correctly.
-- **Text edits, not YAML round-trips:** all mutations are line-level filters and regex replacements. A parse→modify→stringify cycle would re-flow descriptions and break the byte-for-byte parity with the PHP twin.
-- **Emptied `permissions:` lists:** a role whose last key is removed gets an explicit `[]` appended so the YAML remains valid (a bare `permissions:` with nothing below is not a mapping value).
-- **Orphan-subject detection:** a subject is considered orphaned only if *no* surviving fragment **and** the core fragment still declare it. If any other module still uses that subject, cases referencing it are kept.
+- **Order matters:** `readRemovedAuthorization` must run *before* the module folders are deleted, because it reads fragments from `src/modules/<name>/authorization.yaml` on disk.
+- **Text edits, not YAML round-trips:** the shared YAML files are committed byte-for-byte to a PHP twin; re-stringifying would re-wrap every description line and create spurious diffs.
+- **Empty-role guard:** a role whose `permissions:` block loses all keys gets an explicit ` []` appended rather than being left as a bare key with no value.
+- **Orphan-subject detection:** a subject is considered orphaned only if *no* surviving fragment and *no* core fragment still declare it; the check is computed at read time, not at edit time.
+- **Deny-case safety:** a conformance case is dropped (not merely pruned) when its caller would end up holding zero keys, because a deny assertion with no keys would vacuously pass for the wrong reason.

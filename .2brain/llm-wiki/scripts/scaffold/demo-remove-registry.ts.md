@@ -1,7 +1,7 @@
 ---
 source: scripts/scaffold/demo-remove-registry.ts
-sha256: 3da6a1093a56992e95dfa4222372e62ae005c83fe038c7d5554bc7c39ca577b9
-generated_at: 2026-10-14T14:31:38.973333+00:00
+sha256: 0f0d5f9fc4bdbc45a0c5fd33686f3e81ec7e82491b44ab98f5508e65aef56c39
+generated_at: 2026-10-15T09:45:59.869212+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The "central lists" half of the demo-remove strip. When a shop module is removed, this module edits every file that names that module *outside* its own folder—`src/modules.ts`, `package.json`, `docker/crontab`, and the module-owned `scripts/ops/*.ts` files—using pattern matching on the module name rather than a second hand-maintained list. It is invoked by `demo-remove.ts` as one step in the full removal pipeline.
+Handles the "central lists" half of module removal: every shared file that names a module outside its own folder is edited generically off the module name. It strips module entries from `src/modules.ts`, deletes the module's owned `scripts/ops/*.ts` files along with their `package.json` script lines and `docker/crontab` entries, and returns structured removal notes for the orchestrator's final report.
 
 ## Key elements
 
-- **`RemovalNote`** (interface) – A `{ file, detail }` record of one deletion; collected into the final report printed by `demo-remove.ts`.
-- **`removeModuleFolders(repoRoot, names)`** – Recursively deletes each `src/modules/<name>/` directory.
-- **`stripModuleLines(content, names, importPattern)`** (internal) – Generic line filter that removes import lines and bare-name entries (array elements, union members, map keys) matching the given names.
-- **`stripModuleRegistry(repoRoot, names)`** – Reads `src/modules.ts`, strips each module's import, `enabledModules` array entry, and `ModuleName` union member via `stripModuleLines`, then writes the file back.
-- **`readOwnedOpsFiles(repoRoot)`** (internal) – Scans `scripts/ops/*.ts` for a `Removal: owned by \`<module>\`` doc-comment tag and returns the owning module for each file.
-- **`removeShopOwnedOpsScripts(repoRoot, shopNames)`** – Orchestrates the three-step ops-script removal: delete the script files, remove their `package.json` entries, then remove the matching `docker/crontab` lines.
-- **`removePackageJsonScripts(repoRoot, opsBasenames)`** (internal) – Strips `"<name>": "tsx scripts/ops/<basename>.ts"` lines from `package.json`; returns the removed script names for the crontab step.
-- **`removeCrontabEntries(repoRoot, scriptNames)`** (internal) – Removes each `npm run <name>` line from `docker/crontab` along with the contiguous `#` comment block immediately above it.
+- **`RemovalNote`** (exported interface) — pairs a file path with a detail string; collected and printed by `demo-remove.ts`'s report.
+- **`removeModuleFolders`** (exported) — recursively deletes `src/modules/<name>/` for each given module name.
+- **`stripModuleRegistry`** (exported) — reads `src/modules.ts`, removes the import line, `enabledModules` array entry, and `ModuleName` union member for each target, then writes the file back.
+- **`removeShopOwnedOpsScripts`** (exported) — the main entry point for ops cleanup: deletes owned `scripts/ops` files, removes their `package.json` npm-script lines, then removes the matching `docker/crontab` entries. Returns `RemovalNote[]` for all three steps.
+- **`stripModuleLines`** (internal) — line-level filter using `importKey`/`entryKey`/`memberKey` from `./registry` to identify which lines in `src/modules.ts` belong to the target modules.
+- **`readOwnedOpsFiles`** (internal) — scans `scripts/ops/*.ts` for a `Removal: owned by \`<module>\`` doc-comment pattern and returns owner-mapped file list.
+- **`removePackageJsonScripts`** (internal) — regex-removes `"<name>": "tsx scripts/ops/<basename>.ts"` lines; returns the removed script names.
+- **`removeCrontabEntries`** (internal) — regex-removes the `npm run <name>` line in `docker/crontab` plus the contiguous `#` comment block directly above it.
 
 ## Relationships
 
-- **`scripts/scaffold/demo-remove.ts`** – The orchestrator. This file's exported functions (`removeModuleFolders`, `stripModuleRegistry`, `removeShopOwnedOpsScripts`) are the registry-editing steps that `demo-remove.ts` calls and aggregates into a single `RemovalNote[]` report.
-- **`scripts/scaffold/demo-remove-authorization.ts`**, **`demo-remove-modules.ts`**, **`demo-remove-scenarios.ts`**, **`demo-remove-tests.ts`** – Sibling "strip" steps that handle their own cleanup domains (authorization, module internals, scenarios, tests). They share the same `demo-remove.ts` caller and the `RemovalNote` reporting shape but do not import or interact with this file directly.
+- **`scripts/scaffold/registry.ts`** — imports `entryKey`, `importKey`, `memberKey`; these are the canonical line-matchers for `src/modules.ts`, so the file's shape is described in one place.
+- **`scripts/scaffold/demo-remove.ts`** — orchestrator that calls the exported functions here and prints the collected `RemovalNote[]` in its final report.
+- **`scripts/scaffold/demo-remove-modules.ts`** and the other `demo-remove-*.ts` siblings — parallel artifact-specific removal steps (alert rules, authorization, scenarios, tests, validation labels); this file covers the central-registry and ops-script artifacts, complementing rather than duplicating their work.
 
 ## Notes
 
-- **Owner discovery is convention-based.** The link between an ops script and its owning module is the `Removal: owned by \`<module>\`` doc-comment line at the top of each `scripts/ops/*.ts` file. There is no central mapping; if that comment is missing or misspelled, the script is silently skipped.
-- **Single-word module names are required.** The regex in `stripModuleLines` matches bare identifiers. A camelCase alias or multi-word name would not be stripped from arrays/unions.
-- **Crontab comment-block assumption.** `removeCrontabEntries` consumes the contiguous run of `#` lines *immediately above* the `npm run` line as that entry's comment block. A blank line or non-`#` line between the comment and the entry would cause the comment to be left behind.
-- **`package.json` pattern is literal.** The script matches `tsx scripts/ops/<basename>.ts` verbatim. If the invocation prefix changes (e.g., a different runner or path), the regex will not match and the line will be left in place.
+- **Ordering is load-bearing in `removeShopOwnedOpsScripts`:** files are deleted first, then `package.json` scripts, then crontab entries. The crontab step needs the exact npm-script names extracted in step 2, so the sequence cannot be reordered.
+- **Crontab comment removal assumes a strict layout:** the `#` comment block sits immediately above the `npm run` line with no blank lines in between. If a comment block is separated by blank lines, it will not be consumed.
+- **Ownership discovery is comment-driven:** `scripts/ops` files must contain a doc-comment line matching `Removal: owned by \`<module>\`` (regex allows optional `the` and backticks). A file without that comment is invisible to this script and will be left behind.
+- **Union-member matching in `stripModuleLines`:** a line is treated as a `ModuleName` union member only if it starts with `|` after trimming. A quoted module name elsewhere (e.g., in a string literal) will not be stripped.

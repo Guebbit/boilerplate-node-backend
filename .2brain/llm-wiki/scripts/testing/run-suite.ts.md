@@ -1,7 +1,7 @@
 ---
 source: scripts/testing/run-suite.ts
-sha256: 2fed22a81ffbf5287bee2138ac28774d4f682625340a9c98012bfa146deae8b8
-generated_at: 2026-10-14T07:34:01.522684+00:00
+sha256: 30dd55dfa00556a0811c26ab1cb58b3ed5c29f695d9bfc052c43540facd19106
+generated_at: 2026-10-15T09:48:57.697631+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CLI wrapper around `jest` that runs a single test layer as a series of **sequential** jest processes (shards) to cap peak memory on machines with limited RAM. A bare `jest` process retains ~70 MB per test file in its heap; sharding forces a process exit every N files so that retention is released. The file also provides an `--unsharded` mode for callers (coverage, JSON report, randomized-order runs) that need every pattern in one process and already choose their own flags.
+Wraps `jest` with a memory-budget layer for machines that cannot hold an entire test layer's accumulated per-file allocations in one process. Instead of raising Node's heap ceiling (which only delays the OOM), it splits a serialized layer's files into a small number of sequential jest processes (`--shard`), each capped at a computed `--max-old-space-size`. It also exposes a `--unsharded` escape hatch for callers (coverage, JSON report, randomized order) that deliberately want every pattern in a single process.
 
 ## Key elements
 
-- **`SUITES`** (exported) — `Record<string, Suite>` mapping layer names (`unit`, `cross-cutting`, `integration`, `contract`, `fuzz`) to their jest path patterns, a `serialized` discriminant, and (for non-serialized) a `workerPeakMb` figure. Serves as the single source of truth for patterns so `package.json` scripts don't re-list them.
-- **`splitSuiteNames`** — splits argv (after stripping `--unsharded`) into leading known suite names and trailing jest passthrough flags.
-- **`countTestFiles`** — runs `npx jest --listTests` to get the file count from jest's own resolver (respects `testPathIgnorePatterns`); returns 0 if the spawn fails.
-- **`runShard`** — spawns one jest process for a given 1-based shard number, resolves with its exit code.
-- **Budget / shard / worker computation** (inline, not exported) — derives `targetMb`, `perShard`, `shards`, `workers`, `heapMb`, and `boundingFlags` from environment knobs (`JEST_PROCESS_BUDGET_MB`, `JEST_SHARDS`, `JEST_WORKERS`) and the machine's free memory, delegating the math to `machine-budget`.
-- **`boundingFlags`** — `['--runInBand']` for serialized layers; `['--maxWorkers=N', '--workerIdleMemoryLimit=…MB']` for parallel layers.
-- **`--unsharded` path** — `spawnSync('npx', ['jest', …patterns, …passthrough])` in a single process, inheriting stdio, then `process.exit` with jest's status.
+- **`SUITES`** (exported) — `Record<string, Suite>` mapping layer names (`unit`, `cross-cutting`, `integration`, `contract`, `fuzz`) to their jest path patterns and whether files must run in-band (`serialized: true`). The single source of truth for patterns; `package.json` scripts reference suite names rather than duplicating patterns.
+- **`splitSuiteNames`** — Splits argv into leading known suite names and trailing jest passthrough flags. The first arg that is not a key in `SUITES` ends the name list.
+- **`countTestFiles`** — Calls `jest --listTests` (sync) and counts `.test.ts` lines so the shard math uses the same resolver (including `testPathIgnorePatterns`) that will actually run the files.
+- **`runShard`** — Spawns one jest process for a given shard index via `node:child_process.spawn`; resolves with the child's exit code (1 for signal death).
+- **Budget pipeline** — `processBudgetMb` → `shardTargetMb` → `filesPerShard` → `shardCount` computes how many sequential processes to launch; `workerCount` and `heapCapMb` size parallel workers. All pulled from `machine-budget`.
+- **`--unsharded` mode** — Flattens all named suites' patterns into a single `spawnSync('npx jest …')` call, skipping the shard/heap math entirely.
 
 ## Relationships
 
-- **`scripts/testing/machine-budget.ts`** — provides every piece of the memory-budget calculation this file uses: `availableMemoryMb`, `processBudgetMb`, `shardTargetMb`, `filesPerShard`, `shardCount`, `clampShards`, `workerCount`, `heapCapMb`, and `environmentKnob`. This file is the sole consumer that turns those numbers into jest CLI invocations.
+- **`scripts/testing/machine-budget.ts`** — Provides every numeric budget helper this file calls: `environmentKnob`, `processBudgetMb`, `shardTargetMb`, `filesPerShard`, `shardCount`, `clampShards`, `workerCount`, `heapCapMb`, `availableMemoryMb`. This file is the sole consumer that turns those numbers into jest CLI flags.
+- **`scripts/modules-on-disk.ts`** — Supplies `REPO_ROOT`, used as `cwd` for every `spawnSync`/`spawn` call so jest resolves from the repository root regardless of the caller's working directory.
 
 ## Notes
 
-- **Serialized vs. parallel is a layer property, not a machine property.** Serialized suites share one in-memory `mongod`, so they always run `--runInBand` inside each shard regardless of free RAM.
-- **Sharded mode accepts exactly one suite name.** Passing more than one without `--unsharded` exits 2.
-- **`JEST_SHARDS` override is clamped to the actual file count** (`clampShards`) to avoid jest exiting non-zero on an empty shard.
-- **`recycleLimitMb` has a 1024 MB floor.** Without it, a small `workerPeakMb` would set `--workerIdleMemoryLimit` so low that jest restarts a worker after nearly every file — slower than the retention it prevents.
-- **Heap for parallel layers is divided across workers** (`heapCapMb(budgetMb, workers)`); the per-worker cap is floored one MB above `recycleLimitMb` so the recycle always fires before the heap ceiling.
-- **`countTestFiles` returning 0** on a spawn error is a documented sentinel (jest couldn't answer), not a genuine zero-file count; downstream `clampShards` will then clamp shards to 1.
-- The shebang is `#!/usr/bin/env tsx`; the script is meant to be invoked directly or via an `npm run` alias, not imported.
+- `serialized` is a property of the *layer*, not the machine: integration, contract, and fuzz suites share one in-memory `mongod`, so their files cannot run in parallel regardless of free RAM.
+- `--workerIdleMemoryLimit` is intentionally omitted for serialized suites (one in-band worker makes the flag inert) and floored at 1024 MB for parallel suites to prevent recycling after every single file.
+- Sharded mode accepts exactly **one** suite name; combining multiple suites requires `--unsharded`.
+- `JEST_SHARDS` can force a shard count on a parallel layer, but is clamped to the actual file count (a shard beyond that would run empty and jest exits non-zero).
+- The `--unsharded` path uses `spawnSync` (blocking) while the sharded path uses `spawn` (async) — the latter enables sequential-but-non-blocking shard chaining.

@@ -1,7 +1,7 @@
 ---
 source: scripts/docs/generate-role-matrix.ts
-sha256: d659819f55ed844d7a7d14c056cf891913104e0cebaa561b5e08ac9dad50db6e
-generated_at: 2026-10-14T07:16:27.893486+00:00
+sha256: aa837a9903687c178074dbfde2d0dd9a815e9c5d23222193b49798ef125140ba
+generated_at: 2026-10-15T09:41:01.326233+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generates (or checks) the single effective role-permission matrix table embedded in `docs/demo-ecommerce/index.md`. It computes, for every documented role and every module, exactly which permission keys the role holds by delegating to the kernel's `heldKeys` evaluator, then writes the result as a compact Markdown table between `<!-- role-matrix:start/end -->` markers. Prose outside the markers is never touched.
+Generates the **effective role matrix** table in `docs/demo-ecommerce/index.md` — a per-role, per-module view of exactly which permission keys each role holds after the evaluator resolves them. The answer cannot be written by hand (anonymous-baseline union, `any` vs `self` breadth, unrestricted expansion), so the script derives it from `heldKeys` and writes the result between HTML-comment markers, leaving surrounding prose untouched.
 
 ## Key elements
 
-- **`checkOnly`** — sets to `true` when `--check` is in `argv`; causes the script to report drift instead of rewriting the page.
-- **`roles`** — ordered list: `ANONYMOUS_ROLE` first, then `PRESET_ROLES` minus `system`. `system` is excluded because it is an alias for `admin`'s list and is never operator-assigned.
-- **`modules`** — unique module names extracted from `PERMISSION_KEYS` in declaration order; becomes the table columns.
-- **`callerFor(name, scope)`** — builds a `Caller` object the evaluator expects. Unions the anonymous baseline into non-anonymous roles' permissions, computes `unrestricted` and `level`, and sets `tenantId` / `system` to fixed sentinels.
-- **`codes`** — maps each action verb to a single letter (`r`, `c`, `u`, `d`, `x`, `s`, `o`) so the table stays narrow.
-- **`breadthOf(key)`** — returns the second-to-last dot segment of a permission key (the breadth token: `any` or `self`).
-- **`cell(caller, module)`** — for one role×module intersection, returns a string of action letters; uppercase means the `any`-breadth key is held, lowercase means `self` only; `—` means nothing.
-- **`effectiveTable()`** — assembles the full Markdown table (header, separator, one row per role).
-- **`body()`** — wraps the table with a short legend and a one-paragraph reading guide.
-- **`applyMarkerBlocks` call** — the entry point; writes `body()` into the target page or checks for drift, then sets `process.exitCode`.
+- **`callerFor(name, scope)`** – Builds the `Caller` object the evaluator would produce for a role, applying the anonymous-baseline union for non-anonymous scopes. Returns a `Caller` with a synthetic `id`/`tenantId` (`'generated'`) and `system: false` always.
+- **`cell(caller, module)`** – Renders one table cell: one-letter action codes (`r c u d x s o`), **UPPERCASE** when the caller holds the `any`-breadth key for that action, lowercase for `self`, em-dash (—) when nothing is held.
+- **`effectiveTable()`** – Assembles the full Markdown table (header + separator + one row per role, one column per module).
+- **`body()`** – The complete block content: intro sentence, the table, a legend line, and a closing interpretive paragraph. This is what replaces everything between the markers.
+- **`roles`** – `ANONYMOUS_ROLE` first, then `PRESET_ROLES` minus `system`. `guest` is kept as the comparison baseline; `system` is excluded because it duplicates `admin`'s keys and is never operator-assigned.
+- **`modules`** – Unique module names from `PERMISSION_KEYS` in declaration order; these become the table columns.
+- **`codes`** – Maps long action names to single letters so the table stays narrow.
+- **`breadthOf(key)`** – Extracts the second-to-last dot-segment of a key string (e.g. `"any"` from `orders.any.read`).
+- **`checkOnly`** – Set when `--check` is in `process.argv`; passed through to `applyMarkerBlocks` so `complete` reports drift instead of rewriting.
+- **`applyMarkerBlocks`** (from `./marker-block`) – Performs the marker-block write/check; the script exits with its return code.
 
 ## Relationships
 
-- **`src/kernel/permissions.ts`** — source of `ANONYMOUS_ROLE`, `PERMISSION_KEYS`, `PRESET_ROLES`, `permissionsOfRole`, `isUnrestricted`, `levelOfRole`. The script reads the role/permission model but never mutates it.
-- **`src/kernel/ability.ts`** — provides `heldKeys`, the single expansion function the script uses to determine which keys a role actually holds. The script deliberately does *not* use `holdsKey` (see Notes).
-- **`scripts/docs/marker-block.ts`** — provides `applyMarkerBlocks`, the shared read/replace-or-check mechanism for marker-delimited blocks in docs pages.
-- **`src/types/index.ts`** — source of the `AuthorizationScope` and `Caller` type imports used to shape `callerFor`'s return value.
+- **`src/kernel/permissions.ts`** – Source of `ANONYMOUS_ROLE`, `PERMISSION_KEYS`, `PRESET_ROLES`, `permissionsOfRole`, `isUnrestricted`, `levelOfRole`. The script queries these to build callers and enumerate the module columns.
+- **`src/kernel/ability.ts`** – Provides `heldKeys`, the single function that answers "which keys does this caller hold." The script deliberately uses `heldKeys` (full key set) rather than `holdsKey` (binary) to enumerate exact keys.
+- **`scripts/docs/marker-block.ts`** – `applyMarkerBlocks` handles the locate-replace-or-check logic between `<!-- role-matrix:start -->` and `<!-- role-matrix:end -->`.
+- **`scripts/modules-on-disk.ts`** – Supplies `REPO_ROOT` so the script resolves `docs/demo-ecommerce/index.md` relative to the repo root regardless of CWD.
+- **`src/types/index.ts`** – Type-only import of `AuthorizationScope` and `Caller`.
 
 ## Notes
 
-- **`heldKeys` vs `holdsKey`:** the script intentionally uses `heldKeys` (returns the full set of keys) rather than `holdsKey` (collapses breadth into a boolean). The table must show *which* keys are held, not just *whether* a role can act.
-- **`system` is excluded, `guest` is included.** `system` would duplicate `admin`; `guest` is included as the comparison baseline even though no user logs in as it.
-- **Uppercase = `any` breadth, lowercase = `self` breadth.** This encoding means a ten-column table still fits a wiki page without a separate legend per column.
-- **`--check` is the CI path.** `complete` invokes the script with `--check`; the script then exits non-zero on drift without modifying the file. The `driftSubject` and `rerunScript` strings passed to `applyMarkerBlocks` tell the developer what changed and how to regenerate.
-- **`callerFor` duplicates part of `callerInScope`'s logic** (anonymous-baseline union) because the script has no live `AuthContext`. The two implementations agree because both read `permissionsOfRole`; this is acknowledged in the inline comment.
+- The script manages **exactly one table** between the markers. All surrounding prose (role descriptions, narrative) is hand-written and must not be regenerated here.
+- `tenantId` is the literal string `'generated'` — a placeholder that satisfies the `Caller` type; it has no runtime meaning.
+- The anonymous baseline union (`permissionsOfRole(name) ∪ ANONYMOUS_ROLE.permissions`) is applied **inside** `callerFor` for every non-anonymous scope, mirroring what the kernel does at request time. Omitting it would make every row look more permissive than it actually is.
+- `--check` is the mode `npm run complete` invokes; it exits non-zero on drift without touching the file. The re-run hint surfaced to the operator is `docs:roles`.
+- The `system` role is intentionally absent from the table. It is an internal alias for `admin`'s key list and is never a role an operator assigns to a user.
