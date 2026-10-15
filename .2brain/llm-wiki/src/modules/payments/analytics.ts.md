@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/analytics.ts
-sha256: ffffff97a52051ea7bee7a01cd246fd0cc801581d68ab053d6a3906af92b92a8
-generated_at: 2026-09-23T19:16:07.721356+00:00
+sha256: 5c1cd44db0c8307dce45765c11a12ae744110a876df9cf226b972ee9bb111c8e
+generated_at: 2026-10-15T11:22:25.036788+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the canonical analytics event names for the payments module and registers them into the shared `AnalyticsEventMap` via TypeScript module augmentation, so that any consumer typing an event name against the `payments` channel gets autocomplete and compile-time safety without importing a duplicated list.
+Declares the canonical analytics event names for the payments domain and registers them with the analytics port's `AnalyticsEventMap` via TypeScript module augmentation, so that any `emit` of a payments event is type-checked against this list. Controllers import this file directly (mirroring the pattern `./audit.ts` uses for audit actions) rather than a published copy.
 
 ## Key elements
 
-- **`paymentsAnalyticsEvents`** (`as const`) — the three event-name constants:
-    - `PAYMENT_SUCCEEDED` / `PAYMENT_DECLINED` — the funnel's final gate; their ratio is the card-conversion metric.
-    - `PAYMENT_RECORDED_OFFLINE` — a deliberately _separate_ event (not a flagged `PAYMENT_SUCCEEDED`) because the payment never traversed the provider funnel; folding it in would inflate the conversion denominator.
-- **`declare module '@infrastructure/observability/analytics'`** — augments `AnalyticsEventMap` with a `payments` key typed to the union of the three constants above. This is what makes the event names part of the shared port's name map (same pattern as `./audit.ts` uses for audit actions).
+- **`paymentsAnalyticsEvents`** (exported const object, `as const`) — the three event names this module emits:
+  - `PAYMENT_SUCCEEDED` → `'payment_succeeded'`
+  - `PAYMENT_DECLINED` → `'payment_declined'`
+  - `PAYMENT_RECORDED_OFFLINE' → `'payment_recorded_offline'`
+- **Module augmentation** (`declare module '@infrastructure/observability/analytics'`) — adds a `payments` key to `AnalyticsEventMap` typed as the union of the values above, making typos a compile error.
 
 ## Relationships
 
-- **`src/modules/payments/services/settlement.ts`** and **`src/modules/payments/services/offline.ts`** are the graph neighbors. They are the expected emitters of the events declared here: settlement emits `PAYMENT_SUCCEEDED` / `PAYMENT_DECLINED` after the provider round-trip, and offline emits `PAYMENT_RECORDED_OFFLINE` when a payment is recorded without going through that funnel. This file is the single source of truth for the string values those services must use.
+- **`src/modules/payments/services/offline.ts`** — consumes `PAYMENT_RECORDED_OFFLINE` when recording a payment that bypasses the provider funnel entirely.
+- **`src/modules/payments/services/settlement.ts`** — consumes `PAYMENT_SUCCEEDED` / `PAYMENT_DECLINED` at the end of the provider settlement path.
+- **`src/modules/payments/tests/integration/settlement-reports.test.ts`** — asserts the expected event names emitted during settlement flows.
 
 ## Notes
 
-- Event-name strings follow the convention in `docs/tools/analytics.md#naming` (snake_case).
-- The file is imported _directly_ by controllers/services rather than via a re-export, so the module augmentation is picked up wherever the file is in the dependency graph.
-- Do **not** add a boolean "offline" flag to `PAYMENT_SUCCEEDED` to cover offline recordings — the separation is intentional to keep the conversion metric clean.
+- `PAYMENT_RECORDED_OFFLINE` is intentionally **not** a flag on `PAYMENT_SUCCEEDED`. Folding it in would inflate the card-conversion metric (`succeeded / (succeeded + declined)`) with transactions the provider funnel never touched.
+- Event-name strings follow the convention in `docs/tools/analytics.md#naming`; do not rename them ad hoc.
+- The succeeded/declined pair is the denominator for the funnel's last-gate conversion number—any provider change that shifts that ratio should be visible in these two events specifically.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/routes.ts
-sha256: 5f0795871ae7f99934070904d17cceb7cc174da359def65f1aa25c174f2bbc70
-generated_at: 2026-09-23T19:20:38.476462+00:00
+sha256: bbdde545983067a195e60c99ad817bdf1176210b8558ee89bb1008876afaf130
+generated_at: 2026-10-15T11:28:58.230816+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express router that wires every payment endpoint to its controller, applying the correct authentication, authorization, idempotency, and rate-limit middleware per route. It enforces the module's security layering: two public routes above the auth wall, step-up-protected money-moving routes below it, and velocity limits on card validation.
+Express router that wires every payment endpoint to its controller, applying the correct sequence of auth, permission, rate-limit, and idempotency middleware per route. It encodes the layered security policy (public → session → role → fresh-auth → cart-verification → velocity → idempotency) so individual controllers stay purely about business logic.
 
 ## Key elements
 
-- **`router`** (exported) — the sole export; an Express `Router` instance with all payment routes defined in order.
-- **`POST /webhook`** — provider callback; uses `webhookLimiter` only (no session). Must stay above the auth wall.
-- **`GET /methods`** — public list of offered payment methods; must stay above the auth wall.
-- **`router.use(getAuth, isAuth)`** — the auth wall; every subsequent route requires a valid session.
-- **`POST /intent`** — freezes an order's price. Guarded by `requireFreshAuth(REAUTH_TIME_CRITICAL)`, `requirePermission('cart.self.checkout')`, and `idempotencyKey`.
-- **`GET /order/:orderId`** — reads back the payment for a given order (no extra guards beyond auth).
-- **`GET /order-by-reference`** — admin RF-code lookup; requires `payments.any.create`. Literal path segment, not a param.
-- **`POST /order/:orderId/refund`** — operator-initiated refund; requires `payments.any.update` + `idempotencyKey`.
-- **`POST /order/:orderId/offline`** — admin records a manual payment; requires `payments.any.create` + `idempotencyKey`.
-- **`POST /:id/confirm`** — card validation/submission. Stack: fresh-auth → permission → `paymentConfirmAttemptLimiter` → `paymentConfirmDeclineLimiter` → `paymentDeclineChallengeGate` → `idempotencyKey`.
-- **`POST /:id/sync`** — browser reports provider completion. No `idempotencyKey` (idempotent by construction via provider reference).
+- **`router`** (default export) — `express.Router()` instance mounted at the payments path.
+- **`POST /webhook`** — Provider callback; uses `webhookLimiter` only (no session auth, body-signed by the provider). Must remain above the auth wall.
+- **`GET /methods`** — Public; lists available payment methods (same rationale as `GET /delivery/methods`).
+- **`GET /` and `POST /search`** — Staff payment list; `payments.any.read` (exact) + `privateNoCache` / `noStore`.
+- **`GET /refunds`**, **`GET /attention`** — Staff read views; same permission and cache guards.
+- **`POST /intent`** — Freezes an order price. Requires `requireFreshAuth('critical')`, `cart.self.update`, `cart.self.checkout`, `paymentIntentLimiter`. No idempotency key (re-request refreshes the same intent; key would store `clientSecret`).
+- **`GET /order/:orderId`** — Payment behind a specific order.
+- **`GET /order-by-reference`** — Admin RF-code lookup; `payments.any.create`.
+- **`POST /order/:orderId/refund`** — Operator-initiated refund. `payments.any.update` (carries `stepUp: critical` in the YAML key table) + **required** idempotency key.
+- **`POST /order/:orderId/offline`** — Manual offline record. `payments.any.create` (same `stepUp` pattern) + optional idempotency key.
+- **`POST /:id/confirm`** — Card validation / charge. `requireFreshAuth('critical')`, both `cart` permissions, three velocity limiters (`Attempt`, `Decline`, `DeclineBlock`), `paymentDeclineChallengeGate`, optional idempotency key.
+- **`POST /:id/sync`** — Browser reports provider-side completion. Same auth stack as `/intent`; no idempotency key (idempotent by provider reference).
 
 ## Relationships
 
-- **`src/kernel/middlewares/authorizations.ts`** — supplies `getAuth`, `isAuth`, `requirePermission`, `requireFreshAuth`, and the `REAUTH_TIME_CRITICAL` constant used throughout.
-- **`src/infrastructure/http/middlewares/idempotency.ts`** — supplies the `idempotencyKey` middleware applied to all non-idempotent money-moving writes.
-- **`src/modules/payments/rate-limits.ts`** — supplies `webhookLimiter`, `paymentConfirmAttemptLimiter`, `paymentConfirmDeclineLimiter`, and `paymentDeclineChallengeGate`.
-- **Controllers (`./controllers/*`)** — each route's terminal handler is a named import from its dedicated controller file (e.g. `postPaymentConfirm`, `getPaymentMethods`, etc.).
-- **`src/modules/payments/module.ts`** — mounts this router into the application.
-- **`src/modules/payments/tests/unit/routes.test.ts`** — unit tests for route wiring and middleware order.
-- **`tests/cross-cutting/step-up-auth-routes.test.ts`** — verifies the step-up/reauth behavior encoded in this router.
+- **`@kernel/middlewares/authorizations`** — Supplies `getAuth`, `isAuth` (the auth wall), `requirePermission`, and `requireFreshAuth`.
+- **`@infrastructure/http/middlewares/idempotency`** — Supplies `idempotencyKey` (optional) and `requireIdempotencyKey` (mandatory) for refund and confirm.
+- **`@infrastructure/http/middlewares/cache`** — Supplies `noStore` and `privateNoCache` for staff-facing GETs.
+- **`./rate-limits`** — Supplies `webhookLimiter`, `paymentIntentLimiter`, `paymentConfirmAttemptLimiter`, `paymentConfirmDeclineLimiter`, `paymentConfirmDeclineBlockLimiter`, `paymentDeclineChallengeGate`.
+- **Twelve controllers** under `./controllers/` — Each route delegates its handler to exactly one controller function (e.g. `postPaymentConfirm`, `getPaymentMethods`).
 
 ## Notes
 
-- **`order-by-reference` is a literal segment**, not `/order/:ref`. It intentionally names no order ID; treating it as a param would match `/order/anything` and shadow the `:orderId` GET.
-- **Refund and offline do NOT call `requireFreshAuth` explicitly.** The `stepUp: critical` tier is declared on the authorization key (`payments.any.update` / `payments.any.create`) in `shared/authorization-keys.yaml`, so `requirePermission` internally enforces the fresh-session check. Adding a redundant `requireFreshAuth` here would be a second source of truth.
-- **`cart.self.checkout` is owned by the cart module**, not payments. Payments mounts it the same way `products/routes.ts` mounts `locales`-owned `translations.*`. Changes to that key live in the cart module.
-- **Middleware order on `/:id/confirm` is deliberate**: velocity limiters and the challenge gate sit _before_ `idempotencyKey`, mirroring where `credentialLimiters`/`loginChallengeGate` sit on `POST /account/login`. Reordering changes what gets rate-limited vs. what gets deduplicated.
-- **Webhook and `/methods` must remain above the `router.use(getAuth, isAuth)` line.** Moving them below would break provider deliveries (no session to skip) and hide public pre-purchase info behind login.
+- **Route ordering matters.** `/webhook` and `/methods` must precede `router.use(getAuth, isAuth)`; all other routes must follow it. Moving them breaks the public/authenticated split.
+- **`/order-by-reference` is a literal segment**, deliberately not matched by `/order/:orderId`. The `:orderId` param routes are all POSTs on a longer path, so there is no collision, but the naming is intentional.
+- **`stepUp` is defined in `shared/authorization-keys.yaml`, not here.** `payments.any.update` and `payments.any.create` carry `stepUp: critical`, so the router does *not* also call `requireFreshAuth` on refund/offline; the key table enforces it. Adding a new route that uses those keys inherits the fresh-session requirement for free.
+- **`/intent` has no idempotency key by design** — a second call refreshes the same intent, and storing the response would persist the `clientSecret` in the idempotency ledger.
+- **`/sync` has no idempotency key** because it is idempotent by construction (keyed on the provider's payment reference).
+- **`/confirm` stacks three separate limiters plus a challenge gate** between identity guards and idempotency, mirroring the `credentialLimiters` + `loginChallengeGate` pattern on `POST /account/login`.
+- **Staff GETs use `privateNoCache` / `noStore`** (RFC 9111 §3.5 POST rule extended to sensitive GETs) because the responses contain the shop's entire payment state.

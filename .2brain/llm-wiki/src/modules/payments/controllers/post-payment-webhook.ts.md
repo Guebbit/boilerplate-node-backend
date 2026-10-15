@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/controllers/post-payment-webhook.ts
-sha256: 2b350ca7ae003a3e559fa7d02372ae724b25c2036e2a8201454b2947291da116
-generated_at: 2026-09-23T19:17:55.876206+00:00
+sha256: 013110f004111fda0dd19129d8f130530ae6bd67b5f042c3dcaf70b2e9ed748b
+generated_at: 2026-10-15T11:24:43.001326+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express controller for `POST /payments/webhook`. Receives payment-event notifications from an external provider, verifies the raw-body signature (no session auth), delegates the validated event to the payment service, and responds with 200 or 400. It exists to be the single, deliberately minimal entry point through which a payment provider's word becomes actionable in this system.
+Handles `POST /payments/webhook`: receives a signed event from the payment provider confirming what happened to a payment, verifies the signature against the raw body, and delegates processing to the payment service. It is the sole entry point for provider-originated state changes — no session, no cookie, just a cryptographically signed raw byte string.
 
 ## Key elements
 
-- **`postPaymentWebhook(request, response)`** – The sole export. Reads `request.rawBody` (a Buffer preserved by a custom `express.json` `verify` hook), calls the provider to parse and verify the webhook, hands the resulting event to `paymentService.applyWebhookDelivery`, and returns either a 200 success, a 400 rejection (bad signature, malformed body, missing event id), or a 500 via `catchAs` for unexpected internal errors.
+- **`postPaymentWebhook(request, response)`** — the exported Express handler. Resolves the configured provider, calls `provider.parseWebhook(rawBody, signatureHeader)` to verify + parse, then calls `paymentService.applyWebhookDelivery(event)`. Returns `200` for any authentic event (including ones this module ignores), `400` for an unverifiable signature, `404` when no provider is configured, and `500` (via `catchAs`) for internal faults so the provider retries.
+- **`WebhookRejected`** (imported from `../providers`) — error thrown by the provider's parser on any verification failure. Carries `.message` (specific reason) and `.signatureFailure` (boolean flag distinguishing a likely attack from a provider-side malformed event).
+- **`WEBHOOK_SIGNATURE_HEADER`** — constant naming the header the provider signs into the request.
 
 ## Relationships
 
-| Neighbor                                              | Interaction                                                                                                                                                               |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/modules/payments/providers/index.ts`             | Imports `resolvePaymentProvider` (to obtain the active provider and call `parseWebhook`), the `WebhookRejected` error class, and the `WEBHOOK_SIGNATURE_HEADER` constant. |
-| `src/modules/payments/providers/webhook-signature.ts` | Indirect dependency through the providers index; the actual signature verification logic lives there.                                                                     |
-| `src/modules/payments/services/index.ts`              | Imports `paymentService` and calls `applyWebhookDelivery(event)` after successful parsing.                                                                                |
-| `src/modules/payments/routes.ts`                      | Registers `postPaymentWebhook` as the handler for `POST /payments/webhook`.                                                                                               |
-| `src/infrastructure/http/response.ts`                 | Uses `successResponse` and `rejectResponse` to shape the HTTP reply.                                                                                                      |
-| `src/infrastructure/http/controller.ts`               | Uses `catchAs` to convert unexpected errors into a 500 response.                                                                                                          |
-| `src/infrastructure/adapters/logger.ts`               | Logs an `error` when `rawBody` is missing and a `warn` when the provider rejects the webhook.                                                                             |
-| `src/infrastructure/i18n/index.ts` / `context.ts`     | Uses `t()` for user-facing error/success message keys (`payments.webhook-unverified`, `payments.webhook-accepted`).                                                       |
+- **`../providers` (index / webhook-signature)** — supplies `resolvePaymentProvider` (async factory), `WebhookRejected`, and `WEBHOOK_SIGNATURE_HEADER`. The provider's `parseWebhook` performs the actual signature check and JSON parse.
+- **`../services` (index)** — `paymentService.applyWebhookDelivery(event)` is the sole downstream call; deduplication by event id and state transitions live there.
+- **`../routes.ts`** — registers this handler on `POST /payments/webhook`.
+- **`@infrastructure/http/response`** — `successResponse` / `rejectResponse` shape the HTTP reply.
+- **`@infrastructure/http/controller`** — `catchAs` wraps unhandled errors into a `500` with structured logging.
+- **`@infrastructure/http/request`** — `callerContextOf` extracts IP/user-agent metadata for the security event.
+- **`@infrastructure/observability/security-events`** — `recordSecurityEvent` fires only when `WebhookRejected.signatureFailure` is true.
+- **`@infrastructure/observability/audit`** — `coreAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE` identifies the audit action.
+- **`@infrastructure/adapters/logger`** — logs the missing-`rawBody` error and every rejection.
+- **`@infrastructure/i18n`** — `t('payments.webhook-…')` localises the user-facing message strings in `200`/`400`/`404` responses.
 
 ## Notes
 
-- **`rawBody` is a hard precondition.** The `verify` hook on `express.json` (configured in `app/security.ts`) attaches the original Buffer to `request.rawBody` for this route only. If the parser ordering is changed, every signature check fails; the controller guards against this with an early 400 and an `error` log.
-- **200 means "delivered," not "applied."** Any authentic event—regardless of whether this module acts on it—gets a 200. A non-2xx triggers provider retries, so the contract is: 400 only for unverifiable input, 500 only for genuine internal faults (which _should_ be retried).
-- **`WebhookRejected.message` is the log detail.** The controller logs `error.message` verbatim rather than a fixed string, because the message already encodes the specific failure reason (bad header, timestamp drift, mismatch, invalid JSON, missing id).
-- **Stryker mut-testing disables** wrap the `rawBody`-missing branch and the `WebhookRejected` log line to suppress intentional "dead" mutations in those defensive paths.
+- **`rawBody` is load-bearing.** It is populated by the `verify` hook passed to `express.json` in `app/security.ts`. If that ordering is ever broken, every webhook silently fails signature verification. The controller guards for it but can only return a generic `400`.
+- **200 means "got it", not "processed it".** The provider treats any non-2xx as a failed delivery and retries. Even events this service ignores must still produce a 200.
+- **Security-event vs. log line.** Only `WebhookRejected` instances with `.signatureFailure === true` are recorded as security events. A provider sending malformed JSON or a missing event id is logged but not escalated — it is a provider fault, not an attack.
+- **Stryker annotations** (`Stryker disable … all`) suppress mutation testing on dead-defensive branches (the `!rawBody` guard and the rejection warn log).
+- **No body re-serialisation.** The handler passes the `Buffer` (`rawBody`) directly to the parser; never substitute a parsed-then-re-serialised object, or the signature check will fail.

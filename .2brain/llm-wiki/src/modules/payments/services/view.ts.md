@@ -1,38 +1,34 @@
 ---
 source: src/modules/payments/services/view.ts
-sha256: 04b3fc21569d2c99654a4d289f18f7d3541a3bc965d84c931ddff69721d25e0e
-generated_at: 2026-09-27T15:27:57.384786+00:00
+sha256: e48967a5df6c8bd3eeb317f5383fb08593ba5880f8219775a90660a53171b5ea
+generated_at: 2026-10-15T11:32:38.325948+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/payments/services/view.ts
 
 ## Purpose
-
-Read-side service for payments: retrieves the payment linked to an order and enriches it with the set of actions (`pay`, `refund`) the caller is permitted to take. This is the data contract behind the order page's payment panel, mirroring the `OrderActions` shape the orders module publishes.
+Read-side query service for the order page's payment panel. Given an order ID and an auth context, it fetches the associated payment, computes which `actions` (`pay`, `refund`) the caller may take, and returns a shaped `Payment` payload ready for the frontend.
 
 ## Key elements
-
-- **`getForOrder(orderId, authContext?)`** — Looks up a payment by order ID (scoped via `callerScope`), returns a 404 reject if absent, then fetches the order and returns a success response with the payment decorated by `withActions`.
-- **`withActions(payment, order?, authContext?)`** — Spreads `payment.toJSON()` (which applies the model's `_id → id` / date-to-ISO transform) and attaches an `actions` object:
-  - `pay` — true when the payment status is in `CONFIRMABLE_PAYMENT_STATUSES` **and** the order's status is payable per `isPayable`. In-flight (sync-pending) payments are deliberately excluded.
-  - `refund` — true when the caller holds the `payments.any.update` ability key (checked via `holdsKey` on the `Payment` subject) **and** the payment is in `REFUNDABLE_PAYMENT_STATUS`.
+- **`getForOrder(orderId, authContext?)`** – Looks up the payment via `paymentRepository.findByOrderId` (scoped by `callerScope`). If the payment is missing, returns a 404 reject. Otherwise fetches the order (solely to answer `isPayable`) and delegates action-computation to `withActions`.
+- **`withActions(payment, order, authContext?)`** – Assembles the final `Payment` object: spreads `presentPayment` output, then attaches an `actions` object with `pay` and `refund` booleans. Calls `orderService.handlesMoneyOf` to gate the refund path.
+- **`isPayerWithCheckout(payment, authContext?)`** – Private helper. Returns `true` only when the caller is the originating account *and* holds the `cart.self.checkout` ability. Excludes staff, other customers, and erased accounts.
 
 ## Relationships
-
-- **`./scope` → `callerScope`** — determines whether the caller sees only their own payment or can see any (admin).
-- **`../model` → `CONFIRMABLE_PAYMENT_STATUSES`** — the set of payment statuses that allow a `pay` action.
-- **`./refunds` → `REFUNDABLE_PAYMENT_STATUS`** — the single status that gates the `refund` action.
-- **`@modules/orders` (`orderService`, `isPayable`)** — provides order lookup and the order-side half of the payability check.
-- **`@kernel/ability` / `@kernel/permissions`** — `holdsKey` and `callerForSubject` resolve whether the caller's subject holds the `payments.any.update` key.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` wrap results in the standard HTTP response shape.
-- **`@infrastructure/i18n`** — `t('payments.not-found')` localises the 404 message.
-- **`../repository`** — `paymentRepository.findByOrderId` is the data-access call.
-- **`./index.ts`** — re-exports both functions as the public surface of the payments services.
-- **`../tests/integration/service.test.ts`** — integration tests exercise these exports end-to-end.
+- **`@modules/orders`** (`orderService`, `isPayable`, `OrderDocument`) – `getForOrder` fetches the order to evaluate `isPayable`; `withActions` calls `orderService.handlesMoneyOf` for the refund gate.
+- **`../repository`** (`paymentRepository`) – Primary data access for the payment document.
+- **`../presenter`** (`presentPayment`) – Serializes the raw `PaymentDocument` into the wire shape.
+- **`../domain`** (`CONFIRMABLE_PAYMENT_STATUSES`, `REFUNDABLE_PAYMENT_STATUS`) – Status constants that drive the `pay`/`refund` action checks.
+- **`@kernel/permissions`** (`callerForSubject`) and **`@kernel/ability`** (`holdsKey`) – Permission/ability lookups for `cart.self.checkout` and `payments.any.update`.
+- **`@infrastructure/http/response`** – `generateSuccess` / `generateReject` build the HTTP response envelopes.
+- **`@infrastructure/i18n`** – `t()` localizes the 404 message.
+- **`./scope`** (`callerScope`, `readsAllPayments`) – Resolves the repository query scope and presenter-level visibility from the auth context.
+- **`./refunds`** (`remainingOf`) – Determines whether unrefunded balance exists for the `refund` action.
+- **`services/index.ts`** – Re-exports the public functions from this module.
 
 ## Notes
-
-- `withActions` is exported separately so other payment services (e.g. `refunds.ts`) can reuse the same action-computation logic without re-fetching.
-- The `pay` flag intentionally excludes in-flight payments to prevent a customer from submitting a second payment method before `sync` resolves.
-- The refund check uses the exact key `payments.any.update` rather than a broader role check; a moderator holding only that key will see the action, while a broader `payments.any.*` match would have hidden it (see comment in source).
+- **`pay` deliberately excludes in-flight payments.** An in-flight payment's next transition is `sync` (webhook), not a second payment method; offering the card form again risks double-charge.
+- **Refund key is intentionally narrow.** The check uses `payments.any.update` (the moderator's key). Asking for a broader permission would *hide* the action from a moderator who holds exactly that key.
+- **`withActions` is async** because `orderService.handlesMoneyOf` performs an async ranking check (operator vs. buyer). Consumers must `await` it.
+- The order is fetched inside `getForOrder` *only* to answer `isPayable`—the file's own comment calls this out as the mechanism that prevents the client from deriving payability from two separate fields.

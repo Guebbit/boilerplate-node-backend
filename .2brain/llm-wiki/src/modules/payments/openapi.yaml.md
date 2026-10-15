@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/openapi.yaml
-sha256: f7d879671da791ba3e6b7363171d4f48e8668194e88519dc27084204392ef834
-generated_at: 2026-09-27T15:24:07.247377+00:00
+sha256: 6b53877971cba4f6aa3762e154d9c480ce0bf394f0046e265b9dd5d0b0756779
+generated_at: 2026-10-15T11:26:52.833153+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.0.3 contract for the payments module. It defines the full API surface a client needs to discover payment methods, create and confirm a payment intent tied to a pending order, look up payment state by order, and (admin-only) refund, record offline payment, or resolve an RF creditor reference back to an order.
+OpenAPI 3.1.0 module contract for the payments domain. It declares every HTTP endpoint the payments module exposes (method listing, payment/refund queries, the attention queue, intent creation), the module-specific error vocabulary, and the `payments` slice of the account data export. A bundler merges this file into the shop's root OpenAPI document; removing the module removes its paths and export section.
 
 ## Key elements
 
-- **`GET /payments/methods`** (`listPaymentMethods`) — public; returns which methods (`card`, optionally `bank_transfer`) this deployment offers.
-- **`POST /payments/intent`** (`createPaymentIntent`) — authenticated; freezes a caller's `pending` order into a payment intent. Idempotent via `Idempotency-Key`; 409 if the order is no longer payable or the key is in-flight.
-- **`GET /payments/order/{orderId}`** (`getPaymentByOrder`) — authenticated; retrieves the payment record for one of the caller's orders (404 if no intent exists yet).
-- **`GET /payments/order-by-reference`** (`getOrderByReference`) — admin; resolves an RF creditor reference (mod-97 validated) to an order. Returns 404 for both malformed and unmatched references. Requires a fresh session (stale token → 401 `REAUTH_REQUIRED`).
-- **`POST /payments/order/{orderId}/refund`** (`refundPaymentByOrder`) — admin; refunds a `succeeded` payment. Conditional write: second submit gets 409. Requires fresh session.
-- **`POST /payments/order/{orderId}/offline`** (`recordOfflinePayment`) — admin; records a payment that bypassed the card provider (cash, transfer, etc.), marking it `manual` and running the same settlement path as a confirmed intent. Requires fresh session.
-- **Schemas** (referenced via `#/components/schemas/…`): `PaymentMethodsResponseEnvelope`, `CreatePaymentIntentRequest`, `PaymentEnvelope`, `OrderByReferenceResponseEnvelope`, `RecordOfflinePaymentRequest`, plus the `Payment` / `PaymentMethods` data shapes defined in the truncated portion of the file.
+- **`x-error-codes`** — Seven module-scoped error codes (`PAYMENT_DECLINED`, `PAYMENT_IN_FLIGHT`, `PAYMENT_NOT_CONFIRMABLE`, `PAYMENT_NOT_REFUNDABLE`, `PAYMENT_REFUND_EXCEEDS_REMAINING`, `PAYMENT_ORDER_NOT_PAYABLE`, `PAYMENT_CARD_NOT_AVAILABLE`) with HTTP status and human description.
+- **`x-personal-data`** — Defines the `payments` array (items: `ExportPayment`) that the bundler injects into `POST /account/export`.
+- **`GET /payments/methods`** — Public, no auth. Returns which payment methods (`card`, `bank_transfer`) are configured for this deployment; empty list means checkout is off.
+- **`GET /payments`** — Staff listing (`payments.any.read`). Supports pagination, sort, `displayStatus`, `method`, `provider`, date/amount range, `orderId`, `reference` filters. Exposes provider refs and failed-refund reasons not available to payers.
+- **`POST /payments/search`** — Body-variant of the above; tagged `x-alias-of: listPayments`.
+- **`GET /payments/refunds`** — Staff refund listing across all payments; read-only (mutations go through the refund/cancel write path).
+- **`GET /payments/attention`** — Staff queue of unresolved payment problems (stuck refunds, manual refunds owed, stock-commit owed, post-cancel refund owed). Oldest-first, 100-row cap per source. Amount mismatches are excluded (they live in audit, not stored state).
+- **`POST /payments/intent`** *(truncated in source)* — Creates or refreshes a payment intent for a `pending` order. Idempotent by design (no `Idempotency-Key` needed); 201 = created, 200 = refreshed. Rate-limited per caller (429).
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — every error response (`InternalError`, `Unauthorized`, `NotFound`, `Conflict`, `ValidationError`, `Forbidden`), the `Idempotency-Key` parameter, and the `Id` path-parameter schema are `$ref`-imported from this shared root document. This file contributes no shared error or parameter definitions of its own.
+- **`shared/contracts/openapi.root.yaml`** — `$ref` targets for shared parameters (`PageParam`, `PageSizeParam`), the `Id` schema, and standard error responses (`InternalError`, `Unauthorized`, `Forbidden`, `ValidationError`). This file contributes nothing to the root; it only consumes from it.
 
 ## Notes
 
-- Several admin endpoints (`order-by-reference`, `refund`, `offline`) enforce a **re-authentication window**: a valid-but-stale bearer token yields 401 with `errors[].code = REAUTH_REQUIRED`; the client must re-authenticate and retry.
-- `POST /payments/intent` and `POST /payments/order/{orderId}/offline` both accept an `Idempotency-Key` header (imported from the shared root), but `GET` endpoints do not.
-- The `order-by-reference` endpoint is deliberately **non-oracle**: a malformed reference and a well-formed-but-unmatched reference both return 404 with no distinguishing body, so an attacker cannot confirm whether a near-miss code was close.
-- OpenAPI `links` objects wire `createPaymentIntent → confirmPayment` and `getOrderByReference → recordOfflinePayment` as the expected next-step operations, but `confirmPayment` is defined in a separate spec (not in this file's visible paths).
-- The file is truncated in the graph; the `components.schemas` block and any `RecordOfflinePaymentRequest` fields are not fully visible here.
+- `security: []` on `GET /payments/methods` is intentional — it is pre-purchase public information, mirroring `GET /delivery/methods`.
+- `x-alias-of` is a custom extension (not standard OpenAPI) used to signal that `searchPayments` and `listPayments` share one handler.
+- The attention endpoint deliberately excludes amount mismatches; do not add them there — they are audit rows (`payment.amount_mismatch`), not document state.
+- The file content shown is truncated; the `POST /payments/intent` description and any subsequent paths/schemas are not visible in this excerpt.

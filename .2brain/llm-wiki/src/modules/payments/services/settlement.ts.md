@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/settlement.ts
-sha256: 1816e6eb13b6313f820cd6c65b7ab72c6b616ab4919812516b537e65b94b5a43
-generated_at: 2026-09-27T15:27:36.506029+00:00
+sha256: c17b52af3751d3719abd328e0485a6a12f2211dd752cd61b99e5d31c753768f8
+generated_at: 2026-10-15T11:32:12.771690+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single reconciliation point for payment state. Whether the trigger is a provider webhook, a browser-driven confirm, or a sync poll, every path funnels into `settlePayment` so that inventory is committed (or refunded) at most once. The file exists to prevent two parallel settlement paths from double-committing stock or double-refunding.
+The single reconciliation point for payment settlement. All entry paths—browser-driven confirm/sync and provider webhook delivery—funnel into `settlePayment` so that money is reconciled in exactly one place. This prevents two divergent code paths from committing inventory twice.
 
 ## Key elements
 
-- **`SETTLEABLE_PAYMENT_STATUSES`** – readonly tuple of non-terminal statuses (`requires_confirmation`, `requires_action`, `processing`, `declined`). Every conditional write uses this as the "from" set; terminal statuses (`succeeded`, `refunded`) are excluded, which is what gives the at-most-once guarantee.
-- **`Settlement`** – the return shape: the latest `PaymentDocument` plus `orderLost: boolean`, telling the caller whether to respond with a refusal even though the payment status reads `succeeded`.
-- **`settlePayment(payment, state)`** – the exported function. Branches on the provider-reported status:
-  - *Non-terminal* (`processing`, `requires_action`): writes the payment status conditionally; for `processing` additionally extends the inventory hold to the bank-transfer window.
-  - *`declined`*: conditional write; on success emits `PAYMENT_FAILED`.
-  - *`succeeded`*: calls `orderService.markPaid`, then conditionally writes `succeeded` with `pendingEffects: ['commit']`. If the order is no longer `paid`, attempts a refund via `performRefund` and returns `orderLost: true`. Otherwise commits inventory via `inventoryService.commitForOrder`, clears the pending-effect marker, emits `PAYMENT_SUCCEEDED`, and enqueues the buyer's confirmation email.
-- Imports `performRefund` from `./refunds` and `callerScope` from `./scope`; uses `claimWebhookEvent` / `releaseWebhookEvent` from `../repository` for webhook de-duplication (referenced in the module's broader flow).
+- **`Settlement`** (interface) — the result shape returned to callers: the updated `PaymentDocument`, an `orderLost` flag (money arrived but order can no longer be paid), and a `transitioned` flag (did *this* call perform the write, or did a racing call win?).
+- **`receiptMismatch`** — compares the provider's `succeeded` report (amount, currency, paymentId) against the frozen payment. Returns the list of disagreeing fields; uses `toMinorUnits` so float noise is not a false mismatch.
+- **`refundLostPayment`** — puts the money back when the order is no longer payable. Writes a durable `markRefundOwed` marker *before* attempting the refund; logs and swallows failures, leaving the `ORDER_REFUND_OWED` retry sweep to finish.
+- **`cancelMismatchedOrder`** — cancels the order after a provider mismatch; falls back to `refundLostPayment` if the cancel is refused; logs and swallows throws, relying on reservation expiry as the final safety net.
+- **`settleMismatch`** — records the *arrived* figures (not the frozen ones) so the refund returns what was actually collected, cancels the order, increments a mismatch metric, records an audit entry, and returns a `Settlement` with `orderLost: true`.
+- **`SettlementOutcome`** (type) — the in-transaction decision: `replay` (already settled), `paid`, or `lost`.
+- **`settleWithin`** — the one atomic step inside a DB transaction: conditional `succeeded` write (gated on `SUCCESS_SETTLEABLE_PAYMENT_STATUSES`), order `paid` transition + stock-hold commit, timeline and outbox rows. Database-only; no provider calls or mail so a driver re-run on transient error is safe.
+- **`systemContext`** — builds a `CallerContext` under `SYSTEM_ACTOR` for non-request settlement paths (analytics consent off).
+- **`settlePayment`** *(below truncation)* — the public entry point referenced in the module doc; orchestrates the success/mismatch branches.
 
 ## Relationships
 
-- **`@infrastructure/adapters/logger`** – structured error logging for non-fatal failures (hold-extension failure, refund failure).
-- **`@infrastructure/adapters/mailer`** – `enqueueEmail` dispatches the buyer's payment-confirmation email.
-- **`@infrastructure/http/response`** – `generateSuccess` / `generateReject` build the HTTP payload the caller (webhook handler, confirm endpoint) returns.
-- **`@infrastructure/i18n`** – `t` localizes email and response copy.
-- **`@infrastructure/observability/analytics`** – `emitAnalyticsEvent`, `buildAnalyticsBase` record settlement analytics.
-- **`@infrastructure/observability/audit`** – `recordAudit` writes an audit trail entry per settlement.
-- **`@kernel/events`** – `emitDomainEvent` fires `PAYMENT_SUCCEEDED` / `PAYMENT_FAILED` (fire-and-forget via `void`).
-- **`@modules/inventory`** – `inventoryService.commitForOrder` releases the held units; `inventoryService.extendHoldForOrder` extends the hold for bank-transfer timelines.
-- **`@modules/orders`** – `orderService.markPaid`, `orderService.markRefundOwed`, `orderService.clearRefundOwed`, `orderService.getById` for order-state transitions and status re-reads; `bankTransferHoldHours`, `isPayable` from `orders/config`; `mailBuyer`, `paymentSucceededEmail` from `orders/emails`.
+- **`@kernel/permissions`** — uses `SYSTEM_ACTOR` and `callerForSubject` to act under a system identity when no HTTP request is behind the settlement.
+- **`@kernel/outbox`** — enqueues outbox events (`enqueueOutboxEvent`, `nudgeOutbox`) after the settlement transaction commits so downstream consumers (invoicing, notifications) fire exactly once.
+- **`@infrastructure/runtime/database`** — wraps the settlement step in `withTransaction` to make the payment write, order move, and stock commit atomic.
+- **`@modules/orders`** (config / lifecycle) — calls `orderService.markPaid`, `orderService.cancelById`, `orderService.markRefundOwed` / `clearRefundOwed`; reads `isPayable`, `paymentSettled`, `bankTransferHoldHours`.
+- **`@modules/inventory`** — imports `inventoryService` to commit the stock hold as part of the paid transition.
+- **`@infrastructure/observability/audit`** — calls `recordAudit` for mismatch and settlement events.
+- **`@infrastructure/observability/analytics`** — emits analytics events via `emitAnalyticsEvent` / `buildAnalyticsBase`.
+- **`@infrastructure/http/response`** — uses `generateSuccess` / `generateReject` to shape the HTTP reply from a `Settlement`.
+- **`@infrastructure/i18n`** — imports `t` for user-facing error messages.
+- **`@infrastructure/adapters/logger`** — structured error logging in mismatch, refund-failure, and cancel-failure paths.
 
 ## Notes
 
-- **At-most-once via conditional writes, not a lock.** Both the order's `markPaid` and the payment's `updateStatusIfIn` are optimistic; whichever caller wins the write is the one that proceeds. A redelivered webhook that loses both races exits with a no-op.
-- **`pendingEffects: ['commit']`** is written atomically with the `succeeded` status. If the process dies before `commitForOrder` runs, `orders`' retry sweep (`effects.ts#retryPendingEffects`) picks it up. The marker is cleared on both success and refund paths.
-- **Order status is re-read after the payment write.** `markPaid` returns a pre-write snapshot; a concurrent cancel could move the order away from `paid` between the two writes. Trusting the snapshot would retain money for a cancelled order.
-- **`commitForOrder`'s return value is intentionally ignored.** `false` can mean either a harmless replay (hold already committed) or that an expiry sweep beat the payment to zero. `inventory` distinguishes and alarms only the second case.
-- **`order.status_changed` fires before `commitForOrder`.** Any subscriber to that event sees `paid` before stock is committed. Currently only the `webhooks` listener reacts, and it forwards only `{ orderId }`, so this is safe — but reordering (commit first, then report) is required if a future listener needs to read committed stock.
-- **Refund failure is logged, never rethrown.** The settlement must still answer its caller. The `ORDER_REFUND_OWED` sweep in `orders` retries the refund out-of-band.
-- **`processing` vs. `requires_action` hold duration.** `processing` (provider-side work, e.g. SEPA) gets the multi-day bank-transfer window; `requires_action` (browser-side) gets the ordinary 30-minute window.
+- **Race safety:** the `updateStatusIfIn` gate (status must be in `SUCCESS_SETTLEABLE_PAYMENT_STATUSES`, which excludes `succeeded`) is the idempotency lock. A webhook retry or a duplicate confirm sees `null` and reports `replay` / `transitioned: false` without side-effects.
+- **Marker-before-action:** `refundLostPayment` writes `markRefundOwed` *before* calling `performRefund`. Nothing retries this call itself, so a throw with no durable note would lose the refund.
+- **Mismatch writes the *arrived* amount:** `settleMismatch` overwrites the frozen figures with what the provider actually collected, so the subsequent refund returns the real amount, not the expected one.
+- **`settleWithin` is DB-only by contract:** the module doc explicitly forbids provider calls or mail inside the transaction callback because the driver re-runs it on transient errors.
+- **Stryker annotations:** `// Stryker disable all` / `restore all` wrap the error-logging `catch` blocks so mutation testing does not flag them.
+- **`transitioned` is caller-facing:** a `false` value means "a racing call already did the work; respond that the payment is settled but take no further action." The `orderLost` flag is the one signal the payment status alone cannot convey to the client.

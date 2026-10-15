@@ -1,29 +1,32 @@
 ---
 source: src/modules/payments/services/scope.ts
-sha256: 3daa700991018c204c81319f564a8104b4a10ee1fd14b3441e1ab0a1e920b8f4
-generated_at: 2026-09-23T19:22:04.428034+00:00
+sha256: 05c85e6f7b5d4ef2a4e52a04151cbdc3681ecd0e0ed6b52374672ef9a582d39d
+generated_at: 2026-10-15T11:31:49.118065+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/payments/services/scope.ts
 
 ## Purpose
-
-Single export that centralises the row-level access rule for the payments collection. Every other service in this directory resolves _which_ payments a caller may see by delegating to this one function, so the scoping logic lives in exactly one place.
+Defines the four row-level scoping rules for the payments collection. Every other payments service and controller consults these helpers instead of re-deriving "which rows does this caller see?" logic, ensuring a single, consistent permission boundary across the module.
 
 ## Key elements
-
-- **`callerScope(context?: AuthContext)`** — Returns the result of `accessibleFilter(context, 'Payment')`. Takes an optional `AuthContext` and produces a filter (or predicate) that encodes the ownership axis for payment rows. This is the only public export of the module.
+- **`callerScope(context?)`** – Returns a filter for payments the caller may **read**. Delegates to `accessibleFilter(context, 'Payment')`. Payments are never soft-deleted, so ownership is the only axis.
+- **`payerScope(context?)`** – Returns a filter for payments the caller may **confirm or sync** (the customer's money steps). Restricted to the payer's own rows via `paymentRepository.ownerScope`. With no context, falls back to the anonymous read scope (matches nothing).
+- **`buyerOrderScope(context?)`** – Returns a filter for the orders on which the caller may **open a payment intent**. Combines `orderService.ownerScope(context.id)` with `deletedAt: null` to require the order is the buyer's and still live.
+- **`readsAllPayments(context?)`** – Boolean guard: true only when the caller holds the `payments.any.read` key (checked via `heldKeys` / `callerForSubject`). Used to decide whether to expose provider IDs and refund failure reasons.
 
 ## Relationships
-
-- **`src/kernel/access/query.ts`** — Provides `accessibleFilter`, the generic scoping primitive that `callerScope` wraps with the `'Payment'` collection label.
-- **`src/types/index.ts` / `src/types/auth-context.ts`** — Source of the `AuthContext` type used as the function's parameter.
-- **`src/modules/payments/services/index.ts`** — Barrel for the services directory; expected to re-export `callerScope` so sibling consumers can import from a single path.
-- **`src/modules/payments/services/refunds.ts`, `settlement.ts`, `view.ts`** — Sibling services that the module's own doc comment identifies as the downstream consumers of `callerScope` ("the one rule every other file here reads through").
+- **`src/kernel/access/query.ts`** – Supplies `accessibleFilter`, the generic "which rows does this context see?" primitive that `callerScope` wraps.
+- **`src/kernel/permissions.ts`** – Supplies `callerForSubject`, which resolves the permission subject for a given AuthContext and resource; used by `readsAllPayments`.
+- **`src/kernel/ability.ts`** – Supplies `heldKeys`, which enumerates the key set a subject holds; used by `readsAllPayments`.
+- **`src/modules/orders/index.ts`** (→ `src/modules/orders/services/index.ts`) – Exposes `orderService`, whose `ownerScope` and `callerScope` methods provide the order-side ownership filter that `buyerOrderScope` composes.
+- **`src/modules/payments/repository.ts`** – Exposes `paymentRepository.ownerScope`, the concrete "rows owned by this user" filter used by `payerScope`.
+- **`src/types/auth-context.ts`** – Provides the `AuthContext` type that every scope function accepts.
+- **`src/modules/payments/services/index.ts`** – Re-exports these helpers so sibling services (`intent`, `list`, `refunds`, `settlement`, `view`) and the controllers (`post-payment-offline`, `post-payment-refund`) can import them without reaching into this file directly.
 
 ## Notes
-
-- Unlike the analogous scoping in the orders module (which combines _ownership_ and _not-yet-soft-deleted_), payments are **never soft-deleted**, so ownership is the only axis. Do not add a liveness/soft-delete check here; it does not apply to this collection.
-- The `AuthContext` parameter is optional — passing `undefined` yields whatever `accessibleFilter` returns for an unauthenticated/anonymous caller. Callers are expected to handle that case.
-- The collection label is hard-coded to the string `'Payment'`; there is no runtime parameterisation. Keep it in sync if the schema entity is ever renamed.
+- `callerScope` is the **read** scope; `payerScope` is the **write/money** scope. They intentionally differ: a role with `payments.any.read` widens `callerScope` but never touches `payerScope`. Do not substitute one for the other.
+- `readsAllPayments` checks the key `payments.any.read` specifically; `holdsKey` would also match `payments.self.read`, so the name is load-bearing.
+- When `context` is `undefined`, all three filter functions return the anonymous scope (effectively an empty match), so a missing auth context never accidentally grants access.
+- `buyerOrderScope` adds `deletedAt: null` because orders *are* soft-deleted (unlike payments), making that axis necessary here.

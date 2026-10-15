@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/snapshot.test.ts
-sha256: 40634916a1dc4d4486142e0d4ac0daeb632d5b94232370559f01413be5d731c6
-generated_at: 2026-09-27T15:22:33.370274+00:00
+sha256: 4965f951c141658931c56714d39b1d6c9503fb432ca9c9c1204ab5a3e070383f
+generated_at: 2026-10-15T11:21:11.243372+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the order-line snapshot service. It verifies two contracts without a database: (1) `resolveSnapshotProducts` correctly overlays buyer-language translations onto plain product objects using the fallback-chain, and (2) `freezeOrderLines` resolves `taxClass` to a numeric VAT rate and copies scalar fields (weight, sku) onto the frozen line while stripping the class itself.
+Unit tests for `resolveSnapshotProducts` and `freezeOrderLines` (the buyer-language snapshot-freezing logic in the orders service). A fake `TranslationPort` replaces the real `@modules/locales` adapter, so the tests verify the fallback-chain wiring, explicit-locale binding, `_id` preservation, and VAT/field-freezing contracts without a database.
 
 ## Key elements
 
-- **`fakePort(overrides?)`** — factory that returns a `TranslationPort` double whose methods are `jest.fn()` mocks; tests override individual methods (usually `resolve`) per case.
-- **`resolveSnapshotProducts` describe block** — five tests covering: field overlay keyed by product `_id`; the exact fallback-chain order (`it-CH → it → en`) passed to `resolve`; passthrough when no translation row exists; binding to the *explicit* locale argument (not the ambient `runWithLocale` value); and preservation of the original `ObjectId` instance.
-- **`freezeOrderLines — the VAT rate` describe block** — seven tests covering: absent `taxClass` → `NODE_VAT_RATE_DEFAULT`; `taxClass: 'reduced'` → `NODE_VAT_RATE_REDUCED`; weight and sku copied verbatim when present, left `undefined` when absent (no silent defaults); and `taxClass` itself absent from the frozen product (restating the type-level omission at runtime).
-- **`afterEach` hooks** — reset the registered `TranslationPort` to `undefined` and restore `NODE_VAT_RATE_*` env vars.
+- **`fakePort(overrides?)`** – Factory that returns a `TranslationPort` with every method stubbed as a resolved `jest.fn()`. Individual tests override specific methods (typically `resolve`).
+- **`describe('resolveSnapshotProducts')`** – Five tests covering:
+  - Translation overlay keyed by the product's own `_id`.
+  - The full fallback chain (`it-CH → it → en`) is passed to the port.
+  - Product returned unchanged when no translation row exists.
+  - Explicit locale argument wins over the ambient (request) locale via `runWithLocale`.
+  - The original `ObjectId` instance is preserved on the frozen product.
+- **`describe('freezeOrderLines — the VAT rate')`** – Tests that `freezeOrderLines`:
+  - Resolves absent `taxClass` to `NODE_VAT_RATE_DEFAULT`, `"reduced"` to `NODE_VAT_RATE_REDUCED`.
+  - Freezes optional fields (`weight`, `sku`, `rateType`) only when present, leaving them `undefined` otherwise.
+  - Strips `taxClass` from the frozen line (only the resolved `taxRate` survives).
+  - Computes the `preorder` flag from `releaseDate` (true only when the date is still in the future).
 
 ## Relationships
 
-- **`src/modules/orders/services/snapshot.ts`** — the system under test; imports `freezeOrderLines` and `resolveSnapshotProducts` and exercises their public behavior.
-- **`src/kernel/translation.ts`** — provides `registerTranslationPort` (used in setup/teardown) and the `TranslationPort` type (consumed by the `fakePort` factory).
+- **`src/modules/orders/services/snapshot.ts`** – The system under test; provides `resolveSnapshotProducts` and `freezeOrderLines`.
+- **`src/kernel/translation.ts`** – Provides `registerTranslationPort` and the `TranslationPort` type; the fake port is registered/unregistered via this module.
+- **`tests/support/environment.ts`** – `setEnvironment` injects `NODE_VAT_RATE_*` values for the VAT-resolution tests.
+- **`@infrastructure/i18n`** (dynamic import) – `runWithLocale` is used in one test to prove the explicit locale argument overrides the ambient request locale.
 
 ## Notes
 
-- All products handed to the tested functions are **plain objects** by contract; the tests never pass hydrated Mongoose documents, so there is no need to test that path.
-- The locale-binding test dynamically imports `@infrastructure/i18n` (`runWithLocale`) to create an ambient locale that *differs* from the explicit argument, proving the function ignores the ambient value.
-- VAT-rate tests mutate `process.env` and restore it in `afterEach`; run order matters if the env vars are set by other suites.
-- The `taxClass`-exclusion test is explicitly a **runtime restatement** of a type-level guarantee (`FrozenOrderLineProduct` omits the field); both layers are intentional.
+- Every `describe` block ends with `registerTranslationPort(undefined)` in `afterEach` to avoid leaking port state across tests.
+- The "explicit locale" test uses a **dynamic** `import('@infrastructure/i18n')` so the ambient locale is set *after* the fake port is registered, ensuring the assertion targets the right code path.
+- `taxClass` is resolved into a numeric `taxRate` and then **dropped** from the frozen line; `rateType` is **not** resolved—it passes through as the raw reason code (e.g. `"exempt"`) because invoices need the label, not a decimal.
+- The file header comment explicitly states that inputs are already plain objects; hydrated-Mongoose-document concerns are out of scope here.

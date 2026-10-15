@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/schema-contract.test.ts
-sha256: 47bd9ca93e0f0bcf50f3a4a4a02e0511e94dec7e11b5f25f851aa09b7d2b9452
-generated_at: 2026-09-27T15:22:22.264305+00:00
+sha256: e13f5bd4886ff59be546d69995bfb738a3a51ffd6f8aeb52bd4f86648b3ddc83
+generated_at: 2026-10-15T11:20:53.934576+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that inspects the `orderSchema` Mongoose object *directly* — asserting declarations (required flags, types, defaults, enums, index specs, sub-schema shapes) rather than driving the schema through real saves. It exists to catch declaration defects (a dropped `required`, a flipped `_id: false`, a reversed index direction) that integration tests would miss because they don't change what a valid document looks like.
+Unit test that asserts the **declarations** of the Mongoose `orderSchema` object directly—required paths, field types, defaults, enum values, sub-schema options, index specs, and schema-level options. It exists because integration tests that drive real saves/reads cannot detect declaration-level defects (a dropped `required`, a flipped `_id: false`, a reversed index direction) since none of those change what a *valid* document looks like. No database is needed; the helpers in `tests/support/schema.ts` inspect the schema object in memory.
 
 ## Key elements
 
-- **`describe('orderSchema — what an order must carry')`** — asserts `requiredPaths` is exactly `['email']`, `userId` is `ObjectId`, and optional fields (`notes`, `shippingMethod`, `deletedAt`, `orderNumber`, `transferReference`) are absent from required.
-- **`describe('orderSchema — status')`** — asserts the enum equals `Object.values(OrderStatus)` and the default is `OrderStatus.pending`.
-- **`describe('orderSchema — money')`** — asserts `shippingCost` has no default and `min` is 0.
-- **`describe('orderSchema — the embedded snapshots')`** — asserts `items._id` is `false`, item `quantity` is required, `items.product` carries no inherited indexes, `taxRate` is required in `[0, 1]`, and `shippingAddress` is `_id: false` with five required fields (phone optional).
-- **`describe('orderSchema — indexes')`** — asserts the exact six named index specs with directions, and the exact sparse/unique option set per index.
-- **`describe('orderSchema — options')`** — asserts `timestamps` is `true`.
+- **`orderSchema`** (from `@modules/orders/model`) — the system under test; every assertion in the file targets this object or a sub-schema extracted from it.
+- **`OrderStatus`** (from `@types`) — enum whose values the test compares against the schema's `enum` and `default` for the `status` path.
+- **Assertion helpers** (from `@tests/schema`):
+  - `requiredPaths(schema)` — returns the array of paths marked `required`.
+  - `typeOf(schema, path)` — returns the Mongoose type constructor name (e.g. `'ObjectId'`, `'String'`).
+  - `defaultOf(schema, path)` — returns the schema-level default for a path.
+  - `enumOf(schema, path)` — returns the allowed enum values.
+  - `refuses(schema, path, value)` — validates a value against the path's constraints and reports whether it is rejected.
+  - `optionsOf(schemaOrPath)` — returns schema/path options (e.g. `_id`, `timestamps`).
+  - `subSchema(schema, path)` — extracts a nested schema object.
+  - `pathOptions(schema, path)` — returns per-path options such as `min`/`max`.
+  - `indexSpecs(schema)` — returns an array of `"name: field+dir, …"` strings.
+  - `indexOptionSpecs(schema)` — returns `"name: key=value, …"` strings for index options (sparse, unique, etc.).
+- **Describe blocks** (top-level):
+  - *what an order must carry* — required/optional paths, `userId` type, `transferReference` optionality.
+  - *status* — enum matches `OrderStatus` values; default is `OrderStatus.pending`.
+  - *money* — `shippingCost` has no default; negative values are refused.
+  - *the embedded snapshots* — `items` sub-schema (no `_id`, `quantity` required, `product.taxRate` in [0,1], no inherited catalogue indexes), `shippingAddress`/`billingAddress` (no `_id`, required fields, `phone` optional).
+  - *indexes* — exact set of ten named indexes with correct directions; sparse/unique flags.
+  - *options* — `timestamps` is `true`.
 
 ## Relationships
 
-- **`src/modules/orders/model.ts`** — the test imports `orderSchema` from here; every assertion targets that object.
-- **`src/types/index.ts`** — the test imports `OrderStatus` to validate the status enum and default.
-- **`tests/support/schema.ts`** — the test imports the entire inspection helper set (`requiredPaths`, `typeOf`, `defaultOf`, `enumOf`, `pathOptions`, `optionsOf`, `subSchema`, `indexSpecs`, `indexOptionSpecs`); these functions read the Mongoose schema object in-memory with no database connection.
+- **`src/modules/orders/model.ts`** — exports `orderSchema`, the sole object under test.
+- **`src/types/index.ts`** — exports the `OrderStatus` enum used to verify the `status` path's enum and default.
+- **`tests/support/schema.ts`** — provides all ten assertion helper functions; this file is its only consumer in the unit-test layer.
 
 ## Notes
 
-- The test asserts *sets* (e.g., `requiredPaths` equals a specific array) rather than individual field checks, so it fails symmetrically on both a removed and an added `required`.
-- Index assertions are full-string comparisons (`'name: field+1, field2-1'`); a rename in production would leave the old index orphaned, which is why names are pinned here.
-- The `items.product` index assertion is a guard against Mongoose silently copying an embedded schema's indexes onto the parent collection — it currently passes because `orderLineProductSchema` declares none.
-- `userId` is intentionally *not* required: account erasure unsets it, so the schema cannot claim it is always present.
+- `userId` is **deliberately not** in the required set—account-erasure flows unset it, so the schema cannot claim it is always present.
+- Required-path assertions use `toEqual` (exact set) rather than `toContain`, so both a *removed* and an *added* `required` flag fail the test.
+- Index names are asserted explicitly (not auto-derived by Mongoose) because MongoDB identifies indexes by name; a rename would orphan the production index.
+- The `items.product` sub-schema uses a distinct `orderLineProductSchema` (not the catalogue's `productSchema`) specifically so no catalogue indexes leak onto the order collection.
+- `shippingCost` absence (no default) is intentional and paired with `shippingMethod` absence; the OpenAPI contract and `orderTotal`'s `asMoney` helper both treat absent as zero.

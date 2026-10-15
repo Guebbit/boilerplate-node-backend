@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/integration/payment-velocity.test.ts
-sha256: 697239b6d7764fd2cd5b7c084c3c27ad6423d76fc8aedcab28cb444e3272a600
-generated_at: 2026-09-23T19:23:28.870346+00:00
+sha256: cda8cfda5447dc5db8d2f3fe0e3328e4e4628dd90ee501c21b91230f8d8796b5
+generated_at: 2026-10-15T11:34:14.325485+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the three payment-confirm rate limiters (`attempt`, `decline`, `challenge gate`) mounted on `POST /payments/:id/confirm`. The tests exercise the limiters directly against trivial Express handlers rather than the real payment route, because the property under test belongs to the limiters themselves and a real route would add a database round-trip to every attempt. Route-mounting correctness is covered separately in `payments/tests/unit/routes.test.ts`.
+Integration tests for the three velocity limiters and the anti-bot challenge gate that guard `POST /payments/:id/confirm`. They verify budget exhaustion, per-account isolation, correct outcome discrimination (decline vs. success vs. order-lost), and block-level (IP) budgeting — all against trivial Express stubs rather than the real payment route, keeping each assertion focused on limiter behaviour without a database round trip.
 
 ## Key elements
 
-- **`asAccount(id)`** — RequestHandler stub that attaches a minimal `AuthContext` (`{ id }`) to `request.authContext`, satisfying `accountIdOf` without a real auth middleware.
-- **`declineAwareApp(declineLimiter)`** — Builds a small Express app whose handler sets `request.paymentConfirmDeclined` based on a `body.outcome` field (`declined` / `order-lost` / `succeeded`), returning the corresponding 409/409/200. Lets the decline limiter see the flag it reads.
-- **`limitersWithBudget(attemptLimit, declineLimit)`** — Re-evaluates `@modules/payments/rate-limits` under custom `NODE_PAYMENT_*_RATE_LIMIT_MAX` env vars via `withReloadedRateLimits`, returning a fresh module instance.
-- **`describe` — confirm-attempt budget** — Verifies 429 after budget exhaustion (even on success) and per-account isolation.
-- **`describe` — decline budget** — Verifies only a genuine decline (`paymentConfirmDeclined = true`) spends the budget; lost-order 409s and successes do not.
-- **`describe` — paymentDeclineChallengeGate** — Verifies the gate is inert without `NODE_ANTIBOT_PROVIDER`, passes the first decline through, and returns `401 ANTIBOT_VERIFICATION_FAILED` only when a prior decline exists _and_ a provider is configured.
+- **`asAccount(id)`** – Express middleware that attaches a stub `AuthContext` (only `.id` is set) to `request.authContext`, simulating a resolved auth step.
+- **`declineAwareApp(declineLimiter)`** – Builds a minimal Express app whose `/confirm` route sets `request.paymentConfirmDeclined` based on the body's `outcome` field (`declined`, `order-lost`, `succeeded`) and returns the corresponding status (409/409/200).
+- **`limitersWithBudget(attemptLimit, declineLimit?)`** – Uses `withReloadedRateLimits` to re-evaluate `@modules/payments/rate-limits` with specific `NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX` / `NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX` env values, returning the fresh limiter instances.
+- **`appWithBudget(declineLimit)`** – Similar re-evaluation helper, but also imports and chains `paymentDeclineChallengeGate` after the decline limiter; used by the challenge-gate tests.
+- **`blockApp(accountLimit, blockLimit)`** – Chains all three limiters (`paymentConfirmDeclineLimiter`, `paymentConfirmDeclineBlockLimiter`, `paymentDeclineChallengeGate`) the same order as the real route, with a variable `x-account` header per request.
+- **`describe` blocks** – Four groups: confirm-attempt budget, decline budget, decline challenge gate, and address-block decline budget. Each calls `jest.resetModules()` in `afterEach` to clear the re-evaluated module cache.
 
 ## Relationships
 
-- **`src/modules/payments/rate-limits.ts`** — The module under test; source of `paymentConfirmAttemptLimiter`, `paymentConfirmDeclineLimiter`, and `paymentDeclineChallengeGate`.
-- **`tests/support/rate-limit-harness.ts`** — Supplies `withReloadedRateLimits`, which wraps `jest.resetModules()` + dynamic import with custom env so a fresh limiter instance can be constructed per test.
-- **`tests/support/stub.ts`** — Supplies `asStub` to create the minimal `AuthContext` object.
-- **`src/types/auth-context.ts`** (via `src/types/index.ts`) — Provides the `AuthContext` type for the stub.
+- **`src/modules/payments/rate-limits.ts`** – The module under test. Dynamically imported (after `jest.resetModules()`) to obtain fresh limiter instances (`paymentConfirmAttemptLimiter`, `paymentConfirmDeclineLimiter`, `paymentConfirmDeclineBlockLimiter`, `paymentDeclineChallengeGate`) configured via environment variables.
+- **`src/types/auth-context.ts`** – Provides the `AuthContext` type used by `asAccount` to shape the stub `request.authContext` object (only `id` is read by the limiters' `accountIdOf` key function).
+- **`src/types/index.ts`** – Barrel re-export of `AuthContext`; the import in this file resolves through this path.
+- **`tests/support/environment.ts`** – `setEnvironment` is called to inject/override `NODE_ANTIBOT_PROVIDER`, `NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX`, and `NODE_PAYMENT_DECLINE_BLOCK_RATE_LIMIT_MAX` before module re-evaluation.
+- **`tests/support/rate-limit-harness.ts`** – `withReloadedRateLimits` wraps the `jest.resetModules()` + dynamic-import pattern so each test gets isolated limiter instances with a chosen budget.
+- **`tests/support/stub.ts`** – `asStub` creates a minimal object literal typed as `AuthContext` for the `asAccount` helper.
 
 ## Notes
 
-- `rateLimit()` captures its options **once at construction**; changing env vars afterwards has no effect. Every test that needs a different budget must re-import the module (the `withReloadedRateLimits` / `jest.resetModules()` pattern).
-- The attempt limiter counts **all** outcomes (success included), unlike credential-based budgets. This is intentional: a card can be swapped between attempts on the same payment intent.
-- The decline limiter and the challenge gate must originate from the **same** module instance, because the gate reads a property name the decline limiter was configured with. Mixing instances silently breaks the gate.
-- `NODE_ANTIBOT_PROVIDER` is saved/restored around the gate tests; forgetting to restore it would leak into sibling tests.
+- The file intentionally does **not** mount the real `postPaymentConfirm` handler; the comment at the top notes that `payments/tests/unit/routes.test.ts` already asserts the real route chains the three limiters in the documented order.
+- `rateLimit()` reads its options once at construction. Changing the budget therefore requires a full module re-evaluation (`jest.resetModules()` + fresh `import()`), which is why every helper that needs a different budget follows that recipe.
+- The decline limiter keys on `request.paymentConfirmDeclined === true`. The test harness must set this field before the limiter's internal check; a `409` from an order-lost race does **not** set it, which is verified explicitly.
+- The challenge gate reads the same property the decline limiter was configured with, so the gate and limiter must come from the **same** module instance (same `jest.resetModules()` cycle). `appWithBudget` and `blockApp` enforce this by importing both in one statement.
+- The block-level tests use `supertest`'s single outbound IP, so all requests share one address block regardless of the `x-account` header value.

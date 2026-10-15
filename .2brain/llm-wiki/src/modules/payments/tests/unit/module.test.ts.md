@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/unit/module.test.ts
-sha256: 387d8b1415b0a59fccbbad1e0b752e5059970d41914aba0376bf08b062c200ca
-generated_at: 2026-09-27T15:29:38.015164+00:00
+sha256: 6d0a2df7d994920df4f43c9890d3dc26bad4fe161888f24149f34e268361360f
+generated_at: 2026-10-15T11:38:23.206326+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Boot-time validation tests for the payments module's manifest `customCheck`, specifically the provider-selector half (which provider name is accepted) and the single wiring-proof case for the Stripe secret key gate. It verifies that `assertRequiredConfig` throws at boot for misconfigured providers/keys rather than deferring failure to the first payment.
+Unit tests for the payments module's **boot-time configuration gate** (`assertModuleConfig`). Covers two validation concerns from the module manifest: the `NODE_PAYMENT_PROVIDER` selector (accepted / rejected / unset) and the `NODE_PAYMENT_WEBHOOK_SECRET` (optional, minimum length, comma-separated rotation ring, placeholder rejection in production). The file deliberately does **not** test `validateBankTransferConfig`; those cases live in a sibling `config.test.ts`.
 
 ## Key elements
 
-- **`configure()`** — helper that sets `NODE_ENV = 'development'` so the gate does not short-circuit under the test environment.
-- **`describe('the payment provider selector')`** — three cases: unset provider defaults to `fake`, explicit `fake` is accepted, unrecognized name throws `/NODE_PAYMENT_PROVIDER/`.
-- **`describe('the Stripe secret key gate')`** — one case: production + `sk_test_*` key throws `/NODE_STRIPE_SECRET_KEY/`. This is the wiring proof (manifest actually calls the validator), not a test of the validator's logic.
-- **`withoutEnvironmentInThisFile([...])`** — module-level cleanup call ensuring `NODE_ENV`, `NODE_PAYMENT_PROVIDER`, and `NODE_STRIPE_SECRET_KEY` are unset after the file's tests run.
+- **`configure()`** — local helper that sets `NODE_ENV` to `'development'`. Every test calls this (or sets `NODE_ENV` directly) before asserting, because the gate short-circuits under `NODE_ENV=test`.
+- **`describe('the payment provider selector')`** — three cases: unset var is allowed (no card payments), a registered name (`'fake'`) is accepted, an unrecognised name throws with a message mentioning `NODE_PAYMENT_PROVIDER`.
+- **`describe('the payment webhook secret')`** — six cases: unset is fine even in production; < 16 chars rejected; a valid comma-separated ring accepted; a ring with one short entry rejected; a trailing comma (empty entry) rejected; the literal `.env-example` placeholder rejected in production.
+- **`withoutEnvironmentInThisFile([...])`** — file-level guard (from `@tests/environment`) that deletes the three relevant env vars before the suite runs, preventing leakage from CI or shell.
 
 ## Relationships
 
-- **`src/kernel/required-config.ts`** — exports `assertRequiredConfig`, the function under test. The test passes `[paymentsModule]` into it and asserts throw/no-throw behavior.
-- **`src/modules/payments/module.ts`** — the module whose manifest (including its `customCheck`) is exercised. Imported as `paymentsModule` and handed to `assertRequiredConfig`.
-- **`tests/support/environment.ts`** — exports `withoutEnvironmentInThisFile`, used to guarantee env-var isolation for this test file.
+- **`src/kernel/module-config.ts`** — provides `assertModuleConfig`, the function under test. The test calls it with `[paymentsModule]` and an empty second argument (no extra checks).
+- **`src/modules/payments/module.ts`** — the `paymentsModule` export passed into `assertModuleConfig`; its manifest slice (provider + webhook checks) is what the assertions exercise.
+- **`tests/support/environment.ts`** — supplies `withoutEnvironmentInThisFile` (file-scoped env cleanup) and `setEnvironment` (per-test env mutation).
 
 ## Notes
 
-- The gate **short-circuits when `NODE_ENV === 'test'`**, so every case must set `NODE_ENV` to something else (`development` or `production`) or the assertions will be vacuous. The file header calls this out explicitly.
-- This file deliberately excludes `validateBankTransferConfig` cases and `validateStripeSecretKey` pure-logic cases; those live in a sibling `config.test.ts`.
-- The Stripe section contains exactly **one** test. Its stated purpose is to prove the manifest *wires* the validator into `assertRequiredConfig`—a build that omitted the wiring would pass the other three Stripe cases but fail this one.
+- `NODE_ENV` **must** be set away from `'test'` in every test; the gate silently passes under the test environment, so forgetting this yields false-green suites.
+- The webhook secret supports a **comma-separated ring** (e.g. for key rotation). Validation requires *every* entry to be ≥ 16 chars; an empty entry (trailing comma) is treated as a violation, not ignored.
+- The placeholder value `'your-payment-webhook-secret-here'` is rejected **only** when `NODE_ENV=production`; the same string would pass in development.
+- The file intentionally leaves `NODE_PAYMENT_PROVIDER` unset in the webhook-secret tests so that the two concerns are tested independently.

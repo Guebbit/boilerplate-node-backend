@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/model.ts
-sha256: 6c2521d76bf262017db4ab6a4787983e29adb0049fa3dd457909569222c28ec7
-generated_at: 2026-09-27T15:23:35.690146+00:00
+sha256: ad2e8c7cbf6ec0842616896d86d5def606d00314090b2fb729ed02d1a5b86bc5
+generated_at: 2026-10-15T11:26:23.404783+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,42 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schema, model, and serialization contract for the `Payment` collection (one document per order) and the `PaymentWebhookEvent` idempotency ledger. It is the single source of truth for the payment document's shape, status vocabulary, and wire-level visibility rules, sitting below all services and the repository so neither layer can import the other in a cycle.
+Defines the Mongoose schema, document interfaces, and serialization transform for the `payments` collection. One document per order (enforced by `unique` on `orderId`); the file also shapes the embedded `refunds` subdocuments and governs which fields reach the wire vs. stay internal.
 
 ## Key elements
 
-- **`PaymentDocument`** — Interface for the persisted payment record. Carries `orderId` (unique), `userId` (optional; unset on erasure), frozen `amount`/`currency`, `status` (provider-facing lifecycle from `PaymentStatus`), `provider`, optional `providerRef`, `cardLast4`, `method`, offline-only fields (`reference`, `receivedAt`, `refundedByHand`), and the crash-recovery field `pendingEffects`.
-- **`PaymentEffect`** — Union type (`'commit'`) enumerating the effects a `succeeded` write may still owe.
-- **`PaymentModel`** — Mongoose `Model<PaymentDocument>` type alias.
-- **`paymentSchema`** — Mongoose schema with a composite index `{ pendingEffects: 1, updatedAt: 1 }` to back the effects-retry sweep. `providerRef` is `unique` + `sparse` so manual payments (no provider intent) don't collide on `null`.
-- **`applyPaymentTransform`** — Serialization function (built via `applySerialization`) that maps `_id`→`id`, drops `__v`, and omits `providerRef` and `pendingEffects` from wire output.
-- **`paymentModel`** — Registered Mongoose model `'Payment'`.
-- **`CONFIRMABLE_PAYMENT_STATUSES`** — `readonly PaymentStatus[]` listing `requires_confirmation` and `declined`; used by both the confirm endpoint guard and the repository's conditional upsert `$in` filter.
-- **`PaymentWebhookEventDocument`** / **`paymentWebhookEventSchema`** / **`paymentWebhookEventModel`** — Idempotency ledger: one row per provider event id, enforced by a `unique` index (insert-or-reject replaces a racy read-then-write). `receivedAt` carries a 30-day TTL so the collection self-cleans.
+- **`RefundLine`** — `{ productId, quantity }` pair identifying which product lines a refund covers (input to the credit note, never published).
+- **`RefundRecord`** — One refund attempt (amount, currency, status, reason, idempotency key, optional `returnId`/`lines`/`shipping`, provider ref, failure code, settlement timestamp).
+- **`PaymentDocument`** — Full document shape: `orderId`, `userId?`, `amount`, `currency`, `status`, `provider`, `providerRef?`, `cardLast4?`, `method`, `reference?`, `receivedAt?`, `refundedByHand?`, `amountRefunded`, `refunds[]`, timestamps.
+- **`PaymentModel`** — `Model<PaymentDocument>` alias for consumers.
+- **`refundSchema`** — Mongoose sub-schema for `RefundRecord`; uses `moneyPath` for `amount`/`shipping`.
+- **`paymentSchema`** — Top-level Mongoose schema; `orderId` unique, `providerRef` unique+sparse, `amountRefunded` defaults to 0. Registers three compound indexes.
+- **`REFUND_INTERNAL_KEYS`** — Const tuple of refund fields stripped before publishing (`_id`, `providerRefundRef`, `idempotencyKey`, `failureReason`, `lines`, `shipping`).
+- **`wireRefund(refund)`** — Maps `_id`→`id` and deletes internal keys from one refund record.
+- **`applyPaymentTransform`** — Built via `applySerialization`; omits `providerRef` at the top level and runs `wireRefund` over each embedded refund in the `after` hook.
+- **`paymentModel`** — The exported Mongoose model instance (file truncated, but this is the final export).
 
 ## Relationships
 
-- **`src/types/index.ts`** — Imports `PaymentStatus` and `PaymentMethod` enums used in schema `enum` constraints and the `PaymentDocument` interface.
-- **`src/infrastructure/persistence/serialize.ts`** — Imports `applySerialization` to construct `applyPaymentTransform`.
-- **`src/modules/payments/repository.ts`** — Consumes `paymentModel`, `paymentWebhookEventModel`, and `CONFIRMABLE_PAYMENT_STATUSES` (as the `$in` array for conditional status writes and the confirm-path guard).
-- **`src/modules/payments/services/settlement.ts`** — Writes `status → 'succeeded'` and `pendingEffects` in the same atomic write; clears `pendingEffects` once the effect completes.
-- **`src/modules/payments/services/effects.ts`** — Scans `pendingEffects` (via the composite index) to retry or drop owed effects on a schedule.
-- **`src/modules/payments/services/refunds.ts`** — Transitions status to `refunded`; sets `refundedByHand` on manual-provider refunds.
-- **`src/modules/payments/services/retention.ts`** — Unsets `userId` on erasure (document is preserved, not deleted).
-- **`src/modules/payments/services/offline.ts`** — Populates `reference`, `receivedAt`, and `method` for hand-recorded payments.
-- **`src/modules/payments/services/view.ts`** — Reads payment documents for API projection; relies on `applyPaymentTransform` for output shape.
-- **`src/modules/payments/services/intent.ts`** — Creates/updates payment documents through the intent flow; sets `providerRef` once the provider responds.
-- **`src/modules/payments/index.ts`** — Barrel re-export of this module's public API.
-- **`src/modules/payments/tests/unit/schema-contract.test.ts`** — Asserts the schema's fields and constraints match the published API contract.
-- **`src/modules/payments/tests/unit/refunds.test.ts`** — Exercises refund transitions against the schema's status enum and `refundedByHand` flag.
-- **`src/modules/payments/tests/integration/retention.test.ts`** — Verifies the unset-not-delete erasure path on `userId`.
-- **`scenarios/flows/backdate.ts`** — Test-scenario helper that seeds payment documents through the model.
+- **`src/infrastructure/persistence/money-field.ts`** — Provides `moneyPath` (schema path helper) and `moneyPlugin` (Decimal128 ↔ number codec) used throughout the schema.
+- **`src/infrastructure/persistence/serialize.ts`** — Provides `applySerialization`, the factory that produces `applyPaymentTransform`.
+- **`src/modules/payments/repository.ts`** — Owns all queries; consumes `paymentModel` and `applyPaymentTransform` for lean-read normalization.
+- **`src/modules/payments/presenter.ts`** — Re-attaches `providerRefundRef` and `failureReason` for staff-facing views (the model strips them).
+- **`src/modules/payments/services/refunds.ts`** — Reads/writes the `refunds` array and `amountRefunded`; dispatches on `provider` for manual-refund flow.
+- **`src/modules/payments/index.ts`** — Barrel re-export of the model and types.
+- **`scenarios/flows/backdate.ts`** — Scenario/test that exercises the payment document (likely backdating `createdAt`/`settledAt`).
 
 ## Notes
 
-- **One payment per order is enforced by the DB, not application logic.** The `unique` index on `orderId` means a retry after a decline re-confirms the same document; no application-level check can override this.
-- **`providerRef` is intentionally sparse-unique.** Without `sparse: true`, every manual payment (which has no provider intent) would collide on a `null` unique value.
-- **`CONFIRMABLE_PAYMENT_STATUSES` is an array, not a `Set`.** It is read both as a membership test and as the `$in` operand in conditional MongoDB writes; a `Set` would require re-spreading for the second use.
-- **`pendingEffects` is written atomically with the status change to `succeeded`.** A crash between the status write and the effect execution leaves a durable marker; `effects.ts`'s sweep is the only consumer that retries or clears it.
-- **Webhook idempotency relies on insert-or-reject, not read-then-write.** The `unique` index on `eventId` makes the claim race-safe; a 200 response is only sent after a successful insert, so concurrent duplicate deliveries cannot both pass.
-- **`userId` is nullable by design.** Erasure unsets the field rather than deleting the payment row, matching the same convention used on `orders.userId`.
+- **`providerRef` is `unique` + `sparse`**: a payment exists momentarily before the provider assigns a ref; without `sparse`, every such document would collide on `null`.
+- **`userId` is intentionally not `required`**: account erasure unsets the field rather than deleting the payment row.
+- **Embedded-refund transform is manual**: Mongoose's lean-read path does not run a sub-schema's `toJSON` transform, so `applyPaymentTransform.after` loops over `refunds` explicitly. The same loop also covers the `toJSON` path where documents are already plain objects.
+- **`orderId` unique constraint**: a retry after a decline re-confirms the *same* document instead of creating a second one.
+- **Money fields** (`amount`, `shipping`, `amountRefunded`) are stored as Decimal128 via `moneyPath`; lean reads surface them as JS numbers.
+- **`providerRef` is never published**: the contract declares `additionalProperties: false`, so letting it through would fail schema validation as well as leak an internal handle.

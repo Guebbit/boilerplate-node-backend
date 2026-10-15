@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/controllers/post-payment-offline.ts
-sha256: 3109fe5fdb1fc8a87d31138f387c6f7284c9b1f6af8adbfc3609caca4ac63758
-generated_at: 2026-09-23T19:17:25.082946+00:00
+sha256: 6a228fee54925527425df9deaebab5a6215726e38ee73f8c98412c5d2fe54da3
+generated_at: 2026-10-15T11:24:08.258228+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin Express controller for `POST /payments/order/:orderId/offline`. It validates the request body against a Zod schema, delegates to the payment service to record a payment the card provider never saw (admin-only, enforced at the route), and replies **201** with the persisted `Payment` object.
+Controller handler for `POST /payments/order/:orderId/offline`. An admin endpoint for recording a payment the card provider never saw (e.g. cash, in-person, manual settlement). Audit and analytics events are emitted by the service layer at settlement time, mirroring the offline-confirm flow.
 
 ## Key elements
 
-- **`postPaymentOffline`** _(exported)_ — The sole route handler. Accepts `Request<{ orderId?: string }>` and `Response`.
-    1. `parseBody(RecordOfflinePaymentBody, …)` validates the JSON body; bails early on failure.
-    2. Calls `paymentService.recordOfflinePayment(orderId, body, callerContext)`.
-    3. On a `refused` result, short-circuits via `refused(response, result)`.
-    4. On success, sends `successResponse<Payment>(…, 201, …)` using `result.data.toJSON()` to apply the model's `_id → id` / date-to-ISO-string transform.
-    5. `.catch(catchAs(response, 'postPaymentOffline'))` funnels any thrown error through the shared error handler.
+- **`postPaymentOffline(request, response)`** — The sole export. Validates the `orderId` param, parses the request body against `RecordOfflinePaymentBody` (from `@api/schemas.zod`), delegates to `paymentService.recordOfflinePayment`, then serialises the result via `presentPayment` and responds with 201 (new row inserted) or 200 (an existing unpaid card-intent row was converted). Errors are funneled through `catchAs`.
 
 ## Relationships
 
-| Neighbor                                | Interaction                                                                                         |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `@infrastructure/http/controller`       | Provides `catchAs`, `parseBody`, `refused` — the three shared controller utilities used here.       |
-| `@infrastructure/http/request`          | `callerContextOf(request)` extracts the authenticated caller's context for the service call.        |
-| `@infrastructure/http/response`         | `successResponse` builds the 201 JSON reply.                                                        |
-| `../services` (payments services index) | Source of `paymentService.recordOfflinePayment`, the sole business-logic call.                      |
-| `payments/routes.ts`                    | Registers this handler on the route and enforces the `payments.any.create` permission (admin-only). |
-| `@types` (types index)                  | Supplies the `Payment` interface used to type the success response payload.                         |
+- **`src/infrastructure/http/controller.ts`** — Provides `catchAs` (error mapping), `parseBody` (Zod body validation), and `refused` (4xx short-circuit for service-level rejections).
+- **`src/infrastructure/http/ids.ts`** — Provides `requireId` to extract and validate the `orderId` route param, responding 404 with a localised code if missing.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf` to extract the authenticated caller's context for the service call.
+- **`src/infrastructure/http/response.ts`** — Provides `createdOrOk` to emit the correct 201/200 status with the `Payment` payload and a `Location` header.
+- **`src/modules/payments/presenter.ts`** — Provides `presentPayment` to shape the service result into the API-visible `Payment` object, respecting the caller's read permissions (`readsAllPayments`).
+- **`src/modules/payments/routes.ts`** — Registers this handler on the `POST /payments/order/:orderId/offline` route with the `payments.any.create` guard.
+- **`src/modules/payments/services/index.ts`** — Exports `paymentService.recordOfflinePayment` (the business logic) and `readsAllPayments` (a permission predicate).
+- **`src/types/index.ts`** — Provides the `Payment` type used as the response generic.
 
 ## Notes
 
-- **`result.data.toJSON()` is load-bearing.** Without it the Mongoose document would serialise with `_id` and native `Date` objects; the cast to `Payment` is safe only _after_ that call.
-- **Audit / analytics events are not fired here.** They originate in the service layer once settlement actually lands — the same pattern as the confirm flow.
-- **No auth check in this file.** The `payments.any.create` guard lives in `routes.ts`; this handler assumes the request already passed that gate.
+- The 201-vs-200 distinction is driven by `result.status` from the service: 201 means a new row was created; 200 means an existing unpaid card-intent row was repurposed. The controller does not decide this—it trusts the service.
+- The handler is admin-only at the route level (`payments.any.create`); no additional role check lives in this file.
+- `RecordOfflinePaymentBody` is imported from `@api/schemas.zod`, which is outside the listed graph neighbors; its shape is not visible here.

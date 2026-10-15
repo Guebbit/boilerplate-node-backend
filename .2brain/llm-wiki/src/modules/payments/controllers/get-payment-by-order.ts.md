@@ -1,29 +1,30 @@
 ---
 source: src/modules/payments/controllers/get-payment-by-order.ts
-sha256: b32fd7761b3e0329c4d9eddd97d03044462b0ec5a7e9ef8019b3c0d839a48170
-generated_at: 2026-09-23T19:16:48.600090+00:00
+sha256: 5701b7bcf380aae21ff81d19e1ee0be319633cceb9d1154e5a35b1487bca48b4
+generated_at: 2026-10-15T11:23:20.206474+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/payments/controllers/get-payment-by-order.ts
 
 ## Purpose
-
-Single controller for `GET /payments/order/:orderId`. The order page's payment panel calls this on load so that a mid-flow reload can recover the existing payment intent (and its status) rather than starting the payment flow over from scratch.
+Controller handler for `GET /payments/order/:orderId`. It retrieves the payment (intent and status) tied to a given order so that the order page's payment panel can rehydrate its state on reload rather than forcing the user to restart the payment flow.
 
 ## Key elements
-
-- **`getPaymentByOrder`** (default export) — Express handler that delegates to `paymentService.getForOrder(orderId, authContext)`, then either responds with the `Payment` payload, signals a refusal, or forwards the error via `catchAs`. Written as a single chained-promise expression with no local state.
+- **`getPaymentByOrder`** (exported) – Express handler that validates the `orderId` path param, delegates to `paymentService.getForOrder`, and sends either a success response (`Payment` payload), a refusal response, or a caught-error response.
+- **`requireId`** call – Validates that `orderId` exists on the request; if missing, it sends a 404 with the `payments.not-found` code and the handler returns early.
+- **`refused`** – Checks the service result for a refusal condition; if true, the response is already sent and the handler exits.
+- **`catchAs`** – Catches any thrown error and maps it to a structured error response tagged with the handler name.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — provides the `catchAs` and `refused` helpers used for error forwarding and authorization-rejection responses.
-- **`src/infrastructure/http/response.ts`** — provides `successResponse`, the standard envelope for a 200 JSON reply.
-- **`src/modules/payments/services/index.ts`** — source of `paymentService`, whose `getForOrder` method performs the actual lookup.
-- **`src/modules/payments/routes.ts`** — registers this controller against the `/payments/order/:orderId` route.
-- **`src/types/index.ts`** — supplies the `Payment` type used in the response generic.
+- **`src/modules/payments/routes.ts`** – Registers this handler on the `GET /payments/order/:orderId` route.
+- **`src/modules/payments/services/index.ts`** – Source of `paymentService`; the handler calls `paymentService.getForOrder(orderId, request.authContext)`.
+- **`src/infrastructure/http/ids.ts`** – Provides `requireId` for path-parameter validation.
+- **`src/infrastructure/http/controller.ts`** – Provides `catchAs` (error mapping) and `refused` (refusal check).
+- **`src/infrastructure/http/response.ts`** – Provides `successResponse` for the happy-path JSON reply.
+- **`src/types/index.ts`** – Supplies the `Payment` type used as the response payload generic.
 
 ## Notes
-
-- The route param is typed as optional (`orderId?: string`) in the handler signature; the code coerces it with `String(request.params.orderId)` before passing to the service. If the param is genuinely missing the service will receive the literal string `"undefined"` — validation is expected upstream (routes layer).
-- The file contains no business logic; it is a thin adapter between Express and the service layer, following the same pattern as other controllers in the project.
+- The request param type is declared as `{ orderId?: string }` (optional) because `requireId` is responsible for the validation; the handler treats a `null`/`undefined` return as "already responded" and bails out.
+- `request.authContext` is forwarded into the service call, meaning the service performs its own authorization scoping—this controller does not check roles directly.
+- The early `if (!orderId) return Promise.resolve()` pattern is the established convention for exiting after `requireId` has already sent an error response.

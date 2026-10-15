@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/totals.property.test.ts
-sha256: 42253ce2d8c1d2f538fb948d854764c22078c6db2c2cebd821585a1866ff3bcf
-generated_at: 2026-09-23T19:15:50.403350+00:00
+sha256: 60ae96c452321b5fbe68ae8ea2f3ce1e7ec0901052ceb01efb7fb4eb5d6b9f66
+generated_at: 2026-10-15T11:21:52.582071+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Property-based tests (via `fast-check`) for `sumLineItems` and `orderTotal`. The file's central concern is **totality**: no input—however malformed or nullish—may produce `NaN` or throw. Beyond that it pins the arithmetic invariants (order-independence, additivity, scaling) to the cent, and verifies that `orderTotal` composes line totals with shipping without drift.
+Property-based tests (via `fast-check`) for `sumLineItems` and `orderTotal` in the orders domain. Verifies that the cart-total arithmetic is total (never NaN, never throws), additive, order-independent, and quantity-linear — all asserted exactly in cents to sidestep float tolerance.
 
 ## Key elements
 
-- **`RUN`** — fixed `fast-check` run config: seed `20_260_809`, `numRuns` from `PROPERTY_RUNS`, `endOnFailure: true`. Single place to change seed or run count.
-- **`nullish()`** — arbitrary yielding `null` _or_ `undefined`; used to assert both spellings contribute 0 rather than `NaN`.
-- **`decimalPrice()`** — cents-precise `double` (0 – 100 000.00), mirroring `Product.price`.
-- **`lineItem()`** — well-formed `LineItem` record (integer quantity, decimal price).
-- **`hostileLineItem()`** — deliberately broken `LineItem`: wrong types, nullish fields, missing keys. Cast to `fc.Arbitrary<LineItem>`.
-- **`describe('sumLineItems — totality')`** — three properties: never `NaN`, never throws, `count` equals array length for _any_ input.
-- **`describe('sumLineItems — arithmetic invariants')`** — empty-cart zero, order-independence, non-negativity, additivity over concatenation (compared via `Math.round(… * 100)`), price scales linearly with quantity, zero-quantity line excluded from money but included in count.
-- **`describe('orderTotal')`** — equals line price when shipping is absent/zero (covers `undefined`, `null`, `0`); adds shipping exactly in cents; never `NaN` with hostile items _and_ hostile shipping cost.
+- **`RUN`** — Single `{ seed, numRuns, endOnFailure }` config shared by every `fc.assert` call; `numRuns` comes from `PROPERTY_RUNS`.
+- **`nullish()`** — Arbitrary producing `null` or `undefined`, covering both spellings a failed populate can leave.
+- **`decimalPrice()`** — Cents-precise `double` prices (0 – 100 000.00).
+- **`lineItem()`** — Well-formed `LineItem` record (integer quantity, cent-precise price).
+- **`hostileLineItem()`** — Adversarial `LineItem` with arbitrary types in every field (`requiredKeys: []`), simulating a malformed aggregate.
+- **`describe('sumLineItems — totality')`** — No NaN, no throws, `count === items.length` on hostile input.
+- **`describe('sumLineItems — arithmetic invariants')`** — Zero on empty cart, order-independence, non-negativity, additivity over concatenation (cent-exact), price scales linearly with quantity, zero-quantity lines contribute 0 to money but +1 to count.
+- **`describe('orderTotal')`** — Shipping-zero equivalence with `sumLineItems`, exact cent addition of shipping, no NaN on hostile input, per-currency minor-unit rounding (EUR/JPY/KWD spot check).
 
 ## Relationships
 
-- **`src/modules/orders/domain/totals.ts`** — System under test. This file imports `sumLineItems`, `orderTotal`, and the `LineItem` type. Every property here constrains the behaviour that file must satisfy.
-- **`tests/support/knobs.ts`** — Supplies `PROPERTY_RUNS`, the shared run-count knob. Changing it here adjusts the iteration budget for this file (and every other property test that reads the same constant).
+- **`src/modules/orders/domain/totals.ts`** — Imports `sumLineItems`, `orderTotal`, and the `LineItem` type under test.
+- **`tests/support/knobs.ts`** — Imports `PROPERTY_RUNS` which sets the `numRuns` count for every property in this file.
 
 ## Notes
 
-- All money comparisons go through `Math.round(… * 100)` to sidestep IEEE-754 accumulation error (`0.1 + 0.2 ≠ 0.3`). The test suite never uses `toBeCloseTo` or a tolerance.
-- `hostileLineItem` uses `requiredKeys: []`, so _every_ field is optional in the generated record; the cast to `LineItem` is intentional and unchecked at the type level.
-- `endOnFailure: true` means the suite stops at the first counterexample; the fixed seed makes that counterexample reproducible and (per the module doc-block) intended to be written back as a plain `it()`.
-- The seed and run count are deliberately in one `const` (`RUN`) so a future developer changes them in one place rather than hunting through every `fc.assert` call.
+- Seed is hard-coded to `20_260_809`; a found counterexample is expected to be written back as a plain `it()` so the property suite stays green.
+- `endOnFailure: true` means the first counterexample aborts the property run (no shrinking continuation).
+- All property cases price in **EUR**; per-currency rounding is deliberately delegated to `money.property.test.ts` (only the final `orderTotal` spot-check exercises JPY/KWD).
+- Arithmetic comparisons use `Math.round(x * 100)` rather than a tolerance, because the only residual imprecision is the single final division back to a `double`.
+- `hostileLineItem` casts through `as fc.Arbitrary<LineItem>` because its record shape is a superset of the real type; this is intentional, not a bug.

@@ -1,26 +1,26 @@
 ---
 source: src/modules/payments/metrics.ts
-sha256: e0b1a59aaa4e4b5a6536f73ea84367a65eaa547e19593fd6beff8b9a66419b47
-generated_at: 2026-09-23T19:18:18.459753+00:00
+sha256: 6524ef6c508a5daf41ff1804ce3cc27fe1456c697bf24527b10bdeb9b605d75e
+generated_at: 2026-10-15T11:26:07.071170+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/payments/metrics.ts
 
 ## Purpose
-
-Defines the Prometheus counters owned by the payments module. The counters live here (in the domain module) rather than in `infrastructure/observability` so that metric ownership follows the business capability. The overview endpoint reads them via the shared registry without needing to import this file directly.
+Defines the Prometheus counters for the payments domain: one for confirmation outcomes and one for settlement-amount mismatches. Metrics live here (in the module) rather than in `infrastructure` so the domain owns its observability vocabulary; the overview endpoint reads them without importing this file (see `modules/account/metrics.ts` for the pattern).
 
 ## Key elements
-
-- **`paymentConfirmTotal`** (`Counter`, exported) — Counts payment-confirmation attempts, labelled by `outcome` (e.g. success, decline). The label split is intentional: a decline spike at steady volume signals a fraud or provider incident, whereas summing outcomes would mask that signal.
+- **`paymentConfirmTotal`** (`Counter`, labels: `outcome`) — increments on every payment-confirmation attempt, tagged with the result (e.g. `succeeded`, `declined`). The label split exists so a decline-spike-vs-steady-volume ratio is visible as a distinct series rather than hidden in a total.
+- **`paymentAmountMismatchTotal`** (`Counter`, labels: `field`) — increments when a provider reports a success whose amount, currency, or payment-id differs from the frozen payment. Each increment is a reconciliation signal.
+- **Pre-initialisation loop** — calls `inc({ field }, 0)` for `amount`, `currency`, and `paymentId` at module load so Prometheus sees all three label values from startup (avoids "missing metric" gaps in `increase()` alerts after a restart).
 
 ## Relationships
-
-- **`src/infrastructure/observability/metrics-registry.ts`** — Imports the shared `metricsRegistry` instance and registers `paymentConfirmTotal` with it, making the metric available to the central collector.
-- **`src/modules/payments/controllers/post-payment-confirm.ts`** — The confirmation controller that increments `paymentConfirmTotal` (with the appropriate outcome label) as part of its request handling.
+- **`src/infrastructure/observability/metrics-registry.ts`** — imported as `metricsRegistry`; both counters register against it so they appear on the shared `/metrics` endpoint alongside all other domain metrics.
+- **`src/modules/payments/services/settlement.ts`** — the source of the three fields (`amount`, `currency`, `paymentId`) the mismatch counter tracks; settlement is where the provider response is compared to the frozen record and the counter is incremented.
+- **`src/modules/payments/controllers/post-payment-confirm.ts`** — the handler that increments `paymentConfirmTotal` with the appropriate `outcome` label after each confirmation attempt.
+- **`src/modules/payments/tests/integration/settlement-mismatch.test.ts`** — integration test exercising the settlement-mismatch path that drives `paymentAmountMismatchTotal`.
 
 ## Notes
-
-- Only one counter is defined here; the module's convention (noted in the header comment and mirrored in `modules/account/metrics.ts`) is that each domain module owns its own metric definitions in a co-located `metrics.ts`.
-- The counter uses `labelNames: ['outcome']`. Any new outcome value must be a finite, known set — open-ended labels will create unbounded series on the Prometheus side.
+- The counter names use the `*_total` suffix (Prometheus counter convention); the `help` strings are the operator-facing descriptions shown in the metrics endpoint.
+- The zero-initialisation loop is intentional and idempotent (`inc` by 0), but it must stay in sync with whichever fields `settlement.ts` actually compares — adding a new comparison field without adding it here will produce a missing series in dashboards/alerts until the first real mismatch occurs.

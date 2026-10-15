@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/controllers/post-payment-intent.ts
-sha256: c29dac1de4c8b76692c856f14f62609b0dd39f0875e3b6d9689535adf2e64455
-generated_at: 2026-09-23T19:17:14.791206+00:00
+sha256: 6443ad43a83f5f4a8233726af924a57b16e3d478f7084d510b3d4c1b71df7a2a
+generated_at: 2026-10-15T11:23:57.097749+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin Express controller for `POST /payments/intent`. It validates the request body, delegates to the payment service to freeze an order's price and open a payment intent at the provider, and returns the resulting `Payment` object (including a transient `clientSecret`) with a `201`. All business rules—ownership, the `pending` gate, amount resolution—live in the service; this file performs no audit, analytics, or domain logic.
+Handler for `POST /payments/intent`. Freezes an order's price into a payment intent and opens one at the provider, ready to confirm. Deliberately thin: ownership checks, the `pending` gate, and amount calculation all live in the service layer. No audit or analytics events fire here—an intent is page-load preparation, not a business event; those fire on confirm.
 
 ## Key elements
 
-- **`postPaymentIntent(request, response)`** (exported) — The sole handler. Parses `request.body` against `CreatePaymentIntentBody` (Zod), calls `paymentService.createIntent(orderId, authContext)`, and either refuses, returns the 201 success, or catches the error.
+- **`postPaymentIntent`** — the sole export. Parses the request body against `CreatePaymentIntentBody` (Zod schema), delegates to `paymentService.createIntent(orderId, authContext)`, and responds with `createdOrOk`. The response carries `clientSecret` inside the `Payment` object; the service performs that serialization because the field is not part of the persisted document.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — Supplies the three helpers used here: `parseBody` (schema validation + early-exit), `refused` (uniform 4xx/409 handling), and `catchAs` (centralized error→status mapping).
-- **`@infrastructure/http/response`** — `successResponse` wraps the payload into the module's standard envelope.
-- **`../services`** (payments service barrel) — Exposes `paymentService.createIntent`, which owns all domain logic and serializes the response body (including `clientSecret`).
-- **`src/modules/payments/routes.ts`** — Registers `postPaymentIntent` on the `POST /payments/intent` route.
-- **`@types`** — Imports the `Payment` type used as the generic on `successResponse`.
+- **`src/infrastructure/http/controller.ts`** — supplies `parseBody`, `refused`, and `catchAs` helpers used for validation, rejection checks, and error handling.
+- **`src/infrastructure/http/response.ts`** — supplies `createdOrOk`, which emits 201 (new payment) or 200 (refreshed existing one) with a `Location` header.
+- **`src/modules/payments/routes.ts`** — registers this handler on the `POST /payments/intent` route.
+- **`src/modules/payments/services/index.ts`** — provides `paymentService.createIntent`, which owns all business logic (idempotency, amount locking, provider call).
+- **`src/types/index.ts`** — provides the `Payment` type that shapes the response body.
 
 ## Notes
 
-- `clientSecret` appears only in this endpoint's response. It is never logged, never persisted, and is the one field the standard `Payment` document does not carry.
-- The service (not the controller) serializes the result because of that extra field—the controller passes `result.data` through unchanged.
-- No audit or analytics calls here by design; those fire on the confirm step, not on intent creation.
-- Returns **201**, not 200, signalling resource creation.
+- `clientSecret` is never logged, never stored, and appears in exactly one endpoint response in this module. Treat any logging middleware with care around this field.
+- 201 vs. 200 is determined by the service (`result.status`), not by the controller.
+- The controller does not attach audit/analytics; do not add them here—those belong on the confirm path.

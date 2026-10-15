@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/integration/lookup.test.ts
-sha256: 3da3fe33cf9883accb5e62b13d13bcb1c8f2f629b318d6a3bb91216f16924b1a
-generated_at: 2026-09-23T19:23:15.166150+00:00
+sha256: a89d6ee3f4b4890679898854ad5d32122c2e8d18237542942ac684f2df69d7a4
+generated_at: 2026-10-15T11:33:59.930812+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,40 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for the admin's bank-transfer reference lookup (`getOrderByReference`) and its immediate downstream settle step (`recordOfflinePayment`). It pins the contract that a reference minted at checkout resolves to its own order, that any miss (typo, unmatched, malformed) yields a uniform 404 with no oracle, and that the order the lookup returns is the one the existing offline endpoint settles — with no new settlement logic in between.
+Integration test for the admin's RF-reference lookup path (`getOrderByReference`). It verifies that a `bank_transfer` order's own minted reference resolves back to that order, that mistyped/unmatched references all collapse to an indistinguishable 404, and that the two-step admin flow (lookup → settle via the existing `recordOfflinePayment` endpoint) works end-to-end with no additional settlement code.
 
 ## Key elements
 
-- **`setupTestDb()`** — spins up a real MongoDB instance for the test run (integration, not mock).
-- **`transferOrder()`** (local helper) — creates a user, product, and a pending `bank_transfer` order whose `_id` is pinned _before_ insertion so `buildReference(id)` names the exact row that is about to be written.
-- **`orderIdOf()`** (local helper) — extracts `data._id` from a success envelope for assertions.
-- **`describe('getOrderByReference')`** — six cases:
-    - exact reference → success, correct order id
-    - grouped + lowercased reference (simulating a bank-statement read) → still resolves
-    - raw ObjectId passed in → 404 (order predates the reference field)
-    - one-character typo → 404 (checksum rejection path)
-    - well-formed but never-minted reference → 404 (lookup-miss path)
-    - arbitrary string → 404 (same as typo)
-- **`describe("lookup then settle — the admin's two-step flow")`** — calls `getOrderByReference`, then `recordOfflinePayment` on the found id, then reads the order back and asserts `status === 'paid'`.
+- **`transferOrder()`** – Creates a user, a product, a pre-minted `buildReference` id, and a pending `bank_transfer` order whose `_id` is the same id used to build the reference. Returns `{ order, reference }` for use in assertions.
+- **`orderIdOf(result)`** – Small helper that pulls `data._id` out of a service result shape.
+- **`describe('getOrderByReference')`** – Six cases covering: exact match, case/space-insensitive match (customer reading off a bank statement), raw ObjectId rejection, single-character typo, valid-but-orphan reference (checksum passes, no order), and arbitrary garbage input. All miss-cases assert a uniform 404 via `asReject`.
+- **`describe("lookup then settle")`** – One case that chains `getOrderByReference` into `recordOfflinePayment` (called with `callerContextAs('admin')`) and confirms the order's persisted status becomes `'paid'`.
 
 ## Relationships
 
-| Neighbor                                          | Interaction                                                                        |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `src/modules/payments/services/lookup.ts`         | Provides `getOrderByReference`, the function under test.                           |
-| `src/modules/payments/services/offline.ts`        | Provides `recordOfflinePayment`, exercised in the settle test.                     |
-| `src/modules/payments/services/index.ts`          | Barrel re-export; the test imports both service functions from here.               |
-| `src/modules/orders/domain/transfer-reference.ts` | Source of `buildReference`, used to mint the reference and the "orphan" reference. |
-| `src/modules/orders/index.ts`                     | Re-exports `buildReference` for the test's import.                                 |
-| `src/modules/orders/tests/factories.ts`           | `createOrder`, `readOrder`, `toOrderItem` — order fixtures.                        |
-| `src/modules/products/tests/factories.ts`         | `createProduct` — product fixture.                                                 |
-| `src/modules/users/tests/factories.ts`            | `createUser` — user fixture.                                                       |
-| `tests/support/callers.ts`                        | `testCallerContext` — auth context for the offline-payment call.                   |
-| `tests/support/response.ts`                       | `asReject` — asserts the result is a rejection envelope and exposes `.status`.     |
-| `tests/support/setup-test-db.ts`                  | `setupTestDb` — provisions the test database.                                      |
+- **`src/modules/payments/services/lookup.ts`** – Source of `getOrderByReference`, the function under test (imported via `services/index.ts`).
+- **`src/modules/payments/services/offline.ts`** – Source of `recordOfflinePayment`, used in the settle step to prove the lookup's output feeds the existing offline endpoint unchanged.
+- **`src/modules/payments/services/index.ts`** – Barrel re-export from which both service functions are imported.
+- **`src/modules/orders/domain/transfer-reference.ts`** – Provides `buildReference`, used to mint a realistic reference bound to the order's own id.
+- **`src/modules/orders/index.ts`** – Re-exports `buildReference`.
+- **`src/modules/orders/tests/factories.ts`** – Provides `createOrder`, `readOrder`, `toOrderItem` for order setup and post-assertion reads.
+- **`src/modules/products/tests/factories.ts`** – Provides `createProduct`.
+- **`src/modules/users/tests/factories.ts`** – Provides `createUser`.
+- **`tests/support/callers.ts`** – Provides `callerContextAs('admin')` for the settlement call.
+- **`tests/support/response.ts`** – Provides `asReject` to unwrap the failure envelope and assert `.status`.
+- **`tests/support/setup-test-db.ts`** – Provides `setupTestDb`, called at module top-level to seed/clean the Mongo test database.
 
 ## Notes
 
-- The id-pinning pattern (create ObjectId → build reference → pass id into `createOrder`) mirrors what the cart checkout does in production; it guarantees the reference refers to the row actually written, not a second id.
-- The 404 cases are deliberately distinct branches (checksum fail vs. lookup miss vs. non-reference input) so a future refactor that collapses them would be caught.
-- The settle test imports `recordOfflinePayment` from the _existing_ offline service — the test's job is to confirm no new settlement code was introduced between lookup and settle, not to test the offline service's own logic (that lives in `service.test.ts`).
+- The reference is deliberately built from the order's **own** `_id` (pinned before `createOrder`), mirroring how `cart` checkout mints it. This ensures the reference names the row it will be written to, not a transient second id.
+- All four miss-cases (ObjectId, typo, orphan reference, garbage) must return **the same** 404 status; the test explicitly documents this as an anti-leak guarantee.
+- The settle test does not assert on the *shape* of the offline endpoint's response beyond `success === true`; it only checks the persisted order status, keeping the test focused on the lookup→settle handoff rather than re-testing settlement internals.

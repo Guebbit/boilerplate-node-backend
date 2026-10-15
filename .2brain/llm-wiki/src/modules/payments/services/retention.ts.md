@@ -1,35 +1,41 @@
 ---
 source: src/modules/payments/services/retention.ts
-sha256: 278d57694d603c926d0c5f6a43867a7a53d9e3417a56f61ec2de1a10ae1a4a25
-generated_at: 2026-09-27T15:27:14.465174+00:00
+sha256: 0ee519cab535fcf0dda753924241ff46bcd8323e87042cc3387a9bd94dfb139d
+generated_at: 2026-10-15T11:31:35.608030+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/payments/services/retention.ts
 
 ## Purpose
-Handles the payment lifecycle after money has moved: identity detachment on account erasure, full-payment retrieval for the account's own data export, and a sweep that deletes abandoned (never-settled) payment attempts past a retention window.
+
+Post-transaction lifecycle operations for payments: detaching a user's identity at erasure, assembling the account's full payment history for data export, and sweeping out abandoned (never-succeeded) payment attempts past a retention window.
 
 ## Key elements
-- **`detachUserId(userId, session)`** — DDD-D6 `personalData.erase` hook. Unsets `userId` on all payments belonging to the erased account. Joins the caller's hard-delete transaction via the `ClientSession` parameter.
-- **`findOwnPayments(userId)`** — Returns *all* payments for a user. Deliberately unpaginated (uses `readAll` internally) because it serves a one-time full export, not a client-facing listing.
-- **`toExportPayment(payment)`** *(private)* — Maps a `Lean<PaymentDocument>` to the public `ExportPayment` shape. Explicitly omits `userId`, spreads `cardLast4` and timestamps conditionally, and returns a plain object (not a type-level `Omit`) so serialization cannot leak `userId`.
-- **`findOwnPaymentsForExport(userId)`** — Composes `findOwnPayments` + `toExportPayment`. The field mapping formerly inlined in `module.ts`.
-- **`reapAbandonedPayments()`** — Deletes payment attempts that are not in `succeeded`/`refunded` status and whose last modification is older than `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30, min 1). Returns the count deleted.
+
+- **`detachUserId(userId, session)`** — Erasure hook. Unsets `userId` on every payment the account made. Joins the caller's `ClientSession` transaction. Logs only when `detached > 0`.
+- **`findOwnPayments(userId)`** — Reads **all** payments for the user via `readAll` (intentionally unpaginated). Returns `Lean<PaymentDocument>[]`.
+- **`toExportPayment(payment)`** *(private)* — Maps a `Lean<PaymentDocument>` to the public `ExportPayment` shape. Deliberately omits `userId` and conditionally includes `cardLast4`, `createdAt`, `updatedAt`, and per-refund `returnId`/`settledAt`.
+- **`findOwnPaymentsForExport(userId)`** — Composes `findOwnPayments` + `toExportPayment`; the exported entry point for the data-export route.
+- **`reapAbandonedPayments()`** — Computes a cutoff from `abandonedPaymentRetentionDays()`, delegates to `paymentRepository.deleteAbandonedBefore`, returns the deleted count. Logs only when `deleted > 0`.
 
 ## Relationships
-- **`paymentRepository`** (`../repository`) — All reads and writes go through it (`detachUserId`, `findAll` with `ownerScope`, `deleteAbandonedBefore`).
-- **`readAll` / `MAX_CONFIGURED_PAGE_SIZE`** (`@infrastructure/persistence/search`) — Drives the unpaginated full-read in `findOwnPayments`.
-- **`environmentNumber`** (`@infrastructure/runtime/environment`) — Resolves the retention-days threshold at call time.
-- **`logger`** (`@infrastructure/adapters/logger`) — Emits info logs when detach or reap operations affect > 0 rows.
-- **`PaymentDocument`** (`../model`) — Type used for the document-to-export mapping.
-- **`ExportPayment`** (`@types`) — The public export shape returned by `findOwnPaymentsForExport`.
-- **`module.ts`** — Likely registers these functions as the module's service surface (the doc comment notes the mapping was moved *from* `module.ts`).
-- **`services/index.ts`** — Re-exports the public functions from this file.
-- **`retention.test.ts`** — Integration tests exercising the three public operations.
+
+- **`../repository.ts`** — Primary data access: `detachUserId`, `findAll` + `ownerScope`, `deleteAbandonedBefore`.
+- **`../config.ts`** — Supplies `abandonedPaymentRetentionDays` for the reap cutoff.
+- **`../model.ts`** — Provides the `PaymentDocument` type used in signatures and mapping.
+- **`@infrastructure/persistence/search.ts`** — `readAll` and `MAX_CONFIGURED_PAGE_SIZE` drive the unpaginated export read.
+- **`@infrastructure/persistence/create-repository.ts`** — Source of the `Lean<T>` type.
+- **`@infrastructure/adapters/logger.ts`** — Structured info logging on detach and reap (guarded by Stryker mutation-disable comments).
+- **`@types/index.ts`** — Defines `ExportPayment` and `Refund` shapes used by the export mapper.
+- **`../services/index.ts`** — Barrel re-export of the public functions.
+- **`../module.ts`** — Consumes the exported functions for route wiring (the field mapping lives here, not in `module.ts`).
+- **`../tests/integration/retention.test.ts`** — Integration coverage for all exported operations.
 
 ## Notes
-- `toExportPayment` builds a fresh plain object rather than relying on `Omit`/`Pick` on the Mongoose document. The code comment explains that `applyPaymentTransform` does not carry the omission, so returning the document as-is would still serialize `userId`.
-- `detachUserId` participates in the caller's MongoDB transaction; it must not be called standalone outside that session.
-- The Stryker disable/restore comments wrap the `logger.info` call in `detachUserId` to suppress mutation-testing on a pure side-effect line.
-- A settled payment (`succeeded` or `refunded`) is never a candidate for `reapAbandonedPayments`, regardless of age.
+
+- `findOwnPayments` uses `readAll` on purpose — an export is a one-shot full answer, not a paginated listing. Do not "fix" this to a single-page query.
+- `toExportPayment` is a hand-written mapper (not a type-level `Omit`) because `applyPaymentTransform` does not strip `userId`; returning the Mongoose document directly would leak it.
+- `reapAbandonedPayments` only targets attempts that **never reached `succeeded`**; settled payments are never candidates.
+- The retention window is env-configurable (`NODE_PAYMENT_ABANDONED_RETENTION_DAYS`, default 30).
+- Stryker mutation-testing disable/restore comments wrap the logger calls — remove them only if you understand the mutation-testing setup.

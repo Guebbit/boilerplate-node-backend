@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/controllers/post-payment-refund.ts
-sha256: 138126f2554b2bbf1b98b2cf451f37774208783cdfd662eaacf6e2ce044e65ae
-generated_at: 2026-09-23T19:17:35.518320+00:00
+sha256: 2e68d614d6d5a5ca25cf03fb75c3a097e7e0224581d0bd6ff681b77e619a7a79
+generated_at: 2026-10-15T11:24:19.195925+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin Express controller for `POST /payments/order/:orderId/refund`. It performs a standalone monetary refund on an order without altering the order's status, giving an operator the ability to refund alone (as opposed to the "cancel + refund" flow where the client issues both calls). All business logic is delegated to `paymentService.refundByOrder`; this file only wires the HTTP layer to the service result.
+HTTP controller for `POST /payments/order/:orderId/refund`. Handles an admin-initiated refund (full or partial) of an order's payment without altering the order's status. Kept as a standalone endpoint so an operator can refund, cancel, or do both independently.
 
 ## Key elements
 
-- **`postPaymentRefund`** (exported const) — The sole export. Accepts an Express `Request<{ orderId?: string }>` and `Response`. Calls `paymentService.refundByOrder(orderId, authContext, callerContext)`, then:
-    - If the result is a refusal, short-circuits via `refused(response, result)`.
-    - On success, serializes the domain object with `.toJSON()` (which applies the model's `_id → id` and date → ISO-string transform) and sends it through `successResponse<Payment>` with status 200.
-    - On thrown error, delegates to `catchAs(response, 'postPaymentRefund')`.
+- **`postPaymentRefund`** (exported) — Route handler. Validates `orderId` via `requireId`, parses the request body against `RefundPaymentByOrderBody` (Zod schema), delegates to `paymentService.refundByOrder(orderId, authContext, callerContext, body)`, then shapes the `Payment` result through `presentPayment` (scoped by `readsAllPayments`) and sends a 200 response. Errors are funnelled through `refused` / `catchAs`.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs` (async error formatting) and `refused` (result-shape check that writes the refusal response and returns a truthy value to skip the success path).
-- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf`, which extracts the caller's context from the request for the service call.
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, the standard envelope writer.
-- **`src/modules/payments/services/index.ts`** — Supplies `paymentService`, specifically its `refundByOrder` method (the actual refund logic).
-- **`src/modules/payments/routes.ts`** — Registers this handler on the `POST /payments/order/:orderId/refund` path (admin-only guard lives there, not here).
-- **`src/types/index.ts`** — Supplies the `Payment` type used in the success-response cast.
+- **`src/modules/payments/routes.ts`** — Registers `postPaymentRefund` as the handler for the refund route; enforces admin-only access at this layer.
+- **`src/modules/payments/services/index.ts`** — Source of `paymentService` (executes the refund) and `readsAllPayments` (a scope predicate passed to the presenter).
+- **`src/modules/payments/services/scope.ts`** — Likely origin of `readsAllPayments`; determines which `Payment` fields are visible to the caller.
+- **`src/modules/payments/presenter.ts`** — `presentPayment` converts the raw `Payment` domain object into the API response shape, respecting the `readsAllPayments` scope.
+- **`src/infrastructure/http/controller.ts`** — Provides the shared helpers `parseBody`, `refused`, and `catchAs` used for body validation, business-rejection handling, and error serialisation.
+- **`src/infrastructure/http/ids.ts`** — `requireId` extracts and validates the `orderId` param, short-circuiting with a 404 if absent.
+- **`src/infrastructure/http/request.ts`** — `callerContextOf` derives the caller's contextual metadata (e.g. IP, user-agent) passed to the service.
+- **`src/infrastructure/http/response.ts`** — `successResponse` serialises the final JSON envelope.
+- **`src/types/index.ts`** — Defines the `Payment` type used as the response payload.
 
 ## Notes
 
-- The controller does **not** mutate order status. "Cancel and refund" is modeled as two separate HTTP calls from the client; this endpoint covers the refund half only.
-- `request.params.orderId` is typed `string | undefined` by the Express generic but is unconditionally wrapped in `String()` before being passed to the service — treat it as always present at runtime (the route pattern guarantees it).
-- The `.toJSON()` call is load-bearing: without it the response would contain the raw Mongoose `ObjectId` under `_id` and native `Date` objects rather than the `Payment` shape consumers expect.
-- Auth enforcement (admin-only) is applied in `routes.ts`; nothing in this file checks permissions.
+- The controller deliberately does **not** change order status; "cancel and refund" is modelled as two separate client calls (this endpoint + the cancel endpoint) so each can be done independently.
+- `readsAllPayments(request.authContext)` is a *scope function*, not a boolean flag — the presenter uses it field-by-field, so the same `Payment` shape can yield different payloads for different roles.
+- The `orderId` in the route is treated as optional at the type level (`{ orderId?: string }`) and validated at runtime by `requireId`; do not assume it is present before the guard.

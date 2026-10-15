@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/lookup.ts
-sha256: 4af8b28968f4f45c60220e5950c7862f5a42c81d1ab54b8cc1e05d88a47332f3
-generated_at: 2026-09-23T19:21:16.665411+00:00
+sha256: 487f49d8a5aeb78c20dc0857644703596f17a3b7da5220a0d672893223789378
+generated_at: 2026-10-15T11:30:26.823909+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin lookup layer that resolves an RF bank-transfer reference to the order it pays. It sits one step in front of the existing `POST /payments/order/{orderId}/offline` settlement endpoint, letting an admin confirm _which_ order a pasted reference maps to before settling it. No settlement logic lives here.
+Resolves an RF (bank transfer) reference to the order it pays. It is the single lookup step in front of the existing `POST /payments/order/{orderId}/offline` settlement endpoint; no settlement logic lives here.
 
 ## Key elements
 
-- **`getOrderByReference(ref: string)`** _(sole export)_ — Parses the raw reference string via `parseReference`, queries `orderService.getByTransferReference`, and returns either `ResponseSuccess<OrderDocument>` or a 404 `ResponseReject`. A malformed reference and an unmatched reference both produce the identical 404 payload.
+- **`getOrderByReference(ref: string)`** — The sole export. Parses the raw reference with `parseReference`, queries `orderService.getByTransferReference`, and returns either `generateSuccess(order)` or a `404` reject. Both a malformed reference and a valid-but-unmatched one yield the identical 404 payload.
 
 ## Relationships
 
-- **`src/infrastructure/http/response.ts`** — Imports `generateSuccess`, `generateReject`, and the `ResponseSuccess` / `ResponseReject` types used to shape every return value.
-- **`src/infrastructure/i18n/index.ts`** (re-exported by `context.ts`) — Imports the `t` helper; the 404 message key is `payments.order-not-found`.
-- **`src/modules/orders/index.ts`** — Barrel import source for `orderService`, `parseReference`, and the `OrderDocument` type. The underlying implementations live in `services/index.ts` (`orderService`), `domain/transfer-reference.ts` (`parseReference`), and `model.ts` (`OrderDocument`).
-- **`src/modules/payments/services/index.ts`** — Re-exports `getOrderByReference` as part of the payments service public surface.
-- **`src/modules/payments/tests/integration/lookup.test.ts`** — Integration tests covering the reference→order resolution path.
+- **`@infrastructure/http/response`** — Uses `generateSuccess` / `generateReject` and the `ResponseSuccess` / `ResponseReject` types to shape the HTTP response.
+- **`@infrastructure/i18n`** — Imports `t` to produce the localised error message (`payments.order-not-found`).
+- **`@modules/orders`** (barrel: `index.ts`) — Consumes `orderService` (service layer), `parseReference` (domain, defined in `domain/transfer-reference.ts`), and the `OrderDocument` type (model).
+- **`src/modules/payments/services/index.ts`** — Re-exports `getOrderByReference` as part of the payments service surface.
+- **`src/modules/payments/tests/integration/lookup.test.ts`** — Integration tests exercise this function directly.
 
 ## Notes
 
-- **Deliberate 404 conflation:** A malformed reference (fails `parseReference`) and a well-formed-but-unmatched reference both return the same 404 body. This is intentional so a client cannot distinguish "typo" from "unknown code."
-- **Pre-reference orders are unreachable here:** Orders created before the transfer-reference field existed have no reference and cannot be found through this function; the admin must use the normal order-search flow instead.
-- **Read-only:** This file performs no mutations. Settlement is the responsibility of the separate `recordOfflinePayment` endpoint.
+- Card orders (no transfer reference) are **not** reachable through this endpoint by design; admins must find them via normal order search by ID.
+- A raw order ID pasted as the "reference" will fail `parseReference` and produce the same 404 — the endpoint deliberately does not distinguish "malformed" from "not found" to avoid leaking which case occurred.
+- The function is intentionally thin (parse → query → wrap). If settlement logic is added, it belongs in the offline-payment endpoint, not here.

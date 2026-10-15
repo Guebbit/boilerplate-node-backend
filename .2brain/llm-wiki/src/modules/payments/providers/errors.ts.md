@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/providers/errors.ts
-sha256: a62ddda66c68e11f097d7ab7f8623ae8bb60d56b48a5203a80cca36e364df093
-generated_at: 2026-09-27T15:24:15.989860+00:00
+sha256: c99d0bb0c36a733f02d06d348ef8bcadcef04548ffbd94caeaed6c22290a9a56
+generated_at: 2026-10-15T11:27:13.965141+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,18 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Houses the error type(s) thrown by the payment provider port, isolated into their own module so implementations can import and throw them without pulling in `index.ts` (the port interface), which itself imports every implementation. This split exists specifically to break a circular-dependency cycle that previously arose when the error lived inside `index.ts`.
+Defines the two error classes that a payment provider adapter (real or fake) throws when it refuses a cancel or a refund. It is split out of `providers/index.ts` so that an implementation can import only these error types without pulling in the port interface, the config, or the registry that the adapter itself is registered in — avoiding a circular import.
 
 ## Key elements
 
-- **`PaymentInFlightError`** (exported class, extends `Error`) — Thrown exclusively by `PaymentProvider.cancel` when the payment intent has already succeeded or is still mid-flight on the provider side, meaning there is nothing open left to close and only a refund could return the funds. Constructor accepts a single `message: string` and sets `name` to `'PaymentInFlightError'`.
+- **`PaymentInFlightError`** — extends `Error`. Thrown exclusively by `PaymentProvider.cancel` when the intent already succeeded or is still mid-flight on the provider side and there is nothing open left to close. Carries a `message` describing the intent's state.
+- **`PaymentProviderError`** — extends `Error`. Thrown by an adapter when it refuses a refund. Exposes a readonly `code: RefundFailureReason` (the closed reason shown to staff) and a `message` containing the provider's own wording (log-only, never sent to the wire).
+- **Import** — `RefundFailureReason` from `@types`, used as the closed-set enum for `PaymentProviderError.code`.
 
 ## Relationships
 
-- **`src/modules/payments/providers/index.ts`** — The port-interface module this file was split out of. `index.ts` imports all provider implementations; keeping the error type here (rather than in `index.ts`) lets implementations import the error without creating the cycle `index.ts → impl → index.ts`.
-- **`src/modules/payments/providers/fake.ts`** — The in-repo implementation that throws `PaymentInFlightError` from its `cancel` method, importing it from this module.
+- **`src/types/index.ts`** — provides the `RefundFailureReason` type used by `PaymentProviderError`.
+- **`src/modules/payments/providers/index.ts`** — the port interface this file was extracted from; adapters import the errors from here instead of from the port to avoid importing the registry/config.
+- **`scenarios/support/doubles/payments/fake.ts`** — the test double that throws these errors to simulate provider rejections without importing the port file.
+- **`src/modules/payments/services/refunds.ts`** — catches `PaymentProviderError` to classify the refund outcome.
+- **`src/modules/payments/services/intent.ts`** / **`src/modules/payments/services/offline.ts`** — catch `PaymentInFlightError` from cancel calls.
+- **`src/modules/payments/tests/integration/refunds.test.ts`** / **`timeline.test.ts`** — exercise code paths that produce or handle these errors.
+- **`tests/unit/scenarios/payments-fake.test.ts`** — asserts the fake double throws the correct error classes.
 
 ## Notes
 
-- The module-level doc comment is load-bearing: it records *why* the split exists. Merging the class back into `index.ts` will re-introduce the circular import.
-- `PaymentInFlightError` is documented as thrown "nowhere else in this port" — if other port methods begin throwing it, that contract breaks.
+- The module doc block explicitly states the split is an import-cycle mitigation; do not re-merge these classes into `index.ts` without reconsidering the dependency graph.
+- `PaymentProviderError.message` is contractually log-only. If a caller surfaces it to an API response, that is a bug.
+- Any adapter error that is *not* wrapped in one of these two classes is treated by callers as `unknown`, not as a classified failure.

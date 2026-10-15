@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/integration/retention.test.ts
-sha256: 28ee3b1f4ad101af930d29ff1db52e2e733726390a350e166aec6965730082df
-generated_at: 2026-09-27T15:28:37.198449+00:00
+sha256: 4547ba5f0e04ac3847ec2c8f6586d0f0c6ff543723ce7d105d103ec5be36b4a0
+generated_at: 2026-10-15T11:35:45.770251+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for two payment-retention behaviors: (1) **account erasure** — hard-deleting a user detaches `userId` from the associated payment (and order) without deleting the payment record itself, and (2) **abandoned-payment reaping** — the `reapAbandonedPayments` sweep deletes unsettled attempts past a configurable retention window while never touching settled payments. Both suites exercise real module wiring via `registerCheckoutModules([paymentsModule])`.
+Integration tests for two retention behaviors of the payments module: (1) what happens to a payment when its owning user account is hard-deleted (the "detach" / erasure cascade), and (2) the `reapAbandonedPayments` sweep that deletes never-settled payment attempts past a configurable retention window. Tests exercise real module wiring (via `registerCheckoutModules`) rather than unit-mocking services.
 
 ## Key elements
 
-- **`describe('payments — detach on account erasure')`** — three tests verifying that `userService.remove(user, true)` unsets `userId` on the payment, leaves the payment row intact, and that an admin intent against a pre-detached order records `undefined` (not the string `"undefined"`) as payer.
-- **`describe('payments — reapAbandonedPayments (reap-payments sweep)')`** — three tests verifying the retention window: an 8-day-old attempt is deleted, a 6-day-old attempt survives, and a 365-day-old *settled* payment is never deleted regardless of age.
-- **`touch(paymentId, updatedAt)`** (local helper) — backdates a payment's `updatedAt` via `paymentModel.updateOne` with `{ timestamps: false }` to prevent Mongoose from immediately resetting it to the current time.
-- **Env-var save/restore** — `afterEach` in the reap suite restores `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` to its original value.
+- **`describe('payments — detach on account erasure')`** — four tests verifying that `userService.remove(user, true)` unsets `payment.userId` while the payment document itself survives, that an offline payment recorded against a detached order stores `userId: undefined` (not the string `"undefined"`), and that a stranger cannot open a new intent on a detached order.
+- **`describe('payments — reapAbandonedPayments (reap-payments sweep)')`** — three tests verifying the retention window: abandoned (unconfirmed) payments past `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` are deleted; those still within the window are untouched; confirmed (settled) payments are never deleted regardless of age.
+- **`touch(paymentId, updatedAt)`** — local helper that backdates a payment's `updatedAt` via `paymentModel.updateOne` with `{ timestamps: false }` so Mongoose does not immediately overwrite it.
+- **`setEnvironment({ NODE_PAYMENT_ABANDONED_RETENTION_DAYS: '7' })`** — used in the reap block to control the retention threshold per test.
 
 ## Relationships
 
-- **`src/modules/payments/services/index.ts`** — re-exports `createIntent`, `confirmPayment`, and `reapAbandonedPayments` used directly in assertions.
-- **`src/modules/payments/services/retention.ts`** — implements `reapAbandonedPayments` (the function under test in the second suite).
-- **`src/modules/payments/services/intent.ts`** — implements `createIntent`, the entry point that produces the payment records under test.
-- **`src/modules/payments/services/settlement.ts`** — implements `confirmPayment`, used to settle a payment before the "never delete settled" assertion.
-- **`src/modules/payments/repository.ts`** — `paymentRepository.findById` is the primary assertion vehicle in every test.
-- **`src/modules/payments/model.ts`** — `paymentModel` is used by the `touch` helper for raw Mongoose updates.
-- **`src/modules/payments/module.ts`** — `paymentsModule` is registered in `beforeEach` to wire the real service→repository→event graph.
-- **`src/modules/users/index.ts`** — `userService.remove(user, true)` triggers the cascade that detaches the payment.
-- **`src/modules/users/tests/factories.ts`** — `createUser` factory.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem`, and `detachOrderUserId` (used to pre-detach an order before the admin-intent test).
-- **`src/modules/products/tests/factories.ts`** — `createProduct` factory.
-- **`src/kernel/events.ts`** — `resetDomainEvents` called in `afterEach` to prevent cross-test event leakage.
-- **`src/infrastructure/http/response.ts`** — `ResponseSuccess<T>` type used to unwrap intent results.
-- **`src/types/index.ts`** — `Payment` domain type for the cast `(intent as ResponseSuccess<Payment>).data`.
+- **`payments/services/retention.ts`** — provides `reapAbandonedPayments`, the function under test in the second describe block.
+- **`payments/services/offline.ts`** — provides `recordOfflinePayment`, tested in the offline-vs-detached-order case.
+- **`payments/services/intent.ts`** — provides `createIntent` and `confirmPayment`, used to create and settle test payments.
+- **`payments/services/index.ts`** — barrel from which the above service functions are imported.
+- **`payments/repository.ts`** — `paymentRepository.findById` is the assertion surface for "does the document still exist / what is `userId`?".
+- **`payments/model.ts`** — `paymentModel` is used directly by the `touch` helper; `PaymentDocument` type is imported for the offline test.
+- **`payments/module.ts`** — `paymentsModule` is registered with `registerCheckoutModules` in `beforeEach` to wire the real service graph.
+- **`users/index.ts`** — `userService.remove(user, true)` triggers the hard-delete cascade that unsets the payment's `userId`.
+- **`users/tests/factories.ts`** — `createUser` factory for test accounts.
+- **`orders/tests/factories.ts`** — `createOrder`, `toOrderItem` for order setup; `detachOrderUserId` simulates the order-side cascade (the same path `personalData.erase` walks) for the offline and stranger tests.
+- **`products/tests/factories.ts`** — `createProduct` to build the order line item.
+- **`kernel/events.ts`** — `resetDomainEvents()` in `afterEach` to isolate event-bus state between tests.
+- **`infrastructure/http/response.ts`** — `ResponseSuccess<T>` type used to cast the return values of service calls (e.g. `intent as ResponseSuccess<Payment>`).
 
 ## Notes
 
-- `touch` passes `{ timestamps: false }` to Mongoose; without it Mongoose's automatic `updatedAt` management would immediately overwrite the backdated value, making the retention-window test non-deterministic.
-- The retention window is controlled entirely by the `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` env var (string number of days). Tests set it to `'7'` and rely on the afterEach cleanup.
-- The erasure tests assert `userId` is `undefined` (not `null`) after `userService.remove` — a convention that downstream code must check with `toBeUndefined` / truthiness rather than a `null` comparison.
-- `reapAbandonedPayments()` returns the count of deleted documents; tests assert `resolves.toBe(1)` or `resolves.toBe(0)` accordingly.
+- The file's module doc-comment makes the design intent explicit: the payment is a *receipt*, not an account-owned entity. The erasure cascade detaches (`userId → undefined`) rather than deletes.
+- The offline-payment test is called out as the **only live path** that can still write a payment against a detached order (an operator recording cash); a customer's intent path is blocked, and the test proves it.
+- `touch` must pass `{ timestamps: false }` — without it Mongoose's `updatedAt` middleware rewrites the field to "now" and the retention-window assertions break.
+- The reap tests rely on environment variables (`NODE_PAYMENT_ABANDONED_RETENTION_DAYS`), not hardcoded constants, so the window is controllable per-test.
+- All tests run against a real test database (`setupTestDb()`) and real module wiring; there are no service-level mocks in this file.

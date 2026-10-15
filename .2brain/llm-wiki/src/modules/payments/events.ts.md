@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/events.ts
-sha256: d206644d5d96248ea226bdd64922bc0cdddc2978edfadfdeabee6091bd0281e0
-generated_at: 2026-09-23T19:18:04.610768+00:00
+sha256: fbadbb52b4be19a28d10127de6edfb8e1abe45eac5ff99d4dda0150b751c3e22
+generated_at: 2026-10-15T11:25:43.802653+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the two domain events the payments module emits and registers them into the kernel's app-wide `DomainEventMap` via TypeScript module augmentation. This follows the same pattern as `modules/orders/events.ts` — each module augments the shared interface rather than contributing to a central list, keeping the event namespace distributed alongside the code that owns it.
+Declares the three domain events the payments module emits (`payment.succeeded`, `payment.failed`, `payment.refunded`) by augmenting the kernel's `DomainEventMap`, and exports string constants for each event name. Uses the per-module augmentation pattern (rather than a central registry) for the same reasons documented in `modules/orders/events.ts`.
 
 ## Key elements
 
-- **`declare module '@kernel/events'` block** — extends `DomainEventMap` with two keys:
-    - `'payment.succeeded'` — payload `{ paymentId, orderId }`; fired when a payment is settled. Emitted in the same at-most-once write as `order.status_changed` (`to: 'paid'`).
-    - `'payment.failed'` — payload `{ paymentId, orderId }`; fired when the provider declines the method. Can repeat per order (each retry attempt is its own event).
-- **`PAYMENT_SUCCEEDED`** — exported string constant `'payment.succeeded'`, for use as an event-name reference without hardcoding.
-- **`PAYMENT_FAILED`** — exported string constant `'payment.failed'`, same role.
+- **`DomainEventMap` augmentation (`declare module '@kernel/events'`)** — adds three typed payload shapes to the app-wide event map.
+- **`PAYMENT_SUCCEEDED`** / **`PAYMENT_FAILED`** / **`PAYMENT_REFUNDED`** — exported string constants matching the event names; consumers reference these instead of raw strings.
+- **`payment.succeeded` payload** — `{ paymentId, orderId }`. Emitted from `settlePayment` alongside `order.status_changed (to: 'paid')`.
+- **`payment.failed` payload** — `{ paymentId, orderId }`. Can fire **more than once per order**; each retry attempt is its own fact.
+- **`payment.refunded` payload** — `{ paymentId, orderId, refundId, returnId?, goods?, amount, currency, full }`. `amount` is this individual refund's, not the payment's. `goods` (lines + shipping) is present only when the refund pays for specific line items; absent for goodwill/cancellation refunds. `full` flags the single case where a credit note mirrors the whole invoice.
 
 ## Relationships
 
-- **`src/modules/payments/services/settlement.ts`** — Sole emitter. Both events are dispatched from `settlePayment`, the single reconciliation point in the module.
-- **`src/modules/payments/module.ts`** — Module registration; likely wires these event names into the module's declared event list so the kernel knows which events the module produces.
-- **`src/modules/payments/index.ts`** — Public barrel; re-exports the `PAYMENT_SUCCEEDED` / `PAYMENT_FAILED` constants (and the augmented types) for consumers outside the module.
-- **`asyncapi.public.yaml`** — The AsyncAPI spec documents these events in the external API contract; this file is the in-code source of truth for their payloads.
+- **`services/settlement.ts`** — source of `payment.succeeded` and `payment.failed`; both are written in the same at-most-once `settlePayment` write.
+- **`services/refunds.ts`** — source of `payment.refunded`; written in the transaction that settles the refund record.
+- **`services/announce.ts`** — delivery channel for all three events via the transactional outbox; also provides `recordDecline` for `payment.failed`.
+- **`asyncapi.public.yaml`** — documents these events in the public API contract.
+- **`tests/integration/*`** — exercise the events end-to-end (announce, refunds, settlement-mismatch, concurrency races).
 
 ## Notes
 
-- `payment.failed` is **not** terminal: the payment remains in a confirmable status (`CONFIRMABLE_PAYMENT_STATUSES`), so the same order can produce multiple `payment.failed` events across retry attempts. Listeners should treat each occurrence as an independent fact, consistent with how `paymentsAuditActions.PAYMENT_FAILED` audit entries work.
-- `payment.succeeded` is intentionally a separate event rather than inferred from `order.status_changed`. Downstream listeners (e.g. `webhooks`) need it as their own fact rather than coupling to order-status transitions.
-- The payload shape is identical for both events (`{ paymentId, orderId }`). Any future differentiation (e.g. provider error code on failure) will require a breaking change to the augmented interface.
+- All three events are delivered **at-least-once** through the outbox; listeners must deduplicate on `meta.eventId`.
+- `payment.failed` is **not** terminal for an order — the payment can be retried with a different method (`CONFIRMABLE_PAYMENT_STATUSES`), so multiple `payment.failed` events per order are expected.
+- `payment.refunded` has **no event** when a refund is left for an operator (`leaveForOperator`); no refund record exists in that path.
+- The `goods.lines` array and `shipping` in `payment.refunded` exist so downstream `invoicing` can apportion VAT per line; their absence signals a spread-across-all-rates credit note instead.

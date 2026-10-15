@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/services/effects.ts
-sha256: 66286b288624c6a6d60069c89578f8d2f1ab83227c9f8acc8712d84e342d7344
-generated_at: 2026-09-27T15:25:42.591771+00:00
+sha256: 450d122cc03c662daeb5947f414476a0f6823032a4645e069173ee227d9bbe09
+generated_at: 2026-10-15T11:29:20.787365+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Crash-recovery sweep that discharges the one effect a `succeeded` payment write may have left owing: either committing stock for the order, or marking a refund owed if the order moved away before settlement's own `orderLost` branch could react. It exists solely to catch the window between writing `succeeded` and completing the side-effect; `settlement.ts` handles the normal path itself.
+Background sweep that finishes work left incomplete by the normal settlement flow: retries refunds the provider refused or never answered, and asks the provider about payments that settled without a webhook arriving. Exports two entry points (`retryOpenRefunds`, `reconcileStalePayments`) intended to be called on a schedule.
 
 ## Key elements
 
-- **`retryPendingEffects()`** (exported) — Entry point. Finds up to `SWEEP_BATCH_SIZE` payments past the retry cutoff, iterates them sequentially, and returns the count settled. Logs a warning if the batch was full (more work remains) and an info line summarising the run.
-- **`retryOne(payment)`** (module-private) — Resolves a single payment's owed effect: checks order status → commits stock via `inventoryService`, or calls `orderService.markRefundOwed` if the order already advanced. Always clears the `pendingEffects` marker on success. Returns `false` on any error so the marker persists for the next sweep.
-- **`SWEEP_BATCH_SIZE`** (const, `200`) — Per-pass cap; hitting it triggers the "run it again" warning.
+- **`sweepDue`** (internal) — shared skeleton for both sweeps. Fetches one batch of due payments, processes them sequentially via a caller-supplied handler, warns if the batch hit the 200-payment cap, and returns the settled count.
+- **`retryOneRefund`** (internal) — wraps `settleOpenRefunds` for a single payment; logs and returns `false` on error so the payment stays open for the next sweep.
+- **`retryOpenRefunds`** (exported) — the refund sweep. Uses `paymentRepository.findWithOpenRefunds` with a grace period from `paymentEffectRetryMinutes()`.
+- **`reconcileOne`** (internal) — wraps `settleFromProvider` for a single payment; counts it settled only if the provider's answer actually transitioned the payment's status. Logs and returns `false` on error.
+- **`reconcileStalePayments`** (exported) — the reconcile sweep. Uses `paymentRepository.findStaleInFlight` with a grace period from `paymentReconcileMinutes()`.
+- **`SWEEP_BATCH_SIZE`** — constant `200`; caps how many payments one pass touches.
 
 ## Relationships
 
-- **`src/modules/payments/repository.ts`** — Reads due payments (`findWithPendingEffects`) and clears the marker (`clearPendingEffects`).
-- **`src/modules/payments/model.ts`** — Provides the `PaymentDocument` type for the parameter of `retryOne`.
-- **`src/modules/payments/config.ts`** — Supplies `paymentEffectRetryMinutes()` for the age cutoff.
-- **`src/modules/orders/services/index.ts`** / **`src/modules/orders/index.ts`** — Exports `orderService` (used for `getById`, `markRefundOwed`) and the `stockCommitted` status predicate.
-- **`src/modules/inventory/index.ts`** / **`src/modules/inventory/service.ts`** — Exports `inventoryService.commitForOrder` for the stock-commit path.
-- **`src/modules/orders/domain/lifecycle.ts`** — Defines the order statuses that `stockCommitted` and the `orderLost` branch reference.
-- **`src/infrastructure/adapters/logger.ts`** — Structured logging for errors, the batch-cap warning, and the run summary.
-- **`src/modules/payments/services/index.ts`** — Barrel re-export making `retryPendingEffects` available to external callers (notably `scripts/ops/sweep-payment-effects.ts`).
-- **`src/modules/payments/tests/integration/service.test.ts`** — Integration coverage for the settlement path this file backstops.
+- **`./refunds.ts`** — calls `settleOpenRefunds(payment)` per payment in the refund sweep; reuses the same idempotency keys so a re-ask is safe.
+- **`./settlement.ts`** — calls `settleFromProvider(payment)` per payment in the reconcile sweep; the write is conditional, so a webhook-delivered payment is a no-op.
+- **`../repository.ts`** — provides `paymentRepository.findWithOpenRefunds` and `paymentRepository.findStaleInFlight` as the "find" callbacks.
+- **`../model.ts`** — `PaymentDocument` is the unit passed through the sweep.
+- **`../config.ts`** — supplies the two grace-period functions (`paymentEffectRetryMinutes`, `paymentReconcileMinutes`).
+- **`../../infrastructure/adapters/logger.ts`** — all warn/error/info output.
+- **`./index.ts`** — re-exports the two public functions for module consumers.
+- **Tests** — `reconcile.test.ts`, `refunds.test.ts`, and `service.test.ts` exercise these sweeps end-to-end; `cancelled.test.ts` and `staff-reads.test.ts` cover adjacent paths that share the same repository queries.
 
 ## Notes
 
-- **Sole caller is the ops script** (`scripts/ops/sweep-payment-effects.ts`); no runtime code path invokes `retryPendingEffects` directly. Treat it as a manual/automated cron job, not a request-time service.
-- **Sequential by design** — mirrors the sweep shape in `orders/services/cancel.ts`. Do not parallelise without re-evaluating the stock-commit idempotency guarantees.
-- **Marker is the retry mechanism** — on failure the `pendingEffects` field is left intact; the next sweep re-attempts. There is no in-process retry or queue.
-- **Stryker annotations** (`// Stryker disable … restore`) wrap the `logger` calls so mutation testing does not flag no-op mutations on the log statements. Preserve these when editing nearby code.
-- The `cutoff` uses `paymentEffectRetryMinutes()` from config, so the effective retry delay is environment-configurable, not hardcoded.
+- Processing is **sequential**, not parallel — intentional, mirroring `orders/services/cancel.ts`'s sweep. Do not add concurrency without understanding the provider's rate limits and the conditional-write guarantees in `settlement.ts`.
+- A "settled" count in `reconcileStalePayments` means the payment **changed state** this pass (`transitioned === true` and status differs). A payment the provider was still undecided about, or one that lost a race, does **not** increment the count.
+- Hand-paid refunds are explicitly out of scope for the refund sweep; only an operator's manual call can close them.
+- Stryker mutation-testing disable/restore annotations guard the log-only branches — keep them if you refactor the logging lines.
+- The batch-cap warning is the **only** signal that work remains; callers should loop or re-schedule until the returned count drops below the batch size.
