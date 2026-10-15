@@ -14,7 +14,7 @@ import {
 } from '@infrastructure/http/response';
 import { callerForSubject } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
-import { orderService, ownOrderIds } from '@modules/orders';
+import { ownOrderIds } from '@modules/orders';
 import type { AuthContext, Return, ReturnActions } from '@types';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { returnRepository } from '../repository';
@@ -37,37 +37,22 @@ const isStaff = (authContext: AuthContext): boolean =>
     holdsKey(callerForSubject(authContext, 'Return'), 'returns.any.read');
 
 /**
- * What the caller's rank allows on the buyer of a return's order, as {@link actionsFor} reads it.
- */
-interface BuyerStanding {
-    /** The caller's rank reaches the buyer (the rank rule alone — the caller's own order counts). */
-    reaches: boolean;
-    /** The caller's rank reaches the buyer AND the buyer is not the caller (nobody handles their own money). */
-    handlesMoney: boolean;
-}
-
-/**
  * What this caller may do to this return, decided here so no client re-implements the lifecycle.
- * Staff act on a customer's return only: the rank rule, asked of the buyer of its order, is part
- * of every answer. Approving and receiving move money, so they also need the buyer to be someone
- * else; declining does not.
+ * Each flag needs the key that names the act and a status the act can run from; a customer holds
+ * none of the keys, so a buyer is offered nothing here (their own door is `GET /returns/options`).
  * @param returned - the return
  * @param authContext - the caller
- * @param standing - how the caller stands to the buyer of the return's order
  */
-export const actionsFor = (
-    returned: ReturnDocument,
-    authContext: AuthContext,
-    standing: BuyerStanding
-): ReturnActions => {
+export const actionsFor = (returned: ReturnDocument, authContext: AuthContext): ReturnActions => {
     const caller = callerForSubject(authContext, 'Return');
-    const decidable = DECIDABLE_RETURN_STATUSES.includes(returned.status);
-    const holdsUpdate = holdsKey(caller, 'returns.any.update');
+    const decidable =
+        DECIDABLE_RETURN_STATUSES.includes(returned.status) &&
+        holdsKey(caller, 'returns.any.update');
+
     return {
-        approve: standing.handlesMoney && holdsUpdate && decidable,
-        decline: standing.reaches && holdsUpdate && decidable,
+        approve: decidable,
+        decline: decidable,
         receive:
-            standing.handlesMoney &&
             holdsKey(caller, 'returns.any.receive') &&
             RECEIVABLE_RETURN_STATUSES.includes(returned.status)
     };
@@ -78,14 +63,10 @@ export const actionsFor = (
  * @param returned - the return
  * @param authContext - the caller
  */
-export const withActions = (returned: ReturnDocument, authContext: AuthContext): Promise<Return> =>
-    Promise.all([
-        orderService.reachesBuyerOf(String(returned.orderId), authContext),
-        orderService.handlesMoneyOfOrder(String(returned.orderId), authContext)
-    ]).then(([reaches, handlesMoney]) => ({
-        ...presentReturn(returned),
-        actions: actionsFor(returned, authContext, { reaches, handlesMoney })
-    }));
+export const withActions = (returned: ReturnDocument, authContext: AuthContext): Return => ({
+    ...presentReturn(returned),
+    actions: actionsFor(returned, authContext)
+});
 
 /**
  * The returns this caller may see, filtered. Staff filter freely; everyone else is held to their
@@ -121,12 +102,11 @@ export const getReturn = (
 ): Promise<ResponseSuccess<Return> | ResponseReject> =>
     returnRepository.findById(id).then((found) => {
         if (!found) return generateReject(404, [t('returns.not-found')]);
-        if (isStaff(authContext))
-            return withActions(found, authContext).then((payload) => generateSuccess(payload));
+        if (isStaff(authContext)) return generateSuccess(withActions(found, authContext));
 
         return ownOrder(String(found.orderId), authContext).then((order) =>
             order
-                ? withActions(found, authContext).then((payload) => generateSuccess(payload))
+                ? generateSuccess(withActions(found, authContext))
                 : generateReject(404, [t('returns.not-found')])
         );
     });

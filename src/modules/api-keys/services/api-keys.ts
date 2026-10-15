@@ -213,7 +213,7 @@ export const mint = (
 /**
  * Revoke a credential. Idempotent: revoking an already-revoked key is a no-op success, not a 404.
  *
- * Not ranked (no `outrankedRefusal`): revoking only takes access away, so an administrator may
+ * Not protected like a staff account: revoking only takes access away, so an administrator may
  * revoke a fellow administrator's leaked key. Stripe and GitHub let any org admin do the same.
  * The route's own key and the tenant check are the whole gate.
  */

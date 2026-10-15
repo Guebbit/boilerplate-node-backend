@@ -17,7 +17,6 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     orders["orders<br/><i>this module</i>"]
-    access["access"]
     cart["cart"]
     delivery["delivery"]
     inventory["inventory"]
@@ -35,7 +34,6 @@ flowchart LR
     payments --> orders
     returns --> orders
     stats --> orders
-    orders --> access
     orders --> inventory
     orders --> products
     orders --> shop
@@ -54,7 +52,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
     class delivery,inventory,invoicing,payments,returns,shop,stats supporting;
-    class access,users generic;
+    class users generic;
     class orders centre;
 ```
 

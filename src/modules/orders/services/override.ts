@@ -29,7 +29,6 @@ import { announceInTransaction } from '@kernel/outbox';
 import { statusChangedEvent, statusOverriddenEvent } from './announce';
 import { announceMoveShippingStock } from './ship-stock';
 import { withTimeline } from './timeline';
-import { outrankedOrderRefusal } from './scope';
 import { ordersAuditActions } from '../audit';
 import {
     canOverrideTo,
@@ -167,16 +166,13 @@ export const overrideStatus = (
     orderRepository.findByIdScoped(orderId).then((order) => {
         if (!order) return generateReject(404, [t('orders.not-found')]);
 
-        return outrankedOrderRefusal(orderId, context).then((refusal) => {
-            if (refusal) return refusal;
-            if (!canOverrideTo(order.status, to, isDigitalOnlyOrder(order.items)))
-                return notAllowed(order.status, to);
-            if (shipsAwaitedStock(to, order.fulfillment)) return awaitingStock();
+        if (!canOverrideTo(order.status, to, isDigitalOnlyOrder(order.items)))
+            return notAllowed(order.status, to);
+        if (shipsAwaitedStock(to, order.fulfillment)) return awaitingStock();
 
-            return applyOverride(order, to, reason, context).then((updated) =>
-                // Lost a race against another write since the read above — same shape as the
-                // ordinary `update`'s 409, not a 404: the order still exists.
-                updated ? generateSuccess(updated) : notAllowed(order.status, to)
-            );
-        });
+        return applyOverride(order, to, reason, context).then((updated) =>
+            // Lost a race against another write since the read above — same shape as the
+            // ordinary `update`'s 409, not a 404: the order still exists.
+            updated ? generateSuccess(updated) : notAllowed(order.status, to)
+        );
     });

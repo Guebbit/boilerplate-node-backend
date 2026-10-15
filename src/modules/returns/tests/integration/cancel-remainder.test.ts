@@ -399,14 +399,14 @@ describe('staff cancelling what has not shipped', () => {
         );
     });
 
-    it('is refused on an order whose buyer ranks at or above the caller', async () => {
+    it('is allowed on an administrator’s order too: nothing ranks, the refund key is the whole rule', async () => {
         const fixture = await partlyShipped();
         await assignRole(fixture.user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
 
-        const outcome = await staffCancels(fixture, 'moderator');
+        const cancellation = created(await staffCancels(fixture, 'moderator'));
 
-        expect(outcome.kind === 'refused' && outcome.reject.status).toBe(403);
-        expect(await refundsOf(fixture.orderId)).toEqual([]);
+        expect(cancellation).toMatchObject({ kind: 'cancellation', status: 'closed' });
+        expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: 10 }]);
     });
 });
 

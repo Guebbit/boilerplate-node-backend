@@ -1,14 +1,13 @@
 /**
  * @module
  * What a caller may do to a fulfillment order or a shipment, decided here so no client re-derives
- * the rules. Every flag needs the key that names the act (`delivery.any.update`) and a rank that
- * reaches the buyer; the buyer themselves, and anyone without the key, get all `false`. The state
- * half of each rule is pure and lives in `../domain`; this file adds the caller and the order.
+ * the rules. Every flag needs the key that names the act (`delivery.any.update`); anyone without
+ * it gets all `false`. The state half of each rule is pure and lives in `../domain`; this file
+ * adds the caller and the order.
  */
 
 import { callerForSubject } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
-import { orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import type {
     AuthContext,
@@ -22,12 +21,10 @@ import { isAwaitingAnswer, isFulfillable, isHoldable, isReleasable, isShippable 
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import { presentFulfillmentOrder, presentShipment } from '../presenter';
 
-/** How the caller stands to an order: may they update fulfilment, and does their rank reach the buyer. */
+/** How the caller stands to an order: may they update fulfilment, and are they its buyer. */
 export interface Standing {
     /** The caller holds `delivery.any.update`. */
     staff: boolean;
-    /** The caller's rank reaches the order's buyer. */
-    reaches: boolean;
     /** The caller is the order's own buyer — the one who may answer "keep waiting". */
     owner: boolean;
 }
@@ -37,17 +34,13 @@ export interface Standing {
  * @param order - the order
  * @param authContext - the caller, or `undefined` for no request behind the read
  */
-export const standingOn = (
-    order: OrderDocument,
-    authContext: AuthContext | undefined
-): Promise<Standing> =>
+export const standingOn = (order: OrderDocument, authContext: AuthContext | undefined): Standing =>
     authContext
-        ? orderService.reachesBuyer(order, authContext).then((reaches) => ({
+        ? {
               staff: holdsKey(callerForSubject(authContext, 'Shipment'), 'delivery.any.update'),
-              reaches,
               owner: order.userId !== undefined && String(order.userId) === authContext.id
-          }))
-        : Promise.resolve({ staff: false, reaches: false, owner: false });
+          }
+        : { staff: false, owner: false };
 
 /**
  * The order's status is one a fulfilment act can still run from: `processing` for shipping and
@@ -69,7 +62,7 @@ export const fulfillmentOrderActions = (
     order: OrderDocument,
     standing: Standing
 ): FulfillmentOrderActions => {
-    const may = standing.staff && standing.reaches;
+    const may = standing.staff;
     return {
         ship:
             may && orderIn(order.status, [OrderStatus.processing]) && isShippable(fulfillmentOrder),
@@ -105,7 +98,6 @@ export const shipmentActions = (
 ): ShipmentActions => {
     const open =
         standing.staff &&
-        standing.reaches &&
         shipment.status === 'shipped' &&
         orderIn(order.status, [OrderStatus.processing, OrderStatus.shipped]);
     return { deliver: open, editTracking: open };
@@ -121,14 +113,15 @@ export const viewFulfillmentOrder = (
     fulfillmentOrder: FulfillmentOrderDocument,
     order: OrderDocument,
     authContext: AuthContext | undefined
-): Promise<FulfillmentOrder> =>
-    standingOn(order, authContext).then((standing) =>
-        presentFulfillmentOrder(
-            fulfillmentOrder,
-            fulfillmentOrderActions(fulfillmentOrder, order, standing),
-            standing.staff
-        )
+): FulfillmentOrder => {
+    const standing = standingOn(order, authContext);
+
+    return presentFulfillmentOrder(
+        fulfillmentOrder,
+        fulfillmentOrderActions(fulfillmentOrder, order, standing),
+        standing.staff
     );
+};
 
 /**
  * A shipment as the wire carries it, for this caller.
@@ -140,7 +133,5 @@ export const viewShipment = (
     shipment: ShipmentDocument,
     order: OrderDocument,
     authContext: AuthContext | undefined
-): Promise<Shipment> =>
-    standingOn(order, authContext).then((standing) =>
-        presentShipment(shipment, shipmentActions(shipment, order, standing))
-    );
+): Shipment =>
+    presentShipment(shipment, shipmentActions(shipment, order, standingOn(order, authContext)));

@@ -11,8 +11,9 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import type { AuthorizationScope, CallerContext, RoleLevel } from '@types';
-import { findRole, isBelowLevel, levelOfRoles, PRESET_ROLES } from '@kernel/permissions';
+import type { AuthorizationScope, CallerContext } from '@types';
+import { findRole, PRESET_ROLES } from '@kernel/permissions';
+import { holdsKey } from '@kernel/ability';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { t } from '@infrastructure/i18n';
 import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
@@ -24,17 +25,20 @@ import { membershipRepository, tenantRepository } from './repository';
 import type { MembershipDocument, TenantDocument } from './model';
 import { accessAuditActions } from './audit';
 
-/** The `metadata.reason` of a `security.forbidden` row for a refusal because the owner outranks the caller. */
-export const OUTRANKED_REASON = 'outranked';
+/**
+ * The one permission that protects people: whoever holds it may hand out a staff role and change an
+ * account that already holds one. Declared in this module's `authorization.yaml`.
+ */
+const ASSIGN_KEY = 'roles.any.assign';
 
-/** The `metadata.reason` of a `security.forbidden` row for a refusal because the thing is the caller's own. */
-export const OWN_REASON = 'own';
+/** The `metadata.reason` of a `security.forbidden` row for a refusal because the account holds a staff role. */
+export const ROLE_PROTECTED_REASON = 'role_protected';
 
 /**
  * The reasons the shop's own rules write on a `security.forbidden` row — shop business, which the
  * platform operator's incident view leaves out.
  */
-export const SHOP_REFUSAL_REASONS: readonly string[] = [OUTRANKED_REASON, OWN_REASON];
+export const SHOP_REFUSAL_REASONS: readonly string[] = [ROLE_PROTECTED_REASON];
 
 /**
  * Raised when a write would assign a role nothing declares, or grant more than the granter holds.
@@ -85,10 +89,11 @@ type GrantVerdict = { lowered: string } | { refusal: string };
  *     codebase: a role's permissions come only from `shared/authorization-roles.yaml`'s presets,
  *     never a caller-supplied list, so every key a resolved role can hold is already a declared
  *     one by construction —`tests/cross-cutting/authorization-keys.test.ts` is what proves that
- *     for every preset, once, rather than this function re-checking it on every grant;
- *   - **granting what the granter does not hold** — otherwise every grant is a
- *     privilege-escalation endpoint, which is the single most common way these systems fail. One
- *     named exception: `CREATE_USER_KEY`'s own docblock.
+ *     for every preset, once, rather than this function re-checking it on every grant. `customer`,
+ *     `unverified` and `guest` are such names: an audience is computed, never granted;
+ *   - **a granter without `roles.any.assign`** — handing out a staff role is the one act that
+ *     widens a person's powers, so it has one permission of its own instead of being implied by
+ *     the keys of the roles being handed out.
  *
  * @param granter - the keys the person MAKING the grant holds, or `undefined` for a seeder, a
  *   migration or an operator on the console — the three callers with nobody to escalate from
@@ -100,9 +105,8 @@ const checkGrant = (
 ): GrantVerdict => {
     const lowered = roleName.toLowerCase();
     const role = findRole(lowered);
-    const permissions = role?.scope === scope ? role.permissions : undefined;
 
-    if (!permissions) {
+    if (role?.scope !== scope) {
         return {
             refusal:
                 `[access] "${roleName}" is not a role in this ${scope} scope. ` +
@@ -110,18 +114,12 @@ const checkGrant = (
         };
     }
 
-    if (granter) {
-        const held = new Set(granter);
-        const escalated = permissions.filter((key) => !held.has(key));
-
-        if (escalated.length > 0) {
-            return {
-                refusal:
-                    `[access] cannot grant "${roleName}": it holds ${escalated.join(', ')}, ` +
-                    `which the granter does not. A role editor that allows this is a ` +
-                    `privilege-escalation endpoint.`
-            };
-        }
+    if (granter && !granter.includes(ASSIGN_KEY)) {
+        return {
+            refusal:
+                `[access] cannot grant "${roleName}": the granter does not hold ${ASSIGN_KEY}. ` +
+                `A role editor that allows this is a privilege-escalation endpoint.`
+        };
     }
 
     return { lowered };
@@ -476,102 +474,93 @@ export const rolesOfMany = (
               );
 
 /**
- * Where a person ranks: the higher level of the roles they hold in the shop and over the
- * installation, `user` for someone with no membership at all.
- *
- * Read fresh from the membership rows rather than from a session, because it is asked about the
- * OWNER of a thing — somebody who is not making this request.
+ * Does this person hold a staff role, in the shop or over the installation? Read fresh from the
+ * membership rows rather than from a session, because it is asked about the OWNER of an account —
+ * somebody who is not making this request.
  *
  * @param userId - the person asked about
  */
-export const levelOfUser = (userId: string): Promise<RoleLevel> =>
-    rolesOf(userId, DEPLOYMENT_TENANT_ID).then(levelOfRoles);
+export const holdsStaffRole = (userId: string): Promise<boolean> =>
+    membershipsOf(userId).then((memberships) => memberships.length > 0);
 
 /**
- * {@link levelOfUser} for a set of people, in two queries rather than two per person — the
- * batched sibling the inactivity reaper needs to leave staff and administrators alone.
+ * {@link holdsStaffRole} for a set of people, in two queries rather than two per person — the
+ * batched sibling the inactivity reaper and a users list page need.
  *
  * @param userIds - the people asked about
- * @returns each id's level; a person with no membership is `user`
+ * @returns the ids among them that hold a staff role
  */
-export const levelsOfMany = (userIds: readonly string[]): Promise<Map<string, RoleLevel>> =>
+export const staffHoldersAmong = (userIds: readonly string[]): Promise<Set<string>> =>
     Promise.all([
         rolesOfMany(userIds, DEPLOYMENT_TENANT_ID, 'tenant'),
         rolesOfMany(userIds, null, 'platform')
-    ]).then(
-        ([tenant, platform]) =>
-            new Map(
-                userIds.map((id) => [
-                    id,
-                    levelOfRoles({
-                        tenant: tenant.get(id) ?? null,
-                        platform: platform.get(id) ?? null
-                    })
-                ])
-            )
-    );
+    ]).then(([tenant, platform]) => new Set([...tenant.keys(), ...platform.keys()]));
 
 /**
- * May this caller change something that belongs to `ownerId`? The rank rule, asked AFTER the
- * route's key: the owner must rank strictly below the caller.
+ * May this caller change the account `accountId`? An account that holds a staff role may only be
+ * changed by a holder of `roles.any.assign`, asked AFTER the route's own key: a moderator who may
+ * erase accounts erases customers, never the administrator.
  *
  * Answers yes, without a lookup, for:
  *
- *   - no context at all — self-erasure and the other self-service paths have no caller to rank;
+ *   - no context at all — self-erasure and the other self-service paths have no caller to protect from;
  *   - the system actor — a sweep or the reaper acts for nobody;
- *   - a thing nobody owns, or the caller's OWN thing — the rule is only about other people's.
+ *   - the caller's OWN account;
+ *   - a holder of `roles.any.assign`.
  *
  * @param context - the caller, or `undefined` for a self-service path with no request behind it
- * @param ownerId - who the account, order, payment, return or key belongs to
+ * @param accountId - the account about to be changed
  */
-export const canActOn = (
+export const canChangeAccount = (
     context: CallerContext | undefined,
-    ownerId: string | null | undefined
+    accountId: string
 ): Promise<boolean> => {
-    if (!context || context.caller.system || !ownerId || context.caller.id === ownerId) {
+    if (
+        !context ||
+        context.caller.system ||
+        context.caller.id === accountId ||
+        holdsKey(context.caller, ASSIGN_KEY)
+    ) {
         return Promise.resolve(true);
     }
 
-    return levelOfUser(ownerId).then((ownerLevel) =>
-        isBelowLevel(ownerLevel, context.caller.level)
-    );
+    return holdsStaffRole(accountId).then((holds) => !holds);
 };
 
 /**
- * {@link canActOn} as a refusal a service can return: `undefined` to carry on, or the
- * `403 OUTRANKED` envelope — recorded as a failed `security.forbidden` first, so an attempt on an
- * equal or a superior leaves a row naming who tried what to whom.
+ * {@link canChangeAccount} as a refusal a service can return: `undefined` to carry on, or the
+ * `403 ROLE_MANAGEMENT_REQUIRED` envelope — recorded as a failed `security.forbidden` first, so an
+ * attempt on a staff account leaves a row naming who tried what to whom.
  *
  * @param context - the caller, or `undefined` for a self-service path
- * @param ownerId - who the thing belongs to
- * @param targetType - the audit row's object, e.g. `order`
- * @param targetId - the audit row's object id, when it is not the owner's own
+ * @param accountId - the account about to be changed
  */
-export const outrankedRefusal = (
+export const roleProtectedRefusal = (
     context: CallerContext | undefined,
-    ownerId: string | null | undefined,
-    targetType: string,
-    targetId: string | undefined = ownerId ?? undefined
+    accountId: string
 ): Promise<ResponseReject | undefined> =>
-    canActOn(context, ownerId).then((allowed) => {
+    canChangeAccount(context, accountId).then((allowed) => {
         if (allowed || !context) return undefined;
 
         recordAudit(context, {
             action: coreAuditActions.SECURITY_FORBIDDEN,
             outcome: 'failure',
-            targetType: targetType,
-            targetId: targetId,
-            metadata: { reason: OUTRANKED_REASON, ownerId }
+            targetType: 'user',
+            targetId: accountId,
+            metadata: { reason: ROLE_PROTECTED_REASON }
         });
 
         return generateReject(403, [
-            { code: ERROR_CODES.OUTRANKED, message: t('generic.error-outranked') }
+            {
+                code: ERROR_CODES.ROLE_MANAGEMENT_REQUIRED,
+                message: t('generic.error-role-management-required')
+            }
         ]);
     });
 
 /**
- * Does `ownerId` name the caller themselves? The question behind "nobody handles their own
- * money" — no context, the system actor and a thing nobody owns are never the caller's own.
+ * Does `ownerId` name the caller themselves? The question behind a money step's `ownOrder` audit
+ * flag — no context, the system actor and a thing nobody owns are never the caller's own.
  *
  * @param context - the caller, or `undefined` for a path with no request behind it
  * @param ownerId - who the order, payment or return belongs to
@@ -586,43 +575,18 @@ export const isOwnThing = (
     context.caller.id === ownerId;
 
 /**
- * The two-part refusal for a step that moves money: the caller may not be the owner (separation
- * of duties — a person never pays, refunds or approves their own), and the owner must rank below
- * the caller like any other write ({@link outrankedRefusal}).
+ * The audit metadata a money step carries when the caller is the order's own buyer: the step is
+ * allowed (a customer who is staff is trusted with their own order), and the record says so, so a
+ * review sees self-dealing at a glance.
  *
- * The own-thing refusal is a plain `403 FORBIDDEN` with its own message, never `OUTRANKED`: that
- * code's contract text makes the caller's own thing the exception. It is recorded as a failed
- * `security.forbidden` with `reason: 'own'`; the owner is the caller, so no `ownerId` rides along.
- *
- * See: docs/theory/authorization.md#nobody-handles-their-own-money
  * @param context - the caller, or `undefined` for a path with no request behind it
- * @param ownerId - who the thing belongs to
- * @param targetType - the audit row's object, e.g. `order`
- * @param targetId - the audit row's object id, when it is not the owner's own
+ * @param ownerId - who the order belongs to
+ * @returns `{ ownOrder: true }` for the buyer's own order, otherwise nothing
  */
-export const ownMoneyRefusal = (
+export const ownOrderFlag = (
     context: CallerContext | undefined,
-    ownerId: string | null | undefined,
-    targetType: string,
-    targetId: string | undefined = ownerId ?? undefined
-): Promise<ResponseReject | undefined> => {
-    if (!context || !isOwnThing(context, ownerId))
-        return outrankedRefusal(context, ownerId, targetType, targetId);
-
-    recordAudit(context, {
-        action: coreAuditActions.SECURITY_FORBIDDEN,
-        outcome: 'failure',
-        targetType: targetType,
-        targetId: targetId,
-        metadata: { reason: OWN_REASON }
-    });
-
-    return Promise.resolve(
-        generateReject(403, [
-            { code: ERROR_CODES.FORBIDDEN, message: t('generic.error-own-money') }
-        ])
-    );
-};
+    ownerId: string | null | undefined
+): { ownOrder?: true } => (isOwnThing(context, ownerId) ? { ownOrder: true } : {});
 
 /**
  * The one shop this boilerplate ships.

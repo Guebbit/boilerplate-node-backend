@@ -58,6 +58,7 @@ const PREFERRED_ORDER = [
     'core',
     'users',
     'account',
+    'access',
     'audit-logs',
     'webhooks',
     'api-keys',

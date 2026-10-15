@@ -310,8 +310,7 @@ const STRANGER: Caller = {
     scope: 'platform',
     permissions: [],
     unrestricted: false,
-    system: false,
-    level: 'user'
+    system: false
 };
 
 /**

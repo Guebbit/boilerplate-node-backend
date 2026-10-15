@@ -579,8 +579,7 @@ components:
             description: >-
                 What the requesting caller may do to this fulfillment order, decided by the server so
                 a client renders its controls from this. `ship`, `fulfill`, `hold` and `release` are
-                false when the buyer of the order ranks at or above the caller, and for anyone
-                without `delivery.any.update`; `confirmWait` is the order's own buyer's.
+                false for anyone without `delivery.any.update`; `confirmWait` is the order's own buyer's.
             properties:
                 ship:
                     type: boolean

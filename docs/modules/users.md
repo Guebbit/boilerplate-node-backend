@@ -85,16 +85,16 @@ shared factory.
 **What an edit needs, beyond the route's key.** Three rules sit in `services/update.ts` and
 `services/remove.ts`, asked before anything is written:
 
-| Rule                      | Refusal         | Why                                                                     |
-| ------------------------- | --------------- | ----------------------------------------------------------------------- |
-| the field's own key       | `403 FORBIDDEN` | `active` needs `users.any.ban`, a different key from `users.any.update` |
-| the owner ranks below you | `403 OUTRANKED` | [R1](../theory/authorization.md#acting-on-someone-else-s-things)        |
-| not your own role         | `403 FORBIDDEN` | promotion is somebody else's act                                        |
+| Rule                           | Refusal                        | Why                                                                     |
+| ------------------------------ | ------------------------------ | ----------------------------------------------------------------------- |
+| the field's own key            | `403 FORBIDDEN`                | `active` needs `users.any.ban`, a different key from `users.any.update` |
+| the account holds a staff role | `403 ROLE_MANAGEMENT_REQUIRED` | [R1](../theory/authorization.md#protecting-people)                      |
+| handing a role out             | `409` (the grant is refused)   | only a holder of `roles.any.assign` hands out a staff role              |
 
 A key is asked only when the field **changes**: a `PUT` resends `active` and `role` on every save,
-and resending what the account already has is no ban and no promotion. The same rank rule covers
-soft delete, hard delete and restore. A refused attempt on a rank is audited as `security.forbidden`
-with `metadata.reason: outranked`.
+and resending what the account already has is no ban and no role change (`role: null` is a plain
+customer). The same protection covers soft delete, hard delete and restore. A refused attempt on a
+staff account is audited as `security.forbidden` with `metadata.reason: role_protected`.
 
 ### Creating and updating with a role
 

@@ -30,22 +30,21 @@ export const postReturn = (request: Request, response: Response) => {
                 rejectResponse(response, outcome.reject.status, outcome.reject.errors);
                 return;
             }
-            return returnService.withActions(outcome.created, authContext).then((created) => {
-                createdResponse<Return>(
-                    response,
-                    created,
-                    `/returns/${created.id}`,
-                    // Closed at birth: either the withdrawal already cancelled and refunded the order,
-                    // or a remainder cancel gave back what had not shipped.
-                    t(
-                        created.kind === 'cancellation'
-                            ? 'returns.remainder-cancelled'
-                            : created.status === 'closed'
-                              ? 'returns.withdrawn'
-                              : 'returns.requested'
-                    )
-                );
-            });
+            const created = returnService.withActions(outcome.created, authContext);
+            createdResponse<Return>(
+                response,
+                created,
+                `/returns/${created.id}`,
+                // Closed at birth: either the withdrawal already cancelled and refunded the order,
+                // or a remainder cancel gave back what had not shipped.
+                t(
+                    created.kind === 'cancellation'
+                        ? 'returns.remainder-cancelled'
+                        : created.status === 'closed'
+                          ? 'returns.withdrawn'
+                          : 'returns.requested'
+                )
+            );
         })
         .catch(catchAs(response, 'postReturn'));
 };

@@ -17,6 +17,7 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     payments["payments<br/><i>this module</i>"]
+    access["access"]
     cart["cart"]
     inventory["inventory"]
     invoicing["invoicing"]
@@ -28,6 +29,7 @@ flowchart LR
     invoicing --> payments
     returns --> payments
     stats --> payments
+    payments --> access
     payments --> inventory
     payments --> orders
     orders -. "order.cancelled" .-> payments
@@ -41,6 +43,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
     class inventory,invoicing,returns,stats supporting;
+    class access generic;
     class payments centre;
 ```
 

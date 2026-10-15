@@ -230,13 +230,11 @@ const announceCancelled = (
 
 /**
  * What the caller may do here, before anything is written: the buyer exercises their withdrawal
- * (within its window, never on goods Art. 16 excludes); staff need the refund key, must not be the
- * buyer and must outrank them.
+ * (within its window, never on goods Art. 16 excludes); anyone else needs the refund key.
  *
  * @param order - the order
  * @param input - the request
  * @param authContext - the caller
- * @param context - the caller, for the rank rule
  * @param remainder - the lines of the fulfillment order being cancelled
  * @returns a refusal, or `undefined` when the caller may go on
  */
@@ -244,30 +242,25 @@ const refuseCaller = (
     order: OrderDocument,
     input: CreateReturnInput,
     authContext: AuthContext,
-    context: CallerContext,
     remainder: readonly ProductQuantity[]
-): Promise<CreateReturnOutcome | undefined> => {
+): CreateReturnOutcome | undefined => {
     if (String(order.userId) === authContext.id) {
-        if (input.reason !== 'withdrawal') return Promise.resolve(badCancellation());
+        if (input.reason !== 'withdrawal') return badCancellation();
         if (order.withdrawUntil && Date.now() > order.withdrawUntil.getTime())
-            return Promise.resolve(windowClosed());
+            return windowClosed();
         const excluded = new Set(
             order.items
                 .filter((item) => isExcludedFromWithdrawal(item))
                 .map((item) => String(item.product._id))
         );
-        return Promise.resolve(
-            remainder.some(({ productId }) => excluded.has(productId))
-                ? badLines('excluded')
-                : undefined
-        );
+        return remainder.some(({ productId }) => excluded.has(productId))
+            ? badLines('excluded')
+            : undefined;
     }
 
-    if (!holdsKey(callerForSubject(authContext, 'Return'), 'payments.any.update'))
-        return Promise.resolve(forbidden());
-    return orderService
-        .ownMoneyRefusalFor(order, context)
-        .then((refusal) => (refusal ? refused(refusal) : undefined));
+    return holdsKey(callerForSubject(authContext, 'Return'), 'payments.any.update')
+        ? undefined
+        : forbidden();
 };
 
 /**
@@ -275,7 +268,7 @@ const refuseCaller = (
  *
  * @param input - the request: the order, the fulfillment order, a reason and an optional note
  * @param authContext - the buyer, or a staff member holding the refund key
- * @param context - for audit and the rank rule
+ * @param context - for audit
  * @returns the outcome: refused, or the cancellation written, closed
  */
 export const createCancellation = (
@@ -295,30 +288,27 @@ export const createCancellation = (
                 // Nothing shipped yet, or nothing left on it: the whole order is cancelled instead.
                 if (!option) return nothingToCancel();
 
-                return refuseCaller(order, input, authContext, context, option.lines).then(
-                    (refusal) => {
-                        if (refusal) return refusal;
+                const refusal = refuseCaller(order, input, authContext, option.lines);
+                if (refusal) return refusal;
 
-                        const byBuyer = String(order.userId) === authContext.id;
-                        return cancelUnderLock(
-                            order,
-                            input,
-                            fulfillmentOrderId,
-                            byBuyer ? FulfillmentCancelReason.buyer : FulfillmentCancelReason.staff
-                        )
-                            .then((done): CreateReturnOutcome | Promise<CreateReturnOutcome> =>
-                                typeof done === 'string'
-                                    ? done === 'not-found'
-                                        ? badCancellation()
-                                        : nothingToCancel()
-                                    : announceCancelled(order, done, byBuyer, context)
-                            )
-                            .catch((error: unknown) => {
-                                if (error instanceof ActRefusal) return refused(error.reject);
-                                throw error instanceof Error ? error : new Error(String(error));
-                            });
-                    }
-                );
+                const byBuyer = String(order.userId) === authContext.id;
+                return cancelUnderLock(
+                    order,
+                    input,
+                    fulfillmentOrderId,
+                    byBuyer ? FulfillmentCancelReason.buyer : FulfillmentCancelReason.staff
+                )
+                    .then((done): CreateReturnOutcome | Promise<CreateReturnOutcome> =>
+                        typeof done === 'string'
+                            ? done === 'not-found'
+                                ? badCancellation()
+                                : nothingToCancel()
+                            : announceCancelled(order, done, byBuyer, context)
+                    )
+                    .catch((error: unknown) => {
+                        if (error instanceof ActRefusal) return refused(error.reject);
+                        throw error instanceof Error ? error : new Error(String(error));
+                    });
             }
         );
     });

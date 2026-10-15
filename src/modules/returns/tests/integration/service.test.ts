@@ -623,17 +623,27 @@ describe('deciding a request', () => {
         expect(asReject(result).status).toBe(409);
     });
 
-    // Approving opens the way to a refund, so nobody approves their own; declining gives nothing
-    // away, so a buyer promoted to staff may still decline theirs.
-    it('refuses a promoted buyer approving their own return, but lets them decline it', async () => {
+    // Holding the key is the whole rule: a buyer promoted to staff decides their own return like
+    // anyone's, and the refund step that follows is the one the audit row flags.
+    it('lets a promoted buyer approve their own return', async () => {
         const { user, returnId } = await requestedReturn();
         await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
-        const own = callerContextAs('manager', user.id);
 
-        const approval = asReject(await approveReturn(returnId, own));
-        const declined = await declineReturn(returnId, 'Changed my mind', own);
+        const approval = await approveReturn(returnId, callerContextAs('manager', user.id));
 
-        expect([approval.status, approval.errors[0].code]).toEqual([403, 'FORBIDDEN']);
+        expect(approval.success && approval.data.status).toBe('approved');
+    });
+
+    it('lets a promoted buyer decline their own return', async () => {
+        const { user, returnId } = await requestedReturn();
+        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
+
+        const declined = await declineReturn(
+            returnId,
+            'Changed my mind',
+            callerContextAs('manager', user.id)
+        );
+
         expect(declined.success && declined.data.status).toBe('declined');
     });
 
@@ -644,11 +654,10 @@ describe('deciding a request', () => {
     });
 });
 
-/** What a caller is offered on a stored return — `withActions`' `actions`, awaited. */
+/** What a caller is offered on a stored return — `withActions`' `actions`. */
 const actionsOf = (
     ...args: Parameters<typeof withActions>
-): Promise<Awaited<ReturnType<typeof withActions>>['actions']> =>
-    withActions(...args).then((returned) => returned.actions);
+): ReturnType<typeof withActions>['actions'] => withActions(...args).actions;
 
 describe('who sees which return', () => {
     it('shows a customer their own returns and staff all of them', async () => {
@@ -698,44 +707,27 @@ describe('who sees which return', () => {
         const { user, returnId } = await requestedReturn();
         const stored = await returnRepository.findById(returnId);
 
-        expect(await actionsOf(stored!, asManager())).toEqual({
+        expect(actionsOf(stored!, asManager())).toEqual({
             approve: true,
             decline: true,
             receive: false
         });
-        expect(await actionsOf(stored!, buyer(user))).toEqual({
+        expect(actionsOf(stored!, buyer(user))).toEqual({
             approve: false,
             decline: false,
             receive: false
         });
     });
 
-    // The rank rule is part of the answer: a client renders its buttons from `actions`, so a
-    // return on an equal's or a superior's order must offer staff nothing.
-    it('offers staff nothing on a return whose buyer ranks at or above them', async () => {
-        const { user, returnId } = await requestedReturn();
-        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'moderator');
-        const stored = await returnRepository.findById(returnId);
-
-        expect(await actionsOf(stored!, asManager())).toEqual({
-            approve: false,
-            decline: false,
-            receive: false
-        });
-        expect(await actionsOf(stored!, asAdmin())).toEqual({
-            approve: true,
-            decline: true,
-            receive: false
-        });
-    });
-
-    it('offers a promoted buyer a decline on their own return, and neither approve nor receive', async () => {
+    // Holding the key is enough: a staff member who is also the buyer is a customer first, so the
+    // permission decides, and the money step is recorded rather than refused.
+    it('offers a staff buyer the same decisions on their own return as any other staff member', async () => {
         const { user, returnId } = await requestedReturn();
         await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
         const stored = await returnRepository.findById(returnId);
 
-        expect(await actionsOf(stored!, asRole('manager', user.id))).toEqual({
-            approve: false,
+        expect(actionsOf(stored!, asRole('manager', user.id))).toEqual({
+            approve: true,
             decline: true,
             receive: false
         });
@@ -746,7 +738,7 @@ describe('who sees which return', () => {
         await approveReturn(returnId, callerContextAs('admin'));
         const stored = await returnRepository.findById(returnId);
 
-        expect(await actionsOf(stored!, asRole('warehouse'))).toEqual({
+        expect(actionsOf(stored!, asRole('warehouse'))).toEqual({
             approve: false,
             decline: false,
             receive: true

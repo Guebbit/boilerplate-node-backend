@@ -46,7 +46,7 @@ import {
 } from '../domain';
 import type { ExampleDocument } from '../model';
 import { presentExampleRow } from '../presenter';
-import { outrankedRefusalFor, ownerNamesOf, presentWithOwner } from './owner';
+import { ownerNamesOf, presentWithOwner } from './owner';
 import { exampleRepository } from '../repository';
 
 /** Every answer a write gives: the example as the contract shapes it, or the refusal. */
@@ -222,7 +222,7 @@ const publishAndAnnounce = (
 /**
  * Write a validated change onto an example already loaded, then audit and announce it.
  *
- * @param example - the loaded example, already cleared by the scope and the rank rule
+ * @param example - the loaded example, already cleared by the scope
  * @param changes - the validated body; an omitted field stays as it is
  * @param context - the caller
  * @returns 422 for an illegal status move, otherwise the saved example
@@ -277,14 +277,13 @@ const applyUpdate = (
 /**
  * Apply a change to an example the caller may edit — PUT and PATCH both end here.
  *
- * Two doors, in order: the scope (a row you may not edit is simply not found), then the rank rule
- * (an `any.update` holder may not edit an equal's or a superior's example).
+ * One door: the scope (a row you may not edit is simply not found).
  *
  * @param id - the example's id
  * @param changes - the validated body; an omitted field stays as it is
  * @param context - the caller
- * @returns 404 when the caller may not edit one by that id, 403 `OUTRANKED` for an owner at or
- *   above the caller, 422 for an illegal status move or an over-long body, otherwise the saved example
+ * @returns 404 when the caller may not edit one by that id, 422 for an illegal status move or an
+ *   over-long body, otherwise the saved example
  */
 export const update = (
     id: string,
@@ -297,9 +296,7 @@ export const update = (
     return exampleRepository.findScoped(id, scopeOf(context, 'update')).then((example) => {
         if (!example) return generateReject(404, [t('example.not-found')]);
 
-        return outrankedRefusalFor(example, context).then(
-            (outranked) => outranked ?? applyUpdate(example, changes, context)
-        );
+        return applyUpdate(example, changes, context);
     });
 };
 
@@ -331,8 +328,7 @@ const deleteLoaded = (
  *
  * @param id - the example's id
  * @param context - the caller
- * @returns 404 when the caller may not delete one by that id, 403 `OUTRANKED` for an owner at or
- *   above the caller
+ * @returns 404 when the caller may not delete one by that id
  */
 export const remove = (
     id: string,
@@ -341,7 +337,5 @@ export const remove = (
     exampleRepository.findScoped(id, scopeOf(context, 'delete')).then((example) => {
         if (!example) return generateReject(404, [t('example.not-found')]);
 
-        return outrankedRefusalFor(example, context).then(
-            (outranked) => outranked ?? deleteLoaded(example, context)
-        );
+        return deleteLoaded(example, context);
     });

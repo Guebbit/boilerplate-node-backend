@@ -95,10 +95,10 @@ describe('the operator’s audit read — what it withholds', () => {
         expect(await seenByOperator()).toEqual([]);
     });
 
-    // The shop's own rank refusals name an account (`ownerId`) and are the shop admin's business.
-    it('withholds a forbidden row the shop’s rank rule wrote, and keeps every other forbidden', async () => {
+    // The shop's own refusal of a staff account names an account and is the shop admin's business.
+    it('withholds a forbidden row the shop’s role protection wrote, and keeps every other forbidden', async () => {
         await Promise.all(
-            ['outranked', 'own', 'own_role', undefined].map((reason, index) =>
+            ['role_protected', 'missing_permission', undefined].map((reason, index) =>
                 auditLogRepository.create(
                     row('security.forbidden', 'failure', {
                         requestId: `forbidden-${index}`,
@@ -111,8 +111,8 @@ describe('the operator’s audit read — what it withholds', () => {
         const { items } = await auditLogService.searchIncidents({});
 
         expect(items.map((item) => item.requestId).toSorted()).toEqual([
-            'forbidden-2',
-            'forbidden-3'
+            'forbidden-1',
+            'forbidden-2'
         ]);
     });
 

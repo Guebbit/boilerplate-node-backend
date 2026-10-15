@@ -105,28 +105,26 @@ export const fulfillFulfillmentOrder = (
         return orderService.getById(String(found.orderId)).then((order) => {
             if (!order) return generateReject(404, [t('delivery.order-not-found')]);
 
-            return orderService.outrankedRefusalFor(order, context).then((outranked) => {
-                if (outranked) return outranked;
-                return runAct((session) =>
-                    fulfillAct(fulfillmentOrderId, session, context.caller.id)
-                ).then((result) => {
-                    if (result.refused) return result.reject;
-                    const { shipment } = result.value;
-                    return orderService
-                        .refreshShelf(shipment.lines.map(({ productId }) => productId))
-                        .then(() => notifyDelivered(String(shipment.orderId), shipment))
-                        .then(() => {
-                            recordAudit(context, {
-                                action: deliveryAuditActions.ADMIN_ORDER_FULFILLED,
-                                outcome: 'success',
-                                targetType: 'order',
-                                targetId: String(shipment.orderId),
-                                metadata: { shipmentId: String(shipment._id) }
-                            });
-                        })
-                        .then(() => viewShipment(shipment, result.value.order, authContext))
-                        .then((view) => generateSuccess(view));
-                });
+            return runAct((session) =>
+                fulfillAct(fulfillmentOrderId, session, context.caller.id)
+            ).then((result) => {
+                if (result.refused) return result.reject;
+                const { shipment } = result.value;
+                return orderService
+                    .refreshShelf(shipment.lines.map(({ productId }) => productId))
+                    .then(() => notifyDelivered(String(shipment.orderId), shipment))
+                    .then(() => {
+                        recordAudit(context, {
+                            action: deliveryAuditActions.ADMIN_ORDER_FULFILLED,
+                            outcome: 'success',
+                            targetType: 'order',
+                            targetId: String(shipment.orderId),
+                            metadata: { shipmentId: String(shipment._id) }
+                        });
+                    })
+                    .then(() =>
+                        generateSuccess(viewShipment(shipment, result.value.order, authContext))
+                    );
             });
         });
     });

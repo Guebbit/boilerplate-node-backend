@@ -22,19 +22,7 @@ import { remove, removeById, restoreById } from './remove';
 import { placeOrder } from './place';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
-import {
-    callerScope,
-    ownerScope,
-    outrankedOrderRefusal,
-    outrankedRefusalFor,
-    ownMoneyOrderRefusal,
-    ownMoneyRefusalFor,
-    handlesMoneyOf,
-    handlesMoneyOfOrder,
-    reachesBuyer,
-    reachesBuyerOf,
-    withActions
-} from './scope';
+import { callerScope, ownerScope, withActions } from './scope';
 import {
     cancelById,
     cancelUnanswered,
@@ -137,21 +125,7 @@ export {
     deleteTimelineOf
 } from './timeline';
 export { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
-export {
-    callerScope,
-    cancelScope,
-    actorOf,
-    ownerScope,
-    outrankedOrderRefusal,
-    outrankedRefusalFor,
-    ownMoneyOrderRefusal,
-    ownMoneyRefusalFor,
-    handlesMoneyOf,
-    handlesMoneyOfOrder,
-    reachesBuyer,
-    reachesBuyerOf,
-    withActions
-} from './scope';
+export { callerScope, cancelScope, actorOf, ownerScope, withActions } from './scope';
 export { freezeOrderLines } from './snapshot';
 export { reencryptOrders } from './reencrypt';
 export type {
@@ -182,14 +156,6 @@ export const orderService = {
     getForCaller,
     callerScope,
     ownerScope,
-    outrankedOrderRefusal,
-    outrankedRefusalFor,
-    ownMoneyOrderRefusal,
-    ownMoneyRefusalFor,
-    handlesMoneyOf,
-    handlesMoneyOfOrder,
-    reachesBuyer,
-    reachesBuyerOf,
     create,
     placeOrder,
     sendOrderPlacedEmail,

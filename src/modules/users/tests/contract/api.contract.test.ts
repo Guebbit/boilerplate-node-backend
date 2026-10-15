@@ -589,9 +589,9 @@ const actionsSeenBy = async (callerRole: string) => {
 };
 
 /**
- * `actions` is what the caller may do to each account: the route's key AND the rank rule, so a
- * client renders a ban button only where the ban would be accepted. One column per role, one row
- * per account level.
+ * `actions` is what the caller may do to each account: the route's key AND the protection of staff
+ * accounts, so a client renders a ban button only where the ban would be accepted. One column per
+ * role, one row per kind of account.
  */
 describe('GET /users — what the caller may do to each account', () => {
     it('lets a moderator edit, ban and erase a customer, and nothing on staff or an admin', async () => {
@@ -605,13 +605,13 @@ describe('GET /users — what the caller may do to each account', () => {
         });
     });
 
-    it('lets an admin act on a customer and on staff, but not on another admin — and on themself', async () => {
+    it('lets an admin, who manages roles, act on a customer, on staff and on another admin', async () => {
         const seen = await actionsSeenBy('admin');
 
         expect(seen).toMatchObject({
             'row-customer': { update: true, ban: true, delete: true },
             'row-support': { update: true, ban: true, delete: true },
-            'row-admin': { update: false, ban: false, delete: false },
+            'row-admin': { update: true, ban: true, delete: true },
             self: { update: true, ban: true, delete: true }
         });
     });
@@ -643,7 +643,7 @@ describe('GET /users — what the caller may do to each account', () => {
         expect(edit.body.data.actions).toEqual({ update: true, ban: true, delete: true });
     });
 
-    it('is absent from the account’s own record, which has no one to rank', async () => {
+    it('is absent from the account’s own record, which has no one to protect', async () => {
         const { bearer } = await authenticateAs('user');
 
         const response = await api().get('/account').set('Authorization', bearer);

@@ -74,8 +74,7 @@ const adminWithKey = async () => {
             scope: 'tenant',
             permissions: permissionsOfRole('admin'),
             unrestricted: false,
-            system: false,
-            level: 'admin'
+            system: false
         },
         analyticsConsent: false
     };

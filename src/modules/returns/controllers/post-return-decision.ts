@@ -24,9 +24,12 @@ export const postReturnApprove = (request: Request<{ id?: string }>, response: R
         .approveReturn(id, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            return returnService.withActions(result.data, authContext).then((payload) => {
-                successResponse<Return>(response, payload, 200, result.message);
-            });
+            successResponse<Return>(
+                response,
+                returnService.withActions(result.data, authContext),
+                200,
+                result.message
+            );
         })
         .catch(catchAs(response, 'postReturnApprove'));
 };
@@ -44,9 +47,12 @@ export const postReturnDecline = (request: Request<{ id?: string }>, response: R
         .declineReturn(id, body.reason, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            return returnService.withActions(result.data, authContext).then((payload) => {
-                successResponse<Return>(response, payload, 200, result.message);
-            });
+            successResponse<Return>(
+                response,
+                returnService.withActions(result.data, authContext),
+                200,
+                result.message
+            );
         })
         .catch(catchAs(response, 'postReturnDecline'));
 };

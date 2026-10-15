@@ -61,22 +61,19 @@ export const startFulfilment = (
     orderService.getById(orderId).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
 
-        return orderService.outrankedRefusalFor(order, context).then((outranked) => {
-            if (outranked) return outranked;
-            if (order.status !== OrderStatus.paid) return notPaid();
+        if (order.status !== OrderStatus.paid) return notPaid();
 
-            return ensureFulfillmentOrders(orderId)
-                .then(() => orderService.markProcessing(orderId))
-                .then((moved) => {
-                    if (!moved) return notPaid();
+        return ensureFulfillmentOrders(orderId)
+            .then(() => orderService.markProcessing(orderId))
+            .then((moved) => {
+                if (!moved) return notPaid();
 
-                    recordAudit(context, {
-                        action: deliveryAuditActions.ADMIN_ORDER_FULFILMENT_STARTED,
-                        outcome: 'success',
-                        targetType: 'order',
-                        targetId: orderId
-                    });
-                    return orderService.withActions(moved, authContext).then(generateSuccess);
+                recordAudit(context, {
+                    action: deliveryAuditActions.ADMIN_ORDER_FULFILMENT_STARTED,
+                    outcome: 'success',
+                    targetType: 'order',
+                    targetId: orderId
                 });
-        });
+                return orderService.withActions(moved, authContext).then(generateSuccess);
+            });
     });

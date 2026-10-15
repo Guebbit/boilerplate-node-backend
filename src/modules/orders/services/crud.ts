@@ -25,8 +25,6 @@ import { ordersAuditActions } from '../audit';
 import { orderRepository } from '../repository';
 import { placeOrder } from './place';
 import { maxAdminOrderLineQuantity, maxAdminOrderLines } from '../config';
-import { outrankedRefusal } from '@modules/access';
-import { outrankedOrderRefusal } from './scope';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -115,12 +113,6 @@ export const create = async (
     const overLimit = lineLimitRefusal(items);
     if (overLimit) return overLimit;
 
-    // The rank rule, asked of the buyer named in the body: an operator raises an order for a
-    // customer, never for an equal or a superior. Raising one for themselves is allowed — the
-    // steps that move its money then refuse them (`ownMoneyRefusalFor`).
-    const outranked = await outrankedRefusal(context, userId, 'user');
-    if (outranked) return outranked;
-
     // The snapshot each line freezes wants the BUYER's stored language, never the caller's: this
     // endpoint lets an admin place an order for someone else, and `context.locale` there is the
     // admin's own UI language, not the recipient's. Same rule as `@modules/cart`'s checkout.
@@ -206,9 +198,7 @@ export const update = (
 };
 
 /**
- * Update an existing order by ID (admin).
- * Fetches the document, refuses an order whose buyer ranks at or above the caller, then
- * delegates to update().
+ * Update an existing order by ID (admin). Fetches the document, then delegates to update().
  */
 export const updateById = (
     id: string,
@@ -220,18 +210,14 @@ export const updateById = (
         // at the `.catch()` that has to tell them apart.
         if (!order) return generateReject(404, [t('orders.not-found')]);
 
-        return outrankedOrderRefusal(id, context).then(
-            (refusal) =>
-                refusal ??
-                update(order, data).then((result) => {
-                    if (result.success)
-                        recordAudit(context, {
-                            action: ordersAuditActions.ORDER_UPDATED,
-                            outcome: 'success',
-                            targetType: 'order',
-                            targetId: id
-                        });
-                    return result;
-                })
-        );
+        return update(order, data).then((result) => {
+            if (result.success)
+                recordAudit(context, {
+                    action: ordersAuditActions.ORDER_UPDATED,
+                    outcome: 'success',
+                    targetType: 'order',
+                    targetId: id
+                });
+            return result;
+        });
     });

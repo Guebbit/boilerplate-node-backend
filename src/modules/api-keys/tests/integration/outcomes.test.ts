@@ -101,8 +101,7 @@ const contextFor = (
         scope: 'tenant',
         permissions,
         unrestricted: false,
-        system: false,
-        level: 'admin'
+        system: false
     },
     analyticsConsent: false
 });

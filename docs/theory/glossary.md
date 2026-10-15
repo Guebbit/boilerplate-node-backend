@@ -29,11 +29,11 @@ language is kept per context rather than shared.
 
 ## `access`
 
-| Term           | What it means here                                                                                                                                 |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Tenant**     | The shop (or the platform) a role is held in. A membership is always one person, one tenant, one role.                                             |
-| **Membership** | The stored ASSIGNMENT of a role to a user in a tenant. A role's own permissions are never stored — they live in `shared/authorization-roles.yaml`. |
-| **Level**      | `admin`, `staff` or `user`: the rank a role carries. A write on someone else's thing needs the owner strictly below the caller.                    |
+| Term           | What it means here                                                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tenant**     | The shop (or the platform) a role is held in. A membership is always one person, one tenant, one role.                                                      |
+| **Membership** | The stored ASSIGNMENT of a role to a user in a tenant. A role's own permissions are never stored — they live in `shared/authorization-roles.yaml`.          |
+| **Audience**   | `guest`, `unverified` or `customer`: what a request is before any staff role is added, computed from the session and `verifiedAt`, never stored or granted. |
 
 ## `addresses`
 

@@ -90,8 +90,7 @@ paths:
                 `closed`, its `lines` are the remainder, and the refund of those lines follows (plus
                 the delivery when it takes the last unit of the order). The buyer uses it as part of
                 their withdrawal; staff may use it too (out of stock for good), and then need
-                `payments.any.update` — the refund key, `stepUp: critical` — and the buyer must be
-                someone else who ranks below them. `GET /returns/options` says what each door would
+                `payments.any.update` — the refund key, `stepUp: critical`. `GET /returns/options` says what each door would
                 take and refund.
 
                 A return answers for goods that left (`kind: return`, the default); only the order's
@@ -117,8 +116,7 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/ReturnEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                # A staff `cancellation` by a caller without the refund key (`payments.any.update`), or on
-                # an order whose buyer ranks at or above them, or on their own order (nobody handles their own money).
+                # A staff `cancellation` by a caller without the refund key (`payments.any.update`).
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # Not the caller's order, or no such order.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -193,10 +191,7 @@ paths:
             description: >-
                 Staff accept a `requested` return; the customer is told they may send the goods
                 back. The write is conditional on the return still being `requested`, so two staff
-                members deciding at once cannot both win — the second answers 409. Never for a return on
-                the caller's own order: approving opens the way to a refund, and nobody handles
-                their own money, so the buyer is refused with `403 FORBIDDEN` (declining one's own
-                return is allowed).
+                members deciding at once cannot both win — the second answers 409.
             operationId: approveReturn
             security:
                 - bearerAuth: []
@@ -257,9 +252,7 @@ paths:
                 the customer is owed the money for them, and the return finishes. Requires an
                 `approved` return — a withdrawal is born approved, anything else was approved by
                 staff first. The status move and the restock are one transaction, so a return is
-                never half-received; the move is conditional, so a second click answers 409. Never for a
-                return on the caller's own order: receiving opens the refund, and nobody handles
-                their own money, so the buyer is refused with `403 FORBIDDEN`.
+                never half-received; the move is conditional, so a second click answers 409.
 
                 What is refunded: the returned lines, plus the delivery paid when the return
                 carries every unit on the order (a withdrawal gets back up to the cheapest standard
@@ -358,10 +351,8 @@ components:
             required: [approve, decline, receive]
             description: >-
                 What the requesting caller may do to this return, decided by the server, so a client
-                renders its controls from this rather than re-implementing the lifecycle. All three
-                are false when the buyer of the return's order ranks at or above the caller
-                (`OUTRANKED`). `approve` and `receive` move money, so they are also false when the
-                buyer is the caller; `decline` is not.
+                renders its controls from this rather than re-implementing the lifecycle. Each needs
+                the key that names the act and a status the act can run from.
             properties:
                 approve:
                     type: boolean

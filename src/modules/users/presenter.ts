@@ -6,12 +6,11 @@
  * through the service.
  */
 
-import type { Caller, RoleLevel, User, UserActions } from '@types';
+import type { Caller, User, UserActions } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { decryptPii } from '@infrastructure/security/pii-encryption';
 import { heldKeys } from '@kernel/ability';
-import { isBelowLevel, levelOfRoles } from '@kernel/permissions';
-import { levelsOfMany, rolesOf, rolesOfMany } from '@modules/access';
+import { rolesOf, rolesOfMany, staffHoldersAmong } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { phoneAad, type UserDocument, type UserWire } from './model';
 
@@ -67,21 +66,21 @@ export const presentUser = (document: UserWire, role: string | null, actions?: U
     });
 
 /**
- * What `caller` may do to one account: each route's key AND the rank rule. The caller's own
- * account is judged by the keys alone, as the rule never applies to one's own things; anyone else's
- * must rank strictly below the caller.
+ * What `caller` may do to one account: each route's key AND the protection of staff accounts. The
+ * caller's own account is judged by the keys alone; one that holds a staff role is reachable only
+ * with `roles.any.assign`.
  *
  * @param ownerId - the account being described
- * @param ownerLevel - its level ({@link levelOfRoles} of the roles it holds)
+ * @param ownerHoldsRole - whether it holds a staff role, in the shop or over the installation
  * @param caller - `request.caller`
  */
 export const userActionsFor = (
     ownerId: string,
-    ownerLevel: RoleLevel,
+    ownerHoldsRole: boolean,
     caller: Caller
 ): UserActions => {
     const held = heldKeys(caller);
-    const reachable = caller.id === ownerId || isBelowLevel(ownerLevel, caller.level);
+    const reachable = caller.id === ownerId || !ownerHoldsRole || held.has('roles.any.assign');
 
     return {
         update: reachable && held.has('users.any.update'),
@@ -104,13 +103,19 @@ export const presentUserWithCurrentRole = (user: UserDocument, caller?: Caller):
         presentUser(
             user,
             roles.tenant,
-            caller ? userActionsFor(String(user._id), levelOfRoles(roles), caller) : undefined
+            caller
+                ? userActionsFor(
+                      String(user._id),
+                      roles.tenant !== null || roles.platform !== null,
+                      caller
+                  )
+                : undefined
         )
     );
 
 /**
  * {@link presentUserWithCurrentRole} for a whole page of already-loaded rows: the roles in one
- * `$in` query and the levels in two more, never a lookup per row. Takes {@link UserWire} — the
+ * `$in` query and who holds a staff role in two more, never a lookup per row. Takes {@link UserWire} — the
  * lean, already-normalised rows `search()` returns.
  *
  * @param rows - the page's accounts
@@ -123,13 +128,13 @@ export const presentUsersWithCurrentRoles = (
 ): Promise<User[]> => {
     const ids = rows.map((user) => user.id);
 
-    return Promise.all([rolesOfMany(ids, DEPLOYMENT_TENANT_ID), levelsOfMany(ids)]).then(
-        ([roles, levels]) =>
+    return Promise.all([rolesOfMany(ids, DEPLOYMENT_TENANT_ID), staffHoldersAmong(ids)]).then(
+        ([roles, staff]) =>
             rows.map((user) =>
                 presentUser(
                     user,
                     roles.get(user.id) ?? null,
-                    caller && userActionsFor(user.id, levels.get(user.id) ?? 'user', caller)
+                    caller && userActionsFor(user.id, staff.has(user.id), caller)
                 )
             )
     );

@@ -7,17 +7,13 @@
 
 import { z } from 'zod';
 import {
-    anonymousCaller,
     AUDIENCE_NAMES,
     AUDIENCE_ROLES,
     audienceOf,
     isAudienceName,
     keysInScope,
     callerInScope,
-    isBelowLevel,
     keysDocumentSchema,
-    levelOfRole,
-    levelOfRoles,
     permissionModelVersion,
     PERMISSION_KEYS,
     PRESET_ROLES,
@@ -107,7 +103,6 @@ describe('rolesDocumentSchema', () => {
                         scope: 'tenant',
                         title: 'The moderator',
                         description: 'Accounts and orders.',
-                        level: 'staff',
                         permissions: ['users.any.read']
                     }
                 ],
@@ -119,50 +114,7 @@ describe('rolesDocumentSchema', () => {
     it('refuses a role with no permissions array', () => {
         const result = rolesDocumentSchema.safeParse({
             version: 1,
-            roles: [
-                { name: 'moderator', scope: 'tenant', title: 't', description: 'd', level: 'staff' }
-            ],
-            audience: validAudience
-        });
-
-        expect(result.success).toBe(false);
-    });
-
-    // A role cannot be added without deciding where it ranks: the load fails, and the pretty
-    // error names the field.
-    it('refuses a role with no level, naming the field', () => {
-        const result = rolesDocumentSchema.safeParse({
-            version: 1,
-            roles: [
-                {
-                    name: 'moderator',
-                    scope: 'tenant',
-                    title: 't',
-                    description: 'd',
-                    permissions: []
-                }
-            ],
-            audience: validAudience
-        });
-
-        expect(result.success).toBe(false);
-        if (result.success) return;
-        expect(z.prettifyError(result.error)).toContain('level');
-    });
-
-    it('refuses a level outside admin, staff and user', () => {
-        const result = rolesDocumentSchema.safeParse({
-            version: 1,
-            roles: [
-                {
-                    name: 'moderator',
-                    scope: 'tenant',
-                    title: 't',
-                    description: 'd',
-                    level: 'owner',
-                    permissions: []
-                }
-            ],
+            roles: [{ name: 'moderator', scope: 'tenant', title: 't', description: 'd' }],
             audience: validAudience
         });
 
@@ -284,58 +236,20 @@ describe('permissionModelVersion', () => {
 });
 
 /*
- * `level:` is data in the YAML and the second question after the keys. The table is written out
- * here on purpose: re-levelling a role is a decision, and this is where it shows up in review.
+ * What protects people is a key, not a rank: `roles.any.assign`, held by the administrator and by
+ * nobody else. A staff role is only a bundle of keys.
  */
-describe('role levels', () => {
-    const EXPECTED: Record<string, string> = {
-        manager: 'staff',
-        warehouse: 'staff',
-        support: 'staff',
-        editor: 'staff',
-        moderator: 'staff',
-        admin: 'admin',
-        system: 'admin',
-        operator: 'admin'
-    };
-
-    it('gives every preset role the level the shared file says, and the table covers them all', () => {
-        expect(Object.fromEntries(PRESET_ROLES.map((role) => [role.name, role.level]))).toEqual(
-            EXPECTED
+describe('role management', () => {
+    it('is held by admin and the system actor that aliases it, and by no other role', () => {
+        const holders = PRESET_ROLES.filter((role) =>
+            role.permissions.includes('roles.any.assign')
         );
+
+        expect(holders.map((role) => role.name)).toEqual(['admin', 'system']);
     });
 
-    it('reads a person with no membership, or a role nothing declares, as user', () => {
-        expect(levelOfRole(null)).toBe('user');
-        expect(levelOfRole(undefined)).toBe('user');
-        expect(levelOfRole('owner')).toBe('user');
-    });
-
-    it('counts a person holding two roles at the higher one', () => {
-        expect(levelOfRoles({ tenant: null, platform: null })).toBe('user');
-        expect(levelOfRoles({ tenant: 'support', platform: null })).toBe('staff');
-        expect(levelOfRoles({ tenant: 'support', platform: 'operator' })).toBe('admin');
-        expect(levelOfRoles({ tenant: 'admin', platform: 'operator' })).toBe('admin');
-        expect(levelOfRoles({ tenant: null, platform: 'operator' })).toBe('admin');
-    });
-
-    it('is strictly below only for a lower rank', () => {
-        expect(isBelowLevel('user', 'staff')).toBe(true);
-        expect(isBelowLevel('staff', 'admin')).toBe(true);
-        expect(isBelowLevel('user', 'admin')).toBe(true);
-        expect(isBelowLevel('staff', 'staff')).toBe(false);
-        expect(isBelowLevel('admin', 'staff')).toBe(false);
-        expect(isBelowLevel('user', 'user')).toBe(false);
-    });
-
-    it('hands a stranger the user level', () => {
-        expect(anonymousCaller().level).toBe('user');
-    });
-
-    it('stamps the caller with its person’s level', () => {
-        expect(callerAs('moderator').level).toBe('staff');
-        expect(callerAs('admin').level).toBe('admin');
-        expect(callerAs('customer').level).toBe('user');
+    it('declares no level on any role', () => {
+        expect(PRESET_ROLES.every((role) => !('level' in role))).toBe(true);
     });
 });
 

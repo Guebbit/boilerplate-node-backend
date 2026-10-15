@@ -121,11 +121,11 @@ minus the ability to spend.
 | **`admin`**     | Unrestricted within this shop, and only within it. It says nothing about the platform: one role cannot reach both scopes, which is the point.                                                                                                                                                                                                |
 | **`operator`**  | Runs the installation — health, metrics, the operational audit. Explicitly **not** a super-admin: it holds no shop key and therefore cannot read a single shop's orders, customers or messages. The conformance suite asserts both halves of that.                                                                                           |
 
-Every role also has a **level**: `admin` (`admin`, `operator`), `staff` (`manager`, `warehouse`,
-`support`, `editor`, `moderator`) or `user` (`customer`). A write on someone else's thing needs the
-owner to rank strictly below the caller, so staff work on customers and an administrator on staff,
-and nobody on an administrator. Staff and administrators do not shop: the basket is the
-customer's. See [Authorization](../theory/authorization.md#acting-on-someone-else-s-things).
+A role is only a bundle of keys: there is no level and nothing ranks. What protects people is one
+key, `roles.any.assign`, held by `admin` alone: staff work on customers, and only an administrator
+changes an account that holds a role or hands one out. Every signed-in account is a customer too,
+staff included, so a staff member fills a basket like anyone else. See
+[Authorization](../theory/authorization.md#protecting-people).
 
 ### What that actually grants
 
@@ -134,18 +134,18 @@ customer's. See [Authorization](../theory/authorization.md#acting-on-someone-els
 The roles above after the evaluator has had them, the `customer` audience folded into every
 signed-in row. This is what a route guard and a listing actually answer.
 
-| Role         | products | cart | orders      | payments | inventory | delivery | returns   | feedback | locales | core | users   | audit-logs | webhooks | api-keys | observability | example | notifications | stats |
-| ------------ | -------- | ---- | ----------- | -------- | --------- | -------- | --------- | -------- | ------- | ---- | ------- | ---------- | -------- | -------- | ------------- | ------- | ------------- | ----- |
-| `guest`      | r        | —    | —           | —        | —         | —        | —         | —        | r       | —    | —       | —          | —        | —        | —             | —       | —             | —     |
-| `unverified` | r        | u    | r           | r        | —         | —        | —         | —        | r       | —    | —       | —          | —        | —        | —             | —       | rd            | —     |
-| `customer`   | r        | ux   | r           | r        | —         | —        | —         | —        | r       | —    | —       | —          | —        | —        | —             | —       | rd            | —     |
-| `manager`    | RCUD     | ux   | RCUDEXPORT  | R        | R         | START    | RURECEIVE | R        | RCUD    | RU   | —       | R          | RCUD     | —        | —             | rcud    | rd            | R     |
-| `warehouse`  | R        | ux   | R           | r        | RC        | USTART   | RRECEIVE  | —        | r       | —    | —       | —          | —        | —        | —             | rcud    | rd            | —     |
-| `support`    | r        | ux   | R           | R        | —         | —        | RU        | RUD      | r       | —    | RU      | —          | —        | —        | —             | rcud    | rd            | —     |
-| `editor`     | RCUD     | ux   | r           | r        | —         | —        | —         | —        | RCUD    | RU   | —       | —          | —        | —        | —             | rcud    | rd            | —     |
-| `moderator`  | r        | ux   | RU          | RCU      | —         | —        | RU        | —        | r       | —    | RCUBAND | R          | —        | —        | —             | rcud    | rd            | —     |
-| `admin`      | RCUD     | ux   | RCUDOEXPORT | RCU      | RCS       | USTART   | RURECEIVE | RUD      | RCUD    | RU   | RCUBAND | R          | RCUD     | RCD      | —             | RcUD    | rd            | R     |
-| `operator`   | —        | —    | —           | —        | —         | —        | —         | —        | —       | —    | —       | —          | —        | —        | R             | —       | —             | —     |
+| Role         | products | cart | orders      | payments | inventory | delivery | returns   | feedback | locales | core | users   | access | audit-logs | webhooks | api-keys | observability | example | notifications | stats |
+| ------------ | -------- | ---- | ----------- | -------- | --------- | -------- | --------- | -------- | ------- | ---- | ------- | ------ | ---------- | -------- | -------- | ------------- | ------- | ------------- | ----- |
+| `guest`      | r        | —    | —           | —        | —         | —        | —         | —        | r       | —    | —       | —      | —          | —        | —        | —             | —       | —             | —     |
+| `unverified` | r        | u    | r           | r        | —         | —        | —         | —        | r       | —    | —       | —      | —          | —        | —        | —             | —       | rd            | —     |
+| `customer`   | r        | ux   | r           | r        | —         | —        | —         | —        | r       | —    | —       | —      | —          | —        | —        | —             | —       | rd            | —     |
+| `manager`    | RCUD     | ux   | RCUDEXPORT  | R        | R         | START    | RURECEIVE | R        | RCUD    | RU   | —       | —      | R          | RCUD     | —        | —             | rcud    | rd            | R     |
+| `warehouse`  | R        | ux   | R           | r        | RC        | USTART   | RRECEIVE  | —        | r       | —    | —       | —      | —          | —        | —        | —             | rcud    | rd            | —     |
+| `support`    | r        | ux   | R           | R        | —         | —        | RU        | RUD      | r       | —    | RU      | —      | —          | —        | —        | —             | rcud    | rd            | —     |
+| `editor`     | RCUD     | ux   | r           | r        | —         | —        | —         | —        | RCUD    | RU   | —       | —      | —          | —        | —        | —             | rcud    | rd            | —     |
+| `moderator`  | r        | ux   | RU          | RCU      | —         | —        | RU        | —        | r       | —    | RCUBAND | —      | R          | —        | —        | —             | rcud    | rd            | —     |
+| `admin`      | RCUD     | ux   | RCUDOEXPORT | RCU      | RCS       | USTART   | RURECEIVE | RUD      | RCUD    | RU   | RCUBAND | ASSIGN | R          | RCUD     | RCD      | —             | RcUD    | rd            | R     |
+| `operator`   | —        | —    | —           | —        | —         | —        | —         | —        | —       | —    | —       | —      | —          | —        | —        | R             | —       | —             | —     |
 
 UPPERCASE — the `any`-breadth key, every row · lowercase — `self`, the caller’s own · `r` read · `c` create · `u` update · `d` delete · `x` checkout · `s` sweep · `o` override · — nothing
 

@@ -36,8 +36,8 @@ version: 1
 # shop needs them apart: a support agent may update a user and may not delete one, a warehouse
 # operator may adjust stock and may not delete a product.
 #
-# `checkout`, `sweep`, `override`, `start`, `receive`, `ban` and `export` are the seven additions beyond
-# CASL's own CRUD vocabulary, and all seven follow the same rule: a verb is added only when CRUD cannot say the
+# `checkout`, `sweep`, `override`, `start`, `receive`, `ban`, `export` and `assign` are the eight additions beyond
+# CASL's own CRUD vocabulary, and all eight follow the same rule: a verb is added only when CRUD cannot say the
 # thing, never when CRUD is merely inconvenient, and the reason is recorded on the key itself.
 #   - `checkout` is `cart.self.checkout`'s action, and nowhere else. CRUD has no verb for "spend
 #     the basket": `create` on `Cart` collided with `orders.any.create` (raising an order on
@@ -60,6 +60,10 @@ version: 1
 #     out of the application as a file, which is a wider hand than reading them one at a time —
 #     `read` on `Order` would give the warehouse and the support desk the first by granting the
 #     second. Shopify keeps a separate Export permission for the same reason.
+#   - `assign` is `roles.any.assign`'s action, and nowhere else. It hands a staff role to an account
+#     or takes it away, and it is what lets someone change an account that already holds a staff
+#     role. No `Role` row is created, updated or deleted — the roles are data in a file — so no CRUD
+#     verb says it. Solidus names the same thing `RoleManagement`.
 #
 # THIS LIST IS THE ONE HOME of the vocabulary: `npm run gen:api` turns it into
 # `api/permission-actions.ts` (and the frontend's copy), so no code types it a second time.
@@ -75,6 +79,7 @@ actions:
     - receive
     - ban
     - export
+    - assign
 
 # The two scopes. Never both, never derived from a flag — a caller resolves to exactly one.
 scopes:

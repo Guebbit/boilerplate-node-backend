@@ -17,6 +17,7 @@ import {
 } from '@infrastructure/http/response';
 import { PaymentMethod } from '@types';
 import { orderService, orderTotal, isPayable } from '@modules/orders';
+import { ownOrderFlag } from '@modules/access';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import type { CallerContext } from '@types';
@@ -42,8 +43,8 @@ export interface OfflinePaymentInput {
  * would.
  *
  * The order lookup is unscoped: this is an operator action reached only once `payments.any.create` has
- * already been checked at the route, not a customer reading their own order. The own-money rule is
- * asked next: the caller may not be the buyer, and the buyer must rank below the caller.
+ * already been checked at the route, not a customer reading their own order. Recording money on
+ * one's own order is allowed and flagged `ownOrder` on the audit row.
  *
  * @param orderId - the order the money arrived for
  * @param input - the method, an optional reference, and when the money actually arrived
@@ -62,10 +63,6 @@ export const recordOfflinePayment = async (
 
     const order = await orderService.getById(orderId);
     if (!order) return generateReject(404, [t('payments.order-not-found')]);
-    // Nobody handles their own money: an operator records it against a customer's order, never
-    // against their own, nor an equal's or a superior's.
-    const refused = await orderService.ownMoneyRefusalFor(order, context);
-    if (refused) return refused;
     // Asked of the order lifecycle rather than compared against a literal here, so this
     // module cannot drift from the owner of the rule.
     if (!isPayable(order.status)) return notPayable();
@@ -120,7 +117,11 @@ export const recordOfflinePayment = async (
         outcome: 'success',
         targetType: 'order',
         targetId: orderId,
-        metadata: { method: input.method, reference: input.reference }
+        metadata: {
+            method: input.method,
+            reference: input.reference,
+            ...ownOrderFlag(context, order.userId ? String(order.userId) : undefined)
+        }
     });
     emitAnalyticsEvent({
         ...buildAnalyticsBase(context),

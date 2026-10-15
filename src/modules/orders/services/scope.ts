@@ -7,9 +7,7 @@
 
 import { callerForSubject, isSystemActor } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
-import { canActOn, outrankedRefusal, ownMoneyRefusal } from '@modules/access';
-import type { ResponseReject } from '@infrastructure/http/response';
-import type { AuthContext, CallerContext, Order, OrderActions } from '@types';
+import type { AuthContext, Order, OrderActions } from '@types';
 import type { OrderDocument } from '../model';
 import { accessibleFilter } from '@kernel/access/query';
 import { orderRepository } from '../repository';
@@ -58,96 +56,6 @@ export const cancelScope = (
             ? { ...ownerScope(authContext.id), deletedAt: null }
             : accessibleFilter(undefined, 'Order', 'update')
         : accessibleFilter(authContext, 'Order', 'update');
-
-/**
- * What a service asks about an order's buyer before a write: the rank rule alone
- * ({@link outrankedRefusal}) or with the own-money rule in front of it ({@link ownMoneyRefusal}).
- */
-type BuyerRefusal = typeof outrankedRefusal;
-
-/**
- * {@link BuyerRefusal} for an order already in hand. An order whose buyer is gone (erased) has no
- * owner to outrank.
- *
- * @param ask - which rule to ask of the buyer
- * @param order - the order about to be changed
- * @param context - the caller, or `undefined` for a path with no request behind it
- */
-const refusalOnOrder = (
-    ask: BuyerRefusal,
-    order: Pick<OrderDocument, '_id' | 'userId'>,
-    context: CallerContext | undefined
-): Promise<ResponseReject | undefined> =>
-    ask(context, order.userId ? String(order.userId) : undefined, 'order', String(order._id));
-
-/**
- * {@link refusalOnOrder} for an order known only by id: loads it, unless the caller is one the
- * rules never refuse (no context, or the system actor), in which case there is no read at all.
- *
- * @param ask - which rule to ask of the buyer
- * @param orderId - the order about to be changed
- * @param context - the caller, or `undefined` for a path with no request behind it
- */
-const refusalOnOrderId = (
-    ask: BuyerRefusal,
-    orderId: string,
-    context: CallerContext | undefined
-): Promise<ResponseReject | undefined> =>
-    !context || context.caller.system
-        ? Promise.resolve(undefined)
-        : orderRepository
-              .findById(orderId)
-              .then((order) => (order ? refusalOnOrder(ask, order, context) : undefined));
-
-/**
- * The rank rule for an order already in hand: `403 OUTRANKED` when its buyer ranks at or above the
- * caller, else `undefined`. Staff handle other people's orders, never an equal's or a superior's.
- * The caller's OWN order is exempt here: this is the rule for every step but the four that move
- * money, which ask {@link ownMoneyRefusalFor} instead.
- *
- * @param order - the order about to be changed
- * @param context - the caller, or `undefined` for a path with no request behind it
- */
-export const outrankedRefusalFor = (
-    order: Pick<OrderDocument, '_id' | 'userId'>,
-    context: CallerContext | undefined
-): Promise<ResponseReject | undefined> => refusalOnOrder(outrankedRefusal, order, context);
-
-/**
- * {@link outrankedRefusalFor} for an order known only by id.
- *
- * @param orderId - the order about to be changed
- * @param context - the caller, or `undefined` for a path with no request behind it
- */
-export const outrankedOrderRefusal = (
-    orderId: string,
-    context: CallerContext | undefined
-): Promise<ResponseReject | undefined> => refusalOnOrderId(outrankedRefusal, orderId, context);
-
-/**
- * The refusal for a step that moves an order's money (record cash, refund, approve or receive a
- * return): the caller may not be the buyer, and the buyer must rank below the caller. Nobody
- * handles their own money — a customer promoted to staff, or an administrator who raised an order
- * for themselves, still needs someone else to pay, refund or take back the goods.
- *
- * @param order - the order whose money is about to move
- * @param context - the caller, or `undefined` for a path with no request behind it
- */
-export const ownMoneyRefusalFor = (
-    order: Pick<OrderDocument, '_id' | 'userId'>,
-    context: CallerContext | undefined
-): Promise<ResponseReject | undefined> => refusalOnOrder(ownMoneyRefusal, order, context);
-
-/**
- * {@link ownMoneyRefusalFor} for an order known only by id.
- *
- * @param orderId - the order whose money is about to move
- * @param context - the caller, or `undefined` for a path with no request behind it
- */
-export const ownMoneyOrderRefusal = (
-    orderId: string,
-    context: CallerContext | undefined
-): Promise<ResponseReject | undefined> => refusalOnOrderId(ownMoneyRefusal, orderId, context);
 
 /**
  * One account's orders, by id rather than by `AuthContext`, WITHOUT excluding soft-deleted rows —
@@ -236,8 +144,7 @@ const withoutCancelOnceShipped = <T extends { transitions: OrderStatus[]; cancel
 
 /**
  * The operator's "record a payment by hand" button: offered while the order can still reach
- * `paid` and the caller holds the key the offline route asks for. Rank is applied afterwards by
- * `withinStanding`, like every other operator door.
+ * `paid` and the caller holds the key the offline route asks for.
  *
  * @param status - the order's current status
  * @param authContext - the caller, or `undefined` for no request behind this read
@@ -249,8 +156,8 @@ const canRecordPayment = (status: OrderStatus, authContext: AuthContext | undefi
 
 /**
  * Whether the caller may spend a basket at all — the key `POST /payments/intent` and the other card
- * steps ask. `pay` is offered only to a caller who holds it: staff and administrators do not shop,
- * and an unproven address is told to confirm it, so neither is offered a step the server refuses.
+ * steps ask. `pay` is offered only to a caller who holds it: an unproven address is told to confirm it,
+ * so it is not offered a step the server refuses.
  *
  * @param authContext - the caller, or `undefined` for no request behind this read
  */
@@ -281,120 +188,22 @@ const withdrawalActions = (
 };
 
 /**
- * Does the caller's rank reach this order's buyer — the rank rule asked as a question, for a
- * response that tells a client what to render. Yes for a path with no request, for the buyer
- * themselves, and for an order whose buyer is gone.
- *
- * @param order - the order being served
- * @param authContext - the caller, or `undefined` for no request behind this read
- */
-export const reachesBuyer = (
-    order: Pick<OrderDocument, 'userId'>,
-    authContext: AuthContext | undefined
-): Promise<boolean> =>
-    authContext
-        ? canActOn(
-              { caller: callerForSubject(authContext, 'Order'), analyticsConsent: false },
-              order.userId ? String(order.userId) : undefined
-          )
-        : Promise.resolve(true);
-
-/**
- * Whether the caller's rank reaches the buyer of one order, by id — {@link reachesBuyer} for a
- * sibling module that holds an order id (a return, a payment) rather than the order. An order
- * that does not exist reaches nobody.
- *
- * @param orderId - the order
- * @param authContext - the caller, or `undefined` for no request behind this read
- */
-export const reachesBuyerOf = (
-    orderId: string,
-    authContext: AuthContext | undefined
-): Promise<boolean> =>
-    authContext
-        ? orderRepository
-              .findById(orderId)
-              .then((order) => (order ? reachesBuyer(order, authContext) : false))
-        : Promise.resolve(true);
-
-/**
- * May the caller move this order's money — {@link reachesBuyer}, and not their own order. The
- * question behind the `actions` flags that {@link ownMoneyRefusalFor} refuses.
- *
- * @param order - the order being served
- * @param authContext - the caller, or `undefined` for no request behind this read
- */
-export const handlesMoneyOf = (
-    order: Pick<OrderDocument, 'userId'>,
-    authContext: AuthContext | undefined
-): Promise<boolean> =>
-    reachesBuyer(order, authContext).then(
-        (reaches) => reaches && String(order.userId) !== authContext?.id
-    );
-
-/**
- * {@link handlesMoneyOf} for a sibling module that holds an order id (a return). An order that
- * does not exist is handled by nobody.
- *
- * @param orderId - the order
- * @param authContext - the caller, or `undefined` for no request behind this read
- */
-export const handlesMoneyOfOrder = (
-    orderId: string,
-    authContext: AuthContext | undefined
-): Promise<boolean> =>
-    authContext
-        ? orderRepository
-              .findById(orderId)
-              .then((order) => (order ? handlesMoneyOf(order, authContext) : false))
-        : Promise.resolve(true);
-
-/**
- * What the caller may do to this order beyond what its status allows: every lifecycle move and
- * delivery door is for the order's BUYER (cancel, pay) or for an operator whose rank reaches the
- * buyer, and nobody else. A warehouse or support account reads every order and still gets no
- * cancel; a moderator gets none on a staff member's order.
- *
- * @param order - the order being served
- * @param authContext - the caller, or `undefined` for no request behind this read
- * @returns whether the caller is the buyer, and whether their rank reaches the buyer
- */
-const standingOn = (
-    order: OrderDocument,
-    authContext: AuthContext | undefined
-): Promise<{ isBuyer: boolean; reaches: boolean }> =>
-    reachesBuyer(order, authContext).then((reaches) => ({
-        isBuyer: String(order.userId) === authContext?.id,
-        reaches
-    }));
-
-/**
- * The actions as `standing` allows them: the status-derived ones only for the buyer (a customer
- * actor) or an operator who reaches the buyer, the delivery and override doors only when the
- * caller's rank reaches the buyer.
+ * The actions as the caller's standing allows them: the status-derived moves for the order's buyer
+ * (a customer actor) or for an operator, who holds the key; paying is the buyer's own step.
  *
  * @param actions - everything the caller's keys and the order's status allow
  * @param actor - which lifecycle column the caller reads
- * @param standing - {@link standingOn}'s answer
+ * @param isBuyer - whether the caller is the order's own buyer
  */
-const withinStanding = (
-    actions: OrderActions,
-    actor: OrderActor,
-    standing: { isBuyer: boolean; reaches: boolean }
-): OrderActions => {
-    const mayMove = actor === 'customer' ? standing.isBuyer : standing.reaches;
-    const doors = standing.reaches ? {} : { start: false, override: [] };
+const forStanding = (actions: OrderActions, actor: OrderActor, isBuyer: boolean): OrderActions => {
+    const mayMove = actor === 'customer' ? isBuyer : true;
 
     return {
         ...actions,
-        ...doors,
         transitions: mayMove ? actions.transitions : [],
         cancel: mayMove && actions.cancel,
         // Paying is the buyer's own step; an operator reading the order is never offered it.
-        pay: standing.isBuyer && actions.pay,
-        // Recording money by hand is the operator's: over a buyer their rank reaches, never
-        // their own order (nobody handles their own money).
-        recordPayment: standing.reaches && !standing.isBuyer && actions.recordPayment
+        pay: isBuyer && actions.pay
     };
 };
 
@@ -412,29 +221,27 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
         order.fulfillment?.shipped === true
     );
 
-    return Promise.all([resolveCurrentImages([serialized]), standingOn(order, authContext)]).then(
-        ([[resolved], standing]) => ({
-            ...resolved,
-            actions: {
-                ...withinStanding(
-                    {
-                        ...statusActions,
-                        pay: statusActions.pay && holdsCheckout(authContext),
-                        ...startAndOverrideActions(order, authContext),
-                        ...withdrawalActions(order, authContext),
-                        recordPayment: canRecordPayment(order.status, authContext),
-                        // `paidAt` is stamped in the SAME write that moves an order to `paid`
-                        // (`repository.ts#markPaid`), so it is a same-module, no-dependency proxy for
-                        // "an invoice was issued" — `invoicing` freezes one from the very same
-                        // transition, in its own event listener. `GET /orders/{id}/invoice` (owned by
-                        // `invoicing`) still checks for real and 404s on the rare gap this flag cannot
-                        // see — the same "gaps are acceptable" policy `orderNumber` already lives under.
-                        invoice: Boolean(order.paidAt)
-                    },
-                    actor,
-                    standing
-                )
-            }
-        })
-    );
+    const isBuyer = String(order.userId) === authContext?.id;
+
+    return resolveCurrentImages([serialized]).then(([resolved]) => ({
+        ...resolved,
+        actions: forStanding(
+            {
+                ...statusActions,
+                pay: statusActions.pay && holdsCheckout(authContext),
+                ...startAndOverrideActions(order, authContext),
+                ...withdrawalActions(order, authContext),
+                recordPayment: canRecordPayment(order.status, authContext),
+                // `paidAt` is stamped in the SAME write that moves an order to `paid`
+                // (`repository.ts#markPaid`), so it is a same-module, no-dependency proxy for
+                // "an invoice was issued" — `invoicing` freezes one from the very same
+                // transition, in its own event listener. `GET /orders/{id}/invoice` (owned by
+                // `invoicing`) still checks for real and 404s on the rare gap this flag cannot
+                // see — the same "gaps are acceptable" policy `orderNumber` already lives under.
+                invoice: Boolean(order.paidAt)
+            },
+            actor,
+            isBuyer
+        )
+    }));
 };

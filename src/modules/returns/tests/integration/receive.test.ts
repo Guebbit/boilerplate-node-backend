@@ -289,20 +289,15 @@ describe('receiving a return', () => {
     });
 });
 
-describe('nobody receives their own return', () => {
-    it('refuses a promoted buyer taking back their own goods, and refunds nothing', async () => {
+describe('a staff buyer receiving their own return', () => {
+    it('is allowed: the warehouse holds the key, and the refund follows', async () => {
         const fixture = await paidAndDelivered();
         const id = await approvedReturn(fixture);
         await assignRole(fixture.user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'warehouse');
 
-        const result = asReject(
-            await receiveReturn(id, {}, callerContextAs('warehouse', fixture.user.id))
-        );
+        const result = await receiveReturn(id, {}, callerContextAs('warehouse', fixture.user.id));
 
-        expect([result.status, result.errors[0].code]).toEqual([403, 'FORBIDDEN']);
-        const stored = await returnRepository.findById(id);
-        const payment = await paymentOf(fixture.orderId);
-        expect([stored?.status, payment.status]).toEqual(['approved', 'succeeded']);
+        expect(result.success && result.data.refundAmount).toBeGreaterThan(0);
     });
 });
 

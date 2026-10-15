@@ -45,6 +45,7 @@ import {
     type Money
 } from '@shared-kernel/money';
 import { orderService } from '@modules/orders';
+import { ownOrderFlag } from '@modules/access';
 import { paymentsAuditActions } from '../audit';
 import { PaymentProviderError, providerNamed } from '../providers';
 import { paymentRepository } from '../repository';
@@ -273,7 +274,11 @@ const announceRefund = (
         outcome,
         targetType: 'order',
         targetId: orderId,
-        metadata: { refundId: String(refund._id), amount: refund.amount }
+        metadata: {
+            refundId: String(refund._id),
+            amount: refund.amount,
+            ...ownOrderFlag(context, payment.userId?.toString())
+        }
     });
 };
 
@@ -632,36 +637,26 @@ export const refundByOrder = (
     context: CallerContext,
     body: { amount?: number; currency?: string } = {}
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    // The own-money rule first: the operator may not be the buyer, who must also rank below them,
-    // and one who may not touch this order is told so before anything about its payment.
-    orderService
-        .ownMoneyOrderRefusal(orderId, context)
-        .then<ResponseSuccess<PaymentDocument> | ResponseReject>(
-            (refusal) =>
-                refusal ??
-                paymentRepository
-                    .findByOrderId(orderId, callerScope(authContext))
-                    .then((payment) => {
-                        if (!payment) return generateReject(404, [t('payments.not-found')]);
+    paymentRepository.findByOrderId(orderId, callerScope(authContext)).then((payment) => {
+        if (!payment) return generateReject(404, [t('payments.not-found')]);
 
-                        const invalid = refusalFor(payment, body);
-                        if (invalid) return invalid;
+        const invalid = refusalFor(payment, body);
+        if (invalid) return invalid;
 
-                        return performRefund(orderId, context, {
-                            amount: body.amount,
-                            reason: 'goodwill'
-                        }).then((refunded) =>
-                            refunded
-                                ? generateSuccess(refunded, 200, t('payments.refund-success'))
-                                : generateReject(409, [
-                                      {
-                                          code: ERROR_CODES.PAYMENT_NOT_REFUNDABLE,
-                                          message: t('payments.not-refundable')
-                                      }
-                                  ])
-                        );
-                    })
+        return performRefund(orderId, context, {
+            amount: body.amount,
+            reason: 'goodwill'
+        }).then((refunded) =>
+            refunded
+                ? generateSuccess(refunded, 200, t('payments.refund-success'))
+                : generateReject(409, [
+                      {
+                          code: ERROR_CODES.PAYMENT_NOT_REFUNDABLE,
+                          message: t('payments.not-refundable')
+                      }
+                  ])
         );
+    });
 
 /**
  * `ORDER_REFUND_OWED`'s listener: give the money back if any was taken.

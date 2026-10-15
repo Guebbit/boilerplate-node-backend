@@ -3,22 +3,22 @@
  * The inactivity reaper's own reads, one per stage.
  */
 
-import { levelsOfMany } from '@modules/access';
+import { staffHoldersAmong } from '@modules/access';
 import { logger } from '@infrastructure/adapters/logger';
 import { userRepository } from '../repository';
 import { personalDataMinimisers } from '../erasure-registry';
 import type { UserDocument } from '../model';
 
 /**
- * Keeps only the accounts the reaper may take offline: people at the `user` level. An employee's
+ * Keeps only the accounts the reaper may take offline: people who hold no staff role. An employee's
  * account ends when the employment does, decided by a person — never by a quiet month — and the
  * shop's only administrator is exactly who a long holiday would otherwise erase.
  *
  * @param accounts - the reaper's candidates for one stage
  */
 const customersOnly = (accounts: UserDocument[]): Promise<UserDocument[]> =>
-    levelsOfMany(accounts.map((account) => String(account._id))).then((levels) =>
-        accounts.filter((account) => levels.get(String(account._id)) === 'user')
+    staffHoldersAmong(accounts.map((account) => String(account._id))).then((staff) =>
+        accounts.filter((account) => !staff.has(String(account._id)))
     );
 
 /**

@@ -11,7 +11,6 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { ERROR_CODES } from '@api/error-codes';
 import { heldKeys } from '@kernel/ability';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
@@ -27,8 +26,8 @@ import {
     assignRole,
     auditRoleAssigned,
     auditRoleRevoked,
-    outrankedRefusal,
     revokeRole,
+    roleProtectedRefusal,
     rolesOf
 } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -298,41 +297,18 @@ const missingKeyRefusal = (key: string, id: string, context: CallerContext): Res
 };
 
 /**
- * Nobody changes their own role — a promotion is somebody else's decision, a demotion would lock
- * the person out of what they were trusted with. `403 FORBIDDEN`, audited.
- *
- * @param id - the account the update was aimed at
- * @param context - the caller
- */
-const ownRoleRefusal = (id: string, context: CallerContext): ResponseReject => {
-    recordAudit(context, {
-        action: coreAuditActions.SECURITY_FORBIDDEN,
-        outcome: 'failure',
-        targetType: 'user',
-        targetId: id,
-        metadata: { reason: 'own_role' }
-    });
-
-    return generateReject(403, [
-        { code: ERROR_CODES.FORBIDDEN, message: t('users.own-role-change') }
-    ]);
-};
-
-/**
  * Everything an admin update must clear before a field is written, in order: the keys its
- * changed fields need, the rank rule, and the ban on changing one's own role.
+ * changed fields need, then the protection of an account that holds a staff role.
  *
  * @param user - the loaded document
  * @param data - the request body
  * @param context - the caller
- * @param role - {@link changedRole}'s answer for this request
  * @returns the refusal, or `undefined` to carry on
  */
 const refusalFor = (
     user: UserDocument,
     data: Pick<UpdateUserByIdRequest, 'active'>,
-    context: CallerContext,
-    role: RoleChange
+    context: CallerContext
 ): Promise<ResponseReject | undefined> => {
     const id = String(user._id);
     const held = heldKeys(context.caller);
@@ -340,13 +316,7 @@ const refusalFor = (
 
     if (missing) return Promise.resolve(missingKeyRefusal(missing, id, context));
 
-    return outrankedRefusal(context, id, 'user').then(
-        (outranked) =>
-            outranked ??
-            (context.caller.id === id && role !== undefined
-                ? ownRoleRefusal(id, context)
-                : undefined)
-    );
+    return roleProtectedRefusal(context, id);
 };
 
 /**
@@ -410,7 +380,7 @@ const applyUpdate = (
  *
  * @param id - the account being changed
  * @param data - the request body
- * @param context - the caller, whose keys and rank decide what may change
+ * @param context - the caller, whose keys decide what may change
  */
 export const updateById = (
     id: string,
@@ -427,7 +397,7 @@ export const updateById = (
 
         // Once per request: the role the membership already holds is not a change.
         return changedRole(user, data.role).then((role) =>
-            refusalFor(user, data, context, role).then(
+            refusalFor(user, data, context).then(
                 (refusal) => refusal ?? applyUpdate(user, data, context, wasActive, role)
             )
         );

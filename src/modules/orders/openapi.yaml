@@ -126,9 +126,7 @@ paths:
             summary: Create order
             description: >-
                 Creates a new order directly from the supplied payload, for the account named in
-                `userId`. The rank rule applies to that account: an operator raises orders for
-                customers, never for an equal or a superior (`OUTRANKED`). Raising one for oneself
-                is allowed, but the steps that move its money then refuse the caller.
+                `userId`. Raising one for oneself is allowed.
 
                 A body is bounded twice. The schema caps it at 1000 lines of at most 999999 units
                 (what the contract promises); a deployment may set a lower limit in
@@ -512,8 +510,7 @@ paths:
                 the order's held stock in every case. Whether the MONEY goes back is `refund`:
                 a customer is always refunded and cannot waive it, an operator chooses. Later
                 statuses need their own flow (a return). A customer can cancel only their own
-                orders; an operator can cancel a customer's, never an equal's or a superior's
-                (`OUTRANKED`). The check and the write are one atomic statement, so a cancel racing a status change resolves
+                orders; an operator can cancel anyone's. The check and the write are one atomic statement, so a cancel racing a status change resolves
                 to exactly one winner.
             operationId: cancelOrderById
             security:
@@ -534,7 +531,6 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/OrderEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                # An operator cancelling an order whose buyer ranks at or above them: `OUTRANKED`.
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # The order exists and is visible to the caller, but its status is past the
@@ -1164,11 +1160,8 @@ components:
                 What the requesting caller may do to this order, decided by the server. A client
                 renders its controls from this rather than re-implementing the lifecycle: the rules
                 depend on the caller's role, and a second copy in a separately deployed client is
-                how the two come to disagree. Cancel and pay are the BUYER's (reading an order is
-                not owning it), and every move an operator makes is withheld when the buyer ranks
-                at or above them — a staff member's order is one only an admin handles. Nobody
-                handles their own money: recording a payment by hand is withheld on the caller's
-                own order too.
+                how the two come to disagree. Pay is the BUYER's (reading an order is not owning
+                it); an operator who holds the key moves any order, a staff member's own included.
             properties:
                 transitions:
                     type: array
@@ -1198,9 +1191,8 @@ components:
                     description: >-
                         Whether `POST /payments/order/{orderId}/offline` would be accepted for this
                         caller: an operator recording money that arrived another way. True while
-                        the order is still awaiting payment, the caller holds the key that records
-                        one and their rank reaches the buyer. Never true for the buyer, whose own
-                        step is `pay` — not even for a buyer who is staff or an administrator.
+                        the order is still awaiting payment and the caller holds the key that records
+                        one. A buyer's own step is `pay`; a buyer who is staff may also record.
                 start:
                     type: boolean
                     description: >-

@@ -8,6 +8,7 @@
  */
 import { model, Schema } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
+import { advanceDate, freezeDate } from '@tests/clock';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { EDIT_REVISION, revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { versionOf } from '@infrastructure/persistence/versioning';
@@ -84,12 +85,20 @@ describe('editRevision', () => {
     });
 
     it('moves for a save() whose only change is marking updatedAt, as the role-only edit does', async () => {
-        const row = await probeModel.create({ name: 'a' });
-        row.markModified('updatedAt');
+        // The clock is moved on, so the save stamps a different `updatedAt` than the create did:
+        // within one millisecond the stamp would not change and, rightly, neither would the counter.
+        freezeDate();
+        try {
+            const row = await probeModel.create({ name: 'a' });
+            advanceDate(10);
+            row.markModified('updatedAt');
 
-        await row.save();
+            await row.save();
 
-        expect(await storedRevision(row._id)).toBe(1);
+            expect(await storedRevision(row._id)).toBe(1);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it.each([

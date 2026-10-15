@@ -27,7 +27,6 @@ import {
     PRESET_ROLES,
     assembleCaller,
     keysInScope,
-    levelOfRole,
     type AudienceName
 } from '@kernel/permissions';
 import { heldKeys } from '@kernel/ability';
@@ -97,8 +96,7 @@ const callerFor = (persona: Persona): Caller => {
         persona.audience === 'guest' ? null : 'generated',
         persona.scope === 'platform' ? null : 'generated',
         persona.scope,
-        permissions,
-        levelOfRole(persona.role)
+        permissions
     );
 };
 

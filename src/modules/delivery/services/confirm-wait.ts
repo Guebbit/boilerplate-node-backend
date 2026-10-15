@@ -95,9 +95,7 @@ export const confirmWait = (
                         targetId: String(order._id),
                         metadata: { fulfillmentOrderId }
                     });
-                    return viewFulfillmentOrder(result.value, order, authContext).then((view) =>
-                        generateSuccess(view)
-                    );
+                    return generateSuccess(viewFulfillmentOrder(result.value, order, authContext));
                 });
             });
     });

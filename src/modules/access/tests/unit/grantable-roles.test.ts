@@ -20,13 +20,13 @@ const everyTenantRole = PRESET_ROLES.filter((role) => role.scope === 'tenant').m
 );
 
 describe('grantableRoles', () => {
-    // The rule is "hold every key the role holds", so a caller may always hand out their own role
-    // and any role whose keys they all hold. `customer` and `unverified` are not roles at all: an
-    // audience is computed, so there is nothing to grant.
+    // The rule is "hold `roles.any.assign`", so only a role manager hands out roles, and any of
+    // them. `customer` and `unverified` are not roles at all: an audience is computed, so there is
+    // nothing to grant.
     it.each([
         ['admin', everyTenantRole],
-        ['moderator', ['moderator']],
-        ['support', ['support']]
+        ['moderator', []],
+        ['support', []]
     ])('gives a %s caller %j', (granterRole, expected) => {
         expect(grantableRoles('tenant', permissionsOfRole(granterRole))).toEqual(expected);
     });
@@ -39,8 +39,12 @@ describe('grantableRoles', () => {
         expect(grantableRoles('tenant', permissionsOfRole('admin'))).not.toContain('operator');
     });
 
-    it.each(everyTenantRole)('agrees with the write path about %s', (role) => {
-        const granter = permissionsOfRole('moderator');
+    it.each(
+        ['admin', 'moderator'].flatMap((granterRole) =>
+            everyTenantRole.map((role) => [granterRole, role])
+        )
+    )('agrees with the write path: a %s granting %s', (granterRole, role) => {
+        const granter = permissionsOfRole(granterRole);
         const offered = grantableRoles('tenant', granter).includes(role);
         const grant = () => {
             assertCanGrant('tenant', role, granter);

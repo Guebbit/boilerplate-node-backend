@@ -331,7 +331,7 @@ sequenceDiagram
     participant O as orders
     participant I as inventory
     S->>D: POST /fulfillment-orders/{id}/shipments {lines?, trackingCode?}
-    Note over D: rank rule — then ONE transaction opens
+    Note over D: ONE transaction opens
     D->>D: refuse early: order status, kind, hold, lines, tracking
     D->>D: claim the fulfillment order by its revision
     D->>D: write the shipment
@@ -468,7 +468,7 @@ date this order was expecting, not the product's previous date.
 | `POST /delivery/shipments/{id}/deliver`                    | `delivery.any.update` | the shipment                                                        |
 
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
-frontend never re-derives a rule. All the staff doors apply [the rank rule](../theory/authorization.md).
+frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../theory/authorization.md#protecting-people).
 
 | Event                                                 | Payload                                            | Public webhook                 |
 | ----------------------------------------------------- | -------------------------------------------------- | ------------------------------ |

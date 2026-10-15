@@ -31,8 +31,7 @@ export const credentialHolding = async (permissions: string[]): Promise<string> 
             scope: 'tenant',
             permissions,
             unrestricted: false,
-            system: false,
-            level: 'admin'
+            system: false
         },
         analyticsConsent: false
     };

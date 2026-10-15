@@ -7,7 +7,6 @@
  * See: docs/theory/sessions.md#the-staff-idle-timeout
  */
 
-import { levelOfRoles } from '@kernel/permissions';
 import type { AuthContext } from '@types';
 import { getStaffIdleTimeSeconds } from './config';
 
@@ -15,10 +14,10 @@ import { getStaffIdleTimeSeconds } from './config';
  * The idle limit that applies to a caller, in milliseconds.
  *
  * @param roles - the caller's roles, as `AuthContext.roles` carries them
- * @returns the limit, or `0` for a caller it does not apply to (a shopper, or the timeout is off)
+ * @returns the limit, or `0` for a caller it does not apply to (no staff role, or the timeout is off)
  */
 export const idleLimitMilliseconds = (roles: AuthContext['roles']): number =>
-    levelOfRoles(roles) === 'user' ? 0 : getStaffIdleTimeSeconds() * 1000;
+    roles.tenant === null && roles.platform === null ? 0 : getStaffIdleTimeSeconds() * 1000;
 
 /**
  * Whether a session last active at `lastActive` has idled out for this caller.

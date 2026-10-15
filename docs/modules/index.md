@@ -84,7 +84,6 @@ flowchart TD
     delivery --> orders
     delivery --> products
     delivery --> shop
-    example --> access
     example --> users
     inventory --> products
     invoicing --> orders
@@ -94,11 +93,11 @@ flowchart TD
     notifications --> delivery
     notifications --> wishlist
     observability --> audit_logs
-    orders --> access
     orders --> inventory
     orders --> products
     orders --> shop
     orders --> users
+    payments --> access
     payments --> inventory
     payments --> orders
     products --> shop
@@ -129,16 +128,16 @@ flowchart TD
 
 |                 | Reaches                                                                 | Reached by                                                  |
 | --------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `orders`        | access, inventory, products, shop, users                                | cart, delivery, invoicing, payments, returns, stats         |
 | `cart`          | addresses, delivery, inventory, orders, payments, products, shop, users | notifications, wishlist                                     |
+| `orders`        | inventory, products, shop, users                                        | cart, delivery, invoicing, payments, returns, stats         |
 | `delivery`      | inventory, orders, products, shop                                       | cart, notifications, returns                                |
+| `payments`      | access, inventory, orders                                               | cart, invoicing, returns, stats                             |
 | `shop`          | —                                                                       | cart, delivery, invoicing, orders, products, returns, stats |
 | `users`         | access                                                                  | account, api-keys, cart, example, orders, webhooks          |
-| `access`        | —                                                                       | account, api-keys, audit-logs, example, orders, users       |
 | `inventory`     | products                                                                | cart, delivery, orders, payments, returns                   |
-| `payments`      | inventory, orders                                                       | cart, invoicing, returns, stats                             |
 | `products`      | shop                                                                    | cart, delivery, inventory, orders, wishlist                 |
 | `returns`       | delivery, inventory, orders, payments, shop                             | stats                                                       |
+| `access`        | —                                                                       | account, api-keys, audit-logs, payments, users              |
 | `stats`         | invoicing, orders, payments, returns, shop                              | —                                                           |
 | `invoicing`     | orders, payments, shop                                                  | stats                                                       |
 | `account`       | access, users                                                           | api-keys                                                    |
@@ -146,8 +145,8 @@ flowchart TD
 | `notifications` | cart, delivery, wishlist                                                | —                                                           |
 | `wishlist`      | cart, products                                                          | notifications                                               |
 | `audit-logs`    | access                                                                  | observability                                               |
-| `example`       | access, users                                                           | —                                                           |
 | `addresses`     | —                                                                       | cart                                                        |
+| `example`       | users                                                                   | —                                                           |
 | `observability` | audit-logs                                                              | —                                                           |
 | `webhooks`      | users                                                                   | —                                                           |
 | `analytics`     | —                                                                       | —                                                           |

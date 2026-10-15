@@ -32,8 +32,7 @@ describe('an api key in use', () => {
                 scope: 'tenant',
                 permissions: permissionsOfRole('admin'),
                 unrestricted: false,
-                system: false,
-                level: 'admin'
+                system: false
             },
             analyticsConsent: false
         };

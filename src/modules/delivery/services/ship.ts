@@ -232,20 +232,17 @@ export const shipFulfillmentOrder = (
         return orderService.getById(String(found.orderId)).then((order) => {
             if (!order) return generateReject(404, [t('delivery.order-not-found')]);
 
-            // The rank rule before the transaction opens: a refusal here writes nothing.
-            return orderService.outrankedRefusalFor(order, context).then((outranked) => {
-                if (outranked) return outranked;
-                return runAct((session) =>
-                    shipAct(fulfillmentOrderId, input, context, session)
-                ).then((result) => {
+            return runAct((session) => shipAct(fulfillmentOrderId, input, context, session)).then(
+                (result) => {
                     if (result.refused) return result.reject;
-                    return afterShipped(result.value, context)
-                        .then(() =>
-                            viewShipment(result.value.shipment, result.value.order, authContext)
+                    return afterShipped(result.value, context).then(() =>
+                        generateSuccess(
+                            viewShipment(result.value.shipment, result.value.order, authContext),
+                            201
                         )
-                        .then((view) => generateSuccess(view, 201));
-                });
-            });
+                    );
+                }
+            );
         });
     });
 };

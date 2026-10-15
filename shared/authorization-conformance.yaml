@@ -24,14 +24,12 @@
 
 version: 1
 
-# Every tenant key `admin` holds — spelled out once and reused via YAML anchor below, for cases
-# that need "the most privileged tenant caller conceivable" rather than one specific key. Every
-# declared tenant key bar the two `shopperOnly` basket ones (`cart.self.update`,
-# `cart.self.checkout`): an administrator does not shop. Kept
-# identical to `authorization-roles.yaml`'s own `admin` entry BY HAND: there is no schema link
-# between the two files, so a key added to one and not the other is a review problem, not a
-# machine-caught one — `tests/unit/kernel/permissions.test.ts` only checks the real preset role,
-# never this fixture copy.
+# Every tenant key a verified `admin` effectively holds: the keys of the `customer` audience plus
+# the ones `authorization-roles.yaml` lists for `admin` — spelled out once and reused via YAML
+# anchor below, for cases that need "the most privileged tenant caller conceivable" rather than one
+# specific key. That is every declared tenant key. Kept identical to the two lists in
+# `authorization-roles.yaml` BY HAND: there is no schema link between the files, so a key added to
+# one and not the other is a review problem, not a machine-caught one.
 admin-permissions: &admin_permissions
     - products.self.read
     - products.any.read
@@ -81,6 +79,7 @@ admin-permissions: &admin_permissions
     - apikeys.any.read
     - apikeys.any.create
     - apikeys.any.delete
+    - roles.any.assign
     - examples.self.read
     - examples.self.create
     - examples.self.update

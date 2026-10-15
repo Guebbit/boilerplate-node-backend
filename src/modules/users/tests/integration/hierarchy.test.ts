@@ -1,19 +1,19 @@
 /**
  * @module
- * Who may change whom, through `userService` — the two refusals an admin write owes after the
- * route's own key: the key a CHANGED field needs (`users.any.ban` for `active`), and the rank
- * rule (the account must rank strictly below the caller, the caller's own excepted), plus the
- * ban on changing one's own role.
+ * Who may change whom, through `userService` — the refusals an admin write owes after the
+ * route's own key: the key a CHANGED field needs (`users.any.ban` for `active`), the protection of
+ * an account that holds a staff role (only a holder of `roles.any.assign` may change one, the
+ * caller's own excepted), and the same key for handing a role out.
  *
- * Driven through the service rather than the route so each cell names the caller's role and the
- * owner's level; the route-level matrix is the cross-cutting role-hierarchy suite.
+ * Driven through the service rather than the route so each cell names the caller's role and what
+ * the account holds; the route-level matrix is the cross-cutting account-protection suite.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { observePort } from '@tests/ports';
 import { callerContextAs } from '@tests/callers';
 import * as auditPort from '@infrastructure/observability/audit';
-import { assignRole, rolesOf } from '@modules/access';
+import { AccessInvariantError, assignRole, rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseReject } from '@infrastructure/http/response';
 import * as userService from '@modules/users/services';
@@ -130,20 +130,20 @@ describe('users.any.ban — the key a ban needs', () => {
     });
 });
 
-describe('the rank rule on a user', () => {
-    // [caller role, owner role, expected]
+describe('the protection of staff accounts', () => {
+    // [caller role, account holds, expected]
     it.each([
         ['support', 'customer', 'allowed'],
         ['support', 'unverified', 'allowed'],
         ['moderator', 'customer', 'allowed'],
         ['admin', 'customer', 'allowed'],
         ['admin', 'moderator', 'allowed'],
-        ['support', 'support', 'OUTRANKED'],
-        ['support', 'moderator', 'OUTRANKED'],
-        ['moderator', 'support', 'OUTRANKED'],
-        ['support', 'admin', 'OUTRANKED'],
-        ['moderator', 'admin', 'OUTRANKED'],
-        ['admin', 'admin', 'OUTRANKED']
+        ['admin', 'admin', 'allowed'],
+        ['support', 'support', 'ROLE_MANAGEMENT_REQUIRED'],
+        ['support', 'moderator', 'ROLE_MANAGEMENT_REQUIRED'],
+        ['moderator', 'support', 'ROLE_MANAGEMENT_REQUIRED'],
+        ['support', 'admin', 'ROLE_MANAGEMENT_REQUIRED'],
+        ['moderator', 'admin', 'ROLE_MANAGEMENT_REQUIRED']
     ])('%s editing a %s: %s', async (callerRole, ownerRole, expected) => {
         const owner = await accountHolding(ownerRole, 'owner');
 
@@ -157,7 +157,7 @@ describe('the rank rule on a user', () => {
         else expect(refusalCode(result)).toBe(expected);
     });
 
-    it('leaves an outranked account untouched, and records the failed attempt', async () => {
+    it('leaves a protected account untouched, and records the failed attempt', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const owner = await accountHolding('admin');
 
@@ -174,12 +174,12 @@ describe('the rank rule on a user', () => {
                 outcome: 'failure',
                 targetType: 'user',
                 targetId: owner.id,
-                metadata: expect.objectContaining({ reason: 'outranked' })
+                metadata: expect.objectContaining({ reason: 'role_protected' })
             })
         );
     });
 
-    it('lets anyone edit their own account, whatever their level', async () => {
+    it('lets anyone edit their own account, whatever they hold', async () => {
         const admin = await accountHolding('admin');
         const support = await accountHolding('support');
 
@@ -199,7 +199,7 @@ describe('the rank rule on a user', () => {
         expect(own.map((result) => result.success)).toEqual([true, true]);
     });
 
-    it('refuses every shop role the platform operator’s account', async () => {
+    it('refuses every role but a role manager the platform operator’s account', async () => {
         const operator = await accountHolding('customer', 'operator-account');
         await assignRole(operator.id, null, 'platform', 'operator');
 
@@ -213,24 +213,22 @@ describe('the rank rule on a user', () => {
             )
         );
 
-        expect(results.map((result) => refusalCode(result))).toEqual([
-            'OUTRANKED',
-            'OUTRANKED',
-            'OUTRANKED'
-        ]);
+        expect(results.map((result) => (result.success ? 'allowed' : refusalCode(result)))).toEqual(
+            ['ROLE_MANAGEMENT_REQUIRED', 'ROLE_MANAGEMENT_REQUIRED', 'allowed']
+        );
     });
 
-    it('counts a person holding two roles at the higher one', async () => {
+    it('protects an account holding a role in either scope', async () => {
         const both = await accountHolding('support', 'both-roles');
         await assignRole(both.id, null, 'platform', 'operator');
 
         const result = await userService.updateById(
             both.id,
-            { username: 'by-admin' },
-            callerContextAs('admin', 'someone-else')
+            { username: 'by-moderator' },
+            callerContextAs('moderator', 'someone-else')
         );
 
-        expect(refusalCode(result)).toBe('OUTRANKED');
+        expect(refusalCode(result)).toBe('ROLE_MANAGEMENT_REQUIRED');
     });
 
     it('applies to a soft delete, a hard delete and a restore', async () => {
@@ -242,9 +240,9 @@ describe('the rank rule on a user', () => {
         const restore = await userService.restoreById(admin.id, moderatorContext);
 
         expect([soft, hard, restore].map((result) => refusalCode(result))).toEqual([
-            'OUTRANKED',
-            'OUTRANKED',
-            'OUTRANKED'
+            'ROLE_MANAGEMENT_REQUIRED',
+            'ROLE_MANAGEMENT_REQUIRED',
+            'ROLE_MANAGEMENT_REQUIRED'
         ]);
         expect(await stored(admin.id)).not.toBeNull();
     });
@@ -262,18 +260,45 @@ describe('the rank rule on a user', () => {
     });
 });
 
-describe('nobody changes their own role', () => {
-    it.each(['admin', 'moderator', 'support'])('refuses a %s', async (role) => {
-        const self = await accountHolding(role);
+describe('handing out a staff role', () => {
+    it('refuses a caller without role management, and writes nothing', async () => {
+        const target = await accountHolding('customer');
+
+        await expect(
+            userService.updateById(
+                target.id,
+                { role: 'support' },
+                callerContextAs('moderator', 'someone-else')
+            )
+        ).rejects.toThrow(AccessInvariantError);
+
+        expect(await heldRole(target.id)).toBeNull();
+    });
+
+    it('lets an administrator grant a role, and take it away', async () => {
+        const target = await accountHolding('customer');
+        const admin = callerContextAs('admin', 'someone-else');
+
+        const granted = await userService.updateById(target.id, { role: 'support' }, admin);
+        const grantedRole = await heldRole(target.id);
+        const revoked = await userService.updateById(target.id, { role: null }, admin);
+
+        expect([granted.success, revoked.success]).toEqual([true, true]);
+        expect(grantedRole).toBe('support');
+        expect(await heldRole(target.id)).toBeNull();
+    });
+
+    it('refuses a caller without role management taking a role away', async () => {
+        const target = await accountHolding('support');
 
         const result = await userService.updateById(
-            self.id,
+            target.id,
             { role: null },
-            callerContextAs(role, self.id)
+            callerContextAs('moderator', 'someone-else')
         );
 
-        expect(refusalCode(result)).toBe('FORBIDDEN');
-        expect(await heldRole(self.id)).toBe(role);
+        expect(refusalCode(result)).toBe('ROLE_MANAGEMENT_REQUIRED');
+        expect(await heldRole(target.id)).toBe('support');
     });
 
     // A PUT carries `role` on every save; resending the held one changes nothing.

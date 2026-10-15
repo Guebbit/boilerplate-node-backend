@@ -22,7 +22,6 @@ export type {
     ResolveMissReason,
     ResolveOptions,
     PlatformCaller,
-    RoleLevel,
     TenantCaller,
     TenantCallerContext
 } from './auth-context';

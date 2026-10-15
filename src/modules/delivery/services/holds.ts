@@ -141,9 +141,9 @@ const releaseAct = async (
 };
 
 /**
- * Run a hold or a release behind the rank rule, then answer with the fulfillment order.
+ * Run a hold or a release, then answer with the fulfillment order.
  * @param fulfillmentOrderId - the fulfillment order
- * @param act - the act to run once the rank rule has cleared the caller
+ * @param act - the act to run
  * @param action - the audit action to record on success
  * @param authContext - the caller, for the response's own `actions`
  * @param context - the caller, for the audit entry
@@ -161,29 +161,27 @@ const guarded = (
         return orderService.getById(String(found.orderId)).then((order) => {
             if (!order) return generateReject(404, [t('delivery.order-not-found')]);
 
-            return orderService.outrankedRefusalFor(order, context).then((outranked) => {
-                if (outranked) return outranked;
-                return runAct(act).then((result) => {
-                    if (result.refused) return result.reject;
-                    const { fulfillmentOrder } = result.value;
-                    recordAudit(context, {
-                        action,
-                        outcome: 'success',
-                        targetType: 'order',
-                        targetId: String(fulfillmentOrder.orderId),
-                        metadata: { fulfillmentOrderId }
-                    });
-                    return orderService
-                        .getById(String(fulfillmentOrder.orderId))
-                        .then((fresh) =>
+            return runAct(act).then((result) => {
+                if (result.refused) return result.reject;
+                const { fulfillmentOrder } = result.value;
+                recordAudit(context, {
+                    action,
+                    outcome: 'success',
+                    targetType: 'order',
+                    targetId: String(fulfillmentOrder.orderId),
+                    metadata: { fulfillmentOrderId }
+                });
+                return orderService
+                    .getById(String(fulfillmentOrder.orderId))
+                    .then((fresh) =>
+                        generateSuccess(
                             viewFulfillmentOrder(
                                 fulfillmentOrder,
                                 fresh ?? result.value.order,
                                 authContext
                             )
                         )
-                        .then((view) => generateSuccess(view));
-                });
+                    );
             });
         });
     });

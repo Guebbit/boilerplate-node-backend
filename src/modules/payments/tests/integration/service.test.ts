@@ -35,6 +35,8 @@ import {
 } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { withEnvironment } from '@tests/environment';
+import { observePort } from '@tests/ports';
+import * as auditPort from '@infrastructure/observability/audit';
 import {
     FAKE_DECLINE_METHOD,
     fakePaymentProvider,
@@ -53,6 +55,27 @@ import {
     testCallerContext,
     callerContextAs
 } from '@tests/callers';
+
+// The audit port is replaced, not spied on — see `tests/support/ports.ts`.
+jest.mock('@infrastructure/observability/audit', () => {
+    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
+        '@infrastructure/observability/audit'
+    );
+    const emitAuditEvent = jest.fn();
+    return {
+        __esModule: true,
+        ...actual,
+        emitAuditEvent,
+        // `recordAudit` closes over its own module's real `emitAuditEvent`; reroute it.
+        recordAudit: (
+            context: Parameters<typeof actual.recordAudit>[0],
+            fields: Parameters<typeof actual.recordAudit>[1]
+        ) => {
+            if (!context) return;
+            emitAuditEvent(actual.buildAuditEvent(context, fields));
+        }
+    };
+});
 
 setupTestDb();
 
@@ -333,9 +356,9 @@ describe('getForOrder', () => {
         expect(asSelfResult.data?.actions?.refund).toBe(false);
     });
 
-    // A client renders its buttons from `actions`: a refund on an equal's or a superior's money
-    // would be refused (OUTRANKED), so it must not be offered.
-    it('offers the refund on a customer’s money and not once the buyer is a staff member', async () => {
+    // A client renders its buttons from `actions`: holding the key is the whole answer, so the
+    // refund is offered on a staff member's money exactly as on a customer's.
+    it('offers the refund on a customer’s money and on a staff member’s alike', async () => {
         const { user, order } = await paidOrder();
 
         const whileCustomer = await getForOrder(String(order._id), asModerator());
@@ -344,28 +367,46 @@ describe('getForOrder', () => {
 
         expect([whileCustomer.data?.actions?.refund, whileStaff.data?.actions?.refund]).toEqual([
             true,
-            false
+            true
         ]);
     });
 });
 
-// Nobody handles their own money: a buyer promoted to staff keeps their orders, and still
-// cannot refund one — the refusal is a plain FORBIDDEN, and no refund is offered.
+// Own money is trusted and recorded, not refused: a buyer promoted to staff keeps their orders,
+// may refund one, and the audit row says it was their own.
 describe('a refund on one’s own order', () => {
-    it('is refused, and not offered, to a buyer promoted to moderator', async () => {
+    it('is offered, allowed and flagged ownOrder for a buyer promoted to moderator', async () => {
         const { user, order } = await paidOrder();
         await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'moderator');
         const own = asRole('moderator', user.id);
+        const auditSpy = observePort(auditPort.emitAuditEvent);
 
         const offered = await getForOrder(String(order._id), own);
-        const refused = asReject(
-            await refundByOrder(String(order._id), own, callerContextAs('moderator', user.id))
+        const refunded = await refundByOrder(
+            String(order._id),
+            own,
+            callerContextAs('moderator', user.id)
         );
 
-        expect(offered.data?.actions?.refund).toBe(false);
-        expect([refused.status, refused.errors[0].code]).toEqual([403, 'FORBIDDEN']);
-        const payment = await paymentRepository.findByOrderId(String(order._id));
-        expect(payment!.status).toBe('succeeded');
+        expect(offered.data?.actions?.refund).toBe(true);
+        expect(refunded.success).toBe(true);
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: 'admin.payment.refunded',
+                metadata: expect.objectContaining({ ownOrder: true })
+            })
+        );
+    });
+
+    it('is not flagged when the refund is for someone else’s order', async () => {
+        const { order } = await paidOrder();
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await refundByOrder(String(order._id), asModerator(), callerContextAs('moderator'));
+
+        expect(auditSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ metadata: expect.objectContaining({ ownOrder: true }) })
+        );
     });
 });
 
@@ -1347,11 +1388,12 @@ describe('recordOfflinePayment', () => {
         expect(payment!.receivedAt!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
     });
 
-    // Nobody handles their own money: an administrator who raised an order for themselves cannot
-    // also record the cash for it.
-    it('refuses the buyer recording cash on their own order, and leaves it pending', async () => {
+    // Own money is trusted and recorded: an administrator who raised an order for themselves may
+    // also record the cash for it, and the audit row is flagged.
+    it('lets the buyer record cash on their own order, flagged ownOrder', async () => {
         const { user, order } = await orderFor();
         await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
 
         const result = await recordOfflinePayment(
             String(order._id),
@@ -1359,11 +1401,14 @@ describe('recordOfflinePayment', () => {
             callerContextAs('admin', user.id)
         );
 
-        expect([asReject(result).status, asReject(result).errors[0].code]).toEqual([
-            403,
-            'FORBIDDEN'
-        ]);
-        expect((await orderService.getById(String(order._id)))!.status).toBe('pending');
+        expect(result.success).toBe(true);
+        expect((await orderService.getById(String(order._id)))!.status).toBe('paid');
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: 'payment.recorded_offline',
+                metadata: expect.objectContaining({ ownOrder: true })
+            })
+        );
     });
 
     it('refuses an order that is not pending, the same code createIntent uses', async () => {
@@ -1698,7 +1743,7 @@ describe('getForOrder — what the caller may do', () => {
         const payment = await paymentRepository.findByOrderId(String(order._id));
         const stranger = await createUser({ email: 'not-the-payer@example.com' });
 
-        const body = await withActions(payment!, order, auth(stranger));
+        const body = withActions(payment!, order, auth(stranger));
 
         expect(body.actions?.pay).toBe(false);
     });

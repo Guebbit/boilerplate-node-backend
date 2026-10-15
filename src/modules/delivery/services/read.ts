@@ -39,16 +39,17 @@ export const getForOrder = (
     orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
 
+        const standing = standingOn(order, authContext);
+
         return ensureFulfillmentOrders(orderId)
             .then(() =>
                 Promise.all([
                     fulfillmentOrderRepository.findByOrderId(orderId),
                     shipmentRepository.findByOrderId(orderId),
-                    orderService.getById(orderId),
-                    standingOn(order, authContext)
+                    orderService.getById(orderId)
                 ])
             )
-            .then(([fulfillmentOrders, shipments, fresh, standing]) => {
+            .then(([fulfillmentOrders, shipments, fresh]) => {
                 // The order as `ensure` left it: its status may have moved while it ran.
                 const current = fresh ?? order;
                 return generateSuccess({

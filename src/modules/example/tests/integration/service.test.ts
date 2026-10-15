@@ -279,15 +279,14 @@ describe('update', () => {
         asSuccess(await update(String(theirs._id), { title: 'Edited by staff' }, admin));
     });
 
-    it('refuses an administrator editing a fellow administrator’s example, and leaves it untouched', async () => {
+    it('lets an administrator edit a fellow administrator’s example: nothing ranks, the key is the rule', async () => {
         const peer = await anotherAdmin();
         const { context: admin } = await anAdmin();
         const theirs = await createExample({ userId: peer.id, title: 'Theirs' });
 
-        const refused = asReject(await update(String(theirs._id), { title: 'Mine now' }, admin));
+        asSuccess(await update(String(theirs._id), { title: 'Edited by a peer' }, admin));
 
-        expect(refused.status).toBe(403);
-        expect(await fieldOf(String(theirs._id), 'title')).toBe('Theirs');
+        expect(await fieldOf(String(theirs._id), 'title')).toBe('Edited by a peer');
     });
 
     it('answers 404 for an id nothing holds', async () => {
@@ -458,13 +457,14 @@ describe('remove', () => {
         expect(await exampleRepository.findById(String(theirs._id))).not.toBeNull();
     });
 
-    it('refuses an administrator deleting a fellow administrator’s example, and keeps it', async () => {
+    it('lets an administrator delete a fellow administrator’s example', async () => {
         const peer = await anotherAdmin();
         const { context: admin } = await anAdmin();
         const theirs = await createExample({ userId: peer.id });
 
-        expect(asReject(await remove(String(theirs._id), admin)).status).toBe(403);
-        expect(await exampleRepository.findById(String(theirs._id))).not.toBeNull();
+        asSuccess(await remove(String(theirs._id), admin));
+
+        expect(await exampleRepository.findById(String(theirs._id))).toBeNull();
     });
 
     it('lets examples.any.delete remove anyone’s, and audits it', async () => {

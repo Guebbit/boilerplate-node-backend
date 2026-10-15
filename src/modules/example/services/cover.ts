@@ -24,7 +24,7 @@ import { afterCommit } from '@infrastructure/runtime/after-commit';
 import type { ImageChanges } from '@infrastructure/http/uploads';
 import { accessibleFilterFor } from '@kernel/access/query';
 import { exampleAuditActions } from '../audit';
-import { outrankedRefusalFor, presentWithOwner } from './owner';
+import { presentWithOwner } from './owner';
 import type { ExampleDocument } from '../model';
 import { exampleRepository } from '../repository';
 
@@ -86,8 +86,8 @@ const applyCover = (
  * @param id - the example's id
  * @param image - the image fields the upload middleware produced
  * @param context - the caller; they need `update` on the example
- * @returns 404 when the caller may not edit one by that id, 403 `OUTRANKED` for an owner at or
- *   above the caller, otherwise the example with its new cover
+ * @returns 404 when the caller may not edit one by that id, otherwise the example with its new
+ *   cover
  */
 export const setCover = (
     id: string,
@@ -99,7 +99,5 @@ export const setCover = (
         .then((example) => {
             if (!example) return generateReject(404, [t('example.not-found')]);
 
-            return outrankedRefusalFor(example, context).then(
-                (outranked) => outranked ?? applyCover(example, image, context)
-            );
+            return applyCover(example, image, context);
         });

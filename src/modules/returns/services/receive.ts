@@ -299,10 +299,6 @@ export const receiveReturn = (
         return orderService.getById(String(returned.orderId)).then((order) => {
             if (!order) return generateReject(404, [t('returns.order-not-found')]);
 
-            // Nobody handles their own money: staff receive goods for a customer's return, never
-            // their own, an equal's or a superior's — receiving opens the refund.
-            return orderService
-                .ownMoneyRefusalFor(order, context)
-                .then((outranked) => outranked ?? receiveFor(id, returned, order, input, context));
+            return receiveFor(id, returned, order, input, context);
         });
     });

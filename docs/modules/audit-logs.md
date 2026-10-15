@@ -124,9 +124,9 @@ flowchart LR
 `searchIncidents`, which ANDs the operator's own filters with an allow-list (`INCIDENT_SCOPE` in
 `service.ts`): the `security.*` actions, a refused sign-in, a failed second-factor
 challenge or provider sign-in, a reused refresh token and an auto-disabled webhook. The one
-`security.forbidden` it drops is the shop's own rank refusals (`metadata.reason` is `outranked` or
-`own`): staff refused a thing that belongs to an equal, a superior or themselves is the shop's
-business and names an account. Orders, payments, products and successful sign-ins stay on the shop's own `GET /audit`, and every address
+`security.forbidden` it drops is the shop's own refusal of a staff account (`metadata.reason` is
+`role_protected`): staff refused an account that holds a role is the shop's business and names an
+account. Orders, payments, products and successful sign-ins stay on the shop's own `GET /audit`, and every address
 is returned as a keyed digest (`hmac:…`): the operator can correlate "this address, three
 incidents" and never read the address. An operator watching an installation needs the incidents,
 and holding no shop key was never meant to include reading a shop's customers.

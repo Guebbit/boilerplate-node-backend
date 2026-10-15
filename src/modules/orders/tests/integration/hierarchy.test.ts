@@ -1,11 +1,10 @@
 /**
  * @module
- * Who may change which order. Two questions, asked in this order after the route's key:
- *
- * - **the write's own scope** — a warehouse or support account READS every order, and that read
- *   key never lets it cancel one; a customer cancels only their own;
- * - **the rank rule** — an operator handling someone else's order needs the buyer strictly below
- *   them, so a staff member's order is one only an admin handles.
+ * Who may change which order. One question after the route's key: **the write's own scope** — a
+ * warehouse or support account READS every order, and that read key never lets it cancel one; a
+ * customer cancels only their own. There is no second question: an operator who holds the key
+ * handles any order, a staff member's and their own included, because a role is only a bundle of
+ * keys.
  *
  * Driven through the service, one cell per caller role and buyer role.
  */
@@ -16,7 +15,6 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { orderService } from '@modules/orders/services';
 import { OrderStatus } from '@types';
-import type { ResponseReject } from '@infrastructure/http/response';
 import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { orderRepository } from '../../repository';
 
@@ -35,12 +33,6 @@ const orderOf = async (role: string, status: OrderStatus = OrderStatus.pending) 
 
 /** The stored status of an order — a refusal must leave it as it was. */
 const statusOf = (id: string) => orderRepository.findById(id).then((order) => order?.status);
-
-/** The refusal's first error code, for a result that must be one. */
-const refusalCode = (result: { success: boolean }): string | undefined => {
-    expect(result.success).toBe(false);
-    return (result as ResponseReject).errors[0]?.code;
-};
 
 describe('cancelById — the write’s own scope', () => {
     // A warehouse and a support agent both hold `orders.any.read`: that is a read, not a cancel.
@@ -108,7 +100,7 @@ describe('cancelById — the write’s own scope', () => {
     );
 });
 
-/** The six action fields the rank rule and the buyer decide, for a caller reading an order. */
+/** The six action fields the caller's keys and the buyer decide, for a caller reading an order. */
 const actionsFor = (orderId: string, role: string, callerId: string) =>
     orderService
         .getById(orderId)
@@ -146,7 +138,7 @@ describe('what an order offers each caller — what a client renders', () => {
         }
     );
 
-    it('offers an operator the cancel on a customer’s order, and not on a staff member’s', async () => {
+    it('offers an operator the cancel on a customer’s order and on a staff member’s alike', async () => {
         const customers = await orderOf('customer');
         const staffs = await orderOf('support');
 
@@ -155,12 +147,11 @@ describe('what an order offers each caller — what a client renders', () => {
             actionsFor(String(staffs._id), 'moderator', STAFF_ID)
         ]);
 
-        expect([onCustomer.cancel, onStaff.cancel]).toEqual([true, false]);
-        expect(onStaff.transitions).toEqual([]);
-        expect(onStaff.override).toEqual([]);
+        expect([onCustomer.cancel, onStaff.cancel]).toEqual([true, true]);
+        expect(onStaff.transitions).not.toEqual([]);
     });
 
-    it('offers the delivery door on a customer’s paid order and not on a staff member’s', async () => {
+    it('offers the delivery door on a customer’s paid order and on a staff member’s alike', async () => {
         const customers = await orderOf('customer', OrderStatus.paid);
         const staffs = await orderOf('support', OrderStatus.paid);
 
@@ -169,7 +160,7 @@ describe('what an order offers each caller — what a client renders', () => {
             actionsFor(String(staffs._id), 'manager', STAFF_ID)
         ]);
 
-        expect([onCustomer.start, onStaff.start]).toEqual([true, false]);
+        expect([onCustomer.start, onStaff.start]).toEqual([true, true]);
     });
 
     // The operator's "record money by hand" door: pay is the buyer's, this one is not.
@@ -186,13 +177,14 @@ describe('what an order offers each caller — what a client renders', () => {
         expect([byBuyer.recordPayment, byBuyer.pay]).toEqual([false, true]);
     });
 
-    // Nobody handles their own money: an administrator's own unpaid order offers them no cash step.
-    it('withholds the offline payment from the buyer on their own order, whatever they rank', async () => {
+    // Own money is trusted and recorded, not refused: an administrator's own unpaid order offers
+    // them the cash step like anyone else's, and the audit row carries `ownOrder`.
+    it('offers the offline payment to the buyer on their own order, whatever they hold', async () => {
         const order = await orderOf('admin');
 
         const actions = await actionsFor(String(order._id), 'admin', String(order.userId));
 
-        expect(actions.recordPayment).toBe(false);
+        expect(actions.recordPayment).toBe(true);
     });
 
     // `pay` is every buyer's step: a staff member or an administrator is a customer too, so the
@@ -208,33 +200,30 @@ describe('what an order offers each caller — what a client renders', () => {
         }
     );
 
-    it('withholds the offline payment once the order is paid, from a role without the key and over a higher rank', async () => {
+    it('withholds the offline payment once the order is paid, and from a role without the key', async () => {
         const paid = await orderOf('customer', OrderStatus.paid);
         const unpaid = await orderOf('unverified');
-        const staffs = await orderOf('support');
 
-        const [afterPaid, withoutKey, overHigherRank] = await Promise.all([
+        const [afterPaid, withoutKey] = await Promise.all([
             actionsFor(String(paid._id), 'admin', STAFF_ID),
-            actionsFor(String(unpaid._id), 'warehouse', STAFF_ID),
-            actionsFor(String(staffs._id), 'moderator', STAFF_ID)
+            actionsFor(String(unpaid._id), 'warehouse', STAFF_ID)
         ]);
 
         expect(afterPaid.recordPayment).toBe(false);
         expect(withoutKey.recordPayment).toBe(false);
-        expect(overHigherRank.recordPayment).toBe(false);
     });
 });
 
-describe('the rank rule on an order', () => {
-    // [caller, buyer, expected]
+describe('no rank on an order', () => {
+    // [caller, buyer]: every operator handles every buyer's order.
     it.each([
-        ['moderator', 'customer', 'allowed'],
-        ['admin', 'customer', 'allowed'],
-        ['admin', 'moderator', 'allowed'],
-        ['moderator', 'support', 'OUTRANKED'],
-        ['moderator', 'admin', 'OUTRANKED'],
-        ['admin', 'admin', 'OUTRANKED']
-    ])('%s cancelling a %s’s order: %s', async (callerRole, buyerRole, expected) => {
+        ['moderator', 'customer'],
+        ['admin', 'customer'],
+        ['admin', 'moderator'],
+        ['moderator', 'support'],
+        ['moderator', 'admin'],
+        ['admin', 'admin']
+    ])('%s cancelling a %s’s order succeeds', async (callerRole, buyerRole) => {
         const order = await orderOf(buyerRole);
 
         const result = await orderService.cancelById(
@@ -244,11 +233,10 @@ describe('the rank rule on an order', () => {
             callerContextAs(callerRole, STAFF_ID)
         );
 
-        if (expected === 'allowed') expect(result.success).toBe(true);
-        else expect(refusalCode(result)).toBe(expected);
+        expect(result.success).toBe(true);
     });
 
-    it('applies to amending, deleting and restoring an order', async () => {
+    it('lets an operator amend, delete and restore a staff member’s order', async () => {
         const order = await orderOf('admin');
         const id = String(order._id);
         const moderator = callerContextAs('moderator', STAFF_ID);
@@ -256,22 +244,13 @@ describe('the rank rule on an order', () => {
         const results = [
             await orderService.updateById(id, { email: 'taken@over.test' }, moderator),
             await orderService.removeById(id, false, moderator),
-            await orderService.removeById(id, true, moderator),
-            await orderService.restoreById(id, moderator),
-            await orderService.overrideStatus(id, OrderStatus.shipped, 'forced', moderator)
+            await orderService.restoreById(id, moderator)
         ];
 
-        expect(results.map((result) => refusalCode(result))).toEqual([
-            'OUTRANKED',
-            'OUTRANKED',
-            'OUTRANKED',
-            'OUTRANKED',
-            'OUTRANKED'
-        ]);
-        expect(await orderRepository.findById(id)).toMatchObject({ deletedAt: undefined });
+        expect(results.map((result) => result.success)).toEqual([true, true, true]);
     });
 
-    it('lets an admin handle their own order, which the rule never covers', async () => {
+    it('lets an admin handle their own order', async () => {
         const buyer = await createUser({ email: 'me@admin.test', username: 'me' }, 'admin');
         const product = await createProduct();
         const order = await createOrder(buyer, [toOrderItem(product, 1)]);
@@ -285,7 +264,7 @@ describe('the rank rule on an order', () => {
         expect(result.success).toBe(true);
     });
 
-    it('never refuses the system actor, whose sweep cancels any order', async () => {
+    it('lets the system actor cancel any order, as its sweep does', async () => {
         const order = await orderOf('admin');
 
         const result = await orderService.cancelById(String(order._id), SYSTEM_ACTOR);

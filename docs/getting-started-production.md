@@ -198,7 +198,7 @@ docker compose --env-file "clients/<name>/.env" -f docker-compose.production.yml
 One membership per person per place, so the same command also _changes_ a role. An administrator
 that was switched off, or erased, comes back with `db.users.updateOne({ _id: ObjectId("<id>") },
 { $set: { active: true }, $unset: { deletedAt: "" } })`. The app has no way to do either on an
-administrator's behalf: nobody outranks one ([Authorization](./theory/authorization.md#acting-on-someone-else-s-things)).
+administrator's behalf: only a role manager changes one, and the app has no role manager above an administrator ([Authorization](./theory/authorization.md#protecting-people)).
 
 ## Publish a disclosure contact
 

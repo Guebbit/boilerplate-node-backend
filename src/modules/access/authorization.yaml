@@ -1,0 +1,12 @@
+keys:
+    # -- roles ---------------------------------------------------------------------------------
+    # The one permission that protects PEOPLE. Whoever holds it may hand a staff role to an account
+    # or take it away, and may edit, ban or erase an account that already holds one. Everyone else
+    # with a users key changes customers only, so a moderator who may erase accounts cannot erase
+    # the administrator's. A role is a bundle of keys and nothing else: there is no level to rank.
+    - key: roles.any.assign
+      module: access
+      subject: Role
+      action: assign
+      scope: tenant
+      description: Hand a staff role to an account or take it away, and change an account that holds one — edit, ban, erase. Held by administrators.

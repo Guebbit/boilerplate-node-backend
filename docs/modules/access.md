@@ -5,7 +5,7 @@
 where.
 **Depends on** — nothing. It sits low enough in the graph that [`account`](./account.md),
 [`api-keys`](./api-keys.md) and [`users`](./users.md) all import it, never the reverse.
-**Breaks if you change** — the escalation refusal in `assignRole`, and `canActOn`: the two things
+**Breaks if you change** — the role-management refusal in `assignRole`, and `canChangeAccount`: the two things
 standing between any grant form, or any writer, and a privilege-escalation endpoint.
 :::
 
@@ -23,23 +23,21 @@ flowchart LR
     account["account"]
     api_keys["api-keys"]
     audit_logs["audit-logs"]
-    example["example"]
-    orders["orders"]
+    payments["payments"]
     users["users"]
 
     account --> access
     api_keys --> access
     audit_logs --> access
-    example --> access
-    orders --> access
+    payments --> access
     users --> access
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class orders core;
-    class account,api_keys,audit_logs,example,users generic;
+    class payments supporting;
+    class account,api_keys,audit_logs,users generic;
     class access centre;
 ```
 
@@ -115,16 +113,16 @@ Either the account and all its roles go, or none of them does: a failing later h
 role deletion back with it, so no account is ever left alive without the roles it held. No
 membership row survives the user it points at.
 
-## Whose things a role may touch
+## Whose accounts a role may touch
 
-A key says what kind of thing; it never said whose. Every role carries a **level** (`admin`,
-`staff` or `user`, in `shared/authorization-roles.yaml`), and a write on someone else's thing
-needs the owner to rank strictly below the caller, or it is a `403 OUTRANKED`. `canActOn` answers
-it for a user id, `outrankedRefusal` wraps it into the envelope the services return, and
-`levelOfUser` / `levelsOfMany` read an owner's level from their memberships, the higher of two
-roles winning. The rule, its exemptions and where each service asks it are on
-[Authorization](../theory/authorization.md#acting-on-someone-else-s-things); this module owns only
-the question, never the places it is asked.
+A key says what kind of thing; it never said whose. An account that holds a staff role may be
+changed only by a holder of `roles.any.assign`, or it is a `403 ROLE_MANAGEMENT_REQUIRED`.
+`canChangeAccount` answers it for a user id, `roleProtectedRefusal` wraps it into the envelope the
+services return, and `holdsStaffRole` / `staffHoldersAmong` read from the memberships whether an
+account holds a role in either scope. A role has no level and nothing ranks. The rule, its
+exemptions and where each service asks it are on
+[Authorization](../theory/authorization.md#protecting-people); this module owns only the question,
+never the places it is asked.
 
 ## Related pages
 

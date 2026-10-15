@@ -1,7 +1,6 @@
 {
     "users": {
         "not-found": "L'utente richiesto non è stato trovato.",
-        "own-role-change": "Nessuno può cambiare il proprio ruolo.",
         "hard-deleted": "L'utente è stato eliminato definitivamente.",
         "soft-deleted": "L'utente è stato eliminato logicamente (disattivato).",
         "restored": "Utente ripristinato. Le sue sessioni restano disconnesse.",

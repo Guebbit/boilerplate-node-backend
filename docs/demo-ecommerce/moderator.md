@@ -72,12 +72,13 @@ for the platform operator, reached through a different door with a different key
 nothing about the platform, only about this shop, which is exactly the key a shop's own staff can
 be handed. → [`audit-logs`](../modules/audit-logs.md)
 
-## What a moderator ranks above
+## What a moderator protects
 
-Every write on someone else's thing needs the owner to rank **strictly below** the caller
-([the rule](../theory/authorization.md#acting-on-someone-else-s-things)). A moderator is staff: it
+An account that holds a staff role may be changed only by a holder of `roles.any.assign`
+([the rule](../theory/authorization.md#protecting-people)). A moderator does not hold it: it
 can ban, edit and erase a customer, and it cannot touch another staff member or an administrator,
-whatever the keys say; the refusal is `403 OUTRANKED`. It cannot change its own role either. A
+whatever the other keys say; the refusal is `403 ROLE_MANAGEMENT_REQUIRED`. It cannot hand out a
+role either. A
 moderator holds no `orders.any.delete` or `orders.any.create`: sorting an order out is updating it,
 and removing or raising one on someone's behalf is [the manager's](./manager.md) job.
 

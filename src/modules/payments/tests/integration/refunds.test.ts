@@ -143,7 +143,7 @@ describe('a partial refund', () => {
 
         await refund(orderId, { amount: 30 });
         await refund(orderId);
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        await settleOutboxNudges();
 
         expect(events.map(({ amount, full }) => ({ amount, full }))).toEqual([
             { amount: 30, full: false },
@@ -160,7 +160,7 @@ describe('a partial refund', () => {
         const { orderId } = await paidOrder();
 
         await refund(orderId);
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        await settleOutboxNudges();
 
         expect(events).toEqual([expect.objectContaining({ full: true })]);
     });

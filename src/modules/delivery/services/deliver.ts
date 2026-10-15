@@ -125,27 +125,25 @@ export const deliverShipment = (
         return orderService.getById(String(found.orderId)).then((order) => {
             if (!order) return generateReject(404, [t('delivery.order-not-found')]);
 
-            return orderService.outrankedRefusalFor(order, context).then((outranked) => {
-                if (outranked) return outranked;
-                return runAct((session) => deliverAct(shipmentId, input, context, session)).then(
-                    (result) => {
-                        if (result.refused) return result.reject;
-                        const { shipment } = result.value;
-                        return notifyDelivered(String(shipment.orderId), shipment)
-                            .then(() => {
-                                recordAudit(context, {
-                                    action: deliveryAuditActions.ADMIN_ORDER_DELIVERED,
-                                    outcome: 'success',
-                                    targetType: 'order',
-                                    targetId: String(shipment.orderId),
-                                    metadata: { shipmentId, forced: input.forced === true }
-                                });
-                            })
-                            .then(() => viewShipment(shipment, result.value.order, authContext))
-                            .then((view) => generateSuccess(view));
-                    }
-                );
-            });
+            return runAct((session) => deliverAct(shipmentId, input, context, session)).then(
+                (result) => {
+                    if (result.refused) return result.reject;
+                    const { shipment } = result.value;
+                    return notifyDelivered(String(shipment.orderId), shipment)
+                        .then(() => {
+                            recordAudit(context, {
+                                action: deliveryAuditActions.ADMIN_ORDER_DELIVERED,
+                                outcome: 'success',
+                                targetType: 'order',
+                                targetId: String(shipment.orderId),
+                                metadata: { shipmentId, forced: input.forced === true }
+                            });
+                        })
+                        .then(() =>
+                            generateSuccess(viewShipment(shipment, result.value.order, authContext))
+                        );
+                }
+            );
         });
     });
 };

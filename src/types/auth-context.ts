@@ -15,13 +15,6 @@ export const AUTHORIZATION_SCOPES = ['tenant', 'platform'] as const;
 export type AuthorizationScope = (typeof AUTHORIZATION_SCOPES)[number];
 
 /**
- * Where a person ranks, read off the `level:` of their role in `shared/authorization-roles.yaml`.
- * The second question after the keys: acting on somebody else's thing needs the owner strictly
- * below the caller — see `access/service.ts#assertCanActOn`.
- */
-export type RoleLevel = 'admin' | 'staff' | 'user';
-
-/**
  * The resolved caller — both the kernel resolver's own answer and the transport-safe shape
  * threaded through the request. One interface, not two, so the resolver's answer and the DTO
  * cannot drift out of field-for-field sync.
@@ -141,11 +134,6 @@ export interface TenantCaller {
      * boundary (`infrastructure` may not reach `kernel` — see `eslint.config.ts`).
      */
     system: boolean;
-    /**
-     * The highest {@link RoleLevel} among the roles this person holds, in either scope — what the
-     * rank rule compares. An API key carries its minter's. A stranger is `user`.
-     */
-    level: RoleLevel;
 }
 
 /** A caller acting over the installation itself, which has no shop to be scoped to. */
@@ -161,8 +149,6 @@ export interface PlatformCaller {
     unrestricted: boolean;
     /** Same as {@link TenantCaller.system} — `SYSTEM_ACTOR` never actually resolves to this arm (it holds no platform role), but the field stays on both so a `Caller` read never has to narrow first. */
     system: boolean;
-    /** Same as {@link TenantCaller.level}. */
-    level: RoleLevel;
 }
 
 /**

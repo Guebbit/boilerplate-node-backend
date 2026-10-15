@@ -326,10 +326,10 @@ sequenceDiagram
 **Who may.** The buyer, as part of their withdrawal (`reason: withdrawal`; never on goods Art. 16
 excludes, and inside the window). **Staff** (out of stock for good, a sweep that got no answer) need
 the **refund key**, `payments.any.update` — `stepUp: critical`, so the route asks for a fresh session —
-held by moderator and admin; the manager and the warehouse do not hold it. `ownMoneyRefusal` and the
-rank rule apply, as on every door that sends money out: nobody refunds their own order, nor one whose
-buyer ranks at or above them. No new key and no new verb: it is one more thing the refund permission
-already means.
+held by moderator and admin; the manager and the warehouse do not hold it. Holding the key is the
+whole rule, as on every door that sends money out: a refund of one's own order is allowed and its
+audit row is flagged `ownOrder` ([your own money](../theory/authorization.md#your-own-money)). No
+new key and no new verb: it is one more thing the refund permission already means.
 
 Refused: `RETURN_CANCELLATION_INVALID` (422) — no `fulfillmentOrderId`, `lines` sent, or a return that
 names one; `RETURN_NOTHING_TO_CANCEL` (409) — nothing has shipped (cancel the order instead), or

@@ -17,7 +17,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import type { AfterErase } from '@kernel/registry';
-import { outrankedRefusal } from '@modules/access';
+import { roleProtectedRefusal } from '@modules/access';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { personalDataErasers } from '../erasure-registry';
@@ -130,10 +130,10 @@ export const remove = (
  * Undo a soft delete. The account's sessions stay revoked: the owner logs in again.
  *
  * @param id - the user to restore
- * @param context - records `ADMIN_USER_RESTORED`, and ranks the caller against the account; omit
+ * @param context - records `ADMIN_USER_RESTORED`, and judges the caller against the account; omit
  *   for a caller with no request behind it
- * @returns the restored user; 404 when there is none, 403 `OUTRANKED` when the account ranks at or
- *   above the caller, 409 when it is not soft-deleted
+ * @returns the restored user; 404 when there is none, 403 `ROLE_MANAGEMENT_REQUIRED` when the
+ *   account holds a staff role the caller may not manage, 409 when it is not soft-deleted
  */
 export const restoreById = (
     id: string,
@@ -142,7 +142,7 @@ export const restoreById = (
     userRepository.findById(id).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
 
-        return outrankedRefusal(context, id, 'user').then((refusal) => {
+        return roleProtectedRefusal(context, id).then((refusal) => {
             if (refusal) return refusal;
             if (!user.deletedAt) return generateReject(409, [t('users.not-deleted')]);
             user.deletedAt = undefined;
@@ -160,9 +160,9 @@ export const restoreById = (
     });
 
 /**
- * Remove a user by ID (soft or hard delete). Fetches the document, refuses an account that ranks
- * at or above the caller, then delegates to remove().
- * @param context - forwarded to {@link remove} for the audit row, and the caller {@link outrankedRefusal} ranks
+ * Remove a user by ID (soft or hard delete). Fetches the document, refuses a staff account the
+ * caller may not manage, then delegates to remove().
+ * @param context - forwarded to {@link remove} for the audit row, and the caller {@link roleProtectedRefusal} judges
  */
 export const removeById = (
     id: string,
@@ -172,7 +172,7 @@ export const removeById = (
     userRepository.findById(id).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
 
-        return outrankedRefusal(context, id, 'user').then(
+        return roleProtectedRefusal(context, id).then(
             (refusal) => refusal ?? remove(user, hardDelete, context)
         );
     });

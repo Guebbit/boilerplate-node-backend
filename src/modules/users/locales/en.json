@@ -1,7 +1,6 @@
 {
     "users": {
         "not-found": "The requested user was not found.",
-        "own-role-change": "Nobody can change their own role.",
         "hard-deleted": "User was permanently deleted.",
         "soft-deleted": "User was soft deleted (deactivated).",
         "restored": "User restored. Their sessions stay signed out.",

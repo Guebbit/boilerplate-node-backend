@@ -40,10 +40,10 @@ x-error-codes:
             status: 403,
             description: "The caller is authenticated but lacks the permission this route requires. A key's own `deniedCode` can replace this default with a more specific one."
         }
-    OUTRANKED:
+    ROLE_MANAGEMENT_REQUIRED:
         {
             status: 403,
-            description: "The caller holds the permission this route requires, but the person whose account, order, payment, return or API key it would change ranks at or above the caller. The one exception is the caller's own: staff and administrators change what is theirs, never what belongs to an equal or a superior. The four steps that move money (recording a payment by hand, a refund, approving a return, receiving a return) refuse the caller's own order too, with a plain `FORBIDDEN`."
+            description: "The caller holds the permission this route requires, but the account it would change holds a staff role, and only a holder of `roles.any.assign` may change such an account. Staff without it change customers only. The caller's own account is never refused."
         }
     NOT_FOUND:
         {
@@ -810,10 +810,10 @@ components:
                     format: date-time
                 # What the CALLER may do to this account, decided by the server — present on the
                 # `/users` reads and writes, absent on `/account` (a person's own record has no
-                # one to rank). A client renders its controls from this rather than from the role
-                # names: the answer is the route's key AND the rank rule ("is this account below
-                # you?"), and a second copy of that in a separately deployed client is how the two
-                # come to disagree.
+                # one to protect). A client renders its controls from this rather than from the
+                # role names: the answer is the route's key AND the protection of staff accounts
+                # ("does it hold a role only a role manager may touch?"), and a second copy of that
+                # in a separately deployed client is how the two come to disagree.
                 actions:
                     $ref: '#/components/schemas/UserActions'
 
@@ -823,27 +823,28 @@ components:
             required: [update, ban, delete]
             description: >-
                 What the requesting caller may do to this account. Each is the route's permission
-                key AND the rank rule: an account at the caller's own level or above is
-                `false` for all three, the caller's own account is judged by the keys alone.
+                key AND the protection of staff accounts: an account that holds a staff role is
+                `false` for all three unless the caller holds `roles.any.assign`; the caller's own
+                account is judged by the keys alone.
             properties:
                 update:
                     type: boolean
                     description: >-
                         Whether `PUT`/`PATCH /users/{id}` would be accepted for the profile fields
-                        — `users.any.update`, and the account ranks below the caller. Never covers
+                        — `users.any.update`, and the account is not a staff account the caller may not manage. Never covers
                         a credential: no caller changes another person's email, password or second
                         factor.
                 ban:
                     type: boolean
                     description: >-
                         Whether the account may be deactivated or reactivated — `users.any.ban`,
-                        and the account ranks below the caller.
+                        and the account is not a staff account the caller may not manage.
                 delete:
                     type: boolean
                     description: >-
                         Whether `DELETE /users/{id}` (soft or hard) and `POST /users/{id}/restore`
-                        would be accepted — `users.any.delete`, and the account ranks below the
-                        caller.
+                        would be accepted — `users.any.delete`, and the account is not a staff
+                        account the caller may not manage.
 
         # For the path-form deletes, which need no id — `{id}` already carries it — but do
         # read the flag from a body as readily as from the query.

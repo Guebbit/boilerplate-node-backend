@@ -40,34 +40,25 @@ export const editShipmentTracking = (
         return orderService.getById(String(found.orderId)).then((order) => {
             if (!order) return generateReject(404, [t('delivery.order-not-found')]);
 
-            return orderService.outrankedRefusalFor(order, context).then((outranked) => {
-                if (outranked) return outranked;
-                if (trackingCode === undefined)
-                    return viewShipment(found, order, authContext).then((view) =>
-                        generateSuccess(view)
-                    );
+            if (trackingCode === undefined)
+                return generateSuccess(viewShipment(found, order, authContext));
 
-                return shipmentRepository
-                    .setTrackingCode(shipmentId, trackingCode)
-                    .then((edited) => {
-                        if (!edited)
-                            return generateReject(409, [
-                                {
-                                    code: ERROR_CODES.DELIVERY_NOT_DELIVERABLE,
-                                    message: t('delivery.not-deliverable')
-                                }
-                            ]);
-                        recordAudit(context, {
-                            action: deliveryAuditActions.ADMIN_SHIPMENT_TRACKING_EDITED,
-                            outcome: 'success',
-                            targetType: 'order',
-                            targetId: String(edited.orderId),
-                            metadata: { shipmentId }
-                        });
-                        return viewShipment(edited, order, authContext).then((view) =>
-                            generateSuccess(view)
-                        );
-                    });
+            return shipmentRepository.setTrackingCode(shipmentId, trackingCode).then((edited) => {
+                if (!edited)
+                    return generateReject(409, [
+                        {
+                            code: ERROR_CODES.DELIVERY_NOT_DELIVERABLE,
+                            message: t('delivery.not-deliverable')
+                        }
+                    ]);
+                recordAudit(context, {
+                    action: deliveryAuditActions.ADMIN_SHIPMENT_TRACKING_EDITED,
+                    outcome: 'success',
+                    targetType: 'order',
+                    targetId: String(edited.orderId),
+                    metadata: { shipmentId }
+                });
+                return generateSuccess(viewShipment(edited, order, authContext));
             });
         });
     });

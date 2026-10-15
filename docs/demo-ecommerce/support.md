@@ -61,7 +61,8 @@ Support fixes a customer's details (a phone number, a name) and nothing that is 
 to prove: there is no password, email or second-factor reset on anyone's behalf, because those are
 the owner's alone. It cannot ban or reactivate an account either: that is `users.any.ban`, the
 [moderator's](./moderator.md) key. And it works only on customers: another staff member's account
-ranks at or above it, so an edit is refused with `403 OUTRANKED`.
+holds a role only a role manager may touch, so an edit is refused with
+`403 ROLE_MANAGEMENT_REQUIRED`.
 :::
 
 A person can see every device currently signed in to their account and end any of them, or all of

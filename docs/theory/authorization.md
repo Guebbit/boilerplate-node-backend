@@ -132,85 +132,7 @@ invent a key, because a key nothing checks grants nothing while looking like it 
 A role's ASSIGNMENT — who holds it, where — is the one thing the database stores; see
 [Where it lives](#where-it-lives).
 
-## Acting on someone else's things
-
-A key says _what kind_ of thing you may touch. It does not say _whose_. Without a second rule, a
-support agent who holds `users.any.update` may edit the administrator's account, which is a
-privilege escalation with extra steps. So every role has a **level**, and a write on another
-person's thing must clear it.
-
-| Level   | Roles                                                    | Why                                      |
-| ------- | -------------------------------------------------------- | ---------------------------------------- |
-| `admin` | `admin`, `operator`, `system`                            | runs the shop, or the installation       |
-| `staff` | `manager`, `warehouse`, `support`, `editor`, `moderator` | works in the shop under an administrator |
-| `user`  | `customer`, `unverified`, and a visitor                  | shops                                    |
-
-> **R1.** After the route's key is held, a write on someone else's thing needs the owner to rank
-> strictly **below** the caller. Otherwise the answer is `403 OUTRANKED`.
-
-Four details carry the rule:
-
-- **Your own things are exempt** from the comparison, so an administrator still edits their own
-  account. Two exceptions: nobody changes their **own role** (promotion is somebody else's act),
-  and nobody handles **their own money** ([below](#nobody-handles-their-own-money)).
-- **Two roles count at the higher one**: an account that is a `support` agent and the platform
-  `operator` is an `admin`-level owner.
-- **An API key acts at its minter's level**, re-read on every request, so demoting the minter
-  lowers the key with them.
-- **No one outranks an administrator**, and an administrator does not outrank one. Switching an
-  administrator off, or back on, is therefore not something the app does; it is a technician's
-  edit of the database, by decision.
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
-flowchart TD
-    accTitle: How a write on someone else's thing is decided
-    accDescr: The route first requires the key. A write on the caller's own thing is allowed, except changing their own role and the four steps that move money, which answer FORBIDDEN. Otherwise the owner's level is read from the database and compared with the caller's, and a caller who does not rank strictly above the owner is refused with OUTRANKED.
-
-    K{"holds the route's key?"} -- no --> F403["403 FORBIDDEN"]
-    K -- yes --> O{"the caller's own thing?"}
-    O -- yes --> M{"a step that moves money?"}
-    M -- yes --> OWN["403 FORBIDDEN<br/><i>nobody handles their own money</i>"]
-    M -- no --> R{"changing their own role?"}
-    R -- yes --> F403
-    R -- no --> OK["allowed"]
-    O -- no --> L{"caller's level above the owner's?"}
-    L -- no --> OUT["403 OUTRANKED<br/><i>audited as security.forbidden</i>"]
-    L -- yes --> OK
-
-    classDef good fill:#dcfce7,stroke:#16a34a,color:#111827;
-    classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
-    class OK good;
-    class F403,OUT,OWN bad;
-```
-
-**Where it is applied.** `canActOn` and `outrankedRefusal` in `@modules/access` answer it; each
-service that writes on a person's behalf asks before it changes anything — before it reads the
-row where the owner is a known id, after the scoped read where the owner is on the row (`example`):
-
-| Writes on  | Asked in                                                          |
-| ---------- | ----------------------------------------------------------------- |
-| a user     | `users`: edit, delete, restore                                    |
-| an order   | `orders`: cancel, edit, delete, override; `delivery`: start, ship |
-| a payment  | `payments`: record by hand, refund                                |
-| a return   | `returns`: decide, receive                                        |
-| an example | `example`: edit, replace, delete, cover — the pattern to copy     |
-
-Revoking someone else's API key is **not** ranked: it only takes access away, so any administrator
-may revoke a fellow administrator's leaked key (Stripe and GitHub work the same way). Banning a
-compromised administrator stays the technician's edit of the database.
-
-The owner of an order, payment or return is its buyer. The read side tells a client the same
-thing: the `actions` block on a user, order, payment or return already has the rank applied, so a
-screen renders only what would be accepted, and never counts levels itself.
-
-**Credentials belong to their owner.** A password, a second factor and a sign-in email are never
-written by anyone else, whatever their key or level: `POST /users` takes no password and always
-mails a setup link, and there is no admin reset of a second factor. Switching an account off is
-its own key (`users.any.ban`), because a role that edits a customer's phone should not by that
-alone lock them out.
-
-### Everyone is a customer first
+## Everyone is a customer first
 
 **Every signed-in account is a customer, staff included.** A request's _audience_ is computed, never
 stored or granted, and unioned with the one staff role the account may hold:
@@ -243,41 +165,84 @@ cart ask `cart.self.update`; placing an order and the card steps ask `cart.self.
 answers an unproven address with `EMAIL_NOT_VERIFIED` ("confirm your email") instead of a bare
 permissions error. An order's `actions.pay` is offered only to a caller who holds the checkout key.
 
-## Nobody handles their own money
+## Protecting people
 
-The rank rule frees a person's own things, so alone it would let a customer who is later promoted to
-staff, or an administrator who raised an order for themselves, pay, refund and return that order
-without a second pair of eyes. Separation of duties closes it: **the person an order belongs to is
-never the one who moves its money.** The rule on top of R1 is `ownMoneyRefusal` in `@modules/access`,
-asked through `orders` (`ownMoneyRefusalFor`) by:
+A key says _what kind_ of thing you may touch. It does not say _whose_. Without a second rule, a
+support agent who holds `users.any.update` may edit the administrator's account, which is a
+privilege escalation with extra steps. So one permission, `roles.any.assign`, protects people:
 
-| Step                                  | Asked in                           |
-| ------------------------------------- | ---------------------------------- |
-| record a payment by hand              | `payments`: `recordOfflinePayment` |
-| refund an order's payment             | `payments`: `refundByOrder`        |
-| approve a return                      | `returns`: `approveReturn`         |
-| receive a return's goods              | `returns`: `receiveReturn`         |
-| cancel an unshipped remainder (staff) | `returns`: `createCancellation`    |
+> **R1.** An account that holds a staff role may be changed — edited, banned, erased, restored, or
+> have its role taken away — only by a holder of `roles.any.assign`. Otherwise the answer is
+> `403 ROLE_MANAGEMENT_REQUIRED`. The same permission is the only way to hand a staff role out.
 
-- **The answer is a plain `403 FORBIDDEN`** with its own message, audited as `security.forbidden` with
-  `reason: own` (and no `ownerId`, since it is the caller). It is not `OUTRANKED`, whose contract text
-  makes the caller's own thing the exception.
-- **A staff remainder cancel is a refund**, so it is gated by the refund key, `payments.any.update`
-  (`stepUp: critical`; moderator and admin — the manager and the warehouse do not hold it), and gets
-  this rule and the rank rule. No new key: it is one more thing the refund permission already means,
-  as in Shopify, where a partly shipped order cannot be cancelled and the unshipped items are refunded
-  under the Refund permission. The buyer's own withdrawal, on the same route, is never prompted.
-- **Declining a return stays R1 only**: refusing your own return gives nothing away.
-- **`POST /orders` is ranked by `userId`** (R1 only): an administrator may raise an order for
-  themselves, and the four steps then stop them paying, refunding or returning it alone.
-- **`actions` follows.** `recordPayment`, a payment's `refund`, and a return's `approve` and
-  `receive` are false on one's own order, so a client never offers what would be refused.
-- **An administrator's own order is then handled by nobody**: no one outranks an administrator and
-  they may not handle their own. Fixing one is the technician's edit of the database, by decision.
+Of the preset roles only `admin` (and `system`, its alias) holds it. Staff without it change
+customers only: a moderator who may erase accounts erases customers, never the administrator.
 
-Standard: OWASP's
-[Business Logic Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Business_Logic_Security_Cheat_Sheet.html)
-and the maker-checker (four-eyes) rule of payment practice.
+Four details carry the rule:
+
+- **Your own account is exempt**, so a support agent still edits their own profile.
+- **A role is only a bundle of keys.** There is no `level`, no rank between staff roles, and no
+  "outranks": what a role can do is exactly the keys it lists.
+- **An API key holds exactly the keys it was minted with.** One minted without `roles.any.assign`
+  cannot change a staff account, whoever minted it.
+- **An administrator may change another administrator**, and may hand out or take away any role,
+  their own included. Locking the shop out of its last administrator is a technician's edit of the
+  database to repair, by decision.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
+flowchart TD
+    accTitle: How a write on an account is decided
+    accDescr: The route first requires its key. A write on the caller's own account is allowed. Otherwise an account that holds no staff role may be changed, and one that does needs the role-management key, else the answer is ROLE_MANAGEMENT_REQUIRED.
+
+    K{"holds the route's key?"} -- no --> F403["403 FORBIDDEN"]
+    K -- yes --> O{"the caller's own account?"}
+    O -- yes --> OK["allowed"]
+    O -- no --> H{"does the account hold a staff role?"}
+    H -- no --> OK
+    H -- yes --> R{"holds roles.any.assign?"}
+    R -- yes --> OK
+    R -- no --> OUT["403 ROLE_MANAGEMENT_REQUIRED<br/><i>audited as security.forbidden</i>"]
+
+    classDef good fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
+    class OK good;
+    class F403,OUT bad;
+```
+
+**Where it is applied.** `canChangeAccount` and `roleProtectedRefusal` in `@modules/access` answer
+it; `users` asks before it edits, erases or restores an account, and `assignRole` refuses a grant
+from a caller without the key. The read side tells a client the same thing: the `actions` block on
+a user already has the protection applied, so a screen renders only what would be accepted.
+
+Orders, payments, returns and parcels have **no rank at all**: holding the permission is enough, on
+a customer's order, a staff member's or one's own. Revoking someone else's API key is not protected
+either: it only takes access away, so any administrator may revoke a fellow administrator's leaked
+key (Stripe and GitHub work the same way).
+
+**Credentials belong to their owner.** A password, a second factor and a sign-in email are never
+written by anyone else, whatever their key: `POST /users` takes no password and always
+mails a setup link, and there is no admin reset of a second factor. Switching an account off is
+its own key (`users.any.ban`), because a role that edits a customer's phone should not by that
+alone lock them out.
+
+## Your own money
+
+There is no rule against handling one's own order. A staff member is a customer too, so the
+permission they hold is trusted wherever they act: recording a payment by hand, refunding it,
+approving and receiving a return, or cancelling the remainder of an order all work on one's own
+order exactly as on anyone's.
+
+What the system adds is a record, not a refusal. The audit row of the two steps that move money out
+or in — `payment.recorded_offline` and `admin.payment.refunded` (which also covers a return's refund
+and a remainder cancel) — carries `ownOrder: true` when the caller is the buyer (`ownOrderFlag` in
+`@modules/access`), so a review sees self-dealing at a glance.
+
+Why trust and record rather than refuse: no shop platform ships a self-refund rule (Shopify, Stripe
+and Saleor leave it to the merchant, as do Solidus and WooCommerce), a refund goes back to the card
+that paid, so it cannot send money elsewhere, and a refusal for a one-person shop blocks its owner.
+Where separation of duties is wanted, the audit row is what NIST SP 800-53 AC-5 asks of the
+compensating control.
 
 ## Where it lives
 
@@ -287,14 +252,14 @@ enforced per key.
 - **`shared/authorization-keys.yaml`** — every key, its subject, scope, conditions and step-up
   tier. **`-roles.yaml`** — the presets both seeders read. **`-conformance.yaml`** — dozens of
   cases, most of them denials, run by both backends. All three byte-identical in the PHP twin.
-- **`kernel/permissions.ts`** turns an account's two role names into the keys for ONE scope;
-  **`kernel/ability.ts`** builds the CASL ability and answers `holdsKey`.
+- **`kernel/permissions.ts`** turns an account's audience and its two role names into the keys for
+  ONE scope; **`kernel/ability.ts`** builds the CASL ability and answers `holdsKey`.
 - **`@modules/access`** stores the ASSIGNMENT half — tenants and memberships, never a role's own
-  permissions — with the invariants as refusals: a granter cannot hand over what they do not
-  hold, self-service signup can grant nothing but the default role. Removing a shop's last
-  administrator is allowed. It also answers the rank rule (`canActOn`), reading an owner's level
-  from their memberships. Routeless — `account`, `api-keys`, `users` and the modules that write
-  on a buyer's behalf are its consumers.
+  permissions — with the invariants as refusals: only a holder of `roles.any.assign` hands out a
+  role, and `customer`, `unverified` and `guest` are never granted because they are computed.
+  Removing a shop's last administrator is allowed. It also answers the protection of staff
+  accounts (`canChangeAccount`). Routeless — `account`, `api-keys`, `users` and the modules that
+  write on a buyer's behalf are its consumers.
 - **`kernel/access/query.ts`** compiles the rules into the Mongo filter every scoped read spreads,
   so a key that grants more returns more without anybody editing a fragment.
 - **`GET /account/abilities`** publishes the packed rules; the frontend evaluates _those_, not a

@@ -140,9 +140,9 @@ describe('create', () => {
         expect(asSuccess(result).data.email).toBe(user.email);
     });
 
-    // The rank rule is asked of the buyer in the body: an operator raises orders for customers,
-    // and for themselves (the money steps then refuse them), never for an equal.
-    it('refuses an order for an equal’s account, writes nothing, and allows one for oneself', async () => {
+    // No rank on the buyer in the body: an operator raises orders for a customer, an equal and
+    // themselves alike.
+    it('raises an order for a customer, an equal and oneself', async () => {
         const peer = await createUser({ email: 'peer@example.com' }, 'admin');
         const me = await createUser({ email: 'me@example.com' }, 'admin');
         const product = await createProduct({ title: 'Keyboard', price: 25 });
@@ -151,12 +151,8 @@ describe('create', () => {
         const forPeer = await create(peer.id, peer.email, items, callerContextAs('admin', me.id));
         const forMe = await create(me.id, me.email, items, callerContextAs('admin', me.id));
 
-        expect([asReject(forPeer).status, asReject(forPeer).errors[0].code]).toEqual([
-            403,
-            'OUTRANKED'
-        ]);
-        expect(forMe.success).toBe(true);
-        expect(await countOrders()).toBe(1);
+        expect([forPeer.success, forMe.success]).toEqual([true, true]);
+        expect(await countOrders()).toBe(2);
     });
 
     // The open-order cap is a checkout rule (`cart/services/checkout.ts`): an operator raising an
