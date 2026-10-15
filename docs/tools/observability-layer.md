@@ -89,8 +89,8 @@ Both for transport reasons rather than contract ones:
 - `GET /observability/events` — SSE never completes, so supertest hangs on it. Its payload is
   `asyncapi.yaml`'s to pin anyway.
 - `GET /observability/metrics` — the 200 needs `NODE_METRICS_TOKEN` in the process environment.
-  `tests/integration/observability-auth.test.ts` covers it there instead, including the deny-by-default
-  503 that fires when the token is unset.
+  `src/modules/observability/tests/unit/metrics-scraper.test.ts` covers it there instead, including
+  the deny-by-default 503 that fires when the token is unset.
 
 ## Related pages
 

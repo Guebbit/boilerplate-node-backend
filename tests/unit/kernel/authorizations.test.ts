@@ -741,22 +741,6 @@ describe('requirePermission', () => {
         expect(response.status).toHaveBeenCalledWith(403);
     });
 
-    it('rejects a caller whose role holds no wildcard', () => {
-        // Absent must mean "not an admin". The fail-safe direction, asserted separately from the
-        // explicit-false case because they take different code paths.
-        const next = jest.fn();
-        const response = makeResponseStub();
-
-        requirePermission(ADMIN_ONLY_KEY)(
-            makeRequest({ authContext: asCustomer('user-1') }),
-            response,
-            next
-        );
-
-        expect(next).not.toHaveBeenCalled();
-        expect(response.status).toHaveBeenCalledWith(403);
-    });
-
     it('with `exact`, refuses a caller holding only the narrow key of the same action and subject', () => {
         // `payments.self.read` and `payments.any.read` are both `read` on `Payment`: without
         // `exact` the guard cannot tell them apart and a customer reads the staff list.

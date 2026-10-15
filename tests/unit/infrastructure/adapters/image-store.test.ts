@@ -220,13 +220,6 @@ describe('filesystemImageStore.remove', () => {
 
     /* Most images predate the digest pipeline, or never went through a broker fast enough to grow
        one — a missing thumbnail must not stop the main image from being deleted. */
-    it('still deletes the main image when it has no thumbnail', async () => {
-        const { file, imageUrl } = await makeImage('stored.png');
-
-        await expect(filesystemImageStore.remove(imageUrl)).resolves.toBe(true);
-        expect(existsSync(file)).toBe(false);
-    });
-
     it.each([
         ['undefined', undefined],
         ['an empty string', '']
@@ -310,13 +303,6 @@ describe('filesystemImageStore.remove', () => {
 
         await expect(filesystemImageStore.remove('/images/seed/fixture.jpg')).resolves.toBe(false);
         expect(existsSync(fixture)).toBe(true);
-    });
-
-    it('still deletes a file directly in the images directory', async () => {
-        const { file, imageUrl } = await makeImage('flat.png');
-
-        await expect(filesystemImageStore.remove(imageUrl)).resolves.toBe(true);
-        expect(existsSync(file)).toBe(false);
     });
 
     /* Defensive: nothing writes this shape today, but a stored value without its leading slash

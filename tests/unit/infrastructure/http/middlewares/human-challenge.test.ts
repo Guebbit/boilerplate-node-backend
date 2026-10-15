@@ -84,6 +84,28 @@ describe('humanChallengeGate', () => {
         expect(response.status).toHaveBeenCalledWith(401);
     });
 
+    it.each([
+        ['a body saying success: false', () => Response.json({ success: false })],
+        [
+            'a non-200 answer whose body says success: true',
+            () => Response.json({ success: true }, { status: 503 })
+        ]
+    ])('refuses on %s — exactly what an attacker gets back', async (_label, answer) => {
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
+        setEnvironment({ NODE_ANTIBOT_TURNSTILE_SECRET: 'secret' });
+        jest.spyOn(globalThis, 'fetch').mockResolvedValue(answer());
+        const response = makeResponseStub();
+        const next = jest.fn();
+
+        humanChallengeGate(makeRequest('a-token'), response, next);
+        await new Promise((resolve) => {
+            setTimeout(resolve, 50);
+        });
+
+        expect(next).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(401);
+    });
+
     it('refuses when the provider throws rather than answering — never a pass', async () => {
         setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
         setEnvironment({ NODE_ANTIBOT_TURNSTILE_SECRET: 'secret' });

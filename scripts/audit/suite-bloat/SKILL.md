@@ -32,6 +32,10 @@ titles look similar. Use the evidence, in this order:
 - `tmp/reports/mutation/mutation.json` and `tmp/reports/stryker-incremental.json` — which
   mutants each test kills is the ground truth for "what does this test discriminate"
 - `tmp/reports/test-report.json` — per-test duration, for the cost ranking
+- Stryker stops at the first test that kills a mutant, so every `killedBy` list in a regular report
+  holds ONE test and "killed uniquely" cannot be read off it. For an audit run, scope Stryker to the
+  files under audit and pass `--disableBail`, so every killing test is recorded. The regular runs
+  stay as fast as they are. https://stryker-mutator.io/docs/stryker-js/configuration/#disablebail-boolean
 
 ### 2 — find the passengers
 

@@ -50,7 +50,8 @@ const document = parse(readFileSync(INPUT, 'utf8')) as OpenApiDocument;
 
 /**
  * Compiles a contract path template into the text of a regex literal, so the guard never builds a
- * matcher at boot: `/products/{id}/restore` becomes `/^\/products\/[^/]+\/restore$/`.
+ * matcher at boot: `/products/{id}/restore` becomes `/^\/products\/[^/]+\/restore$/i`. Case-insensitive,
+ * because Express routing is: `/Account` reaches the `/account` routes, so the gate must see it too.
  *
  * @param template - a contract path such as `/products/{id}/restore`
  * @returns the literal's source text, and how many `{param}` segments the template has
@@ -65,7 +66,7 @@ const compileTemplate = (template: string): { literal: string; parameterCount: n
         )
         .join(String.raw`\/`);
     return {
-        literal: `/^${source}$/`,
+        literal: `/^${source}$/i`,
         parameterCount: segments.filter((segment) => segment.startsWith('{')).length
     };
 };

@@ -304,6 +304,9 @@ describe('GET /observability/events', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('text/event-stream');
+        // The first thing a client sees is a snapshot of the service's own metrics.
+        expect(response.body).toContain('event: observability.metrics.snapshot');
+        expect(response.body).toContain('data: ');
     });
 
     it('matches the error contract with no session', async () => {
@@ -329,6 +332,8 @@ describe('GET /observability/metrics', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('text/plain');
+        expect(response.text).toContain('http_requests_total');
+        expect(response.text).toContain('process_uptime_seconds');
     });
 
     it('matches the error contract for a user bearer, which is not a scrape token', async () => {

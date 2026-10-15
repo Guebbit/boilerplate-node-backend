@@ -172,6 +172,20 @@ describe('a body express never parsed', () => {
         }
     );
 
+    // Express matches `/Account` to the `/account` routes, so the gate has to as well: a path
+    // spelled in another case must not wave a body through unchecked.
+    it('answers 415 to a text/plain body on a path spelled in another case', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .patch('/Account')
+            .set('Authorization', bearer)
+            .set('Content-Type', 'text/plain')
+            .send('{"username":"x"}');
+
+        expect(response.status).toBe(415);
+    });
+
     it.each(BODY_READING_ROUTES)(
         '$method $path does not fail with no content-type at all',
         async ({ method, path, authorize }) => {

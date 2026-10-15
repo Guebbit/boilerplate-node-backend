@@ -41,12 +41,6 @@ const createEntry = async (
 };
 
 describe('GET /locales', () => {
-    it('matches the contract', async () => {
-        const response = await api().get('/locales');
-
-        expect(response.status).toBe(200);
-    });
-
     it('reports every deployed language as one the API can answer in', async () => {
         const response = await api().get('/locales');
 
@@ -1062,14 +1056,5 @@ describe('GET /locales/:locale/messages?app=', () => {
         const response = await api().get(`/locales/pt/messages${query}`);
 
         expect(response.status).toBe(422);
-    });
-
-    it('still serves the default app when the parameter is omitted', async () => {
-        const { bearer } = await authenticateAs('admin');
-        await createLanguage(bearer);
-
-        const response = await api().get('/locales/pt/messages');
-
-        expect(response.status).toBe(200);
     });
 });

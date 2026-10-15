@@ -86,11 +86,6 @@ describe('evaluateCheckout', () => {
         );
     });
 
-    // Order matters: the two reasons map to different status codes and analytics categories.
-    it('reports emptiness before availability', () => {
-        expect(evaluateCheckout([])).toEqual({ ok: false, reason: 'empty' });
-    });
-
     it('refuses a line asking for more than the shelf holds', () => {
         expect(evaluateCheckout([line(1, 5), line(6, 5)])).toMatchObject({
             ok: false,

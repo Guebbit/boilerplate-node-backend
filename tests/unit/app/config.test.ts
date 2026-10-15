@@ -134,14 +134,16 @@ describe('application-wide variables', () => {
     });
 });
 
-describe('the SMTP group', () => {
-    it('accepts mail left entirely unconfigured', () => {
+describe('a bare environment', () => {
+    it('boots: mail, the antibot rung and the email policy all default off', () => {
         // Unconfigured is a supported choice — the email second factor reports itself unavailable.
         configure();
 
         expect(assertApp).not.toThrow();
     });
+});
 
+describe('the SMTP group', () => {
     it('refuses a host configured without its credentials', () => {
         configure();
         setEnvironment({ NODE_SMTP_HOST: 'mail.example.com' });
@@ -289,12 +291,6 @@ describe('the provider-selector group — refused at boot, not the first request
  * validating it cannot live on a manifest that deleting the module also deletes.
  */
 describe('the antibot provider group', () => {
-    it('asks for nothing while the rung is off — the default', () => {
-        configure();
-
-        expect(assertApp).not.toThrow();
-    });
-
     it('refuses a self-hosted provider selected without its signing secret', () => {
         configure();
         setEnvironment({ NODE_ANTIBOT_PROVIDER: 'altcha' });
@@ -322,12 +318,6 @@ describe('the antibot provider group', () => {
 });
 
 describe('the antibot email-policy group', () => {
-    it('asks for nothing while the policy is off — the default', () => {
-        configure();
-
-        expect(assertApp).not.toThrow();
-    });
-
     it.each(['disposable', 'mx'])('accepts a recognized policy (%s)', (policy) => {
         configure();
         setEnvironment({ NODE_ANTIBOT_EMAIL_POLICY: policy });

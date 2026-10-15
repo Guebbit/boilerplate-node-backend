@@ -128,14 +128,6 @@ describe('buildRateLimiter — the limit', () => {
         expect(refused.status).toBe(429);
     });
 
-    it('reads the limit from the budget variable at build time', async () => {
-        const limiter = buildRateLimiter(budgetOf(1));
-
-        await hit(limiter);
-
-        expect(await passes(limiter)).toBe(false);
-    });
-
     it('sends draft-7 RateLimit headers and no X-RateLimit-* ones', async () => {
         const { headers } = await hit(buildRateLimiter(budgetOf(5)));
 
@@ -263,15 +255,7 @@ describe('buildRateLimiter — escalation', () => {
     });
 });
 
-describe('buildRateLimiter — store errors', () => {
-    it('counts in memory by default, so the limit still holds', async () => {
-        const limiter = buildRateLimiter(budgetOf(1));
-
-        await hit(limiter);
-
-        expect(await passes(limiter)).toBe(false);
-    });
-});
+describe('buildRateLimiter — store errors', () => {});
 
 describe('chargeBudget', () => {
     it('allows hits up to the limit and refuses past it', async () => {

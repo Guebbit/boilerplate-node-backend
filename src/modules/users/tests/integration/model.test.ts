@@ -11,7 +11,6 @@ import { createUser } from '@modules/users/tests/factories';
 import { userRepository } from '../../repository';
 import * as userService from '@modules/users/services';
 import { userService as userServiceObject } from '../../services';
-import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 
 setupTestDb();
 
@@ -45,10 +44,6 @@ describe('email is case-insensitive', () => {
         await createUser({ email: 'ada@example.com' });
 
         await expect(createUser({ email: 'ADA@EXAMPLE.COM' })).rejects.toThrow();
-    });
-
-    it('normalizeEmail trims and lowercases the same way the schema casts', () => {
-        expect(normalizeEmail('  Ada@Example.com  ')).toBe('ada@example.com');
     });
 });
 

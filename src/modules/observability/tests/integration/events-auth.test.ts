@@ -3,7 +3,7 @@ import supertest from 'supertest';
 import cookieParser from 'cookie-parser';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
+import { setEnvironment } from '@tests/environment';
 import {
     requirePermissionViaCookie,
     stillHoldsKeyViaCookie
@@ -12,14 +12,9 @@ import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/test
 import { dropAllSessions } from '@modules/account/tests/factories';
 
 /**
- * The two observability endpoints, and the credentials that reach them.
- *
- * Neither carries user data, but both are a map of how the service behaves: request volumes,
- * error rates, latency percentiles, login success and failure counters, uptime and heap. That is
- * reconnaissance worth having if you intend to attack it.
- *
- * They authenticate differently because their callers CAN authenticate differently, and the tests
- * are split the same way.
+ * The event stream's session credential beyond what the contract file shows: a forged cookie and a
+ * revoked session are refused, and an open stream follows its session family across a refresh.
+ * `EventSource` cannot set request headers, so the stream authenticates with the session cookie.
  */
 
 setupTestDb();
@@ -36,25 +31,6 @@ const signIn = async (role: 'admin' | 'user') => {
 };
 
 describe('GET /observability/events', () => {
-    /**
-     * `EventSource` cannot set request headers — a hard limitation of the browser API, not an
-     * oversight — so a bearer token is not available to an SSE client at all. The cookie is,
-     * given `withCredentials: true`, which is how the frontend already opens the stream.
-     */
-    it('refuses a request with no session cookie', async () => {
-        const response = await api().get('/observability/events');
-
-        expect(response.status).toBe(401);
-    });
-
-    it('refuses a signed-in non-admin', async () => {
-        const { cookie } = await signIn('user');
-
-        const response = await api().get('/observability/events').set('Cookie', cookie);
-
-        expect(response.status).toBe(403);
-    });
-
     it('refuses a forged cookie', async () => {
         const response = await api()
             .get('/observability/events')
@@ -126,59 +102,5 @@ describe('the recheck of an open stream', () => {
         await dropAllSessions(String(user._id));
 
         await expect(stillHoldsKeyViaCookie(request, KEY)).resolves.toBe(false);
-    });
-});
-
-/** Runs `run` against a metrics route guarded with `token` as the configured scrape credential. */
-const withToken = (token: string | undefined, run: (app: express.Express) => Promise<void>) =>
-    withEnvironmentOverrides({ NODE_METRICS_TOKEN: token }, async () => {
-        const { isMetricsScraper } = await import('@modules/observability/metrics-scraper');
-        const guarded = express();
-        guarded.use(cookieParser());
-        guarded.get('/metrics', isMetricsScraper, (_request, response) => {
-            response.send('# HELP up\n');
-        });
-
-        await run(guarded);
-    });
-
-describe('GET /observability/metrics', () => {
-    it('accepts the configured scrape token', async () => {
-        await withToken('secret-token', async (guarded) => {
-            const response = await supertest(guarded)
-                .get('/metrics')
-                .set('Authorization', 'Bearer secret-token');
-
-            expect(response.status).toBe(200);
-        });
-    });
-
-    it.each([
-        ['no credentials', undefined],
-        ['the wrong token', 'Bearer wrong-token'],
-        ['a token of a different length', 'Bearer secret-token-but-longer'],
-        ['a malformed header', 'secret-token']
-    ])('refuses %s', async (_label, header) => {
-        await withToken('secret-token', async (guarded) => {
-            const request = supertest(guarded).get('/metrics');
-            const response = await (header ? request.set('Authorization', header) : request);
-
-            expect(response.status).toBe(401);
-        });
-    });
-
-    /**
-     * Deny by default. An unauthenticated metrics endpoint is not a state to arrive at by
-     * forgetting an environment variable, so an unset token closes the endpoint rather than
-     * opening it — and says so, loudly, in the log.
-     */
-    it('refuses every request when no token is configured', async () => {
-        await withToken(undefined, async (guarded) => {
-            const response = await supertest(guarded)
-                .get('/metrics')
-                .set('Authorization', 'Bearer anything');
-
-            expect(response.status).toBe(503);
-        });
     });
 });

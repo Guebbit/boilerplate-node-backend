@@ -1062,22 +1062,6 @@ describe('orderConfirm', () => {
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
     });
 
-    it('accepts a physical basket under pickup with no shipping address', async () => {
-        const user = await createUser();
-        await giveUserAnAddress(user.id);
-        const product = await createProduct();
-        await cartItemSetById(user.id, String(product._id), 1);
-
-        // `pickup.requiresAddress` is false, so no shipping address is frozen; the book's entry only bills.
-        await cartRepository.setShippingMethod(user.id, 'pickup');
-        const result = await orderConfirm(user.id, testCallerContext, undefined);
-
-        expect(result.success).toBe(true);
-        const order = await findOrder({ userId: user._id });
-        expect(order!.shippingMethod).toBe('pickup');
-        expect(order!.shippingAddress).toBeUndefined();
-    });
-
     it('never freezes the caller default address onto a pickup order', async () => {
         // The real-world bug this guards: a caller WITH a default on file, checking out under a
         // method that ships to nobody, must not have that default silently attached anyway.

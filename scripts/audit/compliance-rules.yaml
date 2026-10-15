@@ -1,6 +1,6 @@
 # Shared compliance rule registry. Read by scripts/audit/compliance-backend/SKILL.md and
 # scripts/audit/compliance-frontend/SKILL.md, which each filter by `responsibility` and evaluate only
-# their own `evidence.<side>` hints. Byte-identical with the sibling repo — see
+# their own `evidence.<side>` hints. Lives here, once, and the frontend audit reads this copy — see
 # docs/tools/ai-auditing.md. `rules:` is what either prompt evaluates; `suggested_rules:` is a
 # staging area for candidates pending human approval and MUST NOT be read by either prompt.
 #
@@ -43,17 +43,20 @@ rules:
       responsibility: both
       severity: high
       rule: >
-          A user completing signup must affirmatively and separately accept the privacy policy,
-          cookie policy, and terms/marketing disclosures via a checkbox that is NOT pre-checked, and
-          the acceptance must be durably recorded (who, when, which policy version) before the
-          account is usable.
+          A user completing signup must affirmatively accept the terms and have the privacy notice put
+          in front of them, via a checkbox that is NOT pre-checked, and the acceptance must be
+          durably recorded (who, when, which policy version) before the account is usable. Cookie
+          and analytics consent is asked separately, never bundled into it. A sign-in with a
+          third-party provider that creates the account may take the acceptance from a notice beside
+          its button ("by continuing you agree to the Terms") instead of a checkbox: that is how the
+          providers' own pages do it, and the record is stamped at creation all the same.
       applies_when: >
           Always applicable to any signup flow that creates a persistent account tied to personal
           data.
       evidence:
           backend:
               - src/modules/account/*.ts (signup/register handler and its Zod schema)
-              - src/modules/users/model.ts (a consent/acceptedAt/policyVersion-shaped field, or its absence)
+              - src/modules/users/model.ts (`termsAcceptedAt` / `termsVersion`, or their absence)
               - openapi.yaml (the signup request schema — is acceptance a required field at all?)
           frontend:
               - signup/register view component (checkbox default v-model value must be false)
@@ -85,6 +88,7 @@ rules:
           backend:
               - src/modules/feedback/**
               - src/modules/products/** (review/UGC fields)
+              - src/modules/example/** (a public page any signed-up account may publish)
               - any content-moderation or takedown route
           frontend:
               - a /dmca or /copyright page
@@ -117,7 +121,7 @@ rules:
           - GDPR Art. 32 (security of processing)
           - PCI-DSS Requirement 3 (protect stored cardholder data)
       notes: >
-          Known-good baseline today: bcrypt-style password hashing, sha256 digest for single-use
+          Known-good baseline today: argon2id password hashing, sha256 digest for single-use
           tokens, cardLast4-only payment storage. Expected to audit SATISFIED; a new field storing a
           secret/PAN/biometric value in cleartext is the regression this rule exists to catch.
 
@@ -260,16 +264,16 @@ rules:
           recipient.
       applies_when: >
           The app sends, or is being extended to send, any email classified as marketing/bulk rather
-          than purely transactional. Currently NOT applicable: all 12 templates under
-          shared/templates/emails/*.ejs are transactional (signup, reset, 2FA, order, shipment,
+          than purely transactional. Currently NOT applicable: every template under
+          src/modules/*/templates/*.ejs is transactional (signup, reset, 2FA, order, shipment,
           contact) and none carry an unsubscribe link or List-Unsubscribe header — confirmed by grep,
           zero hits, which is correct for transactional mail. Re-evaluate the moment a template such
           as a newsletter, promo, or re-engagement email is added.
       evidence:
           backend:
-              - shared/templates/emails/*.ejs
+              - src/modules/*/templates/*.ejs
               - src/infrastructure/adapters/mailer.ts
-              - 'grep -in "unsubscribe\|list-unsubscribe" across src/ and shared/'
+              - 'grep -in "unsubscribe\|list-unsubscribe" across src/'
           frontend: []
       references:
           - CAN-SPAM Act, 15 U.S.C. §7704(a)(3)
@@ -293,13 +297,13 @@ rules:
           Applicable to any deployment reachable from the public internet — always, for this app.
       evidence:
           backend:
-              - public/.well-known/security.txt (existence)
-              - a route serving it, if not a static file
+              - src/app/system-routes.ts (the route serving it, behind a switch)
+              - SECURITY.md (the repo's own policy)
           frontend: []
       references:
           - RFC 9116 (A File Format to Aid in Security Vulnerability Disclosure)
       notes: >
-          Cheap to satisfy (one static file); currently absent.
+          Cheap to satisfy; a route serves it when the deployer sets a contact, and stays off by default so a fork never publishes someone else's.
 
     - id: ccpa-do-not-sell-link
       title: No CCPA "Do Not Sell or Share My Personal Information" link
@@ -339,11 +343,11 @@ rules:
           opt-in) before bulk sends begin, not merely inferred from an unrelated action like checkout.
       applies_when: >
           Only once a marketing/newsletter email feature exists. NOT-APPLICABLE today — no such
-          feature exists (12 templates, all transactional). Pairs with marketing-email-unsubscribe:
+          feature exists (every template is transactional). Pairs with marketing-email-unsubscribe:
           both trigger on the same future feature and should be re-checked together.
       evidence:
           backend:
-              - shared/templates/emails/*.ejs
+              - src/modules/*/templates/*.ejs
               - src/modules/account/**, src/modules/users/** (any list-subscription field)
           frontend: []
       references:
