@@ -377,6 +377,26 @@ describe('one live export per account', () => {
         await settleInlineExports();
     });
 
+    it('counts the retention from the moment the export is ready, not from the request', async () => {
+        const { held, release } = gate();
+        setPersonalDataSections([held]);
+        const user = await createUser({ email: 'ada@example.com' });
+        await requestExport(user.id, testCallerContext);
+        // A slow build: the request went in three days ago, so its first expiry is four days off.
+        const threeDays = 3 * 24 * 60 * 60 * 1000;
+        await accountExportModel.updateOne(
+            { userId: user.id },
+            { $set: { expiresAt: new Date(Date.now() - threeDays + 7 * 24 * 60 * 60 * 1000) } }
+        );
+
+        release();
+        await settleInlineExports();
+
+        const row = await accountExportModel.findOne({ userId: user.id });
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        expect(Math.abs(row!.expiresAt.getTime() - (Date.now() + sevenDays))).toBeLessThan(60_000);
+    });
+
     it('keeps a building export younger than 30 minutes', async () => {
         const { held, release } = gate();
         setPersonalDataSections([held]);

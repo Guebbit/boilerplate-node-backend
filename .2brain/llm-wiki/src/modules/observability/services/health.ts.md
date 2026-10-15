@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/services/health.ts
-sha256: a59729bde97151e8a2d7bfdca375fdfd8e6ba27052a09286741ac59a8b271cc9
-generated_at: 2026-09-27T15:05:13.385747+00:00
+sha256: 08033d44a2ef13ab8dc4be93c93bd9b6f6ae2449a2ab41a65688a10e499963f0
+generated_at: 2026-10-15T10:56:21.338058+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Assembles the full payload for `GET /observability/health` by composing per-service health checks (jobs, queues, dependencies) with process and system metrics into a single `ObservabilityHealth` object. It lives here rather than in the controller so the payload's shape is co-located with the services whose output it aggregates.
+Assembles the JSON payload served by `GET /observability/health`: dependency probe results, telemetry-sink configuration flags, process/system resources, and per-job outcomes. It lives in the services layer (not the controller) so the response shape is defined alongside the helpers that produce its fields.
 
 ## Key elements
 
-- **`buildObservabilityHealth()`** (exported) — Single async function returning `Promise<ObservabilityHealth>`. Calls `jobHealth()` and `queueHealth()` in parallel via `Promise.all`, then synchronously gathers `processSnapshot()`, `dependencyHealth()`, and `resolveAnalyticsProvider()`, and returns a flat object containing:
-  - `status` — folded from all dependency states via `overallStatus` (e.g. one down → `"degraded"`).
-  - `dependencies` — per-service `{ status }` objects for `database`, `cache`, `queue` (object shape so latency/last-error can be added without a breaking change).
-  - `telemetry` — boolean config flags (`loki`, `otel`, `umami`, `faro`) plus an `analytics` block with the resolved provider name and a `configured` check. Deliberately separate from `dependencies` because these are wiring flags, not liveness probes.
-  - `memory` — bytes, same four fields as the SSE stream.
-  - `system` — `os.platform()`, `os.cpus().length`, `os.loadavg()`.
-  - `jobs` / `queues` — pass-through from `jobHealth()` / `queueHealth()`.
+- **`buildObservabilityHealth()`** (only export) — Returns `Promise<ObservabilityHealth>`. Awaits `jobHealth()` and `queueHealth()` in parallel, then synchronously calls `processSnapshot()`, `dependencyHealth()`, and `resolveAnalyticsProvider()` to build and return the full object.
 
 ## Relationships
 
-- **`./dependency-health.ts`** — imports `dependencyHealth()` (per-service state) and `overallStatus()` (folding logic for the top-level `status`).
-- **`./job-health.ts`** — imports `jobHealth()` for the `jobs` section.
-- **`./parked-jobs.ts`** — imports `queueHealth()` (dead-letter depths) for the `queues` section.
-- **`./process-snapshot.ts`** — imports `processSnapshot()` for `uptimeSeconds` and `memory`.
-- **`@infrastructure/observability/analytics`** — imports `resolveAnalyticsProvider()` to report which analytics backend is active and whether it is fully configured.
-- **`@types`** — imports the `ObservabilityHealth` interface that defines the return shape.
-- **`../controllers/get-observability-health.ts`** — the HTTP controller that invokes `buildObservabilityHealth()` and serializes the result (implied by the module doc comment; the controller does no assembly of its own).
-- **`./index.ts`** — barrel re-export so other modules can import `buildObservabilityHealth` from the services index.
+- **`./dependency-health`** — calls `dependencyHealth()` for per-service probe status and `overallStatus()` to fold them into the top-level `status`.
+- **`./job-health`** — calls `jobHealth()` for every lease-guarded job's last outcome.
+- **`./parked-jobs`** — calls `queueHealth()` for each worker queue's dead-letter depth.
+- **`./process-snapshot`** — calls `processSnapshot()` for uptime and memory figures.
+- **`@infrastructure/observability/analytics`** — calls `resolveAnalyticsProvider()` to report which backend analytics provider is active and whether it is credentialed.
+- **`@infrastructure/runtime/config`** — reads `nodeEnvironment`, `loggingConfig`, and `tracingConfig` for the `environment`, `service`, and `telemetry.otel` fields.
+- **`../config`** (module-local) — reads `observabilityConfig()` for Loki and Faro endpoint presence.
+- **`@infrastructure/observability/config`** — reads `analyticsConfig()` for the Umami origin.
+- **`@types`** — imports the `ObservabilityHealth` return type.
+- **`controllers/get-observability-health.ts`** — the HTTP controller that invokes this function and serialises the result.
+- **`services/index.ts`** — barrel re-export so the module's public API is reachable from a single import path.
+- **`tests/unit/health-identity.test.ts`** — unit tests targeting this module's output shape.
 
 ## Notes
 
-- `telemetry` booleans are **config presence** checks (`Boolean(process.env.NODE_LOKI_HOST)` etc.), not reachability probes. Do not add network calls here.
-- The `analytics` sub-block distinguishes *selected provider* from *provider is actually usable*. A provider selected without credentials logs a one-time warning and silently drops events for the process lifetime; this endpoint surfaces that gap.
-- `umami` / `faro` under `telemetry` describe **frontend** observability wiring (script origin, collector URL), not the backend's own analytics path.
-- Memory is reported in **bytes** to stay 1:1 with the SSE health stream; dashboards should not need unit conversion.
-- The function is a plain arrow (no `class`), always returns a `Promise`, and has no side effects beyond reading `process.env` and calling the imported getters.
+- `telemetry` is deliberately **separate from** `dependencies` and is **excluded** from the `status` fold. It reports whether endpoints are configured (boolean reads off config), not whether they are reachable.
+- Within `telemetry.analytics`, the `configured` boolean distinguishes "provider selected but missing credentials" from "a different provider is active." A misconfigured provider silently discards all events for the process lifetime, so this flag surfaces the gap.
+- `memory` is reported in **bytes** (same units as the SSE live-feed stream) to avoid unit-conversion mismatch on dashboards.
+- `environment` renders the literal string `'unset'` when `NODE_ENV` is absent, signalling a deployment context rather than a dev/test one.
+- Only `jobHealth()` and `queueHealth()` are async; all other inputs are synchronous config reads or OS calls, so the single `Promise.all` is the sole await point.

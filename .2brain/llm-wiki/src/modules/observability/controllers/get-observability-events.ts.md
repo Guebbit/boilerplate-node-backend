@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/controllers/get-observability-events.ts
-sha256: a941d9a90829cc605de9c09a16aadcd847f7e612600a386d17f4d67413de9909
-generated_at: 2026-09-27T15:03:48.774456+00:00
+sha256: fe34ed6af14797f15c1b3085630f1462fdb6dcf8c765e1f6f4dc7e7eaf126386
+generated_at: 2026-10-15T10:54:26.124307+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express handler for `GET /observability/events`. It opens the SSE (Server-Sent Events) stream for observability metrics and attaches a periodic permission recheck (every 30 s) so that a caller whose key is revoked mid-stream has the stream terminated proactively—since there is no subsequent HTTP request to re-trigger auth.
+Express controller for `GET /observability/events`. Opens the SSE metrics stream and attaches a periodic (30 s) permission recheck so that a revoked caller is disconnected mid-stream rather than on their next request (which never comes).
 
 ## Key elements
 
-- **`OBSERVABILITY_READ_KEY`** (exported const) — the permission key `'platform.observability.any.read'`. Exported here rather than from `routes.ts` because this handler is the only place that needs the key's *value* (for the recheck callback), not just a guard built from it.
-- **`getObservabilityEvents`** (exported handler) — Reads the caller's refresh token from the request cookie (guaranteed present by upstream `requirePermissionViaCookie`), then delegates to `streamObservabilityMetrics`, passing a callback that calls `stillHoldsKeyViaCookie` to verify the key is still held on each recheck tick.
+- **`OBSERVABILITY_READ_KEY`** (exported constant) — `'platform.observability.any.read'`. The single permission key guarding every route in the observability module. Exported here (not from `routes.ts`) because this handler needs the key's *value* to pass into the recheck callback, not just a guard built from it.
+- **`getObservabilityEvents`** (exported handler) — Receives `Request`/`Response`, calls `streamObservabilityMetrics(response, recheckFn)`. The `recheckFn` delegates to `stillHoldsKeyViaCookie(request, OBSERVABILITY_READ_KEY)`.
 
 ## Relationships
 
-- **`src/kernel/cookies.ts`** — imports `readRefreshCookie` to extract the caller's refresh token for the recheck.
-- **`src/kernel/middlewares/authorizations.ts`** — imports `stillHoldsKeyViaCookie`, the function invoked every 30 s to confirm the caller still holds `OBSERVABILITY_READ_KEY`.
-- **`src/modules/observability/services/stream.ts`** — imports `streamObservabilityMetrics`, which opens the SSE connection and periodically invokes the recheck callback supplied by this handler.
-- **`src/modules/observability/routes.ts`** — mounts `getObservabilityEvents` as the `GET /observability/events` route.
-- **`src/modules/observability/tests/unit/get-observability-events.test.ts`** — unit tests covering this handler.
+- **`src/kernel/middlewares/authorizations.ts`** — Imports `stillHoldsKeyViaCookie` for the periodic recheck. The upstream `requirePermissionViaCookie` middleware has already resolved a key-holding caller before this handler executes.
+- **`src/modules/observability/routes.ts`** — Registers this handler on the `/observability/events` route. `routes.ts` references the permission key as a guard but imports the constant from *this* file.
+- **`src/modules/observability/services/stream.ts`** — Provides `streamObservabilityMetrics`, the actual SSE stream writer that this handler invokes.
+- **`src/modules/observability/tests/unit/get-observability-events.test.ts`** — Unit tests for this controller.
 
 ## Notes
 
-- The non-null assertion `readRefreshCookie(request)!` is intentional: upstream middleware (`requirePermissionViaCookie`) already guaranteed the cookie exists and is valid before this handler runs.
-- This is the one code path where access revocation is handled *proactively* (stream ends after the recheck fails) rather than *reactively* (next 401 response). The 30-second window is the maximum a revoked caller can still receive events.
+- The 30-second recheck is the **only** place in the codebase where a revoked caller does not lose access on the "next request," because no next request exists while the stream is open — the recheck itself terminates the stream if the key no longer resolves.
+- `requirePermissionViaCookie` (in `authorizations.ts`) is expected to have already left its recheck on the request object; this handler assumes that precondition and never re-validates the initial authorization.

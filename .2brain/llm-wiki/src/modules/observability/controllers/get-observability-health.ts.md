@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/controllers/get-observability-health.ts
-sha256: 584ec989f336d1a09b6858abe23374a904e46d8a2d844fefd1d8d51ab9d16a7c
-generated_at: 2026-09-27T15:03:57.489224+00:00
+sha256: 8d43ba41f016ca896c18ca3503cfe2b43845868facd6f87a5cd5de42af329ab1
+generated_at: 2026-10-15T10:54:33.800333+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP controller for `GET /observability/health`. It exists solely to call the readiness builder in the service layer and wrap the result (or error) in the project's standard response helpers. All health-gathering logic lives in `services/health.ts`; this file adds no business logic.
+Thin Express controller that wires the `GET /observability/health` route to the health-building service and shapes the HTTP response. All payload construction lives in the service layer; this file exists solely to bridge the HTTP boundary.
 
 ## Key elements
 
-- **`getObservabilityHealth`** (exported) — Express handler. Calls `buildObservabilityHealth()`, sends the resolved `ObservabilityHealth` payload via `successResponse`, and routes any rejection through `catchAs`.
+- **`getObservabilityHealth(_request, response)`** (exported const) — The sole export. Calls `buildObservabilityHealth()`, sends the result via `successResponse<ObservabilityHealth>`, and funnels rejections through `catchAs(response, 'getObservabilityHealth')`. The request parameter is intentionally unused (prefixed `_`).
 
 ## Relationships
 
-- **`src/modules/observability/services/health.ts`** — Source of the actual readiness data; this controller's only domain dependency.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, the project's standard 200 envelope.
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, the project's standard error-catch helper.
-- **`src/types/index.ts`** — Supplies the `ObservabilityHealth` type used for the response payload.
-- **`src/modules/observability/routes.ts`** — Wires `getObservabilityHealth` to the `GET /observability/health` route.
-- **`src/modules/observability/tests/unit/dependency-health.test.ts`** — Unit tests exercising the health-building path this controller delegates to.
+- **`../services/health.ts`** — Provides `buildObservabilityHealth()`, the async function that assembles the full readiness payload. This controller is its only caller in the HTTP layer.
+- **`@infrastructure/http/response`** — Supplies `successResponse`, the shared helper that serialises a 200 JSON envelope.
+- **`@infrastructure/http/controller`** — Supplies `catchAs`, the shared error-serialisation helper that maps rejected promises to an error response.
+- **`@types`** — Imports the `ObservabilityHealth` interface used to type the success payload.
+- **`src/modules/observability/routes.ts`** — The route registration file that maps `GET /observability/health` to this controller (inferred from the module's single-purpose naming).
 
 ## Notes
 
-- The module JSDoc (and the function JSDoc) deliberately document the distinction between **three** endpoints: `/observability/health` (authenticated, detailed readiness), `/readyz` (binary, unauthenticated orchestrator probe), and `/` (liveness). The split exists so that an orchestrator's liveness-based restart doesn't mask a downed backing service (e.g. Redis).
-- The handler is a plain async function, not a class method, consistent with the project's controller style.
-- See `docs/modules/observability.md` (referenced in the module doc) for the broader design rationale.
+- This endpoint is **readiness**, not liveness. The JSDoc explicitly distinguishes three endpoints: `/observability/health` (detailed, authenticated readiness), `/readyz` (binary LB probe, unauthenticated), and `/livez` (liveness). An orchestrator restarting on liveness would not recover a downed dependency, so the three are intentionally separate.
+- The request parameter is unused; do not add request-reading logic here without first extending the service.
+- Error handling is delegated entirely to `catchAs`; there is no local try/catch.

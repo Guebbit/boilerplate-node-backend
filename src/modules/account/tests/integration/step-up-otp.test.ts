@@ -143,6 +143,16 @@ describe('the identity routes, for an account with a second factor', () => {
         expect(password.status).toBe(200);
     });
 
+    it('pass a deletion once the session proved an otp', async () => {
+        const { user } = await armedAccount();
+        const { bearer } = await sessionWith(user.id, ['pwd', 'otp']);
+
+        const deletion = await api().delete('/account').set('Authorization', bearer);
+
+        expect(deletion.status).not.toBe(401);
+        expect(deletion.status).toBeLessThan(300);
+    });
+
     it('are unchanged for an account with no second factor', async () => {
         const user = await createUser({ verifiedAt: new Date() });
         const { bearer } = await sessionWith(user.id, ['pwd']);

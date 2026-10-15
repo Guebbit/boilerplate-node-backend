@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/tests/unit/metrics-scraper.test.ts
-sha256: 072b8615dbe87762979c7a035e0bf4a327d207cd5950f59b0ac975738d5c0ee9
-generated_at: 2026-09-23T18:58:44.367340+00:00
+sha256: 79c75452fd8464f4db23755ca6ca0bf4868646558ba6e9fd6edcfbd7091375e5
+generated_at: 2026-10-15T10:58:05.303869+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `isMetricsScraper`, the bearer-token credential guard on `GET /observability/metrics`. The tests pin down three security properties that each fail silently if broken: default-deny when no token is configured, rejection of tokens without the `Bearer` scheme, and safe handling of length-mismatched tokens (preventing both a 500 and a timing oracle).
+Unit tests for `isMetricsScraper`, the credential guard protecting `GET /observability/metrics`. This is the only auth check in the codebase that bypasses JWT middleware (Prometheus cannot log in), so the tests pin three security properties that each fail silently if broken: deny-by-default, Bearer-scheme enforcement, and safe length-mismatch handling.
 
 ## Key elements
 
-- **`makeRequest(authorization?)`** – local helper that builds a minimal Express `Request` stub (via `asStub`) whose `header()` returns the given `Authorization` value or `undefined`.
-- **`originalToken`** – captures `process.env.NODE_METRICS_TOKEN` before the suite runs so `afterEach` can restore or delete it.
-- **`describe('isMetricsScraper')`** – eight `it` blocks covering:
-    - 503 when `NODE_METRICS_TOKEN` is unset or empty.
-    - `next()` called exactly once for a correct `Bearer <token>` header.
-    - 401 for a bare token (no scheme), a wrong scheme (`Basic`), or a missing header.
-    - No throw + 401 when the supplied token has a different length than the configured one (guards `timingSafeEqual`'s length assertion).
-    - 401 for an equal-length token differing in one byte (proves the comparison actually reaches `timingSafeEqual`).
+- **`makeRequest(authorization?)`** — local helper that builds a stubbed Express `Request` via `asStub`, returning the supplied string only for the `authorization` header (case-insensitive).
+- **`describe('isMetricsScraper', …)`** — eight cases:
+  - *No token configured* → 503, `next` not called.
+  - *Exact `Bearer <token>` match* → `next` called once, no status set.
+  - *Right token, no scheme* → 401.
+  - *Wrong scheme (`Basic`)* → 401.
+  - *Missing Authorization header* → 401.
+  - *Length-mismatch token* → 401, **and** the call must not throw (guards against `timingSafeEqual` throwing on unequal lengths, which would be a 500 and a length oracle).
+  - *Equal-length token differing in one byte* → 401 (exercises `timingSafeEqual` past the length guard).
+  - *Empty-string configured token* → 503 (treated as unconfigured).
 
 ## Relationships
 
-- **`src/modules/observability/metrics-scraper.ts`** – the system under test; this file imports `isMetricsScraper` and drives it with stubbed `req`/`res`/`next`.
-- **`tests/support/stub.ts`** – provides `asStub`, used to construct the fake `Request` object.
-- **`tests/support/express.ts`** – provides `makeResponseStub`, which records `status()` calls so assertions can inspect the response code without a live server.
+- **`src/modules/observability/metrics-scraper.ts`** — source of `isMetricsScraper`, the unit under test.
+- **`tests/support/environment.ts`** — provides `setEnvironment`, used to set or clear `NODE_METRICS_TOKEN` per test.
+- **`tests/support/express.ts`** — provides `makeResponseStub`, the fake `Response` used to assert `.status()` calls.
+- **`tests/support/stub.ts`** — provides `asStub`, used to build the minimal `Request` object.
 
 ## Notes
 
-- Status semantics: **503** means "endpoint not configured" (no token in env), **401** means "credential present but wrong". Tests assert both codes explicitly; do not conflate them.
-- The length-mismatch test and the equal-length-different-byte test are intentionally separate: the first catches the `timingSafeEqual` throw, the second confirms the comparison isn't short-circuited by the length guard.
-- `NODE_METRICS_TOKEN` is read from `process.env` at call time (not captured at import time), so each test sets it independently and `afterEach` restores the original.
+- The length-mismatch test asserts **both** that no exception is thrown *and* that a 401 is returned; either alone would miss a regression (a throw means a 500, a 401-without-guard means the oracle is still live via error-handling paths).
+- An empty string for `NODE_METRICS_TOKEN` is intentionally treated as *unconfigured* (503), not as a valid zero-length credential.
+- Each test calls `setEnvironment` with a fresh value; there is no `beforeEach`/`afterEach` reset — isolation relies on every test setting the variable it needs.

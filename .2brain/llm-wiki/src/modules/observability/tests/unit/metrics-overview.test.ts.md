@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/tests/unit/metrics-overview.test.ts
-sha256: c50f74b19f9a4b1c35e64b2c14bf8a83f9c624b2a2e1579c37f6c7402f42ac5f
-generated_at: 2026-09-23T18:58:34.465522+00:00
+sha256: d4c38e68a316bd09e64bf9be4f7d751112b2ca80f8f1433912da1acc34fea29d
+generated_at: 2026-10-15T10:57:54.861921+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test for the `GET /observability/metrics/overview` endpoint. It verifies that each domain row in the response payload carries the actual counter value resolved by metric **name** from the shared Prometheus registry, and that a missing counter (e.g. after a module is deleted) degrades to `0` without breaking the fixed response shape.
+Unit tests for the `GET /observability/metrics/overview` endpoint. They verify that each domain row in the response carries real numbers resolved by metric **name** from the shared Prometheus registry, and that a missing counter (e.g. a deleted module) causes the entire block to be omitted rather than reporting zeros.
 
 ## Key elements
 
-- **`Overview`** — local interface describing the payload subset the suite asserts on (`auth`, `business`, `database` sections).
-- **`counter(name)`** — helper that resolves a metric by name via `metricsRegistry.getSingleMetric` and casts it to a minimal `{ inc }` stub, avoiding a hard type dependency on the registry's `Metric` union.
-- **`runOverview()`** — calls `getObservabilityMetricsOverview` with empty args and returns the payload passed to the (mocked) `successResponse`.
-- **Test cases** — one per wired row (login success/failure, signup, checkout, orders created, db queries/errors) plus one for the absent-counter path. Each increments the real counter, re-runs the controller, and asserts the delta.
+- **Side-effect imports** (`@modules/account/module`, `@infrastructure/persistence/command-metrics`) — pull in each module's `metrics.ts` so its counters/histograms self-register on the shared registry before any test runs. No internals are imported directly.
+- **`jest.mock('@infrastructure/http/response')`** — stubs `successResponse`/`rejectResponse` so the controller under test doesn't perform real HTTP work.
+- **`describe('observability metrics overview')`** — four `it` blocks:
+  - *login successes/failures* — increments `auth_login_total` via `counter()` and asserts `before`/`after` deltas on `auth.loginSuccess` / `auth.loginFailure`.
+  - *signups* — increments `auth_signup_total` and checks `auth.signupSuccess` delta.
+  - *database commands/errors* — observes `db_client_operation_duration_seconds` histogram (3 samples, 1 error outcome) and checks `database.queriesTotal` / `database.errorsTotal` deltas.
+  - *absent business block* — removes four `cart`/`order`/`inventory` metrics from `metricsRegistry`, asserts the `business` key is **absent** from the response (while `auth` remains), then re-registers them.
+- **`metrics-overview.support.ts`** helpers — `counter(name)`, `histogram(name)` fetch a metric by name off the registry; `runOverview()` invokes the controller and returns the parsed body.
 
 ## Relationships
 
-- **`get-observability-metrics-overview.ts`** — the controller under test; called directly with `{} as never` args.
-- **`metrics-registry.ts`** — the shared registry the controller reads from and the tests increment via `counter()`; the absent-counter test also calls `removeSingleMetric` / `registerMetric` on it.
-- **`response.ts`** — mocked wholesale so `successResponse` becomes a `jest.fn()` whose call args yield the payload.
-- **`account/module.ts`, `cart/module.ts`, `orders/module.ts`** — imported for their **side effect only** (loading manifests → routes → controllers → `metrics.ts`), which registers the real counters on the shared registry. Their internals are never referenced.
-- **`tests/support/stub.ts`** — provides `asStub` used by the `counter` helper to cast the registry lookup result.
+- **`src/infrastructure/observability/metrics-registry.ts`** — the single global registry. Tests import `metricsRegistry` directly to call `getSingleMetric` / `removeSingleMetric` / `registerMetric` in the absence test. All other counters are reached through it via the support helpers.
+- **`src/modules/account/module.ts`** — imported as a side-effect; its transitive `metrics.ts` registers `auth_login_total` and `auth_signup_total` on the registry. The test never touches account internals.
+- **`src/infrastructure/persistence/command-metrics.ts`** — imported as a side-effect; registers `db_client_operation_duration_seconds` histogram.
+- **`src/modules/observability/tests/unit/metrics-overview.support.ts`** — provides `counter`, `histogram`, and `runOverview` helpers that this spec uses in every test case.
 
 ## Notes
 
-- The three module imports at the top are **side-effect imports**; they exist solely to populate the global registry. Removing any of them silently drops its counters and the corresponding assertions will see zeros.
-- The absent-counter test **mutates the process-global registry** (removes then re-registers `cart_checkout_total`). If the metric was `undefined` it skips the restore. Later suites in the same Jest worker share this registry instance.
-- `successResponse` and `rejectResponse` are both mocked, but only `successResponse` is asserted on. If the controller ever branches to `rejectResponse`, `runOverview` will return `undefined` and assertions will fail with an opaque error.
-- The controller is invoked with `{} as never` for both args — no real `req`/`res` objects are needed because the response shape is fully determined by the registry state.
+- The registry is **process-global**. The "absent business block" test mutates shared state (removes metrics) and **must** restore them in the same test; a failure before the restore loop will poison later suites that run in the same Jest worker.
+- The side-effect imports deliberately mirror the controller's own boundary: it resolves by name, so a renamed or deleted metric degrades to zero/absence rather than a hard import error. The tests encode that contract.
+- `business` is optional in `openapi.yaml`; the test asserts its **absence** (not a zero-valued object) when no shop-module counter is registered.

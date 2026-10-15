@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/metrics-scraper.ts
-sha256: 274e695d10a046f04f3ab99316a4722fac26edd01cf4948d9550fca208097f67
-generated_at: 2026-09-23T18:56:12.740200+00:00
+sha256: f4030a1bb38290544b4037888cbd528f14b34e378e8f259b18a5f97a796fb6f4
+generated_at: 2026-10-15T10:55:12.013603+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express middleware that guards the single Prometheus scrape route (`GET /observability/metrics`) with a static bearer credential. It exists as a separate file from the route because Prometheus cannot hold a session token, so the standard `platform.observability.any.read` check used by other observability routes is not applicable here.
+Single-purpose Express middleware that guards `GET /observability/metrics` with a static bearer token. Prometheus scrapers cannot hold sessions or present the `platform.observability.any.read` permission used by the other observability routes, so this endpoint gets its own credential. The file lives beside the route it protects and is deliberately kept out of the module barrel — it is wiring, not published language.
 
 ## Key elements
 
-- **`isMetricsScraper(request, response, next)`** — the sole export. Validates the `Authorization: Bearer <token>` header against `process.env.NODE_METRICS_TOKEN` using `constantTimeEqual`. Three outcomes:
-    - Token env var unset → `503` (deny-by-default), warning logged.
-    - Header missing/malformed or token mismatch → `401`.
-    - Match → `next()` is called.
+- **`isMetricsScraper(request, response, next)`** — the sole export. Express middleware that:
+  - Returns **503** if `NODE_METRICS_TOKEN` is unset (deny-by-default).
+  - Parses the `Authorization` header, requiring the literal `Bearer ` prefix (a bare token is rejected).
+  - Compares the provided token against the configured value with `constantTimeEqual`.
+  - Returns **401** on mismatch; records a security event only when a token *was* provided (wrong token = credential guess; missing token = probe).
+  - Calls `next()` on success.
 
 ## Relationships
 
-- **`src/infrastructure/security/constant-time.ts`** — provides `constantTimeEqual`, used instead of `===` to avoid timing-attack prefix leakage on the token.
-- **`src/infrastructure/http/response.ts`** — provides `rejectResponse`, the shared helper for the 503 and 401 rejections.
-- **`src/infrastructure/adapters/logger.ts`** — provides `logger`, used for the one warning when the token is unset.
-- **`src/modules/observability/routes.ts`** — mounts `isMetricsScraper` as the guard on the `/observability/metrics` route; this file is the guard it delegates to.
-- **`src/modules/observability/tests/unit/metrics-scraper.test.ts`** — unit tests for the middleware's three code paths.
+- **`src/modules/observability/config.ts`** — calls `observabilityConfig()` to read `NODE_METRICS_TOKEN`.
+- **`src/modules/observability/routes.ts`** — the route this middleware is mounted on.
+- **`src/infrastructure/security/constant-time.ts`** — provides `constantTimeEqual` for the token comparison.
+- **`src/infrastructure/http/response.ts`** — provides `rejectResponse` for the 503/401 exits.
+- **`src/infrastructure/http/request.ts`** — provides `callerContextOf` to populate the audit record's caller field.
+- **`src/infrastructure/observability/audit.ts`** — supplies the `coreAuditActions.SECURITY_METRICS_TOKEN_INVALID` action constant.
+- **`src/infrastructure/observability/security-events.ts`** — `recordSecurityEvent` is called on each invalid-token attempt.
+- **`src/infrastructure/adapters/logger.ts`** — `logger.warn` when the token is unset.
+- **`src/modules/observability/tests/unit/metrics-scraper.test.ts`** — unit tests covering all three branches (unset, missing/invalid, valid).
+- **`tests/integration/observability-auth.test.ts`** — integration tests exercising the endpoint's auth flow end-to-end.
 
 ## Notes
 
-- The `"Bearer "` prefix is **required**, not optional. A bare token in the header is treated as absent (empty string fed to the comparison), so the request fails with 401. This prevents a malformed header shape from ever reaching the equality check.
-- Deliberately **not** re-exported from the module barrel (`index.ts`). The file docblock calls it "wiring, not published language."
-- `Stryker disable/restore` comments bracket the 503 branch to suppress mutation-testing noise on that path.
-- The env var is `NODE_METRICS_TOKEN` (not a generic `METRICS_TOKEN`), tying it to the Node runtime's process env.
+- **Timing side-channel:** `constantTimeEqual` is used instead of `===` specifically so an attacker cannot recover the token's prefix by measuring response time.
+- **`Bearer ` prefix is mandatory, not optional.** The code does not strip-if-present; it requires the scheme. A token sent without `Bearer ` is treated as absent.
+- **Stryker annotations** (`// Stryker disable all` / `// Stryker restore all`) surround the 503 branch to suppress mutation testing there — that branch is a config-error path, not logic worth mutating.
+- The file is intentionally **not re-exported** from the observability barrel; import it directly if you need to reference it.

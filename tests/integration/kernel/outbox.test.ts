@@ -381,4 +381,12 @@ describe('cleanup', () => {
 
         expect(ttl.map(([fields]) => fields)).toEqual([{ publishedAt: 1 }]);
     });
+
+    it('keeps a published row seven days by default', () => {
+        const ttl = outboxEventModel.schema
+            .indexes()
+            .find(([, index]) => index.expireAfterSeconds !== undefined);
+
+        expect(ttl?.[1].expireAfterSeconds).toBe(7 * 24 * 60 * 60);
+    });
 });

@@ -44,6 +44,9 @@ import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users
 import { userModel } from '@modules/users/model';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
 import { withReloadedRateLimits } from '@tests/rate-limit-harness';
+import { cookieHeader, setCookie } from '@tests/cookies';
+import { registerOAuthProvider } from '@modules/account/oauth/providers';
+import { fakeOAuthProvider } from '@scenarios/support/doubles/oauth-fake';
 import {
     plantToken,
     sessionHashesOf,
@@ -203,6 +206,47 @@ const issueSession = async () => {
     return { user, jwtCookie };
 };
 
+/** One start, then the callback request it leads to — built apart so the callbacks can overlap. */
+const startAttempt = async () => {
+    const start = await api().get('/account/oauth/fake');
+    const callbackUrl = new URL(start.headers.location);
+    return () =>
+        api()
+            .get(callbackUrl.pathname + callbackUrl.search)
+            .set('Cookie', cookieHeader(start, 'oauth_state', 'oauth_verifier'));
+};
+
+describe('two simultaneous OAuth signups for one identity', () => {
+    beforeAll(() => {
+        registerOAuthProvider('fake', () => fakeOAuthProvider);
+    });
+
+    it('creates one account; a loser lands on provider_error, and a retry logs in', async () => {
+        const callbacks = await Promise.all(Array.from({ length: RACE_SIZE }, startAttempt));
+
+        const results = await raceN(RACE_SIZE, (index) => callbacks[index]());
+
+        const responses = results.flatMap((result) =>
+            result.status === 'fulfilled' ? [result.value] : []
+        );
+        expect(responses).toHaveLength(RACE_SIZE);
+        // Each answer is a redirect: a session, or the generic provider failure — never a 500.
+        for (const response of responses) {
+            expect(response.status).toBe(302);
+            const signedIn = setCookie(response, '__Host-session') !== undefined;
+            const failed =
+                new URL(response.headers.location).searchParams.get('error') === 'provider_error';
+            expect(signedIn || failed).toBe(true);
+        }
+        expect(await userModel.countDocuments({ email: 'oauth.demo@example.com' })).toBe(1);
+
+        const retry = await (await startAttempt())();
+
+        expect(retry.status).toBe(302);
+        expect(setCookie(retry, '__Host-session')).toBeDefined();
+    });
+});
+
 describe('R5 — concurrent refresh-token rotation, same cookie', () => {
     it('answers every simultaneous exchange with a working access token, none rejected', async () => {
         // Two tabs waking together, an interceptor retrying — all present the SAME cookie, and
@@ -306,11 +350,15 @@ describe('the limiter is raised for these suites, not disabled', () => {
         const supertest = supertestModule.default;
 
         const app = express();
+        app.use(express.json());
         app.post('/probe', ...credentialLimiters, (_request, response) => {
             response.status(401).json({ ok: false });
         });
 
-        const results = await raceN(6, () => supertest(app).post('/probe'));
+        // The identity budget counts attempts at one named account; a body naming none spends nothing.
+        const results = await raceN(6, () =>
+            supertest(app).post('/probe').send({ email: 'someone@example.com' })
+        );
 
         expect(countStatus(results, 429)).toBeGreaterThan(0);
     });

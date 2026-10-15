@@ -1,7 +1,7 @@
 ---
 source: src/modules/observability/tests/unit/get-observability-events.test.ts
-sha256: 99dbd368511ad7bed6b7bd11cc986ce724618fb1f199a99ee43c6979dab99546
-generated_at: 2026-09-27T15:05:55.011839+00:00
+sha256: 1bd69800905b03fb423cd44851ba5f13223510f24f825e31405c68107d868384
+generated_at: 2026-10-15T10:57:13.025735+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `getObservabilityEvents` Express handler. They verify that the handler does not write to the response itself (SSE owns it) and that it hands the streamer a permission-recheck closure wired to the correct key and cookie value.
+Unit tests for the `GET /observability/events` handler. They verify that the controller delegates entirely to the SSE streamer (writing nothing to the response itself) and that the permission recheck it hands over is correctly wired to the caller's request and the observability read key.
 
 ## Key elements
 
-- **`describe('GET /observability/events')`** — the test suite, two cases.
-- **Test 1: "hands the raw response and a recheck to the streamer"** — asserts `streamObservabilityMetrics` is called with the raw `Response` and a `Function` (the recheck), confirming the handler delegates without touching the response.
-- **Test 2: "wires the recheck to the same key and the cookie"** — invokes the recheck returned by the mocked streamer and asserts `stillHoldsKeyViaCookie` receives `(request, 'cookie.jwt', OBSERVABILITY_READ_KEY)`.
-- **`cookieRequest()`** — local helper returning an `asStub<Request>` with `cookies: { jwt: 'cookie.jwt' }`, representing the already-validated state before the handler runs.
-- **Mocks** — `streamObservabilityMetrics` is fully replaced; `stillHoldsKeyViaCookie` is partially replaced via the `...jest.requireActual` spread so the rest of the authorizations module stays intact.
+- **`cookieRequest()`** — local helper that builds a stub `Request` carrying a `sessionRecheck` mock, representing the state left by `requirePermissionViaCookie` after admitting the caller.
+- **Test: "hands the raw response and a recheck to the streamer"** — asserts `streamObservabilityMetrics` is called with the response and a function, and that the handler performs no other response writes.
+- **Test: "wires the recheck to the key and the request"** — invokes the recheck callback extracted from the mock call and asserts it delegates to `stillHoldsKeyViaCookie(request, OBSERVABILITY_READ_KEY)`.
+- **Mocks** — `streamObservabilityMetrics` (fully replaced) and `stillHoldsKeyViaCookie` (replaced while keeping the rest of the authorizations module real via `jest.requireActual` spread).
 
 ## Relationships
 
-- **`src/modules/observability/controllers/get-observability-events.ts`** — the module under test; provides `getObservabilityEvents` and the `OBSERVABILITY_READ_KEY` constant used in assertions.
-- **`src/modules/observability/services/stream.ts`** — fully mocked; the handler's sole delegation target.
-- **`src/kernel/middlewares/authorizations.ts`** — partially mocked; only `stillHoldsKeyViaCookie` is stubbed to verify the recheck wiring.
-- **`tests/support/stub.ts`** — provides the `asStub<T>()` helper used to create typed Express `Request`/`Response` stand-ins without importing real Express instances.
+- **`src/modules/observability/controllers/get-observability-events.ts`** — the unit under test; provides `getObservabilityEvents` and `OBSERVABILITY_READ_KEY`.
+- **`src/modules/observability/services/stream.ts`** — mocked; the SSE streamer that receives the raw response and the recheck closure.
+- **`src/kernel/middlewares/authorizations.ts`** — partially mocked; only `stillHoldsKeyViaCookie` is stubbed so the test can assert the recheck targets the right key without pulling in other guard logic.
+- **`tests/support/stub.ts`** — provides `asStub<T>` for creating minimally typed mock objects (Request, Response).
 
 ## Notes
 
-- The module-level doc comment explains *why* the recheck is critical: an SSE stream has no "next request" in which a revoked caller would be rejected, so the recheck closure is the only mid-stream revocation path.
-- The partial-mock pattern (`...jest.requireActual`) is intentional — it keeps every other guard in `authorizations.ts` real while isolating the one function this test cares about.
-- `beforeEach` clears all mocks; no setup beyond `asStub` is needed because the handler is a pure delegation.
+- The handler is expected to write **nothing** to the response before handing it off; any write would terminate the SSE stream before it starts.
+- The recheck closure is the sole enforcement point after initial admission — there is no "next request" on an open SSE stream, so a revoked caller is caught only when the recheck fires.
+- The authorizations mock intentionally spreads `jest.requireActual` to keep sibling guards (e.g., `requirePermissionViaCookie`) in their real implementations; only the recheck function is stubbed.

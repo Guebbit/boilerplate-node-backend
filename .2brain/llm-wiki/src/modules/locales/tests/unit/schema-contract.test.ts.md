@@ -1,7 +1,7 @@
 ---
 source: src/modules/locales/tests/unit/schema-contract.test.ts
-sha256: 337572ead7290f8c7af8ccf1d153daadccdcd8d89265020402742518e4d159af
-generated_at: 2026-09-23T18:54:26.968455+00:00
+sha256: 75d22d669f7d29e0e26c4ad0b6857e07a298f4d726338042ce423fc9924d4f5d
+generated_at: 2026-10-15T10:49:00.558636+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests that lock down the schema contracts for the locales collections — required paths, unique indexes, field normalisation, defaults, and the `deriveBaseLanguage` helper. They exist to make database-level invariants (e.g. "one row per tag", "one value per locale+tenant+key") explicit, regression-guarded facts rather than implicit assumptions.
+Unit tests that pin the schema contracts for the two locale collections (`localeSchema`, `localeEntrySchema`) and the `deriveBaseLanguage` helper. They assert required paths, unique indexes, field-level normalisation options, defaults, and enum restrictions so that a regression in any of those invariants (e.g. a lost `lowercase: true` or a changed compound index) fails in CI rather than in production.
 
 ## Key elements
 
-- **`normalises` (local helper)** — reads a schema field's `options` (`lowercase`, `trim`) so tests can assert normalisation without importing internal option builders.
-- **`describe('localeSchema')`** — asserts required paths, the `locales_tag` unique index, case/trim normalisation on `tag` and `baseLanguage`, defaults (`direction`, `active`, `revision`), enum restriction on `direction`, and the `revision ≥ 0` constraint.
-- **`describe('deriveBaseLanguage')`** — asserts primary-subtag extraction, passthrough of bare tags, and case/whitespace normalisation of the output.
-- **`describe('localeEntrySchema')`** — asserts required paths, the compound `localeEntries_locale_tenant_key` unique index, selective normalisation (locale & tenant lowercased; key trimmed but _not_ lowercased), the `value` default of `''`, and `timestamps: true`.
+- **`normalises` (local helper)** — reads `options` (`lowercase`, `trim`) off a specific path in a Mongoose schema; used throughout the file to assert per-field normalisation.
+- **`describe('localeSchema')`** — five tests:
+  - Required paths are `['baseLanguage', 'name', 'nativeName', 'tag']`.
+  - Unique index `locales_tag` on `tag`.
+  - `tag` and `baseLanguage` carry `lowercase: true, trim: true`.
+  - Defaults: `direction → ltr`, `active → true`, `revision → 0`.
+  - `direction` enum equals `Object.values(LocaleDirection)`.
+- **`describe('deriveBaseLanguage')`** — three tests: extracts primary subtag (`en-GB → en`), passes bare tags through (`it → it`), normalises case/whitespace before splitting.
+- **`describe('localeEntrySchema')`** — five tests:
+  - Required paths are `['app', 'key', 'locale']` (`value` is intentionally not required).
+  - Unique compound index `localeEntries_locale_app_key` on `(locale, app, key)`.
+  - `locale` and `app` are lowercased; `key` is trimmed but **not** lowercased.
+  - `value` defaults to `''` (empty string).
+  - Both schemas have `timestamps: true`.
 
 ## Relationships
 
-- **`src/modules/locales/model.ts`** — source of `localeSchema`, `localeEntrySchema`, and `deriveBaseLanguage`; the entire test file exists to pin the behaviour of these three exports.
-- **`src/types/index.ts`** — provides `LocaleDirection`, used to assert the enum contract on the `direction` field.
-- **`tests/support/schema.ts`** — provides the assertion helpers (`defaultOf`, `enumOf`, `indexOptionSpecs`, `indexSpecs`, `optionsOf`, `pathOptions`, `requiredPaths`) that turn "the schema should declare X" into a single, readable expectation.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/locales/model.ts` | Source of the three units under test: `localeSchema`, `localeEntrySchema`, `deriveBaseLanguage`. |
+| `src/types/index.ts` | Provides the `LocaleDirection` enum used to assert the allowed values of the `direction` field. |
+| `tests/support/schema.ts` | Supplies all assertion helpers: `defaultOf`, `enumOf`, `indexOptionSpecs`, `indexSpecs`, `optionsOf`, `requiredPaths`. The test file contains no raw Mongoose introspection logic. |
 
 ## Notes
 
-- Tests assert _schema declarations_ (index specs, option flags, defaults) rather than round-tripping documents through Mongoose. They verify the contract a database would enforce, not application logic.
-- The `normalises` helper casts the path lookup to an inline type; if the schema library's option shape changes, this local cast will need updating.
-- The distinction "key is trimmed but not lowercased" (vs. locale/tenant which are lowercased) is a deliberate contract: i18n keys are case-sensitive identifiers, while locale and tenant are case-insensitive addresses.
+- The file is intentionally "documentation as test": inline comments explain *why* each invariant exists (negotiator matching, upsert semantics, key case-sensitivity). Reading the comments is part of the contract.
+- `key` in `localeEntrySchema` is explicitly **not** lowercased — `Cart.Empty` and `cart.empty` are distinct translations. This is the one asymmetry between the three compound-index fields.
+- `value` defaulting to `''` (rather than being optional) is deliberate: it lets the editor distinguish "declared but blank" from "not declared at all."
+- `normalises` is a file-local constant, not exported. It reads a Mongoose `path()` call whose type is cast to expose `options`; if the Mongoose version changes how options are stored, this helper is the single point to fix.
