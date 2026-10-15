@@ -17,7 +17,7 @@ import { rearmPrecondition } from '@infrastructure/persistence/versioning';
 import type { ClientSession } from 'mongoose';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { logger } from '@infrastructure/adapters/logger';
+import { afterCommit } from '@infrastructure/runtime/after-commit';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { productsAuditActions } from '../audit';
 import { PRODUCT_CREATED, PRODUCT_RELEASE_DATE_CHANGED } from '../events';
@@ -73,22 +73,15 @@ type ProductUpdateData = Partial<
 };
 
 /**
- * Runs one post-commit step and swallows only its own failure, with a log line.
+ * Hand a pending image to the queue after the commit; a failure is logged and the saved product
+ * answered.
  *
- * Everything after the commit is best-effort by design: the product is already written, so a
- * failed audit entry, image enqueue or old-image delete must not turn a committed write into an
- * error response — and one failing must not stop the next.
- *
- * @param step - what the step is, for the log
- * @param run - the step itself
+ * @param product - the saved product
  */
-const afterCommitStep = (step: string, run: () => unknown): Promise<void> =>
-    Promise.resolve()
-        .then(run)
-        .then(() => undefined)
-        .catch((error: unknown) => {
-            logger.error({ message: `Product write: post-commit step failed: ${step}.`, error });
-        });
+const enqueuePendingImage = (product: ProductDocument): Promise<ProductDocument> =>
+    afterCommit('image enqueue', () => enqueueIfPending(product), product, {
+        productId: String(product._id)
+    });
 
 /**
  * `data` without its `releaseDate`, which the write converts to a `Date` itself.
@@ -155,32 +148,25 @@ export const finishCreate = (
     nudgeOutbox();
     const id = String(product._id);
 
-    return productRepository
-        .findById(id)
-        .then((reread) => reread ?? product)
-        .catch((error: unknown) => {
-            // The create committed: a failed re-read must not answer 500, or a retry makes a second product.
-            logger.error({ message: 'Product write: post-commit step failed: re-read.', error });
-            return product;
-        })
-        .then((created) =>
-            afterCommitStep('audit', () =>
+    return afterCommit(
+        're-read',
+        () => productRepository.findById(id).then((reread) => reread ?? product),
+        product,
+        { productId: id }
+    ).then((created) =>
+        afterCommit(
+            'audit',
+            () =>
                 recordAudit(context, {
                     action: productsAuditActions.ADMIN_PRODUCT_CREATED,
                     outcome: 'success',
                     targetType: 'product',
                     targetId: id
-                })
-            )
-                .then(() => enqueueIfPending(created))
-                .catch((error: unknown) => {
-                    logger.error({
-                        message: 'Product write: post-commit step failed: image enqueue.',
-                        error
-                    });
-                    return created;
-                })
-        );
+                }),
+            undefined,
+            { productId: id }
+        ).then(() => enqueuePendingImage(created))
+    );
 };
 
 /**
@@ -301,17 +287,10 @@ export const finishUpdate = (outcome: ProductUpdateOutcome): Promise<ProductDocu
     nudgeOutbox();
     const { updated, oldImageUrl } = outcome;
 
-    return afterCommitStep('old image removal', () =>
-        oldImageUrl ? imageStore.remove(oldImageUrl) : undefined
-    )
-        .then(() => enqueueIfPending(updated))
-        .catch((error: unknown) => {
-            logger.error({
-                message: 'Product write: post-commit step failed: image enqueue.',
-                error
-            });
-            return updated;
-        });
+    // `imageStore.remove` never rejects (a missing file is not a failure).
+    return (oldImageUrl ? imageStore.remove(oldImageUrl) : Promise.resolve()).then(() =>
+        enqueuePendingImage(updated)
+    );
 };
 
 /**
@@ -363,13 +342,17 @@ export const finishUpdateById = (
     outcome: ProductUpdateOutcome,
     context: CallerContext
 ): Promise<ResponseSuccess<ProductDocument>> =>
-    afterCommitStep('audit', () =>
-        recordAudit(context, {
-            action: productsAuditActions.ADMIN_PRODUCT_UPDATED,
-            outcome: 'success',
-            targetType: 'product',
-            targetId: id
-        })
+    afterCommit(
+        'audit',
+        () =>
+            recordAudit(context, {
+                action: productsAuditActions.ADMIN_PRODUCT_UPDATED,
+                outcome: 'success',
+                targetType: 'product',
+                targetId: id
+            }),
+        undefined,
+        { productId: id }
     )
         .then(() => finishUpdate(outcome))
         .then((updated) => generateSuccess(updated));

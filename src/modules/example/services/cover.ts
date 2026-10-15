@@ -20,6 +20,7 @@ import { t } from '@infrastructure/i18n';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { applyImageWriteback, imageStore } from '@infrastructure/adapters/image-store';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
+import { afterCommit } from '@infrastructure/runtime/after-commit';
 import type { ImageChanges } from '@infrastructure/http/uploads';
 import { accessibleFilterFor } from '@kernel/access/query';
 import { exampleAuditActions } from '../audit';
@@ -53,7 +54,18 @@ const applyCover = (
     return exampleRepository
         .save(example)
         .then((saved) =>
-            enqueueIfImagePending(saved, EXAMPLE_IMAGE_COLLECTION, exampleRepository.writebackImage)
+            // After the commit: a failed hand-off is logged, and the saved cover still answers.
+            afterCommit(
+                'image enqueue',
+                () =>
+                    enqueueIfImagePending(
+                        saved,
+                        EXAMPLE_IMAGE_COLLECTION,
+                        exampleRepository.writebackImage
+                    ),
+                saved,
+                { exampleId: String(saved._id) }
+            )
         )
         .then((saved) => imageStore.remove(replaced).then(() => saved))
         .then((saved) => {

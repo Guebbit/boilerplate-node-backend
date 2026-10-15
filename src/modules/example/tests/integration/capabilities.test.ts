@@ -15,6 +15,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { emitDomainEvent, resetDomainEvents } from '@kernel/events';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { logger } from '@infrastructure/adapters/logger';
 import { ExampleStatus } from '@types';
 import * as auditPort from '@infrastructure/observability/audit';
 import { exampleAuditActions } from '../../audit';
@@ -144,6 +145,27 @@ describe('setCover', () => {
 
         expect(imageStore.remove).toHaveBeenCalledWith('/images/old.jpg');
         expect(imageStore.remove).not.toHaveBeenCalledWith('/images/new.jpg');
+    });
+
+    it('saves the cover and logs when the image hand-off fails after the commit', async () => {
+        const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        const owner = await createUser();
+        const mine = await createExample({ userId: owner.id });
+
+        // A pending key with nothing quarantined under it: the hand-off cannot read the upload.
+        const saved = asSuccess(
+            await setCover(
+                String(mine._id),
+                { ...image('slow'), pendingImageKey: 'missing' },
+                callerContextAs('customer', owner.id)
+            )
+        );
+
+        expect(saved.data).toMatchObject({ imageUrl: '/images/slow.jpg' });
+        expect(logged).toHaveBeenCalledWith(
+            expect.objectContaining({ message: 'Post-commit step failed: image enqueue.' })
+        );
+        logged.mockRestore();
     });
 
     it('answers 404 for someone else’s example, and changes nothing', async () => {

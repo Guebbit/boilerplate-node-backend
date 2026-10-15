@@ -26,6 +26,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import { presentUser } from '../../presenter';
 import type { UserDocument } from '../../model';
+import { logger } from '@infrastructure/adapters/logger';
 
 // See `tests/support/ports.ts`: the namespace import above must resolve a plain `jest.fn()`,
 // not the real (non-configurable) export, for `observePort` to be able to clear and hand it out.
@@ -246,6 +247,29 @@ describe('userService.create', () => {
         expect(user.email).toBe('created@example.com');
     });
 
+    it('answers 201 and logs when the image hand-off fails after the commit', async () => {
+        const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+
+        // A pending key with nothing quarantined under it: the hand-off cannot read the upload.
+        const user = await expectCreated(
+            {
+                email: 'pending-image@example.com',
+                username: 'pendingimage',
+                pendingImageKey: 'missing'
+            },
+            callerContextAs('admin')
+        );
+
+        expect(await userRepository.findById(String(user._id))).not.toBeNull();
+        expect(logged).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Post-commit step failed: image enqueue.',
+                userId: String(user._id)
+            })
+        );
+        logged.mockRestore();
+    });
+
     it('records no acceptance of the terms: an administrator showed nobody the text', async () => {
         const user = await expectCreated(
             { email: 'staffmade@example.com', username: 'staffmade' },
@@ -410,6 +434,25 @@ describe('userService.updateById', () => {
         expect(updated.username).toBe('new-name');
         const roles = await rolesOf(String(updated._id), DEPLOYMENT_TENANT_ID);
         expect(roles.tenant).toBe('admin');
+    });
+
+    it('keeps the change and logs when the image hand-off fails after the commit', async () => {
+        const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        const user = await createUser();
+
+        const result = await userService.updateById(
+            user._id.toString(),
+            { username: 'kept-name', imageUrl: '/images/pending.jpg', pendingImageKey: 'missing' },
+            callerContextAs('admin')
+        );
+
+        expect(result.success).toBe(true);
+        const stored = await userRepository.findById(user._id.toString());
+        expect(stored?.username).toBe('kept-name');
+        expect(logged).toHaveBeenCalledWith(
+            expect.objectContaining({ message: 'Post-commit step failed: image enqueue.' })
+        );
+        logged.mockRestore();
     });
 
     it('dates the analytics choice when it is first made and when it changes, not when it repeats', async () => {

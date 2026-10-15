@@ -136,6 +136,11 @@ path, `toUser` (`model.ts`) decrypts it on the way out, whether the source docum
 `search()`'s `.lean()` result. See
 [Secrets at rest](../theory/defences/crypto-and-secrets.md#secrets-at-rest).
 
+Post-commit steps log and continue (`afterCommit`, `@infrastructure/runtime/after-commit`): once a
+create or update has committed, a failed image hand-off is logged and the saved user answered, never
+a 500 on a write that landed. Ending sessions is not such a step — it rides in the same save as the
+session epoch.
+
 ## Soft delete vs. erasure
 
 `DELETE /users/:id` soft-deletes by default — `deletedAt` is stamped, the account's sessions are
