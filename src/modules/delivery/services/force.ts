@@ -7,6 +7,7 @@
 import { t } from '@infrastructure/i18n';
 import { fieldError, generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { holds } from '@kernel/ability';
+import { auditForbidden } from '@infrastructure/observability/audit';
 import type { CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -24,8 +25,13 @@ export const refuseUnearnedForce = (
     reason: string | undefined
 ): ResponseReject | undefined => {
     if (!forced) return undefined;
-    if (!holds(context.caller, 'override', 'Order'))
+    if (!holds(context.caller, 'override', 'Order')) {
+        auditForbidden(context, {
+            targetType: 'order',
+            metadata: { reason: 'missing_permission', permission: 'override:Order' }
+        });
         return generateReject(403, [t('generic.error-forbidden')]);
+    }
     if (!reason)
         return generateReject(422, [
             fieldError(

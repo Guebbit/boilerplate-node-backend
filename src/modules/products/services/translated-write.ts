@@ -6,7 +6,7 @@
 import type { z } from 'zod';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
 import { holds } from '@kernel/ability';
-import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
+import { auditForbidden } from '@infrastructure/observability/audit';
 import { fillOmittedWithNull } from '@infrastructure/object-guards';
 import {
     isTranslationPlan,
@@ -91,9 +91,7 @@ const openingStockRefusal = (
 ): ResponseReject | undefined => {
     if (!onHand || holds(context.caller, 'create', 'StockMovement')) return undefined;
 
-    recordAudit(context, {
-        action: coreAuditActions.SECURITY_FORBIDDEN,
-        outcome: 'failure',
+    auditForbidden(context, {
         targetType: 'product',
         metadata: { reason: 'missing_permission', permission: 'create:StockMovement' }
     });

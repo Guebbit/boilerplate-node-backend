@@ -16,7 +16,7 @@ import {
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
-import { recordAudit } from '@infrastructure/observability/audit';
+import { auditForbidden, recordAudit } from '@infrastructure/observability/audit';
 import { isBuyer, orderService } from '@modules/orders';
 import { FulfillmentConsent } from '@types';
 import type { AuthContext, CallerContext, FulfillmentOrder } from '@types';
@@ -47,8 +47,14 @@ export const confirmWait = (
             .getById(String(found.orderId), orderService.callerScope(authContext))
             .then((order) => {
                 if (!order) return generateReject(404, [t('delivery.order-not-found')]);
-                if (!isBuyer(order, authContext))
+                if (!isBuyer(order, authContext)) {
+                    auditForbidden(context, {
+                        targetType: 'order',
+                        targetId: String(order._id),
+                        metadata: { reason: 'not_the_buyer' }
+                    });
                     return generateReject(403, [t('generic.error-forbidden')]);
+                }
 
                 return runAct(async (session) => {
                     const current = await fulfillmentOrderRepository.findInSession(

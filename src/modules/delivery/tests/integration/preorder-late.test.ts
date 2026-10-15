@@ -13,6 +13,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { asAdmin, asCustomer, testCallerContext } from '@tests/callers';
+import { registerAuditSink, type AuditEntry } from '@infrastructure/observability/audit';
 import { asReject } from '@tests/response';
 import { productService } from '@modules/products';
 import { timelineOf } from '@modules/orders/tests/factories';
@@ -239,6 +240,27 @@ describe('the buyer saying keep waiting', () => {
         expect(asReject(byStranger).status).toBe(404);
         expect(asReject(byStaff).status).toBe(403);
         expect(await consentOf(orderId)).toBe('awaiting');
+    });
+
+    it('audits a staff member answering for a buyer as forbidden', async () => {
+        const { orderId, productIds } = await preorder(30);
+        await waitingOf(orderId);
+        await moveDate(productIds[0], inDays(75));
+        const waiting = await waitingOf(orderId);
+        const audited: AuditEntry[] = [];
+        registerAuditSink((entry) => audited.push(entry));
+
+        await confirmWait(String(waiting._id), asAdmin(), testCallerContext);
+
+        expect(audited).toEqual([
+            expect.objectContaining({
+                action: 'security.forbidden',
+                outcome: 'failure',
+                targetType: 'order',
+                targetId: orderId,
+                metadata: { reason: 'not_the_buyer' }
+            })
+        ]);
     });
 
     it('shows the buyer the control, and only while the question stands', async () => {

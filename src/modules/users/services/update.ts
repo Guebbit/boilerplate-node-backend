@@ -18,7 +18,7 @@ import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { rearmPrecondition } from '@infrastructure/persistence/versioning';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
+import { auditForbidden, recordAudit } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import type { CallerContext, UpdateUserByIdRequest, WithServerImage } from '@types';
 import {
@@ -285,9 +285,7 @@ const extraRulesNeeded = (
  * @param context - the caller
  */
 const missingKeyRefusal = (key: string, id: string, context: CallerContext): ResponseReject => {
-    recordAudit(context, {
-        action: coreAuditActions.SECURITY_FORBIDDEN,
-        outcome: 'failure',
+    auditForbidden(context, {
         targetType: 'user',
         targetId: id,
         metadata: { reason: 'missing_permission', permission: key }

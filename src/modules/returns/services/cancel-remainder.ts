@@ -21,6 +21,7 @@
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { generateReject } from '@infrastructure/http/response';
+import { auditForbidden } from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { callerForSubject, systemCallerContext } from '@kernel/permissions';
@@ -60,11 +61,22 @@ interface Cancelled {
 }
 
 /**
- * The 403 for a staff caller without the refund key: a remainder cancel is a refund with
- * consequences, so it needs the key that returns money (`create:Refund`, `stepUp: critical`).
+ * The 403 for a staff caller without the refund rule: a remainder cancel is a refund with
+ * consequences, so it needs the rule that returns money (`create:Refund`, `stepUp: critical`).
+ * Audited, since no route guard can see this refusal.
+ *
+ * @param order - the order the cancel was aimed at
+ * @param context - the caller, for the audit entry
  */
-const forbidden = (): CreateReturnOutcome =>
-    refused(generateReject(403, [t('generic.error-forbidden')]));
+const forbidden = (order: OrderDocument, context: CallerContext): CreateReturnOutcome => {
+    auditForbidden(context, {
+        targetType: 'order',
+        targetId: String(order._id),
+        metadata: { reason: 'missing_permission', permission: 'create:Refund' }
+    });
+
+    return refused(generateReject(403, [t('generic.error-forbidden')]));
+};
 
 /**
  * The Return row of a remainder cancel, closed when made.
@@ -235,6 +247,7 @@ const announceCancelled = (
  * @param order - the order
  * @param input - the request
  * @param authContext - the caller
+ * @param context - the caller, for the audit entry of a refusal
  * @param remainder - the lines of the fulfillment order being cancelled
  * @returns a refusal, or `undefined` when the caller may go on
  */
@@ -242,6 +255,7 @@ const refuseCaller = (
     order: OrderDocument,
     input: CreateReturnInput,
     authContext: AuthContext,
+    context: CallerContext,
     remainder: readonly ProductQuantity[]
 ): CreateReturnOutcome | undefined => {
     if (isBuyer(order, authContext)) {
@@ -260,7 +274,7 @@ const refuseCaller = (
 
     return holds(callerForSubject(authContext, 'Return'), 'create', 'Refund')
         ? undefined
-        : forbidden();
+        : forbidden(order, context);
 };
 
 /**
@@ -288,7 +302,7 @@ export const createCancellation = (
                 // Nothing shipped yet, or nothing left on it: the whole order is cancelled instead.
                 if (!option) return nothingToCancel();
 
-                const refusal = refuseCaller(order, input, authContext, option.lines);
+                const refusal = refuseCaller(order, input, authContext, context, option.lines);
                 if (refusal) return refusal;
 
                 const byBuyer = isBuyer(order, authContext);

@@ -10,7 +10,7 @@ import type { CallerContext } from '@types';
 import { holds } from '@kernel/ability';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { t } from '@infrastructure/i18n';
-import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
+import { auditForbidden } from '@infrastructure/observability/audit';
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { ERROR_CODES } from '@api/error-codes';
 import { membershipsOf, rolesOfMany } from './memberships';
@@ -93,9 +93,7 @@ export const roleProtectedRefusal = (
     canChangeAccount(context, accountId).then((allowed) => {
         if (allowed || !context) return undefined;
 
-        recordAudit(context, {
-            action: coreAuditActions.SECURITY_FORBIDDEN,
-            outcome: 'failure',
+        auditForbidden(context, {
             targetType: 'user',
             targetId: accountId,
             metadata: { reason: ROLE_PROTECTED_REASON }

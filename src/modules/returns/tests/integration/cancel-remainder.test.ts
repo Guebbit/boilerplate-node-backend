@@ -22,6 +22,7 @@ import {
     testCallerContext
 } from '@tests/callers';
 import { asReject } from '@tests/response';
+import { registerAuditSink, type AuditEntry } from '@infrastructure/observability/audit';
 import { assignRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { createUser } from '@modules/users/tests/factories';
@@ -389,10 +390,21 @@ describe('staff cancelling what has not shipped', () => {
 
     it('is refused to a caller without it — the warehouse may receive goods, not decide a refund', async () => {
         const fixture = await partlyShipped();
+        const audited: AuditEntry[] = [];
+        registerAuditSink((entry) => audited.push(entry));
 
         const outcome = await staffCancels(fixture, 'warehouse');
 
         expect(outcome.kind === 'refused' && outcome.reject.status).toBe(403);
+        expect(audited).toEqual([
+            expect.objectContaining({
+                action: 'security.forbidden',
+                outcome: 'failure',
+                targetType: 'order',
+                targetId: fixture.orderId,
+                metadata: { reason: 'missing_permission', permission: 'create:Refund' }
+            })
+        ]);
         expect(await refundsOf(fixture.orderId)).toEqual([]);
         expect(await fulfillmentOrdersOf(fixture.orderId).then(([first]) => first.status)).toBe(
             'in_progress'
