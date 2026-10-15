@@ -10,8 +10,15 @@
  * two — see `invoicing/module.ts`.
  */
 
-import { Router } from 'express';
-import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
+import { Router, type Request } from 'express';
+import {
+    getAuth,
+    isAuth,
+    requireFreshAuthWhen,
+    requirePermission
+} from '@kernel/middlewares/authorizations';
+import { holdsKey } from '@kernel/ability';
+import { callerForSubject } from '@kernel/permissions';
 import { getOrders } from './controllers/get-orders';
 import { createOrder } from './controllers/create-order';
 import { replaceOrderById, updateOrderById } from './controllers/update-order';
@@ -26,6 +33,15 @@ import { postOrderStatusOverride } from './controllers/post-order-status-overrid
 import { invalidateCache, noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
+
+/**
+ * Whether this cancel comes from someone who holds `orders.any.update`: an operator's cancel can
+ * keep a paid order's money, or refund it, so it needs a fresh session. A customer's own cancel is
+ * never prompted — the guard asks the key, and a buyer without it passes through.
+ */
+const isOperatorCancel = (request: Request): boolean =>
+    request.authContext !== undefined &&
+    holdsKey(callerForSubject(request.authContext, 'Order'), 'orders.any.update');
 
 /** Express router for order management (authenticated; `orders.self.read` alone sees only the caller's own orders). */
 export const router = Router();
@@ -72,8 +88,14 @@ router.post(
 router.delete('/', requirePermission('orders.any.delete'), deleteOrders);
 
 // POST /orders/:id/cancel — the one order write a customer can make (owner or admin;
-// the service's conditional write carries the caller's scope)
-router.post('/:id/cancel', invalidateCache(['products']), postCancelOrder);
+// the service's conditional write carries the caller's scope). An operator's cancel asks a fresh
+// session first, before the cache is touched: it is the door that can refund, or keep, the money.
+router.post(
+    '/:id/cancel',
+    requireFreshAuthWhen(isOperatorCancel, 'critical'),
+    invalidateCache(['products']),
+    postCancelOrder
+);
 
 // POST /orders/:id/status-override — must come before /:id
 router.post(

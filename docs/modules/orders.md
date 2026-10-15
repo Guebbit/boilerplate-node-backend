@@ -96,6 +96,11 @@ The status enum is the module's public vocabulary:
 | `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md): `shipped` once the LAST unit has left (an order shipped in parts stays `processing` until then), `delivered` once the last shipment arrived |
 | `cancelled`             | units released, refund issued if one was due | admin, or an expired hold. A product hidden, taken off sale or removed afterwards does not cancel it ([why](./products.md#hiding-taking-off-sale-removing))              |
 
+An operator's cancel (a caller holding `orders.any.update`) asks for a fresh session first, since it
+can refund or keep a paid order's money (`401 REAUTH_REQUIRED` on a stale one); the buyer's own
+cancel is never prompted. Holding the key is the whole rule: there is no rank, so an operator
+cancels a staff member's order, or their own, like anyone's.
+
 Any of these except `paid` (`system`-only, absolute) can also be reached by an admin override with
 a reason — see [Who writes the status](#who-writes-the-status) below.
 

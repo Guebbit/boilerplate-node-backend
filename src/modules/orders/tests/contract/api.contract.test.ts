@@ -15,6 +15,8 @@ import { createUser } from '@modules/users/tests/factories';
 import { orderRepository } from '../../repository';
 import { orderService } from '../../services';
 import { OrderStatus } from '@types';
+import { freezeDate, advanceDate } from '@tests/clock';
+import { reauthWindowSeconds } from '@kernel/config';
 
 setupTestDb();
 
@@ -205,6 +207,40 @@ describe('POST /orders/{id}/cancel', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('cancelled');
+    });
+
+    // An operator's cancel can refund or keep a paid order's money, so it asks a fresh session; the
+    // customer's own cancel, on the same route, is never prompted.
+    it('401s REAUTH_REQUIRED for an operator on a stale session, and cancels nothing', async () => {
+        freezeDate();
+        const { user: owner } = await authenticateAs('user');
+        const order = await seedOrderFor(owner);
+        const { bearer } = await authenticateAs('admin');
+        advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
+
+        const response = await api()
+            .post(`/orders/${String(order._id)}/cancel`)
+            .set('Authorization', bearer);
+        jest.useRealTimers();
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored?.status).not.toBe('cancelled');
+    });
+
+    it('never prompts the buyer cancelling their own order on a stale session', async () => {
+        freezeDate();
+        const { bearer, user } = await authenticateAs('user');
+        const order = await seedOrderFor(user);
+        advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
+
+        const response = await api()
+            .post(`/orders/${String(order._id)}/cancel`)
+            .set('Authorization', bearer);
+        jest.useRealTimers();
+
+        expect(response.status).toBe(200);
     });
 
     it("answers 404 for another user's order — same as an invented id, no existence leak", async () => {

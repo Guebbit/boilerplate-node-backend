@@ -37,15 +37,17 @@ import { router as paymentsRouter } from '@modules/payments/routes';
 import { router as deliveryRouter } from '@modules/delivery/routes';
 import { router as returnsRouter } from '@modules/returns/routes';
 import { router as usersRouter } from '@modules/users/routes';
+import { router as ordersRouter } from '@modules/orders/routes';
 
-/** The six routers with money, identity or role routes, keyed the same way `STEP_UP_ROUTES` is. */
+/** The seven routers with money, identity or role routes, keyed the same way `STEP_UP_ROUTES` is. */
 const ROUTERS: Record<string, Router> = {
     account: accountRouter,
     cart: cartRouter,
     payments: paymentsRouter,
     delivery: deliveryRouter,
     returns: returnsRouter,
-    users: usersRouter
+    users: usersRouter,
+    orders: ordersRouter
 };
 
 /**
@@ -95,6 +97,9 @@ const STEP_UP_ROUTES: Record<string, string> = {
     // A remainder cancel by a caller holding the refund key is staff's money-out door, at that
     // key's own tier; the buyer's own withdrawal, on the same route, is never prompted.
     'returns POST /': `requireFreshAuthWhen(critical)`,
+    // An operator's cancel can keep or refund a paid order's money; a customer's own is never
+    // prompted (the predicate asks `orders.any.update`).
+    'orders POST /:id/cancel': `requireFreshAuthWhen(critical)`,
     // Handing a staff role out, or taking one away, widens or narrows a person's powers: the same
     // critical tier minting an API key asks. A write that names no role is never prompted.
     'users POST /': `requireFreshAuthWhen(critical)`,
