@@ -147,6 +147,8 @@ describe('GET /account/oauth/:provider/callback', () => {
         // No "remember me" box on a provider round trip: browser-session cookies.
         expect(setCookie(response, '__Host-session')).not.toMatch(/max-age=|expires=/i);
         expect(setCookie(response, 'isAuth')).not.toMatch(/max-age=|expires=/i);
+        // A completed login marks the browser familiar, as the password path does.
+        expect(setCookie(response, 'device')).toBeTruthy();
 
         const created = await userRepository.findOne({ email: 'oauth.demo@example.com' });
         expect(created).not.toBeNull();

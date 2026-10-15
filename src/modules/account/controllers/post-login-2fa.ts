@@ -19,7 +19,6 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { isUnrestrictedCaller } from '../roles';
 import { readMfaChallengeCookie, destroyMfaChallengeCookie } from '../oauth/mfa-redirect';
 import { AMR, withProofs } from '../domain/session-proof';
 
@@ -69,10 +68,8 @@ export const postLoginTwoFactor = (
                 provedAt,
                 transport
             }).then((issued) =>
-                // Read fresh from the membership — the document carries no role of its own.
-                isUnrestrictedCaller(userId).then((unrestricted) => {
+                recordLoginSuccess(request, userId).then(() => {
                     authTwoFactorChallengeTotal.inc({ status: 'success' });
-                    recordLoginSuccess(request, userId, unrestricted);
                     destroyMfaChallengeCookie(response);
                     // The login is only complete here, so the browser becomes familiar here.
                     rememberDevice(request, response, user.email);

@@ -18,7 +18,6 @@ import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation, refused } from '@infrastructure/http/controller';
 import type { LoginRequest, LoginOutcome } from '@types';
-import { isUnrestrictedCaller } from '../roles';
 import { AMR } from '../domain/session-proof';
 
 /** The "remember me" tiers the contract declares, checked against the enum the cookies use. */
@@ -111,9 +110,7 @@ export const postLogin = (
                 remember,
                 transport
             }).then((issued) =>
-                // Read fresh from the membership — the document carries no role of its own.
-                isUnrestrictedCaller(userId).then((unrestricted) => {
-                    recordLoginSuccess(request, userId, unrestricted);
+                recordLoginSuccess(request, userId).then(() => {
                     // A completed login marks this browser familiar for the account, so a
                     // lockout an attacker caused cannot keep the owner out.
                     rememberDevice(request, response, data.email);

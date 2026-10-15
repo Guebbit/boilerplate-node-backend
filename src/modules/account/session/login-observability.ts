@@ -15,6 +15,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { pseudonymise } from '@infrastructure/security/pseudonymise';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { accountAuditActions } from '../audit';
+import { isUnrestrictedCaller } from '../roles';
 import { accountAnalyticsEvents } from '../analytics';
 import { authLoginTotal } from '../metrics';
 
@@ -42,31 +43,34 @@ export const recordLoginFailure = (request: Request): void => {
 };
 
 /**
- * Emit login success observability (metrics + audit + analytics).
+ * Emit login success observability (metrics + audit + analytics). The actor's role is read fresh
+ * from the membership: the account document carries none of its own.
  *
+ * @param request - the request that completed the login
+ * @param userId - the account that signed in
  * @param metadata - extra audit detail specific to how this login happened — e.g. `{ via:
  *   'google' }` for an OAuth callback, absent for a plain password login.
  */
 export const recordLoginSuccess = (
     request: Request,
     userId: string,
-    requireUnrestricted: boolean,
     metadata?: Record<string, unknown>
-): void => {
-    const role = requireUnrestricted ? 'admin' : 'user';
-    const context = callerContextOf(request);
-    authLoginTotal.inc({ status: 'success' });
-    recordAudit(context, {
-        action: accountAuditActions.AUTH_LOGIN,
-        actorUserId: userId,
-        actorRole: role,
-        outcome: 'success',
-        ...(metadata ? { metadata } : {})
+): Promise<void> =>
+    isUnrestrictedCaller(userId).then((unrestricted) => {
+        const role = unrestricted ? 'admin' : 'user';
+        const context = callerContextOf(request);
+        authLoginTotal.inc({ status: 'success' });
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_LOGIN,
+            actorUserId: userId,
+            actorRole: role,
+            outcome: 'success',
+            ...(metadata ? { metadata } : {})
+        });
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(context),
+            distinctId: userId,
+            event: accountAnalyticsEvents.USER_LOGGED_IN,
+            properties: { role }
+        });
     });
-    emitAnalyticsEvent({
-        ...buildAnalyticsBase(context),
-        distinctId: userId,
-        event: accountAnalyticsEvents.USER_LOGGED_IN,
-        properties: { role }
-    });
-};

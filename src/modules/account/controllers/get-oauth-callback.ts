@@ -43,8 +43,8 @@ import {
 } from '../services';
 import { issueSession } from '../session/session';
 import { recordLoginSuccess } from '../session/login-observability';
+import { rememberDevice } from '../session/device-cookie';
 import { authOauthTotal } from '../metrics';
-import { isUnrestrictedCaller } from '../roles';
 
 /**
  * Clears all four single-attempt OAuth cookies — called at every outcome of one login attempt,
@@ -151,20 +151,17 @@ export const getOAuthCallback = (request: Request, response: Response) => {
                     amr: [provider.name],
                     provedAt
                 }).then(() => {
+                    // The same completed-login mark the password path sets (Q15): the cookie
+                    // grants nothing but a skipped per-account failure budget.
+                    rememberDevice(request, response, user.email);
                     /*
-                     * Only a genuine LOGIN owes this: `link`/`signup` already audited themselves
-                     * in full inside `loginOrCreateFromOAuth` — recording AUTH_LOGIN here too
-                     * would double-count the event under a second action name. The role is read
-                     * fresh from the membership, never assumed, the same reasoning `postLogin`
-                     * gives for its own tail.
+                     * Only a genuine LOGIN owes the audit row: `link`/`signup` already audited
+                     * themselves in full inside `loginOrCreateFromOAuth` — recording AUTH_LOGIN
+                     * here too would double-count the event under a second action name.
                      */
                     return (
                         outcome === 'login'
-                            ? isUnrestrictedCaller(user.id).then((unrestricted) =>
-                                  recordLoginSuccess(request, user.id, unrestricted, {
-                                      via: provider.name
-                                  })
-                              )
+                            ? recordLoginSuccess(request, user.id, { via: provider.name })
                             : Promise.resolve()
                     ).then(() => {
                         authOauthTotal.inc({ provider: providerName, status: 'success' });
