@@ -112,6 +112,14 @@ scopes:
 # otherwise have to remember. `amr` may also be named, so a future passkey tier is a line here
 # rather than a guard change — the reason `amr` was carried as a list rather than a boolean.
 
+# Credential — whether an API key can be minted with the rule.
+#
+# A rule may carry `credential: false`: no route a credential reaches asks for it, so minting a key
+# with it would grant nothing while looking like it grants something. That is the same argument as
+# "a rule nothing checks", applied to the other end. A rule with a `stepUp` tier is never mintable
+# either (a credential cannot re-authenticate), and neither is a platform rule. Absent means the
+# rule may be minted.
+
 # Conditions — the ABAC half, and the reason this is not pure RBAC.
 #
 # A rule may carry `conditions`: a filter fragment that must ALSO hold of the row. It is the same
@@ -217,6 +225,7 @@ rules:
       subject: Order
       module: orders
       scope: tenant
+      credential: false
       description: Read the caller's own orders.
       conditions:
           userId: $caller.id
@@ -265,6 +274,7 @@ rules:
       subject: Payment
       module: payments
       scope: tenant
+      credential: false
       description: Read the caller's own payments.
       conditions:
           userId: $caller.id
@@ -504,6 +514,7 @@ rules:
       subject: ApiKey
       module: api-keys
       scope: tenant
+      credential: false
       description: List this shop's machine-to-machine credentials. Never returns a key's secret.
     - action: create
       subject: ApiKey
@@ -520,6 +531,7 @@ rules:
       subject: ApiKey
       module: api-keys
       scope: tenant
+      credential: false
       description: Revoke a credential. Soft and immediate; the row stays readable.
 
     # -- observability -------------------------------------------------------------------------
@@ -540,6 +552,7 @@ rules:
       subject: Example
       module: example
       scope: tenant
+      credential: false
       description: Read the caller's own examples, drafts included.
       conditions:
           userId: $caller.id
@@ -547,11 +560,13 @@ rules:
       subject: Example
       module: example
       scope: tenant
+      credential: false
       description: Write a new example of one's own.
     - action: update
       subject: Example
       module: example
       scope: tenant
+      credential: false
       description: Edit the caller's own examples, and move them through draft, published and archived.
       conditions:
           userId: $caller.id
@@ -559,6 +574,7 @@ rules:
       subject: Example
       module: example
       scope: tenant
+      credential: false
       description: Remove the caller's own examples.
       conditions:
           userId: $caller.id
@@ -566,11 +582,13 @@ rules:
       subject: Example
       module: example
       scope: tenant
+      credential: false
       description: Read every example, whoever owns it.
     - action: admin
       subject: Example
       module: example
       scope: tenant
+      credential: false
       description: Edit or remove any example, whoever owns it.
 
     # -- notifications -------------------------------------------------------------------------
@@ -582,6 +600,7 @@ rules:
       subject: Notification
       module: notifications
       scope: tenant
+      credential: false
       description: Read the caller's own notifications, follow them live, and mark them read.
       conditions:
           userId: $caller.id
@@ -589,6 +608,7 @@ rules:
       subject: Notification
       module: notifications
       scope: tenant
+      credential: false
       description: Delete the caller's own notifications, one or all at once.
       conditions:
           userId: $caller.id
@@ -598,6 +618,7 @@ rules:
       subject: Stats
       module: stats
       scope: tenant
+      credential: false
       description: Read the shop's sales numbers — revenue, orders, products, customers, the payments mix.
 
 # The permission sets. A set is the unit a role lists, so a role never names a rule directly.

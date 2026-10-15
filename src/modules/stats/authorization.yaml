@@ -4,6 +4,7 @@ rules:
       subject: Stats
       module: stats
       scope: tenant
+      credential: false
       description: Read the shop's sales numbers — revenue, orders, products, customers, the payments mix.
 
 sets:

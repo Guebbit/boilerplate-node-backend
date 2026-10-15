@@ -52,6 +52,9 @@ paths:
                 currently-held tenant permissions: a key can never reach further than the person
                 who minted it, and that floor is re-checked on every request the key later makes,
                 not just at mint time — see `docs/tools/security.md#machine-to-machine-credentials`.
+                A permission no credential can use is refused with 422 too: one that demands a freshly
+                proved session, and one whose routes are session-only (`read:Stats`, the inbox, the
+                key list itself), which would grant nothing while looking like it grants something.
 
                 Minting needs a critically fresh session (`401 REAUTH_REQUIRED`): a key outlives the
                 session that made it. `expiresAt` is required and at most one year ahead, or the

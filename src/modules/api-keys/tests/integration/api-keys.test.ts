@@ -81,12 +81,12 @@ const contextFor = (userId: string, permissions: readonly string[]): TenantCalle
 describe('mint — the subset boundary', () => {
     it('refuses a permission the caller does not hold', async () => {
         const user = await createRealUser('mint-under');
-        const context = contextFor(String(user._id), ['read:ApiKey']);
+        const context = contextFor(String(user._id), ['read:WebhookSubscription']);
 
         const result = await mint(
             {
                 name: 'partner integration',
-                permissions: ['read:ApiKey', 'display:Order'],
+                permissions: ['read:WebhookSubscription', 'display:Order'],
                 expiresAt: IN_A_WEEK
             },
             context
@@ -112,14 +112,30 @@ describe('mint — the subset boundary', () => {
         expect(result.status).toBe(422);
     });
 
+    it('refuses a permission no credential route asks for, even when the caller holds it', async () => {
+        const user = await createRealUser('mint-session-only');
+        // `read:Stats` is `credential: false`: the stats routes are session-only, so a key holding it
+        // would grant nothing while looking like it grants something.
+        const context = contextFor(String(user._id), keysInScope('admin', 'tenant', 'customer'));
+
+        const result = await mint(
+            { name: 'useless key', permissions: ['read:Stats'], expiresAt: IN_A_WEEK },
+            context
+        );
+
+        expect(result.success).toBe(false);
+        if (result.success) throw new Error('unreachable — asserted above');
+        expect(result.status).toBe(422);
+    });
+
     it('mints when every requested key is held, and returns the plaintext once', async () => {
         const user = await createRealUser('mint-ok');
-        const context = contextFor(String(user._id), ['read:ApiKey', 'create:ApiKey']);
+        const context = contextFor(String(user._id), ['read:WebhookSubscription', 'create:ApiKey']);
 
         const result = await mint(
             {
                 name: 'partner integration',
-                permissions: ['read:ApiKey'],
+                permissions: ['read:WebhookSubscription'],
                 expiresAt: IN_A_WEEK
             },
             context
@@ -128,7 +144,7 @@ describe('mint — the subset boundary', () => {
         expect(result.success).toBe(true);
         if (!result.data) throw new Error('unreachable — asserted above');
         expect(result.data.secret.startsWith('sk_')).toBe(true);
-        expect(result.data.permissions).toEqual(['read:ApiKey']);
+        expect(result.data.permissions).toEqual(['read:WebhookSubscription']);
     });
 
     it('lets a wildcard-holder mint a key naming one specific key beneath it', async () => {
@@ -136,7 +152,7 @@ describe('mint — the subset boundary', () => {
         const context = contextFor(String(user._id), keysInScope('admin', 'tenant', 'customer'));
 
         const result = await mint(
-            { name: 'from owner', permissions: ['read:Order'], expiresAt: IN_A_WEEK },
+            { name: 'from owner', permissions: ['read:WebhookSubscription'], expiresAt: IN_A_WEEK },
             context
         );
 
@@ -186,7 +202,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         const minted = await mint(
             {
                 name: 'about to be demoted',
-                permissions: ['read:ApiKey'],
+                permissions: ['read:WebhookSubscription'],
                 expiresAt: IN_A_WEEK
             },
             mintContext
@@ -194,7 +210,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         if (!minted.data) throw new Error('setup failed: mint was refused');
 
         const beforeDemotion = await credentialOf(minted.data.secret);
-        expect(beforeDemotion?.caller.permissions).toContain('read:ApiKey');
+        expect(beforeDemotion?.caller.permissions).toContain('read:WebhookSubscription');
 
         // `customer` holds none of the api-keys keys — the demotion this test is about.
         await revokeRole(userId, TEST_TENANT_ID, 'tenant');
@@ -202,7 +218,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         const afterDemotion = await credentialOf(minted.data.secret);
         // Still a real, resolvable credential (not revoked, not expired) — just holding nothing
         // now, which is the point: the DOCUMENT never changed, only what it re-floors against did.
-        expect(afterDemotion?.caller.permissions).not.toContain('read:ApiKey');
+        expect(afterDemotion?.caller.permissions).not.toContain('read:WebhookSubscription');
     });
 
     // The minter's deactivation is the only way to switch a key off without touching it: an
@@ -215,7 +231,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         const minted = await mint(
             {
                 name: 'about to lose its minter',
-                permissions: ['read:ApiKey'],
+                permissions: ['read:WebhookSubscription'],
                 expiresAt: IN_A_WEEK
             },
             contextFor(userId, keysInScope('admin', 'tenant', 'customer'))
@@ -227,18 +243,18 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         const after = await credentialOf(minted.data.secret);
         const stored = await apiKeyRepository.findById(minted.data.id);
 
-        expect(before?.caller.permissions).toContain('read:ApiKey');
+        expect(before?.caller.permissions).toContain('read:WebhookSubscription');
         // Still recognised (the guest's floor, not a refusal at the door), holding none of the minter's keys.
-        expect(after?.caller.permissions).not.toContain('read:ApiKey');
+        expect(after?.caller.permissions).not.toContain('read:WebhookSubscription');
         expect(after?.caller.permissions.every((key) => key.startsWith('read:'))).toBe(true);
         expect(stored?.revokedAt).toBeUndefined();
     });
 
     it('carries the credential id for the audit trail, display-shaped, never the secret', async () => {
         const user = await createRealUser('display-id');
-        const context = contextFor(String(user._id), ['read:ApiKey']);
+        const context = contextFor(String(user._id), ['read:WebhookSubscription']);
         const minted = await mint(
-            { name: 'named', permissions: ['read:ApiKey'], expiresAt: IN_A_WEEK },
+            { name: 'named', permissions: ['read:WebhookSubscription'], expiresAt: IN_A_WEEK },
             context
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
@@ -253,9 +269,13 @@ describe('the credential-resolve path — re-floored at every use, not just at m
 describe('revoke', () => {
     it('makes the credential unresolvable immediately', async () => {
         const user = await createRealUser('to-revoke');
-        const context = contextFor(String(user._id), ['read:ApiKey']);
+        const context = contextFor(String(user._id), ['read:WebhookSubscription']);
         const minted = await mint(
-            { name: 'short-lived', permissions: ['read:ApiKey'], expiresAt: IN_A_WEEK },
+            {
+                name: 'short-lived',
+                permissions: ['read:WebhookSubscription'],
+                expiresAt: IN_A_WEEK
+            },
             context
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
@@ -267,9 +287,13 @@ describe('revoke', () => {
 
     it('is idempotent — revoking an already-revoked key still succeeds', async () => {
         const user = await createRealUser('double-revoke');
-        const context = contextFor(String(user._id), ['read:ApiKey']);
+        const context = contextFor(String(user._id), ['read:WebhookSubscription']);
         const minted = await mint(
-            { name: 'short-lived', permissions: ['read:ApiKey'], expiresAt: IN_A_WEEK },
+            {
+                name: 'short-lived',
+                permissions: ['read:WebhookSubscription'],
+                expiresAt: IN_A_WEEK
+            },
             context
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
@@ -287,7 +311,7 @@ describe('revoke across administrators', () => {
         const minterId = String(minter._id);
         await assignRole(minterId, TEST_TENANT_ID, 'tenant', 'admin');
         const minted = await mint(
-            { name: 'leaked', permissions: ['read:ApiKey'], expiresAt: IN_A_WEEK },
+            { name: 'leaked', permissions: ['read:WebhookSubscription'], expiresAt: IN_A_WEEK },
             contextFor(minterId, keysInScope('admin', 'tenant', 'customer'))
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
@@ -313,7 +337,7 @@ describe('an expired credential', () => {
             name: 'already expired',
             publicPrefix,
             hash,
-            permissions: ['read:ApiKey'],
+            permissions: ['read:WebhookSubscription'],
             createdByUserId: 'irrelevant-for-this-check',
             expiresAt: new Date(Date.now() - 1000)
         });
@@ -331,7 +355,7 @@ const stored = (overrides: { revokedAt?: Date; expiresAt?: Date }) => {
             name: 'refused',
             publicPrefix,
             hash,
-            permissions: ['read:ApiKey'],
+            permissions: ['read:WebhookSubscription'],
             createdByUserId: 'irrelevant-for-this-check',
             expiresAt: new Date(Date.now() + 3_600_000),
             ...overrides
@@ -386,13 +410,13 @@ describe('a hard-deleted user takes their credentials with them', () => {
 
     it('erases every credential the user minted', async () => {
         const user = await createRealUser('erased-owner');
-        const context = contextFor(String(user._id), ['read:ApiKey', 'create:ApiKey']);
+        const context = contextFor(String(user._id), ['read:WebhookSubscription', 'create:ApiKey']);
         const first = await mint(
-            { name: 'first', permissions: ['read:ApiKey'], expiresAt: IN_A_WEEK },
+            { name: 'first', permissions: ['read:WebhookSubscription'], expiresAt: IN_A_WEEK },
             context
         );
         const second = await mint(
-            { name: 'second', permissions: ['read:ApiKey'], expiresAt: IN_A_WEEK },
+            { name: 'second', permissions: ['read:WebhookSubscription'], expiresAt: IN_A_WEEK },
             context
         );
         if (!first.data || !second.data) throw new Error('setup failed: mint was refused');
@@ -408,14 +432,18 @@ describe('a hard-deleted user takes their credentials with them', () => {
     it('leaves another user unaffected', async () => {
         const doomed = await createRealUser('erased-alice');
         const kept = await createRealUser('kept-bob');
-        const doomedContext = contextFor(String(doomed._id), ['read:ApiKey']);
-        const keptContext = contextFor(String(kept._id), ['read:ApiKey']);
+        const doomedContext = contextFor(String(doomed._id), ['read:WebhookSubscription']);
+        const keptContext = contextFor(String(kept._id), ['read:WebhookSubscription']);
         await mint(
-            { name: 'about to go', permissions: ['read:ApiKey'], expiresAt: IN_A_WEEK },
+            {
+                name: 'about to go',
+                permissions: ['read:WebhookSubscription'],
+                expiresAt: IN_A_WEEK
+            },
             doomedContext
         );
         const survivor = await mint(
-            { name: 'stays', permissions: ['read:ApiKey'], expiresAt: IN_A_WEEK },
+            { name: 'stays', permissions: ['read:WebhookSubscription'], expiresAt: IN_A_WEEK },
             keptContext
         );
         if (!survivor.data) throw new Error('setup failed: mint was refused');
@@ -434,7 +462,7 @@ describe('touchLastUsed', () => {
             name: 'freshly minted',
             publicPrefix,
             hash,
-            permissions: ['read:ApiKey'],
+            permissions: ['read:WebhookSubscription'],
             createdByUserId: 'irrelevant-for-this-check',
             expiresAt: new Date(IN_A_WEEK)
         });
@@ -459,11 +487,11 @@ describe('touchLastUsed', () => {
         // context's own claimed permissions — needs a real membership row, same as the
         // demoted-minter case above.
         await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
-        const context = contextFor(userId, ['read:ApiKey']);
+        const context = contextFor(userId, ['read:WebhookSubscription']);
         const minted = await mint(
             {
                 name: 'about to fail its touch',
-                permissions: ['read:ApiKey'],
+                permissions: ['read:WebhookSubscription'],
                 expiresAt: IN_A_WEEK
             },
             context
@@ -476,7 +504,7 @@ describe('touchLastUsed', () => {
 
         const resolved = await credentialOf(minted.data.secret);
 
-        expect(resolved?.caller.permissions).toContain('read:ApiKey');
+        expect(resolved?.caller.permissions).toContain('read:WebhookSubscription');
         // Fire-and-forget: give the rejected touch's own microtask a turn before asserting the log.
         await Promise.resolve();
         expect(loggedWarn).toHaveBeenCalledWith(
@@ -494,9 +522,12 @@ const eventually = async (done: () => boolean): Promise<void> => {
 /** Mint two keys for a real user, return the id and the context. */
 const mintTwo = async (id: string) => {
     const user = await createRealUser(id);
-    const context = contextFor(String(user._id), ['read:ApiKey']);
+    const context = contextFor(String(user._id), ['read:WebhookSubscription']);
     for (const name of ['first', 'second'])
-        await mint({ name, permissions: ['read:ApiKey'], expiresAt: IN_A_WEEK }, context);
+        await mint(
+            { name, permissions: ['read:WebhookSubscription'], expiresAt: IN_A_WEEK },
+            context
+        );
     return { userId: String(user._id), context };
 };
 
@@ -515,8 +546,8 @@ describe('a credential outlives a session, so ending sessions wholesale ends cre
         const user = await createRealUser('minter-mail');
 
         const minted = await mint(
-            { name: 'ci', permissions: ['read:ApiKey'], expiresAt: IN_A_WEEK },
-            contextFor(String(user._id), ['read:ApiKey'])
+            { name: 'ci', permissions: ['read:WebhookSubscription'], expiresAt: IN_A_WEEK },
+            contextFor(String(user._id), ['read:WebhookSubscription'])
         );
         // The mail is fire-and-forget: wait for the user lookup and the enqueue to settle.
         await eventually(() => mockOutbox.some((mail) => mail.template === 'api-keys.minted'));

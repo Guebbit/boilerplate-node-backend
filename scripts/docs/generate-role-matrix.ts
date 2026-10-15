@@ -235,7 +235,10 @@ const moduleBody = (pageModules: readonly string[]): string => {
             const sets = PERMISSION_SETS.filter((set) => set.rules.includes(rule.id))
                 .map((set) => `\`${set.name}\``)
                 .join(', ');
-            const credential = rule.scope === 'tenant' && rule.stepUp === undefined ? '✅' : '—';
+            const credential =
+                rule.scope === 'tenant' && rule.stepUp === undefined && rule.credential !== false
+                    ? '✅'
+                    : '—';
 
             return `| \`${rule.id}\` | ${sets} | ${callers
                 .map((caller) => ruleCell(rule, caller))

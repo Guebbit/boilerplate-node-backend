@@ -142,6 +142,19 @@ describe('every requirePermission behind isAuthOrCredential asks for a tenant ru
         expect(offenders).toEqual([]);
     });
 
+    it('finds no rule marked credential: false, which would be a flag that lies', () => {
+        const lying = moduleNames().flatMap((name) => {
+            const router = ROUTED_MODULES[name];
+            if (router === undefined) return [];
+
+            return permissionsBehindCredentialGuard(router)
+                .filter((ask) => findRule(ruleId(ask.action, ask.subject))?.credential === false)
+                .map((ask) => `${name}: ${ruleId(ask.action, ask.subject)}`);
+        });
+
+        expect(lying).toEqual([]);
+    });
+
     it('actually finds rules to check', () => {
         // A canary matching the one above `handlersReadingAuthContext` has: an empty result must
         // mean "every rule qualifies", never "no route mounts isAuthOrCredential at all".

@@ -96,12 +96,12 @@ describe('an api key over the real chain', () => {
      */
     it('cannot mint another credential with a credential', async () => {
         // `create:ApiKey` itself cannot be minted (step-up), so the key holds the read.
-        const secret = await credentialHolding(['read:ApiKey']);
+        const secret = await credentialHolding(['read:WebhookSubscription']);
 
         const response = await api()
             .post('/api-keys')
             .set('Authorization', `Bearer ${secret}`)
-            .send({ name: 'second key', permissions: ['read:ApiKey'] });
+            .send({ name: 'second key', permissions: ['read:WebhookSubscription'] });
 
         expect(response.status).toBe(401);
     });

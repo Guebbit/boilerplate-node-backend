@@ -109,6 +109,12 @@ export interface PermissionRule {
      * a plain `string` here breaks that ordering cycle.
      */
     deniedCode?: string;
+    /**
+     * `false` for a rule no route a credential reaches asks for, so an API key minted with it
+     * would hold something that grants nothing. Absent means it may be minted — unless it is a
+     * platform rule or carries a `stepUp` tier, which a credential can never satisfy.
+     */
+    credential?: boolean;
 }
 
 /** Runtime shape for one entry of `shared/authorization-keys.yaml`'s `rules` list. */
@@ -120,7 +126,8 @@ const permissionRuleSchema = z.object({
     description: z.string(),
     stepUp: stepUpTierSchema.optional(),
     conditions: z.record(z.string(), z.unknown()).optional(),
-    deniedCode: z.string().optional()
+    deniedCode: z.string().optional(),
+    credential: z.boolean().optional()
 }) satisfies z.ZodType<PermissionRule>;
 
 /**

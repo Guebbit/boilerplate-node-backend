@@ -112,6 +112,14 @@ scopes:
 # otherwise have to remember. `amr` may also be named, so a future passkey tier is a line here
 # rather than a guard change — the reason `amr` was carried as a list rather than a boolean.
 
+# Credential — whether an API key can be minted with the rule.
+#
+# A rule may carry `credential: false`: no route a credential reaches asks for it, so minting a key
+# with it would grant nothing while looking like it grants something. That is the same argument as
+# "a rule nothing checks", applied to the other end. A rule with a `stepUp` tier is never mintable
+# either (a credential cannot re-authenticate), and neither is a platform rule. Absent means the
+# rule may be minted.
+
 # Conditions — the ABAC half, and the reason this is not pure RBAC.
 #
 # A rule may carry `conditions`: a filter fragment that must ALSO hold of the row. It is the same

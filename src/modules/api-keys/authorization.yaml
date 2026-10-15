@@ -4,6 +4,7 @@ rules:
       subject: ApiKey
       module: api-keys
       scope: tenant
+      credential: false
       description: List this shop's machine-to-machine credentials. Never returns a key's secret.
     - action: create
       subject: ApiKey
@@ -20,6 +21,7 @@ rules:
       subject: ApiKey
       module: api-keys
       scope: tenant
+      credential: false
       description: Revoke a credential. Soft and immediate; the row stays readable.
 
 sets:

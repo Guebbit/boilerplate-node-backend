@@ -8,6 +8,7 @@ rules:
       subject: Notification
       module: notifications
       scope: tenant
+      credential: false
       description: Read the caller's own notifications, follow them live, and mark them read.
       conditions:
           userId: $caller.id
@@ -15,6 +16,7 @@ rules:
       subject: Notification
       module: notifications
       scope: tenant
+      credential: false
       description: Delete the caller's own notifications, one or all at once.
       conditions:
           userId: $caller.id

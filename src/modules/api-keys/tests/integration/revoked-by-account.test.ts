@@ -53,7 +53,7 @@ const adminWithKey = async () => {
     const minted = await mint(
         {
             name: 'ci',
-            permissions: ['read:ApiKey'],
+            permissions: ['read:WebhookSubscription'],
             expiresAt: new Date(Date.now() + 7 * 24 * 3_600_000).toISOString()
         },
         context

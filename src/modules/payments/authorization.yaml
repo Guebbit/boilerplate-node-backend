@@ -4,6 +4,7 @@ rules:
       subject: Payment
       module: payments
       scope: tenant
+      credential: false
       description: Read the caller's own payments.
       conditions:
           userId: $caller.id

@@ -101,6 +101,10 @@ a person with none live gets neither audit row nor mail), so a redelivery does n
 
 - **Minting needs a fresh session** (`stepUp: critical` on `create:ApiKey`): a stolen access
   token must not turn ten minutes into a long-lived key. GitHub's sudo mode asks the same.
+- **A key holds only what a key can use.** A rule with a step-up tier is refused at mint (a key cannot
+  re-authenticate), and so is one marked `credential: false` in the shared keys file — a rule whose
+  routes are session-only, such as `read:Stats` or the key list itself, which would hold nothing
+  while looking like it holds something.
 - **Every key expires**, at most one year out. A key that never expires never gets rotated.
 - **The minter is mailed** when a key is created, and again — with the list — when logout-everywhere,
   a password reset or an email-change undo ("this wasn't me") revoked them. These are the causes whose row in `REVOCATION` (`account/domain/revocation.ts`) announces; the list is derived there, not restated. `account` only announces the event; this module owns what it
@@ -148,9 +152,9 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 | Rule            | Set                | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                    |
 | --------------- | ------------------ | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `read:ApiKey`   | `ApiKeyDisplay`    | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | ✅         | List this shop's machine-to-machine credentials. Never returns a key's secret.                                          |
+| `read:ApiKey`   | `ApiKeyDisplay`    | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | —          | List this shop's machine-to-machine credentials. Never returns a key's secret.                                          |
 | `create:ApiKey` | `ApiKeyManagement` | —       | —            | —          | —         | —           | —         | —        | —           | ✅ ⚡c  | —          | —          | Mint a credential. Carries its own floor on top of this key: a credential can never hold a permission the minter lacks. |
-| `delete:ApiKey` | `ApiKeyManagement` | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | ✅         | Revoke a credential. Soft and immediate; the row stays readable.                                                        |
+| `delete:ApiKey` | `ApiKeyManagement` | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | —          | Revoke a credential. Soft and immediate; the row stays readable.                                                        |
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in

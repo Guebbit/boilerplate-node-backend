@@ -4,6 +4,7 @@ rules:
       subject: Order
       module: orders
       scope: tenant
+      credential: false
       description: Read the caller's own orders.
       conditions:
           userId: $caller.id

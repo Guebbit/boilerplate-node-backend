@@ -54,7 +54,7 @@ describe('GET /api-keys', () => {
             .set('Authorization', bearer)
             .send({
                 name: 'partner integration',
-                permissions: ['read:Order'],
+                permissions: ['read:WebhookSubscription'],
                 expiresAt: IN_A_WEEK()
             });
 
@@ -77,14 +77,14 @@ describe('POST /api-keys', () => {
             .set('Authorization', bearer)
             .send({
                 name: 'partner integration',
-                permissions: ['read:Order'],
+                permissions: ['read:WebhookSubscription'],
                 expiresAt: IN_A_WEEK()
             });
 
         expect(response.status).toBe(201);
         expect(typeof response.body.data.secret).toBe('string');
         expect(response.body.data.secret.startsWith('sk_')).toBe(true);
-        expect(response.body.data.permissions).toEqual(['read:Order']);
+        expect(response.body.data.permissions).toEqual(['read:WebhookSubscription']);
     });
 
     it('answers no-store: the one-time secret is never kept by a cache', async () => {
@@ -95,7 +95,7 @@ describe('POST /api-keys', () => {
             .set('Authorization', bearer)
             .send({
                 name: 'partner integration',
-                permissions: ['read:Order'],
+                permissions: ['read:WebhookSubscription'],
                 expiresAt: IN_A_WEEK()
             });
 
@@ -144,7 +144,7 @@ describe('POST /api-keys', () => {
             .set('Authorization', bearer)
             .send({
                 name: 'partner integration',
-                permissions: ['read:Order'],
+                permissions: ['read:WebhookSubscription'],
                 expiresAt: IN_A_WEEK()
             });
 
@@ -158,7 +158,7 @@ describe('POST /api-keys', () => {
         const response = await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'forever', permissions: ['read:Order'] });
+            .send({ name: 'forever', permissions: ['read:WebhookSubscription'] });
 
         expect(response.status).toBe(422);
     });
@@ -169,7 +169,7 @@ describe('POST /api-keys', () => {
             api()
                 .post('/api-keys')
                 .set('Authorization', bearer)
-                .send({ name: 'bounded', permissions: ['read:Order'], expiresAt });
+                .send({ name: 'bounded', permissions: ['read:WebhookSubscription'], expiresAt });
 
         const tooFar = await mint(ahead(367));
         const fine = await mint(ahead(360));
@@ -190,7 +190,7 @@ describe('POST /api-keys', () => {
             .set('Authorization', bearer)
             .send({
                 name: 'partner integration',
-                permissions: ['read:Order'],
+                permissions: ['read:WebhookSubscription'],
                 expiresAt: IN_A_WEEK()
             });
 
@@ -206,7 +206,7 @@ describe('DELETE /api-keys/:id', () => {
             .set('Authorization', bearer)
             .send({
                 name: 'short-lived',
-                permissions: ['read:Order'],
+                permissions: ['read:WebhookSubscription'],
                 expiresAt: IN_A_WEEK()
             });
 

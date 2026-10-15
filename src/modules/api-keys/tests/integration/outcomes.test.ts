@@ -92,7 +92,7 @@ const createRealUser = (id: string, locale?: string) =>
 /** The context a call needs for one real user holding `permissions`. */
 const contextFor = (
     userId: string,
-    permissions: readonly string[] = ['read:ApiKey'],
+    permissions: readonly string[] = ['read:WebhookSubscription'],
     tenantId: string = TEST_TENANT_ID
 ): TenantCallerContext => ({
     caller: {
@@ -121,7 +121,7 @@ const auditedAs = (action: string) =>
 /** Mint one key and return its wire shape, or fail loudly. */
 const mintKey = async (context: TenantCallerContext, name = 'ci') => {
     const minted = await mint(
-        { name, permissions: ['read:ApiKey'], expiresAt: IN_A_WEEK },
+        { name, permissions: ['read:WebhookSubscription'], expiresAt: IN_A_WEEK },
         context
     );
     if (!minted.data) throw new Error('setup failed: mint was refused');
@@ -140,7 +140,7 @@ describe('the one-year ceiling', () => {
         const tooFar = new Date(Date.now() + 400 * 24 * 3_600_000).toISOString();
 
         const result = await mint(
-            { name: 'forever', permissions: ['read:ApiKey'], expiresAt: tooFar },
+            { name: 'forever', permissions: ['read:WebhookSubscription'], expiresAt: tooFar },
             contextFor(String(user._id))
         );
 
@@ -159,7 +159,7 @@ describe('the one-year ceiling', () => {
         const inside = new Date(latestExpiry().getTime() - 60_000).toISOString();
 
         const result = await mint(
-            { name: 'long', permissions: ['read:ApiKey'], expiresAt: inside },
+            { name: 'long', permissions: ['read:WebhookSubscription'], expiresAt: inside },
             contextFor(String(user._id))
         );
 
@@ -192,7 +192,10 @@ describe('listing', () => {
         const mine = contextFor(String(user._id));
         const first = await mintKey(mine, 'first');
         const second = await mintKey(mine, 'second');
-        await mintKey(contextFor(String(user._id), ['read:ApiKey'], 'another-tenant'), 'foreign');
+        await mintKey(
+            contextFor(String(user._id), ['read:WebhookSubscription'], 'another-tenant'),
+            'foreign'
+        );
 
         const listed = await list(mine, {});
 
@@ -224,7 +227,7 @@ describe('minting leaves an audit row and a mail', () => {
                 outcome: 'success',
                 targetType: 'api_key',
                 targetId: minted.id,
-                metadata: { permissions: ['read:ApiKey'] }
+                metadata: { permissions: ['read:WebhookSubscription'] }
             })
         ]);
     });
@@ -273,7 +276,7 @@ describe('revoking', () => {
     it('answers 404 for a key that does not exist, and for another tenant’s', async () => {
         const user = await createRealUser('revoker');
         const minted = await mintKey(
-            contextFor(String(user._id), ['read:ApiKey'], 'another-tenant')
+            contextFor(String(user._id), ['read:WebhookSubscription'], 'another-tenant')
         );
 
         const foreign = await revoke(minted.id, contextFor(String(user._id)));

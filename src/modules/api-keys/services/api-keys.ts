@@ -39,11 +39,12 @@ import type { ApiKeyDocument } from '../model';
 /**
  * Is the rule `id` something `caller` may hand out on a credential?
  *
- * Four conditions, all required: the rule must be DECLARED (an invented string grants nothing
+ * Five conditions, all required: the rule must be DECLARED (an invented string grants nothing
  * while looking like it does — `assertDeclared`'s own reasoning), TENANT-scoped (a credential is
  * tenant-scoped only, see `docs/tools/security.md#machine-to-machine-credentials`), free of a
  * STEP-UP tier (a credential can never re-authenticate, so it would hold a permission that is
- * always refused), and actually HELD by the minter right now.
+ * always refused), one a credential can use at all (`credential: false` marks the rules whose
+ * routes are session-only), and actually HELD by the minter right now.
  *
  * `heldRules` is the literal rules the ability was built from, so a minter holding the own-rows
  * `read:Order` cannot mint a credential for the staff `display:Order` they lack.
@@ -51,7 +52,10 @@ import type { ApiKeyDocument } from '../model';
 const isMintable = (id: string, caller: Caller): boolean => {
     const declared = findRule(id);
     return (
-        declared?.scope === 'tenant' && declared.stepUp === undefined && heldRules(caller).has(id)
+        declared?.scope === 'tenant' &&
+        declared.stepUp === undefined &&
+        declared.credential !== false &&
+        heldRules(caller).has(id)
     );
 };
 

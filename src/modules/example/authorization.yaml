@@ -7,6 +7,7 @@ rules:
       subject: Example
       module: example
       scope: tenant
+      credential: false
       description: Read the caller's own examples, drafts included.
       conditions:
           userId: $caller.id
@@ -14,11 +15,13 @@ rules:
       subject: Example
       module: example
       scope: tenant
+      credential: false
       description: Write a new example of one's own.
     - action: update
       subject: Example
       module: example
       scope: tenant
+      credential: false
       description: Edit the caller's own examples, and move them through draft, published and archived.
       conditions:
           userId: $caller.id
@@ -26,6 +29,7 @@ rules:
       subject: Example
       module: example
       scope: tenant
+      credential: false
       description: Remove the caller's own examples.
       conditions:
           userId: $caller.id
@@ -33,11 +37,13 @@ rules:
       subject: Example
       module: example
       scope: tenant
+      credential: false
       description: Read every example, whoever owns it.
     - action: admin
       subject: Example
       module: example
       scope: tenant
+      credential: false
       description: Edit or remove any example, whoever owns it.
 
 sets:
