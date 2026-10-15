@@ -116,7 +116,7 @@ export const reorderIntoCart = (
     const userId = authContext.id;
 
     return orderService
-        .getById(orderId, { ...orderService.ownerScope(userId), deletedAt: null })
+        .getById(orderId, orderService.ownLiveScope(userId))
         .then<ResponseSuccess<CartView> | ResponseReject>((order) => {
             if (!order) return generateReject(404, [t('cart.reorder.order-not-found')]);
 

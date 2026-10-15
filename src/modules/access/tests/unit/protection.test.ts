@@ -15,7 +15,7 @@ import {
     ownOrderFlag,
     roleProtectedRefusal,
     staffHoldersAmong
-} from '../../service';
+} from '../../services';
 
 /** One membership row, as the repository returns it. */
 interface Row {

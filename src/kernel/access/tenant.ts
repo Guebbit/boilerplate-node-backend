@@ -1,8 +1,8 @@
 /**
  * @module
  * The one shop's pinned `_id`, the sole home every caller imports it from. Its own file rather
- * than `@modules/access/service.ts`'s, to avoid a circular import: `permissions.ts` needs the
- * constant too (`anonymousCaller`, `SYSTEM_ACTOR`), and `access/service.ts` already imports from
+ * than `@modules/access/services/`'s, to avoid a circular import: `permissions.ts` needs the
+ * constant too (`anonymousCaller`, `SYSTEM_ACTOR`), and `access/services/` already imports from
  * `permissions.ts`.
  */
 

@@ -1,7 +1,7 @@
 /**
  * @module
  * The authorization model's STORAGE, against the in-memory Mongo `setupTestDb` wires up — the
- * module's own writers (`../../service.ts`, `../../repository.ts`) and the invariants they enforce.
+ * module's own writers (`../../services/`, `../../repository.ts`) and the invariants they enforce.
  *
  * The suite in `tests/cross-cutting/authorization-conformance.test.ts` proves the two backends
  * decide the same way. This one proves the thing those decisions are read FROM can be written,
@@ -31,7 +31,7 @@ import {
     revokeRole,
     rolesOf,
     rolesOfMany
-} from '../../service';
+} from '../../services';
 import { membershipRepository } from '../../repository';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { permissionsOfRole } from '@kernel/permissions';

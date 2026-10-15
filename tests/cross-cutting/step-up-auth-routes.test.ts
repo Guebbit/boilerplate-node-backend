@@ -36,14 +36,16 @@ import { router as cartRouter } from '@modules/cart/routes';
 import { router as paymentsRouter } from '@modules/payments/routes';
 import { router as deliveryRouter } from '@modules/delivery/routes';
 import { router as returnsRouter } from '@modules/returns/routes';
+import { router as usersRouter } from '@modules/users/routes';
 
-/** The five routers with money or identity routes, keyed the same way `STEP_UP_ROUTES` is. */
+/** The six routers with money, identity or role routes, keyed the same way `STEP_UP_ROUTES` is. */
 const ROUTERS: Record<string, Router> = {
     account: accountRouter,
     cart: cartRouter,
     payments: paymentsRouter,
     delivery: deliveryRouter,
-    returns: returnsRouter
+    returns: returnsRouter,
+    users: usersRouter
 };
 
 /**
@@ -92,7 +94,12 @@ const STEP_UP_ROUTES: Record<string, string> = {
     'delivery POST /shipments/:id/deliver': `requireFreshAuthWhen(critical)`,
     // A remainder cancel by a caller holding the refund key is staff's money-out door, at that
     // key's own tier; the buyer's own withdrawal, on the same route, is never prompted.
-    'returns POST /': `requireFreshAuthWhen(critical)`
+    'returns POST /': `requireFreshAuthWhen(critical)`,
+    // Handing a staff role out, or taking one away, widens or narrows a person's powers: the same
+    // critical tier minting an API key asks. A write that names no role is never prompted.
+    'users POST /': `requireFreshAuthWhen(critical)`,
+    'users PUT /:id': `requireFreshAuthWhen(critical)`,
+    'users PATCH /:id': `requireFreshAuthWhen(critical)`
 };
 
 /** Every step-up label actually mounted on a router, keyed the same way as {@link STEP_UP_ROUTES}. */

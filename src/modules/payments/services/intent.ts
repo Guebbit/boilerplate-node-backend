@@ -13,7 +13,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { Payment, AuthContext } from '@types';
-import { orderService, orderTotal, isPayable } from '@modules/orders';
+import { buyerIdOf, orderService, orderTotal, isPayable } from '@modules/orders';
 import {
     resolvePaymentProvider,
     providerNamed,
@@ -106,7 +106,7 @@ export const createIntent = async (
     // No provider configured: this deployment takes no card payments, and the order stays unpaid.
     const provider = resolvePaymentProvider();
     if (!provider) return cardNotAvailable();
-    const payerId = order.userId ? String(order.userId) : undefined;
+    const payerId = buyerIdOf(order);
     const { currency } = order;
     const upserted = await paymentRepository.upsertIntent(orderId, payerId, {
         // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose

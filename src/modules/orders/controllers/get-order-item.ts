@@ -13,6 +13,7 @@ import { catchAs } from '@infrastructure/http/controller';
 import { setEtag } from '@infrastructure/http/preconditions';
 import { recordStaffRead } from '@kernel/staff-read';
 import { ordersAuditActions } from '../audit';
+import { buyerIdOf } from '../domain';
 import { respondWithOrder } from './respond';
 
 /**
@@ -40,7 +41,7 @@ export const getOrderItem = (
                 action: ordersAuditActions.ADMIN_ORDER_VIEWED,
                 targetType: 'order',
                 targetId: id,
-                ownerId: String(order.userId)
+                ownerId: buyerIdOf(order)
             });
             // The version an edit sends back as `If-Match`.
             setEtag(response, order);

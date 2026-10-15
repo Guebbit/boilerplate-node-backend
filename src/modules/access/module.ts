@@ -13,7 +13,7 @@
  */
 
 import type { AppModule } from '@kernel/registry';
-import { eraseMemberships, membershipsOf } from './service';
+import { eraseMemberships, membershipsOf } from './services';
 
 /** This module's manifest entry: no routes, one personal-data section, exported and erased. */
 export default {

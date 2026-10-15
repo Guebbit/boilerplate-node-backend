@@ -4,7 +4,7 @@
  * which role where.
  *
  * Own module: ROUTELESS ON PURPOSE. Tenants and memberships are an identity-and-access domain with
- *             real write invariants (see `./service.ts`), consumed by `account`, `api-keys` and
+ *             real write invariants (see `./services/`), consumed by `account`, `api-keys` and
  *             `users` plus `db` scripts and `scenarios` — several unrelated modules sharing one
  *             domain is reason enough for its own module, the same reasoning `addresses` is split
  *             out of `account` for. It answers to no route of its own: `permissions.ts`,

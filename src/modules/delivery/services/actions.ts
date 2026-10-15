@@ -8,6 +8,7 @@
 
 import { callerForSubject } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
+import { isBuyer } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import type {
     AuthContext,
@@ -38,7 +39,7 @@ export const standingOn = (order: OrderDocument, authContext: AuthContext | unde
     authContext
         ? {
               staff: holdsKey(callerForSubject(authContext, 'Shipment'), 'delivery.any.update'),
-              owner: order.userId !== undefined && String(order.userId) === authContext.id
+              owner: isBuyer(order, authContext)
           }
         : { staff: false, owner: false };
 

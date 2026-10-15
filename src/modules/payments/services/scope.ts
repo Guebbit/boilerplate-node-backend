@@ -34,9 +34,7 @@ export const payerScope = (context?: AuthContext): Record<string, unknown> =>
  * @param context - the caller; with none, the anonymous read scope, which matches nothing
  */
 export const buyerOrderScope = (context?: AuthContext): Record<string, unknown> =>
-    context
-        ? { ...orderService.ownerScope(context.id), deletedAt: null }
-        : orderService.callerScope(undefined);
+    context ? orderService.ownLiveScope(context.id) : orderService.callerScope(undefined);
 
 /**
  * Whether the caller reads every payment, and so may be sent the provider's own ids and a refund's

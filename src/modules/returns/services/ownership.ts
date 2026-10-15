@@ -4,7 +4,7 @@
  * put before touching a return.
  */
 
-import { orderService } from '@modules/orders';
+import { isBuyer, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import type { AuthContext } from '@types';
 
@@ -20,4 +20,4 @@ export const ownOrder = (
 ): Promise<OrderDocument | undefined> =>
     orderService
         .getForCaller(orderId, authContext)
-        .then((order) => (order && String(order.userId) === authContext.id ? order : undefined));
+        .then((order) => (order && isBuyer(order, authContext) ? order : undefined));

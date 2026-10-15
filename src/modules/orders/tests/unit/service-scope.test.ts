@@ -81,3 +81,12 @@ describe('actorOf', () => {
         expect(actorOf(undefined)).toBe('customer');
     });
 });
+
+describe('orderService.ownLiveScope', () => {
+    it('is the owner scope without the soft-deleted rows, as one spelling every module shares', () => {
+        expect(orderService.ownLiveScope(USER_ID)).toEqual({
+            ...orderService.ownerScope(USER_ID),
+            deletedAt: null
+        });
+    });
+});

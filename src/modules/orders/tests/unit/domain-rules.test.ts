@@ -5,7 +5,9 @@
  */
 
 import {
+    buyerIdOf,
     checkOrderLines,
+    isBuyer,
     isShippedItem,
     isDigitalOnlyOrder,
     type OrderLineCandidate
@@ -87,3 +89,21 @@ describe('isDigitalOnlyOrder', () => {
 // caller each, so they live in the service (`../../services/crud`, `../../services/scope`) rather
 // than the domain layer — `service-crud.test.ts` covers the soft delete and `service-scope.test.ts` the
 // scope, including the fail-closed cases.
+
+describe('buyerIdOf and isBuyer', () => {
+    it('spells the buyer the way a caller carries their own id, and is empty for an erased one', () => {
+        expect(buyerIdOf({ userId: { toString: () => 'user-1' } })).toBe('user-1');
+        expect(buyerIdOf({ userId: undefined })).toBeUndefined();
+        expect(buyerIdOf({ userId: null })).toBeUndefined();
+    });
+
+    it('recognises the buyer by id, and never an erased buyer or a caller with no id', () => {
+        const order = { userId: 'user-1' };
+
+        expect(isBuyer(order, { id: 'user-1' })).toBe(true);
+        expect(isBuyer(order, { id: 'user-2' })).toBe(false);
+        expect(isBuyer(order, { id: null })).toBe(false);
+        expect(isBuyer(order, undefined)).toBe(false);
+        expect(isBuyer({ userId: undefined }, { id: undefined })).toBe(false);
+    });
+});

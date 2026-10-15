@@ -9,7 +9,7 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { orderService } from '@modules/orders';
+import { buyerIdOf, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { FulfillmentConsent } from '@types';
 import { answerBy } from '../domain';
@@ -54,7 +54,7 @@ const payloadOf = (
 ): FulfillmentOrderDelayed => ({
     orderId: String(fulfillmentOrder.orderId),
     fulfillmentOrderId: String(fulfillmentOrder._id),
-    ...(order.userId ? { userId: String(order.userId) } : {}),
+    ...(buyerIdOf(order) ? { userId: buyerIdOf(order) } : {}),
     titles: fulfillmentOrder.lines.map(({ title }) => title),
     agreedAt: (fulfillmentOrder.agreedAt ?? new Date(0)).toISOString(),
     // What the buyer is told is the date NOW expected; a cleared date leaves the stored one behind

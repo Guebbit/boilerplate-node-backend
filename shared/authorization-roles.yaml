@@ -267,18 +267,19 @@ roles:
     # list, `&admin_permissions` above: the two can never drift apart by hand, because they are the
     # same parsed array, not two lists somebody has to keep matching.
     #
-    # Assigning it to a real account is possible (nothing here refuses the name) but pointless: the
-    # audit trail's `system` label comes from the CALLER'S ID being the literal string `system`
-    # (`Caller.system` in `kernel/permissions.ts`), never from holding this role, so a real account
-    # granted it would read as an ordinary unrestricted `admin`, not as the system actor. Nothing in
-    # this codebase ever assigns it — `SYSTEM_ACTOR` is its only caller.
+    # `assignable: false`: no request may hand it to an account. The audit trail's `system` label
+    # comes from the CALLER'S ID being the literal string `system` (`Caller.system` in
+    # `kernel/permissions.ts`), never from holding this role, so a real account granted it would be
+    # an admin twin logged as `admin`. Nothing in this codebase assigns it — `SYSTEM_ACTOR` is its
+    # only caller.
     - name: system
       scope: tenant
       title: The system actor
+      assignable: false
       description: >-
           Background and scheduled work acting on nobody's behalf — a reservation-expiry sweep, a
-          reaper. Unrestricted within this shop, exactly like `admin`. Nothing in this codebase
-          assigns it to a real account.
+          reaper. Unrestricted within this shop, exactly like `admin`. Never assignable to an
+          account.
       permissions: *admin_permissions
 
     # -- platform scope ------------------------------------------------------------------------

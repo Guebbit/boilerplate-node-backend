@@ -19,7 +19,8 @@ import {
     isDigitalOnlyOrder,
     isPayable,
     canWithdraw,
-    shipsAwaitedStock
+    shipsAwaitedStock,
+    isBuyer
 } from '../domain';
 import type { OrderActor } from '../domain';
 import { resolveCurrentImages } from './current';
@@ -53,7 +54,7 @@ export const cancelScope = (
 ): Record<string, unknown> =>
     actorOf(authContext) === 'customer' || ownOnly
         ? authContext
-            ? { ...ownerScope(authContext.id), deletedAt: null }
+            ? ownLiveScope(authContext.id)
             : accessibleFilter(undefined, 'Order', 'update')
         : accessibleFilter(authContext, 'Order', 'update');
 
@@ -66,6 +67,18 @@ export const cancelScope = (
  */
 export const ownerScope = (userId: string): Record<string, unknown> =>
     orderRepository.ownerScope(userId);
+
+/**
+ * One account's orders that still exist: {@link ownerScope} without the soft-deleted rows. The one
+ * spelling of "this buyer's own live orders", so a sibling module never has to know `orders` marks
+ * a deletion with `deletedAt`.
+ *
+ * @param userId - whose orders
+ */
+export const ownLiveScope = (userId: string): Record<string, unknown> => ({
+    ...ownerScope(userId),
+    deletedAt: null
+});
 
 /**
  * Which column of the lifecycle table a caller reads. Three actors reach this function, only two
@@ -177,15 +190,15 @@ const holdsCheckout = (authContext: AuthContext | undefined): boolean =>
 const withdrawalActions = (
     order: OrderDocument,
     authContext: AuthContext | undefined
-): Pick<OrderActions, 'withdraw' | 'withdrawUntil'> => {
-    const isBuyer = String(order.userId) === authContext?.id;
-    return {
-        // Nothing left to send back once every unit has: `returnStatus` is the projection `returns`
-        // stamps, the only way this module can know.
-        withdraw: isBuyer && canWithdraw(order, new Date()) && order.returnStatus !== 'returned',
-        ...(order.withdrawUntil ? { withdrawUntil: order.withdrawUntil.toISOString() } : {})
-    };
-};
+): Pick<OrderActions, 'withdraw' | 'withdrawUntil'> => ({
+    // Nothing left to send back once every unit has: `returnStatus` is the projection `returns`
+    // stamps, the only way this module can know.
+    withdraw:
+        isBuyer(order, authContext) &&
+        canWithdraw(order, new Date()) &&
+        order.returnStatus !== 'returned',
+    ...(order.withdrawUntil ? { withdrawUntil: order.withdrawUntil.toISOString() } : {})
+});
 
 /**
  * The actions as the caller's standing allows them: the status-derived moves for the order's buyer
@@ -193,17 +206,17 @@ const withdrawalActions = (
  *
  * @param actions - everything the caller's keys and the order's status allow
  * @param actor - which lifecycle column the caller reads
- * @param isBuyer - whether the caller is the order's own buyer
+ * @param buyer - whether the caller is the order's own buyer
  */
-const forStanding = (actions: OrderActions, actor: OrderActor, isBuyer: boolean): OrderActions => {
-    const mayMove = actor === 'customer' ? isBuyer : true;
+const forStanding = (actions: OrderActions, actor: OrderActor, buyer: boolean): OrderActions => {
+    const mayMove = actor === 'customer' ? buyer : true;
 
     return {
         ...actions,
         transitions: mayMove ? actions.transitions : [],
         cancel: mayMove && actions.cancel,
         // Paying is the buyer's own step; an operator reading the order is never offered it.
-        pay: isBuyer && actions.pay
+        pay: buyer && actions.pay
     };
 };
 
@@ -220,8 +233,6 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
         orderActionsFor(order.status, actor),
         order.fulfillment?.shipped === true
     );
-
-    const isBuyer = String(order.userId) === authContext?.id;
 
     return resolveCurrentImages([serialized]).then(([resolved]) => ({
         ...resolved,
@@ -241,7 +252,7 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
                 invoice: Boolean(order.paidAt)
             },
             actor,
-            isBuyer
+            isBuyer(order, authContext)
         )
     }));
 };

@@ -7,7 +7,7 @@
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
-import { orderService } from '@modules/orders';
+import { buyerIdOf, orderService } from '@modules/orders';
 import { invoicingService } from '../services';
 import { rejectResponse } from '@infrastructure/http/response';
 import { isValidObjectId, requireId } from '@infrastructure/http/ids';
@@ -64,7 +64,7 @@ export const getOrderCreditNote = (
                         targetType: 'credit_note',
                         // The row id, not the number: it repeats across the invoice series.
                         targetId: String(creditNote._id),
-                        ownerId: String(order.userId)
+                        ownerId: buyerIdOf(order)
                     });
 
                     return invoicingService.renderCreditNotePdf(creditNote).then((pdf) => {

@@ -17,6 +17,7 @@ import {
     transferInstructionsFor
 } from '../config';
 import { ANONYMIZED_EMAIL } from '../domain/anonymization';
+import { buyerIdOf } from '../domain';
 import { orderConfirmEmail, bankTransferInstructionsEmail } from '../emails';
 import type { OrderDocument } from '../model';
 
@@ -86,7 +87,8 @@ export const mailBuyer = (
 ): Promise<void> => {
     // `.invalid` never resolves (RFC 6761 section 6.4): the mail would be a guaranteed bounce.
     if (order.email === ANONYMIZED_EMAIL) return Promise.resolve();
-    return (order.userId ? userService.getById(String(order.userId)) : Promise.resolve(undefined))
+    const buyerId = buyerIdOf(order);
+    return (buyerId ? userService.getById(buyerId) : Promise.resolve(undefined))
         .catch((error: unknown) => {
             // Stryker disable all
             logger.error({

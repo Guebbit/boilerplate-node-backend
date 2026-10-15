@@ -7,7 +7,7 @@
  */
 
 import { permissionsOfRole, PRESET_ROLES } from '@kernel/permissions';
-import { assertCanGrant, grantableRoles } from '../../service';
+import { assertCanGrant, grantableRoles } from '../../services';
 
 jest.mock('../../repository', () => ({
     membershipRepository: {},
@@ -19,12 +19,17 @@ const everyTenantRole = PRESET_ROLES.filter((role) => role.scope === 'tenant').m
     (role) => role.name
 );
 
+/** The ones a request may hand out: everything but `system`, the actor background work runs as. */
+const assignableTenantRoles = PRESET_ROLES.filter(
+    (role) => role.scope === 'tenant' && role.assignable !== false
+).map((role) => role.name);
+
 describe('grantableRoles', () => {
     // The rule is "hold `roles.any.assign`", so only a role manager hands out roles, and any of
     // them. `customer` and `unverified` are not roles at all: an audience is computed, so there is
     // nothing to grant.
     it.each([
-        ['admin', everyTenantRole],
+        ['admin', assignableTenantRoles],
         ['moderator', []],
         ['support', []]
     ])('gives a %s caller %j', (granterRole, expected) => {
@@ -33,6 +38,13 @@ describe('grantableRoles', () => {
 
     it('gives an empty list to a caller holding no keys', () => {
         expect(grantableRoles('tenant', [])).toEqual([]);
+    });
+
+    it('never offers the system actor, even to the administrator', () => {
+        expect(grantableRoles('tenant', permissionsOfRole('admin'))).not.toContain('system');
+        expect(() => {
+            assertCanGrant('tenant', 'system', permissionsOfRole('admin'));
+        }).toThrow(/never assigned/);
     });
 
     it('offers no platform role in tenant scope', () => {

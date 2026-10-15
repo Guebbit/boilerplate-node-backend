@@ -114,7 +114,7 @@ sequenceDiagram
     participant C as Caller
     participant R as account/session/resolver.ts
     participant U as userService
-    participant S as access/service.ts rolesOf()
+    participant S as access/services rolesOf()
     participant P as kernel/permissions.ts callerInScope()
 
     C->>R: bearer token

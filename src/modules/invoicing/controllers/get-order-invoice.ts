@@ -8,7 +8,7 @@
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
-import { orderService } from '@modules/orders';
+import { buyerIdOf, orderService } from '@modules/orders';
 import { invoicingService } from '../services';
 import { rejectResponse } from '@infrastructure/http/response';
 import { requireId } from '@infrastructure/http/ids';
@@ -49,7 +49,7 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
                     // The row id, not the number: the invoice and credit-note series both restart
                     // at 1 each year, and `GET /audit?target=` filters on `targetId` alone.
                     targetId: String(invoice._id),
-                    ownerId: String(order.userId)
+                    ownerId: buyerIdOf(order)
                 });
 
                 return invoicingService.renderInvoicePdf(invoice).then((pdf) =>

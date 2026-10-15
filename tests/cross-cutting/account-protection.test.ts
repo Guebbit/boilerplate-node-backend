@@ -22,8 +22,10 @@ import {
 
 setupTestDb();
 
-/** The tenant roles a person can actually log in as. */
-const TENANT_ROLES = PRESET_ROLES.filter((role) => role.scope === 'tenant');
+/** The tenant roles a person can actually log in as: `system` is never assigned to an account. */
+const TENANT_ROLES = PRESET_ROLES.filter(
+    (role) => role.scope === 'tenant' && role.assignable !== false
+);
 
 /** The roles that hold `key`, so each is a caller for the row. */
 const holdersOf = (key: string): string[] =>

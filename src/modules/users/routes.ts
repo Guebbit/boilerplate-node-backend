@@ -6,8 +6,13 @@
  * See: docs/modules/users.md
  */
 
-import { Router } from 'express';
-import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
+import { Router, type Request } from 'express';
+import {
+    getAuth,
+    isAuthOrCredential,
+    requireFreshAuthWhen,
+    requirePermission
+} from '@kernel/middlewares/authorizations';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
 import { getUsers } from './controllers/get-users';
@@ -18,6 +23,18 @@ import { restoreUsers } from './controllers/restore-users';
 import { getUserItem } from './controllers/get-user-item';
 import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
+
+/**
+ * Whether this request names a staff role — handing one out, or taking it away. Widening a
+ * person's powers is the one admin act a stolen session must not be able to do quietly, so it asks
+ * for a fresh session at the tier minting an API key does. Read from the body, so this guard comes
+ * after `upload.image()`, which populates it for a multipart request.
+ */
+const namesARole = (request: Request): boolean => {
+    const role = (request.body as { role?: unknown } | undefined)?.role;
+
+    return role !== undefined && role !== '';
+};
 
 /** Express router for user management (admin only). */
 export const router = Router();
@@ -40,7 +57,14 @@ router.post('/search', requirePermission('users.any.read'), noStore, getUsers);
 router.get('/', requirePermission('users.any.read'), privateNoCache, getUsers);
 
 // POST /users (create)
-router.post('/', requirePermission('users.any.create'), uploadLimiter, upload.image(), createUser);
+router.post(
+    '/',
+    requirePermission('users.any.create'),
+    uploadLimiter,
+    upload.image(),
+    requireFreshAuthWhen(namesARole, 'critical'),
+    createUser
+);
 
 // DELETE /users — id in body
 router.delete('/', requirePermission('users.any.delete'), deleteUsers);
@@ -54,6 +78,7 @@ router.put(
     requirePermission('users.any.update'),
     uploadLimiter,
     upload.image(),
+    requireFreshAuthWhen(namesARole, 'critical'),
     replaceUser
 );
 
@@ -63,6 +88,7 @@ router.patch(
     requirePermission('users.any.update'),
     uploadLimiter,
     upload.image(),
+    requireFreshAuthWhen(namesARole, 'critical'),
     updateUser
 );
 

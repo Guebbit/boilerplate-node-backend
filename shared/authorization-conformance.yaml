@@ -80,6 +80,8 @@ admin-permissions: &admin_permissions
     - apikeys.any.create
     - apikeys.any.delete
     - roles.any.assign
+    - cart.self.update
+    - cart.self.checkout
     - examples.self.read
     - examples.self.create
     - examples.self.update
@@ -837,16 +839,60 @@ cases:
       resource: { tenantId: shop_1 }
       expect: allow
 
-    - name: an administrator may not use a basket, whatever else they hold
+    # Staff are customers too: the audience's keys are unioned with the role's, so what a staff
+    # member holds on top is only the `any` keys. The caller below is a verified manager.
+    - name: an administrator may use a basket, every signed-in account being a customer first
       caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
       action: update
       subject: Cart
       resource: { tenantId: shop_1 }
-      expect: deny
+      expect: allow
 
-    - name: an administrator may not check out
+    - name: an administrator may check out
       caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
       action: checkout
       subject: Cart
       resource: { tenantId: shop_1 }
+      expect: allow
+
+    - name: a verified manager may check out, beside the any keys the role adds
+      caller: { id: usr_2, scope: tenant, tenantId: shop_1, permissions: [cart.self.update, cart.self.checkout, orders.self.read, orders.any.read] }
+      action: checkout
+      subject: Cart
+      resource: { tenantId: shop_1 }
+      expect: allow
+
+    - name: an account whose address is unproven may use a basket but may not check out
+      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [cart.self.update, orders.self.read] }
+      action: checkout
+      subject: Cart
+      resource: { tenantId: shop_1 }
       expect: deny
+
+    - name: a staff member holding both order keys reads their own order and a stranger's
+      caller: { id: usr_2, scope: tenant, tenantId: shop_1, permissions: [orders.self.read, orders.any.read] }
+      action: read
+      subject: Order
+      resource: { tenantId: shop_1, userId: usr_9 }
+      expect: allow
+
+    - name: a customer cannot change an account, the users keys not being in their audience
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [cart.self.update, cart.self.checkout, orders.self.read, payments.self.read] }
+      action: update
+      subject: User
+      resource: { tenantId: shop_1 }
+      expect: deny
+
+    - name: only a role manager may assign a role
+      caller: { id: usr_2, scope: tenant, tenantId: shop_1, permissions: *moderator_permissions }
+      action: assign
+      subject: Role
+      resource: { tenantId: shop_1 }
+      expect: deny
+
+    - name: an administrator may assign a role
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
+      action: assign
+      subject: Role
+      resource: { tenantId: shop_1 }
+      expect: allow

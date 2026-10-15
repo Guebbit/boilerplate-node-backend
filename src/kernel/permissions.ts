@@ -128,6 +128,11 @@ export interface PresetRole {
     title: string;
     description: string;
     permissions: readonly string[];
+    /**
+     * `false` for a role no request may hand to an account — `system`, the actor background work
+     * runs as. Absent means assignable.
+     */
+    assignable?: boolean;
 }
 
 /** Runtime shape for one entry of `shared/authorization-roles.yaml`'s `roles` list. */
@@ -136,7 +141,8 @@ const presetRoleSchema = z.object({
     scope: z.enum(AUTHORIZATION_SCOPES),
     title: z.string(),
     description: z.string(),
-    permissions: z.array(z.string())
+    permissions: z.array(z.string()),
+    assignable: z.boolean().optional()
 }) satisfies z.ZodType<PresetRole>;
 
 /**
@@ -290,7 +296,7 @@ export const audienceOf = (context: Pick<AuthContext, 'verified'> | undefined): 
 const byKey = new Map(PERMISSION_KEYS.map((entry) => [entry.key, entry]));
 
 /** What every caller of {@link findRole} actually reads off its result. */
-export type RoleLookup = Pick<PresetRole, 'name' | 'scope' | 'permissions'>;
+export type RoleLookup = Pick<PresetRole, 'name' | 'scope' | 'permissions' | 'assignable'>;
 
 /** Every preset role, indexed by name for {@link findRole}'s O(1) lookup. */
 const byRoleName = new Map<string, RoleLookup>(PRESET_ROLES.map((role) => [role.name, role]));
@@ -299,7 +305,7 @@ const byRoleName = new Map<string, RoleLookup>(PRESET_ROLES.map((role) => [role.
  * A preset role by name, or `undefined` — a plain lookup, not an assertion.
  *
  * Left as `undefined` here rather than thrown, because the two callers need different errors:
- * {@link permissionsOfRole} throws a name-only message, `access/service.ts`'s `validateGrant`
+ * {@link permissionsOfRole} throws a name-only message, `access/services/grants.ts`'s `validateGrant`
  * throws a scope-aware one. Neither treats a miss as anything but a mistake — roles are fixed
  * data (see this module's own docblock), so an unknown name is never a role this deployment
  * simply hasn't heard of yet.

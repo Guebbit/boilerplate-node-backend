@@ -17,7 +17,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { orderService } from '@modules/orders';
+import { isBuyer, orderService } from '@modules/orders';
 import { FulfillmentConsent } from '@types';
 import type { AuthContext, CallerContext, FulfillmentOrder } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
@@ -47,7 +47,7 @@ export const confirmWait = (
             .getById(String(found.orderId), orderService.callerScope(authContext))
             .then((order) => {
                 if (!order) return generateReject(404, [t('delivery.order-not-found')]);
-                if (String(order.userId) !== authContext.id)
+                if (!isBuyer(order, authContext))
                     return generateReject(403, [t('generic.error-forbidden')]);
 
                 return runAct(async (session) => {

@@ -16,7 +16,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { PaymentMethod } from '@types';
-import { orderService, orderTotal, isPayable } from '@modules/orders';
+import { buyerIdOf, orderService, orderTotal, isPayable } from '@modules/orders';
 import { ownOrderFlag } from '@modules/access';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -84,7 +84,7 @@ export const recordOfflinePayment = async (
         if (refusal) return refusal;
     }
 
-    const payerId = order.userId ? String(order.userId) : undefined;
+    const payerId = buyerIdOf(order);
     const { currency } = order;
     const upserted = await paymentRepository.upsertOffline(orderId, payerId, {
         // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
@@ -120,7 +120,7 @@ export const recordOfflinePayment = async (
         metadata: {
             method: input.method,
             reference: input.reference,
-            ...ownOrderFlag(context, order.userId ? String(order.userId) : undefined)
+            ...ownOrderFlag(context, buyerIdOf(order))
         }
     });
     emitAnalyticsEvent({

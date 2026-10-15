@@ -28,6 +28,7 @@ import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { everyMountedRoute, type MountedRoute } from '@tests/contract-routes';
 import { holdsKey } from '@kernel/ability';
 import { callerAs } from '@tests/callers';
+import { isUnrestrictedRole, PRESET_ROLES } from '@kernel/permissions';
 
 setupTestDb();
 
@@ -76,8 +77,8 @@ describe('every route requiring a caller (contract-derived)', () => {
 });
 
 describe('every route requiring an admin (contract-derived)', () => {
-    // A key a plain `customer` holds by design (`cart.self.checkout`, the `examples.self.*` keys;
-    // see `shared/authorization-roles.yaml`) is excluded: `authenticateAs('user')` below is
+    // A key a plain `customer` holds by design (`cart.self.checkout`, the `notifications.self.*`
+    // keys; see `shared/authorization-roles.yaml`) is excluded: `authenticateAs('user')` below is
     // genuinely allowed through those routes. The per-role sweep below already covers them correctly.
     const requiresAdmin = routes.filter(
         (route) =>
@@ -101,19 +102,20 @@ describe('every route requiring an admin (contract-derived)', () => {
 });
 
 /**
- * Every preset tenant role except `admin`. `admin` is excluded on purpose: it holds every
- * declared tenant key by construction, so a case for it here would just re-assert the role file
+ * Every tenant persona a person can log in as, except the unrestricted ones: the two audiences with
+ * no stored role (`unverified`, `customer`) and every preset tenant role that does not hold every
+ * declared key. `admin` and `system` are excluded for the one reason they share: they hold every
+ * declared tenant key by construction, so a case for them here would just re-assert the role file
  * one key at a time — `tests/unit/kernel/permissions.test.ts` already covers that at the model
- * level, once, for every key.
+ * level, once, for every key. Derived, so a role added to the YAML is never silently skipped.
  */
-const NON_ADMIN_TENANT_ROLES = [
+const NON_ADMIN_TENANT_ROLES: readonly string[] = [
+    'unverified',
     'customer',
-    'manager',
-    'warehouse',
-    'support',
-    'editor',
-    'moderator'
-] as const;
+    ...PRESET_ROLES.filter(
+        (role) => role.scope === 'tenant' && !isUnrestrictedRole(role.name, 'tenant')
+    ).map((role) => role.name)
+];
 
 describe('every guarded route agrees with the role file, for every non-admin role (contract-derived)', () => {
     const guarded = routes.filter(

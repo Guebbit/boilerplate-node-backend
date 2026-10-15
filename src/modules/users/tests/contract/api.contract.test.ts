@@ -10,6 +10,8 @@ import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
+import { freezeDate, advanceDate } from '@tests/clock';
+import { reauthWindowSeconds } from '@kernel/config';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { USER_SETUP_REQUESTED } from '../../events';
@@ -649,5 +651,45 @@ describe('GET /users — what the caller may do to each account', () => {
         const response = await api().get('/account').set('Authorization', bearer);
 
         expect(response.body.data).not.toHaveProperty('actions');
+    });
+});
+
+/**
+ * Handing a staff role out, or taking one away, asks for a fresh session at the tier minting an API
+ * key does: a stolen session must not be able to quietly make a second administrator. A write that
+ * names no role is never prompted.
+ */
+describe('the step-up on naming a role', () => {
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    it('401s REAUTH_REQUIRED for a stale session granting a role, and writes nothing', async () => {
+        freezeDate();
+        const { bearer } = await authenticateAsRole('admin');
+        const target = await createUser({ email: 'stale@target.test', username: 'staletarget' });
+        advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
+
+        const response = await api()
+            .patch(`/users/${target.id}`)
+            .set('Authorization', bearer)
+            .send({ role: 'support' });
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+    });
+
+    it('lets the same stale session edit the profile, which names no role', async () => {
+        freezeDate();
+        const { bearer } = await authenticateAsRole('admin');
+        const target = await createUser({ email: 'stale@target.test', username: 'staletarget' });
+        advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
+
+        const response = await api()
+            .patch(`/users/${target.id}`)
+            .set('Authorization', bearer)
+            .send({ username: 'renamedtarget' });
+
+        expect(response.status).toBe(200);
     });
 });

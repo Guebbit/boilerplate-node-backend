@@ -1,6 +1,6 @@
 /**
  * @module
- * The one door onto the tenant and membership collections. `./service.ts` carries every
+ * The one door onto the tenant and membership collections. `./services/` carries every
  * invariant; this file only shapes the query.
  *
  * See: docs/theory/authorization.md

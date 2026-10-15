@@ -178,13 +178,17 @@ privilege escalation with extra steps. So one permission, `roles.any.assign`, pr
 Of the preset roles only `admin` (and `system`, its alias) holds it. Staff without it change
 customers only: a moderator who may erase accounts erases customers, never the administrator.
 
-Four details carry the rule:
+Five details carry the rule:
 
 - **Your own account is exempt**, so a support agent still edits their own profile.
 - **A role is only a bundle of keys.** There is no `level`, no rank between staff roles, and no
   "outranks": what a role can do is exactly the keys it lists.
 - **An API key holds exactly the keys it was minted with.** One minted without `roles.any.assign`
   cannot change a staff account, whoever minted it.
+- **Handing a role out asks for a fresh session.** `POST`, `PUT` and `PATCH /users` that name a role
+  (to grant it, or `null` to take it away) are gated by `requireFreshAuthWhen` at the critical tier,
+  the one minting an API key asks, so a stolen session cannot quietly make a second administrator. A
+  write that names no role is never prompted. `system` is never handed out at all.
 - **An administrator may change another administrator**, and may hand out or take away any role,
   their own included. Locking the shop out of its last administrator is a technician's edit of the
   database to repair, by decision.

@@ -29,6 +29,29 @@ export const checkOrderLines = (lines: readonly OrderLineCandidate[]): OrderLine
     return { ok: true };
 };
 
+/** The buyer as an order carries it: an ObjectId on a stored order, a string on a hand-built one. */
+interface HasBuyer {
+    userId?: string | { toString: () => string } | null;
+}
+
+/**
+ * The id of the account an order belongs to, as the caller's own id is spelled, or `undefined` when
+ * the account was erased and the order kept. The one place an order's buyer becomes a string.
+ * @param order - anything carrying the order's `userId`
+ */
+export const buyerIdOf = (order: HasBuyer): string | undefined =>
+    order.userId ? String(order.userId) : undefined;
+
+/**
+ * Is `caller` the order's buyer? Never for an erased buyer, and never for a caller with no id.
+ * @param order - anything carrying the order's `userId`
+ * @param caller - whoever is asking, or `undefined` for a path with no request behind it
+ */
+export const isBuyer = (order: HasBuyer, caller: { id?: string | null } | undefined): boolean => {
+    const buyer = buyerIdOf(order);
+    return buyer !== undefined && buyer === caller?.id;
+};
+
 /** A line as {@link isShippedItem} sees it — only the field it actually reads. */
 export interface ShippableLineCandidate {
     product?: { requiresShipping?: unknown } | null;

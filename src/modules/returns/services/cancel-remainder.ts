@@ -27,7 +27,7 @@ import { callerForSubject, systemCallerContext } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
 import { cancelRemainder, remainderOptions, waitHasExpired, ActRefusal } from '@modules/delivery';
 import { inventoryService } from '@modules/inventory';
-import { orderService, isExcludedFromWithdrawal } from '@modules/orders';
+import { isBuyer, orderService, isExcludedFromWithdrawal } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import { FulfillmentCancelReason } from '@types';
@@ -244,7 +244,7 @@ const refuseCaller = (
     authContext: AuthContext,
     remainder: readonly ProductQuantity[]
 ): CreateReturnOutcome | undefined => {
-    if (String(order.userId) === authContext.id) {
+    if (isBuyer(order, authContext)) {
         if (input.reason !== 'withdrawal') return badCancellation();
         if (order.withdrawUntil && Date.now() > order.withdrawUntil.getTime())
             return windowClosed();
@@ -291,7 +291,7 @@ export const createCancellation = (
                 const refusal = refuseCaller(order, input, authContext, option.lines);
                 if (refusal) return refusal;
 
-                const byBuyer = String(order.userId) === authContext.id;
+                const byBuyer = isBuyer(order, authContext);
                 return cancelUnderLock(
                     order,
                     input,

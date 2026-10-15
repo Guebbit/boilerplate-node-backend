@@ -8,6 +8,6 @@
  * See: docs/theory/authorization.md
  */
 
-export * from './service';
+export * from './services';
 
 export type * from './model';

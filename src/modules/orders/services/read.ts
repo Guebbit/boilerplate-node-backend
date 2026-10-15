@@ -17,7 +17,7 @@ import { decryptOrderAddress } from '../pii';
 import { orderRepository } from '../repository';
 import { resolveCurrentImages } from './current';
 import { callerScope, ownerScope } from './scope';
-import { fulfillmentStatusFilter } from '../domain';
+import { buyerIdOf, fulfillmentStatusFilter } from '../domain';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 
 /**
@@ -118,7 +118,7 @@ export const orderBriefsByIds = (orderIds: readonly string[]): Promise<Map<strin
                                   id: String(order._id),
                                   orderNumber: order.orderNumber,
                                   email: order.email,
-                                  ...(order.userId ? { userId: String(order.userId) } : {}),
+                                  ...(buyerIdOf(order) ? { userId: buyerIdOf(order) } : {}),
                                   ...(order.paidAt ? { paidAt: order.paidAt } : {})
                               }
                           ])
