@@ -937,3 +937,30 @@ cases:
       subject: Example
       resource: { tenantId: shop_1, userId: usr_2 }
       expect: deny
+
+    # =============================================================================================
+    # An own-rows rule belongs to a person. A caller with no id (a stranger holding a stray
+    # own-rows rule) must not match the rows that have no owner either: the rule is dropped, not
+    # compiled into "userId is null".
+    # =============================================================================================
+
+    - name: an own-rows rule held by a caller with no id matches nothing, not even an unowned row
+      caller: { id: null, scope: tenant, tenantId: shop_1, permissions: [read:Order] }
+      action: read
+      subject: Order
+      resource: { tenantId: shop_1, userId: null, deletedAt: null }
+      expect: deny
+
+    - name: a signed-in account reads its own notification
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [read:Notification, delete:Notification] }
+      action: read
+      subject: Notification
+      resource: { tenantId: shop_1, userId: usr_1 }
+      expect: allow
+
+    - name: a signed-in account cannot delete someone else's notification
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [read:Notification, delete:Notification] }
+      action: delete
+      subject: Notification
+      resource: { tenantId: shop_1, userId: usr_2 }
+      expect: deny
