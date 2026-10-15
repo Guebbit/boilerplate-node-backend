@@ -115,6 +115,22 @@ describe('an escalating store', () => {
         expect(await refused(store)).toBe(true);
     });
 
+    it('un-counts at the escalated level once the key has a strike', async () => {
+        const store = freshStore();
+        await tripCap(store);
+        // Out of the first lockout, but the strike stands: the key now counts at the next level.
+        jest.advanceTimersByTime(WINDOW_MS + 1);
+        await refused(store);
+        await refused(store);
+        await store.decrement('k');
+        await store.decrement('k');
+
+        // Both hits were given back at THAT level: two more are fine, the third is not.
+        await refused(store);
+        await refused(store);
+        expect(await refused(store)).toBe(true);
+    });
+
     it('resets every level and the strike count together', async () => {
         const store = freshStore();
         await tripCap(store);
@@ -127,16 +143,5 @@ describe('an escalating store', () => {
         await tripCap(store);
         jest.advanceTimersByTime(WINDOW_MS + 1);
         expect(await refused(store)).toBe(false);
-    });
-
-    it('reports the current level through get, so a gate can read how long it is locked', async () => {
-        const store = freshStore();
-        await tripCap(store);
-        jest.advanceTimersByTime(WINDOW_MS + 1);
-        await tripCap(store);
-
-        const record = await store.get?.('k');
-
-        expect(record?.totalHits).toBeGreaterThan(2);
     });
 });

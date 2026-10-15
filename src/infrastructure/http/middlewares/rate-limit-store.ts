@@ -246,9 +246,6 @@ const escalatingStore = (
         plainStore(`${namespace}:x${String(level)}`, onStoreError)
     );
     const strikes = plainStore(`${namespace}:strikes`, onStoreError);
-    // Which level a key was last counted at, so a successful request un-counts the right one.
-    const lastLevel = new Map<string, number>();
-
     /** The level a key is currently locked at, if any: its count has passed the cap. */
     const lockedLevel = async (key: string): Promise<number | undefined> => {
         for (const [level, store] of [...levels.entries()].toReversed())
@@ -256,11 +253,14 @@ const escalatingStore = (
         return undefined;
     };
 
-    /** Count one hit at a level, remembering it for a later `decrement`. */
-    const countAt = (level: number, key: string) => {
-        lastLevel.set(key, level);
-        return levels[level].increment(key);
-    };
+    /**
+     * The level a key counts at right now: the one it is locked at, else the one its strikes pick.
+     * Recomputed from the counters on every call, so there is no per-key memory to grow without
+     * bound — the keys are chosen by whoever is attacking.
+     */
+    const levelOf = async (key: string): Promise<number> =>
+        (await lockedLevel(key)) ??
+        Math.min(liveHits(await strikes.get?.(key)), escalation.doublings);
 
     return {
         init: (received: Options) => {
@@ -274,20 +274,19 @@ const escalatingStore = (
         },
         increment: async (key: string) => {
             const locked = await lockedLevel(key);
-            if (locked !== undefined) return countAt(locked, key);
+            if (locked !== undefined) return levels[locked].increment(key);
 
-            const recorded = liveHits(await strikes.get?.(key));
-            const result = await countAt(Math.min(recorded, escalation.doublings), key);
+            const result = await levels[await levelOf(key)].increment(key);
             // The count just passed the cap: this is a lockout, and the next one is longer.
             if (result.totalHits === escalation.limit + 1) await strikes.increment(key);
             return result;
         },
-        decrement: (key: string) => levels[lastLevel.get(key) ?? 0].decrement(key),
+        // A success is un-counted at the level the key counts at now.
+        decrement: (key: string) => levelOf(key).then((level) => levels[level].decrement(key)),
         resetKey: (key: string) =>
             Promise.all(
                 [...levels, strikes].map((store) => Promise.resolve(store.resetKey(key)))
-            ).then(() => undefined),
-        get: async (key: string) => levels[(await lockedLevel(key)) ?? 0].get?.(key)
+            ).then(() => undefined)
     };
 };
 
