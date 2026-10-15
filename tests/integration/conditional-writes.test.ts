@@ -32,13 +32,8 @@ import {
     etagOf as etagFor
 } from '@infrastructure/persistence/versioning';
 import { givenLocale } from '@modules/locales/tests/factories';
-import { registerModules } from '@kernel/registry';
-import localesModule from '@modules/locales/module';
-import productsModule from '@modules/products/module';
 
 setupTestDb();
-
-beforeAll(() => registerModules([localesModule, productsModule]));
 
 /** What one versioned resource needs to be driven the same way as the others. */
 interface Resource {

@@ -12,9 +12,6 @@ import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
-import { localeService } from '@modules/locales/services';
-import { productRepository } from '@modules/products/repository';
-import { checkProductTranslationFields } from '@modules/products/model';
 import { translator } from '@infrastructure/i18n';
 
 setupTestDb();
@@ -37,21 +34,7 @@ const titleTooShort = () => {
     });
 };
 
-beforeAll(() => {
-    localeService.setTranslatables({
-        product: {
-            collection: 'products',
-            fields: ['title', 'description'],
-            cacheTag: 'products',
-            ...productRepository.translatable,
-            checkFields: checkProductTranslationFields
-        }
-    });
-});
-
-afterAll(() => {
-    localeService.setTranslatables({});
-});
+// `@tests/http`'s import boots the real app, which registers every enabled module's `translatables`.
 
 /** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
 const FALLBACK = 'en';

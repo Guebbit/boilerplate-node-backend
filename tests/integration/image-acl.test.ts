@@ -6,8 +6,6 @@ import { emptyFileSandbox } from '@tests/file-sandbox';
 import { setupTestDb } from '@tests/setup-test-db';
 import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
-import { localeService } from '@modules/locales/services';
-import { productRepository } from '@modules/products/repository';
 import { currentEnvironment } from '@infrastructure/config/store';
 
 /**
@@ -35,19 +33,6 @@ beforeAll(async () => {
     })
         .png()
         .toBuffer();
-
-    localeService.setTranslatables({
-        product: {
-            collection: 'products',
-            fields: ['title', 'description'],
-            cacheTag: 'products',
-            ...productRepository.translatable
-        }
-    });
-});
-
-afterAll(() => {
-    localeService.setTranslatables({});
 });
 
 setupTestDb();

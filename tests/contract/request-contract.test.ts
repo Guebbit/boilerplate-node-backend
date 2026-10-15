@@ -59,25 +59,10 @@ import {
 } from '@api/schemas.zod';
 import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
-import { localeService } from '@modules/locales/services';
-import { productRepository } from '@modules/products/repository';
 
 setupTestDb();
 
-beforeAll(() => {
-    localeService.setTranslatables({
-        product: {
-            collection: 'products',
-            fields: ['title', 'description'],
-            cacheTag: 'products',
-            ...productRepository.translatable
-        }
-    });
-});
-
-afterAll(() => {
-    localeService.setTranslatables({});
-});
+// `@tests/http`'s import boots the real app, which registers every enabled module's `translatables`.
 
 // CreateOrderBody's userId/items[].productId are opaque strings to the schema — the contract
 // has no way to say "must reference a real document" — so the generated payload is patched with

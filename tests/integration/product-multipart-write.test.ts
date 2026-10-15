@@ -6,8 +6,6 @@ import { emptyFileSandbox } from '@tests/file-sandbox';
 import { setupTestDb } from '@tests/setup-test-db';
 import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
-import { localeService } from '@modules/locales/services';
-import { productRepository } from '@modules/products/repository';
 import { currentEnvironment } from '@infrastructure/config/store';
 
 /**
@@ -60,20 +58,7 @@ setupTestDb();
 /** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
 const FALLBACK = 'en';
 
-beforeAll(() => {
-    localeService.setTranslatables({
-        product: {
-            collection: 'products',
-            fields: ['title', 'description'],
-            cacheTag: 'products',
-            ...productRepository.translatable
-        }
-    });
-});
-
-afterAll(() => {
-    localeService.setTranslatables({});
-});
+// `@tests/http`'s import boots the real app, which registers every enabled module's `translatables`.
 
 describe('writing a product through a multipart body', () => {
     beforeEach(async () => {

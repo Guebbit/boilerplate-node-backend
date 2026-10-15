@@ -1,7 +1,7 @@
 ---
 source: tests/contract/request-contract.test.ts
-sha256: 7e4f3a5c01cc9474ba45145b03cf0e475729ad7fdef9a19dcc6dcc35958d1645
-generated_at: 2026-09-27T15:48:24.929879+00:00
+sha256: b72e2371cb96dc855a51b3555454b11d155f176671e78b279fbbe78efb32ac10
+generated_at: 2026-10-15T12:33:15.498676+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract-derived request tests that verify, for every write endpoint, that the API accepts every payload its OpenAPI spec declares legal (expect 2xx) and rejects every payload the spec declares illegal (expect 422 + `ValidationErrorResponse`). This is the request-side mirror of the response contract tests in `tests/contract/*`: those check real responses against `openapi.yaml`; this checks `openapi.yaml`-derived requests against the real API. It exists to catch validators that are either tighter or looser than the spec.
+Contract-derived **request** tests: for every write endpoint, verifies the API accepts every payload its OpenAPI spec declares legal (expect 2xx) and rejects exactly what the spec declares illegal (expect 422 + `ValidationErrorResponse` shape). It is the mirror image of the response-contract tests in `tests/contract/*` — those check responses against the spec; this file checks spec-generated requests against the live API.
 
 ## Key elements
 
-- **`withRealOrderReferences(payload, skipField?)`** — Patches a generated `CreateOrderBody` with a real `userId` and real `productId` per item, since the schema treats those as opaque strings. The `skipField` param prevents overwriting the field the invalid-payload case is actually testing.
-- **`withMatchingPasswordConfirm(payload)`** — Copies `password` into `passwordConfirm` to satisfy a cross-field rule the schema doesn't express independently.
-- **`withRealRole(payload)`** — Replaces the randomly generated `role` string with `'customer'`, since roles are deployment data and any random string is contract-legal but names no real role.
-- **`withRealTranslations(payload)`** — Replaces the generated `translations` record with `en` (the real fallback locale) so the locale row lookup succeeds.
-- **`describe` blocks** — One per write endpoint (`POST /users`, `POST /products`, `POST /orders`, `POST /cart`, `POST /feedback/contact`, …). Each block has a "accepts a legal payload" test (expect 2xx) and an `it.each(invalidPayloads(...))` table of rejection cases (expect 422, `body.success === false`).
-- **`beforeAll` / `afterAll`** — Registers and clears `localeService.setTranslatables` so the product-translation pipeline is active during tests.
-- **`beforeEach` (products block)** — Creates an `en` locale row via `localeRepository.create(makeLocale(...))` so `withRealTranslations` references an existing record.
+- **`withRealOrderReferences(payload, skipField?)`** — Patches a generated `CreateOrderBody` payload with a real `userId` and `productId`, clamps item `quantity` to 1, and skips patching the field currently under test (the `skipField` guard prevents silently fixing the violation being asserted).
+- **`withMatchingPasswordConfirm(payload)`** — Copies `password` into `passwordConfirm` so cross-field equality isn't the failure cause.
+- **`withRealRole(payload)`** — Replaces the randomly generated `role` string with `'customer'`, since the schema has no enum and the API requires a declared role.
+- **`withRealTranslations(payload)`** — Replaces the generated `translations` key with `'en'` so it matches a seeded locale row.
+- **`describe` blocks** — One per write endpoint (`POST /users`, `POST /products`, `POST /orders`, `POST /cart`, and further endpoints in the truncated section). Each contains a valid-payload test (expect 2xx) and an `it.each(invalidPayloads(...))` parameterized suite (expect 422, `success: false`).
+- **`beforeAll` / `afterAll`** — Registers and clears `localeService.setTranslatables` for the product collection (wiring `productRepository` callbacks into the translation pipeline).
+- **`beforeEach` (products suite)** — Seeds an `'en'` locale via `localeRepository.create(makeLocale(...))`.
 
 ## Relationships
 
-- **`tests/support/contract-data.ts`** — Source of `validPayload(schema)` (generates one legal payload from a Zod schema) and `invalidPayloads(schema)` (generates the table of single-field violations). All endpoint tests consume its output directly.
-- **`tests/support/contract.ts`** — Imported as a side-effect (`import '@tests/contract'`); presumably registers shared contract-test helpers or matcher extensions before the suite runs.
-- **`tests/support/http.ts`** — Provides `api()` (supertest wrapper) and `authenticateAs(role)` used in every request.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module level to (re)initialise the test database before any test executes.
-- **`tests/support/spec-walk.ts`** — `listOperations` and `SchemaNode` are imported; used upstream by `contract-data` or in truncated portions of this file to enumerate spec operations.
-- **`src/modules/products/tests/factories.ts`** — `createProduct()` creates a real product document, used by order/cart tests to supply a valid `productId`.
-- **`src/modules/products/repository.ts`** — `productRepository.existsById` and `.writeTranslatedFields` are wired into `localeService.setTranslatables` so the translation pipeline resolves against the real repository.
-- **`src/modules/locales/repository.ts`** — `localeRepository.create` inserts the `en` locale row in the products `beforeEach`.
-- **`src/modules/locales/factories.ts`** — `makeLocale` builds the locale document passed to `localeRepository.create`.
-- **`src/modules/locales/services/index.ts`** — `localeService.setTranslatables` is configured in `beforeAll`/`afterAll` to activate/deactivate the product translation hook.
+- **`tests/support/contract-data.ts`** — Source of `validPayload` and `invalidPayloads`; the generic walker that generates one legal / N illegal payloads per Zod schema.
+- **`tests/support/http.ts`** — Provides `api()` (supertest app) and `authenticateAs` (token acquisition per role).
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` resets the test database before the suite runs.
+- **`tests/support/contract.ts`** — Side-effect import (`@tests/contract`); likely registers global matchers or setup shared across contract tests.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` creates a real product document for reference-patching.
+- **`src/modules/locales/factories.ts`** — `makeLocale` builds the locale document seeded in the products `beforeEach`.
+- **`src/modules/locales/repository.ts`** — `localeRepository.create` persists that document.
+- **`src/modules/locales/services/index.ts`** — `localeService.setTranslatables` hooks the product translation pipeline.
+- **`src/modules/products/repository.ts`** — `existsById`, `writeTranslatedFields`, `markEdited` are passed as callbacks into the translatables registration.
+- **`src/modules/users/tests/factories.ts`** — `PLAIN_PASSWORD` (used in truncated signup/login suites).
+- **`tests/support/shopper-routes.ts`** — `roleReaching` (used in truncated endpoint suites).
+- **`tests/support/spec-walk.ts`** / **`tests/support/spec-world.ts`** — `listOperations`, `seedWorld`, `buildUrl`, `requiredHeadersOf`, etc. (used in truncated endpoint suites for non-POST or multi-step endpoints).
 
 ## Notes
 
-- **`skipField` discipline.** When an invalid-payload case targets a specific field (e.g. `userId`), the real-reference patchers must skip that field. Failing to skip silently replaces the violation with a valid value, making the test pass vacuously. The `field === 'items'` guard in the orders block and the `field === 'productId'` guard in the cart block follow the same pattern.
-- **Scope boundary.** This file only asserts schema/contract conformance. Business rules the schema cannot express (`quantity ≤ available`, `passwordConfirm === password`, cross-reference existence) are either patched in locally or left to dedicated scenario tests.
-- **The four drift mechanisms** documented in the file header (spec format mismatch, `.extend()` field replacement, pre-validation coercion, partial-schema validation) are known, recurring causes of the tighter/looser validator bugs this suite guards against. The correct fix is not always "tighten the validator"—sometimes the spec is wrong.
-- **Generated vs. hand-written data.** This file uses `contract-data`'s generators exclusively. Deterministic scenario tests continue to use module-level `tests/factories.ts`; the two are complementary, not interchangeable.
+- **`skipField` is load-bearing.** Every invalid-payload test for `userId` (or `productId`, `items`, etc.) relies on this guard. Removing it causes the patch helper to silently replace the violation under test, making the case pass for the wrong reason.
+- **Quantity clamping is intentional, not a workaround.** The generated value (999) is the schema's hard ceiling; a shop's per-line cap (default 10) is a business rule outside the contract. Clamping to 1 isolates the *shape* assertion from business-rule rejection.
+- **Patching pattern is uniform.** Any field the schema types as an opaque string (`userId`, `productId`, `role`, `translations` keys) that must reference real runtime data gets a small `with*` helper. Add a new helper rather than inlining the patch, and always guard with `skipField` (or the `field ===` check) so invalid-payload cases aren't self-defeating.
+- **This file is additive to, not a replacement for, scenario tests.** Module `tests/factories.ts` files cover specific business scenarios; this file only asks "does the API honour its own contract for *any* legal/illegal input." Do not add scenario-specific assertions here.
+- **The file is truncated in this view.** The visible portion covers `/users`, `/products`, `/orders`, `/cart`; additional endpoints (signup, login, feedback, etc.) and the imports for `spec-walk`/`spec-world`/`shopper-routes` belong to those unseen suites.
