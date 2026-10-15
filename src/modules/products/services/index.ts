@@ -10,11 +10,10 @@
  */
 
 import type { Caller, Product } from '@types';
-import { zodProductReplaceSchema, zodProductUpdateSchema } from '../model';
+import { zodProductCreateSchema, zodProductReplaceSchema, zodProductUpdateSchema } from '../model';
 import type { ProductDocument } from '../model';
 import { presentProduct } from '../presenter';
 import { canSeeStock, redactStock } from './stock-view';
-import { validateCreateData, validateUpdateData } from './validation';
 import { search, searchForCaller, facets } from './search';
 import { callerScope, getById, getByIdForCaller, getAdmin } from './read';
 import { create, update, updateById } from './crud';
@@ -34,7 +33,6 @@ import {
  * Every operation is published by name as well as through the object below: the suites drive
  * them directly, and the barrel's surface must not shrink when a file moves.
  */
-export { validateCreateData, validateUpdateData } from './validation';
 export { search, searchForCaller } from './search';
 export { callerScope, getById, getByIdForCaller, getAdmin } from './read';
 export { create, update, updateById } from './crud';
@@ -56,8 +54,6 @@ const toProduct = (document: ProductDocument, caller?: Caller): Product =>
 
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const productService = {
-    validateCreateData,
-    validateUpdateData,
     callerScope,
     search,
     searchForCaller,
@@ -87,6 +83,7 @@ export const productService = {
     // Same reason as `toProduct` just above: the update controller's factory needs these to
     // validate PUT/PATCH bodies against the contract plus its two refinements, and may not reach `./model`
     // directly.
+    zodProductCreateSchema,
     zodProductReplaceSchema,
     zodProductUpdateSchema
 };

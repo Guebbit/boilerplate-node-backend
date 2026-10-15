@@ -27,7 +27,10 @@ const FALLBACK = 'en';
 describe('productService.writeCreate — no translation provider', () => {
     it('writes the fallback language alone', async () => {
         const result = await productService.writeCreate(
-            { price: 12.5, translations: { [FALLBACK]: { title: 'Standing Desk' } } },
+            productService.zodProductCreateSchema.parse({
+                price: 12.5,
+                translations: { [FALLBACK]: { title: 'Standing Desk' } }
+            }),
             testCallerContext
         );
 
@@ -37,13 +40,13 @@ describe('productService.writeCreate — no translation provider', () => {
 
     it('refuses a second language with a field-named 422, not a 500', async () => {
         const result = await productService.writeCreate(
-            {
+            productService.zodProductCreateSchema.parse({
                 price: 12.5,
                 translations: {
                     [FALLBACK]: { title: 'Standing Desk' },
                     it: { title: 'Scrivania' }
                 }
-            },
+            }),
             testCallerContext
         );
 

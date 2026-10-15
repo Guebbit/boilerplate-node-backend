@@ -20,10 +20,8 @@ import type {
 } from '@types';
 import {
     generateSuccess,
-    generateReject,
     type ResponseReject,
-    type ResponseSuccess,
-    validationErrors
+    type ResponseSuccess
 } from '@infrastructure/http/response';
 import { zodProductCreateSchema, zodProductUpdateSchema } from '../model';
 import type { ProductDocument } from '../model';
@@ -87,10 +85,10 @@ export interface ProductImageExtras {
  * Create a product and its translation rows in ONE transaction — the create door of the
  * multilingual product write surface.
  *
- * Before:  validation, nothing written yet (a bad body costs no transaction).
- *            1. the product fields' shape — `zodProductCreateSchema`, which also refuses a
- *               missing or `null` fallback locale
- *            2. the translations batch's locales and field names — `planTranslations`
+ * Before:  the translations batch's locales and field names — `planTranslations`; nothing written
+ *          yet (a bad batch costs no transaction). `data` arrives already validated by
+ *          `zodProductCreateSchema` at the controller, which also refuses a missing or `null`
+ *          fallback locale.
  * Inside:  the row, its `PRODUCT_CREATED` outbox event, every translation row, the derived column.
  *          All commit together or none does.
  * After:   the relay wake-up, the audit entry, the image enqueue — each catching its own failure.
@@ -99,25 +97,17 @@ export interface ProductImageExtras {
  * validation has passed — the same order the controller keeps for its own merge.
  */
 export const writeCreate = async (
-    data: Record<string, unknown>,
+    data: z.infer<typeof zodProductCreateSchema>,
     context: CallerContext,
     imageExtras: ProductImageExtras = {}
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> => {
-    const parsed = zodProductCreateSchema.safeParse(data);
-    if (!parsed.success) return generateReject(422, validationErrors(parsed.error));
-
-    const plan = await planTranslations(
-        'product',
-        toUpsertTranslationsRequest(parsed.data.translations)
-    );
+    const plan = await planTranslations('product', toUpsertTranslationsRequest(data.translations));
     if (!isTranslationPlan(plan)) return prefixTranslationErrors(plan);
 
     // Guaranteed present and non-null by the schema's own refinement — a plan cannot validate
     // without it.
-    const fallbackEntry = parsed.data.translations[
-        getFallbackLocale()
-    ] as ProductTranslationFieldsWrite;
-    const { translations: _translations, ...productFields } = parsed.data;
+    const fallbackEntry = data.translations[getFallbackLocale()] as ProductTranslationFieldsWrite;
+    const { translations: _translations, ...productFields } = data;
 
     const product = await withTransaction((session) =>
         insertProduct(

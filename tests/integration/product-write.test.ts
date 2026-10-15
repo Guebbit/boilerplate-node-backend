@@ -41,13 +41,13 @@ describe('productService.writeCreate', () => {
         await givenLocale('it');
 
         const result = await productService.writeCreate(
-            {
+            productService.zodProductCreateSchema.parse({
                 price: 24.9,
                 translations: {
                     en: { title: 'Memory Foam Bed', description: 'Extra support' },
                     it: { title: 'Cuccia in memory foam' }
                 }
-            },
+            }),
             testCallerContext
         );
 
@@ -60,28 +60,14 @@ describe('productService.writeCreate', () => {
         expect(created.title).toBe('Memory Foam Bed');
     });
 
-    it('rejects, and writes neither the product nor a translation row, when the fallback locale is missing', async () => {
-        const before = await productService.search({}, undefined);
-
-        const result = await productService.writeCreate(
-            { price: 10, translations: { it: { title: 'Solo italiano' } } },
-            testCallerContext
-        );
-
-        expect(result.success).toBe(false);
-
-        const after = await productService.search({}, undefined);
-        expect(after.items).toHaveLength(before.items.length);
-    });
-
     it('rejects, and writes nothing, when a translation locale does not exist', async () => {
         const before = await productService.search({}, undefined);
 
         const result = await productService.writeCreate(
-            {
+            productService.zodProductCreateSchema.parse({
                 price: 10,
                 translations: { en: { title: 'Valid title' }, xx: { title: 'Unregistered' } }
-            },
+            }),
             testCallerContext
         );
 

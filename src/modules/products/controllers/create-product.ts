@@ -1,7 +1,7 @@
 /**
  * @module
  * Admin create controller for the catalogue — decodes the upload and the body, then hands both to
- * `productService.writeCreate`, which validates and writes the product together with every
+ * `productService.writeCreate`, which writes the product together with every
  * language it was created in, in one operation.
  */
 
@@ -10,6 +10,7 @@ import type { ParamsDictionary } from 'express-serve-static-core';
 import { productService } from '../services';
 import { rejectResponse, createdResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { parseBody } from '@infrastructure/http/controller';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
 import { claimUpload, readUploadedImage } from '@infrastructure/http/uploads';
 import type { CreateProductRequest, CreateProductRequestMultipart, Product } from '@types';
@@ -51,21 +52,29 @@ export const createProduct = (
     // `.optional()` field.
     const { imageUrl, thumbnailUrl, pendingImageKey } = readUploadedImage(request);
 
+    const body = parseBody(
+        productService.zodProductCreateSchema,
+        {
+            ...request.body,
+            price,
+            active,
+            purchasable,
+            requiresShipping,
+            noWithdrawal,
+            onHand,
+            weight,
+            categories,
+            tags,
+            translations
+        },
+        response
+    );
+    // `parseBody` has already answered 422: the close hook deletes the upload.
+    if (!body) return;
+
     return productService
         .writeCreate(
-            {
-                ...request.body,
-                price,
-                active,
-                purchasable,
-                requiresShipping,
-                noWithdrawal,
-                onHand,
-                weight,
-                categories,
-                tags,
-                translations
-            },
+            body,
             callerContextOf(request),
             // Server-decided, so it never rides in the body the schema validates.
             { imageUrl, thumbnailUrl, pendingImageKey }

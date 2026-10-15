@@ -53,7 +53,10 @@ describe('productService.writeCreate is one transaction', () => {
 
         await expect(
             productService.writeCreate(
-                { price: 12, translations: { [FALLBACK]: { title: 'Standing Desk' } } },
+                productService.zodProductCreateSchema.parse({
+                    price: 12,
+                    translations: { [FALLBACK]: { title: 'Standing Desk' } }
+                }),
                 testCallerContext
             )
         ).rejects.toThrow('translation store down');
@@ -64,7 +67,11 @@ describe('productService.writeCreate is one transaction', () => {
 
     it('commits the product, its translations and the event together', async () => {
         const result = (await productService.writeCreate(
-            { price: 12, onHand: 4, translations: { [FALLBACK]: { title: 'Standing Desk' } } },
+            productService.zodProductCreateSchema.parse({
+                price: 12,
+                onHand: 4,
+                translations: { [FALLBACK]: { title: 'Standing Desk' } }
+            }),
             testCallerContext
         )) as ResponseSuccess<ProductDocument>;
 
