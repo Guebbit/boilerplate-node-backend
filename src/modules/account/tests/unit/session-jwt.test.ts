@@ -203,7 +203,9 @@ describe('verifyAccessToken', () => {
         // accepted, or the long-lived credential becomes the API credential.
         const refresh = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
 
-        await expect(verifyAccessToken(refresh)).rejects.toThrow();
+        await expect(verifyAccessToken(refresh)).rejects.toMatchObject({
+            reason: 'invalid_signature'
+        });
     });
 
     it('rejects a token whose signature does not verify', async () => {
@@ -215,12 +217,6 @@ describe('verifyAccessToken', () => {
             .sign(new TextEncoder().encode('wrong-secret'));
 
         await expect(verifyAccessToken(forged)).rejects.toThrow();
-    });
-
-    it('rejects an expired token', async () => {
-        const expired = await signAs('access-secret', { sub: USER_ID }, { expiresIn: -10 });
-
-        await expect(verifyAccessToken(expired)).rejects.toThrow();
     });
 
     it('classifies each refusal for the resolver: expired, forged, retired key, not a JWT', async () => {
@@ -277,16 +273,6 @@ describe('verifyAccessToken', () => {
         });
     });
 
-    it('rejects nonsense rather than resolving undefined', async () => {
-        await expect(verifyAccessToken('not-a-jwt')).rejects.toThrow();
-    });
-
-    /**
-     * `alg: none` and algorithm confusion, at the VERIFY side. `startSession`'s "pins HS256
-     * rather than letting the header choose" test above only proves signing pins the algorithm;
-     * it says nothing about what `verify` accepts. Built by hand rather than through
-     * a signing library, none of which will produce `alg: none`.
-     */
     it('rejects a hand-built alg:none token with no kid', async () => {
         const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString(
             'base64url'

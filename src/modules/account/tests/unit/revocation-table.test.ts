@@ -17,6 +17,14 @@ describe('the revocation table', () => {
         ]);
     });
 
+    it('purges the pending one-time links and challenges for exactly the credential changes', () => {
+        expect(CAUSES.filter((cause) => REVOCATION[cause].pending).toSorted()).toEqual([
+            'email-change-undo',
+            'password-change',
+            'password-reset'
+        ]);
+    });
+
     it.each(CAUSES)(
         '%s: a caller that keeps its session rode the epoch in its own write',
         (cause) => {

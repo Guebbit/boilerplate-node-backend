@@ -88,51 +88,6 @@ beforeEach(() => {
     setEnvironment({ NODE_SESSION_TIME_SHORT: '3600' });
 });
 
-describe('verifyAccessToken', () => {
-    it('resolves the payload of a token signed with the access secret', async () => {
-        const token = await signAs(
-            ACCESS_SECRET,
-            { sub: 'user-1', sid: 'family-1' },
-            { expiresIn: 900 }
-        );
-
-        await expect(verifyAccessToken(token)).resolves.toMatchObject({ sub: 'user-1' });
-    });
-
-    it('rejects a token signed with the refresh secret', async () => {
-        // The two secrets must not be interchangeable: if they were, a refresh token would be
-        // accepted as an access token and the revocation lookup could be bypassed entirely.
-        const token = await signAs(REFRESH_SECRET, { sub: 'user-1' }, { expiresIn: 900 });
-
-        // Its `kid` names no member of the access ring: a key this ring never held.
-        await expect(verifyAccessToken(token)).rejects.toMatchObject({
-            reason: 'invalid_signature'
-        });
-    });
-
-    it('rejects an expired token', async () => {
-        const token = await signAs(ACCESS_SECRET, { sub: 'user-1' }, { expiresIn: -10 });
-
-        await expect(verifyAccessToken(token)).rejects.toMatchObject({ reason: 'expired' });
-    });
-
-    it('rejects a structurally invalid token', async () => {
-        await expect(verifyAccessToken('not-a-jwt')).rejects.toMatchObject({
-            reason: 'malformed'
-        });
-    });
-
-    it('rejects a token whose payload was tampered with', async () => {
-        const token = await signAs(ACCESS_SECRET, { sub: 'user-1' }, { expiresIn: 900 });
-        const [header, , signature] = token.split('.', 3);
-        const forgedPayload = Buffer.from(JSON.stringify({ sub: 'admin' })).toString('base64url');
-
-        await expect(
-            verifyAccessToken(`${header}.${forgedPayload}.${signature}`)
-        ).rejects.toMatchObject({ reason: 'invalid_signature' });
-    });
-});
-
 describe('token types (`typ` header)', () => {
     it('refuses a refresh token presented as a bearer, even when both rings share a secret', async () => {
         await withEnvironmentOverrides(
@@ -666,6 +621,8 @@ describe('rotateRefreshToken retention', () => {
                 const user = await createUser();
                 const live = await startSession(user.id, ['pwd'], RefreshTokenExpiryTime.SHORT);
                 const before = await sessionRowFor(live);
+                // Time passes first: a successor handed a fresh window would not match the old expiry.
+                advanceDate(60_000);
 
                 const { refreshToken } = await rotateRefreshToken(live);
 
@@ -683,6 +640,18 @@ describe('rotateRefreshToken retention', () => {
                 expect(successor!.purgeAt).toEqual(successor!.expiresAt);
             }
         );
+    });
+
+    it('copies the absolute expiry on rotation: the remaining window shrinks as time passes', async () => {
+        const user = await createUser();
+        const live = await startSession(user.id, ['pwd'], RefreshTokenExpiryTime.MEDIUM);
+        const tierMs = getExpiryTimeMilliseconds(RefreshTokenExpiryTime.MEDIUM);
+
+        advanceDate(60_000);
+        const rotated = await rotateRefreshToken(live);
+
+        // Within a second: the token's own `exp` has second resolution.
+        expect(Math.abs((rotated.refreshMaxAgeMs ?? 0) - (tierMs - 60_000))).toBeLessThan(1000);
     });
 
     it('never moves a superseded row past its own expiry', async () => {

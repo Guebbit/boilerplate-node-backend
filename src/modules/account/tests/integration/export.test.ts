@@ -31,7 +31,6 @@ import {
     setPersonalDataSections
 } from '@modules/account/services/personal-data-registry';
 import {
-    EXPORT_BUILD_LIMIT_MS,
     openOwnExport,
     requestExport,
     settleInlineExports
@@ -360,7 +359,7 @@ describe('one live export per account', () => {
         await expect(accountExportRepository.findById(first.data.id)).resolves.toBeNull();
     });
 
-    it('replaces a building export that has outlived the build limit', async () => {
+    it('replaces a building export older than 30 minutes', async () => {
         const { held, release } = gate();
         setPersonalDataSections([held]);
         const user = await createUser({ email: 'ada@example.com' });
@@ -368,12 +367,29 @@ describe('one live export per account', () => {
         // Age the row past the limit, as a build lost with its process would be.
         await accountExportModel.updateOne(
             { userId: user.id },
-            { $set: { createdAt: new Date(Date.now() - EXPORT_BUILD_LIMIT_MS - 1000) } }
+            { $set: { createdAt: new Date(Date.now() - 31 * 60 * 1000) } }
         );
 
         const second = await requestExport(user.id, testCallerContext);
 
         expect(second.data?.id).not.toBe(first.data?.id);
+        release();
+        await settleInlineExports();
+    });
+
+    it('keeps a building export younger than 30 minutes', async () => {
+        const { held, release } = gate();
+        setPersonalDataSections([held]);
+        const user = await createUser({ email: 'ada@example.com' });
+        const first = await requestExport(user.id, testCallerContext);
+        await accountExportModel.updateOne(
+            { userId: user.id },
+            { $set: { createdAt: new Date(Date.now() - 29 * 60 * 1000) } }
+        );
+
+        const second = await requestExport(user.id, testCallerContext);
+
+        expect(second.data?.id).toBe(first.data?.id);
         release();
         await settleInlineExports();
     });
