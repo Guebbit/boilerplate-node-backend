@@ -6,6 +6,16 @@ import type { NextFunction, Request, Response } from 'express';
 import { asStub } from '@tests/stub';
 import { setEnvironment } from '@tests/environment';
 import { requireAllowedOrigin } from '@infrastructure/http/middlewares/origin';
+import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
+
+// Only the sink is replaced: what a refusal leaves behind is this suite's to pin.
+jest.mock('@infrastructure/observability/audit', () => ({
+    ...jest.requireActual('@infrastructure/observability/audit'),
+    recordAudit: jest.fn()
+}));
+jest.mock('@infrastructure/http/request', () => ({
+    callerContextOf: jest.fn(() => ({ requestId: 'request-1' }))
+}));
 
 /** Runs the guard against a request carrying `origin`, answering what the response and `next` saw. */
 const run = (origin: string | undefined) => {
@@ -16,7 +26,9 @@ const run = (origin: string | undefined) => {
         setHeader: jest.fn()
     });
     const request = asStub<Request>({
-        get: (name: string) => (name === 'Origin' ? origin : undefined)
+        get: (name: string) => (name === 'Origin' ? origin : undefined),
+        path: '/account/refresh',
+        method: 'POST'
     });
 
     requireAllowedOrigin(request, response, asStub<NextFunction>(next));
@@ -25,6 +37,7 @@ const run = (origin: string | undefined) => {
 };
 
 beforeEach(() => {
+    jest.mocked(recordAudit).mockClear();
     setEnvironment({ NODE_CORS_ORIGIN: 'https://shop.example,https://admin.example' });
 });
 
@@ -49,6 +62,34 @@ describe('requireAllowedOrigin', () => {
 
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(403);
+    });
+
+    it('leaves an audit row naming the route and the origin, and none for a pass', () => {
+        run('https://shop.example');
+        expect(recordAudit).not.toHaveBeenCalled();
+
+        run('https://evil.example');
+
+        expect(recordAudit).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                action: coreAuditActions.SECURITY_FORBIDDEN,
+                outcome: 'failure',
+                metadata: {
+                    reason: 'foreign_origin',
+                    origin: 'https://evil.example',
+                    route: '/account/refresh',
+                    method: 'POST'
+                }
+            })
+        );
+    });
+
+    it('caps what it logs of an origin the attacker wrote', () => {
+        run(`https://${'a'.repeat(500)}.example`);
+
+        const [, fields] = jest.mocked(recordAudit).mock.calls[0];
+        expect((fields.metadata as { origin: string }).origin).toHaveLength(200);
     });
 
     it('allows the developer default while the list is unset', () => {

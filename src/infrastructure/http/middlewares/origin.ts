@@ -13,6 +13,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import { rejectResponse } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
+import { callerContextOf } from '@infrastructure/http/request';
+import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
 import { isAllowedOrigin } from '../origins';
 
 /**
@@ -32,5 +34,18 @@ export const requireAllowedOrigin = (
         next();
         return;
     }
+    // A foreign origin is someone else's page acting with the browser's cookie: leave a trail
+    // (ASVS 5.0 V16.3.2). Capped, since the header is the attacker's to write.
+    recordAudit(callerContextOf(request), {
+        action: coreAuditActions.SECURITY_FORBIDDEN,
+        actorUserId: 'anonymous',
+        outcome: 'failure',
+        metadata: {
+            reason: 'foreign_origin',
+            origin: origin.slice(0, 200),
+            route: request.path,
+            method: request.method
+        }
+    });
     rejectResponse(response, 403, [t('generic.error-forbidden')]);
 };
