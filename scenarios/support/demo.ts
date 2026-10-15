@@ -34,6 +34,7 @@ import {
 } from './database-snapshot';
 import { getDemoClock, type DemoClock } from './demo-clock';
 import { clearDemoOutbox, readDemoOutbox } from './doubles/mail-outbox';
+import { z } from 'zod';
 
 /**
  * Thrown for anything `scenarios/index.ts`'s `SCENARIOS` registry does not carry — by
@@ -182,6 +183,12 @@ const requireClock = (response: Response): DemoClock | undefined => {
     return clock;
 };
 
+/** The body of `POST /__test/restore`: which scenario to put back; absent means the default. */
+const RESTORE_BODY = z.object({ scenario: z.string().optional() });
+
+/** The body of `POST /__test/clock`: how far to move the clock forward, never back. */
+const CLOCK_BODY = z.object({ advanceMs: z.number().nonnegative() });
+
 /** Mount the demo profile's routes — `createApp`'s `extension.install`, called by `run-server.ts` alone. */
 export const installDemo = (app: Express): void => {
     // Kept for `buildOnce`: the flow runner drives the real application over real HTTP, on a
@@ -189,16 +196,13 @@ export const installDemo = (app: Express): void => {
     demoApp = app;
 
     app.post('/__test/restore', (request: Request, response: Response) => {
-        const requested: unknown = (request.body as { scenario?: unknown } | undefined)?.scenario;
-        if (requested !== undefined && typeof requested !== 'string') {
-            response.status(400).json({
-                success: false,
-                message: new UnknownScenarioError(requested).message
-            });
+        const body = RESTORE_BODY.safeParse(request.body ?? {});
+        if (!body.success) {
+            response.status(400).json({ success: false, message: z.prettifyError(body.error) });
             return;
         }
 
-        restoreScenario(requested)
+        restoreScenario(body.data.scenario)
             .then(() => response.status(204).end())
             .catch((error: unknown) => {
                 if (error instanceof UnknownScenarioError) {
@@ -225,15 +229,13 @@ export const installDemo = (app: Express): void => {
         const clock = requireClock(response);
         if (!clock) return;
 
-        const advanceMs: unknown = (request.body as { advanceMs?: unknown } | undefined)?.advanceMs;
-        if (typeof advanceMs !== 'number' || !Number.isFinite(advanceMs) || advanceMs < 0) {
-            response
-                .status(400)
-                .json({ success: false, message: 'advanceMs must be a non-negative number' });
+        const body = CLOCK_BODY.safeParse(request.body ?? {});
+        if (!body.success) {
+            response.status(400).json({ success: false, message: z.prettifyError(body.error) });
             return;
         }
 
-        clock.advance(advanceMs);
+        clock.advance(body.data.advanceMs);
         response.json({ now: clock.now().toISOString(), offsetMs: clock.offsetMs() });
     });
 
