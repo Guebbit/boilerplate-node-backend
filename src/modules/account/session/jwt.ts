@@ -484,14 +484,6 @@ export class TokenReuseError extends Error {
 }
 
 /**
- * Every session this account currently holds, gone, and every access token with them — the
- * reuse-detected response. The epoch moves FIRST: if the removal then fails, the tokens are
- * already dead.
- */
-const revokeAllRefreshTokens = (userId: string): Promise<void> =>
-    revokeFor('refresh-reuse', userId);
-
-/**
  * Store a rotation's successor row and answer the new pair. The successor continues the session:
  * same family id, so the id the owner sees (and revokes by) does not change with the token, and
  * the same sign-in time, so "signed in on" names the session and not the token.
@@ -602,8 +594,10 @@ const resolveLostRotation = (
         // Superseded well outside the grace window: THIS is the signal that distinguishes
         // reuse from an ordinary dead credential — a token this account rotated away, on
         // purpose, being replayed long after. Revoke first, so the throw below is never a
-        // lie about what state the account is left in.
-        return revokeAllRefreshTokens(claims.sub).then(() => {
+        // lie about what state the account is left in: every session this account holds is gone,
+        // and every access token with them — the epoch moves FIRST, so if the removal then fails
+        // the tokens are already dead.
+        return revokeFor('refresh-reuse', claims.sub).then(() => {
             throw new TokenReuseError(claims.sub);
         });
     });
