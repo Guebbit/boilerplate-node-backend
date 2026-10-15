@@ -547,6 +547,28 @@ describe('PATCH /account', () => {
     });
 });
 
+describe('PATCH /account refuses what a profile edit may not carry', () => {
+    it('cannot escalate: role, active and password are refused whole, and nothing changes', async () => {
+        const { bearer, user } = await authenticateAs('user');
+
+        // The contract body is strict — `role`/`active`/`password` are not fields it accepts, so
+        // the whole body is refused rather than applying `username` and silently dropping the rest.
+        const response = await api().patch('/account').set('Authorization', bearer).send({
+            username: 'still-plain',
+            role: 'admin',
+            active: false,
+            password: 'injected-password'
+        });
+
+        expect(response.status).toBe(422);
+        const stored = await userRepository.findByIdWithCredentials(user.id);
+        expect(stored?.username).not.toBe('still-plain');
+        expect(stored?.active).toBe(true);
+        // The password is untouched — the fixture's original still logs in.
+        await loginBearer(user.email, PLAIN_PASSWORD);
+    });
+});
+
 describe('DELETE /account/pending-email', () => {
     it('cancels a pending change explicitly', async () => {
         const { bearer } = await authenticateAs('user');

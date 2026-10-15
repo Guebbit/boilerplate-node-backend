@@ -4,25 +4,21 @@
  * to `./email-change`, the password to `./password`.
  */
 
-import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { mailRecipientRefusal } from '../mail-budget';
 import { resendCooldownRemaining } from './verification';
 import { EMAIL_CHANGE_TOKEN_TYPE } from '../token-types';
 import { resendTooSoon } from '../cooldown';
 import { ERROR_CODES } from '@api/error-codes';
-import { UpdateAccountBody } from '@api/schemas.zod';
-import { optionalBooleanSchema } from '@infrastructure/http/schemas';
 import {
     generateSuccess,
     generateReject,
     type ResponseSuccess,
-    type ResponseReject,
-    validationErrors
+    type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { userService, type UserDocument } from '@modules/users';
-import type { CallerContext } from '@types';
+import type { CallerContext, UpdateAccountRequest } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
@@ -54,40 +50,23 @@ export const getOwnProfile = (
 };
 
 /**
- * What `PUT /account` and `PATCH /account` both ultimately write, validated with this codebase's
- * messages. Every contract field comes straight from `UpdateAccountBody` — the merge-shaped
- * contract schema, since every field this function sees is already optional by the time it runs: `update-account.ts`'s PUT path already filled an omitted one with `null`
- * before calling here. `.partial()` last: every field is optional, and absence means "leave it
- * alone".
+ * The fields `PUT /account` and `PATCH /account` both ultimately write, as the edge delivers them:
+ * every one optional, since absence means "leave it alone" (`update-account.ts`'s PUT path has
+ * already filled an omitted one with `null`). The image fields are not on the wire body — the
+ * server, not the client, produces them, and the controller passes them from its own
+ * `readUploadedImage` call.
  */
-const zodProfileSchema = UpdateAccountBody.pick({
-    email: true,
-    username: true,
-    locale: true,
-    phone: true,
-    website: true
-})
-    .extend({
-        // Absence still means "leave it alone", same as every other field here, not "withdraw
-        // consent". `optionalBooleanSchema`, not `UpdateAccountBody.shape` directly: a multipart
-        // request carries this as a string, and `'false'` is truthy.
-        analyticsConsent: optionalBooleanSchema,
-        // Not on `UpdateAccountBody` — both are `readOnly`/absent from the contract because the
-        // server, not the client, produces them. They ride along here only because the controller
-        // passes them from its own `readUploadedImage` call, the same way `imageUrl` does when an
-        // upload — rather than a body value — is what set it.
-        // The server-decided path (`readUploadedImage`), or `null` to remove — never a client's
-        // own string: the wire schema only lets the body carry `null`.
-        imageUrl: z.string().min(1).nullable().optional(),
-        thumbnailUrl: z.string().optional(),
-        pendingImageKey: z.string().optional()
-    })
-    .partial();
-
-/**
- * The fields `PUT/PATCH /account` accepts, after parsing — the input half of {@link writeProfile}.
- */
-type ProfileFields = z.infer<typeof zodProfileSchema>;
+type ProfileFields = Partial<
+    Pick<
+        UpdateAccountRequest,
+        'email' | 'username' | 'locale' | 'phone' | 'website' | 'analyticsConsent'
+    >
+> & {
+    /** The server-decided path (`readUploadedImage`), or `null` to remove — never a client's string. */
+    imageUrl?: string | null;
+    thumbnailUrl?: string;
+    pendingImageKey?: string;
+};
 
 /**
  * The tail of {@link writeProfile} once the change is not paced: the mailbox budget, the write,
@@ -157,7 +136,8 @@ const writeProfile = (
 };
 
 /**
- * Update the caller's own profile — email, username, locale, image.
+ * Update the caller's own profile — email, username, locale, image. `changes` are already validated
+ * against the contract at the edge.
  * Narrower than the admin `userService.update`: no `admin`/`active`/`password` — those belong to
  * `/users` and to {@link passwordChangeWithCurrent}, which proves the current password first.
  * `email` never reaches `userService.update` directly — {@link applyEmailChangeRequest} routes it
@@ -166,26 +146,22 @@ const writeProfile = (
  */
 export const updateProfile = (
     userId: string,
-    data: unknown,
+    changes: ProfileFields,
     context: CallerContext
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    const parseResult = zodProfileSchema.safeParse(data);
-
-    const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
-        ? // Credentials included by default: the update saves this same document.
-          withOwnAccount(userId, (user) => {
-              return applyEmailChangeRequest(user, parseResult.data.email).then((emailOutcome) =>
-                  writeProfile(user, parseResult.data, emailOutcome, context)
-              );
-          }).catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
-        : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
-
-    return outcome.then((result) => {
-        if (!result.success) return result;
-        recordAudit(context, {
-            action: accountAuditActions.AUTH_PROFILE_UPDATED,
-            outcome: 'success'
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    // Credentials included by default: the update saves this same document. The shape was checked
+    // once, at the edge (`update-account.ts`'s factory), so nothing here parses it again.
+    withOwnAccount(userId, (user) =>
+        applyEmailChangeRequest(user, changes.email).then((emailOutcome) =>
+            writeProfile(user, changes, emailOutcome, context)
+        )
+    )
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
+        .then((result) => {
+            if (!result.success) return result;
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_PROFILE_UPDATED,
+                outcome: 'success'
+            });
+            return generateSuccess(result.data, 200, t('account.update.success'));
         });
-        return generateSuccess(result.data, 200, t('account.update.success'));
-    });
-};

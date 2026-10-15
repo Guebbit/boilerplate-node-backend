@@ -11,7 +11,6 @@ import { testCallerContext } from '@tests/callers';
 import {
     createUser,
     PASSPHRASE_PASSWORD,
-    PLAIN_PASSWORD,
     REPLACEMENT_PASSWORD
 } from '@modules/users/tests/factories';
 import {
@@ -132,16 +131,6 @@ describe('updateProfile', () => {
         remove.mockRestore();
     });
 
-    it('rejects an invalid email with 422', async () => {
-        const user = await createUser();
-
-        const response = asReject(
-            await updateProfile(user.id, { email: 'not-an-email' }, testCallerContext)
-        );
-
-        expect(response.status).toBe(422);
-    });
-
     it('answers 401, not 404, for an account that no longer exists', async () => {
         // A verified token for a deleted account is unauthenticated, not missing — `openapi.yaml`
         // declares no 404 on `PUT/PATCH /account`, and `isAuth` treats this exact case as 401 everywhere else.
@@ -153,36 +142,6 @@ describe('updateProfile', () => {
         );
 
         expect(response.status).toBe(401);
-    });
-
-    it('cannot escalate: role, active and password do not pass through', async () => {
-        const user = await createUser({}, 'unverified');
-
-        // `zodProfileSchema` is strict — `role`/`active`/`password` aren't fields `PUT
-        // /account` accepts, so the whole body is refused rather than applying `username` and
-        // silently dropping the rest.
-        const response = asReject(
-            await updateProfile(
-                user.id,
-                {
-                    username: 'still-plain',
-                    role: 'admin',
-                    active: false,
-                    password: 'injected-password'
-                },
-                testCallerContext
-            )
-        );
-        expect(response.status).toBe(422);
-
-        // The membership, not a document field — `role` has no field to have passed through to.
-        const roles = await rolesOf(user.id, DEPLOYMENT_TENANT_ID);
-        expect(roles.tenant).toBe('unverified');
-        const stored = await userRepository.findByIdWithCredentials(user.id);
-        expect(stored?.active).toBe(true);
-        // The password is untouched — the fixture's original still logs in.
-        const login = await accountService.login(user.email, PLAIN_PASSWORD);
-        expect(login.success).toBe(true);
     });
 
     it('holds the new address as pendingEmail, and does not touch email or verifiedAt', async () => {
