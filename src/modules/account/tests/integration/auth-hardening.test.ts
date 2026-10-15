@@ -191,9 +191,10 @@ describe('loginChallengeGate — rung 3 only once the identity budget is mostly 
         const app = await appWithBudget(4);
         const attempt = () => supertest(app).post('/login').send({ email: 'ada@example.com' });
 
-        await attempt(); // first failure of four: well under half, stays honest
+        await attempt(); // first failure of four: under half, stays honest
+        await attempt(); // second: one failure on record, still under half
 
-        const response = await attempt(); // second failure: exactly half of four
+        const response = await attempt(); // third: two failures on record, exactly half of four
 
         expect(response.status).toBe(401);
         expect(response.body.errors[0].code).toBe('ANTIBOT_VERIFICATION_FAILED');

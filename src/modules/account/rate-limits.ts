@@ -19,6 +19,7 @@ import {
     addressBlockOf,
     readBodyField,
     rateLimitInfoOf,
+    priorHits,
     KEYED_BY_ADDRESS,
     KEYED_BY_ADDRESS_BLOCK,
     KEYED_BY_SUBMITTED_EMAIL,
@@ -175,7 +176,7 @@ const CHALLENGE_AFTER_IDENTITY_BUDGET_SPENT = 0.5;
 const identityBudgetMostlySpent = (request: Request): boolean => {
     const info = rateLimitInfoOf(request, IDENTITY_RATE_LIMIT_PROPERTY);
     if (!info) return false;
-    return info.remaining <= info.limit * (1 - CHALLENGE_AFTER_IDENTITY_BUDGET_SPENT);
+    return priorHits(info) >= info.limit * CHALLENGE_AFTER_IDENTITY_BUDGET_SPENT;
 };
 
 /**

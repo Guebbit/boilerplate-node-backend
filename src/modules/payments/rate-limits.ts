@@ -17,6 +17,7 @@ import type { RateLimitBudget } from '@types';
 import {
     buildRateLimiter,
     rateLimitInfoOf,
+    priorHits,
     accountIdOf,
     addressBlockOf,
     KEYED_BY_ADDRESS,
@@ -187,13 +188,12 @@ const CHALLENGE_AFTER_BLOCK_BUDGET_SPENT = 0.5;
  * Whether the caller's address block has spent half its decline budget. Missing rate-limit info
  * (the block limiter didn't run) reads as "not yet".
  *
- * `info.remaining` already counts THIS request provisionally, so it is one lower than the prior
- * declines alone: the comparison is strict (`<`) to cancel that out, arming at exactly half.
+ * `priorHits` takes the provisional count of THIS request out, so the gate arms at exactly half.
  */
 const blockBudgetMostlySpent = (request: Request): boolean => {
     const info = rateLimitInfoOf(request, PAYMENT_DECLINE_BLOCK_RATE_LIMIT_PROPERTY);
     if (!info) return false;
-    return info.remaining < info.limit * (1 - CHALLENGE_AFTER_BLOCK_BUDGET_SPENT);
+    return priorHits(info) >= info.limit * CHALLENGE_AFTER_BLOCK_BUDGET_SPENT;
 };
 
 /**
@@ -201,15 +201,12 @@ const blockBudgetMostlySpent = (request: Request): boolean => {
  * window. Missing rate-limit info (the decline limiter didn't run) reads as "not yet". During a Redis
  * outage the budget counts in memory (`failoverStore`), so the gate reads the fallback's numbers.
  *
- * `info.remaining` already reflects THIS request's own provisional count — express-rate-limit
- * increments before the outcome is known, then undoes it later if `requestWasSuccessful` says so —
- * so `remaining` is one lower than the prior-decline count alone would read. The threshold is
- * `limit - 1`, not `limit`, to cancel that provisional count out.
+ * Reads {@link priorHits}: express-rate-limit counts this request provisionally and undoes it
+ * later if `requestWasSuccessful` says so.
  */
 const hasAPriorDecline = (request: Request): boolean => {
     const info = rateLimitInfoOf(request, PAYMENT_DECLINE_RATE_LIMIT_PROPERTY);
-    if (!info) return false;
-    return info.remaining < info.limit - 1;
+    return info !== undefined && priorHits(info) >= 1;
 };
 
 /**

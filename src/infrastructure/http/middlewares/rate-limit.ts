@@ -294,6 +294,15 @@ export const rateLimitInfoOf = (request: Request, property: string): RateLimitIn
     (request as Request & Record<string, RateLimitInfo | undefined>)[property];
 
 /**
+ * How many hits a budget had on record BEFORE this request. express-rate-limit increments before
+ * the handler runs (then refunds a success), so `used` already counts the request being gated:
+ * read raw, a gate would arm one hit early. Every "failures on record" gate reads it here, once.
+ *
+ * @param info - a budget's own info, from {@link rateLimitInfoOf}
+ */
+export const priorHits = (info: RateLimitInfo): number => info.used - 1;
+
+/**
  * The caller's address, WIDENED to the block it belongs to: an IPv4 /24, an IPv6 /64. A
  * residential-proxy pool costs about $20 for millions of addresses, and one IPv6 customer is
  * allocated 18 quintillion of them — bucketing on the single address lets either look like an
