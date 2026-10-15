@@ -10,7 +10,7 @@ import { mailConfig } from '@infrastructure/adapters/config';
 import { mailDelivers } from '@infrastructure/adapters/mail-transports';
 import { t } from '@infrastructure/i18n';
 import type { CallerContext } from '@types';
-import type { TwoFactorMethodRecord, UserDocument } from '@modules/users';
+import type { DeliveredCodeState, UserDocument } from '@modules/users';
 import type { TwoFactorDelivery } from '@types';
 import { twoFactorCodeEmail, recipientLocale, greetableName } from '../../emails';
 import { sendAccountMail } from '../../services/mail';
@@ -35,20 +35,27 @@ export const maskEmail = (email: string): string => {
 };
 
 /**
- * Mint a code, arm it on the entry, and queue the mail carrying it.
- * Mutates `entry`; the calling service persists it.
+ * Mint a code, arm it on `slot`, and queue the mail carrying it — the one delivery both the email
+ * second factor and the step-up re-authentication use, so their cooldown, lifetime and masking
+ * can only ever agree. Mutates `slot`; the calling service persists it.
+ *
+ * @param user - the account being mailed
+ * @param slot - where the code's digest, send time and expiry are written
+ * @param context - the caller, whose language is the fallback for the mail's
+ * @param buildMail - the copy to send: which flow's mail this code travels in
  */
-const deliver = (
+export const deliverEmailCode = (
     user: UserDocument,
-    entry: TwoFactorMethodRecord,
-    context: CallerContext
+    slot: DeliveredCodeState,
+    context: CallerContext,
+    buildMail: typeof twoFactorCodeEmail
 ): Promise<TwoFactorDelivery> => {
     const code = generateDeliveredCode();
-    armDeliveredCode(entry, code);
+    armDeliveredCode(slot, code);
 
     // The recipient's OWN language, exactly as the verification and reset mails choose theirs:
     // the copy is finished before the job is published, so the worker needs no locale at all.
-    const mail = twoFactorCodeEmail(
+    const mail = buildMail(
         recipientLocale(user.locale, context),
         greetableName(user, user.email),
         code,
@@ -62,7 +69,7 @@ const deliver = (
         resendAfter: DELIVERED_CODE_RESEND_SECONDS,
         // Non-null: `armDeliveredCode` just set it, and it is the one thing this promise
         // is built to report back.
-        expiresAt: entry.codeExpiresAt!.toISOString()
+        expiresAt: slot.codeExpiresAt!.toISOString()
     }));
 };
 
@@ -94,9 +101,12 @@ export const emailMethod: TwoFactorMethodHandler = {
     // An enrollment code and a login code are the same send: the setup payload is the delivery
     // plus the discriminator a client reads to know which half of `TwoFactorSetup` is populated.
     setup: (user, entry, context) =>
-        deliver(user, entry, context).then((delivery) => ({ ...delivery, delivers: true })),
+        deliverEmailCode(user, entry, context, twoFactorCodeEmail).then((delivery) => ({
+            ...delivery,
+            delivers: true
+        })),
 
-    send: deliver,
+    send: (user, entry, context) => deliverEmailCode(user, entry, context, twoFactorCodeEmail),
 
     verify: (user, entry, code) =>
         verifyDeliveredCode(user, { kind: 'method', method: entry.method }, entry, code)

@@ -13,7 +13,6 @@
 
 import { verifyPassword } from '@infrastructure/security/password-hash';
 import { t } from '@infrastructure/i18n';
-import { ERROR_CODES } from '@api/error-codes';
 import {
     generateSuccess,
     generateReject,
@@ -31,18 +30,10 @@ import type {
     TwoFactorDelivery
 } from '@types';
 import { accountAuditActions } from '../audit';
-import { reauthCodeEmail, recipientLocale, greetableName } from '../emails';
-import { resendTooSoon, cooldownRemaining } from '../cooldown';
-import {
-    DELIVERED_CODE_RESEND_SECONDS,
-    DELIVERED_CODE_TTL_MS,
-    armDeliveredCode,
-    generateDeliveredCode,
-    twoFactorMethod,
-    verifyDeliveredCode
-} from '../two-factor';
-import { maskEmail } from '../two-factor/methods/email';
-import { sendAccountMail } from './mail';
+import { reauthCodeEmail } from '../emails';
+import { deliveryCooldownRemaining, twoFactorMethod, verifyDeliveredCode } from '../two-factor';
+import { deliverEmailCode } from '../two-factor/methods/email';
+import { tooSoon } from './two-factor-outcomes';
 import { proveSecondFactor } from './two-factor-lockout';
 import { AMR } from '../domain/session-proof';
 
@@ -108,14 +99,6 @@ export const reauthMethods = (
 ): Promise<ResponseSuccess<ReauthMethods> | ResponseReject> =>
     withCaller(userId, (user) => Promise.resolve(generateSuccess({ methods: methodsOf(user) })));
 
-/** This flow's code and copy bound onto the shared countdown builder. */
-const tooSoon = (seconds: number): ResponseReject =>
-    resendTooSoon(
-        ERROR_CODES.TWO_FACTOR_RESEND_TOO_SOON,
-        t('account.two-factor.resend-too-soon'),
-        seconds
-    );
-
 /**
  * Mint a code on the account, mail it, and persist its digest. The mail is queued before the
  * write, like the second-factor send: a queue that refuses leaves nothing armed.
@@ -124,30 +107,14 @@ const deliverCode = (
     user: UserDocument,
     context: CallerContext
 ): Promise<ResponseSuccess<TwoFactorDelivery>> => {
-    const code = generateDeliveredCode();
     user.reauthCode = {};
     // Read back: Mongoose hydrates the assigned object into a subdocument, and that is the one
     // the helpers must mutate.
     const slot: DeliveredCodeState = user.reauthCode;
-    armDeliveredCode(slot, code);
 
-    const mail = reauthCodeEmail(
-        recipientLocale(user.locale, context),
-        greetableName(user, user.email),
-        code,
-        Math.round(DELIVERED_CODE_TTL_MS / 60_000)
-    );
-    return sendAccountMail(user.email, mail)
-        .then(() => userService.armReauthCode(user))
-        .then(() =>
-            generateSuccess({
-                method: 'email',
-                sentTo: maskEmail(user.email),
-                resendAfter: DELIVERED_CODE_RESEND_SECONDS,
-                // Non-null: `armDeliveredCode` just set it.
-                expiresAt: slot.codeExpiresAt!.toISOString()
-            })
-        );
+    return deliverEmailCode(user, slot, context, reauthCodeEmail)
+        .then((delivery) => userService.armReauthCode(user).then(() => delivery))
+        .then((delivery) => generateSuccess(delivery));
 };
 
 /**
@@ -168,7 +135,7 @@ export const sendReauthCode = (
         if (method === 'password' || !methodsOf(user).includes(method))
             return Promise.resolve(generateReject(422, [t('account.reauth.method-unavailable')]));
 
-        const wait = cooldownRemaining(user.reauthCode?.codeSentAt, DELIVERED_CODE_RESEND_SECONDS);
+        const wait = deliveryCooldownRemaining(user.reauthCode ?? {});
         if (wait > 0) return Promise.resolve(tooSoon(wait));
 
         return deliverCode(user, context);
