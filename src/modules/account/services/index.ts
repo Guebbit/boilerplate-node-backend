@@ -98,7 +98,6 @@ export const accountService = {
     validatePasswordChange: password.validatePasswordChange,
     passwordChange: password.passwordChange,
     passwordChangeWithCurrent: password.passwordChangeWithCurrent,
-    passwordResetChange: passwordReset.passwordResetChange,
     completePasswordReset: passwordReset.completePasswordReset,
     updateProfile: profile.updateProfile,
     cancelPendingEmailChange: emailChange.cancelPendingEmailChange,

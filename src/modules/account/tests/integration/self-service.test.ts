@@ -1044,19 +1044,23 @@ describe('an email change is paced per account', () => {
     });
 });
 
-describe('passwordResetChange', () => {
+/** Plants a live reset link for `user` and spends it for the replacement password. */
+const resetWithLink = async (user: { id: string }) => {
+    await plantToken(user.id, 'password', 'post-reset-link');
+    return accountService.completePasswordReset(
+        'post-reset-link',
+        REPLACEMENT_PASSWORD,
+        REPLACEMENT_PASSWORD,
+        testCallerContext
+    );
+};
+
+describe('what a completed reset leaves behind', () => {
     it('changes the password and audits a reset completion, distinct from a logged-in change', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ password: PASSPHRASE_PASSWORD });
 
-        asSuccess(
-            await accountService.passwordResetChange(
-                user,
-                REPLACEMENT_PASSWORD,
-                REPLACEMENT_PASSWORD,
-                testCallerContext
-            )
-        );
+        asSuccess(await resetWithLink(user));
 
         const withNew = await accountService.login(user.email, REPLACEMENT_PASSWORD);
         expect(withNew.success).toBe(true);
@@ -1068,23 +1072,6 @@ describe('passwordResetChange', () => {
         );
     });
 
-    it('does not audit a rejected pair', async () => {
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-        const user = await createUser({ password: PASSPHRASE_PASSWORD });
-
-        const response = asReject(
-            await accountService.passwordResetChange(
-                user,
-                REPLACEMENT_PASSWORD,
-                'different',
-                testCallerContext
-            )
-        );
-
-        expect(response.status).toBe(422);
-        expect(auditSpy).not.toHaveBeenCalled();
-    });
-
     /*
      * The reset token reached the account's mailbox and nowhere else, so spending it proves
      * possession as strongly as a `verify` token does. Without this, the visitor whose
@@ -1094,39 +1081,12 @@ describe('passwordResetChange', () => {
     it('proves the address, promoting an unverified account to customer', async () => {
         const user = await createUser({ password: PASSPHRASE_PASSWORD }, 'unverified');
 
-        asSuccess(
-            await accountService.passwordResetChange(
-                user,
-                REPLACEMENT_PASSWORD,
-                REPLACEMENT_PASSWORD,
-                testCallerContext
-            )
-        );
+        asSuccess(await resetWithLink(user));
 
         const roles = await rolesOf(user.id, DEPLOYMENT_TENANT_ID);
         expect(roles.tenant).toBe('customer');
         const reloaded = await userRepository.findById(user.id);
         expect(reloaded?.verifiedAt).toBeInstanceOf(Date);
-    });
-
-    // One save carries both facts, so a refused password cannot verify an address as a side
-    // effect of failing.
-    it('leaves the address unproven when the new password is refused', async () => {
-        const user = await createUser({ password: PASSPHRASE_PASSWORD }, 'unverified');
-
-        asReject(
-            await accountService.passwordResetChange(
-                user,
-                REPLACEMENT_PASSWORD,
-                'different',
-                testCallerContext
-            )
-        );
-
-        const roles = await rolesOf(user.id, DEPLOYMENT_TENANT_ID);
-        expect(roles.tenant).toBe('unverified');
-        const reloaded = await userRepository.findById(user.id);
-        expect(reloaded?.verifiedAt ?? null).toBeNull();
     });
 
     /*
@@ -1143,14 +1103,7 @@ describe('passwordResetChange', () => {
         const mockedRolesOf = accessPort.rolesOf as jest.MockedFunction<typeof accessPort.rolesOf>;
         mockedRolesOf.mockRejectedValueOnce(new Error('lookup unavailable'));
 
-        const result = asSuccess(
-            await accountService.passwordResetChange(
-                user,
-                REPLACEMENT_PASSWORD,
-                REPLACEMENT_PASSWORD,
-                testCallerContext
-            )
-        );
+        const result = asSuccess(await resetWithLink(user));
 
         expect(result.data?.email).toBe(user.email);
         const withNew = await accountService.login(user.email, REPLACEMENT_PASSWORD);

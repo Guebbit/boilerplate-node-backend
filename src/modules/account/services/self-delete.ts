@@ -53,7 +53,7 @@ export const removeOwnAccount = (
                 });
 
                 // The recipient's own language first, the request's as fallback — see
-                // {@link passwordResetChange} for why the request is only ever the fallback.
+                // {@link completePasswordReset} for why the request is only ever the fallback.
                 const mail = deleteConfirmEmail(recipientLocale(locale, context), goodbyeName);
                 // Normal priority: a goodbye, not a link or code anyone is blocked on.
                 void sendAccountMail(email, mail, 'normal');

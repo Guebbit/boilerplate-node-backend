@@ -44,7 +44,7 @@ export class OAuthEmailUnverifiedError extends Error {
  * account with the squatter's password still on it.
  *
  * The victim's way in is the password reset, which proves the same mailbox and marks it verified
- * — see `password-reset.ts#passwordResetChange`. The callback controller turns this into an
+ * — see `password-reset.ts#completePasswordReset`. The callback controller turns this into an
  * `?error=account_unverified` redirect.
  */
 export class OAuthAccountUnverifiedError extends Error {

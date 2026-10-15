@@ -248,7 +248,7 @@ export const resendPendingEmailVerificationFor = (
  *
  * Mutates `verifiedAt` on the document, unpersisted — the caller's own `save` covers it — but the
  * role promotion is a MEMBERSHIP write, with no document field to ride along on, so this cannot
- * be purely synchronous. `password-reset.ts#passwordResetChange` is the one caller, passing this as
+ * be purely synchronous. `password-reset.ts#completePasswordReset` is the one caller, passing this as
  * `passwordChange`'s `beforeSave`, awaited there, so a verification can still land in the same
  * request `userService.setPassword` handles — a spent reset token proves the same mailbox a
  * verify token does. `completeEmailVerification`/`completeEmailChange` below do NOT call this:

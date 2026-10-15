@@ -8,7 +8,7 @@
  * cannot appear unnoticed. System-scoped because the paths span the contract, not one module.
  *
  * Two of the three are one function under the hood — `account/services/password.ts#passwordChange`
- * is the shared funnel `passwordResetChange` (reset) and `passwordChangeWithCurrent` (change) both
+ * is the shared funnel `completePasswordReset` (reset) and `passwordChangeWithCurrent` (change) both
  * end at, so "change" and "reset" are two ENTRY POINTS sharing one already-tested rule, not two
  * independent implementations. Signup runs its own check — see `signup.ts#signup`.
  */

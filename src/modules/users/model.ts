@@ -359,7 +359,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
          * `shared/authorization-keys.yaml`) — this is the record of fact, kept separately because
          * the role can be reassigned: the moment an operator grants a staff role to an unproven
          * address, that grant would otherwise be the only evidence the address was never proven.
-         * Set by `completeEmailVerification`/`completeEmailChange`/`passwordResetChange` — every
+         * Set by `completeEmailVerification`/`completeEmailChange`/`completePasswordReset` — every
          * route that proves the mailbox — and read by the OAuth link path, which refuses to link
          * onto an account that never proved its own address.
          */

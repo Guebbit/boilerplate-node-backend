@@ -22,7 +22,7 @@ import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { isUnrestrictedCaller } from '../roles';
-import { validatePasswordChange, passwordChange, writePassword } from './password';
+import { validatePasswordChange, writePassword } from './password';
 import { PASSWORD_RESET_TOKEN_TYPE } from '../token-types';
 
 /**
@@ -37,39 +37,9 @@ const markResetCompleted = (user: UserDocument): Promise<void> => {
 };
 
 /**
- * Change the password from a reset link, record it, and notify the account holder.
- * Wraps {@link passwordChange} rather than emitting inside it, since that function is also
- * `passwordChangeWithCurrent`'s last step (which reports its own `AUTH_PASSWORD_CHANGED`).
- * The mail is sent here, not by the controller, since "a password was reset" is a fact about
- * the account — any future caller gets the notification for free.
- *
- * Also marks the address verified. The token just spent was delivered to that mailbox and
- * nowhere else, so it proves possession exactly as strongly as a `verify` token does — and
- * without this, someone whose verification mail never arrived could reset from that same inbox
- * and still be held at `unverified`, with a re-send of the mail that already failed as their only
- * remedy. `passwordChangeWithCurrent` deliberately does NOT get this: an already-signed-in caller
- * typing their current password proves nothing about the mailbox.
- *
- * `markVerified` mutates, and rides in as `passwordChange`'s `beforeSave` so one write persists
- * both facts — and so a refused password (too weak, breached) cannot verify an address on its way
- * out: the hook runs after the last refusal, not before the first.
- */
-export const passwordResetChange = (
-    user: UserDocument,
-    password: string,
-    passwordConfirm: string,
-    context: CallerContext
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    passwordChange(user, password, passwordConfirm, markResetCompleted, 'password-reset').then(
-        (result) => afterReset(result, user, context)
-    );
-
-/**
  * What follows a finished reset: on success, the audit row, the confirmation mail and the
  * audit row and the confirmation mail (the `account.sessions-revoked` event already left with the
- * password write). Shared by
- * {@link passwordResetChange} and {@link completePasswordReset}, which differ only in how the
- * password was checked.
+ * password write). `resetWith` is the one caller.
  *
  * @param result - what writing the password answered
  * @param user - the account

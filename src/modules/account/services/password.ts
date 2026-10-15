@@ -69,7 +69,7 @@ type PasswordCause = Extract<RevocationCause, 'password-change' | 'password-rese
 
 /**
  * Change user password with validation, then revoke every refresh token on the account.
- * The funnel both `passwordResetChange` and `passwordChangeWithCurrent` end at, so a future
+ * The funnel both `completePasswordReset` and `passwordChangeWithCurrent` end at, so a future
  * third caller gets the revoke for free. Order
  * matters — save first, revoke second: a revoke landing against a password write that then fails
  * would log everyone out for nothing. The revoke's own failure is swallowed rather than turned
@@ -100,7 +100,7 @@ export const passwordChange = (
 
     if (errors.length > 0) return Promise.resolve(generateReject(422, errors));
 
-    // One check for both callers: `passwordResetChange` and `passwordChangeWithCurrent` both
+    // One check for both callers: `completePasswordReset` and `passwordChangeWithCurrent` both
     // funnel through this function.
     return assertPasswordNotBreached(password).then((breachErrors) => {
         if (breachErrors.length > 0) return generateReject(422, breachErrors);
