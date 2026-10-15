@@ -177,6 +177,9 @@ const extractBalanced = (source: string, openIndex: number): string => {
     return source.slice(openIndex, index - 1);
 };
 
+/** What a module's mail frame (`accountMail`) sets itself, beside the keys a builder's `body` names. */
+const FRAME_KEYS = ['locale', 'pageMetaTitle', 'greeting', 'footer'];
+
 /** Every `EmailContent`-returning builder's `template` name mapped to its `data` object's keys. */
 const builderDataKeys = (): Map<string, string[]> => {
     const map = new Map<string, string[]>();
@@ -192,13 +195,19 @@ const builderDataKeys = (): Map<string, string[]> => {
 
         for (const match of source.matchAll(/template: '([^']+)'/g)) {
             const name = match[1];
-            const dataTag = /data:\s*{/.exec(source.slice(match.index));
-            if (!dataTag) continue;
-            const openIndex = match.index + dataTag.index + dataTag[0].length;
+            const rest = source.slice(match.index);
+            // A builder either states its `data` outright, or goes through a module's frame
+            // (`accountMail({ template, locale, name, body })`), which supplies four keys itself.
+            const bodyTag = /body:\s*\(t\)\s*=>\s*\(\{/.exec(rest);
+            const dataTag = /data:\s*{/.exec(rest);
+            const framed = bodyTag !== null && (dataTag === null || bodyTag.index < dataTag.index);
+            const tag = framed ? bodyTag : dataTag;
+            if (!tag) continue;
+            const openIndex = match.index + tag.index + tag[0].length;
             const keys = topLevelEntries(extractBalanced(source, openIndex))
                 .map((entry) => entryKey(entry))
                 .filter(Boolean);
-            map.set(name, keys);
+            map.set(name, framed ? [...FRAME_KEYS, ...keys] : keys);
         }
     }
 

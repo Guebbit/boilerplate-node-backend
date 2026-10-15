@@ -45,6 +45,46 @@ export const greetableName = (
     user.verifiedAt && normalizeEmail(address) === normalizeEmail(user.email) ? user.username : '';
 
 /**
+ * The frame every account mail shares: the template and the subject, the page title, the greeting
+ * and the footer — all keyed off one template name — around whatever the flow itself says.
+ *
+ * The `template` is passed whole and as a literal, on purpose: the name is an identifier shared
+ * with the twin repository, and the cross-cutting sweeps read it from this source text.
+ *
+ * @param mail - `template`: the outbox name, `account.<flow>`, which also names the
+ *   `account.email.<flow>.*` copy keys; `locale`: the recipient's language; `name`: the display
+ *   name for the greeting, or `''` (see {@link greetableName}); `body`: the flow's own copy slots,
+ *   from the translator bound to `locale`
+ */
+const accountMail = ({
+    template,
+    locale,
+    name,
+    body
+}: {
+    // `readonly`: the cross-cutting sweeps read every line that starts `template:` as a published
+    // name, and this is a type, not one.
+    readonly template: `account.${string}`;
+    locale: string;
+    name: string;
+    body: (t: ReturnType<typeof translator>) => Record<string, unknown>;
+}): EmailContent => {
+    const t = translator(locale);
+    const copy = `account.email.${template.slice('account.'.length)}`;
+    return {
+        template,
+        subject: t(`${copy}.subject`),
+        data: {
+            locale,
+            pageMetaTitle: t(`${copy}.meta-title`),
+            greeting: greetingFor(t, `${copy}.greeting`, name),
+            ...body(t),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
  * Email verification: the email carrying the one-time confirmation link. Shared by both
  * verification tokens (`account/services/verification.ts`) — only `kind` differs, so a
  * signup/re-send link lands on the frontend's verify-email page and an email-change link on its
@@ -57,21 +97,17 @@ export const verifyRequestEmail = (
     token: string,
     kind: Extract<AccountLinkKind, 'verify' | 'email-change'> = 'verify'
 ): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.verify-request',
-        subject: t('account.email.verify-request.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.verify-request.meta-title'),
-            greeting: greetingFor(t, 'account.email.verify-request.greeting', name),
+        locale,
+        name,
+        body: (t) => ({
             intro: t('account.email.verify-request.intro'),
             linkLabel: t('account.email.verify-request.link-label'),
             linkUrl: accountFrontendLink(kind, { locale, token }),
-            ignore: t('account.email.verify-request.ignore'),
-            footer: t('email.footer')
-        }
-    };
+            ignore: t('account.email.verify-request.ignore')
+        })
+    });
 };
 
 /**
@@ -89,39 +125,31 @@ export const emailChangeNoticeEmail = (
     newEmail: string,
     undoToken: string
 ): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.email-change-notice',
-        subject: t('account.email.email-change-notice.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.email-change-notice.meta-title'),
-            greeting: greetingFor(t, 'account.email.email-change-notice.greeting', name),
+        locale,
+        name,
+        body: (t) => ({
             body: t('account.email.email-change-notice.body', { newEmail }),
             linkLabel: t('account.email.email-change-notice.link-label'),
-            linkUrl: accountFrontendLink('email-undo', { locale, token: undoToken }),
-            footer: t('email.footer')
-        }
-    };
+            linkUrl: accountFrontendLink('email-undo', { locale, token: undoToken })
+        })
+    });
 };
 
 /** Password reset: the email carrying the one-time link. */
 export const resetRequestEmail = (locale: string, name: string, token: string): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.reset-request',
-        subject: t('account.email.reset-request.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.reset-request.meta-title'),
-            greeting: greetingFor(t, 'account.email.reset-request.greeting', name),
+        locale,
+        name,
+        body: (t) => ({
             intro: t('account.email.reset-request.intro'),
             linkLabel: t('account.email.reset-request.link-label'),
             linkUrl: accountFrontendLink('reset', { locale, token }),
-            ignore: t('account.email.reset-request.ignore'),
-            footer: t('email.footer')
-        }
-    };
+            ignore: t('account.email.reset-request.ignore')
+        })
+    });
 };
 
 /**
@@ -131,21 +159,17 @@ export const resetRequestEmail = (locale: string, name: string, token: string): 
  * password, they never had one.
  */
 export const setupRequestEmail = (locale: string, name: string, token: string): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.setup-request',
-        subject: t('account.email.setup-request.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.setup-request.meta-title'),
-            greeting: greetingFor(t, 'account.email.setup-request.greeting', name),
+        locale,
+        name,
+        body: (t) => ({
             intro: t('account.email.setup-request.intro'),
             linkLabel: t('account.email.setup-request.link-label'),
             linkUrl: accountFrontendLink('reset', { locale, token }),
-            ignore: t('account.email.setup-request.ignore'),
-            footer: t('email.footer')
-        }
-    };
+            ignore: t('account.email.setup-request.ignore')
+        })
+    });
 };
 
 /**
@@ -166,21 +190,17 @@ export const twoFactorCodeEmail = (
     code: string,
     minutes: number
 ): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.two-factor-code',
-        subject: t('account.email.two-factor-code.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.two-factor-code.meta-title'),
-            greeting: greetingFor(t, 'account.email.two-factor-code.greeting', name),
+        locale,
+        name,
+        body: (t) => ({
             intro: t('account.email.two-factor-code.intro'),
             code,
             expiry: t('account.email.two-factor-code.expiry', { minutes }),
-            ignore: t('account.email.two-factor-code.ignore'),
-            footer: t('email.footer')
-        }
-    };
+            ignore: t('account.email.two-factor-code.ignore')
+        })
+    });
 };
 
 /**
@@ -197,21 +217,17 @@ export const reauthCodeEmail = (
     code: string,
     minutes: number
 ): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.reauth-code',
-        subject: t('account.email.reauth-code.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.reauth-code.meta-title'),
-            greeting: greetingFor(t, 'account.email.reauth-code.greeting', name),
+        locale,
+        name,
+        body: (t) => ({
             intro: t('account.email.reauth-code.intro'),
             code,
             expiry: t('account.email.reauth-code.expiry', { minutes }),
-            ignore: t('account.email.reauth-code.ignore'),
-            footer: t('email.footer')
-        }
-    };
+            ignore: t('account.email.reauth-code.ignore')
+        })
+    });
 };
 
 /** What happened to the account's second factors, for {@link twoFactorChangedEmail}. */
@@ -231,19 +247,15 @@ export const twoFactorChangedEmail = (
     change: TwoFactorChange,
     method = ''
 ): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.two-factor-changed',
-        subject: t('account.email.two-factor-changed.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.two-factor-changed.meta-title'),
-            greeting: greetingFor(t, 'account.email.two-factor-changed.greeting', name),
+        locale,
+        name,
+        body: (t) => ({
             body: t(`account.email.two-factor-changed.body-${change}`, { method }),
-            advice: t('account.email.two-factor-changed.advice'),
-            footer: t('email.footer')
-        }
-    };
+            advice: t('account.email.two-factor-changed.advice')
+        })
+    });
 };
 
 /**
@@ -258,19 +270,15 @@ export const twoFactorLockedEmail = (
     name: string,
     minutes: number
 ): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.two-factor-locked',
-        subject: t('account.email.two-factor-locked.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.two-factor-locked.meta-title'),
-            greeting: greetingFor(t, 'account.email.two-factor-locked.greeting', name),
+        locale,
+        name,
+        body: (t) => ({
             body: t('account.email.two-factor-locked.body', { minutes }),
-            advice: t('account.email.two-factor-locked.advice'),
-            footer: t('email.footer')
-        }
-    };
+            advice: t('account.email.two-factor-locked.advice')
+        })
+    });
 };
 
 /**
@@ -285,14 +293,11 @@ export const resetConfirmEmail = (
     name: string,
     providers: readonly string[] = []
 ): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.reset-confirm',
-        subject: t('account.email.reset-confirm.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.reset-confirm.meta-title'),
-            greeting: greetingFor(t, 'account.email.reset-confirm.greeting', name),
+        locale,
+        name,
+        body: (t) => ({
             body: t('account.email.reset-confirm.body'),
             // Always a sentence: "none connected" is as useful to the owner as the list.
             providers:
@@ -304,46 +309,37 @@ export const resetConfirmEmail = (
                               )
                               .join(', ')
                       })
-                    : t('account.email.reset-confirm.providers-none'),
-            footer: t('email.footer')
-        }
-    };
+                    : t('account.email.reset-confirm.providers-none')
+        })
+    });
 };
 
 /** Account deletion: the email carrying the one-time confirmation link. */
 export const deleteRequestEmail = (locale: string, name: string, token: string): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.delete-request',
-        subject: t('account.email.delete-request.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.delete-request.meta-title'),
-            greeting: greetingFor(t, 'account.email.delete-request.greeting', name),
+        locale,
+        name,
+        body: (t) => ({
             intro: t('account.email.delete-request.intro'),
             linkLabel: t('account.email.delete-request.link-label'),
             linkUrl: accountFrontendLink('delete', { locale, token }),
-            ignore: t('account.email.delete-request.ignore'),
-            footer: t('email.footer')
-        }
-    };
+            ignore: t('account.email.delete-request.ignore')
+        })
+    });
 };
 
 /** Account deletion: the goodbye, sent after the row is gone. */
 export const deleteConfirmEmail = (locale: string, name: string): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.delete-confirm',
-        subject: t('account.email.delete-confirm.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.delete-confirm.meta-title'),
-            greeting: greetingFor(t, 'account.email.delete-confirm.greeting', name),
+        locale,
+        name,
+        body: (t) => ({
             body: t('account.email.delete-confirm.body'),
-            farewell: t('account.email.delete-confirm.farewell'),
-            footer: t('email.footer')
-        }
-    };
+            farewell: t('account.email.delete-confirm.farewell')
+        })
+    });
 };
 
 /**
@@ -355,18 +351,14 @@ export const inactivityWarningEmail = (
     name: string,
     graceDays: number
 ): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.inactivity-warning',
-        subject: t('account.email.inactivity-warning.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.inactivity-warning.meta-title'),
-            greeting: greetingFor(t, 'account.email.inactivity-warning.greeting', name),
-            body: t('account.email.inactivity-warning.body', { days: graceDays }),
-            footer: t('email.footer')
-        }
-    };
+        locale,
+        name,
+        body: (t) => ({
+            body: t('account.email.inactivity-warning.body', { days: graceDays })
+        })
+    });
 };
 
 /**
@@ -377,19 +369,15 @@ export const inactivityWarningEmail = (
  * @param name - the display name, or `''` (see {@link greetableName})
  */
 export const exportFailedEmail = (locale: string, name: string): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.export-failed',
-        subject: t('account.email.export-failed.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.export-failed.meta-title'),
-            greeting: greetingFor(t, 'account.email.export-failed.greeting', name),
+        locale,
+        name,
+        body: (t) => ({
             body: t('account.email.export-failed.body'),
-            ignore: t('account.email.export-failed.ignore'),
-            footer: t('email.footer')
-        }
-    };
+            ignore: t('account.email.export-failed.ignore')
+        })
+    });
 };
 
 /**
@@ -407,22 +395,18 @@ export const exportReadyEmail = (
     exportId: string,
     days: number
 ): EmailContent => {
-    const t = translator(locale);
-    return {
+    return accountMail({
         template: 'account.export-ready',
-        subject: t('account.email.export-ready.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.export-ready.meta-title'),
-            greeting: greetingFor(t, 'account.email.export-ready.greeting', name),
+        locale,
+        name,
+        body: (t) => ({
             intro: t('account.email.export-ready.intro'),
             linkLabel: t('account.email.export-ready.link-label'),
             linkUrl: accountExportLink(locale, exportId),
             expiry: t('account.email.export-ready.expiry', { days }),
-            ignore: t('account.email.export-ready.ignore'),
-            footer: t('email.footer')
-        }
-    };
+            ignore: t('account.email.export-ready.ignore')
+        })
+    });
 };
 
 /**
