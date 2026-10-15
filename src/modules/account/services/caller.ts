@@ -10,7 +10,10 @@ import {
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
+import { recordAudit } from '@infrastructure/observability/audit';
+import type { CallerContext } from '@types';
 import { userService, type UserDocument } from '@modules/users';
+import { isUnrestrictedCaller } from '../roles';
 
 /**
  * Run `action` on the caller's own account.
@@ -29,3 +32,26 @@ export const withOwnAccount = <T>(
     load: (id: string) => Promise<UserDocument | null> = userService.findByIdWithCredentials
 ): Promise<ResponseSuccess<T> | ResponseReject> =>
     load(userId).then((user) => (user ? action(user) : generateReject(401, [])));
+
+/**
+ * Record an audit entry about an account's own action, naming the actor's role the way every
+ * account audit does: `admin` for an unrestricted membership, `user` otherwise. The role is read
+ * fresh, after whatever the action just changed (a verification promotes `unverified` to `customer`),
+ * never trusted off a value computed before it.
+ *
+ * @param context - the caller context
+ * @param userId - the account the action belongs to; also the entry's actor
+ * @param entry - the rest of the audit entry
+ */
+export const recordAccountAudit = (
+    context: CallerContext,
+    userId: string,
+    entry: Omit<Parameters<typeof recordAudit>[1], 'actorUserId' | 'actorRole'>
+): Promise<void> =>
+    isUnrestrictedCaller(userId).then((unrestricted) => {
+        recordAudit(context, {
+            ...entry,
+            actorUserId: userId,
+            actorRole: unrestricted ? 'admin' : 'user'
+        });
+    });

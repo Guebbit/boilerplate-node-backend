@@ -33,10 +33,9 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { emailChangeNext, emailChangeStateOf, undoRestoresPreviousEmail } from '../domain';
-import { isUnrestrictedCaller } from '../roles';
 import { promoteVerifiedCustomer } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { withOwnAccount } from './caller';
+import { recordAccountAudit, withOwnAccount } from './caller';
 
 /**
  * How long a verification link works, shared by both token kinds. Tunable because the safe
@@ -279,15 +278,7 @@ const auditProvenAddress = (
     context: CallerContext,
     action: AuditAction
 ): Promise<UserDocument> =>
-    isUnrestrictedCaller(user.id).then((unrestricted) => {
-        recordAudit(context, {
-            action,
-            actorUserId: user.id,
-            actorRole: unrestricted ? 'admin' : 'user',
-            outcome: 'success'
-        });
-        return user;
-    });
+    recordAccountAudit(context, user.id, { action, outcome: 'success' }).then(() => user);
 
 /**
  * Spend a verification token and mark the account verified.

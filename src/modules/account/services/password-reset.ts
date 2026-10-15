@@ -18,9 +18,8 @@ import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
-import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
-import { isUnrestrictedCaller } from '../roles';
+import { recordAccountAudit } from './caller';
 import { validatePasswordChange, writePassword } from './password';
 import { PASSWORD_RESET_TOKEN_TYPE } from '../token-types';
 
@@ -55,24 +54,18 @@ const afterReset = (
     // no role of its own to read synchronously. Same fire-and-forget shape as the
     // mail below: the password change already succeeded, so a lookup hiccup here must not
     // turn a successful reset into an error — worst case, this one audit row is missing.
-    void isUnrestrictedCaller(String(user._id))
-        .then((unrestricted) => {
-            recordAudit(context, {
-                action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
-                actorUserId: String(user._id),
-                actorRole: unrestricted ? 'admin' : 'user',
-                outcome: 'success'
-            });
-        })
-        .catch((error: unknown) => {
-            // Still just a missing audit row, not a reset failure — see the comment
-            // above — but a swallowed lookup failure had no trail at all before this.
-            logger.warn({
-                message: 'Could not audit a completed password reset.',
-                userId: String(user._id),
-                error
-            });
+    void recordAccountAudit(context, String(user._id), {
+        action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
+        outcome: 'success'
+    }).catch((error: unknown) => {
+        // Still just a missing audit row, not a reset failure — see the comment
+        // above — but a swallowed lookup failure had no trail at all before this.
+        logger.warn({
+            message: 'Could not audit a completed password reset.',
+            userId: String(user._id),
+            error
         });
+    });
 
     /*
      * The recipient's OWN language first. These links are clicked from an email client,

@@ -17,7 +17,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
-import { isUnrestrictedCaller } from '../roles';
+import { recordAccountAudit } from './caller';
 import type { OAuthIdentity } from '../oauth/providers/port';
 import { assignRole, VERIFIED_CUSTOMER_ROLE } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -91,19 +91,16 @@ const linkToExistingAccount = (
             connectedAt: new Date()
         })
         .then((linked) =>
-            // Read fresh from the membership — the document carries no role of its own, same
-            // reasoning `postLogin` gives for its own AUTH_LOGIN.
-            isUnrestrictedCaller(user.id).then((unrestricted) => {
-                // Only a link that landed is a fact: an account that already holds this provider
-                // is simply signed in, with nothing new to record.
-                if (linked)
-                    recordAudit(context, {
-                        action: accountAuditActions.AUTH_OAUTH_LINKED,
-                        actorUserId: user.id,
-                        actorRole: unrestricted ? 'admin' : 'user',
-                        outcome: 'success',
-                        metadata: { via: provider }
-                    });
+            // Only a link that landed is a fact: an account that already holds this provider is
+            // simply signed in, with nothing new to record.
+            (linked
+                ? recordAccountAudit(context, user.id, {
+                      action: accountAuditActions.AUTH_OAUTH_LINKED,
+                      outcome: 'success',
+                      metadata: { via: provider }
+                  })
+                : Promise.resolve()
+            ).then(() => {
                 if (!user.twoFactorEnabledAt) {
                     emitAnalyticsEvent({
                         ...buildAnalyticsBase(context),
