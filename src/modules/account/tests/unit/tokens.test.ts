@@ -64,8 +64,8 @@ describe('getExpiryTime', () => {
     });
 
     it('falls back to the tier default when the variable is unset', () => {
-        expect(getExpiryTime()).toBe(604_800);
-        expect(getExpiryTime(RefreshTokenExpiryTime.LONG)).toBe(31_536_000);
+        expect(getExpiryTime()).toBe(86_400);
+        expect(getExpiryTime(RefreshTokenExpiryTime.LONG)).toBe(2_592_000);
     });
 
     it('falls back for an empty variable rather than returning NaN', () => {
@@ -73,7 +73,7 @@ describe('getExpiryTime', () => {
         // jose rejects. An unusable value resolves to the tier default, same as an absent one.
         setEnvironment({ NODE_SESSION_TIME_SHORT: '' });
 
-        expect(getExpiryTime()).toBe(604_800);
+        expect(getExpiryTime()).toBe(86_400);
     });
 
     it('parses in base 10, so a zero-padded value is not read as octal', () => {
@@ -102,7 +102,7 @@ describe('getExpiryTimeMilliseconds', () => {
     it('stays a real number (not NaN) when the variable is unset', () => {
         // A NaN maxAge on a cookie is silently dropped by Express, producing a session cookie
         // instead of the intended persistent one — a bug with no error attached to it.
-        expect(getExpiryTimeMilliseconds()).toBe(604_800_000);
+        expect(getExpiryTimeMilliseconds()).toBe(86_400_000);
     });
 });
 

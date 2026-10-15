@@ -21,7 +21,7 @@ A deployment runs one of two session modes, picked by `NODE_SESSION_MODE` and ex
 
 This keeps normal authenticated requests explicit (client-attached Bearer token), while keeping the refresh token out of JavaScript access (HTTP-only cookie).
 
-In `cookie` mode there is one credential, a random session id kept hashed in the database: an HttpOnly `__Host-session` cookie for a browser, or a `ses_…` Bearer for a client without a cookie jar. Because a cookie rides along on requests the user never meant to make, every state-changing request it authenticates must name an allowed `Origin` (`getAuth`).
+In `cookie` mode there is one credential, a random session id kept hashed in the database: an HttpOnly `__Host-session` cookie for a browser, or a `ses_…` Bearer for a client without a cookie jar. Because a cookie rides along on requests the user never meant to make, every state-changing request it authenticates is refused 403 unless its `Origin` is allowed (`getAuth`). A request that names no `Origin` at all passes: curl and a health check are not a browser's cross-origin call.
 
 ## Where token verification happens
 
@@ -55,7 +55,7 @@ of one — no comma — behaves precisely as an unrotated deployment always has.
 **`jwt` mode only** — a `cookie` deployment signs nothing and has no ring to rotate.
 
 **To rotate:** prepend the new secret (`new-secret,old-secret`), deploy, wait out the longest
-refresh window in play (`NODE_SESSION_TIME_LONG` — a year by default — or force
+refresh window in play (`NODE_SESSION_TIME_LONG` — 30 days by default — or force
 `logout-all` for every account instead of waiting), then drop the old secret and deploy again.
 Skipping the wait window logs out every session still signed with the entry you remove.
 

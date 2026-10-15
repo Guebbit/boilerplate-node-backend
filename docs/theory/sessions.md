@@ -85,7 +85,7 @@ session keeps its public id, its sign-in time and its expiry across the swap.
 
 A cookie travels with a request the user never meant to make. So in this mode a request that
 changes something (anything but `GET`, `HEAD`, `OPTIONS`) and is authenticated **by the cookie** must
-name an allowed `Origin`, or it is answered 403 before anything runs. This is on top of
+name an allowed `Origin`, or it is answered 403 before anything runs — a request naming no `Origin` at all (curl, a health check) is not a browser's cross-origin call and passes. This is on top of
 `SameSite=Lax`, which stops cross-site requests but not ones from a sibling subdomain.
 
 The check lives in the one place a caller is resolved (`getAuth`), so no route can be added that a
@@ -127,6 +127,17 @@ An API key (`sk_…`) is untouched by either mode.
   per refresh token for a day after it is rotated away, so a replay is still recognised.
 - **`cookie`** needs no signing secret. Its rows are one per sign-in and are deleted by their own
   expiry date.
+
+Trade-offs left as they are, on purpose:
+
+- **A lost refresh response, retried after the grace window, reads as token reuse** and revokes
+  every session of the account, as Auth0's reuse interval and Okta's grace period do (RFC 9700
+  §4.14.2). Choose `NODE_TOKEN_ROTATION_GRACE_MS` for the slowest client you serve to retry in.
+- **The session epoch compares timestamps** that two instances stamped on their own clocks. One host
+  with NTP is assumed.
+- **`SameSite` stays `Lax`.** `Strict` drops the cookie on the OAuth callback and on arrival from an
+  email link; `Lax` plus the origin check is the OWASP default.
+- **Signup takes no `transport`.** A bearer client signs in with `POST /account/login` afterwards.
 
 Neither mode saves the account lookup: both read the account and its roles on every request, so a
 "stateless" token saves nothing here. `cookie` adds one indexed read of the session row, where

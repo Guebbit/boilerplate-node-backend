@@ -71,9 +71,9 @@ export const sessionConfig = defineConfig({
     name: 'account-sessions',
     shape: {
         NODE_SESSION_MODE: choice(SESSION_MODES, { default: 'jwt' }),
-        NODE_SESSION_TIME_SHORT: int({ default: 604_800, min: 1 }),
-        NODE_SESSION_TIME_MEDIUM: int({ default: 2_592_000, min: 1 }),
-        NODE_SESSION_TIME_LONG: int({ default: 31_536_000, min: 1 }),
+        NODE_SESSION_TIME_SHORT: int({ default: 86_400, min: 1 }),
+        NODE_SESSION_TIME_MEDIUM: int({ default: 604_800, min: 1 }),
+        NODE_SESSION_TIME_LONG: int({ default: 2_592_000, min: 1 }),
         NODE_TOKEN_ACCESS_TIME: int({ default: 600, min: 1 }),
         NODE_TOKEN_ACCESS: keyRing({
             required: {

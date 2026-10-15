@@ -174,9 +174,9 @@ const keepAlive = async (
 
 /** The three "remember me" tiers and the seconds each one's default keeps a session for. */
 const TIERS = [
-    ['short', 604_800],
-    ['medium', 2_592_000],
-    ['long', 31_536_000]
+    ['short', 86_400],
+    ['medium', 604_800],
+    ['long', 2_592_000]
 ] as const;
 
 /** The `Max-Age` a `Set-Cookie` line carries, in seconds — `undefined` for a browser-session one. */

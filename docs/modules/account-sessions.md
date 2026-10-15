@@ -84,11 +84,15 @@ the answer never tells an attacker whether an account exists.
 The refresh tier is the "remember me" choice, and it is a tier rather than a boolean so the copy on
 the login form and the lifetime in the environment stay one decision:
 
-| Tier     | Environment variable       |
-| -------- | -------------------------- |
-| `short`  | `NODE_SESSION_TIME_SHORT`  |
-| `medium` | `NODE_SESSION_TIME_MEDIUM` |
-| `long`   | `NODE_SESSION_TIME_LONG`   |
+| Tier     | Environment variable       | Default |
+| -------- | -------------------------- | ------- |
+| `short`  | `NODE_SESSION_TIME_SHORT`  | 1 day   |
+| `medium` | `NODE_SESSION_TIME_MEDIUM` | 7 days  |
+| `long`   | `NODE_SESSION_TIME_LONG`   | 30 days |
+
+The longest default is 30 days, which meets ASVS 4.0.3 V3.3.2 L1 as written. A shop session is
+long-lived on purpose and risk-based (ASVS 5.0 V7.1.1): the sensitive actions behind it ask for the
+password again (`NODE_REAUTH_TIME_*`), the model Amazon and Shopify customer accounts use.
 
 `config.ts` is the single place a deployment's answer to _how long is a session_ is parsed —
 `jwt.ts` signs against it, `cookie-strategy.ts` stores its row against it and `cookies.ts` sets
@@ -516,7 +520,7 @@ the caller's re-minted session survive its own bump.
 
 `POST /account/refresh` doesn't just re-sign an access token — it REPLACES the refresh token too,
 every time. Without that, a stolen cookie would stay valid, silently, for as long as it had left to
-live (up to a year, `remember: long`); rotation turns "a value that never changes" into "a value
+live (up to 30 days, `remember: long`); rotation turns "a value that never changes" into "a value
 that changes on every use", so a copy presented after the original has moved is detectable.
 
 The new token's absolute expiry is COPIED from the old one's own claim, never reset to a fresh full
@@ -583,7 +587,7 @@ nature, so it is made loud at the only moment it can be.
 
 The retention default is a trade, stated plainly: an active client rotates about once per
 `NODE_TOKEN_ACCESS_TIME` (600s), so 24h keeps roughly 144 rows per session alive at a time.
-Retaining for a refresh token's full lifetime would reach ~52,500 rows on the one-year tier. Past
+Retaining for a refresh token's full lifetime would reach ~4,300 rows on the 30-day tier. Past
 the retention window a replay is an ordinary 401
 with no revocation — a real limit, chosen rather than stumbled into, and asserted as such in
 `src/modules/account/tests/integration/jwt.test.ts`.
