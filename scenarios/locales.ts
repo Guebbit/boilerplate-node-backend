@@ -254,3 +254,14 @@ export const driveLocaleEntryEdit = (owner: Caller): Promise<void> =>
             }
         )
         .then(() => undefined);
+
+/**
+ * This module's entry in the `shop` fixture table. Picked up by `npm run scenarios:generate`
+ * (`scenarios/shop-modules.generated.ts`), so deleting this file deletes the entry.
+ * `blank` seeds it too (`baseline`): a spec that creates its own product still needs the fallback language active.
+ */
+export const shopModule = {
+    seed: seedLocalesCollection,
+    baseline: true,
+    driveHistoryEdit: driveLocaleEntryEdit
+};

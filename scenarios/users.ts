@@ -292,3 +292,9 @@ export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
  */
 export const seedNamedUsersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(namedUsers.map((user) => insertIfAbsent(userRepository, user)));
+
+/**
+ * This module's entry in the `shop` fixture table. Picked up by `npm run scenarios:generate`
+ * (`scenarios/shop-modules.generated.ts`), so deleting this file deletes the entry.
+ */
+export const shopModule = { seed: seedUsersCollection };

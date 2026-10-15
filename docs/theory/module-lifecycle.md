@@ -457,7 +457,11 @@ locales recipe of `measure:demo-strip` shares) takes the mechanical share of the
   folder registers it.
 - **The shared validation labels only its fields used go** (`validation.attributes` in
   `src/locales/*.json`): a field its contract names that no surviving request carries.
-- **The scenario fixtures lose the module's slice** (`scenarios/<name>.ts` and its table entry).
+- **The scenario files go with it**: `scenarios/<name>.ts` (its fixtures),
+  `scenarios/values/<name>.ts` (its example values for the generated client collections) and
+  `scenarios/support/doubles/<name>/`. Nothing is edited to unlist them — the registries that
+  collected them are generated from the files on disk, see
+  [the scenario registries](../tools/demo-profile.md#the-scenario-registries-are-generated).
 
 Writing a test that survives this is one rule: **a test that needs a module to say something says so
 in its imports, and a foundation test never borrows one as sample data.** A test about a foundation

@@ -3,7 +3,9 @@
  * Taking any set of modules out of the tree — the part of a removal that does not care WHICH
  * modules: their folders, the registry line that names them, the shared authorization files, the
  * alert rules on their metrics, the validation labels only their fields used, the reap/sweep
- * scripts they own, their test doubles and the tests that need them.
+ * scripts they own, their scenario files and test doubles and the tests that need them. The
+ * registries that listed those files are NOT edited: `npm run scenarios:generate` rebuilds them,
+ * and `regenerate` runs it.
  *
  * `demo-remove.ts` calls this with every `group: shop` module and then does the shop-only work
  * (the demo catalogue, the scenarios); `measure-demo-strip.ts` calls it with `locales` for its
@@ -18,7 +20,7 @@ import {
     stripRoleGrants
 } from './demo-remove-authorization';
 import { removeModuleFolders, stripModuleRegistry, type RemovalNote } from './demo-remove-registry';
-import { stripModuleDoubles, stripScenarioModuleEntries } from './demo-remove-scenarios';
+import { removeScenarioModuleFiles } from './demo-remove-scenarios';
 import { removeResidueTests } from './demo-remove-tests';
 
 /**
@@ -38,8 +40,7 @@ export const removeModules = (repoRoot: string, names: readonly string[]): Remov
     return [
         ...removeModuleFolders(repoRoot, names),
         stripModuleRegistry(repoRoot, names),
-        stripScenarioModuleEntries(repoRoot, names),
-        ...stripModuleDoubles(repoRoot, names),
+        ...removeScenarioModuleFiles(repoRoot, names),
         stripRoleGrants(repoRoot, removedAuthorization),
         stripConformanceCases(repoRoot, removedAuthorization),
         ...stripAlertRules(repoRoot, removedMetrics),

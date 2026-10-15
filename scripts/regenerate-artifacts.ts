@@ -41,6 +41,11 @@ interface Step {
  */
 const STEPS: readonly Step[] = [
     {
+        script: 'scenarios:generate',
+        because:
+            'the scenario, fixture and doubles registries (scenarios/*.generated.ts), from the scenario files on disk — first, since a strip leaves them naming deleted files and everything below that boots the app imports them'
+    },
+    {
         script: 'authorization:bundle',
         because:
             'shared/authorization-keys.yaml, from one fragment per module — read by kernel/permissions.ts at boot, so this runs before anything below that boots the app to read docs off it'

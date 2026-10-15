@@ -482,10 +482,12 @@ property of that configuration rather than of the package.
 
 - **shapes come from `openapi.yaml`** — every operation, its auth, its request body, one example per
   declared response;
-- **values come from `scenarios/subjects.ts`** — `GET /products/{id}` asks for a product the
-  database actually holds, and `POST /account/login` sends credentials that work. That is the
-  difference between a collection you can click and one you have to fix first. Only ids and
-  credentials, though: `scenarios/subjects.ts` cannot import a module's own fixtures without
+- **values come from `scenarios/subjects.ts` and `scenarios/values/<module>.ts`** — the first
+  holds the credentials, each of the others the example ids its module knows, so `GET
+  /products/{id}` asks for a product the database actually holds and `POST /account/login` sends
+  credentials that work. A deleted module's file leaves with it; the bundler scans the folder.
+  That is the difference between a collection you can click and one you have to fix first. Only
+  ids and credentials, though: those files cannot import a module's own fixtures without
   pulling in the `@api/` client the bundler is still building (see below), so a body field this
   file cannot name — a title, a price, a description — falls to a type- and format-shaped default;
 - **ownership comes from the module contracts** — a path in `src/modules/orders/openapi.yaml`
@@ -523,7 +525,7 @@ Each probe is a question a contract cannot ask. A few examples:
 | `example` | reading a published example that does not exist · editing one with a malformed id |
 
 A probe refers to seed records as `{{seedSoftDeletedProductId}}` rather than pasting an id — the
-tokens are filled in `scripts/contracts/client-collections-bundle.ts` from the seed ids (the soft-deleted product is *named* once, in `scenarios/subjects.ts`), so
+tokens are filled in `scripts/contracts/client-collections-bundle.ts` from the seed ids (the soft-deleted product is *named* once, in `scenarios/product-ids.ts`), so
 a fixture that stops being soft-deleted takes its probe with it instead of leaving one that quietly
 tests nothing. An unknown token fails the generator with the list of known ones.
 

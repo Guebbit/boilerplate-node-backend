@@ -152,15 +152,16 @@ comparison itself, fed a hand-made map.
 
 Where the id on the other side of the promise comes from depends on what kind of row it names:
 
-- A row `shopModules` SEEDS (a product, a locale entry) — its id is a literal, pinned in
-  `scenarios/subjects.ts`.
+- A row `shopModules` SEEDS (a product, a locale entry) — its id is a literal, pinned beside its
+  fixtures (`scenarios/product-ids.ts`) and listed in the scenario's `subjects`
+  (`scenarios/shop.scenario.ts`).
 - A row the flows PRODUCE (an order, a payment) — its id cannot be a literal, since it is minted
   when the flow runs. `scenarios/flows/shop-history.ts` records it into its own return value as it
   goes, and `buildScenario` merges that into the pinned map.
 
 **To add one:** declare the name under the module's `scenario.shop` array, then either pin a
-literal in `subjects.ts` (a seeded row) or have the flow that produces the row record its id into
-`ShopHistory.subjects` under that same name (a flow-produced one). Skip either half and
+literal in the scenario's `subjects` (a seeded row) or have the flow that produces the row record
+its id into the subjects `driveShopHistory` resolves, under that same name (a flow-produced one). Skip either half and
 `shop.test.ts` fails naming exactly which.
 
 ## Timestamps: three sources, not one

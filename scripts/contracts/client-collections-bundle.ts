@@ -11,7 +11,8 @@
  * can answer:
  *
  *   1. Which module owns which path — read from the module contracts, never restated.
- *   2. Where the values come from — `scenarios/subjects.ts`, so a generated request asks for a
+ *   2. Where the values come from — `scenarios/subjects.ts` for the credentials and each module's
+ *      `scenarios/values/<module>.ts` for its own rows, so a generated request asks for a
  *      product that exists and sends credentials that work. Only ids and credentials: nothing
  *      here can import a module's own fixtures (`scenarios/products.ts` and friends), because
  *      those pull in `@modules/*` code, which imports the generated `@api/` client — the same
@@ -27,6 +28,7 @@
  * See: docs/api/contract-fragmentation.md#the-client-collections-generated
  */
 
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import {
     generateCollections,
@@ -40,19 +42,9 @@ import {
 } from '@guebbit/openapi-runnable-collections';
 
 import { SECTION_ORDER, sectionPaths } from './openapi-bundle';
-import { SEED_PRODUCT_IDS, SUBJECTS } from '../../scenarios/subjects';
+import { SUBJECTS } from '../../scenarios/subjects';
+import type { CollectionValues } from '../../scenarios/collection-values';
 import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
-
-/**
- * What a generated request puts where an ORDER id belongs.
- *
- * Not a literal, and it cannot be one: the demo shop's orders are produced by driving
- * real checkouts (`scenarios/flows/`), so their ids are minted when the shop is built and differ
- * every time. Bruno, Insomnia and Postman all read `{{name}}` as a collection variable at send
- * time, so this hands the reader a slot to fill instead of an id that 404s. The orders section's
- * own first probe is the request that fills it.
- */
-const ORDER_ID_VARIABLE = '{{orderId}}';
 
 /** The four tools, and the order this file names them in. */
 const COLLECTION_TOOLS = ['bruno', 'insomnia', 'mockoon', 'postman'] as const;
@@ -78,26 +70,24 @@ const sections = (): Section[] =>
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
 /**
- * The generator's value table (`ValueSources` from `@guebbit/openapi-runnable-collections`): what
- * goes into a request body or path where the contract only gives a shape.
+ * The foundation's own value table (`ValueSources` from `@guebbit/openapi-runnable-collections`):
+ * what goes into a request body or path where the contract only gives a shape, for what every
+ * deployment has. A module adds its own through `scenarios/values/<module>.ts`
+ * ({@link loadValues}).
  */
-const values: ValueSources = {
+const baseValues: ValueSources = {
     /*
      * By property name, because that is what makes a generated body USABLE: a request that posts
-     * `{"productId": ""}` is a request whoever opens the collection has to fix before it does
+     * `{"userId": ""}` is a request whoever opens the collection has to fix before it does
      * anything. Everything else — title, price, description and the like — falls through to a
      * type- and format-shaped default; only ids and credentials are real, see the file header.
      */
     byProperty: {
-        id: SUBJECTS.product.id,
         email: SUBJECTS.user.email,
         password: SUBJECTS.user.password,
         newPassword: SUBJECTS.user.password,
         username: 'new-shopper',
-        productId: SUBJECTS.product.id,
         userId: SUBJECTS.user.id,
-        orderId: ORDER_ID_VARIABLE,
-        quantity: 2,
         admin: false,
         active: true,
         locale: 'en',
@@ -129,20 +119,17 @@ const values: ValueSources = {
 
     /** A path parameter's value: the seeded record of whichever domain the path belongs to. */
     pathParam: (name, template) => {
-        if (name === 'productId') return SUBJECTS.product.id;
         if (name === 'locale') return 'en';
         if (name !== 'id') return undefined;
 
-        if (template.startsWith('/products')) return SUBJECTS.product.id;
-        if (template.startsWith('/orders')) return ORDER_ID_VARIABLE;
         if (template.startsWith('/users')) return SUBJECTS.user.id;
         return SUBJECTS.admin.id;
     },
 
     /*
-     * The seed facts a probe may refer to, as `{{token}}`. A probe that pasted
-     * `65dc8ad8604c307b702b5cd4` into its URL would be a copy of `scenarios/subjects.ts`, and
-     * copies drift — the whole reason these are read from there rather than retyped.
+     * The seed facts a probe may refer to, as `{{token}}`. A probe that pasted an id into its URL
+     * would be a copy of the fixture, and copies drift — the whole reason these are read from the
+     * fixtures rather than retyped.
      */
     tokens: {
         seedAdminEmail: SUBJECTS.admin.email,
@@ -150,16 +137,69 @@ const values: ValueSources = {
         seedAdminId: SUBJECTS.admin.id,
         seedUserEmail: SUBJECTS.user.email,
         seedUserPassword: SUBJECTS.user.password,
-        seedUserId: SUBJECTS.user.id,
-        seedProductId: SUBJECTS.product.id,
-        seedSoftDeletedProductId: SEED_PRODUCT_IDS.heaterSoftDeleted,
-        seedInactiveProductId: SEED_PRODUCT_IDS.bundleInactive,
-        seedOffSaleProductId: SEED_PRODUCT_IDS.bedOffSale,
-        // Both resolve to a collection variable rather than an id — see ORDER_ID_VARIABLE.
-        seedOrderId: ORDER_ID_VARIABLE,
-        seedDeletedOrderId: '{{deletedOrderId}}'
+        seedUserId: SUBJECTS.user.id
     }
 };
+
+/**
+ * Narrows a loaded `scenarios/values/<module>.ts` to the one export the bundler reads.
+ * @param loaded - the imported module namespace
+ * @throws {Error} when it exports no `collectionValues`
+ */
+const readCollectionValues = (loaded: unknown): CollectionValues => {
+    if (typeof loaded === 'object' && loaded !== null && 'collectionValues' in loaded)
+        // The file's own type annotation (`CollectionValues`) is what makes this the right shape.
+        return loaded.collectionValues as CollectionValues;
+    throw new Error('[collections] a scenarios/values file exports no `collectionValues`.');
+};
+
+/**
+ * Every `scenarios/values/<module>.ts` that exists, loaded by directory scan: a module's example
+ * values are in the collections with no edit here, and a deleted module's file leaves with it.
+ *
+ * Memoised: the values are source, so they cannot change mid-run.
+ */
+const loadModuleValues = (() => {
+    let loaded: Promise<CollectionValues[]> | undefined;
+
+    return (): Promise<CollectionValues[]> => {
+        const folder = path.join(REPO_ROOT, 'scenarios', 'values');
+        loaded ??= Promise.all(
+            (existsSync(folder) ? readdirSync(folder) : [])
+                .filter((file) => file.endsWith('.ts'))
+                .toSorted()
+                // Dynamic `import()` of a computed path, for the same reason as the probes below.
+                .map((file) => import(path.join(folder, file)).then(readCollectionValues))
+        );
+        return loaded;
+    };
+})();
+
+/**
+ * The foundation's table with every module's example values merged in. A module's `pathParam` is
+ * asked first and the foundation's answers what none of them claims.
+ */
+const loadValues = (): Promise<ValueSources> =>
+    loadModuleValues().then((modules) => ({
+        ...baseValues,
+        byProperty: {
+            ...Object.fromEntries(
+                modules.flatMap((entry) => Object.entries(entry.byProperty ?? {}))
+            ),
+            ...baseValues.byProperty
+        },
+        tokens: {
+            ...Object.fromEntries(modules.flatMap((entry) => Object.entries(entry.tokens ?? {}))),
+            ...baseValues.tokens
+        },
+        pathParam: (name, template) => {
+            for (const entry of modules) {
+                const found = entry.pathParam?.(name, template);
+                if (found !== undefined) return found;
+            }
+            return baseValues.pathParam?.(name, template);
+        }
+    }));
 
 /* ────────────────────────────────────────────────────────────────────────────────────────────
  * 3. What the contract cannot describe — each module's authored probes
@@ -223,7 +263,7 @@ const loadProbes = (() => {
  * from existed.
  */
 const generate = (): Promise<GenerateResult> =>
-    loadProbes().then((probes) =>
+    Promise.all([loadProbes(), loadValues()]).then(([probes, values]) =>
         generateCollections({
             spec: loadSpec(path.join(REPO_ROOT, 'openapi.yaml')),
             sections: sections(),

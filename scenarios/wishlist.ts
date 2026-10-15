@@ -6,7 +6,7 @@
  */
 
 import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
-import { SEED_PRODUCT_IDS } from './subjects';
+import { SEED_PRODUCT_IDS } from './product-ids';
 import { makeWishlist } from '@modules/wishlist/factories';
 import { type SeedOutcome, insertIfAbsentForOwner } from '@scenarios/seed';
 import { wishlistRepository } from '@modules/wishlist/repository';
@@ -37,3 +37,9 @@ export const seedWishlistsCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(
         wishlistFixtures.map((wishlist) => insertIfAbsentForOwner(wishlistRepository, wishlist))
     );
+
+/**
+ * This module's entry in the `shop` fixture table. Picked up by `npm run scenarios:generate`
+ * (`scenarios/shop-modules.generated.ts`), so deleting this file deletes the entry.
+ */
+export const shopModule = { seed: seedWishlistsCollection };

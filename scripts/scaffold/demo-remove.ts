@@ -5,8 +5,8 @@
  *
  * Deletes every `group: shop` and `group: example` module folder (its scheduled jobs go with it,
  * and `regenerate` rewrites the crontab), the seed images, and the demo
- * catalogue's own scenario data — then edits the handful of central files (`src/modules.ts`,
- * `scripts/contracts/client-collections-bundle.ts`, `scenarios/*`) that would otherwise stop the
+ * catalogue's own scenario data — then edits `src/modules.ts` and regenerates the scenario
+ * registries (`npm run scenarios:generate`), the only central files that would otherwise stop the
  * repo compiling. See `docs/getting-started-new-project.md` for what this promises and does not.
  *
  * RUNS AGAINST THIS CHECKOUT, not a scratch copy — this is the real command, not the measurement.
@@ -17,15 +17,9 @@
 import { readDemoModuleNames } from '../testing/demo-module-names';
 import { removeModules } from './demo-remove-modules';
 import type { RemovalNote } from './demo-remove-registry';
-import {
-    removeSeedImages,
-    removeShopOnlyScenarioFiles,
-    stripClientCollections,
-    stripScenarioIndex,
-    stripShopModulesTable,
-    stripSubjects,
-    stripDemoJobs
-} from './demo-remove-scenarios';
+import { removeSeedImages, removeShopOnlyScenarioFiles } from './demo-remove-scenarios';
+import { formatWithRepoConfig } from './format-text';
+import { writeScenarioRegistries } from './scenario-registry';
 import { REPO_ROOT } from '../modules-on-disk';
 
 /** Print every step's own report line. */
@@ -45,26 +39,27 @@ console.info(
 console.info('\n[demo-remove] the modules, and everything central that names them:');
 report(removeModules(REPO_ROOT, demoModuleNames));
 
-/** Step two: delete the demo catalogue's data, then edit the files that listed it. */
-console.info('\n[demo-remove] the demo catalogue and its generated collections:');
+/** Step two: delete the demo catalogue's data. Nothing is edited: the registries are step three. */
+console.info('\n[demo-remove] the demo catalogue:');
 report(removeSeedImages(REPO_ROOT));
 report(removeShopOnlyScenarioFiles(REPO_ROOT));
-report([
-    stripShopModulesTable(REPO_ROOT),
-    stripScenarioIndex(REPO_ROOT),
-    stripSubjects(REPO_ROOT),
-    stripDemoJobs(REPO_ROOT),
-    stripClientCollections(REPO_ROOT)
-]);
 
-/** What the person running this must do next, since the edits above are not yet verified. */
-console.info('\n[demo-remove] done. Next:');
-console.info(
-    '  1. npm run regenerate   — rebuild the contract bundles and every generated doc page'
-);
-console.info(
-    '  2. npm run ts-check     — anything it still reports names the removed modules in a'
-);
-console.info(
-    '                            string or a table rather than an import; fix it by hand.'
-);
+/**
+ * Step three: regenerate the registries that listed the deleted files — the one rewrite the strip
+ * makes, and a generated one — then say what to do next.
+ */
+void writeScenarioRegistries(REPO_ROOT, formatWithRepoConfig).then((written) => {
+    console.info('\n[demo-remove] the scenario registries, rebuilt from what is left:');
+    report(written.map((file) => ({ file, detail: 'regenerated' })));
+    // What the person running this must do next, since the edits above are not yet verified.
+    console.info('\n[demo-remove] done. Next:');
+    console.info(
+        '  1. npm run regenerate   — rebuild the contract bundles and every generated doc page'
+    );
+    console.info(
+        '  2. npm run ts-check     — anything it still reports names the removed modules in a'
+    );
+    console.info(
+        '                            string or a table rather than an import; fix it by hand.'
+    );
+});

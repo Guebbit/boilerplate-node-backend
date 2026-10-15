@@ -13,7 +13,8 @@
  * `GET /__test/clock`      the demo clock: what `Date.now()` answers, and how far ahead of real time
  * `POST /__test/clock`     move it FORWARD by `advanceMs` (never back); a job that should react
  *                          is then triggered through its own door, e.g. the reservation sweep
- * `POST /__test/jobs/:name` run one background job now (`scenarios/jobs.ts`), e.g. `reap-orders`
+ * `POST /__test/jobs/:name` run one declared background job now, under its name with
+ *                          the colon as a dash — `reap:orders` is `reap-orders`
  *
  * A scenario is BUILT once per process and REPLAYED thereafter — see {@link buildOnce}.
  * Unauthenticated since the profile only ever binds beside a database `npm run demo` just created.
@@ -23,9 +24,9 @@ import type { Express, Request, Response } from 'express';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
+import type { JobDeclaration } from '@kernel/registry';
 import { seedCredentials } from '@scenarios/accounts';
 import { DEFAULT_SCENARIO, buildScenario, isScenarioName } from '@scenarios/index';
-import { DEMO_JOBS } from '@scenarios/jobs';
 import {
     captureDatabase,
     emptyDatabase,
@@ -189,8 +190,25 @@ const RESTORE_BODY = z.object({ scenario: z.string().optional() });
 /** The body of `POST /__test/clock`: how far to move the clock forward, never back. */
 const CLOCK_BODY = z.object({ advanceMs: z.number().nonnegative() });
 
-/** Mount the demo profile's routes — `createApp`'s `extension.install`, called by `run-server.ts` alone. */
-export const installDemo = (app: Express): void => {
+/**
+ * The job lever's lookup: each declared job under its URL segment (`reap:orders` → `reap-orders`).
+ *
+ * A map rather than an object: a lookup by an arbitrary segment must never find an inherited
+ * property such as `constructor`.
+ * @param jobs - every job the enabled modules declare
+ */
+const jobLevers = (jobs: readonly JobDeclaration[]): ReadonlyMap<string, JobDeclaration> =>
+    new Map(jobs.map((job) => [job.name.replaceAll(':', '-'), job]));
+
+/**
+ * Mount the demo profile's routes — `createApp`'s `extension.install`, called by `run-server.ts` alone.
+ * @param app - the application being assembled
+ * @param jobs - the declared jobs `POST /__test/jobs/:name` may run; each module's own, so a
+ *   deleted module takes its lever with it
+ */
+export const installDemo = (app: Express, jobs: readonly JobDeclaration[]): void => {
+    const levers = jobLevers(jobs);
+
     // Kept for `buildOnce`: the flow runner drives the real application over real HTTP, on a
     // throwaway loopback listener of its own (`scenarios/flows/loopback.ts`).
     demoApp = app;
@@ -245,12 +263,13 @@ export const installDemo = (app: Express): void => {
 
         Promise.resolve()
             .then(() => {
-                const job = DEMO_JOBS.get(name);
+                const job = levers.get(name);
                 if (!job) {
                     response.status(404).json({ success: false, message: `unknown job: ${name}` });
                     return undefined;
                 }
-                return job().then((result) => {
+                // What the job resolves is its own count of what it swept, so a spec can assert it did something.
+                return job.run().then((result) => {
                     response.json({ job: name, result });
                 });
             })

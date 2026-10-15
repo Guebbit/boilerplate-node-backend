@@ -224,10 +224,20 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
         // of it at import. `createApp()` builds the app with the demo extension; its own `start()`
         // seeds `shop` (the extension's `afterBoot`) before it starts listening.
         const port = currentEnvironment().NODE_PORT ?? '3000';
-        return Promise.all([import('../src/app'), import('./support/demo')])
-            .then(([{ createApp }, { installDemo, restoreScenario }]) =>
+        return Promise.all([
+            import('../src/app'),
+            import('../src/modules'),
+            import('@kernel/registry'),
+            import('./support/demo')
+        ])
+            .then(([{ createApp }, { enabledModules }, { resolveJobs }, demo]) =>
                 createApp({
-                    extension: { install: installDemo, afterBoot: () => restoreScenario() }
+                    extension: {
+                        install: (app) => {
+                            demo.installDemo(app, resolveJobs(enabledModules));
+                        },
+                        afterBoot: () => demo.restoreScenario()
+                    }
                 }).start()
             )
             .then(() => waitUntilListening(port))

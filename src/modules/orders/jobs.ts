@@ -17,7 +17,9 @@ export const ordersJobs: readonly JobDeclaration[] = [
         schedule: '10 2 * * *',
         summary:
             "Anonymizes an order's remaining PII once its retention window has passed, and unsets a timeline row's staff text once its own window has.",
-        run: () => anonymizeDueOrders().then(() => scrubTimelineText())
+        // Resolves how many orders were anonymized — the demo profile's job lever reports it.
+        run: () =>
+            anonymizeDueOrders().then((anonymized) => scrubTimelineText().then(() => anonymized))
     },
     {
         name: 'sweep:order-effects',

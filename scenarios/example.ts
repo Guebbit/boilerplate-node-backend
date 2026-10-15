@@ -69,3 +69,9 @@ export const exampleFixtures: PinnedExample[] = [
 /** Seed this collection. Declared in `./shop-modules`'s table; walked by `seedShop`. */
 export const seedExampleCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(exampleFixtures.map((fixture) => insertIfAbsent(exampleRepository, fixture)));
+
+/**
+ * This module's entry in the `shop` fixture table. Picked up by `npm run scenarios:generate`
+ * (`scenarios/shop-modules.generated.ts`), so deleting this file deletes the entry.
+ */
+export const shopModule = { seed: seedExampleCollection };

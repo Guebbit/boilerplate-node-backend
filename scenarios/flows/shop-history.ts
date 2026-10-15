@@ -19,13 +19,14 @@ import {
     SEED_USER_EMAIL,
     SEED_USER_PASSWORD
 } from '@scenarios/accounts';
-import { SEED_PRODUCT_IDS } from '../subjects';
+import { SEED_PRODUCT_IDS } from '../product-ids';
 import { fillerProductId, openingStockFor, productFixtures } from '../products';
 import { SEED_CUSTOMER_EMAILS, SEED_CUSTOMER_IDS } from '../users';
 import { historyEdits } from '../shop-modules';
 import { withdrawalPeriodDays } from '@modules/orders/services';
 import { PLAIN_PASSWORD } from '@modules/users/factories';
 import { signIn, type Caller } from './client';
+import { backdateHistory } from './backdate';
 import {
     startProcessing,
     shipOrder,
@@ -48,18 +49,6 @@ import {
     syncPayment,
     type Line
 } from './actions';
-
-/** What the flows produced: the guarantee-name → row-id map, and how far back each order sits. */
-export interface ShopHistory {
-    /** `order.paid`, `payment.refunded`, … — merged into `GET /__test/scenario`'s `subjects`. */
-    subjects: Record<string, string>;
-
-    /**
-     * Order id → how many days the whole order moves back, itself and everything it produced.
-     * `0` means today, which is where the two orders still holding stock have to stay.
-     */
-    ages: Record<string, number>;
-}
 
 /**
  * The oldest order in the shop, in days.
@@ -360,10 +349,13 @@ const requireBankTransfer = (owner: Caller): Promise<void> =>
  * after it. The same reasoning puts the ban last.
  *
  * @param baseUrl - a listening app, without a trailing slash
- * @returns the subject ids and per-order ages the backdating pass needs
+ * @returns the flow-produced subject ids (`order.paid`, `payment.refunded`, …), after every order
+ *          has been moved into the past (`./backdate`)
  * @throws {ScenarioFlowError} on any call that should have succeeded and did not
  */
-export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> => {
+export const driveShopHistory = async (
+    baseUrl: string
+): Promise<Readonly<Record<string, string>>> => {
     const owner = await signIn(baseUrl, SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD);
     const customer = await signIn(baseUrl, SEED_USER_EMAIL, SEED_USER_PASSWORD);
 
@@ -637,5 +629,7 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
 
     ages[subjects['order.deliveredLongAgo']] = OLDEST_DAYS;
 
-    return { subjects, ages: { ...ages, ...windowAges } };
+    await backdateHistory({ ...ages, ...windowAges });
+
+    return subjects;
 };

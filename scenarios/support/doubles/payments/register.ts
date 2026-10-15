@@ -4,7 +4,7 @@
  * nothing and the payments module is read only when something opens an intent.
  *
  * Its own folder, with `./fake`, because `payments` is a `group: shop` module and `demo:remove`
- * deletes the folder with it — the one edit left in `../register.ts` is the import and the call.
+ * deletes the folder with it — `../modules.generated.ts` is rebuilt from the folders that remain.
  */
 
 import { registerPaymentProvider } from '@modules/payments/providers/registry';
@@ -46,6 +46,6 @@ export const lazyFakePaymentProvider: PaymentProvider = {
 };
 
 /** Puts the fake PSP into the payments registry, under `fake`. */
-export const registerPaymentDouble = (): void => {
+export const registerDouble = (): void => {
     registerPaymentProvider('fake', lazyFakePaymentProvider);
 };

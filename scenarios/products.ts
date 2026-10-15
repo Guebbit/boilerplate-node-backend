@@ -26,7 +26,7 @@ import { FILLER_IMAGE_ROLE_KEYS, FILLER_PRODUCTS, fillerProductId } from './prod
  */
 export { fillerProductId } from './products-filler';
 import productImages from './products-images.generated.json';
-import { SEED_PRODUCT_IDS } from './subjects';
+import { SEED_PRODUCT_IDS } from './product-ids';
 import { makeProduct, type ProductOverrides } from '@modules/products/factories';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { productRepository } from '@modules/products/repository';
@@ -518,3 +518,11 @@ export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
                 )
             ).then(() => outcomes)
     );
+
+/**
+ * This module's entry in the `shop` fixture table. Picked up by `npm run scenarios:generate`
+ * (`scenarios/shop-modules.generated.ts`), so deleting this file deletes the entry.
+ * Waits for `locales`: a product write goes through `planTranslations`/`writeTranslations`, which needs the
+ * fallback locale to already exist as an ACTIVE row (`@modules/locales/services/translations.ts`'s `planSlot`).
+ */
+export const shopModule = { seed: seedProductsCollection, after: ['locales'] };

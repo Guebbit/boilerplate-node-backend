@@ -10,22 +10,15 @@
 import type { SeedOutcome } from '@scenarios/seed';
 import type { WaveEntry } from './waves';
 import type { Caller } from './flows/client';
-import { seedAddressBooksCollection } from './addresses';
-import { seedExampleCollection } from './example';
-import { driveLocaleEntryEdit, seedLocalesCollection } from './locales';
-import { seedProductsCollection } from './products';
-import { seedUsersCollection } from './users';
-import { seedWebhooksCollection } from './webhooks';
-import { seedWishlistsCollection } from './wishlist';
+import { shopModuleFixtures } from './shop-modules.generated';
 
 /** One `shopModules` entry: its fixtures, what it waits for, and whether `blank` also wants it. */
 export interface ShopModuleEntry {
     seed: () => Promise<SeedOutcome[]>;
     /**
      * Other `shopModules` entries this one's write depends on — see `./waves`'s `WaveEntry` for
-     * what a name absent from the table means. `products` names `locales` here: its write goes
-     * through `planTranslations`/`writeTranslations`, which requires the fallback locale to
-     * already exist as an ACTIVE row (`@modules/locales/services/translations.ts`'s `planSlot`).
+     * what a name absent from the table means: it is ignored, so an entry survives the deletion
+     * of the one it waited for.
      */
     after?: readonly string[];
     /**
@@ -36,9 +29,10 @@ export interface ShopModuleEntry {
      */
     baseline?: boolean;
     /**
-     * A demo-history step this entry contributes, driven by `flows/shop-history.ts` — the module
-     * that owns a piece of the story owns writing it, rather than the flow hardcoding a call into
-     * a route that stops existing the day this entry does.
+     * A demo-history step this entry contributes, driven by whatever scenario calls
+     * `Scenario.drive` (`./index.ts`) — the module that owns a piece of the story owns writing
+     * it, rather than the flow hardcoding a call into a route that stops existing the day this
+     * entry does.
      */
     driveHistoryEdit?: (owner: Caller) => Promise<void>;
 }
@@ -46,26 +40,16 @@ export interface ShopModuleEntry {
 /**
  * Every module with `shop` fixtures — the rows that exist BEFORE anybody uses the shop.
  *
+ * Collected from the `shopModule` export of each `scenarios/<module>.ts` (`./shop-modules.generated`),
+ * not listed here: a module's entry is added or removed by adding or deleting its file.
  * Orders, payments, shipments, stock movements, reservations, carts and audit entries are
- * deliberately absent: those are what using the shop PRODUCES, and `./flows/shop-history.ts`
- * produces them by using it. See: docs/tools/demo-profile.md#how-a-scenario-is-built
+ * deliberately absent: those are what using the shop PRODUCES, once something drives it. See:
+ * docs/tools/demo-profile.md#how-a-scenario-is-built
  *
  * `satisfies`, not an annotation: an annotation would widen every key to `string`, and
  * `./check.ts`'s compile-time check reads the literal keys straight off `keyof typeof shopModules`.
  */
-export const shopModules = {
-    addresses: { seed: seedAddressBooksCollection },
-    example: { seed: seedExampleCollection },
-    locales: {
-        seed: seedLocalesCollection,
-        baseline: true,
-        driveHistoryEdit: driveLocaleEntryEdit
-    },
-    products: { seed: seedProductsCollection, after: ['locales'] },
-    users: { seed: seedUsersCollection },
-    webhooks: { seed: seedWebhooksCollection },
-    wishlist: { seed: seedWishlistsCollection }
-} satisfies Record<string, ShopModuleEntry>;
+export const shopModules = shopModuleFixtures satisfies Record<string, ShopModuleEntry>;
 
 /**
  * Reshape a `shopModules`-like table into what `./waves`'s `runInWaves`/`waveOrder` take —

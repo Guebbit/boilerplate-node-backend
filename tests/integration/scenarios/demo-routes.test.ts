@@ -12,6 +12,8 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { installDemo } from '@scenarios/support/demo';
+import { resolveJobs } from '@kernel/registry';
+import { enabledModules } from '../../../src/modules';
 import { installRequestParsing, installSecurity } from '@app/security';
 import { installRequestContext } from '@app/request-context';
 import { installRoutes } from '@app/routes';
@@ -63,7 +65,7 @@ afterAll(emptyFileSandbox);
 const testApp = () => {
     const app = express();
     app.use(express.json());
-    installDemo(app);
+    installDemo(app, resolveJobs(enabledModules));
     return app;
 };
 
@@ -82,7 +84,7 @@ const drivableApp = () => {
     installSecurity(app);
     installRequestParsing(app);
     installRequestContext(app);
-    installDemo(app);
+    installDemo(app, resolveJobs(enabledModules));
     installRoutes(app);
     installErrorHandling(app);
     return app;

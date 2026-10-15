@@ -17,7 +17,7 @@
 import { registerMailTransport } from '@infrastructure/adapters/mail-transports';
 import { logMailTransport } from './mail-log';
 import { outboxMailTransport } from './mail-outbox';
-import { registerPaymentDouble } from './payments/register';
+import { registerModuleDoubles } from './modules.generated';
 import { registerWebhookSinkExemption } from './webhook-sink';
 
 /**
@@ -25,7 +25,7 @@ import { registerWebhookSinkExemption } from './webhook-sink';
  * replaced, not duplicated.
  */
 export const registerDoubles = (): void => {
-    registerPaymentDouble();
+    registerModuleDoubles();
     registerMailTransport('log', logMailTransport);
     registerMailTransport('outbox', outboxMailTransport);
     registerWebhookSinkExemption();

@@ -28,7 +28,7 @@ It is also the lightest way for a human to get a working API for anything — a 
 | `GET /__test/scenario`    | What is currently restored: the name, every seed account's login, and `subjects` — one row id per guarantee name (`order.paid`, `product.outOfStock`, …). The only way to address a specific order, since order ids are minted at boot rather than pinned                                                                                                                                                             |
 | `GET /__test/clock`       | The demo clock: `{ now, offsetMs }` — what `Date.now()` answers, and how far it is ahead of real time                                                                                                                                                                                                                                                                                                                 |
 | `POST /__test/clock`      | Move the clock FORWARD: `{ "advanceMs": 3600000 }`. Never back (a negative or non-numeric value is a 400). Moves nothing else: a job that should react is triggered through its own door — the reservation sweep is `POST /inventory/reservations/sweep`. A restore puts it back to real time. Jumps beyond the refresh-token lifetime end the session, so log in again                                               |
-| `POST /__test/jobs/:name` | Run one background job now, through the same service function its `scripts/ops/` script calls. `reap-orders` scrubs the PII of orders past their retention window and answers `{ job, result }` (how many it scrubbed); any other name is a 404. Move the clock first, then run the job                                                                                                                               |
+| `POST /__test/jobs/:name` | Run one declared background job now (`reap:orders` is `reap-orders`: the colon becomes a dash), through the same function the cron runner calls. `reap-orders` scrubs the PII of orders past their retention window and answers `{ job, result }` (how many it scrubbed); any name no enabled module declares is a 404. Move the clock first, then run the job                                                        |
 | `GET /__test/emails`      | The emails the app "sent" since the last restore. In demo mode the mailer (`src/infrastructure/adapters/mailer.ts`) sends through the `outbox` transport (`scenarios/support/doubles/mail-outbox.ts`, a [test double](./test-doubles.md)), which records to memory instead of talking to SMTP, with the reset/verify token lifted out of the link — a password-reset spec is the token in the email, or it is nothing |
 
 The routes are unauthenticated on purpose: the profile only ever binds beside an in-memory database that `npm run demo` created seconds earlier. There is nothing to protect and no deployment that mounts them — the code is outside `src/`, and `scenarios/run-server.ts` is the only caller that passes it.
@@ -214,10 +214,37 @@ spec that CREATES what it then asserts on, rather than reading a furnished shop'
 run scenario:apply -- blank` seeds it against a real database exactly like `shop` does, and
 `{ "scenario": "blank" }` on `POST /__test/restore` selects it here.
 
+### The scenario registries are generated
+
+Nothing central lists the shop. Each file declares what it is, and `npm run scenarios:generate`
+(a step of `npm run regenerate`, held by `npm run check:scenarios`) collects them:
+
+| File                                             | Export             | Collected into                                      |
+| ------------------------------------------------ | ------------------ | --------------------------------------------------- |
+| `scenarios/<module>.ts`                          | `shopModule`       | `shopModuleFixtures` in `shop-modules.generated.ts` |
+| `scenarios/<name>.scenario.ts`                   | `scenario`         | `scenarioFixtures` in `scenarios.generated.ts`      |
+| `scenarios/support/doubles/<module>/register.ts` | `registerDouble`   | `registerModuleDoubles` in `modules.generated.ts`   |
+| `scenarios/values/<module>.ts`                   | `collectionValues` | scanned by the client-collections bundler           |
+
+```mermaid
+flowchart LR
+    Strip["demo:remove<br/>deletes files only"] --> Gone["scenarios/shop.scenario.ts<br/>scenarios/products.ts<br/>scenarios/values/products.ts ..."]
+    Gone --> Gen["npm run scenarios:generate"]
+    Gen --> Reg["shop-modules.generated.ts<br/>scenarios.generated.ts<br/>modules.generated.ts"]
+    Reg --> Index["scenarios/index.ts<br/>SCENARIOS = shop? + blank"]
+    Index --> Default["DEFAULT_SCENARIO<br/>shop if registered, else blank"]
+```
+
+So the strip only deletes. `DEFAULT_SCENARIO` is derived: `shop` while a `shop` scenario is
+registered, `blank` once it is gone, because a default that names a scenario that no longer exists
+would be a lie. A scenario that backdates what it wrote does so inside its own `drive`, so the
+registry knows nothing about orders.
+
 ### Row ids are not literals
 
-Products, languages and accounts keep pinned ids — `scenarios/subjects.ts` is the one place they
-are written. Orders, payments and shipments do not: they are minted when the flows run. Ask
+Products, languages and accounts keep pinned ids — `scenarios/subjects.ts` holds the two
+foundation accounts, and a module's own rows are pinned beside its fixtures
+(`scenarios/product-ids.ts`). Orders, payments and shipments do not: they are minted when the flows run. Ask
 `GET /__test/scenario` for them by guarantee name, or chain a list request. Each module declares
 the names it promises in its own `module.ts` (`AppModule.scenario`), and
 `tests/integration/scenarios/shop.test.ts` builds the whole scenario for real and holds the two

@@ -1,7 +1,8 @@
 /**
  * @module
- * The scenario registry: every named, whole-database state this repo knows how to seed, plus the
- * `shop` scenario's own table of per-module fixtures. Every file in this folder imports its
+ * The scenario registry: every named, whole-database state this repo knows how to seed — `blank`,
+ * plus each `scenarios/<name>.scenario.ts` file (`./scenarios.generated`). Every file in this folder
+ * imports its
  * module's repository, model and factories directly (never the other way), so a production image
  * can omit this whole folder and nothing under `src/` notices.
  *
@@ -15,32 +16,13 @@
  */
 
 import type { Express } from 'express';
-import { asWaveEntries, shopModules } from './shop-modules';
-import { runInWaves } from './waves';
 import { seedBlank } from './blank';
-import { seedAccessModel } from './accounts';
-import { SHOP_SUBJECTS } from './subjects';
+import { scenarioFixtures } from './scenarios.generated';
 import { withLoopbackServer } from './flows/loopback';
 import { withoutHumanChallenge } from './support/no-human-challenge';
-import { driveShopHistory, type ShopHistory } from './flows/shop-history';
-import { backdateHistory } from './flows/backdate';
 import type { SeedOutcome } from '@scenarios/seed';
 
 export { shopModules } from './shop-modules';
-
-/**
- * The `shop` scenario's STARTING rows: the access model, then every `shopModules` entry, in the
- * fewest sequential waves its `after` graph allows (`./waves`) — `products` waits for `locales`,
- * everything else runs from the first wave. Nothing can resolve a caller until there is a shop to
- * be a member of, which is why the access model runs before any of it.
- *
- * A shop seeded and never driven has an empty catalogue shelf — every product starts at
- * `onHand: 0` and takes delivery from {@link buildScenario}'s flow run.
- */
-const seedShop = (): Promise<SeedOutcome[]> =>
-    seedAccessModel()
-        .then(() => runInWaves(asWaveEntries(shopModules)))
-        .then((outcomes) => outcomes.flat());
 
 /** One named, whole-database state: the rows it starts from, and the history it then lives. */
 interface Scenario {
@@ -48,10 +30,12 @@ interface Scenario {
     seed: () => Promise<SeedOutcome[]>;
 
     /**
-     * Drive the application until the shop has a past, against a base URL that is already
-     * listening. Absent for a scenario with nothing to live through.
+     * Drive the application until it has a past, against a base URL that is already listening.
+     * Absent for a scenario with nothing to live through. Resolves the EXTRA subjects that drive
+     * produced (an order id, say); a scenario that also backdates what it wrote does so inside
+     * this function, before resolving.
      */
-    drive?: (baseUrl: string) => Promise<ShopHistory>;
+    drive?: (baseUrl: string) => Promise<Readonly<Record<string, string>>>;
 
     /** Guarantee name → row id, for the rows {@link Scenario.seed} pinned rather than produced. */
     subjects: Readonly<Record<string, string>>;
@@ -63,18 +47,12 @@ interface Scenario {
  * in exactly one place.
  */
 export const SCENARIOS = {
-    shop: { seed: seedShop, drive: driveShopHistory, subjects: SHOP_SUBJECTS },
+    ...scenarioFixtures,
     blank: { seed: seedBlank, subjects: {} }
 } satisfies Record<string, Scenario>;
 
 /** A name {@link SCENARIOS} actually knows how to seed. */
 export type ScenarioName = keyof typeof SCENARIOS;
-
-/**
- * The scenario every caller falls back to when none was named — the shop, since a demo of an
- * ecommerce boilerplate with no catalogue in it demonstrates nothing.
- */
-export const DEFAULT_SCENARIO: ScenarioName = 'shop';
 
 /**
  * Whether `name` is one {@link SCENARIOS} carries, narrowing it to {@link ScenarioName}.
@@ -90,12 +68,25 @@ export const isScenarioName = (name: string): name is ScenarioName =>
     Object.hasOwn(SCENARIOS, name);
 
 /**
+ * `preferred` when {@link SCENARIOS} carries it, else `blank`.
+ * @param preferred - the scenario a deployment with a catalogue is demonstrated with
+ */
+const scenarioOr = (preferred: string): ScenarioName =>
+    isScenarioName(preferred) ? preferred : 'blank';
+
+/**
+ * The scenario every caller falls back to when none was named: `shop` while the repo carries one
+ * (a demo of an ecommerce boilerplate with no catalogue in it demonstrates nothing), else `blank`.
+ * Derived, so deleting the shop scenario needs no edit here.
+ */
+export const DEFAULT_SCENARIO: ScenarioName = scenarioOr('shop');
+
+/**
  * Seed a scenario into the CURRENTLY EMPTY database and, where it has one, live its history:
- * drive the real flows against a throwaway loopback listener, then move each order into the past.
+ * drive the real flows against a throwaway loopback listener.
  *
- * One function rather than three exported steps because the three have exactly one legitimate
- * order, and it is not obvious: nothing can be driven before the rows exist, and nothing can be
- * backdated before it has been driven.
+ * One function rather than two exported steps because they have exactly one legitimate order:
+ * nothing can be driven before the rows exist.
  *
  * @param name - which scenario
  * @param app - the Express application, for the loopback listener the flows are driven against.
@@ -117,17 +108,8 @@ export const buildScenario = (
         seed()
             // The flows are a script: they can solve no human challenge, so the provider is off while they run.
             .then(() =>
-                drive && app
-                    ? withoutHumanChallenge(() => withLoopbackServer(app, drive))
-                    : undefined
+                drive && app ? withoutHumanChallenge(() => withLoopbackServer(app, drive)) : {}
             )
-            .then((history) =>
-                history
-                    ? backdateHistory(history.ages).then(() => ({
-                          ...subjects,
-                          ...history.subjects
-                      }))
-                    : subjects
-            )
+            .then((extra) => ({ ...subjects, ...extra }))
     );
 };

@@ -27,6 +27,9 @@ asyncapi.public.yaml                                           linguist-generate
 
 # ── Realtime types, generated from the async contract ────────────────────────────────────────
 src/types/asyncapi.generated.ts                                linguist-generated=true
+scenarios/shop-modules.generated.ts                           linguist-generated=true
+scenarios/scenarios.generated.ts                               linguist-generated=true
+scenarios/support/doubles/modules.generated.ts                 linguist-generated=true
 
 # ── The orval client, generated from openapi.yaml ────────────────────────────────────────────
 api/**                                                         linguist-generated=true
