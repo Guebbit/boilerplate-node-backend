@@ -15,7 +15,7 @@ import { holdNoteRetentionDays } from '../config';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * `scripts/ops/reap-delivery.ts`'s sweep. Unsets `holdNote` on every fulfillment order whose
+ * `reap:delivery`'s sweep. Unsets `holdNote` on every fulfillment order whose
  * `updatedAt` is older than `NODE_HOLD_NOTE_RETENTION_DAYS`. `updatedAt`, not a closing date: a
  * fulfillment order held forever never closes.
  *

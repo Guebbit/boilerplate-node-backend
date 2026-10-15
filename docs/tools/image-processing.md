@@ -70,7 +70,7 @@ flowchart LR
 | `products` writeback                             | `src/modules/products/repository.ts` → `writebackImage`                      |
 | `users`/`account` writeback                      | `src/modules/users/repository.ts` → `writebackImage`                         |
 | `example` writeback (the copyable template)      | `src/modules/example/repository.ts` → `writebackImage`                       |
-| Quarantine reaper                                | `scripts/ops/reap-quarantine.ts`                                             |
+| Quarantine reaper                                | `reap:quarantine`                                                            |
 
 ## How it's used
 

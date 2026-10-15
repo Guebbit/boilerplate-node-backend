@@ -343,7 +343,7 @@ export const deleteConfirmEmail = (locale: string, name: string): EmailContent =
 };
 
 /**
- * Inactivity, stage one: `scripts/ops/reap-inactive-accounts.ts` warning that the
+ * Inactivity, stage one: `reap:inactive-accounts` warning that the
  * account will be deactivated, then erased, unless the owner signs back in.
  */
 export const inactivityWarningEmail = (

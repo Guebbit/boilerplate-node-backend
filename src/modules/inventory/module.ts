@@ -24,12 +24,14 @@ import './events';
 // Registers the two domain gauges with the metrics registry at module load.
 import './metrics';
 import { inventoryConfig } from './config';
+import { inventoryJobs } from './jobs';
 
 /** This module's manifest entry: routes, the two domain gauges, and locales. */
 export default {
     name: 'inventory',
     basePath: '/inventory',
     routes: router,
+    jobs: inventoryJobs,
     config: [inventoryConfig.slice],
     /*
      * `products` cannot call this module back (it already imports `products`, and the graph must

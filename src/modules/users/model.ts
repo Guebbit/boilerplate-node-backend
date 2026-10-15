@@ -43,7 +43,7 @@ export interface UserRecord extends Omit<
     deletedAt?: Date;
 
     /**
-     * Stamped by `scripts/ops/reap-inactive-accounts.ts` when it warns this account about
+     * Stamped by `reap:inactive-accounts` when it warns this account about
      * impending removal — never set anywhere else. Absent means "never warned". The soft-delete
      * stage counts its grace from this date; an account active again since is warned afresh.
      */
@@ -64,7 +64,7 @@ export interface UserRecord extends Omit<
     lastApiKeyUseAt?: Date;
 
     /**
-     * Stamped by `scripts/ops/reap-inactive-accounts.ts` once every module's `personalData.minimise`
+     * Stamped by `reap:inactive-accounts` once every module's `personalData.minimise`
      * hook has run for this account. An account active again since is minimised afresh when it goes
      * quiet again. Never on the wire.
      */
@@ -72,7 +72,7 @@ export interface UserRecord extends Omit<
 
     /**
      * Who soft-deleted the account, when it was not a person: `reaper` marks
-     * `scripts/ops/reap-inactive-accounts.ts`'s own soft delete, the only thing its hard-delete
+     * `reap:inactive-accounts`'s own soft delete, the only thing its hard-delete
      * stage may later erase. Cleared by a restore. Never on the wire.
      */
     deletedBy?: 'reaper';

@@ -1,7 +1,7 @@
 /**
  * @module
  * Brings up the one global i18next instance every entry point shares: `app.ts`'s real boot,
- * `reap-inactive-accounts.ts` rendering email copy outside the HTTP process, and jest's own
+ * `scripts/ops/run-job.ts` rendering email copy outside the HTTP process, and jest's own
  * global setup binding the suite's `en`. Each caller owns HOW it finds its locale directories — a
  * module registry, a disk glob, or a mock-safe read done before the framework installs — so this
  * only takes the resolved list.

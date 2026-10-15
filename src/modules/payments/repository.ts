@@ -389,7 +389,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
 
     /**
      * Delete every payment attempt that never became money and has sat untouched since before
-     * `cutoff` — `scripts/ops/reap-payments.ts`'s sweep. Only the statuses in `REAPABLE_PAYMENT_STATUSES`
+     * `cutoff` — `reap:payments`'s sweep. Only the statuses in `REAPABLE_PAYMENT_STATUSES`
      * go, however old: `succeeded` is an invoice, kept forever like `orders`' own records, and a
      * status added later is kept until someone names it reapable.
      * See `docs/modules/payments.md`'s retention section for the reasoning.

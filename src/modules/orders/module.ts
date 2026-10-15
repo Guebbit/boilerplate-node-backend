@@ -36,6 +36,7 @@ import {
 import { ORDER_CANCELLED, ORDER_CREATED, ORDER_STATUS_CHANGED } from './events';
 import { ordersConfig } from './config';
 import { ordersRateLimits } from './rate-limits';
+import { ordersJobs } from './jobs';
 
 /**
  * This module's public (webhook-visible) events — `webhooks/services/publish.ts`
@@ -72,6 +73,7 @@ export default {
     name: 'orders',
     basePath: '/orders',
     routes: router,
+    jobs: ordersJobs,
     publicEvents,
     // Bank transfer, the order rules and the order link: see `./config`.
     config: [ordersConfig.slice],

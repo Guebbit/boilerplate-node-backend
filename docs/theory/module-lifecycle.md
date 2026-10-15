@@ -174,8 +174,7 @@ A new `package.json` dependency this module alone needs is this module's, the mo
 imports it — no registry entry, just the vetting rules and a `## Libraries` section on the
 module's page. See [Libraries a module owns](./modules.md#libraries-a-module-owns).
 
-**A config line outside the module is still the module's.** A scheduled job's `docker/crontab`
-line, a compose service only it needs, an `.env-example` variable nothing else reads — none of
+**A config line outside the module is still the module's.** A compose service only it needs, an `.env-example` variable nothing else reads — none of
 these can live under `src/modules/<name>/`, but deleting the module should still mean deleting
 them. Wherever the file format allows a comment, that line carries:
 
@@ -183,12 +182,11 @@ them. Wherever the file format allows a comment, that line carries:
 # WARNING: owned by the <name> module — delete it when removing the module (docs/modules/<name>.md)
 ```
 
-`package.json` is the one exception — its own comments do not survive `npm install`, so its
-scripts are listed on the module's page instead (see step 5 below). A `scripts/ops/*.ts` script's own
-docblock names the `npm run` entry and crontab line that go with it, the same way; see
-`scripts/ops/sweep-webhook-retries.ts` for the pattern. `tests/cross-cutting/scheduled-jobs.test.ts` is
-what turns a forgotten crontab line, or a script pointing at a file that no longer exists, into a
-failing test rather than a silent 2am cron failure.
+A module's scheduled jobs are the exception to the exception: they are declared on its manifest
+(`jobs`), and `npm run jobs:generate` writes `docker/crontab` and the `reap:*`/`sweep:*` npm scripts
+from them, so there is no line to remember to delete. `tests/cross-cutting/scheduled-jobs.test.ts`
+holds the declarations to their rules, and `npm run check:jobs` holds the generated files to them.
+See `sweep:webhook-retries` (`src/modules/webhooks/jobs.ts`) for the pattern.
 
 The manifest is the whole contract between the domain and the application:
 

@@ -3,8 +3,8 @@
  * `npm run demo:remove` — the actual one-command strip. `measure:demo-strip` is its measuring
  * twin: same recipe, run against a scratch copy.
  *
- * Deletes every `group: shop` and `group: example` module folder, the reap/sweep scripts and
- * `docker/crontab`/`package.json` lines that belong to one, the seed images, and the demo
+ * Deletes every `group: shop` and `group: example` module folder (its scheduled jobs go with it,
+ * and `regenerate` rewrites the crontab), the seed images, and the demo
  * catalogue's own scenario data — then edits the handful of central files (`src/modules.ts`,
  * `scripts/contracts/client-collections-bundle.ts`, `scenarios/*`) that would otherwise stop the
  * repo compiling. See `docs/getting-started-new-project.md` for what this promises and does not.

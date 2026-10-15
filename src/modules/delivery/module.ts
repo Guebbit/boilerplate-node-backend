@@ -42,6 +42,7 @@ import { presentExportFulfillmentOrder, presentExportShipment } from './presente
 // Also installs this module's event declarations. Reached directly, never through this module's
 // own barrel — see CLAUDE.md's module-barrel rule.
 import { SHIPMENT_DELIVERED, SHIPMENT_SHIPPED, type ShipmentEventPayload } from './events';
+import { deliveryJobs } from './jobs';
 
 /**
  * What both `shipment.*` webhooks carry: the shipment, its fulfillment order and what is in it.
@@ -80,6 +81,7 @@ export default {
     name: 'delivery',
     basePath: '/delivery',
     routes: router,
+    jobs: deliveryJobs,
     config: [deliveryConfig.slice],
     publicEvents,
     personalData: [

@@ -27,6 +27,7 @@ import {
     reencryptWebhookSecrets
 } from './services';
 import { webhooksConfig } from './config';
+import { webhooksJobs } from './jobs';
 
 /**
  * Once every enabled module is known, collect their `publicEvents` declarations and subscribe —
@@ -52,6 +53,7 @@ export default {
     name: 'webhooks',
     basePath: '/webhooks',
     routes: router,
+    jobs: webhooksJobs,
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates'),
     onRegistered,

@@ -99,7 +99,7 @@ const expireBatch = async (stale: readonly { orderId: unknown }[]): Promise<numb
  * leaves the `held` set, so a repeated read cannot see it twice.
  *
  * @param context - audit context for `ADMIN_RESERVATIONS_SWEPT`; the HTTP route always passes
- *   one, but `scripts/ops/sweep-reservations.ts`'s own scheduled run does not, so the recurring
+ *   one, but `sweep:reservations`'s own scheduled run does not, so the recurring
  *   cron sweep writes no audit row — only an operator's on-demand call does
  * @returns how many holds were expired
  */

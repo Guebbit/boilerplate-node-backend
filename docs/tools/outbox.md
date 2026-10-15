@@ -55,7 +55,7 @@ does: a unique `(subscriptionId, eventId)` index turns a redelivered fan-out int
 | ----------------------------------------- | -------------------------------------------------------- |
 | Model, `enqueueOutboxEvent`, relay, nudge | `src/kernel/outbox.ts`                                   |
 | `meta.eventId` on the bus                 | `src/kernel/events.ts` (`DomainEventMeta`)               |
-| Backstop relay, every minute              | `scripts/ops/sweep-outbox.ts` (`npm run sweep:outbox`)   |
+| Backstop relay, every minute              | `sweep:outbox` (`npm run sweep:outbox`)                  |
 | Counters                                  | `src/infrastructure/observability/metrics-outbox.ts`     |
 | One write + its event, atomically         | `announceInTransaction` in `src/kernel/outbox.ts`        |
 | …inside a transaction the caller owns     | `announceWithin` in `src/kernel/outbox.ts`               |

@@ -31,6 +31,7 @@ import { paymentsRateLimits } from './rate-limits';
 import { PAYMENT_SUCCEEDED, PAYMENT_FAILED, PAYMENT_REFUNDED } from './events';
 import { paymentsConfig } from './config';
 import { paymentProviderProbe } from './providers';
+import { paymentsJobs } from './jobs';
 
 /**
  * This module's public (webhook-visible) events — `webhooks/services/publish.ts`
@@ -72,6 +73,7 @@ export default {
     name: 'payments',
     basePath: '/payments',
     routes: router,
+    jobs: paymentsJobs,
     publicEvents,
     /** The webhook and card-testing budgets — see `./rate-limits.ts`. */
     rateLimits: paymentsRateLimits,

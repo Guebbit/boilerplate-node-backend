@@ -113,7 +113,7 @@ export const cancelPendingEmail = (user: UserDocument): Promise<UserDocument> =>
 };
 
 /**
- * Stamp that an inactive account has been warned, so the reaper (`scripts/ops/reap-inactive-accounts.ts`)
+ * Stamp that an inactive account has been warned, so the reaper (`reap:inactive-accounts`)
  * does not warn it twice. The one field this operation may touch.
  */
 export const markInactivityWarned = (user: UserDocument): Promise<UserDocument> => {

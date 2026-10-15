@@ -582,7 +582,7 @@ const piiClockExpression = (now: Date, retentionDays: number) => ({
 
 /**
  * Unset `userId` on every order this account placed, and mark each for
- * `scripts/ops/reap-orders.ts` to scrub later — `users`' `personalData.erase` hook. The order row
+ * `reap:orders` to scrub later — `users`' `personalData.erase` hook. The order row
  * is never touched otherwise: it is the invoice, kept whole until its own `anonymizeAfter`.
  *
  * An aggregation-pipeline update, not a flat `$set`, because the clock runs PER ORDER: a decade-old
@@ -638,7 +638,7 @@ const startPiiClock = (userId: string, retentionDays: number): Promise<number> =
         .then(({ modifiedCount }) => modifiedCount);
 
 /**
- * `scripts/ops/reap-orders.ts`'s sweep: every order whose `anonymizeAfter` has elapsed loses its
+ * `reap:orders`'s sweep: every order whose `anonymizeAfter` has elapsed loses its
  * remaining PII in one write.
  *
  * Scrub:      both embedded addresses and `notes` are UNSET; `email` is replaced, since the schema

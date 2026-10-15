@@ -14,7 +14,7 @@ import { returnTextRetentionDays } from '../config';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * `scripts/ops/reap-returns.ts`'s sweep. Unsets `note` and `declineReason` on every return whose
+ * `reap:returns`'s sweep. Unsets `note` and `declineReason` on every return whose
  * `updatedAt` is older than `NODE_RETURN_TEXT_RETENTION_DAYS`. `updatedAt`, not the closing date:
  * an approved return whose goods never arrive never closes.
  *

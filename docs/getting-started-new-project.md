@@ -103,9 +103,9 @@ branch, or after committing whatever you had in progress. It touches:
   map, the docs index and sidebar — and their order lists are only a preference.
   The account data-export schema is among them: each module declares its section as
   `x-personal-data` in its own `openapi.yaml`, so a removed module takes its section with it.
-- **The reap/sweep scripts a shop module owns** (`scripts/ops/reap-orders.ts` and friends), found by
-  their own `Removal: owned by` doc comment rather than a second hand-kept list, plus the
-  `package.json` script and `docker/crontab` line each one has.
+- **The scheduled jobs a shop module owns** (`reap:orders` and friends) leave with its folder: each is
+  declared on the module's own manifest, and `npm run regenerate` rewrites `docker/crontab` and the
+  `package.json` scripts without them.
 - **The removed modules' test doubles** (`scenarios/support/doubles/<module>/`, such as the fake
   payment provider) and the lines that register them. See [Test doubles](./tools/test-doubles.md).
 - **The removed modules' permission keys** in `shared/authorization-roles.yaml` (every role's grants)

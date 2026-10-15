@@ -192,7 +192,7 @@ const settleWriteback = (
 ): Promise<void> =>
     writeback(documentId, key, urls).then((matched) => {
         // Only now: the urls are durably on the document, so no retry will need these bytes.
-        // Best-effort — a leftover is swept by `scripts/ops/reap-quarantine.ts` regardless.
+        // Best-effort — a leftover is swept by `reap:quarantine` regardless.
         const clearQuarantine = imageStore.removeQuarantined(key);
         if (!matched) {
             // Stale job or deleted document: nobody will ever read these urls, so they are

@@ -84,46 +84,54 @@ One config per service in the chain. Each is mounted into its container by the c
 The `cron` service in both compose files — [supercronic](https://github.com/aptible/supercronic) reading `docker/crontab` — is an
 external scheduler: the schedule is deployment configuration instead of code, and the shape
 survives a move off compose unchanged (a `CronJob` on Kubernetes, a systemd timer on a VM). It runs
-the same `scripts/ops/reap-*`/`sweep:*` entry points every one of them already documents as "meant to run
-periodically", via `scripts/run-script.ts`.
+the jobs the modules declare — one runner, `scripts/ops/run-job.ts`, via `scripts/run-script.ts`.
+
+**A job is declared once**, as a `JobDeclaration` on the manifest of the module that owns the work
+(`AppModule.jobs`), or in `src/app/jobs.ts` when it belongs to none: its name, schedule, one-line
+summary, the function that does the work, and what it needs (the event subscriptions, the
+translations, a lease). `npm run jobs:generate` (a step of `npm run regenerate`) writes the three
+things that used to be kept by hand — `docker/crontab`, the `reap:*`/`sweep:*` scripts in
+`package.json`, and the table below — and `npm run check:jobs` fails `complete` when any of them has
+drifted. Deleting a module deletes its jobs on the next regeneration.
 
 The backup schedule is **not** in `docker/crontab`: the `backup` service (the `backup` compose profile)
 builds its own crontab at start from `BACKUP_SCHEDULE` and `BACKUP_CHECK_SCHEDULE`, and runs it with
 its own supercronic, so the backup secrets stay out of the `cron` container. See [Backups](../tools/backups.md).
 
-| Job                              | Schedule (UTC) | Leased | What it does                                                                                                                                                                    |
-| -------------------------------- | -------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run reap:quarantine`        | 02:00 nightly  | No     | Deletes quarantined upload files past their retention window.                                                                                                                   |
-| `npm run reap:orphaned-images`   | 02:03 nightly  | No     | Deletes a stored image or thumbnail no document names, once it is over an hour old.                                                                                             |
-| `npm run reap:inactive-accounts` | 02:05 nightly  | Yes    | Minimises an account inactive past `NODE_INACTIVE_MINIMISE_DAYS`; with deletion turned on, warns, then soft-, then hard-deletes one inactive past `NODE_INACTIVE_ACCOUNT_DAYS`. |
-| `npm run reap:previous-emails`   | 02:07 nightly  | Yes    | Forgets the previous email of an account whose undo link has lapsed (sessions and one-time tokens delete themselves at their own expiry date).                                  |
-| `npm run reap:invoice-pdfs`      | 02:08 nightly  | No     | Deletes stored invoice and credit-note PDFs past their retention window; the next download renders again.                                                                       |
-| `npm run reap:account-exports`   | 02:09 nightly  | No     | Deletes built data exports (file and row) past `NODE_ACCOUNT_EXPORT_TTL_DAYS`; the account can ask again.                                                                       |
-| `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed, and unsets a timeline row's staff text once its own window has.                                       |
-| `npm run reap:delivery`          | 02:11 nightly  | No     | Unsets a fulfillment order's hold note once it has not changed for its retention window.                                                                                        |
-| `npm run reap:returns`           | 02:12 nightly  | No     | Unsets a return's free text (`note`, `declineReason`) once the return has not changed for its retention window.                                                                 |
-| `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                                                                                                 |
-| `npm run sweep:preorders`        | 02:20 nightly  | Yes    | Asks the buyer of a late preorder whether to keep waiting, and announces a wait left unanswered for 30 days, which `returns` cancels and refunds.                               |
-| `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.                                                                                |
-| `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.                                                                           |
-| `npm run sweep:outbox`           | every minute   | No     | Publishes every due [outbox](../tools/outbox.md) event — the backstop for the writer's own after-commit nudge.                                                                  |
-| `npm run sweep:payment-effects`  | every 5 min    | No     | Retries refunds the provider has not answered, and settles unsettled payments whose webhook never arrived.                                                                      |
-| `npm run sweep:reservations`     | every 5 min    | Yes    | Drains every stale checkout hold (batches of 200) and cancels the order behind each.                                                                                            |
-| `npm run sweep:order-effects`    | every 5 min    | No     | Re-announces `ORDER_REFUND_OWED` for a refund the event bus's one delivery attempt did not carry through.                                                                       |
+<!-- jobs:start -->
 
-`docker/crontab` and the nightly jobs above are staggered five minutes apart so they do not all
-land on the connection pool at once — each job's own header in `scripts/ops/` has the full reasoning.
-`sweep:webhook-retries`, `sweep:outbox`, `sweep:payment-effects`, `sweep:reservations` and
+| Job                              | Schedule (UTC) | Leased | What it does                                                                                                                                                                |
+| -------------------------------- | -------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run reap:quarantine`        | 02:00 nightly  | No     | Deletes quarantined upload files past their retention window.                                                                                                               |
+| `npm run reap:orphaned-images`   | 02:03 nightly  | No     | Deletes a stored image or thumbnail no document names, once it is over an hour old.                                                                                         |
+| `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.                                                                            |
+| `npm run sweep:outbox`           | every minute   | No     | Publishes every due outbox event — the backstop for the writer's own after-commit nudge.                                                                                    |
+| `npm run reap:inactive-accounts` | 02:05 nightly  | Yes    | Minimises an account inactive past NODE_INACTIVE_MINIMISE_DAYS; with deletion turned on, warns, then soft-, then hard-deletes one inactive past NODE_INACTIVE_ACCOUNT_DAYS. |
+| `npm run reap:previous-emails`   | 02:07 nightly  | Yes    | Forgets the previous email of an account whose undo link has lapsed (sessions and one-time tokens delete themselves at their own expiry date).                              |
+| `npm run reap:account-exports`   | 02:09 nightly  | No     | Deletes built data exports (file and row) past NODE_ACCOUNT_EXPORT_TTL_DAYS; the account can ask again.                                                                     |
+| `npm run reap:delivery`          | 02:11 nightly  | No     | Unsets a fulfillment order's hold note once it has not changed for its retention window.                                                                                    |
+| `npm run sweep:preorders`        | 02:20 nightly  | Yes    | Asks the buyer of a late preorder whether to keep waiting, and announces a wait left unanswered for 30 days, which `returns` cancels and refunds.                           |
+| `npm run sweep:reservations`     | every 5 min    | Yes    | Drains every stale checkout hold (batches of 200) and cancels the order behind each.                                                                                        |
+| `npm run reap:invoice-pdfs`      | 02:08 nightly  | No     | Deletes stored invoice and credit-note PDFs past their retention window; the next download renders again.                                                                   |
+| `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed, and unsets a timeline row's staff text once its own window has.                                   |
+| `npm run sweep:order-effects`    | every 5 min    | No     | Re-announces ORDER_REFUND_OWED for a refund the event bus's one delivery attempt did not carry through.                                                                     |
+| `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                                                                                             |
+| `npm run sweep:payment-effects`  | every 5 min    | No     | Retries refunds the provider has not answered, and settles unsettled payments whose webhook never arrived.                                                                  |
+| `npm run reap:returns`           | 02:12 nightly  | No     | Unsets a return's free text (`note`, `declineReason`) once the return has not changed for its retention window.                                                             |
+| `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.                                                                       |
+
+<!-- jobs:end -->
+
+The nightly jobs are staggered a few minutes apart so they do not all land on the connection pool at
+once. `sweep:webhook-retries`, `sweep:outbox`, `sweep:payment-effects`, `sweep:reservations` and
 `sweep:order-effects` run on a different schedule entirely, every 5 minutes or faster, because the
 sweep interval IS the retry/expiry granularity for what each covers — see
 [webhooks](../modules/webhooks.md#the-delivery-path),
 [payments](../modules/payments.md#one-settlement-transaction),
-[inventory](../modules/inventory-reservations.md) and [orders](../modules/orders.md). `tests/cross-cutting/scheduled-jobs.test.ts`
-asserts `docker/crontab` and `package.json`'s `reap:*`/`sweep:*` scripts agree in both directions —
-a script renamed in one and not the other is either a job that fails every run or cleanup that
-silently stops running — and that every scheduled script still names a file that exists, so
-deleting a module's `scripts/ops/*.ts` script flags its crontab line rather than leaving it to fail quietly
-at 2am.
+[inventory](../modules/inventory-reservations.md) and [orders](../modules/orders.md).
+`tests/cross-cutting/scheduled-jobs.test.ts` holds the declarations to their rules (a unique name, a
+five-field schedule, a `reap:`/`sweep:` prefix) and `npm run check:jobs` holds the generated files
+to the declarations, so a job that exists in one place and not the other cannot reach `main`.
 
 **Mutual exclusion.** `deploy: replicas: 1` on the `cron` service is what actually stops two passes
 racing over the same collection — nothing here is meant to scale. `withLease`

@@ -145,7 +145,7 @@ export const clearTimelineActor = (userId: string, session: ClientSession): Prom
     orderEventRepository.clearActor(userId, session).then(() => undefined);
 
 /**
- * `scripts/ops/reap-orders.ts`'s second sweep: unset the free text of every row older than
+ * `reap:orders`'s second sweep: unset the free text of every row older than
  * `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`. The row, its type and its codes stay.
  *
  * @returns how many rows lost their text

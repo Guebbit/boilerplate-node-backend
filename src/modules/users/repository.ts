@@ -695,7 +695,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
 
     /**
      * Every enabled, live account inactive past the warning threshold and not yet warned for this
-     * stretch of inactivity — `scripts/ops/reap-inactive-accounts.ts`'s first stage.
+     * stretch of inactivity — `reap:inactive-accounts`'s first stage.
      */
     findInactiveUnwarned: (cutoff: Date) =>
         userModel

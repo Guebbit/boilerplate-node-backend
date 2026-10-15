@@ -23,7 +23,7 @@ const customersOnly = (accounts: UserDocument[]): Promise<UserDocument[]> =>
 
 /**
  * Every account inactive past the warning threshold, never yet warned —
- * `scripts/ops/reap-inactive-accounts.ts`'s first stage. Staff and administrators are never in it.
+ * `reap:inactive-accounts`'s first stage. Staff and administrators are never in it.
  */
 export const findInactiveUnwarned = (cutoff: Date) =>
     userRepository.findInactiveUnwarned(cutoff).then(customersOnly);

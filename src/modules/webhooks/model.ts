@@ -286,7 +286,7 @@ webhookDeliverySchema.index({ subscriptionId: 1, createdAt: -1 });
 webhookDeliverySchema.index({ status: 1, createdAt: -1 });
 
 // The retry sweep's own read: due, retryable rows, in no particular order — see
-// `scripts/ops/sweep-webhook-retries.ts`.
+// `sweep:webhook-retries`.
 webhookDeliverySchema.index({ status: 1, nextAttemptAt: 1 });
 
 // The same read's other half: a STRANDED in-flight row whose lease already expired.

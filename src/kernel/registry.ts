@@ -246,6 +246,51 @@ export interface PersonalDataSubject {
 }
 
 /**
+ * One scheduled job: a unit of background work cron runs on a schedule. Declared once, on the
+ * module that owns the work (or in `src/app/jobs.ts` for work that belongs to no module);
+ * `npm run jobs:generate` derives `docker/crontab` and the `npm run <name>` scripts from it, and
+ * `scripts/ops/run-job.ts <name>` is the one runner. Deleting a module deletes its jobs with it.
+ *
+ * See: docs/reference/ops.md#scheduled-jobs
+ */
+export interface JobDeclaration {
+    /** `reap:*` for what deletes or scrubs, `sweep:*` for what retries or drains. Unique repo-wide. */
+    name: string;
+
+    /** Five-field cron expression, in the container's time zone (UTC). */
+    schedule: string;
+
+    /** What it does, in one line — the comment above its `docker/crontab` entry. */
+    summary: string;
+
+    /**
+     * The work itself, run once connected. May resolve anything: the runner discards it. Idempotent
+     * by contract, since a missed or overlapping run must cost nothing.
+     */
+    run: () => Promise<unknown>;
+
+    /**
+     * Whether the sweep needs the database BEFORE it starts. `false` for a filesystem sweep that
+     * never touches Mongo: it runs first and connects afterwards, only to record its outcome, so a
+     * Mongo outage cannot block a cleanup that never needed it. Default `true`.
+     */
+    connectFirst?: boolean;
+
+    /**
+     * Install every module's event subscriptions and, with `i18n`, load the translations before
+     * `run`. Needed by a sweep that works by emitting an event (it would be unheard otherwise) or
+     * that renders translated mail.
+     */
+    needs?: { subscriptions?: boolean; i18n?: boolean };
+
+    /**
+     * Run under a lease so only one runner at a time does the work — for a job that can outlast
+     * its interval, or whose double run is costly. The lease records the job's outcome itself.
+     */
+    lease?: { ttlMs: number };
+}
+
+/**
  * What one module holds about one person, for a data-subject export (GDPR Art. 15 and 20).
  *
  * `infrastructure/adapters/*` and the kernel itself may not import `src/modules/*` — the same wall
@@ -453,6 +498,13 @@ export interface AppModule {
     rateLimits?: readonly RateLimitBudget[];
 
     /**
+     * The scheduled jobs this module owns — see {@link JobDeclaration}. `npm run jobs:generate`
+     * collects every enabled module's into `docker/crontab` and the `npm run` scripts, so deleting
+     * the module deletes its schedule.
+     */
+    jobs?: readonly JobDeclaration[];
+
+    /**
      * Moves this module's encrypted fields onto the newest key of their ring, after a rotation.
      * `npm run reencrypt` runs every enabled module's, so deleting a module deletes its walk.
      * Most modules store nothing encrypted and have none.
@@ -644,6 +696,14 @@ export const resolvePersonalDataMinimisers = (
                   section.minimise ? [section.minimise] : []
               )
     );
+
+/**
+ * Every enabled module's {@link JobDeclaration}s, flattened in declaration order.
+ *
+ * @param appModules - the enabled module list
+ */
+export const resolveJobs = (appModules: AppModule[]): readonly JobDeclaration[] =>
+    appModules.flatMap((appModule) => appModule.jobs ?? []);
 
 /**
  * Every registered module's {@link RateLimitBudget}s, flattened in declaration order.

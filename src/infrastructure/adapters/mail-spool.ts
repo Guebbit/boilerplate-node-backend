@@ -79,7 +79,7 @@ export const discardSpooled = (key: string): Promise<void> => {
 };
 
 /**
- * Deletes every spooled attachment older than `retentionMs` — `scripts/ops/reap-mail-spool.ts`'s one
+ * Deletes every spooled attachment older than `retentionMs` — `reap:mail-spool`'s one
  * sweep. A file survives this long only when the job that spooled it never finished: see
  * `mailer.ts` and `email.worker.ts` for who is supposed to {@link discardSpooled} it first.
  *

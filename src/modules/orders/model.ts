@@ -174,7 +174,7 @@ export interface OrderDocument
     /**
      * Set alongside `userId` being unset, to `max(now, createdAt + NODE_ORDER_PII_RETENTION_DAYS)`
      * — an order already past its own window at erasure time is due almost immediately, not given
-     * a fresh retention period. `scripts/ops/reap-orders.ts` scrubs the order's remaining PII
+     * a fresh retention period. `reap:orders` scrubs the order's remaining PII
      * (email replaced; both addresses and notes unset) once this elapses; the order row itself is
      * never deleted.
      */
@@ -538,7 +538,7 @@ orderSchema.index({ email: 1 }, { name: 'orders_email' });
 /* Non-admin reads exclude soft-deleted rows (`callerScope` in `services/scope.ts`). */
 orderSchema.index({ userId: 1, deletedAt: 1 }, { name: 'orders_userId_deletedAt' });
 /*
- * `scripts/ops/reap-orders.ts`'s own sweep — NOT a TTL index: the row must survive, only its PII
+ * `reap:orders`'s own sweep — NOT a TTL index: the row must survive, only its PII
  * gets scrubbed, so nothing here may carry `expireAfterSeconds`.
  */
 orderSchema.index({ anonymizeAfter: 1 }, { name: 'orders_anonymizeAfter', sparse: true });

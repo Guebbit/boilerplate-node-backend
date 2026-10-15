@@ -28,12 +28,14 @@ import { collectPersonalData } from './services/personal-data';
 import { invoicingRateLimits } from './rate-limits';
 import { invoicingConfig } from './config';
 import { invoicingProviderProbe } from './providers';
+import { invoicingJobs } from './jobs';
 
 /** This module's manifest entry: routes, the two issuing subscriptions, and locales. */
 export default {
     name: 'invoicing',
     basePath: '/orders',
     routes: router,
+    jobs: invoicingJobs,
     config: [invoicingConfig.slice, invoicingProviderProbe.slice],
     rateLimits: invoicingRateLimits,
     // The buyer address frozen on each invoice and credit note is PII-encrypted.

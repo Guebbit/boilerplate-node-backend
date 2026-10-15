@@ -9,7 +9,7 @@
  * module — and therefore its `publicEvents` — is known.
  *
  * The queue publish is fire-and-forget from here on purpose: when it fails (no broker configured,
- * or a publish error), the row it already wrote stays `pending` and `scripts/ops/sweep-webhook-retries.ts`
+ * or a publish error), the row it already wrote stays `pending` and `sweep:webhook-retries`
  * picks it up on its next pass. With a broker the sweep re-publishes it; without one the sweep
  * sends it itself (`./sweep.ts`) — never lost, at worst delayed to the sweep interval. That is
  * the same "degrades to queued rather than to lost" story `./attempt.ts`'s `recordFailure` already

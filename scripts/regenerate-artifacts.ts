@@ -84,6 +84,11 @@ const STEPS: readonly Step[] = [
             "docs/tools/security.md's rate-limit budget table, read off every module's own manifest"
     },
     {
+        script: 'jobs:generate',
+        because:
+            "docker/crontab, the reap:*/sweep:* scripts in package.json and the jobs table in docs/reference/ops.md, from every module's declared jobs"
+    },
+    {
         script: 'docs:audit-actions',
         because:
             "docs/tools/winston.md's audit action table, read off every module's audit.ts and its call sites' target types"

@@ -26,6 +26,7 @@ import { collectPersonalData } from './services/personal-data';
 import { RETURN_REQUESTED, RETURN_RECEIVED, RETURN_CLOSED } from './events';
 import { closeReturn } from './services/close';
 import { cancelUnanswered } from './services/cancel-remainder';
+import { returnsJobs } from './jobs';
 
 /**
  * This module's public (webhook-visible) events, projected by `webhooks` through
@@ -63,6 +64,7 @@ export default {
     name: 'returns',
     basePath: '/returns',
     routes: router,
+    jobs: returnsJobs,
     config: [returnsConfig.slice],
     rateLimits: returnsRateLimits,
     publicEvents,

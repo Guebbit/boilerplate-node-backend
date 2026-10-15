@@ -16,7 +16,7 @@ import { clearTimelineActor } from './timeline';
 
 /**
  * The `personalData.erase` hook. Unsets `userId` on every order this account placed and
- * marks each for `scripts/ops/reap-orders.ts` to scrub after `NODE_ORDER_PII_RETENTION_DAYS`
+ * marks each for `reap:orders` to scrub after `NODE_ORDER_PII_RETENTION_DAYS`
  * (default 3650, ~10 years — the outer edge of common commercial record-keeping periods) FROM ITS
  * OWN `createdAt`, not from today — see `orderRepository.detachUserId`'s own per-order clock, which
  * scrubs a never-paid order AT ONCE instead: it never became the invoice this retention exists
@@ -55,7 +55,7 @@ export const startOrderPiiClock = (userId: string): Promise<void> =>
     });
 
 /**
- * `scripts/ops/reap-orders.ts`'s sweep. Scrubs the remaining PII on every order
+ * `reap:orders`'s sweep. Scrubs the remaining PII on every order
  * whose retention window (stamped by {@link detachUserId}) has elapsed.
  *
  * @returns how many orders were scrubbed

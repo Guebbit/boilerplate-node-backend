@@ -106,7 +106,7 @@ export interface ReapResult {
 
 /**
  * Deletes every file directly under `root` whose `mtime` is at or before `cutoffMs` — the one
- * sweep every retention reaper in this codebase needs (`scripts/ops/reap-quarantine.ts`,
+ * sweep every retention reaper in this codebase needs (`reap:quarantine`,
  * `mail-spool.ts#reapSpooled`). A missing `root` is not a failure — a store that never wrote
  * anything has nothing to sweep — it is logged and reported as zero. A subdirectory is left
  * alone; none of these stores ever writes one.
@@ -156,7 +156,7 @@ export const reapDirectory = (root: string, cutoffMs: number, label: string): Pr
 /**
  * Deletes every FILE directly under `root` whose basename is not in `keep` — a subdirectory is
  * left alone unconditionally, same as {@link reapDirectory}. Reference-based rather than
- * age-based: `scripts/ops/reap-orphaned-images.ts` is the one caller, for a store (a promoted
+ * age-based: `reap:orphaned-images` is the one caller, for a store (a promoted
  * image, its thumbnail) meant to outlive the process, where age says nothing about whether it is
  * still wanted — only "does something still name it" can. Age only protects the newest files: one
  * promoted a moment ago may not be saved on its row yet.

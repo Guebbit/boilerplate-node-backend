@@ -39,6 +39,7 @@ import { eraseExports } from './services/export';
 import { exportSessions, eraseSessionsAndTokens } from './services/sessions';
 import { runExportJob } from './services/export-job';
 import { reencryptTotpSecrets } from './services/reencrypt';
+import { accountJobs } from './jobs';
 
 /**
  * Everything this module installs once every enabled module is known: the auth resolver the whole
@@ -64,6 +65,7 @@ export default {
     name: 'account',
     basePath: '/account',
     routes: router,
+    jobs: accountJobs,
     /** The credential/signup/reset/MFA/password-check budgets — see `./rate-limits.ts`. */
     rateLimits: accountRateLimits,
     /*

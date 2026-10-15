@@ -17,12 +17,7 @@ import {
     stripConformanceCases,
     stripRoleGrants
 } from './demo-remove-authorization';
-import {
-    removeModuleFolders,
-    removeShopOwnedOpsScripts,
-    stripModuleRegistry,
-    type RemovalNote
-} from './demo-remove-registry';
+import { removeModuleFolders, stripModuleRegistry, type RemovalNote } from './demo-remove-registry';
 import { stripModuleDoubles, stripScenarioModuleEntries } from './demo-remove-scenarios';
 import { removeResidueTests } from './demo-remove-tests';
 
@@ -43,7 +38,6 @@ export const removeModules = (repoRoot: string, names: readonly string[]): Remov
     return [
         ...removeModuleFolders(repoRoot, names),
         stripModuleRegistry(repoRoot, names),
-        ...removeShopOwnedOpsScripts(repoRoot, names),
         stripScenarioModuleEntries(repoRoot, names),
         ...stripModuleDoubles(repoRoot, names),
         stripRoleGrants(repoRoot, removedAuthorization),
