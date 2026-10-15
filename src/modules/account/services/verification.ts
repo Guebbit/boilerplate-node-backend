@@ -51,13 +51,6 @@ const emailVerifyTokenTtlMs = (): number => accountConfig().NODE_EMAIL_VERIFY_TT
  */
 export const VERIFY_RESEND_SECONDS = 60;
 
-/**
- * The error code a client branches on to render a resend countdown rather than a generic 429.
- * Module-private, like `services/two-factor-outcomes.ts`'s equivalent: a client reads it off the response,
- * not off an exported constant.
- */
-const VERIFY_RESEND_TOO_SOON_CODE = ERROR_CODES.EMAIL_VERIFY_RESEND_TOO_SOON;
-
 /** The two kinds a link here may be. A union of the constants, so a third one cannot be passed. */
 type VerifyLinkType = typeof EMAIL_VERIFY_TOKEN_TYPE | typeof EMAIL_CHANGE_TOKEN_TYPE;
 
@@ -147,6 +140,35 @@ export const resendCooldownRemaining = (
     );
 
 /**
+ * The pacing every verification re-send shares: the cooldown first, then the recipient's mailbox
+ * budget, and only then the send. The cooldown is a promise to a client's countdown button; the
+ * budget protects a mailbox the caller chose, charged here rather than by a middleware.
+ *
+ * @param user - the account asking
+ * @param type - which kind of link is being re-sent, and so which cooldown applies
+ * @param recipient - the address the mail goes to
+ * @param send - the send itself, run only when neither refuses
+ * @returns the refusal, or what `send` answers
+ */
+const pacedSend = (
+    user: UserDocument,
+    type: VerifyLinkType,
+    recipient: string,
+    send: () => Promise<ResponseSuccess<EmailVerificationRequested>>
+): Promise<ResponseSuccess<EmailVerificationRequested> | ResponseReject> =>
+    resendCooldownRemaining(user, type).then((wait) =>
+        wait > 0
+            ? resendTooSoon(
+                  ERROR_CODES.EMAIL_VERIFY_RESEND_TOO_SOON,
+                  t('account.verify.resend-too-soon'),
+                  wait
+              )
+            : mailRecipientRefusal(recipient).then<
+                  ResponseSuccess<EmailVerificationRequested> | ResponseReject
+              >((refusal) => refusal ?? send())
+    );
+
+/**
  * `POST /account/verify-request` end to end: loads the caller's own account, refuses the three
  * states that can't be sent to, and sends. The refusals live here since
  * `requestEmailVerification` takes an already-loaded user and can't enforce its own precondition.
@@ -166,27 +188,16 @@ export const requestEmailVerificationFor = (
         if (!user) return generateReject(404, [t('users.not-found')]);
         if (user.verifiedAt) return generateReject(409, [t('account.verify.already-verified')]);
 
-        return resendCooldownRemaining(user, EMAIL_VERIFY_TOKEN_TYPE).then((wait) => {
-            if (wait > 0)
-                return resendTooSoon(
-                    VERIFY_RESEND_TOO_SOON_CODE,
-                    t('account.verify.resend-too-soon'),
-                    wait
-                );
-
-            // The recipient is the account's own stored address, so no body names it: charged here.
-            return mailRecipientRefusal(user.email).then((refusal) => {
-                if (refusal) return refusal;
-
-                return requestEmailVerification(user, context).then(() =>
-                    generateSuccess<EmailVerificationRequested>(
-                        { resendAfter: VERIFY_RESEND_SECONDS },
-                        200,
-                        t('account.verify.email-sent')
-                    )
-                );
-            });
-        });
+        // The recipient is the account's own stored address, so no body names it.
+        return pacedSend(user, EMAIL_VERIFY_TOKEN_TYPE, user.email, () =>
+            requestEmailVerification(user, context).then(() =>
+                generateSuccess<EmailVerificationRequested>(
+                    { resendAfter: VERIFY_RESEND_SECONDS },
+                    200,
+                    t('account.verify.email-sent')
+                )
+            )
+        );
     });
 
 /**
@@ -215,31 +226,20 @@ export const resendPendingEmailVerificationFor = (
                 t('account.email-change.nothing-pending')
             );
 
-        return resendCooldownRemaining(user, EMAIL_CHANGE_TOKEN_TYPE).then((wait) => {
-            if (wait > 0)
-                return resendTooSoon(
-                    VERIFY_RESEND_TOO_SOON_CODE,
-                    t('account.verify.resend-too-soon'),
-                    wait
-                );
-
-            // The recipient is the stored pending address: charged here, not by a middleware.
-            return mailRecipientRefusal(pendingEmail).then((refusal) => {
-                if (refusal) return refusal;
-
-                return sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE).then(() => {
-                    recordAudit(context, {
-                        action: accountAuditActions.AUTH_EMAIL_CHANGE_RESENT,
-                        outcome: 'success'
-                    });
-                    return generateSuccess<EmailVerificationRequested>(
-                        { resendAfter: VERIFY_RESEND_SECONDS },
-                        200,
-                        t('account.email-change.resent')
-                    );
+        // The recipient is the stored pending address.
+        return pacedSend(user, EMAIL_CHANGE_TOKEN_TYPE, pendingEmail, () =>
+            sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE).then(() => {
+                recordAudit(context, {
+                    action: accountAuditActions.AUTH_EMAIL_CHANGE_RESENT,
+                    outcome: 'success'
                 });
-            });
-        });
+                return generateSuccess<EmailVerificationRequested>(
+                    { resendAfter: VERIFY_RESEND_SECONDS },
+                    200,
+                    t('account.email-change.resent')
+                );
+            })
+        );
     });
 
 /**
