@@ -31,6 +31,7 @@ import { appendTimeline } from './timeline';
 // follows for its own writes.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { shopCurrency } from '@modules/shop';
+import type { OrderAddress } from '@types';
 
 /**
  * One line ready to be written: the request's own `{productId, quantity}` plus its resolved
@@ -40,16 +41,6 @@ import { shopCurrency } from '@modules/shop';
 export interface PlaceOrderLine {
     item: { productId: string; quantity: number };
     product: ProductSnapshot | null | undefined;
-}
-
-/** A frozen copy of a book entry, as an order embeds it — shipping or billing alike. */
-export interface PlaceOrderAddress {
-    fullName: string;
-    street: string;
-    city: string;
-    zip: string;
-    country: string;
-    phone?: string;
 }
 
 /**
@@ -62,7 +53,7 @@ export interface PlaceOrderAddress {
  * shape between the caller's own read and this function's write.
  */
 export interface PlaceOrderShipping {
-    address?: PlaceOrderAddress;
+    address?: OrderAddress;
     method?: { id: string; priceFor: (frozenLines: readonly OrderDocumentItem[]) => number };
     /** Stock hold length in minutes; `undefined` defers to `reserveForOrder`'s own default. */
     holdMinutes?: number;
@@ -78,7 +69,7 @@ export interface PlaceOrderInput {
     paymentMethod?: string;
     shipping?: PlaceOrderShipping;
     /** Who the order is invoiced to; `undefined` writes no `billingAddress` (the admin's own `POST /orders`). */
-    billingAddress?: PlaceOrderAddress;
+    billingAddress?: OrderAddress;
     /** Free-text notes the buyer left at checkout — `undefined` writes no `notes` field at all. */
     notes?: string;
     /**

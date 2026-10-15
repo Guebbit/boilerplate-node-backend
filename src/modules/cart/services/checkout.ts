@@ -28,7 +28,7 @@ import { userService } from '@modules/users';
 import { addressForCheckout, type AddressItem } from '@modules/addresses';
 import { findShippingMethod, type StaticShippingMethod } from '@modules/delivery';
 import { paymentService, type PaymentMethodInfo } from '@modules/payments';
-import type { CallerContext } from '@types';
+import type { CallerContext, CheckoutRequest, ExpectedTotal } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartRepository } from '../repository';
@@ -77,13 +77,7 @@ const toOrderAddress = (address: AddressItem) => ({
  * - `expectedTotal`: the total the buyer was shown, in minor units. A checkout that would charge
  *   another amount or currency is refused before anything is held (`CART_TOTAL_CHANGED`).
  */
-export interface CheckoutChoices {
-    addressId?: string;
-    billingAddressId?: string;
-    paymentMethod?: string;
-    notes?: string;
-    expectedTotal?: ExpectedTotal;
-}
+export type CheckoutChoices = Partial<CheckoutRequest>;
 
 /** Either half of a pre-flight step: what {@link runCheckout} needs to proceed, or why not. */
 type PreflightOutcome<T> = ({ ok: true } & T) | { ok: false; reject: ResponseReject };
@@ -322,14 +316,6 @@ const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
         }
     ]);
 };
-
-/** An order total in minor units, as the contract's `ExpectedTotal` spells it. */
-interface ExpectedTotal {
-    /** Minor units of `currency` (EUR 71.00 is 7100). */
-    amount: number;
-    /** The ISO-4217 code the amount is priced in. */
-    currency: string;
-}
 
 /**
  * What this basket would cost right now, in minor units: the items plus the chosen shipping, priced

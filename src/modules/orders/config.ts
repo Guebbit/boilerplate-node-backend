@@ -20,6 +20,7 @@ import { defineConfig } from '@infrastructure/config/define';
 import { int, text } from '@infrastructure/config/fields';
 import { frontendLink } from '@infrastructure/http/frontend-link';
 import type { OrderTransferInstructions } from '@types';
+import { createOrderBodyItemsMax, createOrderBodyItemsItemQuantityMax } from '@api/schemas.zod';
 
 /** How the shop takes a transfer, and the rules an order lives by. */
 export const ordersConfig = defineConfig({
@@ -86,19 +87,13 @@ export const bankTransferBic = (): string | undefined => ordersConfig().NODE_BAN
  */
 export const bankTransferHoldHours = (): number => ordersConfig().NODE_BANK_TRANSFER_HOLD_HOURS;
 
-/** The contract's hard ceiling on lines per admin-created order (`CreateOrderRequest.items.maxItems`). */
-export const ADMIN_ORDER_LINES_CEILING = 1000;
-
-/** The contract's hard ceiling on one line's quantity (`OrderLineInput.quantity.maximum`). */
-export const ADMIN_ORDER_LINE_QUANTITY_CEILING = 999_999;
-
 /**
  * How many lines an admin-created order may carry: `NODE_ADMIN_ORDER_MAX_LINES`, never above the
  * contract's ceiling. A value over the ceiling has no effect (the schema refuses first).
  * @returns the line cap
  */
 export const maxAdminOrderLines = (): number =>
-    Math.min(ordersConfig().NODE_ADMIN_ORDER_MAX_LINES, ADMIN_ORDER_LINES_CEILING);
+    Math.min(ordersConfig().NODE_ADMIN_ORDER_MAX_LINES, createOrderBodyItemsMax);
 
 /**
  * The largest quantity one line of an admin-created order may ask for:
@@ -106,7 +101,10 @@ export const maxAdminOrderLines = (): number =>
  * @returns the quantity cap
  */
 export const maxAdminOrderLineQuantity = (): number =>
-    Math.min(ordersConfig().NODE_ADMIN_ORDER_MAX_LINE_QUANTITY, ADMIN_ORDER_LINE_QUANTITY_CEILING);
+    Math.min(
+        ordersConfig().NODE_ADMIN_ORDER_MAX_LINE_QUANTITY,
+        createOrderBodyItemsItemQuantityMax
+    );
 
 /**
  * Whether this deployment offers `bank_transfer` at all — both the beneficiary and the IBAN must

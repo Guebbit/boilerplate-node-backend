@@ -13,6 +13,7 @@
 
 import type { Types } from 'mongoose';
 import { encryptPii, decryptPii } from '@infrastructure/security/pii-encryption';
+import type { OrderAddress } from '@types';
 
 /** The two embedded addresses an order carries. */
 export type OrderAddressPath = 'shippingAddress' | 'billingAddress';
@@ -20,20 +21,10 @@ export type OrderAddressPath = 'shippingAddress' | 'billingAddress';
 /** The paths walked on every order; both are optional on the row. */
 export const ADDRESS_PATHS: readonly OrderAddressPath[] = ['shippingAddress', 'billingAddress'];
 
-/** The text fields of one embedded address; `phone` alone is optional. */
-interface AddressText {
-    fullName: string;
-    street: string;
-    city: string;
-    zip: string;
-    country: string;
-    phone?: string | undefined;
-}
-
 /** What {@link encryptOrderPii} reads and rewrites on an order being created. */
 interface OrderPiiFields {
-    shippingAddress?: AddressText | undefined;
-    billingAddress?: AddressText | undefined;
+    shippingAddress?: OrderAddress | undefined;
+    billingAddress?: OrderAddress | undefined;
     notes?: string | undefined;
 }
 
@@ -54,7 +45,7 @@ export const notesAad = (orderId: string): string => `orders:notes:${orderId}`;
  * Rewrites every present field of one address with `convert`. Absent fields stay absent — the
  * optional `phone` must not become the string `"undefined"`.
  */
-const mapAddress = <T extends AddressText>(
+const mapAddress = <T extends OrderAddress>(
     address: T,
     convert: (value: string, field: (typeof ADDRESS_FIELDS)[number]) => string
 ): T => {
@@ -91,7 +82,7 @@ export const encryptOrderPii = <T extends OrderPiiFields>(data: T, orderId: Type
  *
  * @param orderId - the order the address was written under
  */
-export const decryptOrderAddress = <T extends AddressText>(
+export const decryptOrderAddress = <T extends OrderAddress>(
     address: T,
     path: OrderAddressPath,
     orderId: string
@@ -109,7 +100,7 @@ export const decryptSerializedOrder = (serialized: Record<string, unknown>): voi
     const id = String(serialized.id);
     for (const path of ADDRESS_PATHS) {
         // Cast: the stored shape, which this module's own writer produced.
-        const address = serialized[path] as AddressText | undefined;
+        const address = serialized[path] as OrderAddress | undefined;
         if (address) serialized[path] = decryptOrderAddress(address, path, id);
     }
     if (typeof serialized.notes === 'string')

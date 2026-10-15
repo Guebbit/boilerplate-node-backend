@@ -9,6 +9,7 @@
 
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
+import { NotificationSeverity } from '@types';
 import type { CartLineRemovedParams, CartMergeRefusedParams, PreorderDelayedParams } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
@@ -23,12 +24,6 @@ export const NOTIFICATION_CODES = [
 
 /** One of {@link NOTIFICATION_CODES}. */
 export type NotificationCode = (typeof NOTIFICATION_CODES)[number];
-
-/** What a message means, not how it looks — the contract's `NotificationSeverity`. */
-export const NOTIFICATION_SEVERITIES = ['info', 'success', 'warning', 'error'] as const;
-
-/** One of {@link NOTIFICATION_SEVERITIES}. */
-export type NotificationSeverity = (typeof NOTIFICATION_SEVERITIES)[number];
 
 /**
  * What each code's `params` holds — the contract's per-variant params, keyed by the code that
@@ -79,7 +74,7 @@ export const notificationSchema = new Schema<NotificationDocument>(
         userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
         code: { type: String, enum: NOTIFICATION_CODES, required: true },
         params: { type: Schema.Types.Mixed, default: {} },
-        severity: { type: String, enum: NOTIFICATION_SEVERITIES, required: true },
+        severity: { type: String, enum: Object.values(NotificationSeverity), required: true },
         readAt: { type: Date }
     },
     { timestamps: { createdAt: true, updatedAt: false } }

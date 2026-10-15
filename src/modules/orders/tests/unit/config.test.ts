@@ -12,6 +12,7 @@
  * environment, so a suite that left it alone would assert nothing.
  */
 import { assertModuleConfig } from '@kernel/module-config';
+import { createOrderBodyItemsMax, createOrderBodyItemsItemQuantityMax } from '@api/schemas.zod';
 import {
     bankTransferBeneficiary,
     bankTransferBic,
@@ -21,8 +22,6 @@ import {
     bankTransferIbanFriendly,
     maxAdminOrderLines,
     maxAdminOrderLineQuantity,
-    ADMIN_ORDER_LINES_CEILING,
-    ADMIN_ORDER_LINE_QUANTITY_CEILING,
     orderFrontendLink,
     withdrawalPeriodDays
 } from '../../config';
@@ -163,8 +162,8 @@ describe('the admin order limits', () => {
             NODE_ADMIN_ORDER_MAX_LINES: '5000',
             NODE_ADMIN_ORDER_MAX_LINE_QUANTITY: '99999999'
         });
-        expect(maxAdminOrderLines()).toBe(ADMIN_ORDER_LINES_CEILING);
-        expect(maxAdminOrderLineQuantity()).toBe(ADMIN_ORDER_LINE_QUANTITY_CEILING);
+        expect(maxAdminOrderLines()).toBe(createOrderBodyItemsMax);
+        expect(maxAdminOrderLineQuantity()).toBe(createOrderBodyItemsItemQuantityMax);
     });
 
     it('refuse a limit below 1', () => {

@@ -12,7 +12,8 @@
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 import { addressLine } from '@modules/orders';
-import type { ReturnAddress, ReturnPostagePayer } from '@modules/shop';
+import type { ReturnPostagePayer } from '@modules/shop';
+import type { ShopAddress } from '@types';
 
 /** Which notice is being sent. */
 export type ReturnNoticeKind =
@@ -38,7 +39,7 @@ export interface ReturnNoticeInput {
     /** What went back, on a closed return. */
     refund?: { amount: number; currency: string };
     /** Where to send the goods, on an approval. */
-    returnAddress?: ReturnAddress;
+    returnAddress?: ShopAddress;
 }
 
 /**

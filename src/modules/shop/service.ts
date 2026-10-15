@@ -8,7 +8,7 @@
  */
 
 import { ConfigError } from '@infrastructure/config/define';
-import type { Shop } from '@types';
+import type { Shop, ShopAddress } from '@types';
 import { shopConfig } from './config';
 import type { ReturnPostagePayer } from './domain';
 
@@ -84,24 +84,13 @@ export const shopIdentity = (): ShopIdentity => {
     };
 };
 
-/** Where returned goods go. */
-export interface ReturnAddress {
-    /** Who the parcel is addressed to. */
-    name?: string;
-    street: string;
-    city: string;
-    zip: string;
-    /** ISO-3166 alpha-2. */
-    country: string;
-}
-
 /**
  * Where returned goods are sent: the configured return address, or the shop's legal address when
  * none is fully set. Partial config reads as none rather than guessed at: a customer told to post
  * a parcel to "Via Roma, " is worse off than one sent to the legal address.
  * @returns the address; never `undefined`
  */
-export const returnAddress = (): ReturnAddress => {
+export const returnAddress = (): ShopAddress => {
     const {
         NODE_RETURN_ADDRESS_STREET: street,
         NODE_RETURN_ADDRESS_CITY: city,
