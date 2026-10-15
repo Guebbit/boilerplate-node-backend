@@ -64,6 +64,7 @@ export {
 export { EMAIL_CHANGE_UNDO_TOKEN_TYPE } from '../token-types';
 export { reapLapsedPreviousEmails } from './previous-email-cleanup';
 export { reapExpiredExports } from './export-rows';
+export { reapInactiveAccounts } from './reap-inactive';
 export { reencryptTotpSecrets } from './reencrypt';
 export { sendAccountMail } from './mail';
 export {
