@@ -34,6 +34,7 @@ import {
 } from '@infrastructure/persistence/create-repository';
 import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 import { imageWritebackFor } from '@infrastructure/persistence/image-writeback';
+import { DAY_MS } from '@infrastructure/runtime/time';
 
 /**
  * `password`, the 2FA secret fields, `reauthCode`, `oauthAccounts` and `pendingEmail` are
@@ -54,7 +55,7 @@ const CREDENTIAL_FIELDS =
 const LAST_ACTIVE_EXPR = { $max: ['$lastActiveAt', '$lastApiKeyUseAt', '$createdAt'] };
 
 /** One day in milliseconds: the throttle of the activity stamp. */
-const ACTIVITY_THROTTLE_MS = 24 * 60 * 60 * 1000;
+const ACTIVITY_THROTTLE_MS = DAY_MS;
 
 /**
  * Whether the reaper has not yet warned an account for its CURRENT stretch of inactivity: never

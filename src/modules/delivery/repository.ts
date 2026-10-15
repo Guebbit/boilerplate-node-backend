@@ -27,6 +27,7 @@ import {
     type Repository,
     type Wire
 } from '@infrastructure/persistence/create-repository';
+import { DAY_MS } from '@infrastructure/runtime/time';
 
 /** What the preorder board filters by. */
 export interface BoardFilters {
@@ -55,9 +56,6 @@ export interface ProductSummaryRow {
     cancelled: number;
     late: number;
 }
-
-/** How many milliseconds a day is, for `dueWithin`. */
-const DAY_MS = 86_400_000;
 
 /**
  * The Mongo condition each board state stands for. Kept beside the query, in step with

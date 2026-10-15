@@ -44,10 +44,7 @@ import { enqueueIfPending } from './image';
  * - Returns a result envelope, same protocol `update` follows.
  */
 export const create = (
-    data: WithServerImage<CreateUserRequest> & {
-        /** Set alongside the pending-image placeholder — see `readUploadedImage`. */
-        pendingImageKey?: string;
-    },
+    data: WithServerImage<CreateUserRequest>,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     // 32 random bytes as hex, same as `tokenAdd` below uses for a reset token: unguessable and

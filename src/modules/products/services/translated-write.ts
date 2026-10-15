@@ -16,7 +16,8 @@ import type { TranslationBatch } from '@kernel/translation';
 import type {
     CallerContext,
     ProductTranslationFieldsPatch,
-    ProductTranslationFieldsWrite
+    ProductTranslationFieldsWrite,
+    ServerImageFields
 } from '@types';
 import {
     generateSuccess,
@@ -72,16 +73,6 @@ const prefixTranslationErrors = (rejection: ResponseReject): ResponseReject => (
 });
 
 /**
- * The image fields the server decided for a product write — never part of the contract body, so
- * they join only after validation. `imageUrl` is the upload pipeline's path, `null` to remove.
- */
-export interface ProductImageExtras {
-    imageUrl?: string | null;
-    thumbnailUrl?: string;
-    pendingImageKey?: string;
-}
-
-/**
  * Create a product and its translation rows in ONE transaction — the create door of the
  * multilingual product write surface.
  *
@@ -99,7 +90,7 @@ export interface ProductImageExtras {
 export const writeCreate = async (
     data: z.infer<typeof zodProductCreateSchema>,
     context: CallerContext,
-    imageExtras: ProductImageExtras = {}
+    imageExtras: ServerImageFields = {}
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> => {
     const plan = await planTranslations('product', toUpsertTranslationsRequest(data.translations));
     if (!isTranslationPlan(plan)) return prefixTranslationErrors(plan);
@@ -151,7 +142,7 @@ export const writeUpdate = async (
     id: string,
     data: z.infer<typeof zodProductUpdateSchema>,
     context: CallerContext,
-    imageExtras: ProductImageExtras = {}
+    imageExtras: ServerImageFields = {}
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> => {
     const { translations, ...productFields } = data;
 

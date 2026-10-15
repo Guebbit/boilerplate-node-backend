@@ -10,6 +10,7 @@
 import { defineConfig } from '@infrastructure/config/define';
 import { int, text } from '@infrastructure/config/fields';
 import { frontendLink } from '@infrastructure/http/frontend-link';
+import { DAY_MS } from '@infrastructure/runtime/time';
 
 /** The five token-bearing account links — one per kind of proof a link can carry. */
 export type AccountLinkKind = 'verify' | 'reset' | 'delete' | 'email-change' | 'email-undo';
@@ -81,4 +82,4 @@ export const accountExportLink = (locale: string, exportId: string): string =>
  * next export built and to the next reaper run.
  */
 export const exportRetentionMs = (): number =>
-    accountConfig().NODE_ACCOUNT_EXPORT_TTL_DAYS * 24 * 60 * 60 * 1000;
+    accountConfig().NODE_ACCOUNT_EXPORT_TTL_DAYS * DAY_MS;

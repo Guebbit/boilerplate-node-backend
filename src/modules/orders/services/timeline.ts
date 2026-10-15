@@ -22,9 +22,7 @@ import type { OrderDocument } from '../model';
 import { orderEventTextRetentionDays } from '../config';
 import { presentTimeline, presentTimelineEntry } from '../presenter';
 import type { TimelineEntryInput } from '../domain';
-
-/** Milliseconds in a day, for the retention window. */
-const DAY_MS = 86_400_000;
+import { DAY_MS } from '@infrastructure/runtime/time';
 
 /**
  * Append one row to an order's timeline, in the caller's transaction so the row commits with the

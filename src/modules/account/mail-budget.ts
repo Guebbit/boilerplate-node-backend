@@ -27,9 +27,10 @@ import { pseudonymise } from '@infrastructure/security/pseudonymise';
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
 import { ERROR_CODES } from '@api/error-codes';
+import { DAY_MS } from '@infrastructure/runtime/time';
 
 /** One day, the window of the recipient budget. */
-const MAIL_RECIPIENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+const MAIL_RECIPIENT_WINDOW_MS = DAY_MS;
 
 /**
  * Mails per window to ONE canonical mailbox. Ten is a verification mail, a few resends and a reset

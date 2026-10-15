@@ -14,7 +14,7 @@ import winston from 'winston';
 // module resolution — see that file's own comment. An alias resolves at `tsc`/`eslint` time but
 // fails at jest's globalSetup runtime.
 import { isRelaxedEnvironment, loggingConfig, PERSONAL_FIELD_MODES } from '../runtime/config';
-import { pseudonymise } from '../security/pseudonymise';
+import { correlationDigest } from '../security/pseudonymise';
 import { toSemanticNames } from './semantic-names';
 
 /** A structured log call's own object form: a `message` plus whatever context goes with it. */
@@ -188,7 +188,7 @@ const applyPersonalFieldMode = (value: string): string => {
     const mode = resolvePersonalFieldMode();
     if (mode === 'plain') return value;
     if (mode === 'redact') return REDACTED;
-    return `hmac:${pseudonymise('log', value).slice(0, 12)}`;
+    return correlationDigest(value);
 };
 
 /**

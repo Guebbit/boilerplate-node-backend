@@ -43,6 +43,7 @@ import { queueConfig } from '@infrastructure/adapters/config';
 import { isTestEnvironment } from '@infrastructure/runtime/config';
 import { settleWithin } from '@infrastructure/runtime/settle';
 import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metrics-queue';
+import { DAY_MS } from '@infrastructure/runtime/time';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -388,7 +389,7 @@ const QUORUM_QUEUE_TYPE = { 'x-queue-type': 'quorum' } as const;
  * holds on an operator's own broker too. Without it a parking queue grows for ever.
  * https://www.rabbitmq.com/docs/ttl
  */
-const DEAD_LETTER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const DEAD_LETTER_TTL_MS = 7 * DAY_MS;
 
 /**
  * How a parking queue is declared — shared by {@link assertJobQueue} and {@link parkedCounts},

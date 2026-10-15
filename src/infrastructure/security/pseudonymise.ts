@@ -46,3 +46,13 @@ const subkeyFor = (purpose: PseudonymPurpose): KeyObject => {
 export const pseudonymise = (purpose: PseudonymPurpose, value: string): string =>
     // Node: HMAC. https://nodejs.org/api/crypto.html#cryptocreatehmacalgorithm-key-options
     createHmac('sha256', subkeyFor(purpose)).update(value).digest('hex');
+
+/**
+ * The short digest a log line and an audit row show in place of a personal value: keyed, truncated
+ * to 12 hex characters, and prefixed `hmac:` so a reader can tell it was keyed. One function, so
+ * the audit page's "same address, three incidents" matches the log lines by construction.
+ *
+ * @param value - the personal value to stand in for
+ */
+export const correlationDigest = (value: string): string =>
+    `hmac:${pseudonymise('log', value).slice(0, 12)}`;

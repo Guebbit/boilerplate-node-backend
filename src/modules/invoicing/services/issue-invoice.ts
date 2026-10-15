@@ -128,11 +128,7 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
                         // The exact function `orders/model.ts#applyOrderTotals` and the placed-order email
                         // both quote — never a hand-composed sum, so this can never drift from what the order
                         // itself says it charged.
-                        grandTotal: orderTotal({
-                            items: order.items,
-                            shippingCost: order.shippingCost,
-                            currency
-                        })
+                        grandTotal: orderTotal(order)
                     },
                     session
                 )

@@ -19,6 +19,7 @@ import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { readBodyField } from '@infrastructure/http/middlewares/rate-limit';
 import { secureCookieOptions } from './cookies';
 import { sessionConfig } from './config';
+import { DAY_MS } from '@infrastructure/runtime/time';
 
 /** The cookie's name. */
 export const DEVICE_COOKIE = 'device';
@@ -27,7 +28,7 @@ export const DEVICE_COOKIE = 'device';
 const MAX_TOKENS = 5;
 
 /** How long a device stays familiar: 180 days, renewed by every successful login. */
-const DEVICE_COOKIE_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
+const DEVICE_COOKIE_MAX_AGE_MS = 180 * DAY_MS;
 
 /** The separator between tokens: not in base64url, so a token can never contain it. */
 const SEPARATOR = '.';

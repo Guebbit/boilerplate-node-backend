@@ -65,14 +65,7 @@ export type { CreateReturnInput, CreateReturnOutcome } from './outcome';
  * nobody paid for owes nothing — the cancel releases its hold and that is all.
  * @param order - the order being withdrawn from
  */
-const refundOwedOn = (order: OrderDocument): number =>
-    order.paidAt
-        ? orderTotal({
-              items: order.items,
-              shippingCost: order.shippingCost,
-              currency: order.currency
-          })
-        : 0;
+const refundOwedOn = (order: OrderDocument): number => (order.paidAt ? orderTotal(order) : 0);
 
 /**
  * Write the record of a withdrawal the cancel already settled: closed at birth, no lines (nothing

@@ -51,15 +51,7 @@ export const paymentReceivedEmail = (
                     price: item.product.price
                 })
             ),
-            // Explicit fields, not a spread: `order` is often a hydrated Mongoose document, whose
-            // schema paths are prototype getters a spread copies nothing from.
-            total: t('payments.email-received.total', {
-                total: orderTotal({
-                    items: order.items,
-                    shippingCost: order.shippingCost,
-                    currency: order.currency
-                })
-            }),
+            total: t('payments.email-received.total', { total: orderTotal(order) }),
             linkLabel: t('payments.email-received.link-label'),
             linkUrl: orderFrontendLink({ locale, id: orderId }),
             footer: t('email.footer')

@@ -31,7 +31,7 @@ export type {
 export { AUTHORIZATION_SCOPES } from './auth-context';
 
 // The server-decided image half of a write (wire `imageUrl` is `null`-only).
-export type { WithServerImage } from './server-image';
+export type { ServerImageFields, WithServerImage } from './server-image';
 
 // A module's rate-limit budget data — shared between kernel/registry.ts's manifest field and
 // infrastructure's own limiter factory, which may not import kernel.

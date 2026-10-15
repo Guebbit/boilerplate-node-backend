@@ -12,6 +12,7 @@ import type { ExportPayment, Refund } from '@types';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 import { abandonedPaymentRetentionDays } from '../config';
+import { DAY_MS } from '@infrastructure/runtime/time';
 
 /**
  * The `personalData.erase` hook. Unsets `userId` on every payment this account made; the
@@ -98,7 +99,7 @@ export const findOwnPaymentsForExport = (userId: string): Promise<ExportPayment[
  */
 export const reapAbandonedPayments = (): Promise<number> => {
     const retentionDays = abandonedPaymentRetentionDays();
-    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    const cutoff = new Date(Date.now() - retentionDays * DAY_MS);
 
     return paymentRepository.deleteAbandonedBefore(cutoff).then((deleted) => {
         if (deleted > 0) {

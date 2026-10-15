@@ -16,6 +16,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { deleteFile, moveFile, toPosixPath } from '@infrastructure/adapters/filesystem';
 import type { ReencodableImageMime } from '@infrastructure/adapters/image';
 import { imageConfig } from '@infrastructure/adapters/config';
+import type { ServerImageFields } from '@types';
 
 /**
  * The seam between an upload and wherever bytes actually live. One implementation ships today —
@@ -268,15 +269,11 @@ export const filesystemImageStore: ImageStore = {
 export const imageStore: ImageStore = filesystemImageStore;
 
 /**
- * The three fields an editable image occupies on a document. `users` and `products` each carry
- * one of these, and all three always change together — never independently, and never by any
- * writer but the one below.
+ * The three fields an editable image occupies on a document — see {@link ServerImageFields}. `users`
+ * and `products` each carry one of these, and all three always change together — never
+ * independently, and never by any writer but the one below.
  */
-export interface ImageWritebackFields {
-    imageUrl?: string | null;
-    thumbnailUrl?: string;
-    pendingImageKey?: string;
-}
+export type ImageWritebackFields = ServerImageFields;
 
 /**
  * Applies an image change onto a document in place — the one gate `users` and `products`

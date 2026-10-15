@@ -1,3 +1,4 @@
+import { DAY_MS } from '@infrastructure/runtime/time';
 /**
  * @module
  * The one-time token kinds this module stores in `verificationtokens` — a leaf, so the schema, the
@@ -39,7 +40,7 @@ export const EMAIL_CHANGE_UNDO_TOKEN_TYPE = 'email-change-undo';
 export const MFA_CHALLENGE_TOKEN_TYPE = 'mfa-challenge';
 
 /** How long the undo link works — 7 days, long enough for someone who reads their mail weekly. */
-export const EMAIL_CHANGE_UNDO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const EMAIL_CHANGE_UNDO_TTL_MS = 7 * DAY_MS;
 
 /**
  * Every kind `verificationtokens.type` may hold — the schema's closed `enum`. A kind added later

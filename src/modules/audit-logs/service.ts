@@ -15,7 +15,7 @@ import type { AuditLogDocument } from './model';
 import type { AuditEntryItem } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { auditSinkFailuresTotal } from './metrics';
-import { pseudonymise } from '@infrastructure/security/pseudonymise';
+import { correlationDigest } from '@infrastructure/security/pseudonymise';
 
 /**
  * Store an emitted audit entry. This is the {@link AuditSink} implementation that
@@ -101,15 +101,6 @@ const INCIDENT_SCOPE: Record<string, unknown> = {
 };
 
 /**
- * An address the operator can correlate but not read: the same keyed, truncated digest the log
- * pipeline writes, so "this address, three incidents" still works across `GET /observability/audit`
- * and the log lines, and the address itself never leaves.
- *
- * @param ip - the stored address
- */
-const pseudonymisedIp = (ip: string): string => `hmac:${pseudonymise('log', ip).slice(0, 12)}`;
-
-/**
  * `GET /observability/audit`: the operator's page — {@link INCIDENT_SCOPE} only, every address
  * pseudonymised. `meta.totalItems` counts the incidents matching the filters, not the page.
  *
@@ -128,7 +119,7 @@ export const searchIncidents = (
             ...page,
             items: page.items.map((item) => ({
                 ...item,
-                ...(item.ip === undefined ? {} : { ip: pseudonymisedIp(item.ip) })
+                ...(item.ip === undefined ? {} : { ip: correlationDigest(item.ip) })
             }))
         }));
 

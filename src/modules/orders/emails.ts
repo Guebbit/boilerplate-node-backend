@@ -41,19 +41,6 @@ export interface OrderLines {
     currency: string;
 }
 
-/**
- * What every builder below actually quotes — `orderTotal`, resolved against `order`'s own
- * currency. Explicit fields, not `{ ...order, currency }`: `order` is often a hydrated Mongoose
- * document (`notify.ts`, `cancel.ts`), whose schema paths are prototype getters a spread copies
- * nothing from.
- */
-const totalOf = (order: OrderLines): number =>
-    orderTotal({
-        items: order.items,
-        shippingCost: order.shippingCost,
-        currency: order.currency
-    });
-
 /** Days the law gives to hand goods back and to reimburse, whatever longer window the shop offers. */
 const STATUTORY_DAYS = 14;
 
@@ -230,7 +217,7 @@ export const orderConfirmEmail = (
                     price: item.product.price
                 })
             ),
-            total: t('orders.email-confirm.total', { total: totalOf(order) }),
+            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
             linkLabel: t('orders.email-confirm.link-label'),
             linkUrl: orderFrontendLink({ locale, id: orderId }),
             withdrawalHeading: withdrawal.heading,
@@ -282,7 +269,7 @@ export const bankTransferInstructionsEmail = (
                     timeStyle: 'short'
                 }).format(payBy)
             }),
-            total: t('orders.email-confirm.total', { total: totalOf(order) }),
+            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
             // Order-number allocation doesn't wait on payment (see `order-numbering.ts`), so the
             // same link, rendering the same receipt on demand, applies here as on the paid path.
             linkLabel: t('orders.email-transfer.link-label'),
@@ -312,7 +299,7 @@ export const bankTransferExpiredEmail = (locale: string, order: OrderLines): Ema
             pageMetaTitle: t('orders.email-transfer-expired.meta-title'),
             greeting: t('orders.email-transfer-expired.greeting'),
             body: t('orders.email-transfer-expired.body'),
-            total: t('orders.email-confirm.total', { total: totalOf(order) }),
+            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
             footer: t('email.footer')
         }
     };
@@ -333,7 +320,7 @@ export const cardHoldExpiredEmail = (locale: string, order: OrderLines): EmailCo
             pageMetaTitle: t('orders.email-card-expired.meta-title'),
             greeting: t('orders.email-card-expired.greeting'),
             body: t('orders.email-card-expired.body'),
-            total: t('orders.email-confirm.total', { total: totalOf(order) }),
+            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
             footer: t('email.footer')
         }
     };
@@ -389,7 +376,7 @@ export const orderCancelledEmail = (
             greeting: t('orders.email-cancelled.greeting', { name }),
             body: t('orders.email-cancelled.body', { order: orderRef }),
             refundNote: t(`orders.email-cancelled.${cancelledRefundKey(!!order.paidAt, refund)}`, {
-                amount: money(locale, totalOf(order), order.currency)
+                amount: money(locale, orderTotal(order), order.currency)
             }),
             footer: t('email.footer')
         }

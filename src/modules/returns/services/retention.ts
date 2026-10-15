@@ -9,9 +9,7 @@
 import { logger } from '@infrastructure/adapters/logger';
 import { returnRepository } from '../repository';
 import { returnTextRetentionDays } from '../config';
-
-/** One day, in milliseconds. */
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { DAY_MS } from '@infrastructure/runtime/time';
 
 /**
  * `reap:returns`'s sweep. Unsets `note` and `declineReason` on every return whose

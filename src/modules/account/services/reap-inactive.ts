@@ -19,12 +19,13 @@ import { getDefaultLocale } from '@infrastructure/i18n';
 import { systemCallerContext } from '@kernel/permissions';
 import { userService, type UserDocument } from '@modules/users';
 import { inactivityWarningEmail, greetableName } from '../emails';
+import { DAY_MS } from '@infrastructure/runtime/time';
 
 /** Fixed pause between the deletion stages — not configurable, so the one dial stays a day count. */
 const GRACE_DAYS = 30;
 
 /** The moment `days` days before now. */
-const daysAgo = (days: number): Date => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+const daysAgo = (days: number): Date => new Date(Date.now() - days * DAY_MS);
 
 /** Stage one: warn, and stamp so this account is not warned twice. */
 const warn = (user: UserDocument): Promise<void> => {

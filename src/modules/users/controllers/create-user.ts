@@ -11,7 +11,7 @@ import { rejectResponse, createdResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { parseBody } from '@infrastructure/http/controller';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
-import { claimUpload, readUploadedImage } from '@infrastructure/http/uploads';
+import { writeWithUploadedImage } from '@infrastructure/http/uploads';
 import { CreateUserBody } from '@api/schemas.zod';
 import type { CreateUserRequest, CreateUserRequestMultipart, User } from '@types';
 
@@ -30,10 +30,6 @@ export const createUser = (
     >,
     response: Response
 ) => {
-    // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`), and `undefined`
-    // already means "no change" to the body's optional field the same way an absent key does.
-    const { imageUrl, thumbnailUrl, pendingImageKey } = readUploadedImage(request);
-
     /*
      * The contract's own strict schema, and from here on ONLY its output: an undeclared key is a
      * 422, never a column. `create` writes whatever it is handed, so a raw body here let an
@@ -50,28 +46,16 @@ export const createUser = (
     if (!body) return;
     const { role, active } = body;
 
-    // `role`, `active` and the server-derived upload fields: `thumbnailUrl` is on `User` itself
-    // (readOnly on the contract); `pendingImageKey` is not, so it joins via an intersection — both
-    // are server-derived, never client-supplied.
-    const validated: Pick<User, 'role' | 'active' | 'thumbnailUrl'> & { pendingImageKey?: string } =
-        { role, active, thumbnailUrl, pendingImageKey };
-
-    return userService
-        .create(
-            {
-                ...body,
-                ...validated,
-                // Server-decided, so it joins only after the body was validated as `null`-only.
-                imageUrl
-            },
-            callerContextOf(request)
-        )
+    // The upload's image fields are server-decided, so they join only after the body was validated
+    // (as `null`-only for `imageUrl`); the helper claims the upload when the write succeeds.
+    return writeWithUploadedImage(request, undefined, (image) =>
+        userService.create({ ...body, role, active, ...image }, callerContextOf(request))
+    )
         .then((result) => {
             if (!result.success) {
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
-            claimUpload(request);
             // `toUserContract` picks only the `User` contract's own fields, so the hashed
             // password and tokens on the document never reach `res.json`. The role is read
             // fresh from the membership just written — never off the document, which holds none.

@@ -11,7 +11,7 @@ import { rejectResponse, createdResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { parseBody } from '@infrastructure/http/controller';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
-import { claimUpload, readUploadedImage } from '@infrastructure/http/uploads';
+import { writeWithUploadedImage } from '@infrastructure/http/uploads';
 import type { CreateProductRequest, CreateProductRequestMultipart, Product } from '@types';
 
 /**
@@ -47,10 +47,6 @@ export const createProduct = (
         jsonFields: ['translations']
     });
 
-    // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`) — `undefined` is what "no image" means to `zodProductCreateSchema`'s
-    // `.optional()` field.
-    const { imageUrl, thumbnailUrl, pendingImageKey } = readUploadedImage(request);
-
     const body = parseBody(
         productService.zodProductCreateSchema,
         {
@@ -71,13 +67,11 @@ export const createProduct = (
     // `parseBody` has already answered 422: the close hook deletes the upload.
     if (!body) return;
 
-    return productService
-        .writeCreate(
-            body,
-            callerContextOf(request),
-            // Server-decided, so it never rides in the body the schema validates.
-            { imageUrl, thumbnailUrl, pendingImageKey }
-        )
+    // The helper reads the upload's server-decided image fields, so they never ride in the body
+    // the schema validated, and claims the upload when the write succeeds.
+    return writeWithUploadedImage(request, undefined, (image) =>
+        productService.writeCreate(body, callerContextOf(request), image)
+    )
         .then((result) => {
             // A refusal is left unclaimed: the upload middleware's close hook deletes the upload
             // once the 4xx/5xx has gone out.
@@ -85,7 +79,6 @@ export const createProduct = (
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
-            claimUpload(request);
             const product = productService.toProduct(result.data, request.caller);
             createdResponse<Product>(response, product, `/products/${product.id}`);
         })

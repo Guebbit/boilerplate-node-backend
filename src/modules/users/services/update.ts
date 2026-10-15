@@ -46,15 +46,11 @@ import { enqueueIfPending } from './image';
 export const update = (
     user: UserDocument,
     data: WithServerImage<Omit<UpdateUserByIdRequest, 'role'>> & {
-        /** Not on `UpdateUserByIdRequest` — `readOnly` on the contract, set only by the server. */
-        thumbnailUrl?: string;
-        /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
-        pendingImageKey?: string;
         /**
          * Not on `UpdateUserByIdRequest` either — consent is `account`'s own self-service field
          * (`UpdateAccountRequest`), deliberately absent from the ADMIN `/users/:id` contract:
          * consent is the data subject's to give, never an operator's to set on their behalf.
-         * Rides along the same way `thumbnailUrl` does, from the one caller (`account`'s
+         * Rides along the same way the image fields do, from the one caller (`account`'s
          * `updateProfile`) that actually has one to pass.
          */
         analyticsConsent?: boolean;
@@ -331,14 +327,8 @@ const auditActionForUpdate = (wasActive: boolean | undefined, active?: boolean):
     return active ? usersAuditActions.ADMIN_USER_UNBANNED : usersAuditActions.ADMIN_USER_BANNED;
 };
 
-/**
- * The shape of an admin update's data: the contract's body, plus what the server derives
- * (`thumbnailUrl`/`pendingImageKey` — see `update()`'s own docblock for why each rides along).
- */
-type UpdateByIdData = WithServerImage<UpdateUserByIdRequest> & {
-    thumbnailUrl?: string;
-    pendingImageKey?: string;
-};
+/** The shape of an admin update's data: the contract's body, plus the image fields the server decides. */
+type UpdateByIdData = WithServerImage<UpdateUserByIdRequest>;
 
 /**
  * The write half of {@link updateById}, once every refusal has been cleared: the update itself,

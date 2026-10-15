@@ -93,7 +93,7 @@ export const recordOfflinePayment = async (
         // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
         // document; spreading it copies nothing, since its schema paths are prototype getters,
         // not the document's own enumerable properties.
-        amount: orderTotal({ items: order.items, shippingCost: order.shippingCost, currency }),
+        amount: orderTotal(order),
         currency,
         method: input.method,
         reference: input.reference,
