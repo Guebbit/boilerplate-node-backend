@@ -22,7 +22,8 @@ const JOBS = [...appJobs, ...resolveJobs(enabledModules)];
 describe('the declared jobs', () => {
     it('finds the jobs it means to check', () => {
         // A canary: an empty list must mean "the registry moved", not "everything agreed".
-        expect(JOBS.length).toBeGreaterThan(10);
+        // Exact floor for the foundation alone: the jobs no module owns plus `account`'s and `webhooks`'.
+        expect(JOBS.length).toBeGreaterThanOrEqual(8);
     });
 
     it('names each job once', () => {

@@ -35,36 +35,36 @@ const subscribe = (eventTypes: string[], enabled: boolean) =>
         secrets: [mintRingSecret().entry]
     });
 
-/** Wire the fan-out for `order.created`, then announce one order. */
-const announceOrder = () => {
+/** Wire the fan-out for `user.setup-requested`, then announce one account's setup. */
+const announceSetup = () => {
     subscribeToWebhookEvents({
-        'order.created': {
-            toPublicEvent: ({ orderId }: { orderId: string }) => ({
-                eventType: 'order.created',
-                data: { orderId }
+        'user.setup-requested': {
+            toPublicEvent: ({ userId }: { userId: string }) => ({
+                eventType: 'user.setup-requested',
+                data: { userId }
             })
         }
     });
-    return emitDomainEvent('order.created', { orderId: 'order_1' });
+    return emitDomainEvent('user.setup-requested', { userId: 'user_1' });
 };
 
 describe('webhook fan-out', () => {
     it('delivers only to the enabled subscription whose filter matches', async () => {
-        const matching = await subscribe(['order.created'], true);
-        await subscribe(['order.created'], false);
+        const matching = await subscribe(['user.setup-requested'], true);
+        await subscribe(['user.setup-requested'], false);
         await subscribe(['payment.succeeded'], true);
 
-        await announceOrder();
+        await announceSetup();
 
         const rows = await webhookDeliveryRepository.findDue(10);
         expect(rows.map((row) => String(row.subscriptionId))).toEqual([String(matching._id)]);
     });
 
     it('gives every subscription the same eventId for one event', async () => {
-        await subscribe(['order.created'], true);
+        await subscribe(['user.setup-requested'], true);
         await subscribe(['*'], true);
 
-        await announceOrder();
+        await announceSetup();
 
         const rows = await webhookDeliveryRepository.findDue(10);
         expect(rows).toHaveLength(2);
