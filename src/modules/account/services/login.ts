@@ -17,6 +17,7 @@ import {
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { userService, type UserDocument } from '@modules/users';
+import { withOwnAccount } from './caller';
 
 /**
  * An argon2id hash of no real password, computed once at import time (a one-time boot cost, not a
@@ -81,16 +82,10 @@ export const verifyOwnPassword = (
     password: string,
     wrongKey: string
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    userService
-        // `password` is select:false — proving identity is this flow's whole point.
-        .findByIdWithCredentials(userId)
-        .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-            // Gone-but-verified is 401 — same rule `updateProfile` follows, and `openapi.yaml`
-            // declares no 404 here either.
-            if (!user) return generateReject(401, []);
-            if (!user.password) return generateReject(422, [t(wrongKey)]);
+    withOwnAccount(userId, (user) => {
+        if (!user.password) return generateReject(422, [t(wrongKey)]);
 
-            return verifyPassword(password, user.password).then((doMatch) =>
-                doMatch ? generateSuccess<UserDocument>(user) : generateReject(422, [t(wrongKey)])
-            );
-        });
+        return verifyPassword(password, user.password).then((doMatch) =>
+            doMatch ? generateSuccess<UserDocument>(user) : generateReject(422, [t(wrongKey)])
+        );
+    });

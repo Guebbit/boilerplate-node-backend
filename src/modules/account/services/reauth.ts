@@ -36,6 +36,7 @@ import { deliverEmailCode } from '../two-factor/methods/email';
 import { tooSoon } from './two-factor-outcomes';
 import { proveSecondFactor } from './two-factor-lockout';
 import { AMR } from '../domain/session-proof';
+import { withOwnAccount } from './caller';
 
 /**
  * The RFC 8176 `amr` value each method earns the session. `email` is this app's own value, not a
@@ -75,19 +76,8 @@ const methodsOf = (user: UserDocument): ReauthMethod[] => {
     return user.verifiedAt && twoFactorMethod('email') ? ['email'] : [];
 };
 
-/**
- * The account behind the caller's token, or the 401 a vanished one earns — the same answer
- * `updateProfile` gives, and the contract declares no 404 here either.
- */
-const withCaller = <T>(
-    userId: string,
-    action: (user: UserDocument) => Promise<ResponseSuccess<T> | ResponseReject>
-): Promise<ResponseSuccess<T> | ResponseReject> =>
-    userService
-        // Credentials included: `password` and `reauthCode` are both select:false.
-        .findByIdWithCredentials(userId)
-        .then((user) => (user ? action(user) : generateReject(401, [])))
-        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+/** A storage failure in these flows answers the shared database envelope, never a bare 500. */
+const rejectAuthFailure = (error: unknown) => rejectDatabaseEnvelope('auth', error);
 
 /**
  * `GET /account/reauth` — the methods this account can answer a step-up challenge with.
@@ -97,7 +87,9 @@ const withCaller = <T>(
 export const reauthMethods = (
     userId: string
 ): Promise<ResponseSuccess<ReauthMethods> | ResponseReject> =>
-    withCaller(userId, (user) => Promise.resolve(generateSuccess({ methods: methodsOf(user) })));
+    withOwnAccount(userId, (user) => generateSuccess({ methods: methodsOf(user) })).catch(
+        rejectAuthFailure
+    );
 
 /**
  * Mint a code on the account, mail it, and persist its digest. The mail is queued before the
@@ -131,7 +123,7 @@ export const sendReauthCode = (
     method: ReauthMethod,
     context: CallerContext
 ): Promise<ResponseSuccess<TwoFactorDelivery> | ResponseReject> =>
-    withCaller(userId, (user) => {
+    withOwnAccount(userId, (user) => {
         if (method === 'password' || !methodsOf(user).includes(method))
             return Promise.resolve(generateReject(422, [t('account.reauth.method-unavailable')]));
 
@@ -139,14 +131,16 @@ export const sendReauthCode = (
         if (wait > 0) return Promise.resolve(tooSoon(wait));
 
         return deliverCode(user, context);
-    }).then((result) => {
-        recordAudit(context, {
-            action: accountAuditActions.AUTH_REAUTH_CODE_SENT,
-            outcome: result.success ? 'success' : 'failure',
-            metadata: { method }
+    })
+        .catch(rejectAuthFailure)
+        .then((result) => {
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_REAUTH_CODE_SENT,
+                outcome: result.success ? 'success' : 'failure',
+                metadata: { method }
+            });
+            return result;
         });
-        return result;
-    });
 
 /** Whether the typed password matches; an account with none never does. */
 const passwordMatches = (user: UserDocument, password: string): Promise<boolean> =>
@@ -231,15 +225,17 @@ export const reauth = (
     proof: ReauthRequest,
     context: CallerContext
 ): Promise<ResponseSuccess<ReauthProven> | ResponseReject> =>
-    withCaller(userId, (user) =>
+    withOwnAccount(userId, (user) =>
         proveMethod(user, proof).then((proved) =>
             proved.success ? proveOtp(user, proof, context) : proved
         )
-    ).then((result) => {
-        recordAudit(context, {
-            action: accountAuditActions.AUTH_REAUTHENTICATED,
-            outcome: result.success ? 'success' : 'failure',
-            metadata: { method: proof.method }
+    )
+        .catch(rejectAuthFailure)
+        .then((result) => {
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_REAUTHENTICATED,
+                outcome: result.success ? 'success' : 'failure',
+                metadata: { method: proof.method }
+            });
+            return result;
         });
-        return result;
-    });

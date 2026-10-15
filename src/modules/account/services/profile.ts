@@ -31,6 +31,7 @@ import {
     notifyEmailChangeRequested,
     type EmailChangeOutcome
 } from './email-change';
+import { withOwnAccount } from './caller';
 
 /**
  * Read the caller's own profile.
@@ -170,20 +171,12 @@ export const updateProfile = (
     const parseResult = zodProfileSchema.safeParse(data);
 
     const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
-        ? userService
-              // Credentials included: the update saves this same document.
-              .findByIdWithCredentials(userId)
-              .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-                  // A verified token for a since-deleted account is unauthenticated, not a
-                  // 404 — `openapi.yaml` declares no 404 here, and `isAuth` treats this exact
-                  // case (token valid, user gone) as 401 for every other route.
-                  if (!user) return generateReject(401, []);
-
-                  return applyEmailChangeRequest(user, parseResult.data.email).then(
-                      (emailOutcome) => writeProfile(user, parseResult.data, emailOutcome, context)
-                  );
-              })
-              .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
+        ? // Credentials included by default: the update saves this same document.
+          withOwnAccount(userId, (user) => {
+              return applyEmailChangeRequest(user, parseResult.data.email).then((emailOutcome) =>
+                  writeProfile(user, parseResult.data, emailOutcome, context)
+              );
+          }).catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
         : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
     return outcome.then((result) => {

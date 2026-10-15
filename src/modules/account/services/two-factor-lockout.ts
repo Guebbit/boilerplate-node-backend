@@ -23,6 +23,7 @@ import {
     type TwoFactorMethodHandler
 } from '../two-factor';
 import { rejectWrongCode, rejectLocked, notifyLocked } from './two-factor-outcomes';
+import { withOwnAccount } from './caller';
 
 /** The account's armed factors, in the registry's own order rather than enrollment order. */
 export const armedEntries = (user: UserDocument) =>
@@ -172,16 +173,11 @@ export const withVerifiedCode = <T>(
     precondition: (user: UserDocument) => ResponseReject | undefined,
     onMatch: (user: UserDocument) => Promise<ResponseSuccess<T> | ResponseReject>
 ): Promise<ResponseSuccess<T> | ResponseReject> =>
-    userService
-        .findByIdWithCredentials(userId)
-        .then<ResponseSuccess<T> | ResponseReject>((user) => {
-            if (!user) return generateReject(401, []);
+    withOwnAccount(userId, (user) => {
+        const rejection = precondition(user);
+        if (rejection) return rejection;
 
-            const rejection = precondition(user);
-            if (rejection) return rejection;
-
-            return verifyArmedFactor(user, code, context).then((verdict) =>
-                settleVerdict(verdict, user, () => onMatch(user))
-            );
-        })
-        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+        return verifyArmedFactor(user, code, context).then((verdict) =>
+            settleVerdict(verdict, user, () => onMatch(user))
+        );
+    }).catch((error: unknown) => rejectDatabaseEnvelope('auth', error));

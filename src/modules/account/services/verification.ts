@@ -32,6 +32,7 @@ import { emailChangeNext, emailChangeStateOf, undoRestoresPreviousEmail } from '
 import { isUnrestrictedCaller } from '../roles';
 import { promoteVerifiedCustomer } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { withOwnAccount } from './caller';
 
 /**
  * How long a verification link works, shared by both token kinds. Tunable because the safe
@@ -202,9 +203,7 @@ export const resendPendingEmailVerificationFor = (
     userId: string,
     context: CallerContext
 ): Promise<ResponseSuccess<EmailVerificationRequested> | ResponseReject> =>
-    userService.findByIdWithCredentials(userId).then((user) => {
-        // A valid token for a since-deleted account is unauthenticated, as on `PUT /account`.
-        if (!user) return generateReject(401, []);
+    withOwnAccount(userId, (user) => {
         const { pendingEmail } = user;
         if (emailChangeNext(emailChangeStateOf(user), 'resend') === undefined || !pendingEmail)
             return generateSuccess<EmailVerificationRequested>(

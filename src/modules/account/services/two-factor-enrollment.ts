@@ -41,6 +41,7 @@ import {
     settleVerdict,
     withVerifiedCode
 } from './two-factor-lockout';
+import { withOwnAccount } from './caller';
 
 /** This account's entry for one method, created empty if it has never had one. */
 const entryFor = (user: UserDocument, method: string): TwoFactorMethodRecord => {
@@ -60,32 +61,27 @@ const entryFor = (user: UserDocument, method: string): TwoFactorMethodRecord => 
 export const twoFactorStatus = (
     userId: string
 ): Promise<ResponseSuccess<TwoFactorStatus> | ResponseReject> =>
-    userService
-        .findByIdWithCredentials(userId)
-        .then<ResponseSuccess<TwoFactorStatus> | ResponseReject>((user) => {
-            if (!user) return generateReject(401, []);
+    withOwnAccount(userId, (user) => {
+        // Armed ones only: an entry that has a pending code but no `enrolledAt` is an
+        // enrollment in progress, and listing it would show a factor login does not ask for.
+        const enrolled = armedEntries(user);
+        const enrolledNames = new Set(enrolled.map(({ handler }) => handler.name));
 
-            // Armed ones only: an entry that has a pending code but no `enrolledAt` is an
-            // enrollment in progress, and listing it would show a factor login does not ask for.
-            const enrolled = armedEntries(user);
-            const enrolledNames = new Set(enrolled.map(({ handler }) => handler.name));
-
-            return generateSuccess({
-                enabled: Boolean(user.twoFactorEnabledAt),
-                methods: enrolled.map(({ handler, entry }) => ({
+        return generateSuccess({
+            enabled: Boolean(user.twoFactorEnabledAt),
+            methods: enrolled.map(({ handler, entry }) => ({
+                ...summarize(handler, user),
+                ...(entry.enrolledAt && { enrolledAt: entry.enrolledAt.toISOString() })
+            })),
+            available: availableTwoFactorMethods()
+                .filter((handler) => !enrolledNames.has(handler.name))
+                .map((handler) => ({
                     ...summarize(handler, user),
-                    ...(entry.enrolledAt && { enrolledAt: entry.enrolledAt.toISOString() })
+                    ...handler.eligibility(user)
                 })),
-                available: availableTwoFactorMethods()
-                    .filter((handler) => !enrolledNames.has(handler.name))
-                    .map((handler) => ({
-                        ...summarize(handler, user),
-                        ...handler.eligibility(user)
-                    })),
-                backupCodesRemaining: user.twoFactorBackupCodes.length
-            });
-        })
-        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+            backupCodesRemaining: user.twoFactorBackupCodes.length
+        });
+    }).catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
 /**
  * `POST /account/2fa/methods/{method}/setup` — starts, or restarts, one method's enrollment.
@@ -106,29 +102,24 @@ export const setupTwoFactorMethod = (
     if (!handler)
         return Promise.resolve(generateReject(404, [t('account.two-factor.unknown-method')]));
 
-    return userService
-        .findByIdWithCredentials(userId)
-        .then<ResponseSuccess<TwoFactorSetup> | ResponseReject>((user) => {
-            if (!user) return generateReject(401, []);
+    return withOwnAccount(userId, (user) => {
+        const eligibility = handler.eligibility(user);
+        if (!eligibility.enrollable)
+            return generateReject(422, [
+                eligibility.reason ?? t('account.two-factor.unknown-method')
+            ]);
 
-            const eligibility = handler.eligibility(user);
-            if (!eligibility.enrollable)
-                return generateReject(422, [
-                    eligibility.reason ?? t('account.two-factor.unknown-method')
-                ]);
+        // The first factor needs only the fresh password the route demands: there is nothing
+        // to prove yet, and a backup code is what an account that lost its phone has.
+        if (armedEntries(user).length === 0) return beginSetup(user, handler, context);
 
-            // The first factor needs only the fresh password the route demands: there is nothing
-            // to prove yet, and a backup code is what an account that lost its phone has.
-            if (armedEntries(user).length === 0) return beginSetup(user, handler, context);
-
-            // Once anything is armed, changing the factors needs a factor (or a backup code), so
-            // a stolen-but-fresh session cannot swap out the very thing it would have to pass.
-            if (!code) return generateReject(422, [t('account.two-factor.code-required')]);
-            return verifyArmedFactor(user, code, context).then((verdict) =>
-                settleVerdict(verdict, user, () => beginSetup(user, handler, context))
-            );
-        })
-        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+        // Once anything is armed, changing the factors needs a factor (or a backup code), so
+        // a stolen-but-fresh session cannot swap out the very thing it would have to pass.
+        if (!code) return generateReject(422, [t('account.two-factor.code-required')]);
+        return verifyArmedFactor(user, code, context).then((verdict) =>
+            settleVerdict(verdict, user, () => beginSetup(user, handler, context))
+        );
+    }).catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 };
 
 /**
@@ -176,25 +167,20 @@ export const sendMethodCode = (
     if (!twoFactorMethod(method))
         return Promise.resolve(generateReject(404, [t('account.two-factor.unknown-method')]));
 
-    const outcome = userService
-        .findByIdWithCredentials(userId)
-        .then<ResponseSuccess<TwoFactorDelivery> | ResponseReject>((user) => {
-            if (!user) return generateReject(401, []);
+    const outcome = withOwnAccount(userId, (user) => {
+        const armed = armedEntries(user).find(({ handler }) => handler.name === method);
+        if (!armed?.handler.send)
+            return generateReject(422, [t('account.two-factor.not-delivered')]);
 
-            const armed = armedEntries(user).find(({ handler }) => handler.name === method);
-            if (!armed?.handler.send)
-                return generateReject(422, [t('account.two-factor.not-delivered')]);
+        const wait = deliveryCooldownRemaining(armed.entry);
+        if (wait > 0) return tooSoon(wait);
 
-            const wait = deliveryCooldownRemaining(armed.entry);
-            if (wait > 0) return tooSoon(wait);
-
-            return armed.handler
-                .send(user, armed.entry, context)
-                .then((delivery) =>
-                    userService.persistTwoFactorMethods(user).then(() => generateSuccess(delivery))
-                );
-        })
-        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+        return armed.handler
+            .send(user, armed.entry, context)
+            .then((delivery) =>
+                userService.persistTwoFactorMethods(user).then(() => generateSuccess(delivery))
+            );
+    }).catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     return audited(outcome, context, accountAuditActions.AUTH_2FA_CODE_SENT, method);
 };
@@ -219,27 +205,22 @@ export const confirmTwoFactorMethod = (
     if (!handler)
         return Promise.resolve(generateReject(404, [t('account.two-factor.unknown-method')]));
 
-    const outcome = userService
-        .findByIdWithCredentials(userId)
-        .then<ResponseSuccess<TwoFactorConfirmed> | ResponseReject>((user) => {
-            if (!user) return generateReject(401, []);
+    const outcome = withOwnAccount(userId, (user) => {
+        const entry = user.twoFactorMethods.find((candidate) => candidate.method === method);
+        if (!entry || entry.enrolledAt)
+            return generateReject(422, [t('account.two-factor.setup-not-started')]);
 
-            const entry = user.twoFactorMethods.find((candidate) => candidate.method === method);
-            if (!entry || entry.enrolledAt)
-                return generateReject(422, [t('account.two-factor.setup-not-started')]);
-
-            return handler
-                .verify(user, entry, code)
-                .then<ResponseSuccess<TwoFactorConfirmed> | ResponseReject>((matched) =>
-                    matched
-                        ? armMethod(user, entry).then((armed) => {
-                              notifyChange(user, 'enrolled', method, context);
-                              return armed;
-                          })
-                        : rejectWrongCode(user)
-                );
-        })
-        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+        return handler
+            .verify(user, entry, code)
+            .then<ResponseSuccess<TwoFactorConfirmed> | ResponseReject>((matched) =>
+                matched
+                    ? armMethod(user, entry).then((armed) => {
+                          notifyChange(user, 'enrolled', method, context);
+                          return armed;
+                      })
+                    : rejectWrongCode(user)
+            );
+    }).catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     return audited(outcome, context, accountAuditActions.AUTH_2FA_ENROLLED, method);
 };
