@@ -48,8 +48,7 @@ const messagesCache = setCache(3600, {
     tags: ['locales'],
     keyParameters: ['app'],
     browserRevalidate: true,
-    scopeKey: (request: Request) =>
-        hasAnonymousReadScope(localeService.callerScope, request.authContext)
+    scopeKey: (request: Request) => hasAnonymousReadScope(localeService.callerScope, request.caller)
 });
 
 /**
@@ -68,8 +67,7 @@ const publicLocaleCache = setCache(3600, {
     tags: ['locales'],
     keyParameters: [],
     browserRevalidate: true,
-    scopeKey: (request: Request) =>
-        hasAnonymousReadScope(localeService.callerScope, request.authContext)
+    scopeKey: (request: Request) => hasAnonymousReadScope(localeService.callerScope, request.caller)
 });
 
 // GET /locales — which languages this deployment offers, and what each of them can do.

@@ -13,8 +13,8 @@ import {
 } from '@types';
 import { getDefaultLocale, getFallbackLocale, listSupportedLocales } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import type { AuthContext } from '@types';
-import { accessibleFilter } from '@kernel/access/query';
+import type { Caller } from '@types';
+import { accessibleFilterFor } from '@kernel/access/query';
 import { deriveBaseLanguage, type LocaleDocument } from '../model';
 import { localeEntryRepository, localeRepository } from '../repository';
 import { backendApp, frontendApp } from '../apps';
@@ -154,10 +154,14 @@ export const readDynamicTier = (
 /**
  * Which languages a caller is allowed to read.
  *
- * `undefined` for admins, meaning "no restriction"; the active languages for everyone else. Why
- * the scope rides in the read is the shared rule's to explain — see `accessibleFilter`.
+ * Every language for a holder of `display:Locale`, the active ones for everyone else. Takes the
+ * resolved `Caller`, which a session and an API key both reach, so a key minted with the staff
+ * read is answered as that read and not as a stranger. Why the scope rides in the read is the
+ * shared rule's to explain — see `accessibleFilterFor`.
+ *
+ * @param caller - `request.caller`, or `undefined` for an anonymous request
  */
-export const callerScope = (context?: AuthContext) => accessibleFilter(context, 'Locale');
+export const callerScope = (caller?: Caller) => accessibleFilterFor(caller, 'Locale');
 
 /**
  * Every language this deployment offers, and what each of them can do.

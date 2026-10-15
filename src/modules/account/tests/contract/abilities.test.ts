@@ -11,6 +11,7 @@
  */
 
 import { api, authenticateAs } from '@tests/http';
+import { credentialHolding } from '@tests/credentials';
 import { unpackRules } from '@casl/ability/extra';
 import { createMongoAbility, subject, type MongoAbility } from '@casl/ability';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -80,6 +81,20 @@ describe('GET /account/abilities', () => {
         expect(ability.can('read', subject('Order', { userId: 'somebody-else', tenantId }))).toBe(
             false
         );
+    });
+
+    it('answers an API key with the rules it was minted with, not a stranger’s', async () => {
+        const secret = await credentialHolding(['display:Order']);
+
+        const response = await api()
+            .get('/account/abilities')
+            .set('Authorization', `Bearer ${secret}`)
+            .expect(200);
+        const ability = abilityFrom(response.body, 'tenant');
+        const { tenantId } = response.body.data;
+
+        expect(ability.can('display', subject('Order', { tenantId }))).toBe(true);
+        expect(ability.can('delete', subject('Product', { tenantId }))).toBe(false);
     });
 
     it('carries a shop owner’s rules, which narrow nothing', async () => {

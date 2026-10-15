@@ -66,8 +66,11 @@ export const getMyAbilities = (request: Request, response: Response) => {
     const context: AuthContext | undefined = request.authContext;
 
     // A stranger is the `guest` role in tenant scope and holds nothing over the installation, so
-    // their platform list is empty rather than absent — same shape for every caller.
-    const tenant = context ? callerInScope(context, 'tenant') : anonymousCaller();
+    // their platform list is empty rather than absent — same shape for every caller. An API key
+    // has no session to resolve: its own caller, the rules it was minted with, is what it holds.
+    const tenant = context
+        ? callerInScope(context, 'tenant')
+        : (request.caller ?? anonymousCaller());
     const platform = context ? callerInScope(context, 'platform') : undefined;
 
     successResponse(response, {

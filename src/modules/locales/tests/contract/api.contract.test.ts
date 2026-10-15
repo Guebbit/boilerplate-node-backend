@@ -10,6 +10,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
+import { credentialHolding } from '@tests/credentials';
 import { listSupportedLocales, getDefaultLocale, getFallbackLocale } from '@infrastructure/i18n';
 import { translator } from '@infrastructure/i18n';
 import { MISSING_ID } from '@tests/ids';
@@ -39,6 +40,10 @@ const createEntry = async (
 
     return response.body.data.id as string;
 };
+
+/** The language tags a manifest response lists. */
+const tags = (response: { body: { data: { locales: { tag: string }[] } } }): string[] =>
+    response.body.data.locales.map(({ tag }) => tag);
 
 describe('GET /locales', () => {
     it('reports every deployed language as one the API can answer in', async () => {
@@ -115,6 +120,18 @@ describe('GET /locales', () => {
         const response = await api().get('/locales');
 
         expect(response.status).toBe(200);
+    });
+
+    it('lists an inactive language to an API key minted with display:Locale, and not to a stranger', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        await api().patch('/locales/pt').set('Authorization', bearer).send({ active: false });
+        const secret = await credentialHolding(['display:Locale']);
+        const asKey = await api().get('/locales').set('Authorization', `Bearer ${secret}`);
+        const asStranger = await api().get('/locales');
+
+        expect(tags(asKey)).toContain('pt');
+        expect(tags(asStranger)).not.toContain('pt');
     });
 });
 
