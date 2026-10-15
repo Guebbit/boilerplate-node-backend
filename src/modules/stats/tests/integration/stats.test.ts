@@ -21,7 +21,7 @@ import invoicingModule from '@modules/invoicing/module';
 import { issueInvoice, issueCreditNote } from '@modules/invoicing';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createOrder, detachOrderUserId, toOrderItem } from '@modules/orders/tests/factories';
 import type { OrderDocument } from '@modules/orders';
 import { statsService } from '../../services';
 import { resolvePeriod, type Period } from '../../services/range';
@@ -258,6 +258,21 @@ describe('the breakdowns', () => {
             returningCustomers: 1,
             returningRate: 0.5
         });
+    });
+
+    it('does not count erased accounts as customers: their orders share a placeholder email', async () => {
+        const product = await createProduct({ price: 122 });
+        const first = await customer();
+        await paidOrder({ user: first, product, quantity: 1, paidAt: '2026-03-10T10:00:00Z' });
+        // An erased account's paid orders keep the placeholder address and lose the account.
+        const erased = await createUser({ email: 'anonymized@deleted.invalid' });
+        for (const paidAt of ['2026-03-10T11:00:00Z', '2026-03-11T11:00:00Z'])
+            await paidOrder({ user: erased, product, quantity: 1, paidAt });
+        await detachOrderUserId(erased.id, new Date());
+
+        const stats = await statsService.getCustomerStats(periodOf('2026-03-09', '2026-03-13'));
+
+        expect(stats).toMatchObject({ customers: 1, newCustomers: 1, returningCustomers: 0 });
     });
 
     it('rates the cancellation cohort, and refunds against what was invoiced', async () => {

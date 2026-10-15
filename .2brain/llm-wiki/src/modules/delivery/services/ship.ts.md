@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/ship.ts
-sha256: 5ad260b12f008748746529f0f51d492577a5d21881d3520c0cae117ad6ec4b74
-generated_at: 2026-10-14T15:33:27.483423+00:00
+sha256: bcbc3b4feef6b61261ec3c9279d4b03b5bf690ee22b5edf0d28faf6ce49d4105
+generated_at: 2026-10-15T10:28:22.710730+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the staff "shipping door": cutting a shipment out of a fulfillment order. All writes (fulfillment lines, the shipment record, unit stock, order summary/status, `shipment.shipped`) commit in a single transaction; the buyer notification and audit row are dispatched after commit.
+Implements the staff "ship" action: cutting one or more shipments out of a fulfillment order. All data changes (lines, shipment record, units, order summary, status, `shipped` flag) commit in a single transaction; mail, audit, and shelf-cache refresh happen only after the commit succeeds.
 
 ## Key elements
 
-- **`ShipInput`** (exported interface) — staff request shape: optional `lines`, `trackingCode`, `forced` flag, and `reason`.
-- **`gateOrder`** — refuses if order is `cancelled`/`pending` (409, not shippable) or not in `processing` (or `paid` when forced).
-- **`gateFulfillmentOrder`** — enforces physical kind, shippable state, and validates requested lines via `checkShipLines`; returns the resolved `ProductQuantity[]`.
-- **`gateTracking`** — looks up the shipping method live and refuses (422) if it is tracked but no tracking code was supplied.
-- **`shipAct`** — the transactional core: reads fulfillment order & order in-session, runs the three gates, calls `cutShipment`, marks order `processing` (forced-from-paid case), reports progress, settles the order, records forced fulfilment, and writes the shipped event.
-- **`afterShipped`** — post-commit chain: refresh shelf stock cache → `notifyShipped` → `recordAudit`.
-- **`shipFulfillmentOrder`** (exported) — the public entry point. Resolves the fulfillment order and order, checks `refuseUnearnedForce`, applies the outrank refusal (pre-transaction, no writes), then runs `runAct(shipAct)` and on success calls `afterShipped` → `viewShipment` → `generateSuccess(201)`.
+- **`ShipInput`** (exported interface) — what staff submits: `lines` (partial or full), `trackingCode`, `forced` flag, and `reason` for forced ships.
+- **`shipFulfillmentOrder`** (exported) — entry point. Runs the force-eligibility check, reads the fulfillment order and order outside the transaction, checks the rank rule, then delegates to `runAct` → `shipAct`, and on success chains `afterShipped` → `viewShipment` → 201 response.
+- **`shipAct`** (internal) — the transactional body. Reads entities in-session, runs the three gates, calls `cutShipment`, advances order status if needed, reports progress, settles the order, records forced-fulfilment override, and emits `announceShipped`.
+- **`gateOrder` / `gateFulfillmentOrder` / `gateTracking`** (internal) — validation gates that throw `ActRefusal` with specific error codes before any write lands.
+- **`afterShipped`** (internal) — post-commit chain: `refreshShelf` → `notifyShipped` → `recordAudit`.
+- **`Shipped`** (internal interface) — the value handed from `shipAct` to `afterShipped` (shipment doc, order doc, remaining units).
 
 ## Relationships
 
-- **`@infrastructure/http/response`** — builds the `201` success and `4xx` rejection responses returned to the caller.
-- **`@infrastructure/i18n`** — localizes refusal messages via `t()`.
-- **`@infrastructure/observability/audit`** — `recordAudit` writes the post-commit audit row.
-- **`../domain` (index, fulfillment, rates)** — `checkShipLines`, `isShippable`, `findShippingMethod`, and the `ProductQuantity` type used for line validation and tracking-method lookup.
-- **`../audit`** — supplies the `deliveryAuditActions.ADMIN_ORDER_SHIPPED` action identifier.
-- **`../model`** — `FulfillmentOrderDocument` / `ShipmentDocument` types used in the act and post-commit steps.
-- **`../repository`** — `fulfillmentOrderRepository.findInSession` / `findById` for reading the fulfillment order.
-- **`./act`** — `runAct` wraps the transaction; `refuse` / `refuseMissing` short-circuit with a typed rejection.
-- **`./actions`** — `viewShipment` shapes the shipment for the API response.
-- **`./announce`** — `announceShipped` writes the shipped domain event inside the transaction.
-- **`./cut`** — `cutShipment` performs the actual shipment creation and unit deduction.
-- **`./force`** — `refuseUnearnedForce` gates the `forced` flag against the caller's override permission before any transaction opens.
+- **`@infrastructure/http/response`** — builds all success/reject HTTP payloads (`generateSuccess`, `generateReject`, `fieldError`).
+- **`@infrastructure/i18n`** — localises all human-readable refusal and error messages via `t`.
+- **`@infrastructure/observability/audit`** — `recordAudit` writes the audit row after commit.
+- **`../audit`** (`deliveryAuditActions`) — supplies the action constant `ADMIN_ORDER_SHIPPED` used in the audit record.
+- **`../domain`** (fulfillment, rates) — `isShippable`, `checkShipLines` for line validation; `findShippingMethod` to determine whether a tracking code is required.
+- **`../model`** — `FulfillmentOrderDocument` and `ShipmentDocument` type shapes.
+- **`../repository`** — `fulfillmentOrderRepository.findInSession` / `findById` for data access.
+- **`./act`** — `runAct` (transaction wrapper), `refuse` / `refuseMissing` (structured refusals), `ActRefusal` (thrown for gate failures).
+- **`./actions`** — `viewShipment` shapes the API response view.
+- **`./announce`** — `announceShipped` emits the in-transaction shipped event.
+- **`./cut`** — `cutShipment` performs the actual line/unit/shipment writes.
+- **`./force`** — `refuseUnearnedForce` checks caller permission and reason before the transaction opens.
 
 ## Notes
 
-- `forced` only widens *which* order status may ship (`paid` instead of `processing`); it never changes what is written and never permits shipping from `on_hold`.
-- The tracking-method requirement is evaluated against the **current** rate lookup, not the value frozen at checkout — a rate change can retroactively require a tracking code.
-- The outrank refusal is checked *before* `runAct` opens a transaction, so it always writes nothing.
-- `shipAct` reads the fulfillment order and order **within the session** (snapshot reads) to ensure gates evaluate the same data the writes commit against.
+- **Two-phase commit discipline.** Everything that mutates state lives inside `runAct`'s session. The three post-commit steps (shelf refresh, buyer notification, audit) run sequentially *after* the session closes and cannot roll back the shipment.
+- **`forced` semantics.** Widen *which* order statuses may ship (`paid` in addition to `processing`); it never changes *what* is written, never bypasses `on_hold` or `cancelled`, and requires `orders.any.override` plus a `reason` string recorded on the order's override history.
+- **Tracking-code requirement is dynamic.** `findShippingMethod` is called at ship time, not frozen at checkout, so a rate change upstream can newly require (or no longer require) a tracking code.
+- **Rank check is pre-transaction.** `orderService.outrankedRefusalFor` runs before `runAct` opens a session; a rank refusal writes nothing and returns immediately.
+- **Absent `lines` means "everything remaining."** `gateFulfillmentOrder` resolves the omission via `checkShipLines`, so callers need not enumerate the full remainder.

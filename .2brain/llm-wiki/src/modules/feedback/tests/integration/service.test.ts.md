@@ -1,7 +1,7 @@
 ---
 source: src/modules/feedback/tests/integration/service.test.ts
-sha256: c524ec9ae1a978fa77c90788a98b536c34753b5cc1d85a9e4787fb6be6d4af4e
-generated_at: 2026-10-14T15:52:30.439654+00:00
+sha256: 3ae05ca7c7d777895fa168e02df7497dc1fc260c34cef4d0a604c7195a1950a4
+generated_at: 2026-10-15T10:33:00.006039+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for the feedback request service (`create`, `search`, `updateStatus`, `remove`). It pins normalization rules (email lowercasing, whitespace trimming, blank-name → `undefined`), operator-mailer behaviour, honeypot and disposable-email spam disposition, search filtering/pagination, and status-transition persistence — all against a real test database rather than unit-level mocks.
+Integration test suite for the feedback request service. It runs against a real test database (`setupTestDb`) to pin down service-level invariants that unit tests cannot: input normalisation (email lowercasing, field trimming, blank-name coercion), the one-shot `respondedAt` stamp, honeypot and disposable-email spam disposition, operator-notification side-effects, search filtering/pagination, status transitions, and removal.
 
 ## Key elements
 
-- **`setupTestDb()`** — spins up a real (or seeded) database instance before the suite runs.
-- **Mocked `enqueueEmail`** (`@infrastructure/adapters/mailer`) — replaced with `jest.fn()` so tests can assert on call count, envelope, template, and data without sending mail.
-- **Mocked `@infrastructure/observability/audit`** — `emitAuditEvent` is replaced with a spy; `recordAudit` is manually rerouted through that spy because it closes over its module's own real `emitAuditEvent` (see `tests/support/ports.ts` for the pattern).
-- **`makePayload(overrides?)`** — builds a valid creation payload; each test overrides one or two fields.
-- **`seed()`** — creates three feedback requests with varied emails/subjects and one resolved status, used by the `search` block.
-- **`describe('create')`** — normalization: lowercased email, trimmed fields, blank name → `undefined`, whitespace-only name preserved after trim.
-- **`describe('create — the operator notification')`** — verifies mailer is called with correct `to`, `subject`, `template`, and `data`; verifies no call when no mailbox is configured.
-- **`describe('create — honeypot')`** — spam status when `website` is non-empty; `new` status + notification when empty or whitespace-only; honeypot field never persisted or serialized.
-- **`describe('create — disposable-email policy')`** — off by default (disposable domain still accepted); when `NODE_ANTIBOT_EMAIL_POLICY=disposable`, submission is filed as `spam` with no notification.
-- **`describe('search')`** — unfiltered, status filter, email-fragment filter, free-text across name/subject/message, pagination meta coherence.
-- **`describe('updateStatus')`** — applies status, persists to DB, records admin notes, leaves status untouched when payload omits it.
+- **`create` describe blocks** — five sub-suites: basic status/normalisation, operator notification (mailbox routing, template, suppression when unconfigured), honeypot (`website` field → `spam` status, field never persisted), disposable-email policy (`NODE_ANTIBOT_EMAIL_POLICY`), and whitespace-honeypot edge case.
+- **`search` describe block** — verifies unfiltered listing, status/email/text filters, and pagination meta consistency (`totalPages` derived from `totalItems`, not page size).
+- **`updateStatus` / `updateStatusById` describe block** — status transition, `adminNotes`, persistence beyond in-memory mutation, and no-op when payload omits `status`.
+- **`remove` describe block** — (truncated) deletion via service.
+- **`makePayload(overrides)`** — factory for a valid creation payload; each test overrides one field.
+- **`seed()`** — creates three varied feedback rows (two `new`, one `resolved`) for search tests.
+- **Audit mock** — partial mock of `@infrastructure/observability/audit` that preserves the real module surface but reroutes `recordAudit` through a local `emitAuditEvent` spy (see Notes).
+- **Mailer mock** — `enqueueEmail` replaced with a resolved `jest.fn()`; assertions inspect `mock.calls[0]`.
 
 ## Relationships
 
-- **`src/modules/feedback/service.ts`** — the system under test; imports `create`, `search`, `updateStatus`, `updateStatusById`, `remove`.
-- **`src/modules/feedback/repository.ts`** — imports `feedbackRequestRepository` for direct persistence verification (`findById`, `findByIdRaw`, `save`).
-- **`src/infrastructure/adapters/mailer.ts`** — mocked; `enqueueEmail` is the spy target for all notification assertions.
-- **`src/infrastructure/observability/audit.ts`** — mocked; `emitAuditEvent` spied, `recordAudit` rerouted (see Notes).
-- **`src/modules/feedback/audit.ts`** — imports `feedbackAuditActions` for use in audit-event assertions.
-- **`src/types/index.ts`** — imports `FeedbackRequestStatus` enum for status comparisons.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()`.
-- **`tests/support/environment.ts`** — provides `setEnvironment()` for per-test env-var manipulation.
-- **`tests/support/callers.ts`** — provides `testCallerContext`.
-- **`tests/support/response.ts`** — provides `asSuccess` / `asReject` for Result-type unwrapping in assertions.
-- **`tests/support/ids.ts`** — provides `MISSING_ID` sentinel.
-- **`tests/support/ports.ts`** — provides `observePort`; also documents the audit-mock pattern referenced in this file's comment.
+| Neighbor | Role in this file |
+|---|---|
+| `src/modules/feedback/service.ts` | System under test; imports `create`, `search`, `updateStatus`, `updateStatusById`, `remove` |
+| `src/modules/feedback/repository.ts` | Used directly for `findByIdRaw` (honeypot non-persistence check) and `save` (seed / status pre-set) |
+| `src/modules/feedback/audit.ts` | Imports `feedbackAuditActions` for audit-event assertions |
+| `src/infrastructure/adapters/mailer.ts` | `enqueueEmail` is fully mocked to capture and assert notification calls |
+| `src/infrastructure/observability/audit.ts` | Partially mocked; `emitAuditEvent` spied, `recordAudit` wrapped (see Notes) |
+| `src/types/index.ts` | `FeedbackRequestStatus` enum used throughout assertions |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the shared test DB before the suite |
+| `tests/support/callers.ts` | `testCallerContext` supplies a valid caller identity for service calls |
+| `tests/support/environment.ts` | `setEnvironment` swaps `NODE_CONTACT_NOTIFY_EMAIL`, `NODE_ANTIBOT_EMAIL_POLICY`, etc. per-test |
+| `tests/support/ids.ts` | `MISSING_ID` for invalid/absent-ID rejection tests |
+| `tests/support/ports.ts` | `observePort` helper; referenced in a comment explaining the audit-mock pattern (shared with `orders/tests/integration/cancel.test.ts`) |
+| `tests/support/response.ts` | `asSuccess` / `asReject` unwrap `Result<T>` so tests can assert on `.data` or the error payload |
 
 ## Notes
 
-- **Audit mock is non-trivial.** `recordAudit` internally calls its own module's `emitAuditEvent`, so a simple `jest.mock` on `emitAuditEvent` alone would miss calls made through `recordAudit`. The mock re-implements `recordAudit` to call the spied `emitAuditEvent` via `actual.buildAuditEvent`. The same pattern is used in `orders/tests/integration/cancel.test.ts`.
-- **Environment must be set explicitly.** Service-level suites never import `src/app.ts` (where `dotenv/config` populates `NODE_CONTACT_NOTIFY_EMAIL`). The `beforeEach` sets it to `'admin@example.com'`; without this, honeypot "no notification" tests would pass for the wrong reason (no mailbox configured rather than honeypot suppression).
-- **Honeypot whitespace handling.** A whitespace-only `website` value is treated as empty (legitimate client behaviour), not as spam.
-- **Disposable-email policy is opt-in.** Default (env var unset) is "off"; the test explicitly sets `NODE_ANTIBOT_EMAIL_POLICY=disposable` to activate the check.
-- **`beforeEach` resets env; `afterEach` clears all mocks.** Order matters if adding tests that depend on environment state.
+- **Audit mock is intentionally complex.** `recordAudit` in the real module closes over its own `emitAuditEvent` binding, so a simple `jest.spyOn` on the exported `emitAuditEvent` would not intercept calls made through `recordAudit`. The mock therefore re-implements `recordAudit` to call a local spy via `buildAuditEvent`. This pattern is shared with `orders/tests/integration/cancel.test.ts` (see `tests/support/ports.ts` for the canonical reference).
+- **`NODE_CONTACT_NOTIFY_EMAIL` is set in `beforeEach`, not in a global setup.** Service-level test suites never import `src/app.ts`, so `dotenv/config` never runs. Without this, honeypot "no notification" assertions would pass for the wrong reason (mailbox simply unset).
+- **Honeypot whitespace edge case is explicitly tested.** A whitespace-only `website` value must be treated as empty (real clients leave the hidden field blank or with stray whitespace); only a non-whitespace value triggers spam disposition.
+- **Disposable-email policy is opt-in.** `NODE_ANTIBOT_EMAIL_POLICY` defaults to off; a `mailinator.com` address must behave identically to a normal address unless the policy is explicitly enabled.
+- **Spam dispositions return a 201-shaped result** (not a 4xx/5xx) so that a spam script cannot distinguish which anti-automation signal fired.

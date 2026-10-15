@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/integration/repository.test.ts
-sha256: 11aa98dbbcb886789dfbc523e8937fd5eeccf4552018213c186113521bcb2785
-generated_at: 2026-10-14T16:03:38.762269+00:00
+sha256: 066732889f930f9fd469d63633aba59d6e7e084352b25f5be64628d580ae2a34
+generated_at: 2026-10-15T10:37:05.102700+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for `stockLevelRepository`'s aggregate read methods (`sumReserved`, `stockBoard`, `lowAvailabilityProductIds`) against a real MongoDB instance. The file verifies zero-state behavior (empty collection returns sane defaults, not a missing row) and documents the deliberate design choice that these gauges operate over the *entire* catalogue regardless of product visibility. Transition-path logic (`applyDelta`, `ensure`) is intentionally excluded — it is covered by the services-layer tests.
+Integration tests for `stockLevelRepository`'s **aggregate reads only** (`sumReserved`, `stockBoard`, `lowAvailabilityProductIds`) against a real Mongo instance. The file specifically asserts the empty-collection edge case (a `$group`/`$facet` pipeline returns no row rather than a zeroed one, so the `.at(0)` guard in calling code is exercised) and documents the intentional difference between the two "stock gauge" queries in terms of which product populations they count. Transition-path methods (`applyDelta`, `insertIfAbsent`) are deliberately out of scope here.
 
 ## Key elements
 
-- **`setupTestDb()`** (from `@tests/setup-test-db`) — spins up a real Mongo instance for the suite.
-- **`describe('an empty collection')`** — three tests asserting that `sumReserved()` → `0`, `stockBoard()` → `{ items: [], totalItems: 0 }`, and `lowAvailabilityProductIds()` → `[]` when the collection has no documents. This pins the `.at(0)` guard that the calling code relies on, since a `$group`/`$facet` pipeline yields no row at all rather than a zeroed one.
-- **`describe('the two stock gauges count different populations')`** — seeds products via `createProduct` and asserts that both `lowAvailabilityProductIds` and `sumReserved` include *inactive* products in their counts. Uses `stockLevelModel.deleteMany({})` in `beforeEach` to isolate the stock-level collection.
-- **Availability vs. onHand distinction** — the test explicitly includes a fully-reserved product (`onHand: 40, reserved: 40`) as a low-availability candidate, confirming the gauge measures `onHand - reserved`, not raw `onHand`.
+- **`describe('an empty collection')`** — Three assertions confirming that `sumReserved()` → `0`, `stockBoard()` → `{ items: [], totalItems: 0 }`, and `lowAvailabilityProductIds(5)` → `[]` when the collection has zero documents.
+- **`describe('the two stock gauges count different populations')`** — Seeds a mix of visible/hidden and low/high-availability products via `createProduct`, then asserts:
+  - `lowAvailabilityProductIds` returns **all** candidates (active and inactive, including fully-reserved ones) because visibility is a downstream concern of the `products` module, not this repository.
+  - `sumReserved` also counts **all** products regardless of visibility, since an inactive product still holds reserved units.
+- **`beforeEach(() => stockLevelModel.deleteMany({}))`** — Clears only the stock-level collection between tests; no need to clear `products` because both gauges query *from* the stock level and visibility is applied afterwards.
 
 ## Relationships
 
-- **`src/modules/inventory/repository.ts`** — the system under test; imports `stockLevelRepository`.
-- **`src/modules/inventory/model.ts`** — imports `stockLevelModel` solely for `deleteMany` cleanup in `beforeEach`.
-- **`src/modules/products/tests/factories.ts`** — imports `createProduct` to seed products with specific `active`/`onHand`/`reserved` values.
-- **`tests/support/setup-test-db.ts`** — imports and calls `setupTestDb()` to provision the real Mongo connection.
+- **`src/modules/inventory/repository.ts`** — The system under test. The file imports and calls `stockLevelRepository.sumReserved`, `.stockBoard`, and `.lowAvailabilityProductIds`.
+- **`src/modules/inventory/model.ts`** — `stockLevelModel` is imported solely for collection cleanup (`deleteMany`) in the second `describe` block's `beforeEach`.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` is the seed helper; each call also creates the corresponding stock-level document so the aggregates have data to read.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module top-level to provision and connect a real Mongo instance for the entire file.
 
 ## Notes
 
-- **Visibility is not this repository's concern.** `lowAvailabilityProductIds` and `sumReserved` intentionally do *not* filter by `active`. The public-visibility narrowing is applied downstream by `services/levels.ts` (`lowStockCount`). The "two numbers will not match, and should not" invariant is documented in `docs/modules/inventory-reservations.md` §"The threshold, and its two readers."
-- **Transition path is out of scope here.** `applyDelta` and `ensure` are tested in `../../services/transition.ts`'s own test file, where their guarantees are contractually asserted.
-- **`beforeEach` clears only the stock-level collection**, not `products`. Both gauges query *from* the stock-level collection; visibility is applied by `products` afterwards, so deleting the stock-level rows is sufficient isolation.
-- **The `.at(0)` guard is a load-bearing assumption.** Mongo's `$group`/`$facet` returns an empty array (not a zero-filled row) on an empty collection. These tests pin that behavior so the repository's defensive `.at(0) ?? 0` arm is verified, not merely assumed.
+- **Visibility is intentionally absent here.** `lowAvailabilityProductIds` does not filter by `products.active` / public visibility. That filtering lives in `services/levels.ts` (`lowStockCount`) and is asserted in `../../tests/integration/service.test.ts`. A reader might expect the filter here; it is not.
+- **Availability ≠ `onHand`.** The gauge keys off `available = onHand − reserved`. A product with `onHand: 40, reserved: 40` is a low-availability candidate even though `onHand` alone would look healthy. The test asserts this explicitly.
+- **Cross-reference:** The behavioral contract is documented in `docs/modules/inventory-reservations.md`, §"The threshold, and its two readers."
+- **Scope boundary:** `applyDelta` and `insertIfAbsent` are tested in the transition service's own integration tests, not here. Do not add those cases to this file.

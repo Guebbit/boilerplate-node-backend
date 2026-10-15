@@ -1,33 +1,34 @@
 ---
 source: src/modules/inventory/openapi.yaml
-sha256: 33ce208ca42761452e34aa5b6847560372f9a1abe0e4d323b680a4509a13fafe
-generated_at: 2026-09-27T14:55:44.465044+00:00
+sha256: 787fe979d9412d64d733fa892d8574f45643b83808f229d35e021e1c66c5d865
+generated_at: 2026-10-15T10:35:06.850789+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/inventory/openapi.yaml
 
 ## Purpose
-
-OpenAPI 3.0.3 contract for the inventory module (v2.0.0). It defines the admin-facing API surface for reading stock levels, auditing the movement ledger, and performing the three counter mutations (receive, adjust, sweep). The inventory module is the sole writer of `Product.onHand` and `Product.reserved`; this spec is the single source of truth for how those counters are read and changed.
+OpenAPI 3.1.0 contract for the inventory module. It defines the HTTP surface for stock counters (on-hand / reserved), preorder allowances, the stock-movement ledger, and the mutation endpoints (receipt, adjustment) that change those counters. Serves as the single source of truth for client and server teams building against this module.
 
 ## Key elements
-
-- **`GET /inventory/levels`** (`listInventoryLevels`) — Paged list of products with `onHand`, `reserved`, and derived `available`. Filterable by `lowOnly` (at/below deployment threshold). Sorted most-scarce-first.
-- **`GET /inventory/movements`** (`listStockMovements`) — Paged, append-only ledger of counter changes. Filterable by `productId` and `reason`. `meta.totalItems` reflects the full matching set, not just the current page.
-- **`POST /inventory/receipts`** (`receiveStock`) — Records a supplier delivery; increments `onHand` only. The only transition that can create units.
-- **`POST /inventory/adjustments`** (`adjustStock`) — Signed stocktake correction on `onHand`. Returns **409** if the result would drive `onHand` below the current `reserved`.
-- **`POST /inventory/reservations/sweep`** (`sweepReservations`) — Expires all holds past their window and reports how many were released. Idempotent. Intentionally an admin endpoint with no internal scheduler — callers (cron, platform job, operator) drive it.
-- **`StockMovementReason`** — Enum: `reserve`, `commit`, `release`, `expire`, `receive`, `adjust`, `restock`. Each maps to a fixed pair of signed deltas on the two counters (documented in the schema description; the canonical mapping lives in `domain/transitions.ts`).
-- **`StockMovement`** — One append-only ledger row. Both `onHandDelta` and `reservedDelta` are always present (one may be zero), making the ledger replayable: summing each column over a product's rows reproduces the counter.
+- **`x-error-codes`** — custom extension declaring `INVENTORY_BELOW_RESERVED` (409), used when an adjustment would push `onHand` below `reserved`.
+- **`GET /inventory/levels`** (`listInventoryLevels`) — paginated stock board; supports a `lowOnly` filter to surface products at or under the low-availability threshold.
+- **`GET /inventory/preorders`** (`listPreorderLevels`) — admin preorder board showing cap, outstanding (split unpaid/paid), and lifetime ordered count per product.
+- **`PUT /inventory/levels/{productId}/preorder-limit`** (`setPreorderLimit`) — absolute, idempotent set of a product's preorder allowance; lowering below outstanding is allowed (existing orders untouched).
+- **`GET /inventory/movements`** (`listStockMovements`) — paginated ledger, newest first; filterable by `productId` and `reason`.
+- **`POST /inventory/receipts`** (`receiveStock`) — adds units to `onHand`; requires an `Idempotency-Key` header to make retries safe.
+- **`POST /inventory/adjustments`** (`adjustStock`) — signed stocktake correction; refuses to drop `onHand` below `reserved`; also requires `Idempotency-Key`.
+- **Local schemas** (defined under `components`, truncated in source): `InventoryLevelsResponseEnvelope`, `PreorderLevelsResponseEnvelope`, `PreorderLimitRequest`, `InventoryLevelEnvelope`, `StockMovementsResponseEnvelope`, `StockMovementReason`, `ReceiptRequest`, `AdjustmentRequest`.
 
 ## Relationships
-
-- **`shared/contracts/openapi.root.yaml`** — Referenced for shared `PageParam`, `PageSizeParam`, `Id` schema, standard error responses (`Unauthorized`, `Forbidden`, `NotFound`, `ValidationError`, `InternalError`, `ErrorResponse`), and the common `ErrorResponse` body used by the 409 on adjustments. The module spec re-exports none of these; it only consumes them via `$ref`.
+- **`shared/contracts/openapi.root.yaml`** — the root contract referenced (relative path `../../../shared/contracts/…`) for:
+  - Shared parameters: `PageParam`, `PageSizeParam`, `IdempotencyKeyHeader`.
+  - Standard error responses: `Unauthorized`, `Forbidden`, `ValidationError`, `InternalError`, `NotFound`, `Conflict`.
+  - Shared schema: `Id` (used for the `productId` path parameter and `productId` query filter).
 
 ## Notes
-
-- Every endpoint requires `bearerAuth`; there is no public/customer-facing path in this spec (customers see `available` on the product itself, not here).
-- The movement ledger is strictly append-only — there is no update or delete path. Corrections are made by the next movement row.
-- The sweep endpoint has no `requestBody` and no `404`/`422` responses; it is a bare admin trigger.
-- `additionalProperties: false` is set on the schema objects, so consumers should not expect undocumented fields.
+- Every operation requires `bearerAuth` or `apiKeyAuth`; there are no unauthenticated endpoints in this module.
+- Mutating endpoints (`receipts`, `adjustments`) are idempotent via an `Idempotency-Key` header; a retry with the same key replays the original response rather than applying the delta twice.
+- `setPreorderLimit` is absolute (PUT semantics) and idempotent by design — safe to retry without an explicit idempotency key.
+- The `x-error-codes` block is a module-level extension, not a standard OpenAPI construct; tooling that ignores vendor extensions will not surface `INVENTORY_BELOW_RESERVED` automatically.
+- The file is truncated in the source snapshot; the full `components/schemas` section (envelopes, request bodies, enums) lives below the visible portion.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/feedback/domain/lifecycle.ts
-sha256: cc44e764bce98ae820a7b4218b2176d351c571ab3897bcb17949a742168183f1
-generated_at: 2026-10-14T15:49:28.662709+00:00
+sha256: b3e8b6ee9cd609a72af8bb9a60d4b72e972c81d21932f9fa1364bfdb3af087fd
+generated_at: 2026-10-15T10:31:53.149512+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure domain logic for the feedback ticket's status lifecycle. It defines how a ticket is initially classified, how an incoming status string is validated against the closed 4-value enum, and when the `respondedAt` timestamp is stamped. There is intentionally no transition graph or `canTransition` guard — staff may re-triage a ticket to any status at any time, including backward.
+Encodes the two business rules around a feedback ticket's status lifecycle: how a fresh ticket is initially classified, and when the `respondedAt` timestamp gets stamped. Unlike the orders/payments domains, there is no `canTransition` gate—staff may move a ticket to any of the four `FeedbackRequestStatus` values in any direction.
 
 ## Key elements
 
-- **`FEEDBACK_STATUS_VALUES`** (private) — `Object.values` of the generated `FeedbackRequestStatus` enum, used as the membership set for the narrowing check.
-- **`toFeedbackStatus(status?: string)`** — Narrows an arbitrary string onto the `FeedbackRequestStatus` type; returns `undefined` if the value is outside the enum. Acts as a defense-in-depth guard for callers that bypass the HTTP-layer Zod validation (e.g. internal service paths).
-- **`initialFeedbackStatus(suspectedSpam: boolean)`** — Returns `spam` when the submission looks like spam (skipping operator notification), otherwise `new`.
-- **`shouldStampRespondedAt(nextStatus, alreadyResponded)`** — Returns `true` only when the write is transitioning the ticket to `resolved` **and** `respondedAt` has not been set before. Guarantees the timestamp is written exactly once per ticket lifetime.
+- **`initialFeedbackStatus(suspectedSpam: boolean)`** — Returns `FeedbackRequestStatus.spam` if the submission looked like spam (skipping operator notification), otherwise `FeedbackRequestStatus.new`.
+- **`shouldStampRespondedAt(nextStatus, alreadyResponded)`** — Returns `true` only when the incoming write sets the status to `resolved` **and** the ticket does not already carry a `respondedAt` stamp. Prevents re-resolving from moving the timestamp.
+- **`FeedbackRequestStatus`** (imported from `@types`) — The closed 4-value enum: `new`, `in_progress`, `resolved`, `spam`.
 
 ## Relationships
 
-- **`src/types/index.ts`** — Provides the `FeedbackRequestStatus` enum that this module imports and validates against.
-- **`src/modules/feedback/domain/index.ts`** — Re-exports this module so callers can reach these helpers via the domain barrel.
-- **`src/modules/feedback/service.ts`** — Consumer of the three exports: calls `toFeedbackStatus` to sanitize input, `initialFeedbackStatus` on creation, and `shouldStampRespondedAt` before persisting a status write.
-- **`src/modules/feedback/tests/unit/lifecycle.test.ts`** — Unit-tests each export's truth table (valid/invalid strings, spam vs. non-spam init, first-resolve vs. re-resolve stamping).
+- **`src/types/index.ts`** — Source of the `FeedbackRequestStatus` enum consumed by both exported functions.
+- **`src/modules/feedback/domain/index.ts`** — Barrel file; re-exports the two functions so consumers can import from the domain folder.
+- **`src/modules/feedback/service.ts`** — Primary caller; uses `initialFeedbackStatus` when creating a ticket and `shouldStampRespondedAt` before persisting a triage write.
+- **`src/modules/feedback/tests/unit/lifecycle.test.ts`** — Unit tests covering both functions' edge cases (backward transitions, repeat-resolve, `undefined` nextStatus).
 
 ## Notes
 
-- The "narrow away rather than trust" philosophy is explicit: `toFeedbackStatus` returns `undefined` for bad input instead of throwing, so the caller decides the error path.
-- `shouldStampRespondedAt` is deliberately stateless — it takes `alreadyResponded` as a parameter rather than inspecting the ticket, keeping it a pure function.
-- Unlike `orders`/`payments` modules in the codebase, there is no transition matrix here; any status is a valid target for any other.
+- `shouldStampRespondedAt` accepts `nextStatus: FeedbackRequestStatus | undefined`. The `undefined` case represents a write that leaves status untouched (e.g., editing only the body)—in that case it always returns `false`.
+- The "no gated transitions" design is deliberate: there is intentionally **no** `canTransition` export here. Do not add one without a product decision, because staff re-triage is a first-class workflow.

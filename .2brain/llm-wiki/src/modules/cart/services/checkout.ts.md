@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/services/checkout.ts
-sha256: 2e3521d8b50ba4c27329743c8c4189c8bd859cc4fac2a91f74bc2d129bd0d7f3
-generated_at: 2026-10-14T15:10:52.938645+00:00
+sha256: 6d1656c318cd0f2ba2bddde0b8eb0977f1cba2dffb875100b2f80c7aa0c16aca
+generated_at: 2026-10-15T10:24:18.026746+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the cart checkout flow — the single cart operation that writes into another module's (orders) collection and where a race can cost the customer money. It resolves payment method, shipping, and billing addresses; validates stock and totals; then delegates the actual order write to `placeOrder`. All pre-flight checks refuse before anything is persisted.
+The checkout service for the cart module. It is the single cart operation that writes into another module's collection (orders) and the only one where a race condition can cost a customer money. It orchestrates the full pre-flight → place-order → confirm flow: resolving payment method, shipping, and billing; evaluating the basket against domain rules; calling `placeOrder`; and emitting analytics.
 
 ## Key elements
 
-- **`toOrderAddress`** – Maps an `AddressItem` to the address shape an order embeds. Spelled field-by-field so the entry's `_id`/`default` cannot leak into the order document.
-- **`CheckoutChoices`** (exported) – The buyer's optional checkout parameters: `addressId`, `billingAddressId`, `paymentMethod`, `notes`, `expectedTotal`.
-- **`PreflightOutcome<T>`** – Discriminated union: either `{ ok: true } & T` or `{ ok: false; reject: ResponseReject }`. Used by every pre-flight resolver.
-- **`resolvePaymentMethod`** – Validates the chosen method against `paymentService.listPaymentMethods()` and enforces `maxOpenUnpaidOrdersPerAccount`. Defaults to `'card'`.
-- **`resolveShipping`** – Resolves the shipping method and shipping address (or confirms neither is needed). Refuses an explicit `addressId` when nothing ships to an address.
-- **`resolveBilling`** – Resolves the billing address (named → same-as-shipping → default). Every order must carry one (EU VAT Art. 226).
-- **`StockRefusal` / `buildStockRefusal`** – Unified shape for stock-related refusals; produces the wire-level `ResponseReject` with appropriate 404 (pre-flight) or 409 (post-`placeOrder`) status.
-- **`runCheckout`** (referenced in docs, truncated) – The main orchestration entry point that sequences pre-flight, stock, and order-write steps.
+- **`CheckoutChoices`** – Interface describing the buyer's optional selections: `addressId`, `billingAddressId`, `paymentMethod`, `notes`, `expectedTotal`.
+- **`PreflightOutcome<T>`** – Discriminated union (`{ ok: true } & T` | `{ ok: false; reject }`) used by every pre-flight resolver to signal "proceed" or "refuse now, nothing written yet".
+- **`resolvePaymentMethod`** – Validates the chosen method against `paymentService.listPaymentMethods()` and enforces `maxOpenUnpaidOrdersPerAccount`; refuses with 409 before any stock is held.
+- **`resolveShipping`** – Resolves the shipping method (via `findShippingMethod`) and shipping address (via `addressForCheckout`); handles all-digital baskets, pickup (`requiresAddress: false`), and unsupported ship-to countries.
+- **`resolveBilling`** – Resolves the invoice address following the priority: explicit `billingAddressId` → same-as-shipping → default book entry. Every order carries one (EU VAT Directive Art. 226).
+- **`toOrderAddress`** – Maps an `AddressItem` to a flat address object for the order document, explicitly listing each field so `_id`/`default` never leak into the order.
+- **`StockRefusal`** / **`buildStockRefusal`** – Unified shape and wire-level reject builder for the two stock-failure modes (`insufficient-stock` vs `unavailable`), which can originate from either the pre-flight check or `placeOrder`'s write.
 
 ## Relationships
 
-- **`@infrastructure/http/response`** – `generateSuccess` / `generateReject` build every HTTP response this file returns.
-- **`@infrastructure/http/errors`** – `rejectDatabaseEnvelope` formats unexpected database failures into the standard error shape.
-- **`@infrastructure/i18n`** – `t()` localises every user-facing error message; `getDefaultLocale` selects the catalog.
-- **`@infrastructure/observability/analytics`** – `emitAnalyticsEvent` / `buildAnalyticsBase` fire checkout analytics events.
-- **`../analytics`** – `cartAnalyticsEvents` supplies the event names/payloads for checkout-specific tracking.
-- **`../config`** – `cartLineMax` and `maxOpenUnpaidOrdersPerAccount()` provide the runtime limits enforced here.
-- **`../domain`** – `evaluateCheckout`, `evaluateShippingRequirement`, `needsShipping`, and the `CheckoutShortfall` / `UnavailableCartLine` types supply the business-rule verdicts.
-- **`../repository`** – `cartRepository` reads and clears the cart lines after a successful (or failed) checkout.
-- **`@modules/addresses`** – `addressForCheckout` resolves a book entry to an `AddressItem`; the `AddressItem` type is the address shape used throughout.
+- **`src/infrastructure/http/response.ts`** – Uses `generateReject`, `generateSuccess`, `fieldError`, and the `ResponseSuccess`/`ResponseReject` types to shape every HTTP response.
+- **`src/infrastructure/http/errors.ts`** – Imports `rejectDatabaseEnvelope` for database-level failure envelopes.
+- **`src/infrastructure/i18n/index.ts`** – Imports `t` (and `getDefaultLocale`) to produce localised error messages and customer-facing strings.
+- **`src/infrastructure/observability/analytics/index.ts`** – Calls `emitAnalyticsEvent` and `buildAnalyticsBase` to record checkout outcomes.
+- **`src/modules/cart/analytics.ts`** – Imports `cartAnalyticsEvents` for the event names/payloads emitted during checkout.
+- **`src/modules/cart/config.ts`** – Reads `cartLineMax` and `maxOpenUnpaidOrdersPerAccount` as enforcement limits.
+- **`src/modules/cart/domain/index.ts`** – Calls `evaluateCheckout`, `evaluateShippingRequirement`, and `needsShipping`; consumes `CheckoutShortfall` and `UnavailableCartLine` types.
+- **`src/modules/cart/repository.ts`** – Uses `cartRepository` to read the caller's cart lines for the checkout evaluation.
+- **`src/modules/addresses/index.ts`** – Calls `addressForCheckout` to resolve shipping and billing address entries from the caller's address book.
 
 ## Notes
 
-- The file is the *only* cart service that crosses a module boundary to write (into orders). Treat any change to its write-path ordering as a potential money-loss regression.
-- `expectedTotal` (minor units) acts as an optimistic lock on price: if the computed total differs from what the buyer saw, checkout is refused with `CART_TOTAL_CHANGED` before stock is held.
-- `resolvePaymentMethod` defaults `paymentMethod` to `'card'` via a parameter default (not `??`), so passing `undefined` from the route yields `'card'` without extra branching.
-- Stock refusals use *different* HTTP statuses depending on *where* the check fired (404 pre-flight vs 409 post-`placeOrder`) while keeping the same message shape — this is intentional and preserved across both call sites.
-- `toOrderAddress` is deliberately non-exhaustive: it picks only the fields the order needs, preventing `_id`, `default`, or future book-internal fields from leaking into the order snapshot.
+- Pre-flight resolvers (`resolvePaymentMethod`, `resolveShipping`, `resolveBilling`) are ordered so that any refusal fires **before** stock is held or an order document is written. The file's module doc explicitly flags the race risk.
+- `resolvePaymentMethod` uses a parameter default (`paymentMethod = 'card'`) rather than `?? 'card'` so that a caller explicitly passing `undefined` still resolves to `card`; the comment warns against changing this.
+- `StockRefusal.type === 'unavailable'` carries a `status` field (404 pre-flight, 409 post-`placeOrder`) and an optional `lines` array; both shapes are "existing behaviours, preserved as-is" per the comment—do not unify them.
+- `toOrderAddress` deliberately omits the spread of the whole `AddressItem`; any new address field must be added here individually to avoid leaking book metadata into the order.
+- The file is the sole import point that bridges cart → orders/inventory/payments/users/delivery in a single write path; all cross-module writes funnel through this file.

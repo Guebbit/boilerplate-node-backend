@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/services/transition.ts
-sha256: 8ef3b7f6092e1b0c9547395a8e4e016e26c348922f30bf71dc6463f9653cc67d
-generated_at: 2026-10-14T16:00:06.217329+00:00
+sha256: 01c8fa26faef9d94afedc4d524b182b07bb2679edad0f81f00d68c06a0258424
+generated_at: 2026-10-15T10:36:42.383127+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single chokepoint through which every stock counter change and its corresponding ledger row pass. It encapsulates the read-ensure-delta-record-sync pipeline so that sibling services (`reserve`, `holds`, `returns`, etc.) never touch the repository or cache directly — they only declare *what* moves, and this file decides *how*.
+The single chokepoint for every stock-counter change in the application. All named transitions (receive, adjust, reserve, hold, release, expire, commit, ship, restock) funnel through `applyTransition`, which atomically updates the counter row, writes the ledger record, and (outside a transaction) refreshes the catalogue's cached copy. It exists so that counter semantics, guard rules, and the audit trail stay in one place rather than scattering across each service.
 
 ## Key elements
 
-- **`applyTransition(reason, productId, quantity, context?, session?)`** — The core primitive. Ensures a level row exists, computes the counter delta via `counterDeltaFor`, applies it conditionally, writes a `stockMovement` ledger row, and (outside a transaction) refreshes the product cache. Returns `false` when the movement is refused; `true` when it lands. Marked `@internal` — never exposed via the module barrel.
-- **`applyToEveryLine(reason, lines, context, session?)`** — Order-level loop that calls `applyTransition` per line and **throws** on any refusal, giving the caller's transaction a natural rollback point. Special-cases `ship` + `kind: 'preorder'` to reject shipping units that are still a preorder claim.
-- **`syncStockCache(productId)`** — Reads the current level row, pushes `{ onHand, reserved }` to the catalogue via `productService.syncStockCache`, then invalidates the `products` cache tag. Swallows all errors (log-and-continue) so a cache hiccup never fails an already-committed transition.
+- **`applyTransition`** *(exported, `@internal`)* — Reads-or-inserts the product's level row, computes deltas via `counterDeltaFor`, performs a conditional write (`applyDelta`), records a `stockMovement` ledger row, then syncs the catalogue cache (skipped when a `ClientSession` is present). Returns `true` only if the counters actually moved. Special-cases a missing row per reason: `reserve`/`preorder` refuse; `release`/`expire`/`commit` report success (trivially, nothing to move); `receive`/`adjust` insert the row first.
+- **`applyToEveryLine`** — Iterates an order's lines, calling `applyTransition` per line. Throws on the first refusal so the caller's transaction rolls back. Also pre-rejects `ship` on a `preorder`-kind line (units still claimed, not yet on-hand).
+- **`syncStockCache`** — Re-reads the level row, pushes `{onHand, reserved}` to `productService.syncStockCache`, then invalidates the `products` cache tag. Swallows and logs errors; never rejects the caller.
+- **`refreshStockCacheForProducts`** — Deduplicates a list of product IDs and calls `syncStockCache` for each. Intended to be called *after* a transaction commits, since the cross-module cache write cannot roll back.
 
 ## Relationships
 
-- **`../domain` (`domain/index.ts`)** — Provides `counterDeltaFor` (maps a reason + quantity + kind to signed deltas) and the `HoldKind` type used to decide which counter a `release`/`expire` returns to.
-- **`../repository`** — `stockLevelRepository` (find, ensure, applyDelta) and `stockMovementRepository` (create ledger row) are the only data-access points this file uses.
-- **`@modules/products` (`products/index.ts`)** — `productService.syncStockCache` keeps the catalogue's denormalised counter copy in step after every non-transactional write.
-- **`@infrastructure/adapters/cache`** — `invalidateCacheTagsLogged(['products'])` busts the HTTP response cache for product reads.
-- **`@infrastructure/adapters/logger`** — Structured error log when the catalogue sync fails.
-- **`@types`** — `StockMovementReason` enum that drives guard logic, delta computation, and the ledger `reason` column.
-- **Sibling services (`reserve`, `holds`, `returns`, `allocate`, `admin`, `levels`)** — Callers that delegate to `applyTransition` or `applyToEveryLine`; they own the *policy* (which reasons are allowed, what context to record) and rely on this file for the *mechanics*.
-- **`delivery/tests/unit/fulfillment.test.ts`** — Exercises the `ship` / `commit` paths through `applyToEveryLine`.
+- **`src/modules/inventory/repository.ts`** — Reads/writes via `stockLevelRepository` (findByProductId, insertIfAbsent, applyDelta) and `stockMovementRepository` (create).
+- **`src/modules/inventory/domain/index.ts`** — Imports `counterDeltaFor` (maps reason + quantity + kind → signed deltas) and the `HoldKind` type.
+- **`src/infrastructure/adapters/cache.ts`** — Calls `invalidateCacheTagsLogged(['products'])` after a successful catalogue sync to bust `GET /products/:id` and list responses.
+- **`src/infrastructure/adapters/logger.ts`** — Logs non-fatal cache-sync failures; the transition itself already committed.
+- **`src/modules/inventory/services/index.ts`** — Barrel through which sibling services (`reserve.ts`, `holds.ts`, `allocate.ts`, `returns.ts`, `levels.ts`, `admin.ts`) import `applyTransition`; the function is marked `@internal` and is not meant to be reached outside the barrel.
+- **`src/modules/inventory/tests/integration/service.test.ts` / `cache-invalidation.test.ts`** — Integration tests exercising transition flows and verifying the `products` cache tag is invalidated.
+- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — Exercises the `ship` reason path through `applyToEveryLine`.
 
 ## Notes
 
-- **No-row semantics differ by reason.** `reserve` / `preorder` against a missing level row return `false` (nothing to hold). `release` / `expire` / `commit` return `true` (nothing to undo — let the sweep continue). `receive` / `adjust` fall through to `ensure`, creating the row on the fly.
-- **Transaction awareness.** When a `session` is passed, the catalogue cache sync is deliberately skipped (it lives outside this module and cannot roll back). The caller is expected to invoke `refreshStockCacheForOrder` after commit.
-- **`kind` is not persisted on the ledger row.** It only influences which counter a `release`/`expire` gives back (preordered vs. stock); the `recorded` spread excludes it.
-- **Stryker mutation-test suppression** wraps the `syncStockCache` catch block — the "never fail the caller" contract is intentional and should not be "fixed" by tests.
+- `applyTransition` is `@internal`: consume it only via the services barrel, never import the file directly from other modules.
+- When a `ClientSession` is passed, the catalogue cache sync is **deliberately skipped**. The caller is responsible for running `refreshStockCacheForProducts` (or an equivalent) after commit, because the cross-module write cannot participate in the transaction.
+- A missing level row is not an error: `reserve`/`preorder` refuse (nothing to set aside), while `release`/`expire`/`commit` return `true` so batch sweeps over a deleted product's remaining lines can proceed.
+- `context.kind` is **not** persisted on the ledger row; it only influences which counter a `release`/`expire` credits (`preordered` vs `onHand`). The rest of `context` (`reference`, `note`) is spread onto the movement record.
+- The `Stryker` disable/restore comments around the `syncStockCache` catch block suppress mutation testing of the error-handling path.

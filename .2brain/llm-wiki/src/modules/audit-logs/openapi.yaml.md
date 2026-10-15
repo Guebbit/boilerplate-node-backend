@@ -1,7 +1,7 @@
 ---
 source: src/modules/audit-logs/openapi.yaml
-sha256: b21447300f7d86a5c6c96b9ab6a739a1269fb0ce4f2be7887b39ba6ac0180923
-generated_at: 2026-09-23T18:27:12.953568+00:00
+sha256: 890b3cede4e577d5483ee99416d1380e024323308d7052e6c55c9d0409948b9a
+generated_at: 2026-10-15T10:22:02.234971+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.0.3 contract for the **audit-logs** module. It declares the single `GET /audit` endpoint (shop-scoped, role-gated action history) and the component schemas that endpoint—and the shared `POST /account/export` route—reference. It exists so consumers and code-gen tools have a machine-readable, module-local contract without reaching into another module's spec.
+OpenAPI 3.1.0 contract for the **audit-logs** module. It defines the tenant-facing endpoint `GET /audit` (a shop's own action history), the shared `AuditEntryItem` row schema, and registers the module's slice of the account data export. It is the machine-readable API spec that documents and constrains what the module exposes to tenants.
 
 ## Key elements
 
-- **`GET /audit`** — Filtered, paged list of audit entries for the current shop. Supports query filters (`actor`, `action`, `outcome`, `target`, `since`) plus shared pagination params. Requires `audit.any.read` (held by `manager`, `support`, `moderator`).
-- **`AuditEntryItem`** — Single audit row: actor identity, action name, outcome, target, timing, and diagnostic fields (`ip`, `user_agent`, `request_id`, `trace_id`, `level`).
-- **`AuditEntryList`** — `items` array + `meta` (shared `PaginationMeta`).
-- **`AuditEntryListResponseEnvelope`** — Standard `{ success, status, message, data }` wrapper around `AuditEntryList`.
-- **`ExportAuditEntry`** — Field-for-field copy of `AuditEntryItem`, referenced by `POST /account/export` in the shared root contract. Kept as a separate named schema so the export shape can diverge independently.
+- **`GET /audit`** (`listAuditEntries`) — paged, filterable read of a shop's action trail (newest first). Filters: `actor`, `action`, `outcome`, `target`, `since` (exclusive lower bound), plus shared `PageParam` / `PageSizeParam`. Requires `audit.any.read` (held by `manager`, `support`, `moderator`). Accepts `bearerAuth` or `apiKeyAuth`.
+- **`AuditEntryItem`** — the single row schema for every audit read surface. Carries actor identity (`actorUserId`, `actorRole`, `actorRoleName`, `actorScope`, optional `actorCredentialId`), the action (`action`, `outcome`, `level`), context (`ip`, `userAgent`, `requestId`, `traceId`, `targetType`, `targetId`, `timestamp`, free-form `metadata`).
+- **`AuditEntriesResponse`** — `{ items, meta }` paginated list wrapper around `AuditEntryItem[]`.
+- **`AuditEntriesResponseEnvelope`** — standard `{ success, status, message, data }` envelope wrapping `AuditEntriesResponse`.
+- **`x-personal-data.auditLog`** — declares the module's contribution to `POST /account/export`; removing the module removes this section from the export.
+- **Tag `Audit`** — namespacing for this module's operations.
 
 ## Relationships
 
-- **→ `shared/contracts/openapi.root.yaml`** — `$ref`s for `PageParam`, `PageSizeParam`, all error responses (`401/403/422/500`), `PaginationMeta`, and the `Envelope*` sub-schemas. This is the _only_ external contract this file references.
-- **← `shared/contracts/openapi.root.yaml`** (`POST /account/export`) — references `ExportAuditEntry` defined here.
-- **~ `observability/openapi.yaml`** (sibling module) — Its `AuditEventItem` mirrors `AuditEntryItem` by hand, not by `$ref`. Both endpoints are served from the same collection via `auditLogRepository.search`.
+- **`shared/contracts/openapi.root.yaml`** — this file `$ref`s six definitions from the root contract:
+  - Parameters: `PageParam`, `PageSizeParam`
+  - Responses: `Unauthorized` (401), `Forbidden` (403), `ValidationError` (422), `InternalError` (500)
+  - Schemas: `PaginationMeta`, `EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`
+
+  The module spec is therefore a fragment that must be resolved against the root spec to be valid on its own.
 
 ## Notes
 
-- **Module isolation rule:** This spec never `$ref`s into a sibling module's contract (e.g. observability). Cross-module sharing goes only through `shared/contracts/openapi.root.yaml`. Rationale documented in `docs/theory/module-lifecycle.md`.
-- **`AuditEntryItem` vs `ExportAuditEntry`:** Deliberately duplicated, not `$ref`'d to each other. If the shapes drift, fix both.
-- **`ip` / `user_agent` are raw.** Hashing seen elsewhere (`adapters/logger.ts`) applies to Winston log lines, not to this queryable collection.
-- **`since` is exclusive** — returns entries strictly _after_ the given timestamp.
-- **`actor_scope` and `actor_role_name`** are absent on rows recorded before those fields existed; consumers must treat them as optional.
+- **Shared row shape, three consumers.** `AuditEntryItem` is the single schema referenced by `GET /audit`, `GET /observability/audit`, and the account export. One serializer (`applyAuditTransform`) handles all three, so schema changes here affect every surface.
+- **`ip` field is context-sensitive.** In this tenant-facing endpoint the raw IP is returned. In the platform-facing observability trail the same field carries an HMAC digest (`hmac:` + 12 hex chars) instead. The schema here documents the tenant variant.
+- **Optional actor fields.** `actorCredentialId` is absent when a person acted directly (no API key); `actorRoleName` is absent when no tenant role resolved for the request.
+- **`since` is exclusive.** The `since` filter returns entries *strictly after* the given timestamp.
+- **`meta.totalItems`** reflects the full filtered count, not just the current page size.
+- **Security is dual-mode.** Both `bearerAuth` and `apiKeyAuth` are listed as acceptable schemes for this operation.

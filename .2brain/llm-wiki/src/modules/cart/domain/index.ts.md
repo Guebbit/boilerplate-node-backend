@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/domain/index.ts
-sha256: 435e1e15ed258b669fbf6aee8d25075631c0894e340b1877ac695ad592db250a
-generated_at: 2026-09-27T14:44:14.302280+00:00
+sha256: 78b90c0fdb94060ae068f01271fa7af56c5d367e35264c065a394621606c5889
+generated_at: 2026-10-15T10:22:44.810363+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file for the cart domain layer. It re-exports the public API of the domain (pure business rules and their associated types) from `./rules`, giving consumers a single import path while keeping the domain layer free of framework dependencies.
+Barrel (re-export) file for the cart **domain layer**. It provides a single, stable public surface for all pure business rules and types, so that services and tests import from one path rather than reaching into individual submodules. The file declares no logic of its own — it exists purely to aggregate exports and enforce the "framework-free" boundary noted in `docs/theory/domain-layer.md`.
 
 ## Key elements
 
-- **`evaluateCheckout`** (function, re-exported from `./rules`) — presumably validates/evaluates a checkout request.
-- **`basketWeight`** (function, re-exported from `./rules`) — presumably computes a weight value for a cart basket.
-- **`needsShipping`** (function, re-exported from `./rules`) — presumably determines whether a given cart requires shipping.
-- **`evaluateShippingRequirement`** (function, re-exported from `./rules`) — presumably checks a shipping requirement and returns a verdict.
-- **`CheckoutShortfall`** (type) — represents a shortfall condition on checkout.
-- **`UnavailableCartLine`** (type) — represents a cart line that is unavailable.
-- **`ShippingRequirementVerdict`** (type) — the result/verdict of a shipping-requirement evaluation.
+- **`./rules`** — `evaluateCheckout`, `basketWeight`, `needsShipping`, `evaluateShippingRequirement`; types `CheckoutShortfall`, `UnavailableCartLine`, `ShippingRequirementVerdict`.
+- **`./merge`** — `planMergeLine`; types `MergeLineFacts`, `MergePlan`, `MergeReason`.
+- **`./stock`** — `fitsStock`.
+- **`./availability`** — `lineAvailability`; types `LineAvailability`, `AvailabilityFacts`, `AvailabilityProduct`.
+
+All exports are re-exported (value or type only) with no transformation.
 
 ## Relationships
 
-- **`src/modules/cart/domain/rules.ts`** — sole source of every symbol re-exported here; this file adds no logic of its own.
-- **`src/modules/cart/index.ts`** — the module-level public entry point; expected to import the domain API through this file.
-- **`src/modules/cart/services/checkout.ts`**, **`services/items.ts`**, **`services/view.ts`** — service-layer consumers that import the domain functions/types via this barrel path.
+- **`./availability.ts`, `./merge.ts`, `./rules.ts`, `./stock.ts`** — Direct dependency targets; this file re-exports their symbols verbatim.
+- **`src/modules/cart/index.ts`** — Upward consumer; the cart module's public entry point is expected to re-export this domain barrel.
+- **Services (`checkout`, `items`, `merge`, `preorder`, `shelf`, `view`)** — Downstream consumers that import domain rules/types through this barrel rather than importing submodules directly.
+- **Tests (`line-availability.test.ts`, `merge-rule.test.ts`, `stock-rule.test.ts`)** — Unit tests that exercise the re-exported symbols.
 
 ## Notes
 
-- This file contains **no executable logic**—it is purely a re-export barrel. Any behavior changes belong in `./rules.ts`.
-- The doc-comment references `docs/theory/domain-layer.md` for the layering contract (pure rules, lint-guaranteed framework-free). That invariant applies to everything re-exported here.
+- Because this is a pure re-export barrel, lint rules (referenced in the file's doc comment) enforce that **no framework imports** leak into the domain layer through this file. Adding a new domain rule means exporting it from the relevant submodule *and* adding it here.
+- Type-only exports (`export type { … }`) are kept separate from value exports. Use `import type` or rely on the barrel's `export type` forms when you only need compile-time symbols.

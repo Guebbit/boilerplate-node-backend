@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/model.ts
-sha256: 6764aab43a4947767874d1702590e342c4c3c26a8ec5a613cb9a4e4f00befd89
-generated_at: 2026-09-27T14:44:40.030826+00:00
+sha256: 9db937d96443e83126c497fa49737100649537a55f56b73dec29e51eac4d1591
+generated_at: 2026-10-15T10:23:45.465549+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schema, document interfaces, and model for the cart collection. One document per user (enforced by a unique index on `userId`), storing cart lines and an optional shipping-method id. It exists to be the sole durable copy of a user's cart — deliberately Mongo rather than Redis, which is cache-only and fails open.
+Defines the Mongoose schema, document interface, and model for the cart collection. One document per user (enforced by a unique index on `userId`) stores the cart's items and an optional shipping-method id. Field names are chosen to match the OpenAPI `CartItem` shape so stored and wire representations stay identical.
 
 ## Key elements
 
-- **`CartItem`** (interface) — A single line: `productId` (ObjectId) + `quantity` (number). No Mongoose `ref`/`populate`; product lookups go through the products module's public service.
-- **`CartDocument`** (interface) — Full document shape: `userId`, `items: CartItem[]`, optional `shippingMethodId`, timestamps, and an explicitly typed `__v: number` (read by `repository.clearLinesIfUnchanged` for conditional checkout clearing).
-- **`CartModel`** (type) — `Model<CartDocument>` alias; queries live in `repository.ts`, rules in `services/`.
-- **`CART_LINE_MAX`** (const, 999) — Hard ceiling on a line's stored quantity. The per-request bound in the OpenAPI spec is separate; this is the guard that catches cumulative `add`-mode writes.
-- **`cartItemSchema`** — Subdocument schema with `_id: false` (lines are addressed by product, and the OpenAPI contract forbids extra properties).
-- **`cartSchema`** — Top-level schema: `unique: true` on `userId` enables single `findOneAndUpdate` upserts; `timestamps: true`; a compound index on `items.productId` (reverse lookup for product deletion); a TTL index on `updatedAt` driven by `NODE_CART_RETENTION_DAYS` (default 365).
-- **`applyCartTransform`** — Serialization normalizer (strips `_id`→`id`, removes `__v`) produced by `applySerialization(cartSchema)`. Required by the repository factory for lean reads even though no endpoint returns the raw document shape.
-- **`cartModel`** — The registered Mongoose model (`'Cart'`), the entry point other modules use.
+- **`CartItem`** (interface) — a single cart line: `productId` (ObjectId) + `quantity` (number).
+- **`CartDocument`** (interface) — the full document: `userId`, `items: CartItem[]`, optional `shippingMethodId`, timestamps, and an explicit `__v: number` (read by `clearLinesIfUnchanged` in `./repository` for optimistic concurrency).
+- **`CART_LINE_HARD_MAX = 999`** — schema-level ceiling on per-line quantity. The shop's lower, configurable ceiling lives in `./config` (`cartLineMax`).
+- **`cartItemSchema`** — subdocument schema with `_id: false`; enforces `quantity` between 1 and `CART_LINE_HARD_MAX`.
+- **`cartSchema`** — top-level schema; `userId` is `unique: true`, `timestamps: true`. Two indexes: a compound index on `items.productId` (for product-deletion lookups) and a TTL index on `updatedAt` (`carts_updatedAt_ttl`).
+- **`applyCartTransform`** — wraps `applySerialization(cartSchema)` (shared `_id`→`id` rename + `__v` strip) for lean-read normalization in the repository factory.
+- **`cartModel`** — the registered Mongoose model (`'Cart'`).
 
 ## Relationships
 
-- **`@infrastructure/persistence/serialize`** — Imports `applySerialization` to build `applyCartTransform`.
-- **`@infrastructure/runtime/environment`** — Imports `environmentNumber` to read `NODE_CART_RETENTION_DAYS` at module load (TTL index value is fixed at startup).
-- **`src/modules/cart/repository.ts`** — Owns all queries against this model; reads `__v` for optimistic `clearLinesIfUnchanged`.
-- **`src/modules/cart/services/view.ts`** — Builds the wire `CartResponse` by hand from lines + product prices; never serializes the document directly.
-- **`src/modules/cart/services/reorder.ts`** — Issues `add`-mode writes via the repository that can push a line's quantity toward `CART_LINE_MAX` across multiple requests.
-- **`src/modules/cart/factories.ts`** — Consumes `cartModel` / `applyCartTransform` to wire up the repository factory.
-- **`src/modules/cart/index.ts`** — Module barrel; re-exports the model and schema for external consumers.
-- **Tests** — `schema-contract.test.ts` (unit + integration) asserts the stored shape matches the OpenAPI contract; `retention.test.ts` verifies TTL index configuration; `cart-races.test.ts` exercises the `__v`-based conditional clear under concurrency.
+- **`@infrastructure/persistence/serialize`** — provides `applySerialization`, used to build `applyCartTransform`.
+- **`./config`** — supplies `cartConfig().NODE_CART_RETENTION_DAYS` for the TTL index's `expireAfterSeconds`.
+- **`./repository`** — consumes `cartModel`, `CartDocument`, `CartModel`, and `applyCartTransform`; performs all queries and the `__v`-based conditional clear.
+- **`./factories`** — instantiates the repository using the model/transform exports.
+- **`./services/view`** — reads cart lines via the repository and builds `CartResponse`; joins product data through `@modules/products`, never via Mongoose `populate`.
+- **`./services/merge`** — writes/updates cart lines through the repository.
+- **`./index`** — re-exports the public surface of this module.
+- **Tests** — schema-contract tests assert field names/defaults against OpenAPI; retention tests verify TTL config; upsert-retry and cart-races tests exercise the unique-`userId` + `__v` concurrency guarantees.
 
 ## Notes
 
-- **TTL index is immutable at runtime.** Mongo will not alter an existing index's `expireAfterSeconds`. Changing `NODE_CART_RETENTION_DAYS` and restarting the process causes a hard boot failure (`autoIndex` conflict). The fix is `npm run db:sync` to drop and rebuild the index.
-- **`shippingMethodId` is a plain string**, not a DB reference. It names an entry in the in-code `SHIPPING_METHODS` list from the delivery module; `undefined` means "not yet chosen" and a `null` PUT clears it.
-- **No endpoint serializes this document directly.** `services/view` assembles `CartResponse` manually; `applyCartTransform` exists solely to satisfy the repository factory's transform contract.
-- **`userId` `ref: 'User'` is decorative** — nothing in the cart module `populate()`s it. The ref is for schema documentation only; the unique index is the functional constraint.
+- **TTL index is immutable after creation.** Changing `NODE_CART_RETENTION_DAYS` and restarting will *fail boot* (`autoIndex` requests the new window; Mongo refuses to alter an existing index). Run `npm run db:sync` to drop and rebuild.
+- **`__v` is application-read.** Unlike most documents where the version key is driver-internal, here checkout compares it to prevent two parallel checkouts from both succeeding.
+- **No `ref` / `populate` on `productId`.** Despite `userId` having `ref: 'User'`, cart never populates; cross-module reads go through the owning module's service.
+- **`_id: false` on cart lines** is deliberate: `CartItem` is `additionalProperties: false`, so a generated subdocument id would be a contract violation if ever serialized.
+- **TTL is on `updatedAt`, not `createdAt`.** Any modification (quantity bump, line add) resets the abandonment clock.

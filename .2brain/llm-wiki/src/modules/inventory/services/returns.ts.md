@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/services/returns.ts
-sha256: 1681e523c679a606742eb1e142d47d85d952d0a652b2af3d272131af0cd29a71
-generated_at: 2026-10-14T15:59:16.249938+00:00
+sha256: bff109e0051a8490812f1327636275d7d83fde875df84df2966f4ff22e35ccb9
+generated_at: 2026-10-15T10:36:23.597344+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles the inventory side of receiving customer returns: it writes `restock` stock-movement records for the returned lines and provides a post-commit helper to synchronise the catalogue's stock cache. It is intentionally thin — the actual ledger write and cache sync live in `transition.ts` — and relies on the caller to wrap everything in a single Mongoose transaction for atomicity.
+Thin service that records customer returns as `restock` inventory-movement ledger entries. It deliberately performs no reservation or state transition itself — the caller's transaction and the return document's own `approved → received` transition guarantee at-most-once execution.
 
 ## Key elements
 
-- **`restockReturnedLines(lines, context, session?)`** — Creates one `restock` movement per line by delegating to `applyToEveryLine` with `StockMovementReason.restock`. `context.reference` names the originating order; `context.note` names the return. Throws if any line's counters refuse the write, causing the caller's transaction to roll back.
-- **`refreshStockCacheForProducts(productIds)`** — Deduplicates the supplied IDs (via `Set`) and calls `syncStockCache` for each product. Intended to be invoked **after** the caller's transaction has committed.
+- **`restockReturnedLines(lines, context, session?)`** — Sole export. Iterates over returned order lines and creates one `restock` ledger entry per line (delegating to `applyToEveryLine`). `context.reference` names the original order; `context.note` names the return record. Throws on the first line whose counters refuse the restock, leaving the caller's transaction to roll back.
 
 ## Relationships
 
-- **`src/modules/inventory/services/transition.ts`** — Source of both `applyToEveryLine` (the shared per-line ledger writer) and `syncStockCache` (the per-product cache synchroniser). This file is the only production import.
-- **`src/types/index.ts`** — Provides the `StockMovementReason` enum (specifically the `restock` value used here).
-- **`src/modules/inventory/services/index.ts`** — Barrel re-export; consumers typically import the two functions through this index rather than the file directly.
-- **`src/modules/inventory/tests/integration/cache-invalidation.test.ts`** — Integration coverage for the cache-sync path (`refreshStockCacheForProducts`).
-- **`src/modules/inventory/tests/integration/service.test.ts`** — Integration tests exercising the restock flow end-to-end.
+- **`./transition`** — Imports `applyToEveryLine`, which performs the per-line ledger write and cache invalidation. This file adds no logic beyond choosing `StockMovementReason.restock` and passing through the caller's Mongoose `ClientSession`.
+- **`@types` (`src/types/index.ts`)** — Imports the `StockMovementReason` enum to tag each movement as `restock`.
+- **`./index.ts`** — Barrel re-export; consumers of the inventory service import `restockReturnedLines` through the module root rather than this path directly.
+- **`tests/integration/cache-invalidation.test.ts`** — Integration tests exercise this function (via the transition layer) to verify that stock caches are invalidated when a return is restocked.
 
 ## Notes
 
-- **At-most-once guarantee is external.** This module does not lock or check idempotency itself; the RETURN document's own `approved → received` transition is what prevents double-restocking. The caller must perform that transition and the restock in the **same** transaction.
-- **No hold/reservation interaction.** The order's stock hold stays in its `shipped` state; this file never touches it (contrast with `holds.ts`).
-- **`session` is optional on `restockReturnedLines`** but should be supplied in production so the ledger write joins the caller's transaction. Passing `undefined` means the write autocommits independently, breaking the atomicity contract described in the docblock.
-- **Cache refresh is post-commit only.** `refreshStockCacheForProducts` is a plain `async` loop with no transaction/session parameter; calling it inside the transaction would read uncommitted counters.
+- **Caller owns atomicity.** The function accepts an optional `ClientSession` but never begins a transaction itself. The caller must wrap this call and the return-state transition in a single transaction so that a refused line rolls back *all* lines.
+- **No idempotency key here.** At-most-once safety comes from the return document's own state machine (`approved → received`), not from any dedup logic in this file.
+- **No reservation interaction.** The order's original stock hold remains in `shipped` state; this function only *adds* units back via a new ledger entry.

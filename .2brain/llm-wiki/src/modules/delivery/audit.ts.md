@@ -1,27 +1,23 @@
 ---
 source: src/modules/delivery/audit.ts
-sha256: f17ab8752a051d898b58c14e6163d9d5d9a62e20b2e7752d4f8e32b737f0ed02
-generated_at: 2026-09-27T14:49:06.107681+00:00
+sha256: 4e639ae19a5d3f8cff6cf6f7bde3608715174c959fda7fa656fb1f4b93047e76
+generated_at: 2026-10-15T10:26:20.143812+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/delivery/audit.ts
 
 ## Purpose
-
-Declares the four audit-action string constants that the delivery domain emits and registers them into the shared `AuditActionMap` interface via TypeScript module augmentation. This keeps the audit vocabulary colocated with the domain that produces it while remaining visible to the global observability infrastructure.
+Declares the audit action identifiers for the delivery domain and registers them into the shared `AuditActionMap` type, so that delivery service code can emit type-safe audit events without a runtime enum.
 
 ## Key elements
-
-- **`deliveryAuditActions`** (exported, `as const`) — The four action identifiers staff actions write through: `ADMIN_ORDER_FULFILMENT_STARTED`, `ADMIN_ORDER_SHIPPED`, `ADMIN_ORDER_DELIVERED`, and `ADMIN_ORDER_FULFILLED`. Values are dot-namespaced strings under `admin.order.*`.
-- **`declare module '@infrastructure/observability/audit'`** — Augments the `AuditActionMap` interface with a `delivery` key typed to the union of the values above, making these actions part of the global audit-action surface.
+- **`deliveryAuditActions`** (exported const object) — Maps readable names (`ADMIN_ORDER_FULFILLED`, `BUYER_WAIT_CONFIRMED`, etc.) to dot-separated action strings. Covers staff actions (fulfilment started, shipped, delivered, fulfilled, tracking edited, order held/released) and the single buyer action (wait confirmed).
+- **`declare module '@infrastructure/observability/audit'`** — Module augmentation that adds a `delivery` key to `AuditActionMap`, typed as the union of all action values. This is the mechanism by which the delivery domain plugs its actions into the global audit schema (same pattern as `modules/account/audit.ts`).
 
 ## Relationships
-
-- **`src/modules/delivery/service.ts`** — The delivery service module that performs fulfilment, shipping, delivery, and digital-only fulfilment. It is the expected consumer/emitter of these action constants when writing audit entries.
+- **All delivery service files** (`start.ts`, `ship.ts`, `deliver.ts`, `fulfill.ts`, `tracking.ts`, `holds.ts`, `confirm-wait.ts`) — Each service imports `deliveryAuditActions` and references the relevant constant when recording an audit event (e.g. `start.ts` emits `ADMIN_ORDER_FULFILMENT_STARTED`, `confirm-wait.ts` emits `BUYER_WAIT_CONFIRMED`). This file is the single source of truth for those string values.
+- **`@infrastructure/observability/audit`** — The augmented module; `AuditActionMap` is the shared interface that all domain modules extend.
 
 ## Notes
-
-- The file intentionally uses **module augmentation** rather than importing from a shared enum. The JSDoc points to `modules/account/audit.ts` as the precedent for this pattern; follow that convention when adding new domain audit files.
-- The `as const` assertion is load-bearing: it gives each value a literal type and makes the union in the augmentation precise. Do not widen the object to `Record<string, string>`.
-- `ADMIN_ORDER_FULFILLED` covers the digital-only (no-parcel) path and is distinct from the physical `SHIPPED` / `DELIVERED` flow.
+- Actions are declared via `as const` + module augmentation rather than a shared enum, following the convention established in `modules/account/audit.ts`. Adding a new delivery audit action means adding a key here and updating the consuming service file.
+- The action string prefixes (`admin.*` vs. `fulfillment_order.*`) encode *who* performs the action, not *what* entity is affected—don't rely on the second segment to infer the resource.

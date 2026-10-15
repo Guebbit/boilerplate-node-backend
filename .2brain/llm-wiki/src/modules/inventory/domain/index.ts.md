@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/domain/index.ts
-sha256: 0dad810b296957f702d20dafd3f789813337478340c69b3cbb676c6076054048
-generated_at: 2026-09-27T14:55:07.595426+00:00
+sha256: 328bd6ba23ec40c008b532b7079e48760c8c23bde53e00bb7edb2d5aa9f296b7
+generated_at: 2026-10-15T10:34:35.112349+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel (re-export) file for the inventory **domain layer**. It gives the rest of the module a single import path for the pure business rules—specifically the reason→delta transition table—while keeping those rules free of Express, Mongoose, or any other tier dependency.
+Barrel (re-export) file for the inventory domain layer. It provides a single import surface for the two pure-rule modules (`transitions` and `hold-lines`) so that upper layers (services, tests) can consume domain logic without reaching into individual files. The doc-comment enforces that nothing here may pull in Express, Mongoose, or any infrastructure tier.
 
 ## Key elements
 
-- **`counterDeltaFor`** (function) — re-exported from `./transitions`. Computes the counter delta for a given inventory-reason input.
-- **`CounterDelta`** (type) — re-exported from `./transitions`. The shape describing the resulting delta.
+- **`counterDeltaFor`** (re-exported function from `./transitions`) — resolves a reason code to its counter delta.
+- **`CounterDelta`**, **`HoldKind`** (re-exported types from `./transitions`) — the delta shape and hold-classification enum/literal.
+- **`takeFromHold`** (re-exported function from `./hold-lines`) — applies a "take" operation against a hold line.
+- **`HoldLine`**, **`HoldTake`** (re-exported types from `./hold-lines`) — the line representation and the take descriptor.
 
 ## Relationships
 
-- **`src/modules/inventory/domain/transitions.ts`** — sole source of the two re-exports; this file adds no logic of its own.
-- **`src/modules/inventory/index.ts`** — consumes the domain barrel so higher-tier modules (service, repository) can import `counterDeltaFor` / `CounterDelta` without reaching into `domain/transitions` directly.
-- **`src/modules/inventory/service.ts`**, **`src/modules/inventory/repository.ts`** — sit above the domain layer and rely on the types/rules re-exported here.
-- **`src/modules/inventory/tests/unit/transitions.test.ts`** — tests the underlying `transitions.ts` module that this barrel surfaces.
+- **→ `domain/transitions.ts`** and **→ `domain/hold-lines.ts`**: the sole source modules; this file imports nothing else and re-exports their public API.
+- **← `services/holds.ts`**, **← `services/transition.ts`**, **← `services/types.ts`**: consume the re-exported functions/types for business-logic calls.
+- **← `tests/unit/hold-lines.test.ts`**, **← `tests/unit/transitions.test.ts`**: import through this barrel to reach the tested modules.
+- **← `src/modules/inventory/index.ts`**: the module-level entry point aggregates the domain barrel alongside model, repository, and service exports.
 
 ## Notes
 
-- This file is intentionally **logic-free**: it only re-exports. All behavior lives in `./transitions.ts`.
-- The module doc comment draws a hard boundary: the *rule* (reason → delta) belongs in `domain/`; the *conditional write*, ledger-row creation, and HTTP envelope belong in upper tiers. When adding new inventory rules, place them here, not in `service.ts` or `repository.ts`.
-- See `docs/theory/domain-layer.md` for the layering rationale referenced in the header comment.
+- This file contains no logic of its own; it is purely a re-export surface. Adding a new domain module requires adding its exports here (or consumers import the leaf file directly).
+- The doc-comment explicitly scopes what belongs in the domain layer vs. what does not (conditional writes, ledger rows, HTTP envelopes). Treat those exclusions as a lint/convention boundary.
+- `HoldKind` and `HoldTake` are exported as **types only** (`export type`), so they are erased at compile time and cannot be used as runtime values from this barrel.

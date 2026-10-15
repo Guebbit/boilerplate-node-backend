@@ -13,13 +13,23 @@ import { requestAndDownloadExport } from '@tests/account-export';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { createIntent } from '@modules/payments';
-import { asCustomer } from '@tests/callers';
+import { createIntent, confirmPayment, paymentService } from '@modules/payments';
+import { invoicingService } from '@modules/invoicing';
+import { asAdmin, asCustomer, callerContextAs, testCallerContext } from '@tests/callers';
 import type { ResponseSuccess } from '@infrastructure/http/response';
 import type { Payment } from '@types';
 import { loginWithCookie } from './support';
 
 setupTestDb();
+
+/** Polls until a fire-and-forget listener's write has landed (the count reaches 1), or gives up. */
+const waitForCount = async (count: () => Promise<number>, timeoutMs = 3000): Promise<void> => {
+    const startedAt = Date.now();
+    while ((await count()) < 1) {
+        if (Date.now() - startedAt > timeoutMs) throw new Error('waitForCount: timed out');
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+};
 
 /** The metadata an exported session may carry, and nothing more: never a credential. */
 const EXPORTED_SESSION_KEYS = new Set(['id', 'createdAt', 'expiration', 'lastUsedAt', 'device']);
@@ -66,6 +76,49 @@ describe('POST /account/export', () => {
             createdAt: expect.any(String),
             expiration: expect.any(String)
         });
+    });
+
+    it('carries the invoice, the credit note and the cart line with exactly their documented fields', async () => {
+        const { user, bearer } = await authenticateAs('user');
+        const product = await createProduct({ price: 25, onHand: 5 });
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        const orderId = String(order._id);
+        const intent = await createIntent(orderId, asCustomer(user.id));
+        if (!intent.success) throw new Error('intent refused');
+        // The fake PSP's "always succeeds" reference.
+        await confirmPayment(
+            intent.data.id,
+            'pm_card_visa',
+            asCustomer(user.id),
+            testCallerContext
+        );
+        await waitForCount(() =>
+            invoicingService.findInvoiceForOrder(orderId).then((row) => +(row !== null))
+        );
+        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
+        await waitForCount(() =>
+            invoicingService.findCreditNotesForOrder(orderId).then((rows) => rows.length)
+        );
+        const added = await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 2 });
+        expect(added.status).toBe(201);
+
+        const response = await requestAndDownloadExport(bearer);
+
+        const data = response.data as {
+            invoicing: { invoices: object[]; creditNotes: object[] };
+            cart: object[];
+        };
+        const documentFields = ['currency', 'grandTotal', 'issuedAt', 'number', 'orderId'];
+        expect(data.invoicing.invoices.map((row) => Object.keys(row).toSorted())).toEqual([
+            documentFields
+        ]);
+        expect(data.invoicing.creditNotes.map((row) => Object.keys(row).toSorted())).toEqual([
+            documentFields
+        ]);
+        expect(data.cart).toEqual([{ productId: String(product._id), quantity: 2 }]);
     });
 
     it("never includes another account's orders", async () => {

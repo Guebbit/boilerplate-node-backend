@@ -1,26 +1,28 @@
 ---
 source: src/modules/feedback/tests/unit/lifecycle.test.ts
-sha256: 636329f675e27e13ddaf34fd569320efaee6ae51fbdbbc2872b390a922889569
-generated_at: 2026-10-14T15:52:43.024373+00:00
+sha256: e5289fb12b0920d9bd44ceaef6199918154d57d5e7fe502dd3a9f8e8cbb95f5d
+generated_at: 2026-10-15T10:33:16.195869+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/feedback/tests/unit/lifecycle.test.ts
 
 ## Purpose
-Unit tests for the feedback-ticket status lifecycle rules (`toFeedbackStatus`, `shouldStampRespondedAt`, `initialFeedbackStatus`). The file exists to lock down the contract between the status enum and the three pure domain helpers without any database or mock dependencies.
+
+Unit tests for the two pure functions exported by `domain/lifecycle.ts`: `shouldStampRespondedAt` (decides whether a ticket transition warrants a "responded at" timestamp) and `initialFeedbackStatus` (maps a spam-signal flag to the starting status of a new ticket). No mocks or database are used; the tests exercise the functions in isolation.
 
 ## Key elements
-- **`EVERY_STATUS`** — `Object.values(FeedbackRequestStatus)`; used to iterate the full enum so a newly added status is covered automatically without editing this test.
-- **`describe('toFeedbackStatus …')`** — Verifies the function is a strict identity on every valid enum value and returns `undefined` for `undefined`, empty string, wrong-case strings, and prototype-pollution probes (`'constructor'`, `'__proto__'`).
-- **`describe('shouldStampRespondedAt …')`** — Confirms the timestamp is stamped *only* when the target status is `resolved` **and** the ticket has not already been responded to; every other combination (including `undefined` status) yields `false`.
-- **`describe('initialFeedbackStatus …')`** — Confirms a fresh ticket starts as `spam` when the spam flag is `true`, otherwise `new`.
+
+- **`EVERY_STATUS`** — `Object.values(FeedbackRequestStatus)`. Derives the full status list from the contract enum at runtime so that any future enum member is automatically included in the "no other status stamps" loop test without editing this file.
+- **`describe('shouldStampRespondedAt …')`** — Table-driven (`it.each`) coverage of the (status × alreadyResponded) matrix, plus two guard tests: (1) every non-`resolved` status returns `false`, and (2) passing `undefined` as the status (i.e. the write leaves status untouched) returns `false`.
+- **`describe('initialFeedbackStatus …')`** — Two assertions confirming that `true` (suspected spam) yields `spam` and `false` yields `new`.
 
 ## Relationships
-- **`src/modules/feedback/domain/lifecycle.ts`** — The system under test; all three imported functions are exercised here with no further dependencies.
-- **`src/types/index.ts`** — Source of the `FeedbackRequestStatus` enum. The test derives its full status list from this enum, so adding a new status upstream automatically adds a round-trip and "not-resolved" assertion here.
+
+- **`src/modules/feedback/domain/lifecycle.ts`** — The system under test. This file imports `initialFeedbackStatus` and `shouldStampRespondedAt` directly; every assertion exercises one of those two exports.
+- **`src/types/index.ts`** — Source of the `FeedbackRequestStatus` contract enum. The test reads the enum *from* that module (never re-declares it) and uses `Object.values` on it to build the exhaustive status list.
 
 ## Notes
-- Tests are written with `it.each` over `EVERY_STATUS` specifically so the suite stays green when a new enum member is added upstream; there is no hardcoded status list to maintain.
-- The negative-case list for `toFeedbackStatus` intentionally includes `__proto__` and `constructor` to guard against prototype-pollution edge cases in the narrowing logic.
-- No mocks, no fixtures, no I/O — the file is safe to run in isolation and in CI with zero setup.
+
+- The "stamps for no status other than resolved" test iterates `EVERY_STATUS` at runtime, so adding a new enum value in `src/types/index.ts` automatically extends that test with zero changes here.
+- The `undefined` status case is intentional: it guards the "write leaves status untouched" branch inside `shouldStampRespondedAt` and would fail if the implementation assumed the parameter is always a valid enum member.

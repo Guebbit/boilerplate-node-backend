@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/tests/integration/outcomes.test.ts
-sha256: 61440099c1fae10614bf3aa8f1164fdaa9c4f250e973f861e625a1cb8f56aa1d
-generated_at: 2026-10-14T15:03:38.361712+00:00
+sha256: 8be3bf3eb62b50c3a1062eab550b199a17238ca87c3a7f969cc114f7ef99ba55
+generated_at: 2026-10-15T10:21:17.657040+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that pins the observable outcomes of the API-keys service layer: the one-year expiry ceiling and its enforcement, the exact wording of validation refusals, tenant/user isolation in listing and lookup, audit-row shape on mint and revoke, and the mail content (locale, key name, greeting/advice/footer). It operates at the service door (not the HTTP contract suite) and is complementary to `api-keys.test.ts`, which owns permission-subset rules.
+Integration test suite that pins the *outcomes* of the API-keys credential service: what it returns (listing order, 404/422 refusals with exact error wording), what it audits (action, target, metadata), and what it mails (template, locale, greeting). It deliberately excludes permission-subset rules (owned by `api-keys.test.ts`) and HTTP-level contracts, instead asserting the same invariants at the service-function boundary.
 
 ## Key elements
 
-- **`mockOutbox`** — module-level array that every intercepted `enqueueEmail` call pushes into; asserted against to verify mail template, locale, and body content.
-- **`jest.mock('@infrastructure/adapters/mailer')`** — replaces `enqueueEmail` with a recorder so mails are captured without sending.
-- **`jest.mock('@infrastructure/observability/audit')`** — replaces `recordAudit` so it delegates to a mock `emitAuditEvent`, letting tests filter recorded events by action.
-- **`eventually`** — polls up to 2 s for an async side-effect (mail, log) that the code under test does not `await`.
-- **`auditedAs(action)`** — filters `mockEmitAuditEvent` calls to a single audit action for targeted assertions.
-- **`mintKey`** — wraps `mint` with a default name/permissions/expiry; throws if setup is refused.
-- **Test suites** — `the one-year ceiling`, `what a refusal says`, `listing`, `minting leaves an audit row and a mail`, `revoking`, `revoking everything a person minted`.
+- **`mockOutbox`** – module-level array that captures every call to the mocked `enqueueEmail`, enabling assertions on mail template, locale, and body content.
+- **`jest.mock` (mailer)** – replaces `enqueueEmail` with a no-op that pushes into `mockOutbox`.
+- **`jest.mock` (audit port)** – replaces `recordAudit` and `emitAuditEvent` so the test can inspect emitted audit events without a real event bus. `mockEmitAuditEvent` is the exposed jest mock.
+- **`createRealUser`** – persists a user via `userRepository.create`, optionally with a `locale` field.
+- **`contextFor`** – builds a `TenantCallerContext` for a given user ID, permission list, and tenant.
+- **`eventually`** – polls up to 2 s for an async side-effect (mail) that the code under test does not await.
+- **`auditedAs`** – filters captured audit events by action string.
+- **`mintKey`** – convenience wrapper around `mint` that throws on refusal, used in setup.
+- **`describe` blocks** – one-year ceiling, refusal wording, listing / own-keys export, mint audit + mail (including locale and user-lookup-failure paths), revoke 404 / idempotent audit, bulk-revoke audit + mail.
 
 ## Relationships
 
-- **`src/modules/api-keys/services/api-keys.ts`** — the system under test; imports `findOwnApiKeys`, `latestExpiry`, `list`, `mint`, `revoke`.
-- **`src/modules/api-keys/audit.ts`** — imports `apiKeysAuditActions` to reference concrete audit-action identifiers in assertions.
-- **`src/infrastructure/observability/audit.ts`** — mocked; the mock replaces `recordAudit`/`emitAuditEvent` so tests can inspect emitted audit events without side effects.
-- **`src/infrastructure/adapters/logger.ts`** — `logger.warn` is spied on to assert a warning is emitted when the minter lookup fails during mint.
-- **`src/kernel/events.ts`** — `resetDomainEvents` is called in `beforeEach` to clear the event bus between tests.
-- **`src/kernel/registry.ts`** — `registerModules` is called in `beforeEach` to re-initialize the module registry for a clean state.
-- **`src/modules.ts`** — `enabledModules` is passed to `registerModules` to mirror production module wiring.
-- **`src/modules/account/index.ts`** — `ACCOUNT_SESSIONS_REVOKED` is imported (used in the bulk-revoke session-revocation assertion in the truncated tail).
-- **`src/modules/users/index.ts`** — `userService.getById` is spied on to simulate lookup failure and user-absent scenarios.
-- **`src/modules/users/tests/factories.ts`** — `userRepository.create` is used to persist real test users in the test DB.
-- **`src/types/index.ts`** — provides the `TenantCallerContext` type used by the `contextFor` helper.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/api-keys/services/api-keys.ts` | The system under test: `findOwnApiKeys`, `latestExpiry`, `list`, `mint`, `revoke`. |
+| `src/modules/api-keys/audit.ts` | Provides `apiKeysAuditActions` constants used to filter captured audit events. |
+| `src/infrastructure/observability/audit.ts` | Fully mocked; `emitAuditEvent` is the assertion target. |
+| `src/infrastructure/adapters/logger.ts` | `logger.warn` spied to confirm a warning is emitted when user lookup fails during mint. |
+| `src/modules/users/index.ts` | `userService.getById` spied (reject / resolve `undefined`) to simulate lookup failure. |
+| `src/modules/users/tests/factories.ts` | Supplies `userRepository` used by `createRealUser`. |
+| `src/kernel/events.ts` | `resetDomainEvents` called in `beforeEach` to isolate domain-event state. |
+| `src/kernel/registry.ts` | `registerModules` called in `beforeEach` with `enabledModules`. |
+| `src/modules.ts` | `enabledModules` array passed to the registry. |
+| `src/modules/account/index.ts` | `ACCOUNT_SESSIONS_REVOKED` imported (used in the truncated bulk-revoke section). |
+| `src/types/auth-context.ts` / `src/types/index.ts` | `TenantCallerContext` type for test fixtures. |
 
 ## Notes
 
-- The audit mock **replaces** `recordAudit` rather than spying on it, because `recordAudit` closes over its own module's `emitAuditEvent`; a plain spy would not intercept the internal call path.
-- `mockOutbox` is declared as a plain mutable array (not a `jest.fn`) so the hoisted `jest.mock` factory can reference it without triggering a "Cannot access before initialization" TDZ error.
-- Mail assertions use the `eventually` poller because the service fires the mail without `await`-ing it; a plain `setTimeout` is insufficient for CI timing.
-- The one-year ceiling test uses a fixed calendar date (`2030-02-28`) to verify the "same day a year on" rule independent of the current clock.
-- Revoking the same key twice is expected to produce **exactly one** audit row (idempotent audit), which is a deliberate contract assertion.
+- `mockOutbox` is a plain array (not a jest mock) so that the hoisted `jest.mock` factory can close over it; it is cleared in `beforeEach`.
+- The audit mock **replaces** `recordAudit` rather than spying, because `recordAudit` closes over its own module's `emitAuditEvent`—a simple spy would not intercept the internal call path.
+- The `eventually` helper exists because the service fires the mail queue without awaiting it; a plain `await mint(...)` is insufficient to observe the side-effect.
+- `afterEach` calls `jest.restoreAllMocks()` (for `spyOn`-based stubs of `userService` and `logger`), while `jest.mock`-based replacements persist for the whole file.
+- The file's own doc-comment explicitly scopes it: it does **not** cover permission-subset validation logic or HTTP status/shape contracts.

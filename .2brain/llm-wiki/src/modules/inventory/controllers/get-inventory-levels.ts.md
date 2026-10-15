@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/controllers/get-inventory-levels.ts
-sha256: 93a36a9bcc8c565b8f053eac6b2227cbb3c7b3a3114059b4404951fe401cb5c5
-generated_at: 2026-09-23T18:43:34.865061+00:00
+sha256: f87e94e80be8f82686b6bb546d02a09be73ada696f13eef4bdc161b5dfd1622c
+generated_at: 2026-10-15T10:33:43.707993+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP controller that exposes `GET /inventory/levels` — a paginated, sorted (scarcest-first) stock-board listing. It validates query-string parameters and delegates to the inventory service, keeping routing logic out of the service layer.
+Controller for `GET /inventory/levels` — returns a paginated list of inventory levels (stock counters and availability, scarcest first). It is a thin layer that parses/validates query params and delegates to the inventory service.
 
 ## Key elements
 
-- **`getInventoryLevels`** (named export) — the list-controller produced by `createListController`. Binds entity name `'inventoryLevels'`, a zod schema for query params, boolean coercion config, and the `runList` callback that calls `inventoryService.listLevels(parsed)`.
-- **Schema** — `ListInventoryLevelsQueryParams.extend({ page: pageSchema, pageSize: pageSizeSchema }).partial()`. Pagination fields are added here rather than living on the shared query-param type, and `.partial()` makes every field optional at the HTTP boundary.
-- **`input: { booleans: ['lowOnly'] }`** — tells the controller factory to coerce the `lowOnly` query-string value (text `"true"`/`"false"`) into a real boolean before passing it to the service.
+- **`getInventoryLevels`** (default export) — The HTTP handler built with `createListController`. Configures:
+  - `entity: 'inventoryLevels'` — identifies the resource type for the generic list machinery.
+  - `schema` — `ListInventoryLevelsQueryParams` (from `@api/schemas.zod`) extended with `page` and `pageSize` (from `pageSchema` / `pageSizeSchema`), then made `.partial()` so every param is optional.
+  - `input: { booleans: ['lowOnly'] }` — tells the factory to coerce the text-only `lowOnly` query value into a real boolean before passing it to the service.
+  - `runList` — calls `inventoryService.listLevels(parsed)` and returns the result.
 
 ## Relationships
 
-- **`@infrastructure/surfaces/create-list-controller`** — factory that builds the Express-style handler, wiring validation, boolean coercion, and pagination around the `runList` callback supplied here.
-- **`@infrastructure/http/schemas`** — provides `pageSchema` and `pageSizeSchema` (zod validators) that this file merges into the query-param schema.
-- **`../service`** (`inventory/service.ts`) — `inventoryService.listLevels(parsed)` is the sole data-access call; all business logic lives there.
-- **`./routes`** (`modules/inventory/routes.ts`) — registers `getInventoryLevels` on the `GET /inventory/levels` route (this file is the handler it mounts).
+- **`src/infrastructure/http/schemas.ts`** — Provides `pageSchema` and `pageSizeSchema`, the shared Zod validators for standard pagination params appended to the endpoint schema.
+- **`src/infrastructure/surfaces/create-list-controller.ts`** — Supplies the `createListController` factory that handles request parsing, boolean coercion, and response shaping; this file only supplies the config object.
+- **`src/modules/inventory/routes.ts`** — Wires `getInventoryLevels` onto the `GET /inventory/levels` route.
+- **`src/modules/inventory/services/index.ts`** — Exports `inventoryService`, whose `listLevels` method performs the actual data retrieval.
 
 ## Notes
 
-- `lowOnly` is the only boolean in the param set; the comment in the source flags that query strings are always text, so the controller layer must handle the coercion explicitly via the `input.booleans` config.
-- The schema is built with `.extend(...).partial()`, meaning _all_ fields (including the original `ListInventoryLevelsQueryParams` fields) are optional at the HTTP layer. Do not assume any field is required.
-- The entity string `'inventoryLevels'` is used by the list-controller for logging / OpenAPI naming; keep it in sync with the service's internal collection if it changes.
+- All query parameters are optional (`.partial()`), so a bare `GET /inventory/levels` with no query string is valid.
+- `lowOnly` is the only param needing type coercion; the factory handles the conversion internally based on the `booleans` hint — you don't see a manual `String → boolean` cast in this file.
+- The `entity` string is a label for the list-controller's logging/responses, not a DB table name.

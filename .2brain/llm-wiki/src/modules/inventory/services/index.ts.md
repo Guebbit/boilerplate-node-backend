@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/services/index.ts
-sha256: de290259309e1b97f3285315d1b42bbf6ed63ac24d5b8b6b625b8e7888edff8c
-generated_at: 2026-10-14T15:58:10.074252+00:00
+sha256: 060b537ededb2a31f529b0096fb867149d110e3d0fb524a91047aba087af50e6
+generated_at: 2026-10-15T10:36:15.182522+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file (and sole public surface) for the inventory services module. It re-exports every stock-mutation and stock-query function from the sub-files (`reserve`, `holds`, `returns`, `sweep`, `levels`, `admin`) and bundles them into a single `inventoryService` object. All stock changes funnel through `applyTransition` internally; this file is purely the import/export boundary so callers never reach into sub-paths directly.
+Barrel (re-export) file for the inventory service. It aggregates the public API of the `./reserve`, `./holds`, `./returns`, `./transition`, `./sweep`, `./levels`, and `./admin` sub-modules into a single import surface and also exposes them as a grouped `inventoryService` object. It exists so callers (controllers, cart services, ops scripts, tests) have one stable entry point rather than reaching into individual sub-files.
 
 ## Key elements
 
-- **Named re-exports** — Every function is published by name *and* through the `inventoryService` object. `module.ts` and `metrics.ts` import `openLevel`, `removeLevel`, `receive`, and `lowStockCount` directly; the remaining callers (cart services, tests, controllers) may use either form.
-- **`inventoryService`** — Single object handle exposing all 24 operations (reserve, commit, ship, release, restock, sweep, level CRUD, admin adjustments, movement/preorder queries, cache refresh, hold checks).
+- **Named re-exports** — every function from the sub-modules is re-exported by name (e.g. `reserveForOrder`, `commitForOrder`, `releaseForOrder`, `availableFor`, `receive`, `adjust`, `runReservationSweep`, etc.). This flat surface is relied on by `module.ts`, `metrics.ts`, and the test suites directly.
 - **Type re-exports** — `StockLine`, `StockShortfall`, `ReserveOutcome`, `LevelFilters`, `MovementFilters` from `./types`.
-- **Sub-file imports (not re-exported as objects):** `./reserve`, `./holds`, `./returns`, `./sweep`, `./levels`, `./admin`, `./types`.
+- **`inventoryService` (const object)** — a single handle that groups all runtime functions (including `isStockBoundToOrder`, `isHoldReleased`, which are *not* in the named export list) for callers that prefer a single reference.
+- **Doc block** — states the invariant that stock changes and ledger rows are always paired inside `applyTransition` (lived in the sub-modules, not this file), and that no Mongo transactions are used.
 
 ## Relationships
 
-- **`src/modules/cart/services/checkout.ts`** — Consumes `reserveForOrder`, `commitForOrder`, `releaseForOrder` (and related hold functions) during order placement and finalisation.
-- **`src/modules/cart/services/shelf.ts`** — Uses hold-related exports (`extendHoldForOrder`, `isHoldReleased`, `isStockBoundToOrder`) for shelf/hold logic.
-- **`src/modules/cart/services/view.ts`** — Reads stock state via `availableFor` and hold-boundary checks.
-- **`src/modules/inventory/controllers/get-inventory-levels.ts`** — Calls `listLevels`, `lowStockCount`, `listMovements` to serve admin read endpoints.
-- **`scripts/ops/sweep-reservations.ts`** — Ops script that invokes `runReservationSweep` to expire stale reservations.
-- **`src/modules/cart/tests/integration/*.test.ts`** and **`src/modules/delivery/tests/integration/*.test.ts`** — Drive the full reservation → commit → ship / release cycles through this barrel.
-- **`src/modules/delivery/tests/factories.ts`** — Constructs fixture orders that the above integration tests pass into inventory functions.
+- **`src/modules/cart/services/checkout.ts`** — consumes reservation/commit/release functions (e.g. `reserveForOrder`, `commitForOrder`, `releaseForOrder`) to lock and release stock during order lifecycle.
+- **`src/modules/cart/services/shelf.ts` / `view.ts`** — read stock availability and levels (`availableFor`, `listLevels`) to display shelf status.
+- **`src/modules/inventory/controllers/get-inventory-levels.ts`** — calls level-query functions (`listLevels`, `availableFor`, `listMovements`, `listPreorders`, `lowStockCount`) to serve API responses.
+- **`scripts/ops/sweep-reservations.ts`** — invokes `runReservationSweep` for periodic cleanup of stale reservations.
+- **Cart & delivery test suites** — import individual functions or `inventoryService` to set up and assert stock state in integration scenarios (checkout totals, stock flags, preorders, holds, merge, override-sync).
+- **`src/modules/delivery/tests/factories.ts`** — builds inventory fixtures (levels, holds) used across delivery integration tests.
 
 ## Notes
 
-- **Surface contract:** The barrel's export list is load-bearing. A file move or rename inside the folder must not shrink the public surface, because `module.ts`, `metrics.ts`, and multiple test suites import by name from this index.
-- **No transactions:** The module deliberately avoids Mongo multi-document transactions. Gaps (e.g., between counter write and ledger insert) are acknowledged at the call sites that own them, not guarded here.
-- **Folder, not single file:** Split into sub-files only after the module passed ~800 lines. `docs/theory/layers.md` documents the layering rationale.
-- **`applyTransition` is internal:** It is not exported from this barrel. Consumers only see the high-level operations listed above.
+- The file is a **barrel only**; no logic lives here. All behavior is in the sub-modules.
+- The doc comment warns that the named-export surface is load-bearing: `module.ts` and `metrics.ts` import `openLevel`, `removeLevel`, `receive`, `lowStockCount` by name, and test suites drive the rest. Do not remove or rename exports when refactoring sub-files.
+- `isStockBoundToOrder` and `isHoldReleased` are available via `inventoryService` but are **not** re-exported as top-level named exports — callers must use the object handle for those two.
+- The folder grew past ~800 lines and was split into sub-files; this index is the stable facade. See `docs/theory/layers.md` for the split rationale.

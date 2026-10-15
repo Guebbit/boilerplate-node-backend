@@ -16,7 +16,8 @@ import { wishlistService } from '@modules/wishlist';
 import { notificationsService } from '@modules/notifications/services';
 import { userService } from '@modules/users';
 import { registerModules } from '@kernel/registry';
-import { resetDomainEvents } from '@kernel/events';
+import { emitDomainEvent, resetDomainEvents } from '@kernel/events';
+import { notificationModel } from '../../model';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { enabledModules } from '../../../../modules';
 
@@ -254,6 +255,20 @@ describe('the module subscriptions', () => {
 
             expect(message?.code).toBe('notifications.preorder-confirm-wait');
             expect(message?.params).toHaveProperty('answerBy');
+        });
+
+        it('writes no row at all for a buyer whose account was erased', async () => {
+            await emitDomainEvent('fulfillment_order.delayed', {
+                orderId: 'order-1',
+                fulfillmentOrderId: 'fo-1',
+                titles: ['Blue mug'],
+                agreedAt: new Date().toISOString(),
+                reason: 'moved',
+                needsAnswer: false
+            });
+
+            // Not an inbox read: a stray row would belong to a made-up owner nobody can open.
+            await expect(notificationModel.countDocuments({})).resolves.toBe(0);
         });
 
         it('writes nothing when the date moves earlier', async () => {

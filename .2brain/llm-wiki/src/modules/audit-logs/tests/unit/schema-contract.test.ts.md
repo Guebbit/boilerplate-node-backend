@@ -1,7 +1,7 @@
 ---
 source: src/modules/audit-logs/tests/unit/schema-contract.test.ts
-sha256: 59ef51f3aea9a7c46c29e4962c14c70bc7a7b1a1ce0b4ef10cb379828c387370
-generated_at: 2026-09-23T18:28:22.316604+00:00
+sha256: 4f0220efdd2a23999114bf8157153dd2c20a8e89ca90e178351063a03a85bbb5
+generated_at: 2026-10-15T10:22:14.896164+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests that lock down the Mongoose schema for audit-log entries: which fields are required, which fields are restricted to closed enum sets, which Mongoose options are set (`timestamps`, `bufferCommands`), and which indexes exist with what options (including the single TTL index). The file exists to make schema drift visible as a test failure rather than a silent production gap.
+A compliance contract test that pins down the `auditLogSchema` (Mongoose) as a regulatory artifact rather than a convenience. It asserts the required fields, closed-set enums, schema options (`timestamps`, `bufferCommands`), index topology, and TTL retention window. Unlike typical unit tests, it documents *why* each constraint exists (e.g., a silent buffer would swallow audit-loss signals) and fails if the schema drifts from the operational contract.
 
 ## Key elements
 
-- **`RETENTION_SECONDS`** – Derived from `NODE_AUDIT_RETENTION_DAYS` (default 90 days) into seconds. Used in the TTL assertion so the test tracks the configured value rather than a hardcoded literal.
-- **"what an entry must carry" block** – Asserts the six required paths (`action`, `actor_role`, `actor_user_id`, `level`, `outcome`, `timestamp`); validates closed enums on `actor_role`, `outcome`, `level`; confirms `anonymous` is present in the role enum; confirms `actor_role_name` exists as an open, optional path (no enum, not required).
-- **"options" block** – Asserts `timestamps: false` (timestamp comes from the event, not the write) and `bufferCommands: false` (an unreachable DB must reject the write so the caller can fall back to local logging).
-- **"indexes and retention" block** – Asserts the exact set of four indexes and their order; asserts that only `timestamp_1` carries `expireAfterSeconds`; asserts that `timestamp_1` is ascending (Mongo only honours TTL on a single-field ascending index, while the compound indexes use `timestamp_-1`).
+- **`RETENTION_SECONDS`** – Computed from `currentEnvironment().NODE_AUDIT_RETENTION_DAYS` (default 90) × 86 400. Used to assert the TTL index `expireAfterSeconds` so the test tracks the configured value, not a literal.
+- **`describe('…what an entry must carry')`** – Asserts the seven required paths (`action`, `actorRole`, `actorScope`, `actorUserId`, `level`, `outcome`, `timestamp`), the closed enums for `actorRole` / `outcome` / `level`, that `anonymous` is a valid role, and that `actorRoleName` is present but optional and open.
+- **`describe('…the credential behind an entry')`** – Asserts `actorCredentialId` is a known schema path (so strict-mode writes don't drop it) but is not required.
+- **`describe('…options')`** – Asserts `timestamps: false` + required `timestamp` (emitter-stamped) and `bufferCommands: false` (a failed write must reject so the caller's fallback fires).
+- **`describe('…indexes and retention')`** – Asserts the exact four index specs (three compound `field_1_timestamp_-1` plus `timestamp_1`), the TTL `expireAfterSeconds` on *only* the `timestamp_1` index, and that the TTL index is single-field ascending (a Mongo requirement).
 
 ## Relationships
 
-- **`src/modules/audit-logs/model.ts`** – Source of `auditLogSchema`, the sole subject under test. Every assertion in this file inspects that schema's paths, options, and index definitions.
-- **`tests/support/schema.ts`** – Provides the introspection helpers (`requiredPaths`, `enumOf`, `pathNames`, `optionsOf`, `indexSpecs`, `indexOptionSpecs`) that extract schema metadata as plain data, letting these tests assert against values rather than re-implementing Mongoose introspection.
+- **`src/modules/audit-logs/model.ts`** — Source of `auditLogSchema`, the sole system under test. Every assertion in this file is a contract on that exported schema object.
+- **`src/infrastructure/config/store.ts`** — Provides `currentEnvironment()`, from which `RETENTION_SECONDS` is derived. The test's TTL expectation shifts with the `NODE_AUDIT_RETENTION_DAYS` env var.
+- **`tests/support/schema.ts`** — Supplies the six inspection helpers (`enumOf`, `indexOptionSpecs`, `indexSpecs`, `optionsOf`, `pathNames`, `requiredPaths`) that extract structured facts from a Mongoose schema without serialising it.
 
 ## Notes
 
-- The TTL index assertion is the only place in the codebase where the DB is allowed to delete documents. The test deliberately asserts against `RETENTION_SECONDS` (env-derived) so changing `NODE_AUDIT_RETENTION_DAYS` moves both the schema default and the test together.
-- The ascending vs. descending distinction on `timestamp` is load-bearing: Mongo ignores `expireAfterSeconds` on a descending or compound index. The final test in the "indexes" block exists specifically to catch that confusion.
-- `actor_role` (closed enum) and `actor_role_name` (open, optional) are intentionally different: the name mirrors the value in `authorization-roles.yaml` and must not break writes when a preset role is renamed.
+- **TTL index direction matters.** Mongo only honours `expireAfterSeconds` on a single-field *ascending* index. The same `timestamp` field appears *descending* in the three compound indexes; confusing the two yields an index that never deletes. The test explicitly asserts `timestamp_1: timestamp+1` to guard against this.
+- **`bufferCommands: false` is load-bearing.** The caller (`audit-logs` module) relies on the write *rejecting* so it can fall back to local logging and increment `auditSinkFailuresTotal`. A buffered-then-resolved write would silently lose the entry and the signal.
+- **Retention is env-driven, not hardcoded.** Changing `NODE_AUDIT_RETENTION_DAYS` moves the schema's TTL and this test's expectation together; a literal `7776000` in the test would drift.
+- **This file is intentionally verbose in its comments.** Each assertion carries the *operational rationale* (what goes wrong if the constraint is dropped), making it serve as both test and documentation of the audit-log contract.

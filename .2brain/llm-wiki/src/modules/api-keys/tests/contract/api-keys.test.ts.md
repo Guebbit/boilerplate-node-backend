@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/tests/contract/api-keys.test.ts
-sha256: 35323cc6925b5c7c14081e96860665469e85f0bd07b0b882b0378ee9c02b5d75
-generated_at: 2026-10-14T15:02:06.163176+00:00
+sha256: aca3bb5b96d013b6850f8d36bc5463824d95759808a64ef887d21964e0650ed8
+generated_at: 2026-10-15T10:20:58.541818+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/api-keys` admin surface (GET list, POST mint, DELETE revoke), validated against the bundled `openapi.yaml`. Every route requires a human bearer session; the credentials minted here are *not* exercised against other routes — that happens in `tests/cross-cutting/`.
+Contract tests for the three `/api-keys` admin routes (list, mint, revoke), verifying observable behavior against the bundled `openapi.yaml`. Every route requires a human bearer session; the API keys minted here are **not** exercised against other routes — that cross-cutting coverage lives in `tests/cross-cutting/`.
 
 ## Key elements
 
-- **`setupTestDb()`** — initialises the in-memory test database before any test runs.
-- **`beforeEach` → `ensureTenant(DEPLOYMENT_TENANT_SLUG, …)`** — creates the deployment's shop so that `context.caller.tenantId` resolves to a string (same setup the webhooks contract suite needs).
-- **`ahead(days)` / `IN_A_WEEK()`** — local helpers that produce ISO-8601 expiry timestamps (N days out / one week out, safely under the one-year ceiling).
-- **`describe('GET /api-keys')`** — 401 (no auth), 403 (role without `apikeys` key), 200 listing with `secret` asserted absent on every item.
-- **`describe('POST /api-keys')`** — 201 mint (secret starts with `sk_`, permissions echoed), `Cache-Control: no-store`, 422 for over-scoped / empty / missing / too-far expiry, 401 `REAUTH_REQUIRED` after the reauth window elapses, 403 for unauthorised role.
-- **`describe('DELETE /api-keys/:id')`** — 200 revoke, 404 for an id outside the caller's reach.
-- **`afterEach` → `jest.useRealTimers()`** — restores the timer mock used by the reauth-window test.
+- **`ahead(days)`** / **`IN_A_WEEK()`** — local helpers that produce ISO-8601 expiry strings (N days from now / 7 days out). Used to satisfy or violate the one-year mint ceiling.
+- **`beforeEach` → `ensureTenant(DEPLOYMENT_TENANT_SLUG, …)`** — creates the deployment's shop so that `context.caller.tenantId` resolves to a real tenant during login. Mirrors the setup the webhooks contract suite needs.
+- **`describe('GET /api-keys')`** — asserts 401 (unauthenticated), 403 (role without the `apikeys` key), and 200 listing that never exposes `secret`.
+- **`describe('POST /api-keys')`** — covers: 201 mint returning a one-time `sk_…` secret; `cache-control: no-store`; 422 for a platform-scope permission the caller lacks, empty permissions list, missing `expiresAt`, and `expiresAt` > 365 days (367 vs 360 boundary); 401 `REAUTH_REQUIRED` when the session age exceeds `reauthWindowSeconds('critical')`; 403 for a role without the key.
+- **`describe('DELETE /api-keys/:id')`** — 200 revoke of a self-created key; 404 for an id outside the caller's reach.
+- **`afterEach`** — restores real Jest timers (the reauth test freezes/advances the clock).
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — side-effect import (`import '@tests/contract'`); registers the OpenAPI contract-assertion harness that makes every response shape-check against `openapi.yaml`.
-- **`tests/support/http.ts`** — provides the `api()` HTTP client and `authenticateAsRole(role)` helper used to obtain bearer tokens per test.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` resets and seeds the test database before the suite runs.
-- **`tests/support/clock.ts`** — `freezeDate()` / `advanceDate(ms)` let the REAUTH_REQUIRED test deterministically push the clock past the reauth window.
-- **`src/kernel/config.ts`** — supplies `reauthWindowSeconds('critical')`, the exact threshold the clock-advance test must exceed by one second.
-- **`src/modules/access/index.ts`** — re-exports `ensureTenant` and `DEPLOYMENT_TENANT_SLUG` used in the `beforeEach` to guarantee a tenant context exists.
+| Neighbor | Interaction |
+|---|---|
+| `tests/support/contract.ts` | Imported for side-effect (`import '@tests/contract'`); sets up the contract-test harness (likely OpenAPI schema validation middleware). |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` called at module scope to seed/verify a clean database before the suite runs. |
+| `tests/support/http.ts` | Provides `api()` (supertest-style request builder) and `authenticateAsRole()` used by every test. |
+| `tests/support/clock.ts` | `freezeDate` / `advanceDate` used in the REAUTH_REQUIRED test to simulate session age. |
+| `src/modules/access/index.ts` | Exports `ensureTenant` and `DEPLOYMENT_TENANT_SLUG`, used in `beforeEach` to create the tenant context. |
+| `src/kernel/config.ts` | Exports `reauthWindowSeconds('critical')`, the threshold the clock-advance test must exceed. |
 
 ## Notes
 
-- The `@tests/contract` import is deliberately bare (no bindings); its sole effect is to wire up OpenAPI validation. Removing it would silently disable contract assertions.
-- The 422 "over-reaching permission" test uses a **platform-scope** key (`platform.observability.any.read`) as a stand-in for "a permission the caller genuinely lacks." The comment in-file explains that an admin is unrestricted within tenant scope, so only a platform-scope request triggers the same 422 path.
-- The one-year expiry boundary is tested with 367 days (→ 422) and 360 days (→ 201), implying the ceiling is 365 days.
-- `reauthWindowSeconds` is called with the `'critical'` severity argument; other severities may have different windows — only this one is exercised here.
+- `setupTestDb()` runs **once at module level**, not in `beforeEach` — the suite assumes a single fresh DB per file.
+- The 422 "permission the caller does not hold" test deliberately uses a **platform-scope** key (`platform.observability.any.read`) rather than a truly missing tenant-scope key, because admin is unrestricted within tenant scope. The comment flags this subtlety.
+- The expiry ceiling is exactly **one year (365 days)**: 367 days → 422, 360 days → 201. The boundary is inclusive of 365.
+- The REAUTH_REQUIRED test depends on `reauthWindowSeconds('critical')` from kernel config — if that value changes, the clock-advance delta in the test must follow.
+- The `tenant` field on a minted credential is resolved from `context.caller.tenantId`; without the `ensureTenant` setup the login would not produce a resolvable tenant, causing spurious failures unrelated to the API-key logic under test.

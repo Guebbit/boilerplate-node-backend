@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/events.ts
-sha256: cf1fdb17c3de6b48c9ba25139a2a9666e706f98a0dbff6a844a42ce3c7d43b20
-generated_at: 2026-09-23T18:44:32.525124+00:00
+sha256: 74129445e33af5f511dcae1d2b967c039e0e7a022f41340605cd820b6947931a
+generated_at: 2026-10-15T10:34:45.677254+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the single domain event emitted by the inventory module (`inventory.reservation_expired`) by augmenting the kernel's `DomainEventMap` interface. It exists to let the `orders` module react to a hold expiring without creating a circular import back into inventory.
+Declares the inventory module's two domain events by augmenting the kernel's `DomainEventMap`, and exports their name constants. The events exist to decouple listeners (`orders`, `delivery`) from this module without creating an import cycle: `orders` already imports inventory, and `delivery` imports only the event name.
 
 ## Key elements
 
-- **`declare module '@kernel/events'`** — Extends `DomainEventMap` with the key `'inventory.reservation_expired'` and its payload shape `{ orderId: string }`. This is the sole event for this module; stock-level changes are deliberately _not_ events here (they live in `products/events.ts`).
-- **`RESERVATION_EXPIRED`** (exported `const`) — The canonical string `'inventory.reservation_expired'`, re-exported through the barrel so emitters and listeners share one spelling instead of duplicating a literal.
+- **`DomainEventMap` augmentation** (`declare module '@kernel/events'`) — adds two payload shapes to the kernel's global event catalogue:
+  - `inventory.reservation_expired` — `{ orderId: string }`. Emitted *after* the hold's stock is released; the `orders` listener cancels the order.
+  - `inventory.preorder_allocated` — `{ orderId: string; productId: string; waiting: number }`. Emitted in the same outbox transaction as the allocation; `waiting` is the *remaining* preorder-claim count (a state, not a delta), making redelivery idempotent for the `delivery` listener.
+- **`RESERVATION_EXPIRED`** — exported string constant (`'inventory.reservation_expired'`) so emitter and listeners share one spelling.
+- **`PREORDER_ALLOCATED`** — exported string constant (`'inventory.preorder_allocated'`), same purpose.
 
 ## Relationships
 
-- **`src/modules/inventory/index.ts`** — Barrel file that re-exports `RESERVATION_EXPIRED`, making the event name available to importers without reaching into this file directly.
-- **`src/modules/inventory/service.ts`** — The emitter side: after releasing held units it fires `RESERVATION_EXPIRED` with the affected `orderId`.
-- **`src/modules/inventory/module.ts`** — Module registration; ties the event declaration into the module's lifecycle so the kernel's catalogue picks it up.
-- The **`orders`** module (external neighbor, not listed) is the listener that cancels the corresponding order upon receiving this event. The event exists specifically because `orders` already imports inventory, so a direct import back would form a cycle.
+- **`index.ts`** — barrel re-exports the two name constants so external consumers import from the module root.
+- **`module.ts`** — module registration entry point; pairs these events with the services that emit them.
+- **`services/sweep.ts`** — the service that detects hold expiries; emits `RESERVATION_EXPIRED` after releasing the reserved units.
+- **`services/allocate.ts`** — the service that fulfils preorder receipts; emits `PREORDER_ALLOCATED` in the allocation's outbox transaction.
+- **`tests/integration/preorder.test.ts`** — exercises the `PREORDER_ALLOCATED` flow end-to-end (allocation → event → delivery release).
 
 ## Notes
 
-- The event name uses past tense (`reservation_expired`) intentionally: by the time `orders` handles it, units are already released. The listener acts on a completed fact, not a pending plan.
-- Do **not** add stock-mutation events here. The doc comment explicitly states that a counter write and its explanatory row are a single write and belong in `products/events.ts`.
-- The event is declared via TypeScript module augmentation, not a separate registry file — the kernel's `DomainEventMap` is the single source of truth for all module events.
+- `waiting` on `preorder_allocated` is a **state** (remaining preorder claims), not a delta. A `0` value means all preorder units for that product/order are fully allocated; `delivery` can therefore release unconditionally and safely on redelivery.
+- `reservation_expired` is past-tense by design: the stock is *already* gone by the time the event fires, so the `orders` listener cancels rather than re-plans.
+- Stock-level changes (counter + explanatory row) are a single write and intentionally **not** events — see `products/events.ts` for the product-side catalogue.

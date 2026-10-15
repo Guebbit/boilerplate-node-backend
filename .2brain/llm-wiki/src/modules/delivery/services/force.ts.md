@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/services/force.ts
-sha256: 1b2edb0e1485dac02905936ad207d234b18c6f96604c42e02e88798a0732e7b1
-generated_at: 2026-10-14T15:29:31.209357+00:00
+sha256: 4daf7d5e85671b0e93d9cdffdeb4cdc013b9e02a6d3f095bf3568149485a88c3
+generated_at: 2026-10-15T10:27:50.381131+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single source of truth for the contract that a `forced: true` request imposes on a caller. Both the `ship` and `deliver` routes accept a `forced` flag; this file centralizes the two requirements (a stricter permission and a mandatory reason) so the two routes cannot drift on what "forced" actually demands.
+Centralizes the validation rule for the `forced: true` request flag so that both delivery entry points (`ship` and `deliver`) enforce identical requirements and cannot drift apart. Without this shared guard, each door would need its own copy of the permission and reason checks.
 
 ## Key elements
 
-- **`refuseUnearnedForce(context, forced, reason)`** *(exported const)* — Guard function. When `forced` is falsy it returns `undefined` immediately. Otherwise it checks, in order:
-  1. The caller holds the `orders.any.override` ability → **403** (`FORBIDDEN`) if not.
-  2. A non-empty `reason` string was supplied → **422** (`DELIVERY_OVERRIDE_REASON_REQUIRED`) if not.
-
-  Returns a `ResponseReject` object on failure, `undefined` on success. Does not throw; the caller is expected to spread the reject into the HTTP response.
+- **`refuseUnearnedForce(context, forced, reason)`** — The single export. When `forced` is falsy it returns `undefined` immediately (pass-through). When `forced` is truthy it:
+  1. Returns a **403** `ResponseReject` if the caller does not hold the `orders.any.override` ability key.
+  2. Returns a **422** `ResponseReject` with a `fieldError` on `reason` if no reason string was supplied.
+  3. Returns `undefined` if both checks pass.
 
 ## Relationships
 
-- **`src/modules/delivery/services/ship.ts`** / **`src/modules/delivery/services/deliver.ts`** — Consumers. Each calls `refuseUnearnedForce` before executing its core logic, so the "forced" contract lives in one place.
-- **`src/kernel/ability.ts`** — Provides `holdsKey`, the predicate used to verify the `orders.any.override` ability.
-- **`src/infrastructure/http/response.ts`** — Provides `generateReject` (shapes the 403/422 body) and the `ResponseReject` type.
-- **`src/infrastructure/i18n/index.ts`** — Provides `t` for the localized error-message strings.
-- **`src/types/index.ts`** / **`src/types/auth-context.ts`** — Source of the `CallerContext` type that carries the caller's identity and abilities.
+- **`@kernel/ability`** — calls `holdsKey` to verify the caller's `orders.any.override` permission.
+- **`@infrastructure/http/response`** — uses `generateReject` and `fieldError` to build the 403/422 rejection payloads; typed against `ResponseReject`.
+- **`@infrastructure/i18n`** — calls `t` to resolve human-readable error messages (`generic.error-forbidden`, `delivery.override-reason-required`).
+- **`@types`** — consumes the `CallerContext` type for the caller parameter.
+- **`../deliver.ts` / `../ship.ts`** — the two call-sites that import `refuseUnearnedForce` and gate their handlers on its return value before proceeding.
 
 ## Notes
 
-- The `orders.any.override` ability is intentionally *additional* to whatever route-level permission gate (e.g. `delivery.any.update`) the ship/deliver routes already enforce. Holding the route permission alone is not enough to force.
-- `reason` is required **only** when `forced` is `true`; a non-forced request never needs it.
-- The function never mutates or throws — it is a pure "refusal calculator" that returns either a reject payload or `undefined`, keeping the call site a simple `if (reject) return reject;` pattern.
+- The route-level `delivery.any.update` gate is explicitly **not** sufficient; `orders.any.override` is a stricter, independent ability. Callers must hold *both*.
+- The function returns `undefined` on success (not `null` or a success object). Callers should treat "falsy / undefined" as "proceed" and a non-undefined `ResponseReject` as "abort with this response."
+- `reason` is only validated when `forced` is truthy; a missing reason on a normal (non-forced) call is irrelevant here.

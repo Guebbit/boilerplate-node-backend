@@ -1,7 +1,7 @@
 ---
 source: src/modules/feedback/tests/integration/submission-rate-limit.test.ts
-sha256: 29c966500bf955cf9ad551777a087d5dff0152af4bb989cb06c2b19ee786a264
-generated_at: 2026-09-23T18:42:22.785007+00:00
+sha256: 0ce85855d1eb961715bdd480136090e67988f03f0d02fb64e97dc6d186c0eefe
+generated_at: 2026-10-15T10:33:08.140977+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for `submissionLimiter` that verifies the contact-form budget is consumed by **every** request (success or failure) and that each 429 refusal is logged. It guards the regression where someone accidentally mounts `credentialLimiters` (which use `skipSuccessfulRequests`) on `POST /feedback/contact`, where every abusive submission returns `201` and would therefore spend zero of the budget.
+Integration test for `submissionLimiter`, the rate-limit budget on `POST /feedback/contact`. It sends real HTTP requests through the `express-rate-limit` middleware (via `supertest`) to verify that the limiter counts *every* request—success or failure—and that each 429 refusal is logged, since nothing downstream records it.
 
 ## Key elements
 
-- **`submissionLimiterWithBudget(limit)`** — helper that reloads the rate-limits module with `NODE_SUBMISSION_RATE_LIMIT_MAX` set to `limit` and returns the `submissionLimiter` instance. Built on `withReloadedRateLimits` from the shared harness.
-- **"spends the budget on a SUCCESSFUL request"** — sends 5 requests through a real Express + `express-rate-limit` setup; asserts the first 3 get `201`, the last 2 get `429`.
-- **"also spends the budget on a FAILED request"** — same loop but the handler returns `422`; confirms the limiter counts failures too (budget is not success-gated).
-- **"logs every refusal, since nothing downstream will"** — asserts `logger.warn` is called with the real method/route/status on a 429, because `installSecurity` mounts the limiter _before_ the request-logger, so the normal per-request log never fires for a refused request.
+- **`submissionLimiterWithBudget(limit)`** — Local helper that calls `withReloadedRateLimits` to re-import `@modules/feedback/rate-limits` with `NODE_SUBMISSION_RATE_LIMIT_MAX` set, returning the `submissionLimiter` instance.
+- **`describe('submissionLimiter')`** — Three test cases:
+  1. Budget is spent on successful (201) responses; 4th and 5th requests return 429.
+  2. Budget is spent on failed (422) responses as well; same 3-then-429 pattern.
+  3. A 429 refusal is logged via `logger.warn` with the real path `POST /contact`, method, route, and status code in the payload.
+- **`afterEach(() => jest.resetModules())`** — Ensures each test gets a fresh module graph after `withReloadedRateLimits` mutates the import cache.
 
 ## Relationships
 
-- **`src/modules/feedback/rate-limits.ts`** — the module under test. The helper imports it (via `withReloadedRateLimits`) and pulls out `submissionLimiter`.
-- **`tests/support/rate-limit-harness.ts`** — provides `withReloadedRateLimits`, which swaps the `NODE_SUBMISSION_RATE_LIMIT_MAX` env var, resets the Jest module registry, re-imports the rate-limits module, and returns the requested export.
+- **`src/modules/feedback/rate-limits.ts`** — The module under test; this file imports `submissionLimiter` from it (dynamically, after reload).
+- **`tests/support/rate-limit-harness.ts`** — Provides `withReloadedRateLimits`, which the helper uses to inject a specific `NODE_SUBMISSION_RATE_LIMIT_MAX` value before the dynamic import.
+- **`@infrastructure/adapters/logger`** — Dynamically imported in the log-assertion test; the test spies on `logger.warn` to confirm the refusal trace.
 
 ## Notes
 
-- Deliberately **not** built on the harness's `appAnswering` helper: that helper pins the route to `/route`, but the logging test asserts the log message contains the real path `POST /contact`.
-- Lives in **integration** (not unit) because it exercises `express-rate-limit`'s middleware with real HTTP requests via `supertest`. The sibling `tests/unit/rate-limits.test.ts` covers pure configuration properties.
-- `afterEach` calls `jest.resetModules()` to prevent budget state from leaking between the three test cases.
-- The logging test mocks `logger.warn` and restores it in-line (`warn.mockRestore()`), rather than in an `afterEach`, so the spy is scoped to that single test.
+- This file intentionally does **not** use the harness's `appAnswering` helper because the third test asserts the log line names the real path `POST /contact`, which the harness's fixed `/route` cannot provide.
+- The limiter spends on *all* responses (success and failure), the opposite of `credentialLimiters`' `skipSuccessfulRequests` option. This is the regression the first test guards: mounting credential limiters on `/contact` would count zero meaningful requests because abusive submissions return 201.
+- The log assertion exists because `installSecurity` mounts limiters *before* `installRequestContext` mounts the request logger, so a 429 never reaches the standard status-logging path. The limiter itself must emit the audit line.

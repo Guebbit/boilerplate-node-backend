@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/contract/api.contract.test.ts
-sha256: 542fa190c7e1c020b519a4d9592a7d3a84e34684442e274be4d9fe8fb3d6308a
-generated_at: 2026-10-14T15:35:29.481579+00:00
+sha256: 11444459596400bfc4d0bc4d7802328185921a789dd8cb3516569b8fad1001a2
+generated_at: 2026-10-15T10:28:37.636613+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/delivery` API exercised over real HTTP. Every response is auto-validated against the API spec via `@tests/contract`. The file pins that nine routes across three audiences (public, order-owner, staff) each return a spec-conforming shape and that the correct branch (200 / 403 / 404 / 409 / 422) is reachable. Business-rule correctness of the acts themselves is deliberately left to the unit and integration suites.
+Contract tests for the `/delivery` API surface over real HTTP. Every response is automatically validated against the API spec via the `@tests/contract` side-effect import. The file pins that each contract branch (status codes, body shape, error codes, audience-specific fields) is actually reached over the wire, for three audiences: public (methods catalogue), the order owner (fulfilment read), and staff (all write operations).
 
 ## Key elements
 
-- **`authenticateWithShipment`** (local helper) — creates a user, a product, an order, and ships everything; returns the bearer token and order so owner-read tests have a shipped record.
-- **`adminWithOrder(quantity, extras?)`** (local helper) — creates an admin, a product, a processing order, and returns bearer + `orderId` + `fulfillmentOrderId` + `productId` for staff-write tests.
-- **`describe('GET /delivery/methods')`** — four tests: unauthenticated 200, resilience to a stale `?weight=` query param, `shipToCountries` reflecting `NODE_SHOP_COUNTRY`, and every method stamped with the shop currency.
-- **`describe('GET /delivery/order/{orderId}')`** — four tests: owner sees both lists with read-only actions, unpaid order returns empty arrays, staff sees mutable actions + hold note, 404 for another customer's order.
-- **`describe('POST /delivery/order/{orderId}/start')`** — three tests: paid → processing (200) and fulfillment orders appear; unpaid → 409; customer → 403.
-- **`describe('POST /delivery/fulfillment-orders/{id}/shipments')`** — five+ tests (file truncated): 201 + `Location` header on full ship; partial ship leaves order `processing`; 422 `DELIVERY_TRACKING_CODE_REQUIRED`; 422 `DELIVERY_LINES_INVALID` (over-quantity); 422 for digital fulfillment order.
+- **`setupTestDb()`** — bootstraps a clean test database before the suite runs.
+- **`authenticateWithShipment()`** — helper that logs in a user, creates a product + order, ships it, and returns the bearer token and order. Used for owner-reading scenarios.
+- **`adminWithOrder(quantity, extras)`** — helper that logs in an admin, creates a product, a processing order (optionally with a specific `shippingMethod`), and returns bearer, `orderId`, `fulfillmentOrderId`, `productId`. Used for staff write scenarios.
+- **`describe('GET /delivery/methods')`** — four tests: unauthenticated 200, ignored `?weight=` query param, `shipToCountries` reflects `NODE_SHOP_COUNTRY`, every method carries the shop currency.
+- **`describe('GET /delivery/order/{orderId}')`** — four tests: owner sees both lists with restricted actions; unpaid order returns empty lists; staff sees `hold`/`release` actions and `holdNote`; another customer's order returns 404.
+- **`describe('POST /delivery/order/{orderId}/start')`** — three tests: admin starts a paid order (200, fulfillment orders created); non-paid order → 409; customer without `delivery.any.start` → 403.
+- **`describe('POST /delivery/fulfillment-orders/{id}/shipments')`** — five visible tests: full ship (201 + `Location` header, order → shipped); partial ship (order stays processing, `partially_fulfilled`); missing tracking code on express → 422 `DELIVERY_TRACKING_CODE_REQUIRED`; over-quantity lines → 422 `DELIVERY_LINES_INVALID`; digital fulfillment order rejection (truncated).
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/contract.ts` | `import '@tests/contract'` — side-effect import that registers the auto contract matcher used by every `expect(response).toMatchContract()` assertion. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` called once at module scope to provision and clean the test database. |
-| `tests/support/http.ts` | `api()`, `authenticateAs`, `authenticateAsRole`, `bearerForCookie` — the HTTP client and auth helpers used by every request. |
-| `tests/support/ids.ts` | `MISSING_ID` — sentinel ID for 404 / not-found assertions. |
-| `tests/support/cookies.ts` | `setCookie` — sets session cookies where bearer auth is not the mechanism. |
-| `tests/support/clock.ts` | `freezeDate`, `advanceDate` — deterministic time for time-dependent contract branches. |
-| `src/modules/delivery/tests/factories.ts` | `fulfillmentOrdersOf`, `paidPreorderOrder`, `shipEverything`, `shipmentsOf` — delivery-domain fixtures. |
-| `src/modules/orders/tests/factories.ts` | `createOrder`, `readOrder`, `toOrderItem` — order fixtures consumed to set up delivery state. |
-| `src/modules/products/tests/factories.ts` | `createProduct` — product fixture (physical / digital). |
-| `src/modules/users/tests/factories.ts` | `createAdminUser`, `PLAIN_PASSWORD` — user fixtures for auth. |
-| `src/kernel/config.ts` | `reauthWindowSeconds` — used when testing re-authentication timing in a contract branch. |
-| `src/types/index.ts` | `OrderStatus` enum — drives fixture setup and assertions. |
+- **`@tests/contract` (tests/support/contract.ts)** — side-effect import that registers a global response interceptor to validate every `api()` call against the OpenAPI/contract spec. The backbone of this file.
+- **`@tests/setup-test-db.ts`** — resets and seeds a test database before each run.
+- **`@tests/http.ts`** — provides `api()`, `authenticateAs`, `authenticateAsRole`, `bearerForCookie`; the actual HTTP client used for every request.
+- **`@tests/cookies.ts`** — `setCookie` for session-based auth where applicable.
+- **`@tests/clock.ts`** — `freezeDate` / `advanceDate` for time-dependent assertions (e.g., reauth windows).
+- **`@tests/ids.ts`** — `MISSING_ID` for negative-path tests.
+- **`@modules/users/tests/factories.ts`** — `createAdminUser`, `PLAIN_PASSWORD` for provisioning admin accounts.
+- **`@modules/products/tests/factories.ts`** — `createProduct` for seeding purchasable items.
+- **`@modules/orders/tests/factories.ts`** — `createOrder`, `readOrder`, `toOrderItem` for order fixtures.
+- **`@modules/delivery/tests/factories.ts`** — `fulfillmentOrdersOf`, `paidPreorderOrder`, `shipEverything`, `shipmentsOf` for delivery-domain fixtures.
+- **`@kernel/config.ts`** — `reauthWindowSeconds` (imported, likely used in a truncated section).
+- **`@types/index.ts`** — `OrderStatus` enum for order-state assertions.
 
 ## Notes
 
-- `setupTestDb()` runs **once per file** (module top-level), not per test; tests within a `describe` block share that database state.
-- The `?weight=10000` test is intentional regression coverage: the methods endpoint is now an unfiltered catalogue, and the test guards against a query param silently altering the response shape.
-- `shipToCountries` is asserted against `['IT']` because `tests/support/setup-environment.ts` sets `NODE_SHOP_COUNTRY=IT` and leaves `NODE_SHIP_TO_COUNTRIES` unset. Currency assertions are likewise pinned to `EUR` by the same environment.
-- The file explicitly does **not** assert business invariants (e.g. "you can't ship more than the order total" beyond the 422 code); those rules belong to the unit/integration suites. Contract tests only verify that the *shape and status* of the response matches the published spec.
+- The `@tests/contract` import is a **side-effect** module: it wraps the HTTP client so every response is auto-asserted against the spec. No explicit `expect(response).toMatchContract(...)` calls appear; the interceptor handles it.
+- The `?weight=` test documents a **deliberate API change**: weight-based filtering was removed from the methods endpoint. The test guards against silently re-introducing a filter.
+- `shipToCountries` and per-method `currency` are asserted from environment variables (`NODE_SHOP_COUNTRY=IT`, currency `EUR`) set in `tests/support/setup-environment.ts` — these are deployment-level config, not per-request values.
+- The 404-for-foreign-order test (not 403) is a contract choice: the owner endpoint hides existence of other users' orders.
+- File is truncated in the source; the digital-fulfillment-order test and any remaining routes are not visible.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/unit/emails.test.ts
-sha256: 3e41350db17658809c40766d20313a92702ee6503a0c097a2274b8e253bab2b3
-generated_at: 2026-09-23T18:38:14.011030+00:00
+sha256: 5f8d2427afa5f98ad0d365a5b9317d441cc36b938329fd3bf876699e44e9526e
+generated_at: 2026-10-15T10:29:08.382276+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test for the `shipmentShippedEmail` builder. It verifies that the dispatch email renders correctly: the tracking code is interpolated (never left as a raw `{{…}}` token), the customer's name appears in the greeting, every copy slot is resolved to real text rather than an i18n key, and locale selection drives actual translation differences.
+Unit tests for the two shipment email builders (`shipmentShippedEmail`, `shipmentDeliveredEmail`). They verify that the customer-facing fields a recipient must act on—tracking code, line items, remaining-units notice, withdrawal deadline—are populated correctly, are locale-aware, and never leak unresolved i18n keys or template placeholders.
 
 ## Key elements
 
-- **`NAME` / `CODE`** – Shared fixture constants (`'Ada Lovelace'`, `'TRK-99887766'`) used by every test case.
-- **`describe('shipmentShippedEmail', …)`** – Contains five assertions:
-    - _names the dispatch template_ – `.template` equals `'delivery.shipment-shipped'`.
-    - _puts the tracking code in the message_ – `data.tracking` contains `CODE` and has **no** `{{` remnants.
-    - _greets the customer by name_ – `data.greeting` contains `NAME`.
-    - _resolves every copy slot rather than echoing a key_ – `subject`, `data.pageMetaTitle`, `data.body`, `data.footer` are non-empty and do not start with `'delivery.'`; `data.pageMetaLinks` is `[]`.
-    - _carries the locale through and translates by it_ – `locale` is passed through (`'en'` / `'it'`), and the Italian `subject` differs from the English one.
+- **Shared fixtures** — `NAME` (`'Ada Lovelace'`), `CODE` (`'TRK-99887766'`), `LINES` (two items), and `completing` (a shipment with `remainingUnits: 0`) used across both `describe` blocks.
+- **`describe('shipmentShippedEmail', …)`** — asserts template ID, tracking-code presence (and absence when `trackingCode` is `undefined`), line-item formatting (`"2 × Analytical Engine"`), conditional `more` field, greeting, full i18n resolution (no empty values, no `delivery.*` key echoes), and locale pass-through.
+- **`describe('shipmentDeliveredEmail', …)`** — asserts template ID, line-item list, greeting, conditional `withdraw` field (only when `withdrawUntil` is supplied), locale-aware date formatting (UTC), and full i18n resolution.
 
 ## Relationships
 
-- **`src/modules/delivery/emails.ts`** – Sole import. The test exercises `shipmentShippedEmail(locale, name, trackingCode)` and asserts on the shape of the object it returns (`template`, `subject`, `data.{tracking, greeting, pageMetaTitle, body, footer, pageMetaLinks, locale}`).
+- **`src/modules/delivery/emails.ts`** — sole dependency under test; provides `shipmentShippedEmail` and `shipmentDeliveredEmail`. The tests call each builder with `(locale, name, shipmentData)` and assert on the returned `{ template, subject, data }` object.
 
 ## Notes
 
-- The tracking-code test is the file's stated primary concern (see the module doc-comment): an empty or half-interpolated code is the failure mode that makes the email useless to the customer.
-- The "resolves every copy slot" test is a guard against i18n fallback regressions where a missing key would surface as the key string itself (e.g. `"delivery.shipment-shipped.body"`).
-- `data.tracking` is cast with `as string`; the test relies on the builder always producing a string there, not an object.
+- The "resolves every copy slot" tests guard against a class of bug where an i18n key (e.g. `delivery.shipment-shipped`) is returned verbatim instead of translated copy. They check that no value is empty **and** does not start with `delivery.`.
+- The tracking-code test explicitly rejects `{{` in the output, catching a half-interpolated template string.
+- `data.more` is expected to be `undefined` (not an empty string) when `remainingUnits` is `0`; `data.withdraw` is expected `undefined` when no `withdrawUntil` is passed.
+- The withdrawal date is asserted as a UTC calendar date (`November 14, 2026` / `14 novembre 2026`), not a timestamp, confirming the builder localizes a UTC instant.

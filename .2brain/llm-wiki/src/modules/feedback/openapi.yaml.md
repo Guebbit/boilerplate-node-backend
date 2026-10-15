@@ -1,7 +1,7 @@
 ---
 source: src/modules/feedback/openapi.yaml
-sha256: 7030cdcb8982a3df60745d9f5d534e9cf9dd26d6a076c544fc8dd07653166ef5
-generated_at: 2026-09-27T14:53:05.247367+00:00
+sha256: 1ce2337d17439afabb09192073e9824d7df0616b93a11c8c1141d31aa941a3a1
+generated_at: 2026-10-15T10:32:21.957859+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.0.3 contract for the feedback module (v2.0.0). Defines the REST surface for user-submitted contact requests and the admin CRUD/triage workflow over them. Serves as the single source of truth for endpoint shapes, shared error semantics, and schema references consumed by the module's implementation and any generated client code.
+OpenAPI 3.1.0 contract for the feedback module: the public contact-submission endpoint and the authenticated admin queue (list, search, update, delete) for visitor feedback requests. It also declares the module's contribution to the account data export via the `x-personal-data` extension.
 
 ## Key elements
 
-- **`POST /feedback/contact`** (`createFeedbackRequest`) — Public (`security: []`) endpoint for submitting a contact request. Requires `AntibotChallengeTokenHeader` and `IdempotencyKeyHeader`. Returns `201` with `FeedbackRequestEnvelope`.
-- **`GET /feedback`** (`listFeedbackRequests`) — Bearer-authed listing with query-only filters (`page`, `pageSize`, `text`, `email`, `status`). Returns `FeedbackRequestsResponseEnvelope`.
-- **`POST /feedback/search`** (`searchFeedbackRequests`) — Body-based equivalent of `GET /feedback`; carries `x-alias-of: listFeedbackRequests`. Same auth and response envelope.
-- **`PUT /feedback/{id}`** (`replaceFeedbackRequestStatus`) — Full-replacement of triage state (RFC 9110 §9.3.4). `status` is required in the body.
-- **`PATCH /feedback/{id}`** (`updateFeedbackRequestStatus`) — JSON Merge Patch (RFC 7396) of status/`adminNotes`; `null` clears `adminNotes`.
-- **`DELETE /feedback/{id}`** (`deleteFeedbackRequest`) — Hard delete; returns shared `Success` response.
-- **`components/schemas`** — `FeedbackRequest`, `FeedbackRequestEnvelope`, `FeedbackRequestsResponseEnvelope`, `FeedbackRequestStatus`, plus request/response DTOs for each operation. All envelope schemas wrap a shared `success/status/message/data` shape.
+- **`x-personal-data`** – Extension key consumed by the account-export bundler; when `NODE_EXPORT_INCLUDE_FEEDBACK=true` it adds an optional `feedback` array (`ExportFeedbackTicket[]`) to `AccountExportResponse`.
+- **`POST /feedback/contact`** (`createFeedbackRequest`) – Public (no auth). Anti-bot + idempotency headers required. Returns `201` with a `Location` header; 401/409/422/429/500 for the usual failure modes.
+- **`GET /feedback`** (`listFeedbackRequests`) – Admin list with pagination, sort, text, email, and status query filters. Requires `bearerAuth` **or** `apiKeyAuth`.
+- **`POST /feedback/search`** (`searchFeedbackRequests`) – DTO-friendly alias of the above (`x-alias-of: listFeedbackRequests`); same filters in a JSON body instead of query params.
+- **`PUT /feedback/{id}`** (`replaceFeedbackRequestStatus`) – Full replace of triage state; `status` is required (RFC 9110 §9.3.4).
+- **`PATCH /feedback/{id}`** (`updateFeedbackRequestStatus`) – RFC 7396 merge-patch; omitted fields unchanged, `null` clears `adminNotes`. Accepts both `application/json` and `application/merge-patch+json`.
+- **`DELETE /feedback/{id}`** (`deleteFeedbackRequest`) – Hard delete.
+- **`FeedbackRequestSort`** – Local schema: 1–3-item string array with `enum [createdAt, -createdAt, status, -status, email, -email]`; leading `-` means descending.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — Pervasive `$ref` target for all shared parameters (`AntibotChallengeTokenHeader`, `IdempotencyKeyHeader`, `PageParam`, `PageSizeParam`, `TextParam`, `IdPathParam`), all standard error/success responses (`Unauthorized`, `Conflict`, `ValidationError`, `TooManyRequests`, `Forbidden`, `NotFound`, `InternalError`, `Success`), and base schemas (`EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`, `Id`, `Email`).
-- **`src/modules/feedback/module.ts`** — The runtime module this spec describes; the `operationId` values and path shapes here are what `module.ts` implements.
+- **`shared/contracts/openapi.root.yaml`** – Every shared parameter (`IdPathParam`, `PageParam`, `PageSizeParam`, `TextParam`, `AntibotChallengeTokenHeader`, `IdempotencyKeyHeader`), response (`Unauthorized`, `Forbidden`, `NotFound`, `Conflict`, `ValidationError`, `TooManyRequests`, `InternalError`, `Success`), and header (`Location`) is `$ref`-ed from that root file. This file never redefines them.
+- **`src/modules/feedback/module.ts`** – The module entry point that registers this spec with the framework (route mounting, tag wiring, and likely the export-bundler hook that reads `x-personal-data`).
 
 ## Notes
 
-- **Query-only GET filter.** `GET /feedback` deliberately rejects a request body (RFC 9110 §9.3.1; Fetch spec disallows it). The inline comment documents a historical cache-keying bug where body-borne filters were invisible to `setCache`. Use `POST /feedback/search` if you need a JSON filter payload.
-- **PUT vs PATCH semantics are distinct.** PUT requires the full triage state (`status` mandatory); PATCH is a partial merge where omitted fields are untouched and explicit `null` clears `adminNotes`.
-- **Idempotency + rate-limit interplay on `/feedback/contact`.** `409` = same `Idempotency-Key` still in flight; `422` = same key replayed with a different body. A separate `contactLimiters` middleware (referenced in a comment, lives in `routes.ts`) can return `429` before the handler runs.
-- **Public vs authed split.** Only `POST /feedback/contact` sets `security: []`; every admin route requires `bearerAuth`.
-- **`x-alias-of` is a vendor extension** — it marks `searchFeedbackRequests` as a transport-level alias of `listFeedbackRequests` for tooling that needs to know the two are functionally identical.
+- The `GET /feedback` query-param design is intentional: a body on GET is semantically undefined (RFC 9110 §9.3.1), and the server's `setCache` keys on declared query params, so a body-borne filter would be invisible to the cache key. `POST /feedback/search` exists as the safe alternative.
+- `PUT` requires `status` in the body (whole-state replace); `PATCH` does not (merge semantics). Don't confuse the two when generating or reviewing client code.
+- The `x-alias-of` extension is a custom, non-standard annotation linking `searchFeedbackRequests` back to `listFeedbackRequests`; tooling may ignore it.
+- Rate limiting is handled by `contactLimiters` in `routes.ts` (referenced in a comment), not by any field in this spec.
