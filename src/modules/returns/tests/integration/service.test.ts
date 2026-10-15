@@ -7,6 +7,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { withEnvironment } from '@tests/environment';
 import { assignRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { createUser } from '@modules/users/tests/factories';
@@ -369,6 +370,23 @@ describe('a return on goods that have shipped', () => {
             expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         }
     );
+
+    it('freezes who pays the postage when the return is opened', () =>
+        withEnvironment('NODE_RETURN_POSTAGE_PAYER', 'shop', async () => {
+            const { user, orderId } = await orderIn(OrderStatus.delivered);
+
+            const outcome = await createReturn(
+                { orderId, reason: 'withdrawal' },
+                buyer(user),
+                testCallerContext
+            );
+
+            if (outcome.kind !== 'created') throw new Error('expected a return');
+            expect(outcome.created.returnPostage).toBe('shop');
+            // What the customer was told stays on the row, whatever the setting says later.
+            const stored = await returnRepository.findById(String(outcome.created._id));
+            expect(stored?.returnPostage).toBe('shop');
+        }));
 
     it('leaves the order where it is — a return is its own object, delivered stays terminal', async () => {
         const { user, orderId } = await deliveredOrder();

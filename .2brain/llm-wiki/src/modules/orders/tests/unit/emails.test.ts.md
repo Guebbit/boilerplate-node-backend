@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/emails.test.ts
-sha256: b1cb22c62c05fc3723db8972af10b0605c0223dd3594c2a67d67bb82e63400bf
-generated_at: 2026-09-27T15:21:06.176664+00:00
+sha256: 4d4ba27ea54ba9c13a7dd31019e810d5e167de15ec4b9e2c9a062edb33025553
+generated_at: 2026-10-15T11:19:10.361584+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the two order-documentation builders (`orderConfirmEmail` and `invoiceDocument`). The focus is on rendering correctness—line counts, per-item field fidelity, total consistency with `orderTotal`, locale propagation, and specific invariants (no `t()` re-resolution of product titles, payment-status language, VAT-block arithmetic)—rather than on the underlying math, which is covered by `totals.property.test.ts`.
+Unit tests for the order **confirmation** and **cancellation** email builders (`orderConfirmEmail`, `orderCancelledEmail`). They verify that the rendered output correctly interpolates order lines, defers total computation to the domain layer, carries locale and link parameters through unchanged, and never re-resolves frozen product titles through the i18n layer. They exist because a formatting slip in a money-facing email is read as a billing error by the least able party to check it.
 
 ## Key elements
 
-- **`ORDER` (shared fixture)** – Two-line `InvoiceOrder` with distinct titles, quantities, prices, and a 22 % tax rate; reused by both the email and invoice describe blocks.
-- **`describe('orderConfirmEmail')`** – Asserts template name, line count/content, total defers to `orderTotal` (incl. shipping), greeting uses the customer's name, empty-items safety, locale translation, all copy slots resolved, link URL matches `orderFrontendLink`, titles are never passed through `t()`, and the email says "awaiting payment" (never "confirmed").
-- **`describe('invoiceDocument')`** – Asserts line rendering, order-ID in title metadata (including non-string IDs), locale, no `t()` re-resolution, and that the document self-identifies as a receipt/confirmation with an explicit "not a tax invoice" disclaimer in both EN and IT.
-- **`describe('invoiceDocument — the VAT block')`** – Verifies `grossAmount = netAmount + taxAmount` (not a float multiply), and that all amounts are formatted via `Intl.NumberFormat` in EUR.
-- **`VAT_ORDER` / `eur`** – Single-line fixture and a `NumberFormat` instance matching the default shop currency, used only in the VAT-block suite.
+- **`describe('orderConfirmEmail')`** — 12 assertions covering: template name, one line per item with correct title/qty/price, total delegates to `orderTotal` (shipping included), greeting by name, empty-order safety, locale passthrough, no unresolved i18n keys, correct frontend link, product-title non-re-resolution guard, and "awaiting payment" (never "confirmed") copy.
+- **`describe('orderCancelledEmail')`** — 5 assertions covering: template name + order ID in body, refund note shows the paid total when a refund was issued, "No refund" when the operator skipped it, "nothing was charged" for unpaid orders, and locale/i18n hygiene.
+- **`ORDER` fixture** — two items with distinct titles, quantities, and prices so no field can silently stand in for another.
+- **`PAID` / `UNPAID` / `TOTAL` fixtures** — support the cancellation-email refund-path assertions.
 
 ## Relationships
 
-- **`src/modules/orders/emails.ts`** – Module under test; provides `orderConfirmEmail`, `invoiceDocument`, and the `OrderLines` / `InvoiceOrder` / `InvoiceVatBlock` types.
-- **`src/modules/orders/domain/index.ts`** (re-exports) and **`src/modules/orders/domain/totals.ts`** – Source of `orderTotal` and `orderTaxBreakdown`, used to assert the builders *defer* to the domain total rather than recomputing.
-- **`src/modules/orders/config.ts`** – Source of `orderFrontendLink`, used to verify the confirmation email's `linkUrl` is the exact output of that helper for the given locale and order ID.
+- **`src/modules/orders/emails.ts`** — the module under test; provides `orderConfirmEmail`, `orderCancelledEmail`, and the `OrderLines` type.
+- **`src/modules/orders/domain/index.ts`** — exports `orderTotal`; the test asserts the email builder *uses* it rather than recomputing, keeping email and charge from drifting.
+- **`src/modules/orders/domain/totals.ts`** — the actual summing logic, covered by its own property-based suite (`totals.property.test.ts`); this file only checks that the builder defers to it.
+- **`src/modules/orders/config.ts`** — provides `orderFrontendLink`; the test asserts the builder passes the order's id and locale through to produce the correct link.
 
 ## Notes
 
-- The file explicitly does **not** re-test `orderTotal` arithmetic; it only asserts the builder *uses* it. The sum logic belongs to `totals.property.test.ts`.
-- "SH2 = C" invariant: the email must never imply payment has completed. This is a product-level constraint encoded as a regex check on subject + body.
-- The "title collides with a translation key" tests guard against a Phase 6 regression where `item.product.title` was accidentally routed through `t()`. Any future refactoring of interpolation must keep these passing.
-- VAT-block tests are sensitive to IEEE 754 rounding: the assertion checks `netAmount + taxAmount`, not `price × quantity`, to catch a builder that re-derives from raw floats.
-- The `eur` formatter is hard-coded to `en` locale + EUR to match the `.env-example` default (`NODE_DEFAULT_CURRENCY`); it is not read from environment.
+- The invoice document is **not** this file's concern; it is explicitly delegated to `src/modules/invoicing/tests/unit/emails.test.ts`.
+- The "colliding title" test (`orders.email-confirm.greeting`) is the sharpest regression guard against accidentally passing a product title through `t()`.
+- The shipping-inclusion test is a two-call comparison: the same order with `shippingCost: 0` must produce a different total string, catching the "email quotes subtotal, card charges delivered total" drift.
+- The empty-items test guards against a builder that indexes `items[0]` instead of mapping; it's unreachable through checkout but reachable via admin-created orders.
+- The "awaiting payment" assertion enforces the SH2=C state invariant: at confirmation-mail time the order is always `pending`.

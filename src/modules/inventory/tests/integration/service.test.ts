@@ -695,6 +695,16 @@ describe('receive', () => {
         expect(result.data).toMatchObject({ onHand: 15, reserved: 5, available: 10 });
     });
 
+    it('writes the ledger newest first', async () => {
+        const product = await createProduct({ onHand: 0 });
+        await receive(String(product._id), 1, 'first');
+        await receive(String(product._id), 2, 'second');
+
+        const { items } = await listMovements({ productId: String(product._id) });
+
+        expect(items.map((movement) => movement.onHandDelta)).toEqual([2, 1]);
+    });
+
     it('404s for a product that does not exist', async () => {
         const result = await receive('c'.repeat(24), 5);
 
@@ -930,6 +940,31 @@ describe('listLevels', () => {
         // The total follows the filter, not the collection — otherwise the board would report
         // two pages of scarce products and render one row.
         expect(result.meta.totalItems).toBe(1);
+        setEnvironment({ NODE_LOW_STOCK_THRESHOLD: undefined });
+    });
+
+    it('counts "low" as at or under the threshold, so a product exactly on it is listed', async () => {
+        setEnvironment({ NODE_LOW_STOCK_THRESHOLD: '5' });
+        await createProduct({ title: 'On the line', onHand: 5 });
+        await createProduct({ title: 'Just above', onHand: 6 });
+
+        const result = await listLevels({ lowOnly: true });
+
+        expect(result.items.map((level) => level.title)).toEqual(['On the line']);
+        setEnvironment({ NODE_LOW_STOCK_THRESHOLD: undefined });
+    });
+
+    it('keeps a preorder product on the board: the stock board counts the whole catalogue', async () => {
+        setEnvironment({ NODE_LOW_STOCK_THRESHOLD: '5' });
+        await createProduct({
+            title: 'Waiting',
+            onHand: 0,
+            releaseDate: new Date(Date.now() + 30 * 86_400_000).toISOString()
+        });
+
+        const result = await listLevels({ lowOnly: true });
+
+        expect(result.items.map((level) => level.title)).toEqual(['Waiting']);
         setEnvironment({ NODE_LOW_STOCK_THRESHOLD: undefined });
     });
 

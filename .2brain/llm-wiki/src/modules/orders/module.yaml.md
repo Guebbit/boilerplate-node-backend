@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/module.yaml
-sha256: 3cb69e887d72dcb3d895e536aaa4b80a2a09a7fddf5d181ce508a6afcc3efafb
-generated_at: 2026-09-23T19:04:28.918504+00:00
+sha256: ce9e813602041dd514eab7ba3e1bc2f23fe8c30511a8665ade9c3d781d11d1a7
+generated_at: 2026-10-15T11:05:08.555541+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declarative module manifest for the **orders** module. It tells the runtime which subdomain the module belongs to and lists the other modules it depends on at the data/transaction level, along with a one-line note explaining _why_ each dependency exists.
+Module descriptor for the **orders** subdomain. It declares what a checkout produces (status machine, totals, invoice link), assigns the module to the `shop` group under the `core` subdomain, and lists its four upstream dependencies with a one-line justification for each.
 
 ## Key elements
 
-- **`subdomain: core`** — Places the orders module in the `core` subdomain (as opposed to, e.g., an edge or auxiliary subdomain).
-- **`dependsOn`** — Ordered list of module dependencies:
-    - **`inventory`** — Orders place a claim on stock units; the claim is released on cancellation or when the reservation expires (`RESERVATION_EXPIRED`).
-    - **`products`** — Each order line copies the relevant catalogue-row fields at purchase time (snapshot, not a live reference).
-    - **`users`** — A `USER_DELETED` cascade affects orders; the buyer's stored locale is used for outbound emails.
+- **summary** — One-sentence domain description: a checkout's status machine, its totals, and its invoice link.
+- **subdomain: core / group: shop** — Placement in the domain taxonomy.
+- **dependsOn** — Four declared dependencies, each annotated with *why* it is needed:
+  - `access` — rank rule: staff may only modify orders of users ranked below them.
+  - `inventory` — a claim on units; released on cancel or `RESERVATION_EXPIRED`.
+  - `products` — a line copies catalogue-row fields at purchase time (snapshot, not live reference).
+  - `users` — buyer's stored locale for email; a hard-delete on the user triggers an "erase hook" here.
 
 ## Relationships
 
-- **`src/modules/orders/module.ts`** — The TypeScript entry point / implementation for this module; the YAML manifest is its declarative counterpart (subdomain, dependency list).
-- **`src/modules/orders/openapi.yaml`** — OpenAPI specification for the orders REST surface; together with this manifest it fully describes the module's public contract.
-- **`src/modules/payments/module.ts`** — Neighboring module in the dependency graph; no direct reference in this file's content.
+- **src/modules/orders/module.ts** — The TypeScript implementation this YAML describes; the descriptor provides the metadata and dependency contract that the code enforces.
+- **src/modules/orders/openapi.yaml** — OpenAPI spec for the orders endpoints in the same module directory.
+- **src/modules/payments/module.ts** — Downstream consumer: the `summary` explicitly references the "invoice link," indicating orders hand off to the payments module.
 
 ## Notes
 
-- The dependency list is **ordered**; the inline comments are the authoritative "why" for each edge and are the primary reason this file exists as human-readable YAML rather than being buried in code.
-- The `products` dependency is a **point-in-time snapshot** (fields copied at purchase), not a live foreign-key relationship—important when interpreting schema migrations.
+- The `dependsOn` comments are load-bearing documentation; they state the *contract* (e.g. "released on cancel or RESERVATION_EXPIRED") rather than just naming the dependency. Treat them as the source of truth for cross-module invariants.
+- The `users` dependency is asymmetric: orders only reads a locale field, but a **hard delete** of a user triggers an "erase hook" *in* orders — a one-way event with a two-way effect.
+- `products` is a snapshot at purchase time, not a live join. Changing a catalogue row does not retroactively alter existing order lines.

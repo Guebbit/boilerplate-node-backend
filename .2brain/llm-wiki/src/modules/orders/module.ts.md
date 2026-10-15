@@ -1,50 +1,45 @@
 ---
 source: src/modules/orders/module.ts
-sha256: b2554e086460c73f63c5f3667259e31d99a464b6973966a85d2210c29b57e7e6
-generated_at: 2026-09-27T15:11:47.119540+00:00
+sha256: 85e8644cec810ab2c16132e229f4a41a9a33d1f76fe816d20701b1196e6852d0
+generated_at: 2026-10-15T11:04:59.314239+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/orders/module.ts
 
 ## Purpose
-
-The module manifest for the **orders** domain. It registers the module with the kernel (name, base path, permissions, routes), declares public webhook event mappings, subscribes to cross-module domain events (reservation expiry, product removal), defines personal-data handling (GDPR erase), and lists the storefront scenario states. It is the single file that ties the orders services, routes, events, and rate limits together as one `AppModule` export.
+Module manifest (default `AppModule` export) that registers the **orders** module with the kernel: wires routes, config, rate-limits, public-event mappings, PII hooks, cross-module event subscriptions, and the test-scenario state list into a single declarative object. It is the one place where the orders module's surface area is declared to the rest of the system.
 
 ## Key elements
 
-- **`publicEvents`** — Maps the three internal domain events (`ORDER_CREATED`, `ORDER_STATUS_CHANGED`, `ORDER_CANCELLED`) to their public webhook payloads. `ORDER_STATUS_CHANGED` is the only non-trivial mapping: it derives `order.paid` or `order.shipped` from `payload.to` and returns `undefined` for every other transition.
-- **`export default`** — The `AppModule` object:
-  - `permissions` — Six keys (`orders.self.read` … `orders.any.override`) this module introduces.
-  - `routes` — The Express router from `./routes`.
-  - `requiredConfig` — `NODE_SHOP_COUNTRY` (min length 1), mandatory for invoice jurisdiction.
-  - `personalData` — `collect` calls `findOwnOrders`; `erase` calls `detachUserId` (detaches the buyer reference without deleting the order row).
-  - `subscribe` — Registers three `onDomainEvent` handlers:
-    - `RESERVATION_EXPIRED` → auto-cancels the order as `SYSTEM_ACTOR`.
-    - `PRODUCT_DELETED` (hard-delete only) → cancels pending orders holding that product.
-    - `PRODUCT_DEACTIVATED` → same cancellation path.
-  - `rateLimits` — Imported from `./rate-limits.ts` (every invoice render spawns a Chromium launch).
-  - `scenario.shop` — The 12 order-state fixtures the integration test runner must reproduce.
+- **`publicEvents`** – Maps the three internal domain events (`ORDER_CREATED`, `ORDER_STATUS_CHANGED`, `ORDER_CANCELLED`) to webhook-visible public events. `order.status_changed` is *not* a 1:1 rename: it emits `order.paid` only when `payload.to === 'paid'` and returns `undefined` for every other transition, so downstream listeners filter on `to` rather than the event name.
+- **`personalData`** – Two GDPR sections:
+  - *orders*: collects via `findOwnOrders`, erases via `eraseUserOrders` (detach, never hard-delete; un-paid orders are also cancelled post-commit), minimises via `startOrderPiiClock` (starts the PII retention clock without deleting).
+  - *orderTimeline*: collects the full staff-annotated timeline via `collectTimelineOf`; erased as a side-effect of the orders' own `erase`.
+- **`subscribe()`** – Registers a `RESERVATION_EXPIRED` handler that calls `cancelById(orderId, SYSTEM_ACTOR, …)`. The actor is `SYSTEM_ACTOR` because the shop (not the buyer) is performing the cancel.
+- **`scenario.shop`** – Ordered list of order states that `scenarios/flows/shop-history.ts` must produce; asserted bidirectionally by `tests/integration/scenarios/shop.test.ts`.
+- **`config`, `rateLimits`, `locales`, `templates`** – Standard module metadata consumed by the kernel at boot.
 
 ## Relationships
 
 | Neighbor | Interaction |
 |---|---|
-| `src/kernel/registry.ts` | Provides the `AppModule` / `PublicEventTarget` types this file satisfies. |
-| `src/kernel/permissions.ts` | Supplies `SYSTEM_ACTOR`, used as the actor when the reservation-expiry sweep cancels an order. |
-| `src/kernel/events.ts` | Provides `onDomainEvent` and the `DomainEventMap` type used in subscription callbacks. |
-| `src/modules/inventory/index.ts` | Imports `RESERVATION_EXPIRED`; the orders module listens for it but never imports inventory's cancel logic (keeps the graph acyclic). |
-| `src/modules/orders/events.ts` | Imports the three event-name constants directly (bypassing the module barrel per the project's module-barrel rule). |
-| `src/modules/orders/services/index.ts` | Barrel re-export of `cancelById`, `cancelPendingOrdersHolding`, `detachUserId`, `findOwnOrders` (individual services live in `services/cancel.ts`, `services/crud.ts`, etc.). |
-| `src/modules/orders/routes.ts` | The `router` object attached to the manifest. |
-| `src/modules/orders/rate-limits.ts` | The `ordersRateLimits` config attached to the manifest. |
-| `src/modules.ts` | Top-level registry that imports this module's default export to mount it. |
-| `src/modules/orders/module.yaml` | Paired declarative manifest (config schema, etc.) read alongside this file. |
+| `src/kernel/registry.ts` | Supplies the `AppModule` and `PublicEventTarget` types; `resolvePublicEvents` is how `webhooks/services/publish.ts` discovers `publicEvents` without importing event names. |
+| `src/kernel/events.ts` | `onDomainEvent` is the subscription primitive used inside `subscribe()`. |
+| `src/kernel/permissions.ts` | `SYSTEM_ACTOR` constant passed as the actor for reservation-expiry cancels. |
+| `src/modules/inventory/index.ts` | Imports `RESERVATION_EXPIRED`; inventory releases units on that event, orders cancels the order — the two paths converge safely in `releaseForOrder` (idempotent, no double-release). |
+| `src/modules/orders/events.ts` | `ORDER_CREATED`, `ORDER_STATUS_CHANGED`, `ORDER_CANCELLED` imported **directly** (not through the module barrel) to register into the kernel's `DomainEventMap`. |
+| `src/modules/orders/routes.ts` | The Hono/router instance mounted at `basePath: '/orders'`. |
+| `src/modules/orders/config.ts` | `ordersConfig` — jurisdiction, currency, bank-transfer, and order-link settings. |
+| `src/modules/orders/rate-limits.ts` | `ordersRateLimits` applied by the kernel's rate-limit middleware. |
+| `src/modules/orders/services/cancel.ts` | `cancelById` invoked by the `RESERVATION_EXPIRED` subscription. |
+| `src/modules.ts` | Registers this module in the application's module list. |
+| `src/modules/invoicing/*` (tests) | Invoicing depends on this module (VAT breakdown, auth-scoped order read) and reacts to `ORDER_STATUS_CHANGED` on its own; **this file has no import of, or wiring for, invoicing**. |
 
 ## Notes
 
-- The module deliberately does **not** import `@modules/products` directly. Product fields are copied into its own `orderLineProductSchema` at purchase time so the embedded line has no live warehouse counter. Product events (`PRODUCT_DELETED`, `PRODUCT_DEACTIVATED`) are consumed, not the product service.
-- The `RESERVATION_EXPIRED` handler and the explicit cancel path both call `cancelById` → `releaseForOrder`. Because `releaseForOrder` is idempotent (a hold already released is a no-op), the two paths converge without double-releasing units.
-- `ORDER_STATUS_CHANGED` is the only public event whose `toPublicEvent` can return `undefined` (non-paid, non-shipped transitions are suppressed at the webhook layer, not the domain layer).
-- `personalData.erase` uses **detach, not delete**: the order row survives the account deletion within the same hard-delete transaction (DDD-D6 invariant).
-- The `scenario.shop` list is asserted in both directions by `tests/integration/scenarios/shop.test.ts` against the ids actually minted by `scenarios/flows/shop-history.ts`; adding a state here without a matching flow will fail that test.
+- **Barrel rule:** Event constants are imported from `./events` directly, never through this module's own barrel (`src/modules/orders/index.ts`), per the project's CLAUDE.md module-barrel rule.
+- **`order.paid` is conditional:** The `ORDER_STATUS_CHANGED` → `order.paid` mapping returns `undefined` for non-`paid` transitions. Any consumer expecting a public event for *every* status change will silently receive nothing.
+- **Cancel idempotency:** The reservation-expiry path and the user-initiated cancel path both funnel through `cancelById` → `releaseForOrder`. The second call finds the hold already released, so double-release is structurally impossible.
+- **Erase ≠ delete:** `eraseUserOrders` detaches the buyer's identity from the order (the order row survives); `startOrderPiiClock` only starts a retention timer on an inactive account's orders. Neither removes the order.
+- **Scenario list is a contract:** Adding a new order state to the storefront or admin without updating `scenario.shop` will break `shop.test.ts`'s bidirectional equality assertion.

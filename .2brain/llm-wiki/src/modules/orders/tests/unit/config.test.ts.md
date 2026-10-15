@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/config.test.ts
-sha256: 9494413d59931d3ff9a12f7a145e6beacaadceb3ab3725e5076c62fadf72cdfd
-generated_at: 2026-09-27T15:20:43.999676+00:00
+sha256: d0a135664e39ec3dd4f4542c97323b37e154f49524c1febe6a20816e847528dc
+generated_at: 2026-10-15T11:18:58.283991+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit-test suite for the orders module's runtime configuration readers (shop identity, bank-transfer payment settings, invoice cache TTL, and the order-frontend link template) and for the `assertRequiredConfig` boot gate as applied to the orders module. It verifies pure env-var reading, defaulting, formatting, and the demo-profile / test-env TTL override without booting the full application.
+Unit tests for the orders module's deployment-config readers and its boot-time validation gate. Verifies that `assertModuleConfig` enforces required env vars (shop country, timezone, identity fields, withdrawal period) and that each individual reader (`shopCountry`, `bankTransferIbanFriendly`, `maxAdminOrderLines`, etc.) behaves correctly against a known-good environment.
 
 ## Key elements
 
-- **`TOUCHED`** — exhaustive list of every env var the suite touches; passed to `withoutEnvironmentInThisFile` so each case starts from a clean slate.
-- **`configure()`** — helper that sets a minimal valid deployment (`NODE_ENV=development`, `NODE_URL`, `NODE_SHOP_COUNTRY=IT`) before individual cases break one thing.
-- **`describe('the shop identity boot gate')`** — asserts `assertRequiredConfig([ordersModule])` throws without `NODE_SHOP_COUNTRY` and passes when the two optional identity fields are absent.
-- **`describe('reading the identity')`** — confirms readers re-read env on every call and that empty-string values are returned as `undefined` (not `''`) so the invoice template omits the row.
-- **`describe('shipToCountries')`** — covers the default (shop country alone), the empty case, and parsing/upper-casing/trimming of a comma-separated override.
-- **`describe('bankTransferEnabled')` / beneficiary / IBAN / BIC / hold hours / max open** — verifies the two-key enablement rule, undefined defaults, configurable values, and the 168-h / 2-open defaults.
-- **`describe('bankTransferIbanFriendly')`** — checks 4-char grouping and that pre-spaced input is re-grouped rather than double-spaced.
-- **`describe('invoiceCacheTtlMinutes')`** — covers the 5-min default, env override, floor-at-0 for negative values, and the forced-0 under demo profile (`enableDemoProfile()`) or `NODE_ENV=test`.
-- **`describe('orderFrontendLink')`** — validates the default template, the `NODE_FRONTEND_LINK_ORDER` override, and URL-encoding of the order id.
+- **`configure()`** — helper that sets a fully valid environment (country, timezone, identity, URL) so each `it` can mutate exactly one variable.
+- **`TOUCHED`** — the complete list of env vars the suite reads or writes; passed to `withoutEnvironmentInThisFile` so no test leaks state into the next.
+- **`IDENTITY` / `IDENTITY_VARIABLES`** — the six required shop-identity variables and their key names, used by a parameterised `it.each` boot-gate test.
+- **Boot-gate describes** (`shop jurisdiction`, `shop time zone`, `shop identity`, `withdrawal period`) — call `assertModuleConfig([ordersModule], [])` and assert the thrown message names the missing/invalid variable.
+- **Reader describes** (`shipToCountries`, `bankTransfer*`, `admin order limits`, `orderFrontendLink`, `shopIdentity`, `withdrawalPeriodDays`) — exercise the individual getters from `../../config` against specific env values, including edge cases (IBAN re-grouping, ceiling clamp, timezone canonicalisation, URL-encoding of order id).
+- **`withoutEnvironmentInThisFile(TOUCHED)`** — top-level call that clears all touched vars before the suite and restores them after, preventing cross-file pollution.
 
 ## Relationships
 
-- **`src/modules/orders/config.ts`** — the module under test; all reader functions (`shopCountry`, `bankTransferIban`, `invoiceCacheTtlMinutes`, `orderFrontendLink`, etc.) are imported and exercised here.
-- **`src/kernel/required-config.ts`** — provides `assertRequiredConfig`, the boot-gate entry point the suite drives to confirm the orders module's required fields are wired correctly.
-- **`src/modules/orders/module.ts`** — exports `ordersModule`, passed to `assertRequiredConfig` to test the module's declared manifest requirements.
-- **`tests/support/environment.ts`** — provides `withoutEnvironmentInThisFile`, which snapshots and restores every variable in `TOUCHED` around the file's execution.
-- **`src/infrastructure/runtime/demo-profile.ts`** — provides `enableDemoProfile`, used to verify the demo-mode TTL override is honoured and then reset via `enableDemoProfile(false)` in `afterEach`.
+- **`src/kernel/module-config.ts`** — exports `assertModuleConfig`, the boot-time validator this suite drives to confirm the orders module's required vars are enforced.
+- **`src/modules/orders/config.ts`** — the module under test; every reader and constant (`bankTransferIbanFriendly`, `ADMIN_ORDER_LINES_CEILING`, `shopIdentity`, …) is imported from here.
+- **`src/modules/orders/module.ts`** — the module definition passed as the argument to `assertModuleConfig`; its declared manifest (required vars, validation rules) is what the gate checks.
+- **`tests/support/environment.ts`** — provides `setEnvironment` (per-case env mutation) and `withoutEnvironmentInThisFile` (suite-level isolation of the `TOUCHED` list).
 
 ## Notes
 
-- **`NODE_ENV` gate:** every case that exercises the boot gate must set `NODE_ENV` away from `test` (via `configure()`); otherwise `assertRequiredConfig` short-circuits and the assertions are vacuous.
-- **Empty-string ≠ absent:** optional identity readers (`shopVatNumber`, `shopLegalName`) deliberately map `''` → `undefined` so the invoice template skips the row entirely.
-- **IBAN re-grouping:** `bankTransferIbanFriendly` strips all whitespace before re-grouping into 4-char blocks, so a pre-spaced env value does not produce doubled spaces.
-- **Demo/test TTL is unconditional:** `invoiceCacheTtlMinutes` returns `0` under demo mode or `NODE_ENV=test` regardless of the env-var value; this keeps demo invoices and test runs out of the cache directory.
-- **`orderFrontendLink` lives in the module, not infrastructure:** the template default and its `NODE_FRONTEND_LINK_ORDER` override are declared here (the D14 fix), while `infrastructure/http/frontend-link.ts` only resolves a template into a URL.
+- **`NODE_ENV` gate:** `assertModuleConfig` short-circuits entirely when `NODE_ENV === 'test'`. Every boot-gate test therefore calls `configure()` first (which sets `NODE_ENV: 'development'`); a test that forgets this would silently pass with zero assertions.
+- **Per-call reads:** readers like `shopCountry()` and `shopTimezone()` read the env var at call time, not at module load. The suite verifies this by mutating the var *after* import and expecting the new value.
+- **Ceiling clamp:** `maxAdminOrderLines` / `maxAdminOrderLineQuantity` silently cap at `ADMIN_ORDER_LINES_CEILING` / `ADMIN_ORDER_LINE_QUANTITY_CEILING` even if the env var exceeds them; a value below 1 throws.
+- **IBAN friendly formatting:** `bankTransferIbanFriendly` strips existing spaces before re-grouping into 4-char blocks, so a pre-spaced input does not double-space.
+- **Timezone canonicalisation:** the reader normalises to IANA form (e.g. `europe/rome` → `Europe/Rome`) and rejects fixed-offset strings like `+01:00` at boot.
+- **`orderFrontendLink` is module-local (D14):** the default template and its `NODE_FRONTEND_LINK_ORDER` override live in this module's config, not in `infrastructure/http/frontend-link.ts`, which only resolves an already-resolved template into a URL.

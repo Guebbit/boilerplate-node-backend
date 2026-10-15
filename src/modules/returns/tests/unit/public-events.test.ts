@@ -20,6 +20,20 @@ describe('the returns module’s public events', () => {
         });
     });
 
+    it('never carries the customer’s own words, even when the domain event holds them', () => {
+        const target = returnsModule.publicEvents[RETURN_REQUESTED];
+
+        const projected = target.toPublicEvent({
+            returnId: 'r1',
+            orderId: 'o1',
+            reason: 'defective',
+            note: 'call me on 555-0100'
+        } as never);
+
+        expect(JSON.stringify(projected)).not.toContain('555-0100');
+        expect(projected?.data).not.toHaveProperty('note');
+    });
+
     it('tells subscribers the goods were received, with the return and its order', () => {
         const target = returnsModule.publicEvents[RETURN_RECEIVED];
 

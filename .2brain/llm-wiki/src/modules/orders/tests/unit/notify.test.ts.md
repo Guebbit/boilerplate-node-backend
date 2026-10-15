@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/unit/notify.test.ts
-sha256: 5426b98f6e2ddfbb195a04972f85502951eefa7febecdf9a9e206528e41c6a1d
-generated_at: 2026-09-27T15:21:58.422862+00:00
+sha256: 46101434d2ce3746239d1e718333d04cc1990a43f5efac6c05438074060075f5
+generated_at: 2026-10-15T11:20:17.428145+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the invoice-attachment behaviour of `sendOrderPlacedEmail` (in `services/notify.ts`). This file asserts that the rendered invoice PDF is spooled and passed to `enqueueEmail` as an `{ filename, key }` attachment, that a render failure degrades gracefully (mail still sent, error logged), and that the attachment rides along on both the card-confirmation and bank-transfer-instructions paths. It explicitly does **not** test which email builder fires — that belongs to `emails.test.ts`.
+Unit tests for `sendOrderPlacedEmail` and `mailBuyer` (both from `services/notify.ts`) focused on one invariant: **no invoice attachment is ever sent at order-placement time**, regardless of payment method. It also verifies that `mailBuyer` short-circuits entirely (no build, no enqueue) when the order email is the anonymized placeholder.
 
 ## Key elements
 
-- **`orderFixture(overrides?)`** – builds a minimal `OrderDocument` (card payment, one item) via `asStub`, used as the default input for every test case.
-- **`flush()`** – resolves one `setImmediate` tick so the internal `.then` chain inside `sendOrderPlacedEmail` completes before assertions run.
-- **Module-level mocks** – `renderInvoicePdf`, `spoolAttachment`, `enqueueEmail`, and `logger` are all `jest.mock`'d at the top of the file; each test sets return values/rejections on the individual mock functions.
-- **Test cases (5):**
-  - Invoice attached under its own order number when present.
-  - Filename falls back to the order `_id` when no `orderNumber` exists.
-  - Render rejection → mail sent with empty `attachments`, `logger.error` called.
-  - Render resolves to `undefined` (nothing to render) → mail sent with empty `attachments`, `spoolAttachment` never called.
-  - Bank-transfer path: env overrides set, template is `orders.order-transfer-instructions`, attachment still present.
+- **`enqueueEmailMock`** – Module-level `jest.fn()` that backs a `jest.mock` of `@infrastructure/adapters/mailer`. All assertions about what gets sent go through this mock.
+- **`orderFixture(overrides?)`** – Builds a minimal `OrderDocument` (single item, card payment) via `asStub`, with a spread-override pattern for per-test variants.
+- **`describe("sendOrderPlacedEmail — no invoice attachment")`** – Two tests: card order and bank-transfer order both produce a request with `attachments === undefined`. The bank-transfer test also asserts the template name is `orders.order-transfer-instructions`.
+- **`describe("mailBuyer — anonymised order")`** – Two tests: `ANONYMIZED_EMAIL` → neither the `build` callback nor `enqueueEmail` is called; a real email → `build` is called with the recipient address.
 
 ## Relationships
 
-- **`src/modules/orders/model.ts`** – provides the `OrderDocument` type that `orderFixture` conforms to.
-- **`tests/support/stub.ts`** – `asStub` is used to type-cast the fixture object without exhaustive field filling.
-- **`tests/support/environment.ts`** – `withEnvironmentOverrides` temporarily sets `NODE_BANK_TRANSFER_BENEFICIARY` / `NODE_BANK_TRANSFER_IBAN` for the bank-transfer test case.
+- **`services/notify.ts`** – SUT. Exports `sendOrderPlacedEmail` and `mailBuyer`; this file exercises their public contracts around attachments and anonymization.
+- **`domain/anonymization.ts`** – Source of the `ANONYMIZED_EMAIL` constant used in the `mailBuyer` guard tests.
+- **`model.ts`** – Provides the `OrderDocument` type that shapes every fixture in this file.
+- **`tests/support/stub.ts`** – `asStub` gives a type-cast shortcut so fixtures can omit fields not relevant to the assertion.
+- **`tests/support/environment.ts`** – `withEnvironmentOverrides` injects `NODE_BANK_TRANSFER_*` env vars for the bank-transfer test case.
 
 ## Notes
 
-- Every test case re-imports `../../services/notify` with `await import(...)` after the mocks are registered, ensuring fresh module state per test.
-- The render-failure branch is asserted **here** (not in `emails.test.ts`) because the module docblock states "nothing else drives it."
-- `spoolAttachmentMock` receives `(bytes, extension)` — the extension is the string `'pdf'` (no dot).
-- The file is a `@module` (no named exports); it is purely a test script.
+- **Template-building is intentionally NOT tested here.** Which email body each payment method produces is covered separately in `emails.test.ts`; this file only asserts the *absence* of attachments and the anonymization guard.
+- The mailer mock is declared at module scope with `jest.mock`, so it replaces the adapter for the entire file. `beforeEach` clears call history and resets the resolved value.
+- `asStub` bypasses real model construction; the resulting object is only as valid as the fields actually set, which is fine because the SUT under test reads only a few of them.

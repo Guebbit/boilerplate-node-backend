@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/domain/index.ts
-sha256: 8fd28d0de6505bf1e14720c34fdff19d2098771c7ce2a2cd705a40334aabebe0
-generated_at: 2026-09-27T15:08:51.882941+00:00
+sha256: a19dd98e2864ac9f9e9d9d16282a0f7e21fc82d5bf20573ded6ebbb6ba28894c
+generated_at: 2026-10-15T11:01:35.944564+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Selective barrel for the orders domain layer. It re-exports the public surface of the five domain sub-modules (totals, rules, lifecycle, tax, transfer-reference) so that consumers import from a single entry point while the layer remains guaranteed free of Express, Mongoose, and any tier-specific code. It intentionally omits certain symbols to prevent them from being treated as general-purpose utilities.
+Barrel re-export for the orders domain layer. It aggregates the public surface of all pure, framework-free order rules (totals, lifecycle, tax, withdrawal, fulfillment, etc.) into a single import path. The file itself contains no logic; its role is to define the boundary: everything exported here must be testable without a database, Express, or Mongoose.
 
 ## Key elements
 
-- **`sumLineItems`, `orderTotal`** (from `./totals`) — compute the order's line-item sum and final total.
-- **`checkOrderLines`, `isShippedItem`, `isDigitalOnlyOrder`** (from `./rules`) — validate and classify order lines; `ShippableLineCandidate` type.
-- **`canTransition`, `isPayable`, `stockCommitted`, `statusesReachableFrom`, `statusesLeadingTo`, `orderActionsFor`, `canOverrideTo`, `statusesOverridableInto`, `overridableTargetsFrom`** (from `./lifecycle`) — order-status transition and override logic; `OrderActor` type.
-- **`orderTaxBreakdown`** (from `./tax`) — VAT breakdown derived from frozen lines; `OrderTaxBreakdown`, `LineTaxBreakdown`, `TaxableLineItem`, `TaxRateSummary` types.
-- **`buildReference`, `parseReference`** (from `./transfer-reference`) — mint and parse the RF creditor reference for `bank_transfer` orders.
+- **`totals`** – `sumLineItems`, `orderTotal`: arithmetic on line items.
+- **`rules`** – `checkOrderLines`, `isShippedItem`, `isDigitalOnlyOrder`, type `ShippableLineCandidate`: validation and classification of order lines.
+- **`lifecycle`** – `ORDER_EVENTS` (the canonical transition table), plus derived helpers `canTransition`, `isPayable`, `paymentSettled`, `statusesReachableFrom`, `statusesLeadingTo`, `orderActionsFor`, `canOverrideTo`, `overridableTargetsFrom`; types `OrderActor`, `OrderEvent`, `OrderEventName`.
+- **`tax`** – `orderTaxBreakdown`, `lineTaxFromRateTotals`; types `OrderTaxBreakdown`, `LineTaxBreakdown`, `TaxableLineItem`, `TaxRateSummary`.
+- **`transfer-reference`** – `buildReference`, `parseReference`: mint/parse the RF creditor reference for `bank_transfer` orders.
+- **`withdrawal`** – `canWithdraw`, `isBeforeDispatch`, `isExcludedFromWithdrawal`, `withdrawUntilFrom`, `withdrawalStartFor`; types `WithdrawalCandidate`, `WithdrawableLine`, `WithdrawalClockCandidate`.
+- **`projections`** – `paymentStatusOf`, `returnStatusOf`, `paymentStatusFilter`, `returnStatusFilter`; types `StampedPaymentStatus`, `StampedReturnStatus`.
+- **`fulfillment`** – `NO_FULFILLMENT`, `fulfillmentStatusOf`, `fulfillmentStatusFilter`, `shipsAwaitedStock`; types `FulfillmentSummary`, `FulfillmentFilter`.
+- **`status-traits`** – `ORDER_STATUS_TRAITS`, `statusesWhere`; type `OrderStatusTraits`.
+- **`shop-time`** – `yearInZone`, `zonedStartOfDay`: shop-calendar helpers for numbered series.
+- **`timeline`** – `TIMELINE_AUDIENCE`, `isBuyerVisible`; types `TimelineAudience`, `TimelineEntryInput`.
+- **`export`** – `ORDER_CSV_COLUMNS`, `toOrderCsvRow`; types `OrderCsvColumn`, `OrderCsvSource`.
 
 ## Relationships
 
-- **`./totals`, `./rules`, `./lifecycle`, `./tax`, `./transfer-reference`** — sole source modules for every re-export in this file; this file adds no logic of its own.
-- **`src/modules/orders/index.ts`** — parent module barrel; imports from this file to surface the domain layer to the wider orders module.
-- **`src/modules/orders/services/cancel.ts`, `override.ts`, `scope.ts`, `status.ts`** — service-layer consumers that import domain symbols through this barrel (e.g. `canTransition`, `orderActionsFor`, `isPayable`).
-- **`src/modules/orders/emails.ts`** — sibling in the same module; does not import from this barrel but shares the domain contracts (types from `./tax`, `./lifecycle`).
-- **`src/modules/orders/tests/unit/emails.test.ts`** — test file that exercises email rendering against domain outputs (totals, tax breakdown).
+- **Re-exports from (all domain siblings):** `totals.ts`, `rules.ts`, `lifecycle.ts`, `tax.ts`, `transfer-reference.ts`, `withdrawal.ts`, `projections.ts`, `fulfillment.ts`, `status-traits.ts`, `shop-time.ts`, `timeline.ts`, `export.ts`. This file is the sole public surface; consumers import through it rather than reaching into individual modules.
+- **Consumed by (orders module entry points):** `src/modules/orders/index.ts` and `src/modules/orders/presenter.ts` import domain symbols from here. `src/modules/orders/emails.ts` also pulls domain types/values through this barrel.
 
 ## Notes
 
-- **Deliberate omissions are a design contract.** `toCents` is *not* re-exported so it cannot be mistaken for a shared utility; it is an internal detail of `sumLineItems` in `totals.ts`. Likewise `ORDER_LIFECYCLE` (the raw transition table) is hidden so callers must use the named predicates (`canTransition`, `isPayable`, etc.) rather than re-deriving state logic.
-- **Adding a new export here is a public-API decision.** Any new `export` line makes the symbol visible to every tier that imports the orders module. If a helper is only needed by one sibling module, keep it local there.
-- The module doc-block references `docs/theory/domain-layer.md` for the tiering rules this file enforces.
+- The module docstring states the contract: anything exported must be free of Express, Mongoose, and "every tier" beyond domain. A lint rule enforces this.
+- `ORDER_EVENTS` is declared the single source of truth for state transitions; all `canTransition` / `statusesLeadingTo` / `statusesReachableFrom` helpers are derived from it. Treat it as the canonical transition table when adding a new status or event.
+- Tax breakdown is described as deriving from an order's *frozen* lines—i.e., the line items captured at order time, not mutable post-hoc values.
+- The file is a pure re-export; there is no local state, no side effects, and no logic to unit-test here. Tests target the individual sibling modules.
+- See `docs/theory/domain-layer.md` (referenced in the module docstring) for the broader architectural rationale.

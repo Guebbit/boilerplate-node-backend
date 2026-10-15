@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/repository.ts
-sha256: feddc41e3bd4c405546cb1edb8c1d30707e16d684620297fef891543f8b44a72
-generated_at: 2026-09-27T15:12:21.821181+00:00
+sha256: 0fbe73a662a8bdefa1954b6bfe6e11dd510e301fdd05543a481990440b4ae827
+generated_at: 2026-10-15T11:06:25.702636+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The data-access layer for orders. Unlike other collections, orders embed a product snapshot, so reads go through the MongoDB aggregation pipeline rather than a simple `find()`. The file wires a base CRUD repository (from the shared factory) together with an aggregation-based `search`, scoped single-row reads, atomic status transitions, and a small pending-effects subsystem used by the retry sweep.
+Order persistence layer. Because an order embeds a product snapshot and filters like `items.product._id` are pipeline concerns, reads go through the aggregation framework rather than plain `find()`. The file provides the single write path for new orders (with PII encryption), scoped reads, paginated search, status-transition writes with conditional guards, and streaming for large exports.
 
 ## Key elements
 
-- **`base`** — the repository instance returned by `createRepository(orderModel, …)`. Declares the searchable spec (objectIds on `id`, `userId`, `productId` → `items.product._id`; exact on `email`, `status`, `paymentMethod`; regex on `notes`; presence on `deletedAt`). Its `search` method is overridden below.
-- **`aggregate<T>(pipeline)`** — thin wrapper around `orderModel.aggregate`.
-- **`withNormalizedEmailFilter(filters)`** — normalises a string `email` filter via `normalizeEmail` before it enters a `$match` stage (which, unlike `find()`, does not run schema casters).
-- **`search(filters?, scope?)`** — aggregation-based paginated search. Builds `$match` from `base.buildWhere` + `scope` (scope merged last as the authorization boundary), then runs two separate `aggregate` calls (count, then page) sharing `DEFAULT_SORT` to avoid tie-induced page duplication.
-- **`findByIdScoped(id, scope?)`** — single-row read; `scope` is spread into the same `findOne` filter so ownership is enforced in-query, not post-read.
-- **`ownerScope(userId)`** — coerces a user id to ObjectId for use as a scope object.
-- **`updateStatusIfIn(id, from, to, scope?, effects?)`** — atomic conditional status move via `findOneAndUpdate`; the `from` statuses ride in the `$in` filter so concurrent racers serialize on the document. Optionally stores `pendingEffects` in the same write.
-- **`applyStatusOverride(id, from, to, entry)`** — same atomic pattern but appends a `statusOverrides` history entry with `$push` in the same write.
-- **`findWithPendingEffects(cutoff, limit)`** — returns orders still owing a retry effect (non-empty `pendingEffects`, `updatedAt ≤ cutoff`), oldest first, bounded by `limit`.
-- **`findPendingByProductId(productId)`** — all `pending` orders containing a line for the given product; used by hard-delete / deactivation to cancel them proactively.
-- **`clearPendingEffect(orderId, effect)`** — conditional `$pull` of one effect; uses `timestamps: false` so draining doesn't push other effects past the sweep cutoff.
-- **`addPendingEffect(orderId, effect)`** — `$addToSet` an effect outside a status transition (settlement refund path); timestamps run normally.
+- **`base`** — Plain CRUD repository produced by `createRepository`, configured with a searchable spec (objectIds, exact match, presence, dateRanges, sortable fields). Its `search` is overridden below.
+- **`create(data, session?)`** — The one write path for a new order. Assigns `_id` if absent (needed in the AAD), encrypts PII via `encryptOrderPii`, then delegates to `base.create`. All callers (placeOrder, admin create, factory) go through this.
+- **`aggregate(pipeline, collation?)`** — Thin wrapper around `orderModel.aggregate` that optionally sets collation for `$sort` text ordering.
+- **`withNormalizedEmailFilter(filters)`** — Normalises a string `email` in the filter bag before it reaches `$match` (which, unlike `find()`, does not cast).
+- **`withProjectionFilters(filters)`** — Combines the declared filter spec with derived `paymentStatus` / `returnStatus` filters into a single `$and` so neither overwrites the other's `paymentStatus`/`paidAt` keys.
+- **`search(filters, scope)`** — Paginated read: builds a `$match` (via `withScope` + `withProjectionFilters`), runs a `$count` pipeline, then a `$skip`/`$limit` pipeline. Returns `{ items: Order[], meta: PaginatedMeta }`. `async` so a malformed-id throw in `buildWhere` becomes a rejection.
+- **`countMatching(filters, scope)`** — Same `$match` as `search`; used to gate an export before any rows are read.
+- **`streamMatching(filters, scope)`** — Async generator that iterates a server-side aggregate cursor (`batchSize: 500`), yielding normalised `Order` objects one at a time for large exports.
+- **`findByIdScoped(id, scope)`** — Single-document read with the authorization scope in the same `findOne` filter (no post-read ownership check). `async` for the same malformed-id reason.
+- **`ownerScope(userId)`** — Returns `{ userId: toObjectId(userId) }`; the ObjectId coercion is required because a raw string in `$match` silently matches nothing.
+- **`updateStatusIfIn(id, from[], to, scope?, effects?, session?)`** — Atomic conditional status move: the `from` list rides in the `findOneAndUpdate` filter so a race resolves to exactly one writer. Optional `effects` (pending retry actions) are stored in the same write. Joins the caller's transaction via `session`.
+- **`ORDER_SORTABLE`** — Whitelist of sortable wire fields mapped to column names. `totalPrice` is intentionally excluded (derived at serialisation, not a column).
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — supplies the `createRepository` factory, the `toObjectId` helper, and the `Repository` type. `base` is its return value; `base.buildWhere` and `base.normalize` are reused by `search`.
-- **`src/infrastructure/persistence/normalize-email.ts`** — `normalizeEmail` is applied inside `withNormalizedEmailFilter` so that a `$match` on `email` matches the same way the schema caster would.
-- **`src/infrastructure/persistence/search.ts`** — provides `normalizePagination`, `buildPaginatedMeta`, `DEFAULT_SORT`, and the `PaginatedMeta` type consumed by `search`.
-- **`src/modules/orders/model.ts`** — exports `orderModel` (the Mongoose model), `applyOrderTransform` (the document→entity mapper passed to the factory), `orderNumberCounterModel`, and the `OrderDocument` / `OrderPendingEffect` / `OrderStatusOverride` types.
-- **`src/modules/orders/services/scope.ts`** — builds the `callerScope` objects that callers spread into `findByIdScoped`, `updateStatusIfIn`, etc.
-- **`src/modules/orders/services/cancel.ts`** — calls `updateStatusIfIn` (with `effects`) and `clearPendingEffect` / `addPendingEffect`.
-- **`src/modules/orders/services/override.ts`** — calls `applyStatusOverride`.
-- **`src/modules/orders/services/place.ts`** — consumes the base CRUD (`create`) and `findByIdScoped`.
-- **`src/modules/orders/services/crud.ts`** — uses `base` for standard list/get/update/delete.
-- **`src/modules/orders/services/availability.ts`** — queries `findPendingByProductId` to check open demand before allowing stock changes.
-- **`src/modules/orders/services/retract.ts` / `retention.ts` / `invoice.ts` / `order-numbering.ts`** — call into the base repository or the status/effect helpers as part of their domain flows.
-- **`src/modules/cart/tests/integration/stock.test.ts`** — exercises `findPendingByProductId` and the status-transition path end-to-end.
+- **`create-repository.ts`** — Provides `createRepository` (the `base` factory), `toObjectId`, `withScope` (authorization composition), and the `Repository`/`Wire`/`AppendOnlyLedger` type contracts this file implements.
+- **`search.ts`** — Provides `normalizePagination`, `buildPaginatedMeta`, `DEFAULT_SORT`, `SORT_COLLATION`, and `sortOf`, which `search`, `countMatching`, and `streamMatching` all use for consistent paging and sort ordering.
+- **`normalize-email.ts`** — `normalizeEmail` is applied in `withNormalizedEmailFilter` so the `$match` email comparison matches the schema's cast.
+- **`changes.ts`** — Exports `setAndUnset`, imported here (usage in the truncated portion, likely for field-level update helpers in status transitions or PII scrubbing).
+- **`versioning.ts`** — Exports `checkedDelete` and `DeleteOutcome`, imported here (usage in the truncated portion, likely for soft-delete or versioned removal of orders).
+- **`reencrypt.ts`** — Exports `reencryptOf`, `ReencryptSpec`, `ReencryptReport`; imported for the PII re-encryption workflow on existing orders.
+- **`pii.ts`** — `encryptOrderPii` is called in `create` to encrypt addresses and notes before the document is written.
+- **`model.ts`** — Supplies `orderModel` (the Mongoose model), `applyOrderTransform` (document → `Order` mapping), plus `orderNumberCounterModel`, `orderEventModel`, and `applyOrderEventTransform` for related collections.
+- **`domain/index.ts`** — Provides `paymentStatusFilter` and `returnStatusFilter` (used in `withProjectionFilters`) and the `FulfillmentSummary`, `StampedPaymentStatus`, `StampedReturnStatus` types.
+- **`domain/anonymization.ts`** — Exports `ANONYMIZED_EMAIL`, imported here (used in the truncated portion, likely when scrubbing PII from an order).
+- **`services/crud.ts`** — Consumer of this repository's `create`, `search`, `findByIdScoped`, and related functions for order CRUD endpoints.
+- **`services/cancel.ts`** — Consumer of `updateStatusIfIn` (passing cancel-specific `effects` and a `session` for the multi-write transaction).
 
 ## Notes
 
-- **`$match` does not cast.** Every filter that goes into the aggregation pipeline must be pre-coerced (ObjectIds via `toObjectId`, emails via `normalizeEmail`). `find()` would cast automatically; the pipeline does not.
-- **Scope is merged last** in both `search` and `findByIdScoped`. A client-supplied filter can never widen the authorization boundary.
-- **Status transitions are atomic** (`findOneAndUpdate` with `$in` on the `from` set). The condition lives in the filter, not a preceding read, so two concurrent writers serialize on the document and only one succeeds.
-- **`DEFAULT_SORT` (not a bare field)** is required in the pipeline because count and page are two separate `aggregate` calls; a tie between them would otherwise place an order on two pages or skip one.
-- **`timestamps: false`** on `clearPendingEffect` is deliberate: bumping `updatedAt` would push sibling effects past the sweep's `cutoff` and delay their own retry.
-- **`productId` maps to `items.product._id`**, not a top-level field. Orders embed a product snapshot; there is no reference to the catalogue.
+- **`$match` vs `find()` casting:** Aggregation `$match` does not run Mongoose schema casts. Two consequences are handled explicitly: ObjectId fields must be coerced with `toObjectId` before assembly, and email must be normalised via `normalizeEmail`. A raw string in either silently matches nothing.
+- **Scope is composed with `withScope`, not spread:** A spread would let a client-supplied filter on the same key (e.g. `userId`) overwrite the authorization scope, or vice versa. `withScope` forces both to coexist in an `$and`.
+- **`DEFAULT_SORT` (not bare `createdAt`):** The count and page are two separate `aggregate` calls. Without a deterministic tiebreaker, two orders with the same sort value can appear on both page 1 and page 2 (or be skipped). Orders arrive in bursts, making ties common.
+- **`totalPrice` is not sortable:** It is computed at serialisation time and has no column backing, so it is deliberately excluded from `ORDER_SORTABLE`.
+- **`create` is the only write path for new orders:** No code path inserts an order document with plaintext PII; all callers funnel through `create`, which encrypts before the write.
+- **`updateStatusIfIn` is a single atomic write:** The status change, the conditional `from` guard, the caller scope, and any `effects` all ride in one `findOneAndUpdate`. There is no read-then-write window, so concurrent status changes (e.g. cancel racing ship) cannot both succeed.

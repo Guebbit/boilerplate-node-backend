@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/config.ts
-sha256: 73870ac8dad61b7fd30af37d46e849e19ecad76a3010e79887efd75f4c2bc162
-generated_at: 2026-09-27T15:06:57.873062+00:00
+sha256: 58c66f8e842e97983ab6c42bab8ef3359f357d95b1c464c186cc404b02d1543f
+generated_at: 2026-10-15T10:58:57.868073+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,46 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central configuration surface for the `orders` module. Exposes the shop's invoice identity, bank-transfer payment settings, invoice-render cache knobs, the refund-retry grace window, and the single frontend order-page link. Every getter reads its env var **per call** (not captured at import), following the pattern set by `inventory/config.ts`, so a deployment can correct any value without a restart.
+Central configuration for the orders module: the shop's legal identity (name, address, contact), return-shipment rules, bank-transfer payment details, operational limits (order size, retention, retry intervals), and the single frontend deep-link into the paired UI. All values are read per-call via getter functions so tests can vary them per case without re-imports; a deployment corrects a value with a restart.
 
 ## Key elements
 
-- **`shopCountry()`** – ISO-3166 country the shop is in; the sole VAT jurisdiction.
-- **`shipToCountries()`** – comma-separated ISO-3166 codes this deployment ships to; defaults to `[shopCountry()]`; each code upper-cased.
-- **`shopVatNumber()`**, **`shopLegalName()`** – optional identity fields printed on invoices.
-- **`shopCurrency()`** – single ISO-4217 code (defaults to `'EUR'`); owned here, not in `payments`.
-- **`bankTransferBeneficiary()`**, **`bankTransferIban()`**, **`bankTransferBic()`** – raw transfer account details; beneficiary + IBAN both set ⇒ transfer offered.
-- **`bankTransferIbanFriendly()`** – IBAN grouped in 4-char blocks for the customer-facing instructions (manual chunking, no `ibantools` import).
-- **`bankTransferHoldHours()`** – stock-reservation window for `bank_transfer` orders (default 168 h).
-- **`bankTransferMaxOpenPerAccount()`** – cap on concurrent pending-transfer orders per account (default 2).
-- **`bankTransferEnabled()`** – `true` only when both beneficiary and IBAN are configured.
-- **`transferInstructionsFor(reference)`** – builds the `OrderTransferInstructions` object; caller is responsible for all guards.
-- **`invoiceCachePath()`** – resolved directory for rendered-invoice cache; must stay outside `NODE_PUBLIC_PATH`.
-- **`invoiceCacheTtlMinutes()`** – cache TTL in minutes; forced to `0` under `isDemoMode()` or `NODE_ENV=test` (never touches disk).
-- **`orderEffectRetryMinutes()`** – grace window before the sweep retries a failed refund (default 5 min).
-- **`orderFrontendLink({locale, id})`** – resolves the paired-frontend order-page URL via `frontendLink`.
-- **`ORDER_LINK_ENV_VAR`**, **`ORDER_LINK_DEFAULT_TEMPLATE`** – internal constants for the link; not exported.
+- **`ordersConfig`** — The `defineConfig` manifest declaring every `NODE_*` variable, its validator, default, and constraints. The single source of truth for shape and boot-time requiredness.
+- **`shopCountry()`** — Returns the shop's ISO-3166 country code (the only jurisdiction where VAT applies). Optional at runtime; required at boot.
+- **`shopTimezone()`** — Returns the IANA time-zone name governing calendar-year series and day-counting. Throws `ConfigError` if unset (only possible under `NODE_ENV=test`).
+- **`shopIdentity()`** — Returns a `ShopIdentity` object (legal name, address, email, phone, optional VAT number) for invoice seller blocks and CRD Art. 6(1)(b)–(c) notices.
+- **`returnAddress()`** — Returns a `ReturnAddress`; falls back to the shop's legal address when the dedicated return fields are only partially set.
+- **`returnPostagePayer()`** — Returns `'consumer'` (default) or `'shop'`; drives placed-order and withdrawal email wording per CRD Art. 14(1).
+- **`shipToCountries()`** — Returns the upper-cased ISO-3166 list the deployment will ship to; defaults to the shop's own country alone.
+- **`shopCurrency()`** — Delegates to `currencyConfig()` from infrastructure; the order-side door to the shared ISO-4217 code.
+- **`bankTransferBeneficiary()` / `bankTransferIban()` / `bankTransferBic()`** — Individual getters; `undefined` means transfer is not offered.
+- **`bankTransferIbanFriendly()`** — Strips whitespace and groups the IBAN into 4-character blocks for display to the customer.
+- **`RETURN_POSTAGE_PAYERS` / `ReturnPostagePayer`** — Const array and derived union type for the postage-payer choice.
+- **`requiredValue`** (module-private) — Guards against `undefined` on boot-required fields when `NODE_ENV=test` skips the manifest check.
 
 ## Relationships
 
-- **`@infrastructure/runtime/environment`** – provides `environmentNumber`, used by every numeric getter (`bankTransferHoldHours`, `bankTransferMaxOpenPerAccount`, `invoiceCacheTtlMinutes`, `orderEffectRetryMinutes`).
-- **`@infrastructure/runtime/demo-profile`** – provides `isDemoMode`, consulted inside `invoiceCacheTtlMinutes` to force TTL to 0.
-- **`@infrastructure/http/frontend-link`** – provides `frontendLink`, the only caller is `orderFrontendLink`; the infrastructure layer stays module-agnostic.
-- **`src/modules/orders/emails.ts`** – sole reader of `shopCountry`, `shopVatNumber`, `shopLegalName` for the invoice payload.
-- **`src/modules/orders/services/index.ts`** – barrel re-exports the bank-transfer getters so `payments` and `cart` can read them without importing this file directly (barrel may only publish services/domain/events/emails/model, never a bare config).
-- **`src/modules/cart/services/checkout.ts`** – consumes `shipToCountries` and `bankTransferEnabled` via the barrel.
-- **`src/modules/orders/services/place.ts`** – enforces `bankTransferMaxOpenPerAccount` at order creation.
-- **`src/modules/orders/services/invoice.ts`** – reads `invoiceCachePath`, `invoiceCacheTtlMinutes`, and shop-identity getters.
-- **`src/modules/orders/services/cancel.ts`** – reads `orderEffectRetryMinutes` for the refund-retry window.
-- **`src/modules/orders/model.ts`** – `applyTransferInstructions` mirrors the "read live, don't freeze at checkout" convention established here.
-- **`src/modules/orders/tests/unit/config.test.ts`** – direct unit tests for every getter in this file.
+- **`src/infrastructure/config/define.ts`** — Provides `defineConfig` and `ConfigError`; this file is a consumer of that DSL.
+- **`src/infrastructure/config/fields.ts`** — Provides the `text`, `email`, `int`, `csv`, `choice`, `timeZone` validators used in the manifest.
+- **`src/infrastructure/runtime/config.ts`** — Provides `currencyConfig`, re-exported here as `shopCurrency()`.
+- **`src/infrastructure/http/frontend-link.ts`** — Provides `frontendLink`; this file is its one caller in the orders layer (infrastructure does not know `orders` exists).
+- **`src/modules/invoicing/emails.ts` / `model.ts` / `services/numbering.ts`** — Consume `shopIdentity`, `shopTimezone`, and `shopCountry` for invoice rendering and year-numbered series.
+- **`src/modules/orders/emails.ts`** — Consumes `shopIdentity`, `returnPostagePayer`, and `returnAddress` for placed-order and withdrawal emails.
+- **`src/modules/cart/services/checkout.ts` / `view.ts`** — Read `shipToCountries` and bank-transfer getters to gate payment methods and display instructions.
+- **`src/modules/delivery/services/start.ts` / `notify.ts`** — Read return-shipment and delivery-relevant config values.
+- **`scenarios/flows/shop-history.ts`** — Reads shop identity and timezone for history/reporting context.
+- **`src/modules/invoicing/tests/integration/issue-invoice.test.ts` / `issue-credit-note.test.ts`** — Vary config values per test case via the per-call read pattern.
 
 ## Notes
 
-- **Per-call reads, not module-level constants.** Every exported function is a zero-arg (or single-arg) getter that reads `process.env` at invocation time. Tests can vary values per case; a deployment can flip a setting and it applies on the next call without a restart.
-- **`invoiceCachePath` must stay outside `NODE_PUBLIC_PATH`.** Invoices carry PII and must only be reachable through the authenticated `GET /orders/{id}/invoice` route, never as a guessable static URL.
-- **`invoiceCacheTtlMinutes` ignores the env var entirely** when `isDemoMode()` or `NODE_ENV=test` is active — the `0` TTL means the render never writes to disk, so no PII is left behind.
-- **`bankTransferIbanFriendly` does its own 4-char chunking** rather than importing `ibantools`, preserving `ibantools`' single-module ownership in the generated dependency docs.
-- **`shopCurrency` defaults to `'EUR'`** (uses `??` not `||`), so an empty-string env var would *not* fall through — an intentional distinction from the `|| undefined` pattern used by the optional getters.
-- **VAT *rates* are not here.** They live in `@modules/products`'s `config.ts`; this module only freezes the rate it is handed.
-- **Barrel restriction:** `services/index.ts` may re-export config values only as part of the allowed public surface (services/domain/events/emails/model). A bare `config` import from outside `orders` is forbidden (`local/barrel-allowed-sources` lint rule).
+- The "per-call read, never capture at import" pattern is deliberate (set by `inventory/config.ts`): it lets each test case supply different values without module-cache resets.
+- `NODE_RETURN_ADDRESS_*` fields are treated as all-or-nothing: if any of street/city/zip/country is missing, `returnAddress()` silently falls back to the shop's legal address rather than returning a partial result.
+- `bankTransferIbanFriendly` intentionally does *not* use `ibantools`' `friendlyFormatIBAN`; it only does a 4-char chunk to keep `ibantools`' single-module ownership in `payments`.
+- `NODE_SHIP_TO_COUNTRIES` defaults to `[shopCountry()]` only; a deployment must explicitly widen the list to enable cross-border shipping.
+- `NODE_WITHDRAWAL_PERIOD_DAYS` has a hard minimum of 21 (CRD floor); `NODE_ORDER_PII_RETENTION_DAYS` defaults to 10 years.

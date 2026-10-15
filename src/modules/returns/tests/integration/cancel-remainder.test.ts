@@ -30,6 +30,7 @@ import {
     createOrder,
     forceOrderStatus,
     readOrder,
+    setWithdrawUntil,
     timelineOf,
     toOrderItem
 } from '@modules/orders/tests/factories';
@@ -300,6 +301,18 @@ describe('the buyer cancelling what has not shipped', () => {
             'RETURN_NOTHING_TO_CANCEL'
         );
         expect(await refundsOf(fixture.orderId)).toHaveLength(1);
+    });
+
+    it('answers 409 once the withdrawal window has closed, and writes nothing', async () => {
+        const fixture = await partlyShipped();
+        await setWithdrawUntil(fixture.orderId, new Date(Date.now() - 1000));
+
+        const outcome = await buyerCancels(fixture);
+
+        expect(outcome.kind === 'refused' && outcome.reject.errors[0].code).toBe(
+            'RETURN_WINDOW_CLOSED'
+        );
+        expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
     });
 
     it('lets exactly one of two parallel cancels through', async () => {

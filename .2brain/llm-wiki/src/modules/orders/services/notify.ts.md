@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/notify.ts
-sha256: 3c7aec191a578c837f508e65cdf93b0d9bd55fcf42d11d60a4a4820a669ba307
-generated_at: 2026-09-27T15:14:38.102837+00:00
+sha256: 64fd1f6cb6f11898c3aadbdd68b88b416c9f8ac0a8571a339e8f88598b5d47c6
+generated_at: 2026-10-15T11:08:44.696805+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Sends the placed-order email (confirmation or bank-transfer instructions) and provides `mailBuyer`, the shared buyer-mail policy consumed by admin confirmations, cancellation notices, and delivery-shipped notices. The email variant is chosen from the order's own `paymentMethod` so callers (`create`, cart checkout) can never pick the wrong template.
+Outgoing buyer-facing email for the order lifecycle: sends the "order placed" mail (confirmation or bank-transfer instructions) and provides a shared `mailBuyer` helper that resolves the buyer's locale and display name before delegating to a caller-supplied `build` function. Exists so that `create`, `cancel`, and delivery all follow one consistent buyer-mail policy without duplicating lookup/fallback logic.
 
 ## Key elements
 
-- **`sendOrderPlacedEmail(order, locale, name, recipientEmail): void`** – The main export. Picks `bankTransferInstructionsEmail` or `orderConfirmEmail` based on `order.paymentMethod` and configured transfer settings, renders/spools the PDF receipt (gracefully omitting it on failure), and enqueues the mail via `enqueueEmail`. Fire-and-forget by design; the caller must `void` the resulting promise.
-- **`mailBuyer(order, build): Promise<void>`** – Shared policy: looks up the buyer via `userService.getById` to resolve locale and display name, then invokes the caller-supplied `build` callback (which performs the actual send). Never rejects — both a failed lookup and a throwing `build` are caught, logged, and swallowed so a mail hiccup cannot undo a mid-transition state change.
-- **`invoiceAttachment(orderId, orderNumber): Promise<MailAttachment[]>`** – (internal) Calls `renderInvoicePdf`, spools the PDF via `spoolAttachment`, and returns a one-element attachment array. Resolves to `[]` on any render/spool error.
-- **`MailAttachment`** – `{ filename, key }` interface matching the attachment shape `enqueueEmail` expects (spool key, never raw bytes).
+- **`sendOrderPlacedEmail(order, locale, name, recipientEmail)`** — Chooses between `bankTransferInstructionsEmail` (when `paymentMethod === 'bank_transfer'` **and** beneficiary, IBAN, `payBy`, and `transferReference` are all present) and the plain `orderConfirmEmail`. Fires via `enqueueEmail`; returns `void` (the send is enqueued, not awaited).
+- **`mailBuyer(order, build)`** — Returns a `Promise<void>` that never rejects. Looks up `order.userId` via `userService.getById`, falls back to `order.email` as the display name on lookup failure, then calls `build(locale, name)`. Silently resolves (no-op) when `order.email === ANONYMIZED_EMAIL`. All errors are logged and swallowed.
 
 ## Relationships
 
-- **`@infrastructure/adapters/mailer`** – `enqueueEmail` is the transport call for every mail this file sends.
-- **`@infrastructure/adapters/mail-spool`** – `spoolAttachment` stores the rendered PDF so the mailer can attach it by key.
-- **`@infrastructure/adapters/logger`** – `logger.error` records every degraded path (receipt render failure, buyer-lookup failure, `mailBuyer` send failure).
-- **`@infrastructure/i18n`** – `getDefaultLocale` provides the fallback locale when the buyer record is missing.
-- **`src/modules/orders/config.ts`** – `bankTransferBeneficiary()`, `bankTransferIbanFriendly()`, and `transferInstructionsFor()` gate and populate the transfer-instructions branch.
-- **`src/modules/orders/emails.ts`** – `orderConfirmEmail` and `bankTransferInstructionsEmail` build the `{ subject, template, data }` payload.
-- **`src/modules/orders/model.ts`** – `OrderDocument` type for the order argument.
-- **`src/modules/orders/services/invoice.ts`** – `renderInvoicePdf` produces the PDF bytes that get spooled.
-- **`src/modules/orders/services/index.ts`** – Barrel that re-exports `sendOrderPlacedEmail` / `mailBuyer` to the rest of the orders module.
-- **`src/modules/cart/services/checkout.ts`**, **`src/modules/orders/services/crud.ts`**, **`src/modules/orders/services/cancel.ts`**, **`src/modules/delivery/service.ts`** – Callers that invoke `sendOrderPlacedEmail` or `mailBuyer` after writing the order / transitioning state.
+- **`mailer.ts`** — `enqueueEmail` is the sole transport; both exports ultimately call it.
+- **`i18n/index.ts`** — `getDefaultLocale` is the fallback when the buyer lookup yields no locale.
+- **`logger.ts`** — Errors from the buyer lookup and from a throwing `build` are logged here.
+- **`users/index.ts`** — `userService.getById` resolves the buyer's `locale` and `username`.
+- **`orders/config.ts`** — Provides `bankTransferBeneficiary`, `bankTransferIbanFriendly`, and `transferInstructionsFor` for the bank-transfer branch.
+- **`orders/domain/anonymization.ts`** — `ANONYMIZED_EMAIL` constant gates the no-op path in `mailBuyer`.
+- **`orders/emails.ts`** — Supplies the two mail-template builders (`orderConfirmEmail`, `bankTransferInstructionsEmail`).
+- **`orders/model.ts`** — `OrderDocument` is the order shape both exports consume.
+- **`cart/services/checkout.ts`** — A documented caller context: the module comment notes checkout and `placeOrder` share this mail so the correct variant is always picked.
+- **`orders/services/cancel.ts`** — Uses `mailBuyer` for the bank-transfer-expired notice.
+- **`orders/services/crud.ts`** — Uses `mailBuyer` for the admin-confirmation mail on `create`.
+- **`orders/services/index.ts`** — Re-exports these functions for external consumers.
+- **`returns/services/notify.ts`** — Analogous pattern in the returns module (shared convention, not a direct import).
 
 ## Notes
 
-- **Fire-and-forget contract.** `sendOrderPlacedEmail` returns `void`; the internal `.then(...)` chain is deliberately not awaited. The invoice render spawns a Chromium process and must never stretch the HTTP request that placed the order. Every caller is expected to `void` the call site.
-- **Bank-transfer branch is doubly gated.** Even when `paymentMethod === 'bank_transfer'`, the instructions email is only sent if *both* `bankTransferBeneficiary()` and `bankTransferIbanFriendly()` return truthy **and** the order carries `payBy` and `transferReference`. An order minted while transfer was on but read back after it was disabled silently falls back to the plain confirmation.
-- **`recipientEmail` ≠ `order.email`.** The recipient parameter exists so an admin can place or mail on behalf of another party; do not assume they match.
-- **`mailBuyer` never rejects.** Both the lookup `.catch` and the outer `.catch` around `build` swallow errors. Callers that need sequencing (e.g. delivery's audit line) can safely `await` it.
-- **Stryker annotations.** The `Stryker disable all` / `restore all` blocks mark error-only branches whose mutations are intentionally excluded from mutation-coverage reporting.
-- **Locale is decided once by the caller** and threaded through, so the order document and the email can never quote two different languages.
+- `mailBuyer` is deliberately infallible to its caller: both the lookup rejection and a `build` throw are caught and logged, because callers (`cancelById`, delivery) are mid state-transition and a mail failure must not roll back the transition.
+- The bank-transfer branch has a five-way `&&` guard; if the deployment disables transfer **after** an order was created, the order silently falls back to the plain confirmation rather than sending an email with no payment instructions.
+- `sendOrderPlacedEmail` carries no invoice — invoicing is a separate `ORDER_STATUS_CHANGED` listener that fires later.
+- Stryker mutation-testing annotations (`Stryker disable all`) wrap both error-log blocks, exempting them from mutation coverage.

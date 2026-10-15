@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/controllers/restore-orders.ts
-sha256: a906990fd252d0dd263d448d507a2556be216777e064f8905f1decf3a86694f8
-generated_at: 2026-09-27T15:08:25.936909+00:00
+sha256: 98ea67d19f7966aca79792dddc09c9cd4e7180bac88e0d9deca7ccd380ef022c
+generated_at: 2026-10-15T11:00:36.878208+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin admin controller that exposes the **POST /orders/:id/restore** endpoint for undoing a soft-deleted order. Rather than implementing the handler inline, it delegates all logic (lookup, permission check, audit, response shaping) to the shared `createRestoreController` factory, keeping the orders module consistent with other entities that follow the same restore pattern.
+Thin admin controller that wires the shared `createRestoreController` factory to the order domain, exposing a single POST endpoint to undo a soft-deleted order.
 
 ## Key elements
 
-- **`restoreOrders`** (default export) — The wired controller instance produced by `createRestoreController`. Accepts and configures:
-  - `entity: 'order'` — label used in generic error/audit messages.
-  - `restore(id)` — calls `orderService.restoreById(id)` to perform the actual state transition.
-  - `present(order, request)` — re-hydrates the order with its currently available actions via `orderService.withActions(order, request.authContext)` so the response reflects the caller's permissions.
-  - `auditAction: ordersAuditActions.ORDER_RESTORED` — the audit-log entry emitted on success.
-  - `notFoundKey: 'orders.not-found'` — i18n key for the 404 body.
+- **`restoreOrders`** (exported const) — The sole export. A controller instance built by `createRestoreController` with:
+  - `entity: 'order'` — used by the factory for logging/error shaping.
+  - `restore` — delegates to `orderService.restoreById(id, callerContextOf(request))`.
+  - `present` — passes the restored order through `orderService.withActions(order, request.authContext)` for action/permission decoration before serialization.
+  - `notFoundKey: 'orders.not-found'` — i18n key for the 404 response.
 
 ## Relationships
 
-- **`create-restore-controller.ts`** — Supplies the `createRestoreController` factory; this file is a pure configuration of that factory for the order entity.
-- **`services/index.ts`** — Source of `orderService`, which provides `restoreById` (state change) and `withActions` (permission-aware shaping).
-- **`audit.ts`** — Provides the `ordersAuditActions.ORDER_RESTORED` constant used as the audit-log action name.
-- **`routes.ts`** — Registers `restoreOrders` under the `POST /orders/:id/restore` route (this file is the handler that routes dispatches to).
+- **`src/infrastructure/surfaces/create-restore-controller.ts`** — Supplies the factory that assembles the restore endpoint (route method, 404/409 handling, response envelope) from the config object passed here.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)`, which extracts the authenticated caller's identity for the service-layer restore call.
+- **`src/modules/orders/services/index.ts`** — Provides `orderService.restoreById` (performs the restore, owns the `ORDER_RESTORED` audit emit) and `orderService.withActions` (attaches allowed-action metadata to the response payload).
+- **`src/modules/orders/routes.ts`** — Imports and mounts `restoreOrders` at the orders route table (POST `/orders/:id/restore`).
 
 ## Notes
 
-- Returns **409 Conflict** (not 400) when the order exists but is *not* in a deleted state — "restore" is only valid as the inverse of a delete.
-- The response payload is not the raw row; `withActions` augments it with a list of actions the caller is permitted to take, so the shape is auth-context-dependent.
-- No additional validation or transaction logic lives here — the service layer owns those concerns.
+- Returns **409** (not 400/404) when the target order is *not* in a deleted state — the "not deleted" case is a conflict, not a not-found.
+- Audit logging (`ORDER_RESTORED`) is the service's responsibility; this controller performs no logging itself.
+- The `present` callback receives `request.authContext` directly (not via `callerContextOf`), whereas the `restore` callback uses `callerContextOf(request)`. Both derive from the request but through slightly different accessors.

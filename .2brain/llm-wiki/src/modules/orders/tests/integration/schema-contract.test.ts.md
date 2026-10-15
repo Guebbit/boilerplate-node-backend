@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/tests/integration/schema-contract.test.ts
-sha256: 736344f90346e776f328d68a935a6c5a849d37c181cb68331093752609bbde25
-generated_at: 2026-09-27T15:19:21.296185+00:00
+sha256: e0efb61fb38943e1b180ce8edcb75aecb3fee2f672cc9a06b0193a4c98bba120
+generated_at: 2026-10-15T11:17:06.351612+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies the Mongoose schema *declarations* for the order document (defaults, `required` fields, `select: false` on credentials) rather than runtime transform logic. Sibling specs in the same folder cover behaviour; this file asserts only what the schema itself guarantees. It runs against a real MongoDB instance because the properties under test (`default`, `required`, `select`) are Mongoose semantics, not application code.
+Validates the *declarations* of the order schema (defaults, per-field `required`, `select: false` on credentials) against a real MongoDB instance, rather than testing transform logic or business behaviour. A real Mongo is required because the assertions depend on Mongoose's own interpretation of `default`, `select`, and path stripping — a mock would only assert its own semantics.
 
 ## Key elements
 
-- **`makeOrderPayload`** – builds a complete valid order document: creates a real user and product via factories, resolves `taxClass` → `taxRate` (mirroring `freezeOrderLines`), and returns the shape expected by `orderRepository.create`.
-- **`describe('order schema')`** – two assertions:
-  - *serialises to id, never `_id` or `__v`* – confirms the `toJSON` transform exposes `id` and strips Mongoose internals.
-  - *drops `onHand`/`reserved`* – proves `orderLineProductSchema` has no path for inventory fields, even though the full live product document (obtained via `product.toObject()`) carries them.
-- **Trailing cart comment** – a block comment above a (presumably still-to-be-written) `describe('cart schema', …)` block, documenting that `userId` is `unique` on the cart collection and that all cart mutations are single upserts.
+- **`makeOrderPayload()`** – async helper that creates a real user and product via test factories, then builds a full valid order document. The product is embedded as a snapshot (spreading `product.toObject()`), with `taxClass` replaced by `resolveTaxRate(taxClass)` and `onHand`/`reserved` intentionally left in the input to prove the schema drops them.
+- **`describe('order schema')`** – two tests:
+  - `serialises to id, never _id or __v` – asserts `toJSON()` exposes `id` and omits `_id` and `__v`.
+  - `drops onHand/reserved…` – asserts the embedded `product` in a persisted order has no `onHand`, `reserved`, or `available` properties, even though the source live product document carries them.
+- **Trailing cart comment** – a section header for cart-collection uniqueness (`userId` as `unique`) is present at the bottom, but the corresponding tests are not yet written in the visible portion of the file.
 
 ## Relationships
 
-- **`src/modules/orders/repository.ts`** – `orderRepository.create` is the single write path exercised here; every assertion inspects the document it returns.
-- **`src/modules/products/index.ts`** – source of the `resolveTaxRate` import (re-exported from `products/tax.ts`); used to replace `taxClass` with a concrete `taxRate` in the embedded snapshot.
-- **`src/modules/products/tax.ts`** – implementation of the tax-rate resolution logic that the test depends on indirectly.
-- **`src/modules/products/tests/factories.ts`** – provides `createProduct`, seeding a real product document whose `toObject()` output deliberately includes `onHand`/`reserved` to stress-test the embedded schema's path list.
-- **`src/modules/users/tests/factories.ts`** – provides `createUser`, seeding a real buyer referenced by `userId` in the order payload.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is called at module top level to spin up a real in-memory (or temp) MongoDB instance for the Mongoose schema behaviours under test.
+- **`src/modules/orders/repository.ts`** – `orderRepository.create()` is the sole write path exercised; the tests call it and inspect the returned Mongoose document's `toJSON()` output.
+- **`src/modules/products/index.ts`** – imports `resolveTaxRate` to compute the `taxRate` that replaces `taxClass` in the embedded snapshot, mirroring what `freezeOrderLines` does in production.
+- **`src/modules/products/tax.ts`** – transitively provides the tax-rate resolution used above.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` seeds a real product document so the embedded snapshot is realistic.
+- **`src/modules/users/tests/factories.ts`** – `createUser` seeds a real user so `userId` / `email` pass validation.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` boots a real Mongo instance and resets it before the suite runs.
 
 ## Notes
 
-- The test intentionally passes the **full** live product object (including `onHand`, `reserved`) into the embedded `product` field. If `orderLineProductSchema` ever gains a path for those fields, the second test will fail — it guards against schema drift, not just the happy path.
-- `taxClass` is destructured out of the product snapshot and replaced with `resolveTaxRate(taxClass)` before insertion, matching the contract that `orderLineProductSchema` expects a resolved rate, not a class name.
-- The file is structured as a *living* spec: the trailing cart comment signals that cart-schema assertions are planned but not yet written.
+- The test deliberately passes `onHand`/`reserved` *into* the payload (they come along on `product.toObject()`) so the assertion proves the schema has no path for them, rather than relying on the payload simply omitting them.
+- The embedded `product` in an order line is a snapshot, not a reference: a bare `ObjectId` would fail validation because `title`, `price`, and `taxRate` are `required` on the embedded sub-schema.
+- The file's doc comment states it covers "what the schema says and nothing else" — sibling specs in the same folder handle behaviour/transforms.
+- The cart-uniqueness section at the end appears to be a stub (comment present, no `describe`/`it` yet); do not assume those assertions exist.

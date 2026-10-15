@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/controllers/delete-orders.ts
-sha256: 16323fa2e42eccfdebf2e5e2691d967e519e3ee04f95784ca3a9f1e86536feb3
-generated_at: 2026-09-23T19:00:04.365946+00:00
+sha256: 8464a4fba8dd6e83c7df10e4fddc68de182097aff0c3bbdb2e67acf8315dac1c
+generated_at: 2026-10-15T10:59:15.315507+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin wiring layer that instantiates the shared `createDeleteController` factory for the order entity. It exists so the orders module can expose a single, pre-configured `deleteOrders` controller (soft-delete by default, hard-delete on demand) without re-implementing the delete logic.
+Thin adapter that wires the shared `createDeleteController` factory to the order-specific service. It exposes a single `deleteOrders` controller for the admin `DELETE /orders` endpoint, delegating all real logic to `orderService.removeById`.
 
 ## Key elements
 
-- **`deleteOrders`** (exported constant) — The admin DELETE controller. Accepts an order id, delegates removal to `orderService.removeById(id, hardDelete)`, and records the action under `ordersAuditActions.ORDER_DELETED`. The `hardDelete` flag is triggered by a `/hard` suffix or `?hardDelete=true` query param.
+- **`deleteOrders`** (exported const) — The controller instance produced by `createDeleteController`. Configured with:
+  - `entity: 'order'`
+  - `remove(id, hardDelete, request)` — calls `orderService.removeById(id, hardDelete, callerContextOf(request))`
+  - `notFoundKey: 'orders.not-found'` — i18n key returned when no matching order is found
 
 ## Relationships
 
-- **`src/infrastructure/surfaces/create-delete-controller.ts`** — Supplies the `createDeleteController` factory. This file only configures it (entity name, remove callback, audit action, i18n key); all HTTP parsing, auth guard, and response shaping live in the factory.
-- **`src/modules/orders/services/index.ts`** — Provides `orderService.removeById(id, hardDelete)`, the actual persistence call the controller invokes.
-- **`src/modules/orders/audit.ts`** — Exports `ordersAuditActions.ORDER_DELETED`, the audit-log action identifier stamped when a delete succeeds.
-- **`src/modules/orders/routes.ts`** — Consumer side; mounts `deleteOrders` on the `DELETE /orders(/:id)(/hard)` route.
+- **`@infrastructure/surfaces/create-delete-controller`** — Provides the `createDeleteController` factory; all HTTP plumbing (route matching, auth guard, response shaping) lives there.
+- **`@infrastructure/http/request`** — Provides `callerContextOf(request)`, which extracts the authenticated caller identity passed into the service call.
+- **`../services` (orders services barrel)** — Supplies `orderService.removeById`, which performs the actual soft/hard delete and emits the `ORDER_DELETED` audit event.
+- **`../routes.ts`** — Registers `deleteOrders` on the admin router at `DELETE /orders(/:id)(/hard)`.
 
 ## Notes
 
-- Soft vs. hard semantics are **domain-level**, not generic: hard delete releases the order's held inventory units before removing the row; soft delete only sets a deletion timestamp because an order is a financial record. This distinction is enforced in `orderService.removeById`, not in this controller.
-- The controller itself contains no validation, auth, or HTTP logic — those are inherited from `createDeleteController`. If behavior seems "missing," look in the factory.
-- `notFoundKey: 'orders.not-found'` is an i18n lookup key; a miss returns the standard 404 message defined elsewhere in the translation catalog.
+- Soft delete is the default; hard delete is triggered by the `/hard` path suffix **or** `?hardDelete=true` query param.
+- Hard delete releases the order's held inventory units before removing the record; soft delete only stamps a deletion flag (order is treated as an immutable financial record).
+- The `ORDER_DELETED` audit event is emitted inside `orderService.removeById`, not in this controller.

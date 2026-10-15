@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/controllers/respond.ts
-sha256: 7f7ce0925aedfc4f376e43343cb2879ae1b62639c09fe97ab4bd5be71e0ee38a
-generated_at: 2026-09-27T15:08:14.216911+00:00
+sha256: 16c3573a286231de369098cf70e8430ba1c6d550a18cf07603ef3456ebe0ec36
+generated_at: 2026-10-15T11:00:28.729405+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared success-tail helper for every order controller (all write endpoints plus the single-order read). It hydrates the order document returned by the service with the caller's computed `actions`, then sends it as the standard success envelope. It lives in the controller layer (not `services/scope.ts`) so that `withActions` remains framework-free while the HTTP `Response`/status split stays at the call site.
+Shared success-tail helper for every order controller (writes and the single-order read). It hydrates the order document returned by the service with the caller's `actions` via `orderService.withActions`, then sends it as the HTTP success envelope. Kept separate from `services/scope.ts` so that `withActions` remains framework-free; each call site still declares its own status code and message.
 
 ## Key elements
 
-- **`respondWithOrder`** (exported) — Takes an Express `Response`, the raw order document, the caller's `AuthContext | undefined`, the operation-name string, and optional `status` / `message`. Calls `orderService.withActions(order, authContext)`, then pipes the resolved order through `successResponse`. Owns its own `.catch(catchAs(response, context))` using the *same* `context` string the caller passes to its outer `.catch`, so a `withActions` failure is logged under one operation name rather than two.
-- **`OrderForResponse`** (local type) — Derived via `Parameters<typeof orderService.withActions>[0]` instead of importing from `../model`. This keeps controllers free of persistence handles (enforced by the `no-persistence-imports` lint rule).
+- **`OrderForResponse`** (type, not exported) — Derived from `Parameters<typeof orderService.withActions>[0]` rather than imported from the model layer, enforcing the `no-persistence-imports` boundary for controllers.
+- **`respondWithOrder`** (exported const, the only export) — Accepts `(response, order, authContext, context, status?, message?)`. Calls `orderService.withActions`, then sends via `createdOrOk`. Attaches its own `.catch(catchAs(response, context))` so a `withActions` failure logs under the same operation name as the caller's outer `.catch`.
 
 ## Relationships
 
-- **`src/modules/orders/services/index.ts`** — Imports `orderService` to call `withActions`; the type of the first parameter of that method also drives the local `OrderForResponse` alias.
-- **`src/infrastructure/http/response.ts`** — Imports `successResponse`, the envelope wrapper that serializes the resolved order onto the Express `Response`.
-- **`src/infrastructure/http/controller.ts`** — Imports `catchAs`, the error-interceptor factory used for this helper's own `.catch`.
-- **`src/types/auth-context.ts` / `src/types/index.ts`** — Provides the `AuthContext` and `Order` types used in the function signature.
-- **Controller call sites** (`create-order.ts`, `get-order-item.ts`, `post-cancel-order.ts`, `post-order-status-override.ts`) — Each invokes `respondWithOrder` after its own service call, passing its own `status` (e.g. 201 for create) and optional `message`, plus the shared operation-name string.
+- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs`, which wraps the `.catch` handler.
+- **`src/infrastructure/http/response.ts`** — Supplies `createdOrOk`, the function that writes the success envelope (status, body, optional Location for 201).
+- **`src/modules/orders/services/index.ts`** — Supplies `orderService.withActions`, the hydration step this file orchestrates.
+- **`src/types/auth-context.ts`** / **`src/types/index.ts`** — Provide the `AuthContext` and `Order` types used in signatures.
+- **`src/modules/orders/controllers/create-order.ts`**, **`post-cancel-order.ts`**, **`get-order-item.ts`**, **`post-order-status-override.ts`** — Callers of `respondWithOrder`; each passes its own `status` (e.g. 201 for create), `message`, and `context` string.
 
 ## Notes
 
-- The `context` parameter must match the string the calling controller already passes to its *outer* `.catch(catchAs(response, context))`. Duplicating a different name would split one logical failure across two log entries.
-- `authContext` is typed `AuthContext | undefined` because the single-order read endpoint may be called without a resolved caller; `withActions` tolerates that.
-- Do not import the order model type directly here — the `OrderForResponse` alias exists specifically to satisfy `no-persistence-imports`.
+- The `context` parameter is **not** optional and must match the string the calling controller already passes to its own outer `.catch`; this is intentional so a `withActions` failure and the preceding service call both log under one operation name rather than two.
+- A 201 response always includes a `Location: /orders/{id}` header (RFC 9110 §9.3.3); `createdOrOk` handles this based on the `status` argument.
+- This file deliberately does **not** import from the order model/persistence layer. If you need a field from the order that isn't in `OrderForResponse`, the fix belongs upstream in the service return shape, not here.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/routes.ts
-sha256: c942a49e65412e08ad3aa8963e5d18e30ee8e46d795a2dc2c1f228f9dbc9291c
-generated_at: 2026-09-27T15:12:37.008720+00:00
+sha256: e33768da2d61b35e2d4ef6d2f434c9f4c17f577683b1e2e6219431f13df1da0b
+generated_at: 2026-10-15T11:06:39.596558+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express router that wires up every order endpoint, enforcing session-based authentication on all routes and splitting access between customer-scoped reads/writes and admin-gated mutations. It exists as the single place where route ordering, middleware chains, and permission guards are declared for the orders domain.
+Express router for all order-management endpoints. It wires authentication, permission checks, caching headers, rate limits, and idempotency guards onto the order controllers and mounts them under the `/orders` basePath. It does not contain business logic; it defines *which* controller handles *which* path, in what order, under which guard.
 
 ## Key elements
 
-- **`router`** (exported `Router`) — the sole export; mounted by the orders module.
-- **Global guard** (`router.use(getAuth, isAuth)`) — every route requires a valid session; API-key credentials are deliberately excluded.
-- **`POST /search`** — caller-scoped search; `noStore` prevents any shared caching.
-- **`GET /`** — list orders; `privateNoCache` allows browser-side revalidation.
-- **`POST /`** — admin order creation; `idempotencyKey` before the handler so retries replay the same order; `invalidateCache(['products'])`.
-- **`DELETE /`** — bulk admin delete (IDs in body).
-- **`POST /:id/cancel`** — the single write a customer may perform; `invalidateCache(['products'])`.
-- **`POST /:id/status-override`** — admin; must precede `/:id` to avoid being swallowed.
-- **`GET /:id/invoice`** — on-demand PDF render; `invoiceLimiter` (from `rate-limits.ts`) throttles Chromium launches.
-- **`GET /:id`** — caller's own order; `privateNoCache`.
-- **`PUT /:id`** / **`PATCH /:id`** — admin replace / merge; `requirePermission('orders.any.update')`.
-- **`DELETE /:id`** — admin soft-delete (or hard if `?hardDelete=true`).
-- **`POST /:id/restore`** — undo a soft delete.
-- **`DELETE /:id/hard`** — same delete with the flag spelled in the path via `routeFlag('hardDelete')`.
+- **`router`** (exported `Router`) — the sole export; all other imports are used to configure it.
+- **Global middleware (`getAuth` → `isAuth`)** — enforces session-based auth for every route. Deliberately `isAuth` (session only), not `isAuthOrCredential`, because customer-scoped routes (`/:id`, `/:id/cancel`) narrow reads via `orderService.callerScope(authContext)`; an API-key credential would resolve to no `authContext` and silently widen scope.
+- **Route ordering** — static segments (`/search`, `/export`) and longer param paths (`/:id/cancel`, `/:id/status-override`, `/:id/timeline`, `/:id/restore`, `/:id/hard`) are registered before the bare `/:id` routes so Express doesn't swallow them.
+- **Caching strategy** — `noStore` on POST responses; `privateNoCache` on caller-scoped GETs (list, single, timeline); no Redis `Cache-Control` for caller-scoped reads because the result depends on the identity of the caller (RFC 9111 §3.5). `invalidateCache(['products'])` is applied to mutations that change product inventory.
+- **`idempotencyKey`** — applied to `POST /orders` so retried creations replay the same order.
+- **`ordersExportLimiter`** (from `./rate-limits`) — per-account rate limit on `GET /orders/export`.
+- **`routeFlag('hardDelete')`** — applied to `DELETE /:id/hard` to inject the `hardDelete` flag into the request so the shared `deleteOrders` controller can branch on it.
+- **`requirePermission('orders.any.*')`** — step-up permission checks on admin-only mutations (create, update, delete, override, export, restore).
 
 ## Relationships
 
-- **`@kernel/middlewares/authorizations`** — provides `getAuth`, `isAuth`, `requirePermission`; applied globally and per-route.
-- **`@infrastructure/http/middlewares/cache`** — `noStore`, `privateNoCache`, `invalidateCache` shape every cache-control and tag-invalidation decision.
-- **`@infrastructure/http/middlewares/idempotency`** — `idempotencyKey` guards the create route against duplicate POSTs.
-- **`@infrastructure/http/middlewares/route-flag`** — `routeFlag('hardDelete')` translates the `/hard` path segment into a query parameter for `deleteOrders`.
-- **`./rate-limits`** — exports `invoiceLimiter`, applied to the invoice route to cap concurrent Chromium spawns.
-- **Controllers (`get-orders`, `create-order`, `update-order`, `delete-orders`, `restore-orders`, `get-order-item`, `get-order-invoice`, `post-cancel-order`, `post-order-status-override`)** — each is the terminal handler for its route; this file only sequences middleware and delegates.
-- **`./module.ts`** — mounts this router into the orders feature module (and presumably registers it on the app's `/orders` prefix).
+- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuth`, `requirePermission`; the three guards applied at router level and per-route.
+- **`src/infrastructure/http/middlewares/cache.ts`** — provides `noStore`, `privateNoCache`, `invalidateCache`; controls HTTP cache semantics per route.
+- **`src/infrastructure/http/middlewares/idempotency.ts`** — provides `idempotencyKey`; ensures idempotent order creation.
+- **`src/infrastructure/http/middlewares/route-flag.ts`** — provides `routeFlag`; used to tag the hard-delete route.
+- **`src/modules/orders/controllers/*`** — each controller (`getOrders`, `createOrder`, `replaceOrderById`, `updateOrderById`, `deleteOrders`, `restoreOrders`, `getOrderItem`, `getOrdersExport`, `getOrderTimeline`, `postCancelOrder`, `postOrderStatusOverride`) is the terminal handler for one or more routes on this router.
+- **`src/modules/orders/module.ts`** — registers this `router` at the app level under the `/orders` mount point.
 
 ## Notes
 
-- **Route ordering is load-bearing.** Static segments (`/search`) and longer paths (`/:id/invoice`, `/:id/hard`, `/:id/cancel`, `/:id/status-override`, `/:id/restore`) must appear before the bare `/:id` handler or they will never match.
-- **Session-only auth is intentional.** The comment block explains that `isAuthOrCredential` would let an API-key call resolve to no `authContext`, silently widening `callerScope` from "my orders" to a fallback. Opening this router to credentials requires splitting it first.
-- **No route tags the cache with `orders`.** The `invalidateCache` calls on create and cancel target the `products` tag because order writes affect product availability, not an `orders` cache tag that doesn't yet exist here.
-- **`DELETE /:id` vs `DELETE /:id/hard` are the same handler.** The only difference is that `routeFlag('hardDelete')` injects the flag, so the controller logic is shared.
-- **`POST /:id/restore` is idempotent-by-nature** (a second DELETE after a restore re-soft-deletes), but there is no explicit idempotency-key middleware on it.
+- **`GET /orders/:id/invoice` and `/orders/:id/credit-note` are intentionally absent.** The `invoicing` module mounts its own router at the same `/orders` basePath and owns those two paths. Router registration order at the app tier (see `invoicing/module.ts`) determines which router wins for overlapping prefixes.
+- **Session-only auth is a load-bearing invariant.** Opening this router to API-key credentials requires splitting it into separate customer-facing and admin-facing routers first; otherwise the `authContext`-narrowing logic in the service layer is bypassed.
+- **`DELETE /orders` (no `:id`) and `DELETE /orders/:id` share the `deleteOrders` controller.** The controller infers scope from the presence of `id` in the params/body.
+- **`DELETE /orders/:id/hard` and `DELETE /orders/:id?hardDelete=true` are equivalent.** The path variant exists so the flag is visible in URLs/logs; `routeFlag` normalises it into the same request shape the query-param variant produces.

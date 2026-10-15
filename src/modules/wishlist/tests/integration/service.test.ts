@@ -19,7 +19,17 @@ import { productService } from '@modules/products';
 import { userService } from '@modules/users';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
+import * as analyticsPort from '@infrastructure/observability/analytics';
+import { observePort } from '@tests/ports';
+import { wishlistAnalyticsEvents } from '../../analytics';
 import { enabledModules } from '../../../../modules';
+
+/* Replaced, not spied on — see `tests/support/ports.ts` for why. */
+jest.mock('@infrastructure/observability/analytics', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/analytics'),
+    emitAnalyticsEvent: jest.fn()
+}));
 
 setupTestDb();
 
@@ -153,6 +163,34 @@ describe('wishlistAdd', () => {
 
         expect(second.success).toBe(true);
         expect(await savedIds(user.id)).toEqual([String(product._id)]);
+    });
+
+    it('announces the save once, however often the same product is saved again', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
+
+        for (let attempt = 0; attempt < 3; attempt += 1)
+            await wishlistService.wishlistAdd(user.id, String(product._id), testCallerContext);
+
+        const added = analyticsSpy.mock.calls.filter(
+            ([event]) => event.event === wishlistAnalyticsEvents.WISHLIST_ITEM_ADDED
+        );
+        expect(added).toHaveLength(1);
+    });
+
+    it('refuses a soft-deleted product with 404', async () => {
+        const user = await createUser();
+        const gone = await createProduct({ deletedAt: new Date().toISOString() });
+
+        const result = await wishlistService.wishlistAdd(
+            user.id,
+            String(gone._id),
+            testCallerContext
+        );
+
+        expect(result.status).toBe(404);
+        expect(await savedIds(user.id)).toEqual([]);
     });
 
     it('refuses a product outside the public catalogue with 404', async () => {

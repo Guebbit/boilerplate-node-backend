@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/crud.ts
-sha256: b6186776cc3d5777254ea63939a4ba6a6247cbb2e69ce9c03a77eebd107cfe7c
-generated_at: 2026-09-27T15:13:33.380969+00:00
+sha256: 60e02bda91386ab0ba364ccdd0892b760d911b6052e4210c5da827941dcb62ea
+generated_at: 2026-10-15T11:07:32.824405+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,48 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CRUD service layer for the Orders module: searching, fetching, creating, updating, and (partially) deleting order records. It composes lower-level operations (`placeOrder`, image resolution, email dispatch, audit/analytics emission) into the endpoints' public API. Cancellation is intentionally excluded—it lives in `./cancel` with its own multi-step sequence.
+The admin-facing write path for orders: creating a new order (product snapshot, stock hold, invoice allocation) and updating an existing one (email only). It composes validation, rank checks, locale resolution, and post-write side-effects (audit, analytics, email) around `placeOrder`, which owns the actual persistence and rollback.
 
 ## Key elements
 
-- **`search(search, scope?, context?)`** — Paginated order search (DTO wire shape). Batch-resolves current product images for the whole page via `resolveCurrentImages`. Emits `ORDERS_VIEWED` analytics when a `CallerContext` is supplied.
-- **`ownOrderIds(userId)`** — Returns every order ID for a user (paged internally via `readAll`). Intended for sibling modules that need IDs only, avoiding image resolution and analytics.
-- **`findOwnOrders(userId)`** — Full-order export path; delegates through `search` so image resolution runs, but omits `context` so no view-analytics fire.
-- **`getById(id, scope?)`** — Single-order fetch returning `OrderDocument` (hydrated). Returns `undefined` on missing/falsy ID.
-- **`recordCreated(order, context)`** — Audit + analytics emission for an order creation. Deliberately separated from `placeOrder` so both the admin path and cart's `orderConfirm` can call it without duplicating the write.
-- **`countOpenBankTransfers(userId)`** — Open `bank_transfer` order count; checkout uses this to cap free stock holds.
-- **`getByTransferReference(reference)`** — Exact-match lookup by RF reference (admin payment reconciliation).
-- **`create(userId, email, items, context)`** — Admin order creation. Resolves buyer's stored locale (falls back to default on failure), resolves product snapshots, delegates the write to `placeOrder`, then calls `recordCreated` and fires the placed-order email. Returns typed `ResponseSuccess`/`ResponseReject`.
-- **`update(order, data)`** — Applies an email change to a loaded document and saves. Does not touch `status` (not in `UpdateOrderByIdRequest`).
-- **`updateById(id, data, context)`** — Fetch-then-delegate to `update`; returns 404 reject on miss.
-- **`resolveItemProducts`** (private) — Parallel `productService.findByIdRaw` lookup for each cart line.
+- **`create(userId, email, items, context)`** — Main admin order-creation entry point. Enforces deployment line/quantity limits, checks caller-vs-buyer rank, resolves the buyer's stored locale, batch-resolves product IDs, delegates to `placeOrder`, then fires `recordCreated` and mails the buyer.
+- **`recordCreated(order, context)`** — Shared "order was created" audit + analytics emit. Extracted so both this file and `@modules/cart`'s checkout can report the same fact without one path triggering the other's email.
+- **`update(order, data)`** — Applies an email change to an in-memory `OrderDocument` and persists it via `orderRepository.save`. Status is intentionally not a field here.
+- **`updateById(id, data, context)`** — Fetches by ID, 404s if missing, runs `outrankedOrderRefusal`, delegates to `update`, and records an `ORDER_UPDATED` audit entry on success.
+- **`lineLimitRefusal(items)`** *(private)* — Returns a 422 `ResponseReject` if line count or per-line quantity exceeds the operator-configured ceilings from `config.ts`.
+- **`resolveItemProducts(items)`** *(private)* — `Promise.all` over `productService.findByIdRaw` to pair each input line with its full product document.
 
 ## Relationships
 
-- **`./place`** (`placeOrder`) — `create` delegates the actual write, stock hold, and invoice allocation here. `placeOrder` owns its own rollback on refused writes.
-- **`./cancel`** — Not imported here; the module docblock explicitly excludes cancellation from this file.
-- **`./current`** (`resolveCurrentImages`) — Batch image resolution applied to search and find-own-orders results.
-- **`./notify`** (`sendOrderPlacedEmail`, `mailBuyer`) — Post-creation email dispatch in `create`.
-- **`./invoice`** (`deleteCachedInvoice`) — Imported (used by the broader module, referenced in this file's import list).
-- **`./scope`** (`ownerScope`) — Builds the ownership filter passed to repository searches for `ownOrderIds` / `findOwnOrders`.
-- **`../analytics`** / **`../audit`** — Event and action-name constants consumed by `search` and `recordCreated`.
-- **`../model`** — `OrderDocument` type used throughout.
-- **`../repository`** (`orderRepository`) — All persistence reads/writes go through this.
-- **`@modules/inventory`** (`inventoryService`) — Imported; stock-related reads during the create flow.
-- **`@modules/products`** (`productService`) — Product lookup for snapshot resolution.
-- **`@modules/users`** (`userService`) — Buyer locale lookup in `create`.
-- **`@infrastructure/i18n`** — `t()` for user-facing messages; `getDefaultLocale()` for fallback.
-- **`@infrastructure/observability/audit`** / **`analytics`** — `recordAudit` / `emitAnalyticsEvent` calls.
-- **`@infrastructure/persistence/search`** (`readAll`, `MAX_CONFIGURED_PAGE_SIZE`) — Pagination helper for `ownOrderIds` and `findOwnOrders`.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` response builders.
-- **`@infrastructure/adapters/logger`** — Error logging in the buyer-locale fallback path.
-- **`asyncapi.public.yaml`** — The search endpoint shape (`POST /orders/search`) is documented there; this file implements it.
+- **`./place`** — `placeOrder` performs the actual write, stock hold, and rollback; this file supplies resolved inputs and maps the `outcome` back into HTTP responses.
+- **`./notify`** — `mailBuyer` / `sendOrderPlacedEmail` deliver the post-creation email; called only here (not in `recordCreated`) to avoid double-sending on the shared path.
+- **`./scope`** — `outrankedOrderRefusal` gates `updateById` against a buyer who ranks ≥ the caller.
+- **`../analytics`, `../audit`, `../config`, `../model`** — Provide event-name constants, audit-action constants, operator limits, and the `OrderDocument` type respectively.
+- **`@infrastructure/i18n`** — `t()` for user-facing messages, `getDefaultLocale()` as fallback when the buyer lookup fails.
+- **`@infrastructure/observability/analytics`, `@infrastructure/observability/audit`** — `emitAnalyticsEvent` / `recordAudit` for the post-creation and post-update side-effects.
+- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape every return value.
+- **`@modules/access`** — `outrankedRefusal` blocks an operator from placing an order for an equal-or-superior user.
+- **`@modules/products`** — `productService.findByIdRaw` resolves product snapshots; `canSeeStock` gates whether the stock-shortage refusal exposes the `available` quantity.
+- **`@modules/users`** — `userService.getById` fetches the buyer's stored locale.
+- **`@infrastructure/adapters/logger`** — Error logging when the buyer-locale lookup fails.
 
 ## Notes
 
-- `recordCreated` is audit + analytics **only**; it does not emit the `ORDER_CREATED` webhook or perform any write. That responsibility stays in `placeOrder`, so a caller forgetting `recordCreated` cannot also silence the webhook.
-- `create` resolves the buyer's locale from `userService`, **not** from `context.locale` (which may be an admin's UI language). The lookup is guarded: failure falls back to `getDefaultLocale()` rather than aborting the order.
-- `update` intentionally does not handle `status`—the request type omits it, and the theory doc (`docs/theory/tactical-ddd.md#who-writes-the-status`) designates a different owner for status transitions.
-- `ownOrderIds` and `findOwnOrders` both use `readAll` to transparently page through all results; the former skips image resolution, the latter does not.
-- `create` uses flat `await`s (not nested `.then()`) so that `toObjectId` and other steps reject as promises rather than throwing synchronously.
-- `search`'s `context` parameter is optional; passing it triggers the `ORDERS_VIEWED` analytics emit, omitting it suppresses it (e.g., in `findOwnOrders`).
+- **Buyer locale, not caller locale.** The order snapshot uses the *recipient's* stored language (`userService.getById(userId).locale`), because an admin may place an order for someone else. A lookup failure falls back to `getDefaultLocale()` rather than aborting.
+- **`recordCreated` is audit/analytics only.** The `ORDER_CREATED` domain event (webhook) is emitted by `placeOrder` itself; this function intentionally does not duplicate it.
+- **Stock-shortage refusal is role-aware.** The `available` field in the shortfall details is included only when `canSeeStock(context.caller)` is true, preventing the refusal from widening a stock read.
+- **`create` is `async` by design** so that `toObjectId` (inside `placeOrder`) rejects as a promise rejection rather than throwing synchronously, keeping the failure shape consistent.
+- **`update` handles email only.** `UpdateOrderByIdRequest` does not declare `status`; status transitions are owned elsewhere (see `docs/theory/tactical-ddd.md#who-writes-the-status`).
+- **`superseded` outcome from `placeOrder` is an invariant violation** in this code path (no `commitWith` step is passed), so it `throw`s rather than returning a 409.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/controllers/post-order-status-override.ts
-sha256: bb6f07e2af906988922e2b9a4bc52219aa4748110b23a3cf3b38230fa5be08b8
-generated_at: 2026-09-27T15:08:03.648118+00:00
+sha256: 7abd163d9a67df879047f9bd76da7bc22d2f0e75e4ef45d6e4f8744e571ec82e
+generated_at: 2026-10-15T11:00:18.759052+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller handler for `POST /orders/:id/status-override`. It is a thin admin endpoint that forces an order's status to a new value with a recorded reason, explicitly without triggering any parcel or email side effects. All wiring delegates to `orderService.overrideStatus`.
+Thin controller for `POST /orders/:id/status-override`. It validates the order ID and request body, then delegates to `orderService.overrideStatus` to force an order into a new status with a recorded reason — with no parcel or email side-effects. Authorization (step-up-gated `orders.any.override`) is handled upstream by the route; this function assumes it has already passed.
 
 ## Key elements
 
-- **`postOrderStatusOverride`** (exported) — Express handler. Validates the `:id` route param, parses the body against the `OverrideOrderStatusBody` Zod schema, calls `orderService.overrideStatus(id, to, reason, callerContext)`, and renders the result via `respondWithOrder`. Handles refusal short-circuits and unexpected errors through the shared `refused` / `catchAs` helpers.
+- **`postOrderStatusOverride(request, response)`** — the sole export. Resolves the order ID, parses the body against `OverrideOrderStatusBody` (Zod schema), calls `orderService.overrideStatus(id, to, reason, callerContext)`, then either responds with the updated order or surfaces a refusal/error.
 
 ## Relationships
 
-- **`routes.ts`** — registers this handler at `POST /orders/:id/status-override` behind the `requirePermission('orders.any.override')` guard; permission is already enforced before this file runs.
-- **`services/index.ts`** — source of `orderService.overrideStatus`, the sole business-logic call this controller makes.
-- **`respond.ts`** — provides `respondWithOrder`, the shared success-renderer for order payloads.
-- **`controller.ts`** (infrastructure) — supplies the `parseBody`, `refused`, and `catchAs` helpers used throughout.
-- **`request.ts`** (infrastructure) — supplies `isValidObjectId` (param check) and `callerContextOf` (audit context extraction).
-- **`response.ts`** (infrastructure) — supplies `rejectResponse` for the 404 short-circuit.
-- **`i18n/index.ts` / `context.ts`** — supplies the `t()` function used for the `orders.not-found` message.
-- **`types/index.ts`** — defines `StatusOverrideRequest` used as the typed body parameter.
+- **`src/modules/orders/routes.ts`** — registers this handler on the `POST /orders/:id/status-override` route and applies `requirePermission('orders.any.override')` before invocation.
+- **`src/modules/orders/services/index.ts`** — provides `orderService.overrideStatus`, the business-logic target.
+- **`src/modules/orders/controllers/respond.ts`** — provides `respondWithOrder`, the shared order-response serializer used after a successful override.
+- **`src/infrastructure/http/controller.ts`** — supplies `parseBody` (Zod validation), `refused` (early-exit on service refusal), and `catchAs` (error-to-HTTP mapping).
+- **`src/infrastructure/http/ids.ts`** — supplies `requireId`, which extracts and validates the `:id` param and short-circuits with a 404 on miss.
+- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf`, extracting the authenticated actor's identity for the service call.
+- **`src/types/index.ts`** — defines the `StatusOverrideRequest` body type used in the `Request` generic.
 
 ## Notes
 
-- The `id` param is typed as optional (`id?: string`) in the route-generics, which is why the handler must explicitly call `isValidObjectId` before proceeding.
-- The module docstring calls this the "status-only door": it deliberately does **not** invoke parcel creation or email dispatch. Do not add such side effects here; they belong in a different endpoint.
-- The permission key (`orders.any.override`) is step-up gated at the route level; this controller performs no additional auth checks.
+- The controller performs **no** permission check itself; it relies entirely on the route middleware. Adding this handler to a new route without the permission guard would bypass step-up auth.
+- `respondWithOrder` receives `request.authContext` (not `callerContextOf`) — the two may differ in shape; keep them in sync if refactoring.
+- The "status-only" semantics (no parcel/email consequences) live in the **service** layer, not here. This file is pure wiring.

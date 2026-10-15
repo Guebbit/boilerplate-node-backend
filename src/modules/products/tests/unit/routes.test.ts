@@ -164,6 +164,12 @@ describe('product routes — caching', () => {
         }
     );
 
+    it('never caches the admin read of one product: someone is editing it right now', () => {
+        const chain = chainOf(router, 'GET /:id/admin');
+
+        expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
+    });
+
     it.each(['POST /', 'DELETE /', 'PUT /:id', 'PATCH /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
         '%s invalidates the catalogue tag it just changed',
         (signature) => {

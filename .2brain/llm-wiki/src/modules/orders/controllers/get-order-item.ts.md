@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/controllers/get-order-item.ts
-sha256: 12da7acdc3deb975e997eb9557af1133a351c4d57d0a0497122beaba5d791bd8
-generated_at: 2026-09-27T15:07:26.123706+00:00
+sha256: cd92bd56560c5cc1d5ce5d4de06ebea959dc5dd9c7945b29a74f6f4fe3bec16e
+generated_at: 2026-10-15T10:59:27.672841+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single-order read controller for `GET /orders/:id`. It enforces a 404-vs-422 distinction by validating the path id *before* the database query runs, and scopes the lookup to the caller's permissions (non-admins see only their own orders).
+HTTP controller for `GET /orders/:id`. It retrieves a single order scoped to the caller's role (non-admins can only see their own), validates the path id before touching the database, records a staff-read audit event, sets an ETag for optimistic concurrency, and returns a caller-specific response body.
 
 ## Key elements
 
-- **`getOrderItem(request, response)`** — The sole export. Validates `request.params.id` with `isValidObjectId`; on failure returns 404 immediately. Otherwise delegates to `orderService.getById(id, orderService.callerScope(authContext))`, 404s on `null`, and on success calls `respondWithOrder` to shape the response body with role-aware actions.
-- **404-before-query guard** — A malformed id would otherwise surface as a `BSONError` → 422 via the normal `.catch` path; this file deliberately avoids that by short-circuiting before the service call.
+- **`getOrderItem(request, response)`** — the sole export; the Express handler for the single-order endpoint.
+  - Validates the `:id` path parameter via `requireId`; a malformed id short-circuits with the same 404 as an unknown id.
+  - Calls `orderService.getForCaller(id, authContext)` to fetch the order with role scoping.
+  - On success: records a staff-read audit entry, sets the `ETag` header, and delegates body serialization to `respondWithOrder`.
+  - On failure: rejects with a localized 404 (`orders.not-found`) or hands the error to `catchAs`.
 
 ## Relationships
 
-- **`src/modules/orders/routes.ts`** — Wires `getOrderItem` to the `GET /orders/:id` route.
-- **`src/modules/orders/services/index.ts`** — Provides `orderService.getById` and `orderService.callerScope`, the actual data access and permission scoping.
-- **`src/modules/orders/controllers/respond.ts`** — `respondWithOrder` builds the final response body including the caller's allowed actions for this order.
-- **`src/infrastructure/http/response.ts`** — `rejectResponse` sends the 404 early-exit responses.
-- **`src/infrastructure/http/request.ts`** — `isValidObjectId` supplies the pre-query id validation.
-- **`src/infrastructure/http/controller.ts`** — `catchAs` maps any service-layer rejection to a structured error response.
-- **`src/infrastructure/i18n/context.ts` / `index.ts`** — `t('orders.not-found')` localises the 404 message.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/orders/services/index.ts` | Provides `orderService.getForCaller` — the single data-fetch call. |
+| `src/modules/orders/controllers/respond.ts` | Provides `respondWithOrder`, which serializes the order and attaches caller-specific permitted actions. |
+| `src/modules/orders/audit.ts` | Provides the `ordersAuditActions.ADMIN_ORDER_VIEWED` constant used in the audit record. |
+| `src/kernel/staff-read.ts` | Provides `recordStaffRead` for logging the read event. |
+| `src/infrastructure/http/ids.ts` | Provides `requireId` for path-parameter validation before any query. |
+| `src/infrastructure/http/response.ts` | Provides `rejectResponse` for the 404 short-circuit. |
+| `src/infrastructure/http/preconditions.ts` | Provides `setEtag` to stamp the version for `If-Match` on edits. |
+| `src/infrastructure/http/controller.ts` | Provides `catchAs` as the promise error handler. |
+| `src/infrastructure/i18n/index.ts` | Provides the `t()` translator for the localized 404 message. |
+| `src/modules/orders/routes.ts` | Registers this handler on the router. |
 
 ## Notes
 
-- The file's JSDoc explicitly contrasts this with "other single-item reads that let the query fail and map the error in `.catch`." If you add a similar controller, the 404-vs-422 rationale here is the pattern to follow.
-- The response body embeds caller-specific actions (what *this* user may do), so the client should render controls from the server's answer rather than a shared lifecycle definition.
-- `request.params.id` is typed as optional (`{ id?: string }`); the `isValidObjectId` guard also covers the `undefined` case.
+- **Malformed ≠ not-found (by design).** `requireId` is called *before* any service query so a syntactically bad id returns the same 404 as a non-existent one, preventing id-space enumeration.
+- **ETag is for `If-Match` on subsequent edits.** The comment in the file makes explicit that the version stamped here is the one a client must echo back when it later sends a mutation.
+- **Response is caller-specific, not a canonical order shape.** `respondWithOrder` receives `authContext` and a caller label (`'getOrderItem'`) so the body includes only the actions *this* caller is allowed to perform; the client renders controls from the server's answer rather than a local copy of the lifecycle.

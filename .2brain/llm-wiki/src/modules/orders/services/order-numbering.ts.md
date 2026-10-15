@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/order-numbering.ts
-sha256: 850bdda1cd8ba9e8145c920168c0b3e45c331f77259299d5af4c357844ba262d
-generated_at: 2026-09-27T15:14:44.777849+00:00
+sha256: 642aaed55b817a3706c352dfc7e7e906ccc4abac8b65034fa06eb0eab7e3e15b
+generated_at: 2026-10-15T11:08:53.062316+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Formats the repository's atomic yearly counter into the order-number string (`{year}-{sequence}`, e.g. `2026-000041`). It is a receipt number, not a tax-invoice number. All atomicity lives in the repository; this file is purely the presentation/formatting layer.
+Formats the repository's atomic yearly counter into the order number string (`{year}-{sequence}`). This is a receipt number, **not** a tax invoice number. The file contains only the formatting decision; all atomicity lives in the repository.
 
 ## Key elements
 
-- **`SEQUENCE_WIDTH`** (const, `6`) — zero-pad width for the sequence portion.
-- **`allocateOrderNumber()`** — sole export. Reads the current UTC year, calls `orderRepository.incrementOrderNumberCounter(year)`, then returns a promise resolving to the formatted string. Intended to be called exactly once per order at creation time.
+- **`allocateOrderNumber(): Promise<string>`** — The sole export. Reads the current year in the shop's timezone, calls `orderRepository.incrementOrderNumberCounter(year)`, and returns a zero-padded string like `2026-000041`. Marked `@internal` to prevent sibling services from consuming a sequence slot.
+- **`SEQUENCE_WIDTH`** (const, `6`) — Pad width for the sequence portion of the number.
 
 ## Relationships
 
-- **`src/modules/orders/repository.ts`** — provides `orderRepository.incrementOrderNumberCounter(year)`; this file is its only consumer for formatting.
-- **`src/modules/orders/services/place.ts`** — the expected caller: invokes `allocateOrderNumber()` during order creation and stores the result on `Order.orderNumber`.
-- **`src/modules/orders/services/index.ts`** — barrel re-export; makes `allocateOrderNumber` available to consumers of the services module.
-- **`src/modules/orders/tests/integration/order-numbering.test.ts`** — integration tests exercising the allocate-and-format flow.
+- **`src/modules/orders/config.ts`** — Imports `shopTimezone` to determine which calendar year to use.
+- **`src/modules/orders/domain/shop-time.ts`** — Imports `yearInZone` to resolve the year in the shop's local timezone.
+- **`src/modules/orders/repository.ts`** — Imports `orderRepository` and calls `incrementOrderNumberCounter(year)`, which performs the atomic increment. This file never touches the DB directly.
+- **`src/modules/orders/services/place.ts`** — The caller. `allocateOrderNumber` is a step inside `placeOrder`; the result is stored on `Order.orderNumber` and never re-allocated for that order.
+- **`src/modules/orders/tests/integration/order-numbering.test.ts`** — Integration tests exercising the allocation and formatting contract.
 
 ## Notes
 
-- The sequence resets each UTC year; the year is read with `getUTCFullYear()`, so the boundary is midnight UTC, not local time.
-- Gaps in the sequence are **by design** (a failed order write burns the number). No rollback or retry logic exists here or is expected from callers.
-- Do not treat the returned value as an invoice number; the distinction is documented in `docs/modules/orders.md`.
+- **Gaps are intentional and accepted.** If the order write that follows allocation fails, the burned number is never reused or rolled back. This mirrors Shopify's `#1001` behavior. Do not add retry/rollback logic here.
+- **Called exactly once per order.** A re-downloaded receipt always shows the same number; the function is not idempotent by design (each call consumes a sequence slot).
+- **`@internal` is load-bearing.** The export is deliberately not re-exported through any barrel so that no other service can accidentally call it and waste a sequence number.
+- The year used is the shop's timezone year (`NODE_SHOP_TIMEZONE`), not UTC — an order placed in late December UTC but January shop-time will get the next year's prefix.

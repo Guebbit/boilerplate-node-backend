@@ -107,6 +107,17 @@ describe('POST /returns', () => {
         expect(response.body.errors[0].code).toBe('RETURN_LINES_INVALID');
     });
 
+    it('refuses a request that names the shop’s own reason, no_answer, with 422', async () => {
+        const { bearer, orderId } = await customerWithOrder(OrderStatus.delivered);
+
+        const response = await api()
+            .post('/returns')
+            .set('Authorization', bearer)
+            .send({ orderId, reason: 'no_answer' });
+
+        expect(response.status).toBe(422);
+    });
+
     it('refuses a cancelled order with 409 RETURN_ORDER_NOT_RETURNABLE', async () => {
         const { bearer, orderId } = await customerWithOrder(OrderStatus.cancelled);
 

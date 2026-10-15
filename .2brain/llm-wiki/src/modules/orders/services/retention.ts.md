@@ -1,29 +1,36 @@
 ---
 source: src/modules/orders/services/retention.ts
-sha256: 8c54f9943f28b48d3923273731bebcba84f8f59c18b817b6b308cb04218730e0
-generated_at: 2026-09-27T15:15:35.478455+00:00
+sha256: adefa535ae8848060e98106dca5c57fa8c3a7322113dedaf35f118de8df22772
+generated_at: 2026-10-15T11:10:25.190946+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/orders/services/retention.ts
 
 ## Purpose
-Implements the two-phase PII lifecycle for orders after an account is erased. Orders are treated as invoices (retained under GDPR Art. 17(3)(b)/(e)) rather than deleted; this file first detaches the user link, then later scrubs residual PII once a per-order retention window elapses.
+Implements the `personalData.erase` and `personalData.minimise` hooks for the orders module under GDPR Art. 17(3)(b)/(e). Because an order is an invoice, it survives account erasure; this file detaches the person from the order, starts a per-order PII clock, and later scrubs residual PII. It also cancels never-paid orders left behind by an erased account so their stock holds are released.
 
 ## Key elements
-- **`detachUserId(userId, session)`** — the `personalData.erase` hook (DDD-D6). Unsets `userId` on every order for the given account and stamps a per-order retention deadline. Joins the caller's transaction via the Mongoose `ClientSession`.
-- **`anonymizeDueOrders()`** — the periodic sweep (invoked by `scripts/ops/reap-orders.ts`). Scrubs PII on orders whose stamped retention deadline has passed; returns the count of affected orders.
-- Both functions are thin orchestrators: they read the retention window, delegate the DB work to `orderRepository`, and log a summary if rows were touched.
+- **`detachUserId(userId, session)`** — Unsets `userId` on all orders for the given account and stamps each with a per-order PII-retention deadline (`createdAt + orderPiiRetentionDays`). Joins the caller's Mongoose session.
+- **`startOrderPiiClock(userId)`** — The `personalData.minimise` hook: starts the same PII clock but preserves `userId`. Idempotent (skips orders already stamped).
+- **`anonymizeDueOrders()`** — Called by `scripts/ops/reap-orders.ts`; scrubs PII on all orders whose retention window has elapsed. Returns the count scrubbed.
+- **`eraseUserOrders(userId, session)`** — The combined `personalData.erase` hook for the orders module. Reads open-unpaid order ids *before* detaching, detaches, clears the timeline actor, and returns a deferred cancel promise (or `undefined`) for the caller to execute **after** the erasure transaction commits.
+- **`cancelUnpaidOrders(orderIds)`** *(private)* — Cancels each unpaid order via `cancelById` as `SYSTEM_ACTOR`. Never rejects; individual failures are logged and the rest proceed (the reservation sweep is the safety net).
 
 ## Relationships
-- **`repository.ts`** — all actual MongoDB operations (`detachUserId`, `scrubDueForAnonymization`) live here; this service adds env reading, transaction propagation, and logging.
-- **`environment.ts`** — supplies `NODE_ORDER_PII_RETENTION_DAYS` (default 3650) via `environmentNumber`.
-- **`logger.ts`** — structured info-level logs for both detach and anonymize events.
-- **`module.ts`** — registers `detachUserId` as the `personalData.erase` hook so the DDD-D6 erasure pipeline calls it.
-- **`services/index.ts`** — barrel re-exports both functions for external consumers.
+- **`orderRepository`** (`repository.ts`) — All data access: `detachUserId`, `startPiiClock`, `scrubDueForAnonymization`, `findOpenUnpaidIdsOf`.
+- **`orderPiiRetentionDays`** (`config.ts`) — Reads the configurable retention window (default 3650 days / ~10 years).
+- **`cancelById`** (`services/cancel.ts`) — Used by `cancelUnpaidOrders` to release stock and cancel payment intents via the normal reservation-sweep path.
+- **`clearTimelineActor`** (`services/timeline.ts`) — Called inside `eraseUserOrders` to strip the erased user's name from all order timeline events.
+- **`SYSTEM_ACTOR`** (`kernel/permissions.ts`) — Identity passed to `cancelById` so the system, not the deleted user, performs the cancel.
+- **`AfterErase`** (`kernel/registry.ts`) — Type for the deferred post-commit callback returned by `eraseUserOrders`.
+- **`logger`** (`infrastructure/adapters/logger.ts`) — Structured logging on detach, clock-start, anonymize, and cancel-failure events.
+- **`services/index.ts`** — Barrel re-export so the module wiring can import the four public functions.
+- **`module.ts`** — Registers `eraseUserOrders` as the module's `personalData.erase` hook and `startOrderPiiClock` as the `personalData.minimise` hook.
 
 ## Notes
-- The retention clock is **per-order** (`createdAt`), not from the erasure date. An order created 9 years before erasure has only ~1 year of remaining retention; one created yesterday has the full ~10 years. The logic for this per-order deadline lives in `orderRepository.detachUserId`, not here.
-- `detachUserId` requires a `ClientSession` and must only be called inside the hard-delete transaction; calling it outside will not be atomic with the account deletion.
-- Stryker mutation-testing suppressions are present on the `logger.info` lines (no behavioural effect if the log call is mutated).
-- Neither function ever deletes or modifies order line items — only PII fields are unset/scrubbed.
+- **Per-order clock, not a global one.** `detachUserId` stamps each order's deadline from *that order's* `createdAt`, not from the moment of erasure. A never-paid order is scrubbed at once (it never became an invoice).
+- **`eraseUserOrders` returns a promise, it does not execute the cancel.** The cancel moves stock and money-adjacent state in other modules that cannot roll back, so the caller must await the returned promise *after* the hard-delete transaction has committed.
+- **Order-id lookup precedes the detach.** `findOpenUnpaidIdsOf` runs before `detachUserId` unsets `userId`; once detached, those orders are unfindable by user.
+- **`cancelUnpaidOrders` is fire-and-forget per order.** A single failure (payment racing in, write conflict) does not abort the batch; the reservation sweep (up to 168 h for bank transfer) cancels anything missed.
+- **Stryker mutation-testing suppressions** are placed inline on every logger call and the catch block — do not remove them when editing.

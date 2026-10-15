@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/services/index.ts
-sha256: eaea62a51875d231d9ed83c9561f0e378c5fc0b95322857e8dfa4af5f05db6bc
-generated_at: 2026-09-27T15:14:01.674604+00:00
+sha256: 332531671d369c48fc4b1b56c1f28573a536cf6f4dd508384c54b508007d6d94
+generated_at: 2026-10-15T11:08:27.732736+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Public barrel and service facade for the Order domain. It re-exports every operation from the `./` sub-modules (crud, place, cancel, status, override, retention, scope, availability, invoice, notify, retract, snapshot, order-numbering) and from `../config`, and bundles the primary ones into a single `orderService` object. Controllers and cross-module callers interact with the order domain **only** through this file's named exports or the `orderService` constant.
+Barrel file for the `orders/services` folder. It re-exports every operation (read, write, status, cancel, retention, scope, fulfillment, timeline, stats) and the config getters that other modules need, and aggregates them all into a single `orderService` object. Controllers and cross-module callers interact with the Order domain exclusively through this file.
 
 ## Key elements
 
-- **Named re-exports** — individual functions (`placeOrder`, `cancelById`, `markPaid`, `search`, `retractOrder`, `renderInvoicePdf`, `detachUserId`, `unavailableLines`, etc.) plus their type aliases (`PlaceOrderInput`, `PlaceOrderOutcome`, `UnavailableLine`).
-- **`orderService` object** — a convenience bundle of ~35 of those functions exposed as one property-access surface; controllers use `orderService.getById` rather than importing the name directly.
-- **Config re-exports** — `bankTransfer*`, `shopCurrency`, `shipToCountries` getters from `../config`, re-published here so callers don't import config directly (barrel-allowed-sources rule).
-- **`allocateOrderNumber`** (from `./order-numbering`) and **`freezeOrderLines`** (from `./snapshot`) — exported by name but *not* included in the `orderService` object.
+- **`orderService`** — exported object that bundles every function below into one namespace; the primary entry point for controllers and cross-module callers.
+- **Named re-exports** — each sub-module (`read`, `crud`, `remove`, `place`, `notify`, `cancel`, `status`, `fulfillment`, `override`, `export`, `timeline`, `retention`, `scope`, `snapshot`, `reencrypt`, `stats`) is re-exported by name so event wiring, cart integration, and test suites can import individual functions without going through the object.
+- **Config re-exports** (`bankTransfer*`, `shop*`, `returnAddress`, etc.) — pulled from `../config` and published here because the module's public barrel is restricted to services/domain/events/emails/model sources.
+- **Type exports** — `PlaceOrderInput`, `PlaceOrderOutcome`, `OrderBrief`, `ForcedFulfilment`, `OrderExport`, `ShopIdentity`, `ReturnAddress`, stats types, etc.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/orders/controllers/*.ts` (create-order, get-orders, get-order-item, delete-orders, get-order-invoice) | Import `orderService` (or individual names) to perform reads, creates, deletes, invoice rendering. |
-| `src/modules/cart/services/checkout.ts` / `reorder.ts` | Import `placeOrder` and `retractOrder` to commit or roll back an order during checkout. |
-| `src/modules/cart/controllers/post-checkout.ts` | Calls `orderService` for post-checkout order operations. |
-| `src/modules/delivery/service.ts` | Imports status transitions (`markShipped`, `markDelivered`, `markFulfilled`) to advance order lifecycle. |
-| `scripts/ops/reap-invoices.ts` | Calls `reapOrphanedInvoices` / `reapExpiredInvoices`. |
-| `scripts/ops/reap-orders.ts` | Drives order cleanup operations through the named exports. |
-| `scripts/ops/sweep-order-effects.ts` | Calls `retryPendingEffects` to re-process stalled side-effects. |
-| `src/modules/orders/config.ts` | Source of the re-exported bank-transfer and currency getters. |
-| `src/modules/cart/tests/integration/stock.test.ts` / `src/modules/delivery/tests/integration/service.test.ts` | Import individual operations directly to exercise business logic in integration suites. |
+- **`src/modules/cart/services/checkout.ts` / `reorder.ts` / `post-checkout.ts`** — call `placeOrder`, `create`, `markPaid`, and related status functions through this barrel to record a completed purchase.
+- **`src/modules/delivery/services/*`** (`actions`, `announce`, `cancel-remainder`, `confirm-wait`, `cut`, `deliver`, `ensure`) — import status marks (`markShipped`, `markDelivered`, `markFulfilmentComplete`), fulfillment helpers (`shipStock`, `refreshShelf`, `readOrder`), and `cancelById` from here.
+- **`scripts/ops/reap-orders.ts`** — calls `cancelUnanswered` to sweep stale unpaid orders.
+- **`scripts/ops/sweep-order-effects.ts`** — calls `retryPendingEffects` to re-process failed post-cancellation side-effects.
+- **`scenarios/jobs.ts`** — invokes `anonymizeDueOrders` (retention) and possibly `cancelUnanswered` on a schedule.
+- **`scenarios/flows/shop-history.ts`** — reads stats helpers (`paidBuckets`, `productTotals`, `pipeline`, etc.) via this barrel.
+- **`src/modules/cart/tests/integration/stock.test.ts`** — exercises `shipStock`, `refreshShelf`, and order status transitions through the named exports.
 
 ## Notes
 
-- The file is a **folder module** (`services/`) rather than a single file; the sub-files listed in the header docstring are the real implementations. This file only re-exports.
-- Exports are published **both** as individual names *and* inside `orderService`. The comment explicitly warns that removing any named export would break callers (event wiring in `module.ts`, cross-module calls from `cart`, and test suites) that import by name rather than via the object.
-- Config getters are re-exported here (not from `../index.ts`) because the project's `local/barrel-allowed-sources` rule restricts a module's public barrel to services/domain/events/emails/model — config must travel through the service barrel.
-- `ownOrderIds` and `findOwnOrders` are re-exported from `./crud` but are **not** in the `orderService` object; callers must import them by name.
+- Both the **named exports** and the **`orderService` object** are part of the public API. The in-file comment explicitly warns that removing either set will break event wiring (`module.ts`), the cart integration (`orders/index.ts`), and test suites. Do not prune exports without checking all three caller categories.
+- Config getters live in `../config` but are re-exported *here* (not from the module root) because of the `local/barrel-allowed-sources` rule: a module's public barrel may only surface services, domain, events, emails, and model. Downstream modules (`invoicing`, `delivery`, `returns`) import shop identity and return address from this file, not from `../config` directly.
+- The folder structure (rather than a single file) exists because the service exceeded ~300 lines; see `docs/theory/layers.md` for the layering rationale.

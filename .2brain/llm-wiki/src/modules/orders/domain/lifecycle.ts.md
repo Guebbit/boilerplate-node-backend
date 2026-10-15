@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/domain/lifecycle.ts
-sha256: fda4c50e5cc3b9db18df100798dff25f9ecea91ead98734121b7d699c847e67f
-generated_at: 2026-09-27T15:09:12.447144+00:00
+sha256: 3420eaccd8b3eca2031eb172715d07b8d50a5ce2fb16dfe282f523bb636409c9
+generated_at: 2026-10-15T11:01:58.886541+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the order-status state machine: which status may follow which, and which actor (`customer`, `admin`, `system`) is permitted on each edge. The status *set* comes from the `OrderStatus` contract in `@types`; this file supplies the edges and actor constraints. It also provides the derived predicates (`isPayable`, `stockCommitted`, `canOverrideTo`) and the helper enumerations that service layers and payment modules use instead of hand-listing status literals.
+Declares the order status-transition graph: which status may follow which, and which actor may make each move. The set of statuses itself comes from the contract (`@types`); this file adds the directed edges, binds the allowed actor to each edge, and provides the query functions services use to gate writes, build conditional-update `from` sets, and render available actions to clients.
 
 ## Key elements
 
-- **`OrderActor`** — union `'customer' | 'admin' | 'system'`. `system` is *narrower* than `admin` (moves nobody makes by hand), not a higher rank.
-- **`ORDER_LIFECYCLE`** — `Readonly Record<OrderStatus, Partial<Record<OrderStatus, readonly OrderActor[]>>>`. Total over every status; terminal states carry `{}`. A new contract status without an entry is a compile error.
-- **`canTransition(from, to, actor)`** — single source of truth for "is this write legal?" Special-cases `from === to`: always allowed *except* into `paid` (where only `system` may echo-write).
-- **`isPayable(status)`** — "can a *new* payment land?" Returns `true` only for `pending`. Deliberately stricter than `canTransition(paid→paid, 'system')`.
-- **`stockCommitted(status)`** — `true` for `paid` and beyond; `false` for `pending` and `cancelled`.
-- **`canOverrideTo(from, to)`** — forward-only admin override check. Only lands on `processing`/`shipped`/`delivered`. Independent of `ORDER_LIFECYCLE` by design.
-- **`overridableTargetsFrom(from)`** / **`statusesOverridableInto(to)`** — the two directions of the override sequence; the latter produces the `from`-set passed to `updateStatusIfIn`.
-- **`statusesReachableFrom(from, actor)`** / **`statusesLeadingTo(to, actor)`** — enumerate all legal targets/sources in contract order; feed 409 responses and conditional writes.
-- **`StatusDerivedActions`** / **`orderActionsFor(status, actor)`** — returns `{ transitions, cancel, pay }` for client rendering. Uses `statusesReachableFrom` (not `canTransition`) so that "may I cancel an already-cancelled order" is correctly `false`.
+- **`OrderActor`** (type) — Union of five actors: `customer`, `admin`, `system`, `withdrawal`, `fulfilment`. `system` is not a privilege rank; it marks moves no human makes by hand.
+- **`OrderEvent`** (interface) — Shape of one lifecycle edge: `from[]`, `to`, `actors[]`.
+- **`ORDER_EVENTS`** (const, `satisfies Record<string, OrderEvent>`) — The full transition table: `pay`, `start`, `ship`, `deliver`, `fulfilmentComplete`, `expire`, `cancel`, `cancelUnanswered`, `cancelInFulfilment`.
+- **`OrderEventName`** (type) — `keyof typeof ORDER_EVENTS`; names a service passes to the repository's conditional write.
+- **`canTransition(from, to, actor)`** — Core guard: does a declared edge exist for this (from, to, actor) triple? Self-transitions are never allowed.
+- **`isPayable(status)`** — Wrapper around `canTransition` asking the single question every payment door needs: may a `system` actor move this status to `paid`?
+- **`paymentSettled(status)`** — Reads `ORDER_STATUS_TRAITS[status].stockCommitted`; the one place "has payment cleared?" is declared.
+- **`canOverrideTo(from, to, digitalOnly?)`** — Forward-only admin override rule over `OVERRIDABLE_SEQUENCE` (`paid → processing → shipped → delivered`). Deliberately independent of `canTransition` so an override can skip a normal `from` gate.
+- **`overridableTargetsFrom(from, digitalOnly?)`** — All legal override destinations from `from`.
+- **`statusesReachableFrom(from, actor)`** — All `to`-statuses the actor can reach from `from` (excludes `from` itself); feeds 409 responses and `orderActionsFor`.
+- **`statusesLeadingTo(to, actor)`** — All `from`-statuses that may precede `to`; the `from` set handed to `updateStatusIfIn`.
+- **`orderActionsFor(status, actor)`** — Returns `{ transitions, cancel, pay }` derived purely from status/actor; permission-key actions (`start`, `ship`, `deliver`, `override`) are merged in later by `services/scope.ts`'s `withActions`.
 
 ## Relationships
 
-- **`src/types/index.ts`** — imports `OrderStatus` (enum) and `OrderActions` (type). The lifecycle table is keyed on `OrderStatus`; `orderActionsFor` returns a `Pick<OrderActions, …>`.
-- **`src/modules/orders/services/status.ts`** — its `markProcessing`, `markShipped`, `markDelivered`, and private `markSystemMove` call `canTransition` / `statusesLeadingTo` and pass the result to the repository's `updateStatusIfIn`.
-- **`src/modules/orders/services/override.ts`** — calls `canOverrideTo`, `overridableTargetsFrom`, and `statusesOverridableInto` to gate and shape admin override writes.
-- **`src/modules/orders/services/cancel.ts`** — checks `canTransition(_, cancelled, actor)` before executing the cancel sequence.
-- **`src/modules/orders/services/scope.ts`** — `withActions` merges permission-key-derived actions (`start`, `ship`, `deliver`, `override`) on top of `orderActionsFor`.
-- **`src/modules/payments/services/intent.ts`** / **`offline.ts`** / **`effects.ts`** — query `isPayable` before creating or settling a payment.
-- **`src/modules/delivery/service.ts`** — the actor that *triggers* `paid→processing`, `processing→shipped`, `shipped→delivered` as `system`; never a direct admin write.
-- **`src/modules/orders/domain/index.ts`** — barrel re-export of this module for external importers.
-- **`src/modules/orders/tests/unit/lifecycle.test.ts`** — unit-tests every exported predicate.
+- **`./status-traits.ts`** — Imports `ORDER_STATUS_TRAITS`; `paymentSettled` reads `stockCommitted` from it.
+- **`@types` (`src/types/index.ts`)** — Source of `OrderStatus` (the status enum) and `OrderActions` (the full client-facing action shape this file partially answers).
+- **`../domain/index.ts`** — Barrel file that re-exports this module's public API.
+- **`../services/cancel.ts`** — Calls `canTransition` / `statusesLeadingTo` to gate and scope cancel writes.
+- **`../services/override.ts`** — Calls `canOverrideTo` and `overridableTargetsFrom` to validate and enumerate admin override moves.
+- **`../services/scope.ts`** — Imports `orderActionsFor` and merges it with permission-key-derived actions via `withActions`.
+- **`../services/status.ts`** — Calls `canTransition` / `statusesLeadingTo` for status-change requests.
+- **`../tests/unit/lifecycle.test.ts`** — Unit tests for every exported function.
+- **`src/modules/payments/services/settlement.ts`** — Calls `isPayable` before recording a settlement.
+- **`src/modules/payments/services/intent.ts`** — Calls `isPayable` to decide whether to create a payment intent.
+- **`src/modules/payments/services/offline.ts`** — The "offline-payment door" referenced in comments; the only path out of `pending` for non-system actors.
+- **`src/modules/payments/services/view.ts`** — Reads `paymentSettled` to determine hold/commit state in payment views.
 
 ## Notes
 
-- **Echo-write carve-out.** `canTransition` allows `from === to` as a no-op, but *blocks* `paid → paid` for any actor other than `system`. This prevents a client echo from looking like a legitimate payment. `isPayable` closes the same gap from the payment side.
-- **`system` is not seniority.** It denotes moves that are *machine-only* (reservation-sweep expiry, fulfilment milestones). An admin or customer can still cancel `paid` or `processing`; the sweep (`system`) cannot.
-- **Override ≠ widened transition.** `canOverrideTo` deliberately bypasses the `ORDER_LIFECYCLE` table. Reusing `canTransition` here would make the override a no-op, since the override's purpose is to skip a `from`-gate the normal lifecycle enforces.
-- **`statusesOverridableInto` is the conditional-write `from`-set.** It produces the array handed to `updateStatusIfIn` in `../repository.ts`, which is what actually makes one racing writer win. The lifecycle table only decides *which* `from` set is legal.
-- **`orderActionsFor` asks `pay` as `system`.** Paying is never a request the client makes; the predicate exists so the client knows whether to render a card form. It is intentionally absent from `transitions`.
+- **Actor semantics are intentionally non-hierarchical.** `system` is narrower than `admin` (it covers moves no human initiates), `withdrawal` is a statutory right (EU Directive Art. 9) wider than `customer`, and `fulfilment` is separated from `system` so the reservation sweep can never reach a paid order.
+- **`canOverrideTo` ≠ widened `canTransition`.** It exists to skip a `from` gate; reusing the normal table here would defeat the override feature.
+- **`pending` is absent from `OVERRIDABLE_SEQUENCE`.** Leaving `pending` is only legal through the offline-payment door; no override may target or originate from it.
+- **`orderActionsFor` deliberately uses `statusesReachableFrom`, not `canTransition`,** to exclude the no-op self-transition when answering "may I cancel / pay this order."
+- **`digitalOnly` parameter** excludes `shipped` as an override target, because a digital-only order goes `processing → delivered` with no parcel to ship.
+- **`as const satisfies`** on `ORDER_EVENTS` gives literal-key access while still enforcing the `OrderEvent` shape without widening.

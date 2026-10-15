@@ -1,7 +1,7 @@
 ---
 source: src/modules/orders/domain/totals.ts
-sha256: d77a94be7d0050fc8f64345a15011fe9294cb3ce34ce9c8f19bacc674f126110
-generated_at: 2026-09-23T19:02:20.425708+00:00
+sha256: 95c43212deb75ff8ae09a5eeecd1ac7065eeb5c3a12c2edbbee31efee8beeccf
+generated_at: 2026-10-15T11:03:17.550064+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure computation of order totals from a list of priced line items (plus optional shipping). It exists so that the cart summary, the order preview, the frozen payment intent, and the confirmation email all derive the same number from a single source rather than each summing independently. All arithmetic is performed in minor units via `money.ts` and converted to a decimal amount exactly once at the boundary.
+Pure arithmetic for order totals: sums a list of priced line items (count, quantity, price) and composes that with a frozen shipping cost to produce the grand total the customer owes. It exists as a single source of truth so that the cart preview, the order, the payment intent, and every downstream email/invoice all agree on the same number without re-deriving it.
 
 ## Key elements
 
-- **`LineItem`** — Loose input shape for a single priced line (`quantity?: unknown`, `product?.price?: unknown`). Accepts raw aggregate output _and_ cart DTOs without a strict type contract.
-- **`LineItemTotals`** — Return shape of `sumLineItems`: `{ count, quantity, price }` (line count, total units, decimal price).
-- **`sumLineItems(items: readonly LineItem[]): LineItemTotals`** — Iterates lines, sanitising each via `wholeCount` / `toMinorUnits` so a missing or malformed line contributes zero rather than poisoning the total with `NaN`.
-- **`OrderTotalInput`** — `{ items, shippingCost? }`; shipping is `unknown` because it arrives as raw aggregate output and is optional when no delivery method was chosen.
-- **`orderTotal(order: OrderTotalInput): number`** — Composes `sumLineItems` price with `shippingCost` in minor units, then returns a single decimal amount. This is _the_ number published to the outside world.
+- **`LineItem`** — Loose input shape (`unknown` fields) that accepts both raw aggregate output and cart DTOs without a shared type.
+- **`LineItemTotals`** — Return type of `sumLineItems`: `count` (line count), `quantity` (total units), `price` (decimal amount).
+- **`sumLineItems(items, currency)`** — Iterates line items, defensively converts each quantity/price via `wholeCount`/`toMinorUnits` (null or unpopulated products contribute zero, not `NaN`), accumulates in minor units, and returns a `LineItemTotals`.
+- **`OrderTotalInput`** — Describes an order's totals inputs: `items`, optional `shippingCost`, and `currency`.
+- **`orderTotal(input)`** — Composes `sumLineItems` + frozen `shippingCost` in minor units, returns the grand total as a decimal amount.
 
 ## Relationships
 
-- **`./money.ts`** — Sole internal dependency. Provides `addMoney`, `scaleMoney`, `toMinorUnits`, `toDecimalAmount`, `wholeCount`, `NO_MONEY`. All rounding policy lives there; this file composes but never rounds.
-- **`./index.ts`** — Barrel re-export. `cart` and `payments` import from the barrel, never directly from this file.
-- **`src/modules/cart/services/checkout.ts` / `view.ts`** — Consumers that call `sumLineItems` / `orderTotal` to build the cart summary and preview.
-- **`src/modules/payments/services/intent.ts` / `offline.ts`** — Consumers that read `orderTotal` to set the frozen amount on the payment intent.
-- **`src/modules/orders/model.ts`** — Source of the `LineItem`-shaped data (order aggregate lines) passed into these functions.
-- **`src/modules/orders/emails.ts`** — Calls `orderTotal` so the confirmation email amount matches the intent.
-- **`tests/unit/totals.property.test.ts`** — Property-based tests for `sumLineItems` and `orderTotal`.
-- **`tests/cross-cutting/money-reconciliation.property.test.ts`** — Verifies that the total computed here reconciles with the minor-unit math in `money.ts`.
+- **`src/modules/orders/domain/index.ts`** — Barrel re-export; this is how `cart` and `payments` modules import these functions without reaching into `orders/domain` directly.
+- **`src/modules/cart/services/checkout.ts`** and **`src/modules/cart/services/view.ts`** — Call `sumLineItems`/`orderTotal` via the barrel to render cart summaries and checkout previews.
+- **`src/modules/payments/services/intent.ts`** — Calls `orderTotal` to freeze the amount on the payment intent.
+- **`src/modules/payments/services/offline.ts`** — Consumes the total for offline payment processing.
+- **`src/modules/orders/model.ts`** — Produces the raw aggregate output that feeds the `LineItem` shape (hence the `unknown` fields).
+- **`src/modules/orders/emails.ts`** and **`src/modules/payments/emails.ts`** — Read the total to render confirmation/payment emails.
+- **`src/modules/invoicing/services/issue-invoice.ts`** and **`issue-credit-note.ts`** — Use the total for invoice/credit-note amounts.
+- **`src/modules/returns/services/create.ts`** and **`receive.ts`** — Read the total when processing returns.
+- **`src/modules/orders/tests/unit/totals.property.test.ts`** — Property-based tests exercising `sumLineItems` and `orderTotal`.
 
 ## Notes
 
-- **No rounding here.** The module doc explicitly states "there is nothing to round." If you see rounding logic, it belongs in `money.ts`.
-- **Defensive by design.** `wholeCount` and `toMinorUnits` are the junk-absorbers. A line with a `null` product or a string price silently contributes zero. Do not add `!` assertions or throw here.
-- **`count` ≠ `quantity`.** `count` is always `items.length` (lines as given); `quantity` is the sum of per-line units. A dropped/zero-quantity line still increments `count`.
-- **Single decimal conversion.** `toDecimalAmount` is called exactly once per public function. Intermediate values stay as `Money` (minor units) to avoid floating-point drift.
+- All arithmetic stays in **minor units** internally; conversion to the decimal amount happens exactly once at the return boundary via `toDecimalAmount`. No rounding occurs here—`money.ts` owns that concern.
+- `LineItem` fields are typed `unknown` deliberately: callers pass either raw aggregate output or DTOs, and `wholeCount`/`toMinorUnits` absorb `null`/`undefined`/non-numeric values by treating them as zero. A missing product on a line does **not** produce `NaN`.
+- `count` in `LineItemTotals` is the number of lines *as given* (array length), not the number of valid-priced lines. A line with a null product still increments `count`.
+- The `currency` parameter is required on every call; it determines the rounding scale applied by the `@shared-kernel/money` helpers. For an unfinalized cart this is the shop's current currency; for a confirmed order it is the order's own frozen currency.
