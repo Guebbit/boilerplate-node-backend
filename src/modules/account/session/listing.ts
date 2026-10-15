@@ -7,8 +7,11 @@
 import type { Session } from '@types';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { userService } from '@modules/users';
+import { rolesOf } from '@modules/access';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { sessionRepository, type SessionRow } from '../repository';
 import { predatesSessionEpoch } from './epoch';
+import { hasIdledOut } from './idle';
 import type { SessionMode } from '../session-mode';
 
 /**
@@ -62,14 +65,17 @@ export const listSessions = (
 ): Promise<Session[]> =>
     Promise.all([
         sessionRepository.listLive(userId, mode, new Date()),
-        userService.findAuthenticatableById(userId)
-    ]).then(([allRows, user]) => {
-        // A ban moves the account's epoch and deletes no row: those rows no longer sign anyone in,
-        // so they are not sessions. A row stamped before `authTime` existed has no epoch to judge.
+        userService.findAuthenticatableById(userId),
+        rolesOf(userId, DEPLOYMENT_TENANT_ID)
+    ]).then(([allRows, user, roles]) => {
+        // A ban moves the account's epoch and deletes no row, and a staff session past its idle
+        // limit is only ended when someone next presents it: neither signs anyone in, so neither
+        // is a session. A row stamped before `authTime` existed has no epoch to judge.
         const rows = allRows.filter(
             (row) =>
-                row.authTime === undefined ||
-                !predatesSessionEpoch(row.authTime, user?.tokensValidAfter)
+                (row.authTime === undefined ||
+                    !predatesSessionEpoch(row.authTime, user?.tokensValidAfter)) &&
+                !hasIdledOut(row.lastUsedAt ?? row.startedAt, roles)
         );
         const digest = credential === undefined ? undefined : hashToken(credential);
         const current = new Set(

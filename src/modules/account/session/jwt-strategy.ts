@@ -14,7 +14,7 @@ import { readSessionCookie } from '@kernel/cookies';
 import type { Resolution, StreamWatch } from '@kernel/authentication';
 import { logger } from '@infrastructure/adapters/logger';
 import { hashToken } from '@infrastructure/security/hash-token';
-import type { AuthContext } from '@types';
+import type { AuthContext, ResolveOptions } from '@types';
 import { sessionRepository } from '../repository';
 import {
     startSession,
@@ -32,6 +32,7 @@ import { getCookieMaxAgeMilliseconds, type RefreshTokenExpiryTime } from './conf
 import { resolveProof } from './auth-context';
 import { listSessions } from './listing';
 import { looksLikeSessionId } from './session-id';
+import { resolveInLiveFamily } from './family-liveness';
 import type { IssuedSession, SessionRequest, SessionSnapshot, SessionStrategy } from './strategy';
 
 /**
@@ -177,27 +178,22 @@ const resolveWith =
             );
 
 /**
- * Resolve a proof, but only while the session family it came from still has a live row: revoking
- * a session stops its access tokens and its open streams at once, not when they expire.
- */
-const resolveInLiveFamily = (
-    claims: Pick<TokenData, 'sub' | 'auth_time' | 'amr'>,
-    familyId: string
-): Promise<Resolution<AuthContext | undefined>> =>
-    Promise.all([
-        sessionRepository.familyIsLive(claims.sub, familyId, 'jwt', new Date()),
-        resolveProof(claims.sub, { authTime: claims.auth_time, amr: claims.amr })
-    ]).then(
-        ([live, ok]): Resolution<AuthContext | undefined> => (live ? { ok } : { miss: 'revoked' })
-    );
-
-/**
  * The bearer's resolver: the token must verify, and the session family it names must still be
  * alive. The `sid` is ours (the signature vouches for it), so it is always a well-formed id.
  */
-const resolveBearer = (token: string): Promise<Resolution<AuthContext | undefined>> =>
+const resolveBearer = (
+    token: string,
+    options?: ResolveOptions
+): Promise<Resolution<AuthContext | undefined>> =>
     verifyAccessToken(token).then(
-        (claims) => resolveInLiveFamily(claims, claims.sid),
+        (claims) =>
+            resolveInLiveFamily(
+                claims.sub,
+                claims.sid,
+                'jwt',
+                () => resolveProof(claims.sub, { authTime: claims.auth_time, amr: claims.amr }),
+                options
+            ),
         (error: unknown): Resolution<AuthContext | undefined> => {
             if (error instanceof TokenRejection) return { miss: error.reason };
             throw error;
@@ -216,7 +212,19 @@ const watchRefreshCookie = (token: string): Promise<Resolution<StreamWatch>> =>
                 (context): Resolution<StreamWatch> => ({
                     ok: {
                         context,
-                        recheck: () => resolveInLiveFamily(data, String(row.familyId))
+                        recheck: () =>
+                            resolveInLiveFamily(
+                                data.sub,
+                                String(row.familyId),
+                                'jwt',
+                                () =>
+                                    resolveProof(data.sub, {
+                                        authTime: data.auth_time,
+                                        amr: data.amr
+                                    }),
+                                // A stream's recheck is not the person acting.
+                                { passive: true }
+                            )
                     }
                 })
             ),
@@ -231,9 +239,9 @@ const watchRefreshCookie = (token: string): Promise<Resolution<StreamWatch>> =>
  * so it is `revoked` (a stale-credential count) rather than a signature failure (a security event).
  */
 const unlessOtherMode =
-    <T>(resolve: (token: string) => Promise<Resolution<T>>) =>
-    (token: string): Promise<Resolution<T>> =>
-        looksLikeSessionId(token) ? Promise.resolve({ miss: 'revoked' }) : resolve(token);
+    <T>(resolve: (token: string, options?: ResolveOptions) => Promise<Resolution<T>>) =>
+    (token: string, options?: ResolveOptions): Promise<Resolution<T>> =>
+        looksLikeSessionId(token) ? Promise.resolve({ miss: 'revoked' }) : resolve(token, options);
 
 /** The `jwt` adapter. */
 export const jwtStrategy: SessionStrategy = {

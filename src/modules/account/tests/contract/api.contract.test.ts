@@ -1020,27 +1020,26 @@ describe('GET /account/sessions', () => {
      * — splitting them would let either regress alone while the field never actually changed.
      */
     it('reports lastUsedAt only once the session has been used', async () => {
-        // The use is the refresh cookie's exchange; `cookie` mode's own stamp is pinned in
-        // `integration/session-modes.test.ts`.
+        // A request that is not the person acting leaves the session unused; an ordinary one is a
+        // use. (A refresh is neither: it renews a token and carries the clock over.)
         inJwtMode();
         const { bearer, jwtCookie } = await loginWithCookie();
+        const listed = () =>
+            api()
+                .get('/account/sessions')
+                .set('Authorization', bearer)
+                .set('Cookie', jwtCookie)
+                .set('X-Session-Passive', 'true');
 
-        const before = await api()
-            .get('/account/sessions')
-            .set('Authorization', bearer)
-            .set('Cookie', jwtCookie);
-
+        const before = await listed();
         expect(before.body.data.sessions[0].lastUsedAt).toBeUndefined();
 
-        // Exchanging the refresh cookie for an access token IS the session making a request.
-        const refreshed = await api().post('/account/refresh').set('Cookie', jwtCookie);
-        expect(refreshed.status).toBe(200);
+        const used = await api().get('/account').set('Authorization', bearer);
+        expect(used.status).toBe(200);
+        // The stamp is written off the request's path.
+        await new Promise((resolve) => setTimeout(resolve, 100));
 
-        const after = await api()
-            .get('/account/sessions')
-            .set('Authorization', bearer)
-            .set('Cookie', jwtCookie);
-
+        const after = await listed();
         expect(after.status).toBe(200);
         expect(typeof after.body.data.sessions[0].lastUsedAt).toBe('string');
     });

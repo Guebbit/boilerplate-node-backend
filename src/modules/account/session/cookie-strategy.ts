@@ -21,7 +21,7 @@ import type { Resolution, StreamWatch } from '@kernel/authentication';
 import { logger } from '@infrastructure/adapters/logger';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { userService } from '@modules/users';
-import type { AuthContext } from '@types';
+import type { AuthContext, ResolveOptions } from '@types';
 import { sessionRepository, type SessionRow } from '../repository';
 import { recordActivity } from './activity';
 import { resolveProof } from './auth-context';
@@ -29,6 +29,8 @@ import { createSessionCookie, createLoggedCookie } from './cookies';
 import { RefreshTokenExpiryTime, getExpiryTimeMilliseconds } from './config';
 import { describeDevice } from './device-label';
 import { listSessions } from './listing';
+import { hasIdledOut } from './idle';
+import { resolveInLiveFamily } from './family-liveness';
 import { assertProofCurrent, assertSecondFactor } from './mint-guard';
 import { looksLikeJwt, looksLikeSessionId, newSessionId } from './session-id';
 import type {
@@ -216,27 +218,45 @@ const resolveRowProof = (row: SessionRow): Promise<AuthContext | undefined> =>
 /**
  * Resolve a presented session id to the caller it names.
  *
+ * A staff session idle past its limit is ended here — the whole family goes — and answers `idle`.
+ * Any other live request counts as activity, unless it says it is `passive`.
+ *
  * @param id - the Bearer or cookie value
- * @returns a miss for an unknown, other-mode or expired id; `ok` otherwise (`undefined` for an
- *   account that may no longer sign in, or a session the epoch has passed)
+ * @param options - `passive` requests are judged but never counted as activity
+ * @returns a miss for an unknown, other-mode, expired or idled-out id; `ok` otherwise (`undefined`
+ *   for an account that may no longer sign in, or a session the epoch has passed)
  */
-const resolveSession = (id: string): Promise<Resolution<AuthContext | undefined>> =>
+const resolveSession = (
+    id: string,
+    options: ResolveOptions = {}
+): Promise<Resolution<AuthContext | undefined>> =>
     findLiveRow(id).then((found) => {
         if ('miss' in found) return found;
         const row = found.ok;
 
-        return resolveRowProof(row).then((ok) => {
-            // Housekeeping, off the request's path: a lost stamp costs a stale reading only. The
-            // throttle is checked on the row already in hand, so a busy tab costs no extra query.
-            if (ok && stampDue(row))
-                void sessionRepository
-                    .touch(hashToken(id), new Date(), USE_STAMP_INTERVAL_MS)
-                    .then((wrote) => (wrote ? recordActivity(String(row.userId)) : undefined))
-                    .catch((error: unknown) => {
-                        logger.warn({ message: 'Could not stamp a session as used.', error });
-                    });
-            return { ok };
-        });
+        return resolveRowProof(row).then(
+            (
+                ok
+            ):
+                | Resolution<AuthContext | undefined>
+                | Promise<Resolution<AuthContext | undefined>> => {
+                if (ok && hasIdledOut(row.lastUsedAt ?? row.startedAt, ok.roles))
+                    return sessionRepository
+                        .removeFamily(String(row.userId), String(row.familyId))
+                        .then((): Resolution<AuthContext | undefined> => ({ miss: 'idle' }));
+
+                // Housekeeping, off the request's path: a lost stamp costs a stale reading only. The
+                // throttle is checked on the row already in hand, so a busy tab costs no extra query.
+                if (ok && !options.passive && stampDue(row))
+                    void sessionRepository
+                        .touch(hashToken(id), new Date(), USE_STAMP_INTERVAL_MS)
+                        .then((wrote) => (wrote ? recordActivity(String(row.userId)) : undefined))
+                        .catch((error: unknown) => {
+                            logger.warn({ message: 'Could not stamp a session as used.', error });
+                        });
+                return { ok };
+            }
+        );
     });
 
 /**
@@ -247,24 +267,19 @@ const watchSession = (id: string): Promise<Resolution<StreamWatch>> =>
     findLiveRow(id).then((found) => {
         if ('miss' in found) return found;
         const row = found.ok;
-        const familyId = String(row.familyId);
 
         return resolveRowProof(row).then(
             (context): Resolution<StreamWatch> => ({
                 ok: {
                     context,
+                    // A stream's recheck is not the person acting: judged, never counted.
                     recheck: () =>
-                        Promise.all([
-                            sessionRepository.familyIsLive(
-                                String(row.userId),
-                                familyId,
-                                'cookie',
-                                new Date()
-                            ),
-                            resolveRowProof(row)
-                        ]).then(
-                            ([live, ok]): Resolution<AuthContext | undefined> =>
-                                live ? { ok } : { miss: 'revoked' }
+                        resolveInLiveFamily(
+                            String(row.userId),
+                            String(row.familyId),
+                            'cookie',
+                            () => resolveRowProof(row),
+                            { passive: true }
                         )
                 }
             })

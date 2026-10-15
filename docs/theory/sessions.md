@@ -107,6 +107,30 @@ obey the same windows:
 
 Re-proving replaces the credential in both modes: a new token pair, or a new id, in the same session family with the same start and absolute expiry. A re-proof proves who you are again; it never stretches how long the sign-in lasts.
 
+## The staff idle timeout
+
+A staff or admin session that sees no real request for `NODE_SESSION_IDLE_TIME_STAFF` seconds (30
+minutes by default, `0` switches it off) ends: the next request answers `401 SESSION_IDLE`, the
+session is revoked and the refusal is audited. A shopper's session never idles out (NIST AAL1 "MAY";
+Shopify and Amazon do not either); NIST AAL2 asks at most an hour of inactivity of staff, and OWASP
+asks that the server enforce it, so a client timer is only a courtesy.
+
+```mermaid
+flowchart LR
+    R[request] --> L{staff or admin?}
+    L -- no --> OK[carry on]
+    L -- yes --> I{idle past the limit?}
+    I -- yes --> E[revoke the session, 401 SESSION_IDLE]
+    I -- no --> P{passive?}
+    P -- yes --> OK
+    P -- no --> S[stamp lastUsedAt, at most once a minute] --> OK
+```
+
+What counts as activity is a real request. What does not: a request sent with
+`X-Session-Passive: true` (a poll, a keep-alive), the 30-second recheck of an open event stream, and
+a refresh, which renews a token and carries the clock over unchanged. `POST /account/session/touch`
+counts and answers the clock, which is how a client asks "still there?" from server numbers.
+
 ## What each defends against
 
 | Threat                              | `jwt`                                                                                                                                      | `cookie`                                                                                          |

@@ -13,6 +13,7 @@ tags:
 x-error-codes:
     EMAIL_CHANGE_TOO_SOON: { status: 429, description: 'An email change was already requested for this account in the last minute — carries `details.retryAfter`.' }
     EMAIL_VERIFY_RESEND_TOO_SOON: { status: 429, description: 'A verification email was already sent recently — carries `details.retryAfter`.' }
+    SESSION_IDLE: { status: 401, description: 'A staff or admin session saw no real request for longer than `NODE_SESSION_IDLE_TIME_STAFF`, and ended. Sign in again. A shopper never gets this.' }
     TWO_FACTOR_RESEND_TOO_SOON: { status: 429, description: 'A two-factor code was already sent recently — carries `details.retryAfter`.' }
 
 # This module's section of the account data export (`POST /account/export`): the bundler adds it
@@ -532,7 +533,8 @@ paths:
                 and a `current` marker; never a credential. The session the caller's own cookie (or
                 `ses_…` bearer) belongs to is flagged `current`.
                 In `cookie` mode each also carries a coarse `device` label such as "Firefox on
-                Linux", read from the User-Agent at the sign-in.
+                Linux", read from the User-Agent at the sign-in. A staff session that has idled out is
+                not listed: it no longer signs anyone in.
             operationId: listSessions
             security:
                 - bearerAuth: []
@@ -543,6 +545,31 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/SessionsEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/session/touch:
+        post:
+            tags: [Account]
+            summary: Count the caller's own session as active, and read its idle clock
+            description: >-
+                Marks the session as having seen a real request now, and answers its idle clock. A
+                staff or admin session that sees none for `idleTimeoutSeconds` ends (`401
+                SESSION_IDLE`); a client shows a "still there?" prompt before then and calls this
+                when the person answers. A shopper's session never idles out, so the field is
+                absent. Every other request counts as activity too, except one sent with the
+                `X-Session-Passive: true` header: a poll or a keep-alive that is not the person
+                acting.
+            operationId: touchSession
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The session's idle clock
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionActivityEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -1665,6 +1692,36 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/SessionConfig'
+
+        SessionActivityEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/SessionActivity'
+
+        SessionActivity:
+            type: object
+            additionalProperties: false
+            required: [lastActiveAt]
+            properties:
+                lastActiveAt:
+                    type: string
+                    format: date-time
+                    description: When the session last saw a real request — now, for a touch.
+                idleTimeoutSeconds:
+                    type: integer
+                    minimum: 1
+                    description: >-
+                        How long the session may then sit unused before it ends. Absent when no idle
+                        timeout applies to this account (a shopper, or the timeout is switched off).
 
         SessionConfig:
             type: object

@@ -90,6 +90,8 @@ the login form and the lifetime in the environment stay one decision:
 | `medium` | `NODE_SESSION_TIME_MEDIUM` | 7 days  |
 | `long`   | `NODE_SESSION_TIME_LONG`   | 30 days |
 
+Staff and admin sessions also idle out: see [the staff idle timeout](../theory/sessions.md#the-staff-idle-timeout).
+
 The longest default is 30 days, which meets ASVS 4.0.3 V3.3.2 L1 as written. A shop session is
 long-lived on purpose and risk-based (ASVS 5.0 V7.1.1): the sensitive actions behind it ask for the
 password again (`NODE_REAUTH_TIME_*`), the model Amazon and Shopify customer accounts use.

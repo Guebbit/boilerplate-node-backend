@@ -28,9 +28,19 @@ jest.mock('@modules/users', () => {
     };
 });
 
+jest.mock('@modules/access', () => {
+    const actual = jest.requireActual<typeof import('@modules/access')>('@modules/access');
+    return {
+        ...actual,
+        __esModule: true,
+        rolesOf: jest.fn(() => Promise.resolve({ tenant: 'customer', platform: null }))
+    };
+});
+
 import { listSessions, newestPerFamily } from '@modules/account/session/listing';
 import { sessionRepository, type SessionRow } from '@modules/account/repository';
 import { userService } from '@modules/users';
+import { rolesOf } from '@modules/access';
 import { hashToken } from '@infrastructure/security/hash-token';
 
 /** The account every case lists. */
@@ -57,6 +67,7 @@ const { findAuthenticatableById } = asStub<{ findAuthenticatableById: jest.Mock 
 
 beforeEach(() => {
     jest.resetAllMocks();
+    jest.mocked(rolesOf).mockResolvedValue({ tenant: 'customer', platform: null });
     findAuthenticatableById.mockResolvedValue({ id: USER_ID });
 });
 
@@ -160,6 +171,19 @@ describe('listSessions and the account epoch', () => {
             tokensValidAfter: new Date(1_750_000_000_000)
         });
 
+        await expect(listSessions('jwt', USER_ID, undefined)).resolves.toHaveLength(1);
+    });
+});
+
+describe('listSessions and the staff idle timeout', () => {
+    it('hides a staff session past its idle limit, and keeps a shopper’s however old', async () => {
+        const stale = new Date(Date.now() - 24 * 3_600_000);
+        listLive.mockResolvedValue([row(new Types.ObjectId(), { lastUsedAt: stale })]);
+
+        jest.mocked(rolesOf).mockResolvedValue({ tenant: 'editor', platform: null });
+        await expect(listSessions('jwt', USER_ID, undefined)).resolves.toEqual([]);
+
+        jest.mocked(rolesOf).mockResolvedValue({ tenant: 'customer', platform: null });
         await expect(listSessions('jwt', USER_ID, undefined)).resolves.toHaveLength(1);
     });
 });

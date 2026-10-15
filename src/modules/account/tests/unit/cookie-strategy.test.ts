@@ -36,7 +36,9 @@ jest.mock('@modules/account/repository', () => {
             findByHash: jest.fn(),
             removeByHash: jest.fn(),
             touch: jest.fn(),
-            familyIsLive: jest.fn(),
+            familyActivity: jest.fn(),
+            touchFamily: jest.fn(),
+            removeFamily: jest.fn(),
             listLive: jest.fn()
         }
     };
@@ -48,17 +50,30 @@ jest.mock('@modules/account/session/auth-context', () => ({
     resolveProof: jest.fn()
 }));
 
+jest.mock('@modules/access', () => {
+    const actual = jest.requireActual<typeof import('@modules/access')>('@modules/access');
+    return {
+        ...actual,
+        __esModule: true,
+        rolesOf: jest.fn(() => Promise.resolve({ tenant: 'customer', platform: null }))
+    };
+});
+
 import { cookieStrategy } from '@modules/account/session/cookie-strategy';
 import { SecondFactorRequiredError, StaleProofError } from '@modules/account/session/mint-guard';
 import { resolveProof } from '@modules/account/session/auth-context';
 import { sessionRepository, type NewSessionRow } from '@modules/account/repository';
 import { userService } from '@modules/users';
+import { rolesOf } from '@modules/access';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { cookieSet, recordingResponse, requestWith } from '../strategy-doubles';
 import { RefreshTokenExpiryTime } from '@modules/account/session/config';
 
 /** The account every case signs in. */
 const USER_ID = '507f1f77bcf86cd799439011';
+
+/** The caller its proof resolves to: a shopper, whom no idle timeout touches. */
+const SHOPPER = { id: USER_ID, roles: { tenant: 'customer', platform: null } };
 
 /** A well-formed id nobody minted — shape only. */
 const SOME_ID = `ses_${'a'.repeat(43)}`;
@@ -69,7 +84,9 @@ const sessions = asStub<{
     findByHash: jest.Mock;
     removeByHash: jest.Mock;
     touch: jest.Mock;
-    familyIsLive: jest.Mock;
+    familyActivity: jest.Mock;
+    touchFamily: jest.Mock;
+    removeFamily: jest.Mock;
     listLive: jest.Mock;
 }>(sessionRepository);
 
@@ -105,12 +122,13 @@ const liveRow = (overrides: Record<string, unknown> = {}) => ({
 beforeEach(() => {
     // `reset`, not `clear`: each case sets its own resolutions, and a leftover one fails the next.
     jest.resetAllMocks();
+    jest.mocked(rolesOf).mockResolvedValue({ tenant: 'customer', platform: null });
     setEnvironment({ NODE_SESSION_TIME_SHORT: '3600', NODE_SESSION_TIME_LONG: '2592000' });
     sessions.insert.mockResolvedValue(undefined);
     sessions.removeByHash.mockResolvedValue(1);
     sessions.touch.mockResolvedValue(false);
     users.touchLastActive.mockResolvedValue(undefined);
-    users.findAuthenticatableById.mockResolvedValue({ id: USER_ID });
+    users.findAuthenticatableById.mockResolvedValue(SHOPPER);
 });
 
 describe('credentialOf', () => {
@@ -185,7 +203,7 @@ describe.each([
     });
 
     it('hands a live row’s stored proof to the shared resolver, and answers its context', async () => {
-        const context = { id: USER_ID };
+        const context = SHOPPER;
         sessions.findByHash.mockResolvedValue(liveRow({ amr: ['pwd', 'otp'] }));
         proof.mockResolvedValue(context);
 
@@ -214,7 +232,7 @@ describe.each([
     });
 
     it('stamps the use only when the row’s last stamp is over a minute old', async () => {
-        proof.mockResolvedValue({ id: USER_ID });
+        proof.mockResolvedValue(SHOPPER);
 
         sessions.findByHash.mockResolvedValue(liveRow({ lastUsedAt: new Date() }));
         await resolve(SOME_ID);
@@ -234,10 +252,10 @@ describe.each([
 
     it('still answers when the use stamp fails', async () => {
         sessions.findByHash.mockResolvedValue(liveRow());
-        proof.mockResolvedValue({ id: USER_ID });
+        proof.mockResolvedValue(SHOPPER);
         sessions.touch.mockRejectedValue(new Error('store down'));
 
-        await expect(resolve(SOME_ID)).resolves.toEqual({ ok: { id: USER_ID } });
+        await expect(resolve(SOME_ID)).resolves.toEqual({ ok: SHOPPER });
     });
 });
 
@@ -556,16 +574,16 @@ describe('watchCookie, the recheck of an open stream', () => {
     it('rechecks the session family, so a re-proof that replaced the row does not end the stream', async () => {
         const row = liveRow();
         sessions.findByHash.mockResolvedValue(row);
-        proof.mockResolvedValue({ id: USER_ID });
-        sessions.familyIsLive.mockResolvedValue(true);
+        proof.mockResolvedValue(SHOPPER);
+        sessions.familyActivity.mockResolvedValue({ lastActiveAt: new Date() });
 
         const watch = await cookieStrategy.watchCookie(SOME_ID);
         // The row the stream connected with is gone (a re-proof replaced it); its family lives on.
         sessions.findByHash.mockResolvedValue(undefined);
         const recheck = 'ok' in watch ? watch.ok.recheck : undefined;
 
-        await expect(recheck?.()).resolves.toEqual({ ok: { id: USER_ID } });
-        expect(sessions.familyIsLive).toHaveBeenCalledWith(
+        await expect(recheck?.()).resolves.toEqual({ ok: SHOPPER });
+        expect(sessions.familyActivity).toHaveBeenCalledWith(
             USER_ID,
             String(row.familyId),
             'cookie',
@@ -575,8 +593,8 @@ describe('watchCookie, the recheck of an open stream', () => {
 
     it('rechecks to a miss once the family is gone', async () => {
         sessions.findByHash.mockResolvedValue(liveRow());
-        proof.mockResolvedValue({ id: USER_ID });
-        sessions.familyIsLive.mockResolvedValue(false);
+        proof.mockResolvedValue(SHOPPER);
+        sessions.familyActivity.mockResolvedValue(undefined);
 
         const watch = await cookieStrategy.watchCookie(SOME_ID);
         const recheck = 'ok' in watch ? watch.ok.recheck : undefined;

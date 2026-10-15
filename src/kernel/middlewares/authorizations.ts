@@ -56,7 +56,7 @@ import {
     type SecurityEventAction
 } from '@infrastructure/observability/security-events';
 import { reauthWindowSeconds } from '@kernel/config';
-import type { AuthContext } from '@types';
+import type { AuthContext, ResolveOptions } from '@types';
 
 /**
  * The `errors[].code` locale key follows one rule everywhere in this codebase: `FORBIDDEN` reads
@@ -177,6 +177,15 @@ const applySession = (
 };
 
 /**
+ * What this request tells the resolver beyond its credential: a client marks a poll or a
+ * keep-alive `X-Session-Passive: true` so it is not counted as the person acting. The header can
+ * only ever make a session look MORE idle, so there is nothing to forge.
+ */
+const resolveOptionsOf = (request: Request): ResolveOptions => ({
+    passive: request.header('X-Session-Passive') === 'true'
+});
+
+/**
  * Resolve a session credential, then continue. The miss, the "nobody" and the outage are told
  * apart exactly as the port documents.
  *
@@ -197,6 +206,8 @@ const continueWithSession = (
         .then((resolved) => {
             if ('miss' in resolved) {
                 noteMiss(request, 'session', resolved.miss);
+                // The 401 that follows tells this person their session ended for inactivity.
+                if (resolved.miss === 'idle') request.sessionIdle = true;
                 onMiss?.();
             }
             const user = 'ok' in resolved ? resolved.ok : undefined;
@@ -231,9 +242,15 @@ const continueWithCookie = (request: Request, response: Response, next: NextFunc
     const resolveFromCookie = (): void => {
         // A cookie the resolver refuses can never work again (another mode's, revoked from
         // another device, expired): clearing it saves the lookup on every request after this one.
-        continueWithSession(request, next, resolveCookie(cookieToken), 'cookie', () => {
-            clearDeadSessionCookie(response);
-        });
+        continueWithSession(
+            request,
+            next,
+            resolveCookie(cookieToken, resolveOptionsOf(request)),
+            'cookie',
+            () => {
+                clearDeadSessionCookie(response);
+            }
+        );
     };
 
     if (SAFE_METHODS.has(request.method)) resolveFromCookie();
@@ -303,7 +320,7 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
         return;
     }
 
-    continueWithSession(request, next, resolveBearer(token), 'bearer');
+    continueWithSession(request, next, resolveBearer(token, resolveOptionsOf(request)), 'bearer');
 };
 
 /**
@@ -318,9 +335,16 @@ const refuseUnauthenticated = (
     auditRefusal(request, {
         action: coreAuditActions.SECURITY_UNAUTHORIZED,
         actorUserId: 'anonymous',
-        actorRole: 'anonymous'
+        actorRole: 'anonymous',
+        ...(request.sessionIdle && { metadata: { reason: 'session_idle' } })
     });
-    rejectResponse(response, 401, errors);
+    rejectResponse(
+        response,
+        401,
+        request.sessionIdle && errors.length === 0
+            ? [{ code: ERROR_CODES.SESSION_IDLE, message: t('account.session-idle') }]
+            : errors
+    );
 };
 
 /** The 401 body the cookie guard has always answered with. */

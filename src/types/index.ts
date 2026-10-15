@@ -20,6 +20,7 @@ export type {
     CallerContext,
     Resolution,
     ResolveMissReason,
+    ResolveOptions,
     PlatformCaller,
     RoleLevel,
     TenantCaller,

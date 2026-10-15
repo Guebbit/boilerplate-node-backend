@@ -516,7 +516,9 @@ const storeSuccessor = (
             mode: 'jwt',
             tokenHash: hashToken(newRefreshToken),
             authTime: claims.auth_time,
-            lastUsedAt: now,
+            // A refresh is the client renewing a token, not the person acting: the clock the idle
+            // timeout reads is carried over, never reset by the rotation.
+            ...(previous.lastUsedAt && { lastUsedAt: previous.lastUsedAt }),
             expiresAt: new Date(now.getTime() + remainingMs)
         })
         .then(() => recordActivity(claims.sub))

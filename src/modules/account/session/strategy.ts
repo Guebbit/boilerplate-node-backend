@@ -16,7 +16,7 @@
 import type { Request, Response } from 'express';
 import type { Types } from 'mongoose';
 import type { Resolution, StreamWatch } from '@kernel/authentication';
-import type { AuthContext, Session } from '@types';
+import type { ResolveOptions, AuthContext, Session } from '@types';
 import type { SessionMode } from '../session-mode';
 import { getSessionMode, type RefreshTokenExpiryTime } from './config';
 import { jwtStrategy } from './jwt-strategy';
@@ -126,10 +126,16 @@ export interface SessionStrategy {
     ): Promise<IssuedSession>;
 
     /** Resolve the credential an `Authorization: Bearer` header carries (not an `sk_…` key). */
-    resolveBearer(token: string): Promise<Resolution<AuthContext | undefined>>;
+    resolveBearer(
+        token: string,
+        options?: ResolveOptions
+    ): Promise<Resolution<AuthContext | undefined>>;
 
     /** Resolve the session cookie's value. */
-    resolveCookie(token: string): Promise<Resolution<AuthContext | undefined>>;
+    resolveCookie(
+        token: string,
+        options?: ResolveOptions
+    ): Promise<Resolution<AuthContext | undefined>>;
 
     /**
      * Resolve the session cookie of an SSE stream and keep its session family, so a recheck holds

@@ -310,32 +310,89 @@ const removeSessionFamilyExcept = (
         .exec()
         .then(({ deletedCount }) => deletedCount);
 
+/** A live session family's clock: when it last saw a real request, and when that was last written down. */
+export interface FamilyActivity {
+    /** The newest `lastUsedAt` of its live rows, else the sign-in — what the idle timeout reads. */
+    lastActiveAt: Date;
+    /** The newest `lastUsedAt` alone; absent until the family has been stamped as used once. */
+    stampedAt?: Date;
+}
+
 /**
- * Whether a session family still has an unexpired row — the check an access token's `sid` claim
- * and an open SSE stream are held to. ANY unexpired row counts, rotated-away or not: a rotation
- * supersedes the old row before it inserts the successor, and a mid-refresh credential must not
- * be refused.
+ * A session family's clock, or `undefined` once it has no unexpired row — the check an access
+ * token's `sid` claim and an open SSE stream are held to, and what the staff idle timeout reads.
+ * ANY unexpired row counts, rotated-away or not: a rotation supersedes the old row before it
+ * inserts the successor, and a mid-refresh credential must not be refused.
  *
  * @param userId - the account the credential names
  * @param familyId - the `sid` claim, or the family the stream's session belongs to
  * @param mode - the session mode the family was minted under
  * @param now - the moment to compare expiry against
  */
-const sessionFamilyIsLive = (
+const sessionFamilyActivity = (
     userId: string,
     familyId: string,
     mode: SessionMode,
     now: Date
+): Promise<FamilyActivity | undefined> =>
+    sessionModel
+        .find(
+            {
+                userId: toObjectId(userId),
+                familyId: toObjectId(familyId),
+                mode,
+                expiresAt: { $gt: now }
+            },
+            { lastUsedAt: 1, startedAt: 1 }
+        )
+        .lean<Pick<SessionRow, 'lastUsedAt' | 'startedAt'>[]>()
+        .exec()
+        .then((rows): FamilyActivity | undefined => {
+            if (rows.length === 0) return undefined;
+            const stamps = rows.flatMap((row) =>
+                row.lastUsedAt ? [row.lastUsedAt.getTime()] : []
+            );
+            const stampedAt = stamps.length > 0 ? new Date(Math.max(...stamps)) : undefined;
+            return {
+                // A row never stamped has been used only by signing in.
+                lastActiveAt: new Date(
+                    Math.max(...rows.map((row) => (row.lastUsedAt ?? row.startedAt).getTime()))
+                ),
+                ...(stampedAt && { stampedAt })
+            };
+        });
+
+/**
+ * Stamp a session family's live row as used, at most once per `minIntervalMs` — the `jwt` mode's
+ * counterpart of {@link touchSession}, which `cookie` mode calls with the id it holds.
+ *
+ * @param userId - the account
+ * @param familyId - the session family
+ * @param now - the moment of use
+ * @param minIntervalMs - skip the write when the row was stamped more recently than this
+ * @returns whether a write happened
+ */
+const touchSessionFamily = (
+    userId: string,
+    familyId: string,
+    now: Date,
+    minIntervalMs: number
 ): Promise<boolean> =>
     sessionModel
-        .exists({
-            userId: toObjectId(userId),
-            familyId: toObjectId(familyId),
-            mode,
-            expiresAt: { $gt: now }
-        })
+        .updateOne(
+            {
+                userId: toObjectId(userId),
+                familyId: toObjectId(familyId),
+                supersededAt: { $exists: false },
+                $or: [
+                    { lastUsedAt: { $exists: false } },
+                    { lastUsedAt: { $lt: new Date(now.getTime() - minIntervalMs) } }
+                ]
+            },
+            { $set: { lastUsedAt: now } }
+        )
         .exec()
-        .then((found) => found !== null);
+        .then(({ modifiedCount }) => modifiedCount > 0);
 
 /**
  * Delete the whole session a credential belongs to: the row it names and every sibling of its
@@ -372,7 +429,8 @@ export const sessionRepository: {
     listLive: typeof listLiveSessions;
     removeByHash: typeof removeSessionByHash;
     removeFamily: typeof removeSessionFamily;
-    familyIsLive: typeof sessionFamilyIsLive;
+    familyActivity: typeof sessionFamilyActivity;
+    touchFamily: typeof touchSessionFamily;
     removeFamilyExcept: typeof removeSessionFamilyExcept;
     removeFamilyByHash: typeof removeSessionFamilyByHash;
     removeAll: typeof removeAllSessions;
@@ -384,7 +442,8 @@ export const sessionRepository: {
     listLive: listLiveSessions,
     removeByHash: removeSessionByHash,
     removeFamily: removeSessionFamily,
-    familyIsLive: sessionFamilyIsLive,
+    familyActivity: sessionFamilyActivity,
+    touchFamily: touchSessionFamily,
     removeFamilyExcept: removeSessionFamilyExcept,
     removeFamilyByHash: removeSessionFamilyByHash,
     removeAll: removeAllSessions

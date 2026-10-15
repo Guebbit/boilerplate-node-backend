@@ -14,7 +14,7 @@
  */
 
 import type { Response } from 'express';
-import type { AuthContext, Caller, Resolution } from '@types';
+import type { AuthContext, Caller, Resolution, ResolveOptions } from '@types';
 
 export type { Resolution, ResolveMissReason } from '@types';
 
@@ -36,9 +36,15 @@ export interface StreamWatch {
  */
 export interface AuthResolver {
     /** The value of `Authorization: Bearer …`, when it is not an `sk_…` key. */
-    fromBearer: (token: string) => Promise<Resolution<AuthContext | undefined>>;
+    fromBearer: (
+        token: string,
+        options?: ResolveOptions
+    ) => Promise<Resolution<AuthContext | undefined>>;
     /** The value of the session cookie. */
-    fromCookie: (token: string) => Promise<Resolution<AuthContext | undefined>>;
+    fromCookie: (
+        token: string,
+        options?: ResolveOptions
+    ) => Promise<Resolution<AuthContext | undefined>>;
     /** The session cookie of an SSE stream: who it names now, and a recheck that survives rotation. */
     watchCookie: (token: string) => Promise<Resolution<StreamWatch>>;
     /**
@@ -122,16 +128,22 @@ const requireResolver = (): AuthResolver => {
 };
 
 /** Resolve a bearer credential — an access token, or a `ses_…` session id. */
-export const resolveBearer = (token: string): Promise<Resolution<AuthContext | undefined>> =>
-    Promise.resolve().then(() => requireResolver().fromBearer(token));
+export const resolveBearer = (
+    token: string,
+    options?: ResolveOptions
+): Promise<Resolution<AuthContext | undefined>> =>
+    Promise.resolve().then(() => requireResolver().fromBearer(token, options));
 
 /** Resolve the session cookie of an SSE stream, keeping what its recheck needs. */
 export const watchCookie = (token: string): Promise<Resolution<StreamWatch>> =>
     Promise.resolve().then(() => requireResolver().watchCookie(token));
 
 /** Resolve the session cookie's value. */
-export const resolveCookie = (token: string): Promise<Resolution<AuthContext | undefined>> =>
-    Promise.resolve().then(() => requireResolver().fromCookie(token));
+export const resolveCookie = (
+    token: string,
+    options?: ResolveOptions
+): Promise<Resolution<AuthContext | undefined>> =>
+    Promise.resolve().then(() => requireResolver().fromCookie(token, options));
 
 /** Clear a session cookie the resolver refused; a build with no `account` has none to clear. */
 export const clearDeadSessionCookie = (response: Response): void => {

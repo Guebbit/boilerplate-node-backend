@@ -1,5 +1,7 @@
 {
     "account": {
+        "session-idle": "La sessione è terminata per inattività. Accedi di nuovo.",
+        "session-touched": "Sessione aggiornata.",
         "login": {
             "wrong-data": "Email o password non validi.",
             "second-factor-required": "Autenticazione a due fattori richiesta.",

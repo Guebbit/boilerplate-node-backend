@@ -23,9 +23,9 @@ export const forgetSessionEpoch = (bearer: string): Promise<unknown> => {
     const now = new Date();
     return userRepository
         .updateMany({}, { $unset: { tokensValidAfter: '' } })
-        .then(() => sessionRepository.familyIsLive(String(id), String(sid), 'jwt', now))
-        .then((live) =>
-            live
+        .then(() => sessionRepository.familyActivity(String(id), String(sid), 'jwt', now))
+        .then((activity) =>
+            activity
                 ? undefined
                 : sessionRepository.insert({
                       userId: new Types.ObjectId(String(id)),

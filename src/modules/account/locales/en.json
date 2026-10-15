@@ -1,5 +1,7 @@
 {
     "account": {
+        "session-idle": "Your session ended after a period of inactivity. Please sign in again.",
+        "session-touched": "Session refreshed.",
         "login": {
             "wrong-data": "Invalid email or password.",
             "second-factor-required": "Two-factor authentication required.",

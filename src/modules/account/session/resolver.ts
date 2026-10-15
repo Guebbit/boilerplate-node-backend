@@ -22,8 +22,8 @@ import { activeStrategy } from './strategy';
  * distinction stays in the miss reason the guard counts and audits.
  */
 export const accountAuthResolver: AuthResolver = {
-    fromBearer: (token) => activeStrategy().resolveBearer(token),
-    fromCookie: (token) => activeStrategy().resolveCookie(token),
+    fromBearer: (token, options) => activeStrategy().resolveBearer(token, options),
+    fromCookie: (token, options) => activeStrategy().resolveCookie(token, options),
     watchCookie: (token) => activeStrategy().watchCookie(token),
     cookieAuthenticates: () => activeStrategy().cookieAuthenticates,
     clearDeadCookie: (response) => {

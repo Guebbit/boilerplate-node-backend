@@ -74,6 +74,8 @@ export const sessionConfig = defineConfig({
         NODE_SESSION_TIME_SHORT: int({ default: 86_400, min: 1 }),
         NODE_SESSION_TIME_MEDIUM: int({ default: 604_800, min: 1 }),
         NODE_SESSION_TIME_LONG: int({ default: 2_592_000, min: 1 }),
+        // Staff only: a shopper's session never idles out. 0 switches the timeout off.
+        NODE_SESSION_IDLE_TIME_STAFF: int({ default: 1800, min: 0 }),
         NODE_TOKEN_ACCESS_TIME: int({ default: 600, min: 1 }),
         NODE_TOKEN_ACCESS: keyRing({
             required: {
@@ -162,6 +164,14 @@ export const getExpiryTime = (remember?: RefreshTokenExpiryTime) =>
  */
 export const getExpiryTimeMilliseconds = (remember?: RefreshTokenExpiryTime) =>
     getExpiryTime(remember) * 1000;
+
+/**
+ * How long a staff or admin session may sit without a real request before it ends, in seconds.
+ * NIST SP 800-63B AAL2 asks for at most an hour of inactivity; a shopper has no such limit.
+ *
+ * @returns seconds, `0` when the timeout is off
+ */
+export const getStaffIdleTimeSeconds = () => sessionConfig().NODE_SESSION_IDLE_TIME_STAFF;
 
 /**
  * Lifetime in seconds of an ACCESS token. Deliberately separate from {@link getExpiryTime}: an

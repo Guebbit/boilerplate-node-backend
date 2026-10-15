@@ -238,9 +238,19 @@ export interface TenantCallerContext extends CallerContext {
 
 /**
  * Why a presented credential was refused. `invalid_signature` and `malformed` are an attack on a
- * credential; `revoked` and `expired` are normally a customer holding a stale one.
+ * credential; `revoked`, `expired` and `idle` are normally a person holding a stale one (`idle`: a
+ * staff session that saw no real request for too long).
  */
-export type ResolveMissReason = 'invalid_signature' | 'malformed' | 'revoked' | 'expired';
+export type ResolveMissReason = 'invalid_signature' | 'malformed' | 'revoked' | 'expired' | 'idle';
+
+/** What a request tells the resolver beyond its credential. */
+export interface ResolveOptions {
+    /**
+     * The request is not the person acting — a poll, a keep-alive — so it must not count as
+     * activity for the idle timeout.
+     */
+    passive?: boolean;
+}
 
 /** What a resolver answers: the resolved value, or the reason the credential was refused. */
 export type Resolution<T> = { ok: T } | { miss: ResolveMissReason };

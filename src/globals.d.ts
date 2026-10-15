@@ -36,6 +36,8 @@ declare module 'express-serve-static-core' {
          * stream — which is what keeps that cookie from counting as a session elsewhere.
          */
         sessionVia?: 'bearer' | 'cookie';
+        /** Set by `getAuth` when the credential it refused was a staff session that idled out. */
+        sessionIdle?: boolean;
         /**
          * Set by `requirePermissionViaCookie` for an SSE stream: re-answers who the session is, for
          * as long as its family lives, whatever happens to the cookie that opened it.
