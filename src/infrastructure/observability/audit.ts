@@ -56,6 +56,8 @@ type CoreAuditAction = (typeof coreAuditActions)[keyof typeof coreAuditActions];
  * Module name → that module's action strings. Augmented per module (declaration merging, like
  * `DomainEventMap` in `kernel/events.ts`), so this stays empty and `infrastructure` never imports
  * from a module — see `modules/account/audit.ts` for the shape.
+ *
+ * @public
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- a declaration-merging seam: each module augments this map with its own actions
 export interface AuditActionMap {}

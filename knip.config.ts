@@ -34,7 +34,16 @@ const config: KnipConfig = {
         // The mutation run's transform, named in `jest.config.mutation.js`, which knip does not
         // read as a jest config; `@swc/core` is its peer.
         '@swc/jest',
-        '@swc/core'
+        '@swc/core',
+        // Loaded by name from `stryker.json` (`testRunner: "jest"`).
+        '@stryker-mutator/jest-runner',
+        // Provides `spectral:oas` and `spectral:asyncapi` to `shared/contracts/spectral*.yaml`.
+        '@stoplight/spectral-rulesets'
+    ],
+    // System tools a script spawns.
+    ignoreBinaries: [
+        // `scenarios/tools/generate-webhook-sink-tls.ts` shells out to it.
+        'openssl'
     ],
     // Imports that resolve at run time, not from the importing file.
     ignoreUnresolved: [
