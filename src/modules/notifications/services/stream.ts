@@ -12,6 +12,7 @@
  */
 
 import type { Response } from 'express';
+import { openSseStream } from '@infrastructure/http/sse';
 import type { NotificationsChannel, SseEventPayloadMap } from '@types';
 
 /** User id → that user's open responses. A `Set` so a disconnect is O(1) and nothing is added twice. */
@@ -19,12 +20,6 @@ const connections = new Map<string, Set<Response>>();
 
 /** Keep-alive cadence; idle proxies commonly drop a connection after 30-60s of silence. */
 const HEARTBEAT_INTERVAL_MS = 15_000;
-
-/**
- * How often an open stream re-proves its caller still holds the key that opened it. Revocation
- * lands on the next request everywhere else; a stream has no next request until this closes it.
- */
-const REVERIFY_INTERVAL_MS = 30_000;
 
 /**
  * Write one SSE frame. `event:` names the channel, `data:` carries single-line JSON, and the
@@ -66,7 +61,7 @@ export const openStreamCount = (): number =>
  * recheck, all torn down when the client goes.
  *
  * @param reverify - re-answers "does this caller still hold the key that opened the stream",
- *   polled every {@link REVERIFY_INTERVAL_MS}. A plain callback so this file stays agnostic of how
+ *   polled by `openSseStream`. A plain callback so this file stays agnostic of how
  *   a caller is authenticated; the controller wires it to the refresh cookie.
  */
 export const streamNotifications = (
@@ -74,14 +69,7 @@ export const streamNotifications = (
     userId: string,
     reverify: () => Promise<boolean>
 ): void => {
-    response.status(200);
-    // The MIME type that makes this an SSE stream for the browser's `EventSource`.
-    response.setHeader('Content-Type', 'text/event-stream');
-    // `no-transform` stops a proxy gzipping or buffering the body, which would hold frames back.
-    response.setHeader('Cache-Control', 'no-cache, no-transform');
-    response.setHeader('Connection', 'keep-alive');
-    // Send the headers now, before any body, so the client sees the stream open.
-    response.flushHeaders();
+    const stream = openSseStream(response, reverify);
 
     const owned = connections.get(userId) ?? new Set<Response>();
     owned.add(response);
@@ -93,27 +81,11 @@ export const streamNotifications = (
         response.write(': keep-alive\n\n');
     }, HEARTBEAT_INTERVAL_MS);
 
-    // Fails closed: a rejection is not "still allowed".
-    const reverifyTimer = setInterval(() => {
-        void reverify()
-            .catch(() => false)
-            .then((allowed) => {
-                if (allowed) return;
-
-                response.end();
-                teardown();
-            });
-    }, REVERIFY_INTERVAL_MS);
-
-    // Both timers and the map entry must go: a timer left running writes to a dead socket
+    // The timer and the map entry must go: a timer left running writes to a dead socket
     // forever, and a map entry left behind pins the whole response in memory.
-    const teardown = () => {
+    stream.onClose(() => {
         clearInterval(heartbeat);
-        clearInterval(reverifyTimer);
         owned.delete(response);
         if (owned.size === 0) connections.delete(userId);
-    };
-
-    // 'close' fires on any disconnect — tab closed, navigation, network drop, proxy timeout.
-    response.on('close', teardown);
+    });
 };

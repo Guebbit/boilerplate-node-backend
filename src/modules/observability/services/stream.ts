@@ -8,6 +8,7 @@
  */
 
 import type { Response } from 'express';
+import { openSseStream } from '@infrastructure/http/sse';
 import {
     // Channel-name constants, shared with asyncapi.yaml so the event names a dashboard listens
     // for are contractual rather than ad hoc strings.
@@ -27,14 +28,6 @@ const sseClients = new Set<Response>();
 
 /** How often the server pushes a metrics delta to all connected SSE clients. */
 const UPDATE_INTERVAL_MS = 5000;
-
-/**
- * How often an open stream re-proves its caller still holds the permission that opened it.
- * Revocation lands on the very next request everywhere else in this codebase; a stream has no next
- * request until this closes it. Cheap to run this often only because the endpoint is admin-only —
- * concurrent streams number in the handful.
- */
-const REVERIFY_INTERVAL_MS = 30_000;
 
 /**
  * Lightweight keep-alive ping to prevent proxies/load-balancers from closing idle SSE streams.
@@ -103,12 +96,11 @@ const writeMetricsEvent = (response: Response, eventName: ObservabilityChannel) 
 
 /**
  * Opens an SSE stream on the given response: sets headers, sends an immediate snapshot,
- * then schedules periodic updates, heartbeats and a permission recheck, cleaning up all intervals
- * on close.
+ * then schedules periodic updates and heartbeats, cleaning up all intervals on close.
  *
  * @param response - the response to hold open and stream frames into
  * @param reverify - re-answers "does this caller still hold the permission that opened the
- *   stream", polled every {@link REVERIFY_INTERVAL_MS}. Kept a plain callback, not a specific auth
+ *   stream", polled by `openSseStream`. Kept a plain callback, not a specific auth
  *   call, so this module stays agnostic of how a caller is authenticated — the route wires it to
  *   `kernel/middlewares/authorizations.ts#stillHoldsKeyViaCookie`.
  */
@@ -116,18 +108,7 @@ export const streamObservabilityMetrics = (
     response: Response,
     reverify: () => Promise<boolean>
 ) => {
-    response.status(200);
-    // The MIME type that makes this an SSE stream — it is what tells the browser's `EventSource`
-    // to parse frames incrementally instead of waiting for the body to end.
-    response.setHeader('Content-Type', 'text/event-stream');
-    // `no-cache` stops an intermediary from serving a stale snapshot; `no-transform` stops
-    // proxies from gzipping/buffering the body, which would delay frames until the buffer fills.
-    response.setHeader('Cache-Control', 'no-cache, no-transform');
-    // Keep the TCP connection open — the response is intentionally never completed.
-    response.setHeader('Connection', 'keep-alive');
-    // Send the headers now, without any body. Express would otherwise hold them until the first
-    // write, leaving the client waiting on an apparently unanswered request.
-    response.flushHeaders();
+    const stream = openSseStream(response, reverify);
 
     sseClients.add(response);
     // Send the first payload immediately so the client has data before the first interval fires.
@@ -146,32 +127,12 @@ export const streamObservabilityMetrics = (
         writeMetricsEvent(response, OBSERVABILITY_CHANNELS.HEARTBEAT);
     }, HEARTBEAT_INTERVAL_MS);
 
-    // The permission recheck. Fails closed on a rejection too — an error is not "still allowed" —
-    // so `reverify` throwing is not required to behave any differently from it resolving `false`.
-    const reverifyInterval = setInterval(() => {
-        void reverify()
-            .catch(() => false)
-            .then((allowed) => {
-                if (allowed) {
-                    return;
-                }
-
-                response.end();
-                teardown();
-            });
-    }, REVERIFY_INTERVAL_MS);
-
-    // Cleanup when the client disconnects to avoid memory leaks and stale intervals.
-    // Both are essential: uncleared intervals would keep writing to a dead socket forever, and
-    // an un-deleted Set entry would pin the whole Response object in memory.
-    const teardown = () => {
+    // Cleanup when the client disconnects or loses access, to avoid memory leaks and stale
+    // intervals. Both are essential: uncleared intervals would keep writing to a dead socket
+    // forever, and an un-deleted Set entry would pin the whole Response object in memory.
+    stream.onClose(() => {
         clearInterval(updatesInterval);
         clearInterval(heartbeatInterval);
-        clearInterval(reverifyInterval);
         sseClients.delete(response);
-    };
-
-    // 'close' fires on any disconnect — tab closed, navigation, network drop, proxy timeout.
-    // It is the only reliable teardown hook, since the response never 'finish'es normally.
-    response.on('close', teardown);
+    });
 };
