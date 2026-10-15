@@ -13,11 +13,10 @@
  * See: docs/theory/module-lifecycle.md#3-the-fragments-and-their-section-entries
  */
 
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { isMap, isScalar, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
 import { orderSections } from './section-order';
 import { modulesWith } from '../modules-on-disk';
+import { readModuleFragment, type DeclaredTag } from './fragments';
 
 /** What one module's `openapi.yaml` declares that the root has to know about. */
 export interface ModuleFragment {
@@ -29,12 +28,6 @@ export interface ModuleFragment {
     tags: readonly string[];
     /** The tags the fragment declares itself, with their description: the module's own say on what each is. */
     declaredTags?: readonly DeclaredTag[];
-}
-
-/** One entry of a fragment's top-level `tags:`. */
-export interface DeclaredTag {
-    name: string;
-    description?: string;
 }
 
 /** A `$ref` into a module fragment's path item — what the root's `paths` holds per module path. */
@@ -146,17 +139,6 @@ export const assembleRoot = (rootText: string, fragments: readonly ModuleFragmen
     return document.toString({ lineWidth: 0, indent: 4 });
 };
 
-/** One operation, as far as this reader looks: the tags it files itself under. */
-interface FragmentOperation {
-    tags?: string[];
-}
-
-/** A fragment's `paths` and `tags`, as far as this reader looks. */
-interface FragmentDocument {
-    tags?: DeclaredTag[];
-    paths?: Record<string, Record<string, FragmentOperation | undefined>>;
-}
-
 /**
  * What every module under `modulesRoot` that ships an `openapi.yaml` declares, in section order.
  *
@@ -173,11 +155,7 @@ export const readModuleFragments = (
     const present = modulesWith(modulesRoot, 'openapi.yaml');
 
     return orderSections(preferredOrder, present).map((section) => {
-        // `parseDocument` keeps the YAML node tree; `.toJS()` converts it to plain objects.
-        // https://eemeli.org/yaml/#yaml-parsedocument
-        const parsed = parseDocument(
-            readFileSync(path.join(modulesRoot, section, 'openapi.yaml'), 'utf8')
-        ).toJS() as FragmentDocument;
+        const parsed = readModuleFragment(modulesRoot, section);
         const operations = Object.values(parsed.paths ?? {}).flatMap((item) => Object.values(item));
 
         return {

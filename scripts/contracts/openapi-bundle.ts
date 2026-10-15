@@ -34,6 +34,7 @@ import { withCookieAuth } from './cookie-auth';
 import { stageExportSchema } from './personal-data-assembly';
 import { pruneUnused } from './prune-unused';
 import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
+import { readOpenApiFragment } from './fragments';
 
 /**
  * The narrative order the contract has always had — what a caller meets first, then the path a
@@ -337,11 +338,6 @@ const isErrorCodeEntry = (value: unknown): value is ErrorCodeEntry =>
     typeof (value as { status?: unknown }).status === 'number' &&
     typeof (value as { description?: unknown }).description === 'string';
 
-/** A fragment's own `x-error-codes:` map, or none if it declares no error codes at all. */
-interface FragmentWithErrorCodes {
-    'x-error-codes'?: Record<string, unknown>;
-}
-
 /**
  * Every error code the contract declares, collected straight off the root and every module
  * fragment's OWN file — never through `redocly bundle`, which only resolves `$ref` chains
@@ -354,8 +350,7 @@ const collectErrorCodes = (): Record<string, ErrorCodeEntry> => {
     const collected: Record<string, ErrorCodeEntry> = {};
 
     const collectFrom = (file: string, owner: string): void => {
-        // `yaml`'s YAML 1.2 loader; the `as` narrows its `any` to the one key read here.
-        const parsed = parseYaml(readFileSync(file, 'utf8')) as FragmentWithErrorCodes;
+        const parsed = readOpenApiFragment(file);
         for (const [code, entry] of Object.entries(parsed['x-error-codes'] ?? {})) {
             if (!isErrorCodeEntry(entry))
                 throw new Error(

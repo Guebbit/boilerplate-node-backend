@@ -23,9 +23,9 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { parse as parseYaml } from 'yaml';
 import { orderSections } from './section-order';
 import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
+import { readAuthorizationFragment } from './fragments';
 
 /** The root residual file: everything no module owns — preamble, `version`, `actions`, `scopes`, the closing note. */
 const ROOT_FILE = path.join(REPO_ROOT, 'shared', 'contracts', 'authorization-keys.root.yaml');
@@ -63,16 +63,6 @@ const PREFERRED_ORDER = [
     'observability'
 ];
 
-/** One key, as `authorization.yaml` and the root's `keys:` shape both declare it — only the field this bundler checks. */
-interface FragmentKey {
-    module: string;
-}
-
-/** A fragment's own `keys:` document — just enough shape to validate module attribution. */
-interface FragmentDocument {
-    keys: FragmentKey[];
-}
-
 /** A section's own fragment file, on disk. */
 const fragmentPath = (section: string): string =>
     section === 'core'
@@ -92,8 +82,7 @@ const fragmentKeysBlock = (section: string): string => {
     if (!existsSync(file)) throw new Error(`[authorization] missing fragment: ${file}`);
 
     const raw = readFileSync(file, 'utf8');
-    // `yaml`'s YAML 1.2 loader; the `as` narrows its `any` to the fragment's known shape.
-    const parsed = parseYaml(raw) as FragmentDocument;
+    const parsed = readAuthorizationFragment(file);
     const owner = section === 'core' ? 'core' : section;
     const misattributed = parsed.keys.filter((key) => key.module !== owner);
     if (misattributed.length > 0)

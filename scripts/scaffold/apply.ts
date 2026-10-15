@@ -8,21 +8,16 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { parse as parseYaml } from 'yaml';
 import type { ScaffoldOptions } from './options';
 import { collidingSchemas, planModule, type ScaffoldPlan } from './plan';
 import { centralEdits } from './central-edits';
 import type { FormatText } from './format-text';
 import { isRegistered } from './registry';
 import { modulesWith } from '../modules-on-disk';
+import { readModuleFragment } from '../contracts/fragments';
 
 /** Where the registry sits, relative to a repo root. */
 const REGISTRY = 'src/modules.ts';
-
-/** The shape this reader takes from a contract fragment: only its schema names. */
-interface FragmentShape {
-    components?: { schemas?: Record<string, unknown> };
-}
 
 /**
  * Every schema name any module's contract fragment declares.
@@ -31,13 +26,9 @@ interface FragmentShape {
  */
 const takenSchemaNames = (root: string): Set<string> => {
     const modules = path.join(root, 'src/modules');
-    const names = modulesWith(modules, 'openapi.yaml')
-        .map((folder) => path.join(modules, folder, 'openapi.yaml'))
-        .flatMap((file) => {
-            // `yaml`'s YAML 1.2 loader (`null` for an empty file); the `as` narrows its `any`.
-            const document = parseYaml(readFileSync(file, 'utf8')) as FragmentShape | null;
-            return Object.keys(document?.components?.schemas ?? {});
-        });
+    const names = modulesWith(modules, 'openapi.yaml').flatMap((folder) =>
+        Object.keys(readModuleFragment(modules, folder).components?.schemas ?? {})
+    );
     return new Set(names);
 };
 

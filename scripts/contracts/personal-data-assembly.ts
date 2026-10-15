@@ -21,6 +21,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { isMap, isSeq, parseDocument } from 'yaml';
+import { readModuleFragment } from './fragments';
 
 /** The module that owns the export endpoint, and with it the stub being completed. */
 export const EXPORT_OWNER = 'account';
@@ -38,17 +39,6 @@ export interface PersonalDataSection {
     required: boolean;
     /** The section's schema, with `$ref`s still relative to the declaring module's file. */
     schema: unknown;
-}
-
-/** What a fragment's `x-personal-data` entry looks like on disk. */
-interface DeclaredSection {
-    required?: boolean;
-    schema?: unknown;
-}
-
-/** A fragment, as far as this reader looks. */
-interface FragmentWithSections {
-    'x-personal-data'?: Record<string, DeclaredSection>;
 }
 
 /**
@@ -84,10 +74,8 @@ export const readPersonalDataSections = (
     modules: readonly string[]
 ): PersonalDataSection[] =>
     modules.flatMap((module) => {
-        const file = path.join(modulesRoot, module, 'openapi.yaml');
-        if (!existsSync(file)) return [];
-        // `yaml`: `parseDocument(...).toJS()` yields plain objects; the cast names the one key read.
-        const parsed = parseDocument(readFileSync(file, 'utf8')).toJS() as FragmentWithSections;
+        if (!existsSync(path.join(modulesRoot, module, 'openapi.yaml'))) return [];
+        const parsed = readModuleFragment(modulesRoot, module);
 
         return Object.entries(parsed['x-personal-data'] ?? {}).map(([key, declared]) => ({
             module,

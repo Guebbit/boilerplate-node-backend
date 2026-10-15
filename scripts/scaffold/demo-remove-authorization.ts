@@ -12,11 +12,11 @@
  * a re-stringify would re-wrap every description.
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { parse as parseYaml } from 'yaml';
 import type { RemovalNote } from './demo-remove-registry';
 import { modulesWith } from '../modules-on-disk';
+import { readAuthorizationFragment } from '../contracts/fragments';
 
 /** What a set of removed modules declared: their permission keys, and the CASL subjects only they used. */
 export interface RemovedAuthorization {
@@ -25,16 +25,6 @@ export interface RemovedAuthorization {
     /** Subjects no surviving fragment (or the core one) still declares. */
     subjects: ReadonlySet<string>;
 }
-
-/** One key's fields this step reads. */
-interface FragmentKey {
-    key: string;
-    subject: string;
-}
-
-/** Keys and subjects one `authorization.yaml`-shaped file declares, or none when it is absent. */
-const readFragment = (file: string): FragmentKey[] =>
-    existsSync(file) ? (parseYaml(readFileSync(file, 'utf8')) as { keys: FragmentKey[] }).keys : [];
 
 /**
  * Read what the modules about to be removed declare, while their folders still exist.
@@ -49,11 +39,11 @@ export const readRemovedAuthorization = (
     const fragmentOf = (name: string): string => path.join(modulesRoot, name, 'authorization.yaml');
     const survivors = modulesWith(modulesRoot, 'authorization.yaml')
         .filter((name) => !names.includes(name))
-        .flatMap((name) => readFragment(fragmentOf(name)));
-    const core = readFragment(
+        .flatMap((name) => readAuthorizationFragment(fragmentOf(name)).keys);
+    const core = readAuthorizationFragment(
         path.join(repoRoot, 'shared', 'contracts', 'authorization-keys.core.yaml')
-    );
-    const removed = names.flatMap((name) => readFragment(fragmentOf(name)));
+    ).keys;
+    const removed = names.flatMap((name) => readAuthorizationFragment(fragmentOf(name)).keys);
 
     const stillUsed = new Set([...survivors, ...core].map((entry) => entry.subject));
     return {
