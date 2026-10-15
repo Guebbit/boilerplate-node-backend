@@ -9,13 +9,10 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import path from 'node:path';
 import { applyScaffold } from './apply';
 import { formatWithRepoConfig } from './format-text';
 import { isRefusal, parseArguments, USAGE } from './options';
-
-/** Repo root, two levels up from `scripts/scaffold/`. */
-const REPO_ROOT = path.resolve(__dirname, '..', '..');
+import { REPO_ROOT } from '../modules-on-disk';
 
 /** The decisions the scaffolder cannot make for the author, printed after a successful run. */
 const OPEN_DECISIONS = [

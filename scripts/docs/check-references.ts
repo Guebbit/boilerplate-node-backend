@@ -40,7 +40,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from '../pairing/paired-frontend-path';
 import {
-    ROOT,
     ALLOWED,
     allowed,
     NOT_A_PATH,
@@ -51,6 +50,7 @@ import {
     throughAliases,
     gitEnvironment
 } from './repo-references';
+import { REPO_ROOT as ROOT } from '../modules-on-disk';
 
 /** The paired repo, addressed in prose by the directory it actually sits in. */
 const PEER_DIRECTORY = path.basename(DEFAULT_FRONTEND_PATH);

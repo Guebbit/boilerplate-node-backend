@@ -14,7 +14,6 @@
  * imports a removed module goes too (`demo-remove-tests.ts`), and the report lists each one.
  */
 
-import path from 'node:path';
 import { readDemoModuleNames } from '../testing/demo-module-names';
 import { removeModules } from './demo-remove-modules';
 import type { RemovalNote } from './demo-remove-registry';
@@ -27,9 +26,7 @@ import {
     stripSubjects,
     stripDemoJobs
 } from './demo-remove-scenarios';
-
-/** Repo root, two levels up from `scripts/scaffold/`. */
-const REPO_ROOT = path.resolve(__dirname, '..', '..');
+import { REPO_ROOT } from '../modules-on-disk';
 
 /** Print every step's own report line. */
 const report = (notes: readonly RemovalNote[]): void => {

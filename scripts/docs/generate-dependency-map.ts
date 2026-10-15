@@ -27,12 +27,10 @@ import {
     type DependencyGroup
 } from './dependency-groups';
 import { applyMarkerBlocks } from './marker-block';
+import { REPO_ROOT as ROOT } from '../modules-on-disk';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
 const checkOnly = process.argv.includes('--check');
-
-/** Repo root, two levels up from `scripts/docs/`. */
-const ROOT = path.join(__dirname, '..', '..');
 
 /** The page both generated blocks live in. */
 const PAGE = path.join(ROOT, 'docs', 'tools', 'package-dependencies.md');

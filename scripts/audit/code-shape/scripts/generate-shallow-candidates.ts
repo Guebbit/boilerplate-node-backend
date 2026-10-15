@@ -10,8 +10,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
-import { REPO_ROOT } from '../../../git-base';
+
 import { findShallowCandidates } from './shallow-candidates';
+import { REPO_ROOT } from '../../../modules-on-disk';
 
 /** Scanned when no path is given: the code that ships or builds what ships. */
 const DEFAULT_SCOPE = ['src', 'scripts', 'scenarios'];

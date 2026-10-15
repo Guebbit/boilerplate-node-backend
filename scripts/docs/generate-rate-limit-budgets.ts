@@ -17,12 +17,10 @@ import { resolveRateLimits } from '@kernel/registry';
 import { INFRASTRUCTURE_RATE_LIMITS } from '@infrastructure/http/middlewares/rate-limit';
 import { applyMarkerBlocks } from './marker-block';
 import type { RateLimitBudget } from '@types';
+import { REPO_ROOT as ROOT } from '../modules-on-disk';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
 const checkOnly = process.argv.includes('--check');
-
-/** Repo root, two levels up from `scripts/docs/`. */
-const ROOT = path.join(__dirname, '../..');
 
 /** The page the table lives in. */
 const PAGE = path.join(ROOT, 'docs/tools/security.md');

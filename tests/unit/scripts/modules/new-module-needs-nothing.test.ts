@@ -23,8 +23,9 @@ import {
     frontendCounterparts,
     readAllModuleDescriptors
 } from '../../../../scripts/docs/module-descriptor';
-import { REPO_ROOT } from '../../../../scripts/contracts/bundle-kinds';
+
 import { routedModulesOf } from '@tests/routes';
+import { REPO_ROOT } from '../../../../scripts/modules-on-disk';
 
 /** The scratch repo root every case reads. */
 let scratch = '';

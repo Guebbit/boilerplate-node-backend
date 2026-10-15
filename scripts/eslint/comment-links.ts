@@ -25,12 +25,12 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { ESLintUtils } from '@typescript-eslint/utils';
 import {
-    ROOT,
     allowed as allowedPathPrefix,
     trackedTargets,
     resolves,
     claimsAPath
 } from '../../scripts/docs/repo-references';
+import { REPO_ROOT as ROOT } from '../modules-on-disk';
 
 /** Anything that looks like a URL. Blanked before scanning, so their paths are never matched. */
 const URL_LIKE = /\w+:\/\/\S+|\bwww\.\S+/g;

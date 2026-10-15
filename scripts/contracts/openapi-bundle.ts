@@ -23,24 +23,17 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import {
-    copyFileSync,
-    existsSync,
-    mkdirSync,
-    readdirSync,
-    readFileSync,
-    rmSync,
-    writeFileSync
-} from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import path from 'node:path';
-import { REPO_ROOT, type CompiledBundle } from './bundle-kinds';
+import { type CompiledBundle } from './bundle-kinds';
 import { orderSections } from './section-order';
 import { assembleRoot, readModuleFragments } from './root-assembly';
 import { withBrowserEvents } from './analytics-browser-events';
 import { withCookieAuth } from './cookie-auth';
 import { stageExportSchema } from './personal-data-assembly';
 import { pruneUnused } from './prune-unused';
+import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
 
 /**
  * The narrative order the contract has always had — what a caller meets first, then the path a
@@ -73,18 +66,11 @@ const MODULE_ORDER: readonly string[] = [
     'api-keys'
 ];
 
-/** The real `src/modules` directory. */
-const MODULES_ROOT = path.join(REPO_ROOT, 'src', 'modules');
-
 /** A module folder's name. */
 type ModuleSection = string;
 
 /** Every module folder that ships its own standalone `openapi.yaml`, discovered from disk. */
-const modulesWithOpenapi = (): string[] =>
-    readdirSync(path.join(REPO_ROOT, 'src', 'modules'), { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .filter((name) => existsSync(path.join(REPO_ROOT, 'src', 'modules', name, 'openapi.yaml')));
+const modulesWithOpenapi = (): string[] => modulesWith(MODULES_ROOT, 'openapi.yaml');
 
 /** The modules contributing a standalone document, in the order the contract is assembled in. */
 export const MODULE_SECTIONS: readonly ModuleSection[] = orderSections(

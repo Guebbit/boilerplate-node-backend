@@ -12,14 +12,15 @@
 import { existsSync, readdirSync, readFileSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import type { RemovalNote } from './demo-remove-registry';
+import { modulesWith } from '../modules-on-disk';
 
 /** Where tests live: the system-level tree, and each surviving module's own `tests/` folder. */
 const testRoots = (repoRoot: string): string[] => {
     const modulesDirectory = path.join(repoRoot, 'src', 'modules');
     const moduleTests = existsSync(modulesDirectory)
-        ? readdirSync(modulesDirectory, { withFileTypes: true })
-              .filter((entry) => entry.isDirectory())
-              .map((entry) => path.join(modulesDirectory, entry.name, 'tests'))
+        ? modulesWith(modulesDirectory, 'tests').map((name) =>
+              path.join(modulesDirectory, name, 'tests')
+          )
         : [];
     return [path.join(repoRoot, 'tests'), ...moduleTests].filter((root) => existsSync(root));
 };

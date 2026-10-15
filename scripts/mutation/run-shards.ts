@@ -36,7 +36,8 @@ import { BASELINE_PATH, REPORT_PATH } from './baseline';
 import { selectShards } from './local-policy';
 import { scopeWithLines } from './mutate-scope';
 import { TARGET_LINES_PER_SHARD, packIntoShards } from './sharding';
-import { REPO_ROOT, runStryker } from './stryker-run';
+import { runStryker } from './stryker-run';
+import { REPO_ROOT } from '../modules-on-disk';
 
 /** Where each shard's report is kept between evenings. Under `tmp/`, so it is gitignored. */
 const SHARD_ROOT = path.join(REPO_ROOT, 'tmp', 'reports', 'mutation-shards');

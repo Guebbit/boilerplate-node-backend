@@ -21,13 +21,11 @@
  * See: docs/api/contract-fragmentation.md, docs/theory/authorization.md
  */
 
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { orderSections } from './section-order';
-
-/** Repo root, from `scripts/contracts/`. */
-const REPO_ROOT = path.resolve(__dirname, '..', '..');
+import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
 
 /** The root residual file: everything no module owns — preamble, `version`, `actions`, `scopes`, the closing note. */
 const ROOT_FILE = path.join(REPO_ROOT, 'shared', 'contracts', 'authorization-keys.root.yaml');
@@ -109,15 +107,7 @@ const fragmentKeysBlock = (section: string): string => {
 };
 
 /** Every section that has a fragment on disk: each module folder carrying an `authorization.yaml`, plus `core`. */
-const sectionsOnDisk = (): string[] => [
-    ...readdirSync(path.join(REPO_ROOT, 'src', 'modules'), { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .filter((name) =>
-            existsSync(path.join(REPO_ROOT, 'src', 'modules', name, 'authorization.yaml'))
-        ),
-    'core'
-];
+const sectionsOnDisk = (): string[] => [...modulesWith(MODULES_ROOT, 'authorization.yaml'), 'core'];
 
 /**
  * Assemble the bundle from the root file plus every fragment that exists, in `PREFERRED_ORDER`, extras appended.

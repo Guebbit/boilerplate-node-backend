@@ -22,7 +22,7 @@ import { openapiBundle } from './openapi-bundle';
 import { asyncapiBundle, asyncapiPublicBundle } from './asyncapi-bundles';
 import type { CollectionTool } from '@guebbit/openapi-runnable-collections';
 import path from 'node:path';
-import { REPO_ROOT } from './bundle-kinds';
+import { REPO_ROOT } from '../modules-on-disk';
 
 /**
  * One tool's collection as a generated bundle entry; its content loads on demand.

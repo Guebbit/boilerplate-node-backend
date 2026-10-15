@@ -6,10 +6,11 @@
  * know about.
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
+import { modulesWith } from '../modules-on-disk';
 
 /**
  * How a module's screen pairs with the paired frontend, when it is not simply "a frontend module of
@@ -71,15 +72,10 @@ export const readModuleDescriptor = (descriptorPath: string): ModuleDescriptor =
  */
 export const readAllModuleDescriptors = (modulesRoot: string): Record<string, ModuleDescriptor> =>
     Object.fromEntries(
-        readdirSync(modulesRoot, { withFileTypes: true })
-            .filter((entry) => entry.isDirectory())
-            .map((entry) => entry.name)
-            .filter((name) => existsSync(path.join(modulesRoot, name, 'module.yaml')))
-            .toSorted()
-            .map((name) => [
-                name,
-                readModuleDescriptor(path.join(modulesRoot, name, 'module.yaml'))
-            ])
+        modulesWith(modulesRoot, 'module.yaml').map((name) => [
+            name,
+            readModuleDescriptor(path.join(modulesRoot, name, 'module.yaml'))
+        ])
     );
 
 /**

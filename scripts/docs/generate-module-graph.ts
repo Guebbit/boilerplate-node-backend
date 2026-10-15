@@ -28,19 +28,16 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { readModuleDescriptor } from './module-descriptor';
+import { readAllModuleDescriptors, type ModuleDescriptor } from './module-descriptor';
 import { applyMarkerBlocks } from './marker-block';
 import { readCatalogue, renderModuleList } from './module-catalogue';
+import { MODULES_ROOT, REPO_ROOT as ROOT } from '../modules-on-disk';
 
 const checkOnly = process.argv.includes('--check');
 
-/** The repo root, two levels up from `scripts/docs/`. */
-const ROOT = path.join(__dirname, '..', '..');
-
 /** Every module folder under `src/modules`. */
-const MODULES_ROOT = path.join(ROOT, 'src', 'modules');
 
 /** The index page carrying the whole-repo graph; each module page is found from its own name. */
 const PAGE = path.join(ROOT, 'docs', 'modules', 'index.md');
@@ -73,15 +70,11 @@ interface Target {
  * module, not in this script. A module folder with no descriptor is left out entirely rather than
  * guessed at, so a forgotten `module.yaml` is missing from the map instead of silently mislabelled.
  */
-const SUBDOMAIN: Readonly<Record<string, 'core' | 'supporting' | 'generic'>> = Object.fromEntries(
-    readdirSync(MODULES_ROOT, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .flatMap((name) => {
-            const descriptorPath = path.join(MODULES_ROOT, name, 'module.yaml');
-            if (!existsSync(descriptorPath)) return [];
-            return [[name, readModuleDescriptor(descriptorPath).subdomain]];
-        })
+const DESCRIPTORS = readAllModuleDescriptors(MODULES_ROOT);
+
+/** Each module's subdomain, from {@link DESCRIPTORS}. */
+const SUBDOMAIN: Readonly<Record<string, ModuleDescriptor['subdomain']>> = Object.fromEntries(
+    Object.entries(DESCRIPTORS).map(([name, descriptor]) => [name, descriptor.subdomain])
 );
 
 /** Every module -> module edge dependency-cruiser can see, read off its collapsed mermaid output. */
@@ -317,8 +310,7 @@ const applyTarget = ({ file, start, end, body }: Target): Promise<number> =>
  * none: it exists to be copied, and `docs/theory/modules.md#the-module-template` is where it is
  * explained, so a neighbourhood block has nowhere to go.
  */
-const hasModulePage = (name: string): boolean =>
-    readModuleDescriptor(path.join(MODULES_ROOT, name, 'module.yaml')).group !== 'example';
+const hasModulePage = (name: string): boolean => DESCRIPTORS[name].group !== 'example';
 
 /** Every block this script owns: the index map, then one neighbourhood per module page. */
 const targets = (): Target[] => {

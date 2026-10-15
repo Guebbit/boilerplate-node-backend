@@ -22,8 +22,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { DiffOutputItem } from '@asyncapi/diff';
 import { Parser } from '@asyncapi/parser';
-import { REPO_ROOT, mergeBase } from '../git-base';
+import { mergeBase } from '../git-base';
 import { breakingChanges } from './asyncapi-breaking';
+import { REPO_ROOT } from '../modules-on-disk';
 
 /** The only bundle this gate cares about: the one a webhook subscriber actually reads. */
 const BUNDLE = 'asyncapi.public.yaml';

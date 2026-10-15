@@ -1,10 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import path from 'node:path';
-
-/**
- * The repo root — every git call below runs from here, not from the caller's cwd.
- */
-export const REPO_ROOT = path.join(__dirname, '..');
+import { REPO_ROOT } from './modules-on-disk';
 
 /**
  * `process.env`, minus the three vars git exports into every hook it runs

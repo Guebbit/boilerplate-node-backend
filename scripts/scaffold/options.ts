@@ -5,6 +5,7 @@
  */
 
 import { isValidEntityName, isValidModuleName } from './names';
+import type { ModuleDescriptor } from '../docs/module-descriptor';
 
 /** Everything a caller may decide when scaffolding a module. */
 export interface ScaffoldOptions {
@@ -13,7 +14,7 @@ export interface ScaffoldOptions {
     /** Explicit record type name, when the naive singular of `name` is wrong. */
     entity?: string;
     /** `foundation` survives `demo:remove`; `shop` is the demo shop's own. */
-    group: 'foundation' | 'shop';
+    group: Exclude<ModuleDescriptor['group'], 'example'>;
     /** One sentence for the docs index. */
     summary: string;
     /** Emit an `audit.ts` and record actions (default), or declare `noAudit` in `module.yaml`. */

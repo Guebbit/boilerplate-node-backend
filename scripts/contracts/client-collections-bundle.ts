@@ -27,7 +27,6 @@
  * See: docs/api/contract-fragmentation.md#the-client-collections-generated
  */
 
-import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import {
     generateCollections,
@@ -39,9 +38,10 @@ import {
     type Section,
     type ValueSources
 } from '@guebbit/openapi-runnable-collections';
-import { REPO_ROOT } from './bundle-kinds';
+
 import { SECTION_ORDER, sectionPaths } from './openapi-bundle';
 import { SEED_PRODUCT_IDS, SUBJECTS } from '../../scenarios/subjects';
+import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
 
 /**
  * What a generated request puts where an ORDER id belongs.
@@ -169,14 +169,8 @@ const values: ValueSources = {
  * Every module folder that has written a `probes.ts`, discovered rather than listed.
  * @param modulesRoot - the `src/modules` directory (the real one, or a scratch tree)
  */
-export const modulesDeclaringProbes = (
-    modulesRoot: string = path.join(REPO_ROOT, 'src', 'modules')
-): string[] =>
-    readdirSync(modulesRoot, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .filter((name) => existsSync(path.join(modulesRoot, name, 'probes.ts')))
-        .toSorted();
+export const modulesDeclaringProbes = (modulesRoot: string = MODULES_ROOT): string[] =>
+    modulesWith(modulesRoot, 'probes.ts');
 
 /** Narrows a loaded `probes.ts` to the one export the generator reads. */
 const hasProbes = (loaded: unknown): loaded is { probes: Probe[] } =>

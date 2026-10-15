@@ -6,7 +6,7 @@
  * can point it at a scratch directory.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { ScaffoldOptions } from './options';
@@ -14,6 +14,7 @@ import { collidingSchemas, planModule, type ScaffoldPlan } from './plan';
 import { centralEdits } from './central-edits';
 import type { FormatText } from './format-text';
 import { isRegistered } from './registry';
+import { modulesWith } from '../modules-on-disk';
 
 /** Where the registry sits, relative to a repo root. */
 const REGISTRY = 'src/modules.ts';
@@ -30,9 +31,8 @@ interface FragmentShape {
  */
 const takenSchemaNames = (root: string): Set<string> => {
     const modules = path.join(root, 'src/modules');
-    const names = readdirSync(modules)
+    const names = modulesWith(modules, 'openapi.yaml')
         .map((folder) => path.join(modules, folder, 'openapi.yaml'))
-        .filter((file) => existsSync(file))
         .flatMap((file) => {
             // `yaml`'s YAML 1.2 loader (`null` for an empty file); the `as` narrows its `any`.
             const document = parseYaml(readFileSync(file, 'utf8')) as FragmentShape | null;

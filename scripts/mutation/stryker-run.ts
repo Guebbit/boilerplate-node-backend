@@ -14,9 +14,7 @@ import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { availableMemoryMb, environmentKnob } from '../testing/machine-budget';
-
-/** The repo root — the working directory every spawned jest inherits. */
-export const REPO_ROOT = path.resolve(__dirname, '..', '..');
+import { REPO_ROOT } from '../modules-on-disk';
 
 /**
  * Measured peak RSS of one Stryker/jest worker during a mutation run, rounded up —

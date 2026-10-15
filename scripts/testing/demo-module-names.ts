@@ -6,9 +6,8 @@
  * hand-kept list. A relabelled module changes both scripts without an edit to either.
  */
 
-import { readdirSync } from 'node:fs';
 import path from 'node:path';
-import { readModuleDescriptor } from '../docs/module-descriptor';
+import { readAllModuleDescriptors } from '../docs/module-descriptor';
 
 /** The `module.yaml` groups `demo:remove` deletes: everything but `foundation`. */
 const REMOVABLE_GROUPS: ReadonlySet<string> = new Set(['shop', 'example']);
@@ -22,12 +21,7 @@ const REMOVABLE_GROUPS: ReadonlySet<string> = new Set(['shop', 'example']);
  */
 export const readDemoModuleNames = (repoRoot: string): string[] => {
     const modulesRoot = path.join(repoRoot, 'src', 'modules');
-    return readdirSync(modulesRoot, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .filter((name) =>
-            REMOVABLE_GROUPS.has(
-                readModuleDescriptor(path.join(modulesRoot, name, 'module.yaml')).group
-            )
-        );
+    return Object.entries(readAllModuleDescriptors(modulesRoot))
+        .filter(([, descriptor]) => REMOVABLE_GROUPS.has(descriptor.group))
+        .map(([name]) => name);
 };

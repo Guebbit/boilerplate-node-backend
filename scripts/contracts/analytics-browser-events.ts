@@ -13,11 +13,12 @@
  * See: docs/api/contract-fragmentation.md#module-owned-browser-events
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { REPO_ROOT } from './bundle-kinds';
+
 import { orderSections } from './section-order';
+import { MODULES_ROOT, modulesWith } from '../modules-on-disk';
 
 /** The file name a module reporting browser events ships. */
 const FRAGMENT_FILE = 'openapi.browser-events.yaml';
@@ -45,13 +46,9 @@ const FRAGMENT_ORDER: readonly string[] = ['products'];
  * @returns absolute paths, in {@link FRAGMENT_ORDER} then alphabetically
  */
 export const browserEventFragments = (): string[] => {
-    const modulesDirectory = path.join(REPO_ROOT, 'src', 'modules');
-    const owners = readdirSync(modulesDirectory, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .filter((name) => existsSync(path.join(modulesDirectory, name, FRAGMENT_FILE)));
+    const owners = modulesWith(MODULES_ROOT, FRAGMENT_FILE);
     return orderSections(FRAGMENT_ORDER, owners).map((name) =>
-        path.join(modulesDirectory, name, FRAGMENT_FILE)
+        path.join(MODULES_ROOT, name, FRAGMENT_FILE)
     );
 };
 

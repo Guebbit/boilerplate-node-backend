@@ -12,10 +12,11 @@
  * a re-stringify would re-wrap every description.
  */
 
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { RemovalNote } from './demo-remove-registry';
+import { modulesWith } from '../modules-on-disk';
 
 /** What a set of removed modules declared: their permission keys, and the CASL subjects only they used. */
 export interface RemovedAuthorization {
@@ -46,9 +47,9 @@ export const readRemovedAuthorization = (
 ): RemovedAuthorization => {
     const modulesRoot = path.join(repoRoot, 'src', 'modules');
     const fragmentOf = (name: string): string => path.join(modulesRoot, name, 'authorization.yaml');
-    const survivors = readdirSync(modulesRoot, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory() && !names.includes(entry.name))
-        .flatMap((entry) => readFragment(fragmentOf(entry.name)));
+    const survivors = modulesWith(modulesRoot, 'authorization.yaml')
+        .filter((name) => !names.includes(name))
+        .flatMap((name) => readFragment(fragmentOf(name)));
     const core = readFragment(
         path.join(repoRoot, 'shared', 'contracts', 'authorization-keys.core.yaml')
     );

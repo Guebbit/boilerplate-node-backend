@@ -26,9 +26,9 @@ import {
     findBundle,
     isGenerated,
     readCommittedBundle,
-    REPO_ROOT,
     type ContractBundle
 } from './bundle-registry';
+import { REPO_ROOT } from '../modules-on-disk';
 
 /** CLI arguments after the script's own path. The trailing underscore avoids shadowing `arguments`. */
 const arguments_ = process.argv.slice(2);

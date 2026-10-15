@@ -13,11 +13,12 @@
  * See: docs/api/contract-fragmentation.md#module-owned-webhook-events
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseDocument, type Document } from 'yaml';
-import { REPO_ROOT } from './bundle-kinds';
+
 import { orderSections } from './section-order';
+import { MODULES_ROOT, modulesWith } from '../modules-on-disk';
 
 /** The AsyncAPI section the fragments merge into: the `webhooks` module's own. */
 const WEBHOOKS_SECTION = 'webhooks';
@@ -34,13 +35,9 @@ const FRAGMENT_ORDER: readonly string[] = ['orders', 'delivery', 'payments', 're
  * @returns absolute paths, in {@link FRAGMENT_ORDER} then alphabetically
  */
 export const webhookEventFragments = (): string[] => {
-    const modulesDirectory = path.join(REPO_ROOT, 'src', 'modules');
-    const owners = readdirSync(modulesDirectory, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .filter((name) => existsSync(path.join(modulesDirectory, name, FRAGMENT_FILE)));
+    const owners = modulesWith(MODULES_ROOT, FRAGMENT_FILE);
     return orderSections(FRAGMENT_ORDER, owners).map((name) =>
-        path.join(modulesDirectory, name, FRAGMENT_FILE)
+        path.join(MODULES_ROOT, name, FRAGMENT_FILE)
     );
 };
 

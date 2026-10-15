@@ -15,9 +15,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { minimatch } from 'minimatch';
-
-/** The repo root, from this file's own location — never the caller's cwd. */
-const REPO_ROOT = path.join(__dirname, '..', '..');
+import { REPO_ROOT } from '../modules-on-disk';
 
 /** `stryker.json`'s own shape, narrowed to the one field this module reads. */
 interface StrykerConfig {

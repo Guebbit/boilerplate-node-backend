@@ -15,9 +15,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { assembleScratchCopy, runIn } from './scratch-copy';
-
-/** Repo root, two levels up from `scripts/testing/`. */
-const REPO_ROOT = path.resolve(__dirname, '..', '..');
+import { REPO_ROOT } from '../modules-on-disk';
 
 /** Under the OS temp directory: `fs.cpSync` refuses a destination inside its own source. */
 const SCRATCH = path.join(os.tmpdir(), 'scaffold-measure');

@@ -21,16 +21,14 @@
  * against more than one distinct literal target.
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { coreAuditActions } from '@infrastructure/observability/audit';
 import { applyMarkerBlocks } from './marker-block';
+import { REPO_ROOT as ROOT, modulesWith } from '../modules-on-disk';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
 const checkOnly = process.argv.includes('--check');
-
-/** Repo root, two levels up from `scripts/docs/`. */
-const ROOT = path.join(__dirname, '..', '..');
 
 /** Every module folder under `src/modules`. */
 const MODULES_ROOT = path.join(ROOT, 'src', 'modules');
@@ -96,9 +94,8 @@ const collectDeclaredActions = async (): Promise<DeclaredAction[]> => {
     }));
 
     const moduleActions = await Promise.all(
-        readdirSync(MODULES_ROOT).map(async (moduleName) => {
+        modulesWith(MODULES_ROOT, 'audit.ts').map(async (moduleName) => {
             const file = path.join(MODULES_ROOT, moduleName, 'audit.ts');
-            if (!existsSync(file)) return [];
             const { varName, actions } = await readModuleActions(file);
             return Object.entries(actions).map(([key, value]) => ({
                 owner: moduleName,

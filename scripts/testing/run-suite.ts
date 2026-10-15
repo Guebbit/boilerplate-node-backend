@@ -29,7 +29,6 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process';
-import path from 'node:path';
 import {
     availableMemoryMb,
     clampShards,
@@ -41,9 +40,7 @@ import {
     shardTargetMb,
     workerCount
 } from './machine-budget';
-
-/** The repo root — the working directory every spawned jest inherits. */
-const REPO_ROOT = path.resolve(__dirname, '..', '..');
+import { REPO_ROOT } from '../modules-on-disk';
 
 /**
  * One test layer: the jest path patterns it matches, and whether its files may run side by side.

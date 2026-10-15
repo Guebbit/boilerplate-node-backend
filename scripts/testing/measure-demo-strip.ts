@@ -25,9 +25,7 @@ import path from 'node:path';
 import { removeModules } from '../scaffold/demo-remove-modules';
 import { readDemoModuleNames } from './demo-module-names';
 import { assembleScratchCopy, runIn } from './scratch-copy';
-
-/** Repo root, two levels up from `scripts/testing/`. */
-const REPO_ROOT = path.resolve(__dirname, '..', '..');
+import { REPO_ROOT } from '../modules-on-disk';
 
 /**
  * Where the scratch copy is assembled — under the OS temp directory, never under `REPO_ROOT`:

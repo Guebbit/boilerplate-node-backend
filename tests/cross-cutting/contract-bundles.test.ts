@@ -41,13 +41,13 @@ import {
     CONTRACT_BUNDLES,
     isGenerated,
     readCommittedBundle,
-    REPO_ROOT,
     type ContractBundle
 } from '../../scripts/contracts/bundle-registry';
 import { MODULE_SECTIONS, moduleSpec } from '../../scripts/contracts/openapi-bundle';
 import { allProbes } from '../../scripts/contracts/client-collections-bundle';
 import { SHARED_FILES } from '../../scripts/pairing/spec-identity';
 import { enabledModules } from '../../src/modules';
+import { REPO_ROOT } from '../../scripts/modules-on-disk';
 
 /** How many requests a collection's folders hold, whichever key that tool nests them under. */
 const counted = (groups: { items?: unknown[]; children?: unknown[] }[]): number =>

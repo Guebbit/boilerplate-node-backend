@@ -16,12 +16,13 @@
  * See: docs/api/contract-fragmentation.md#asyncapi-yaml-—-one-whole-document-per-section-merged
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { isMap, parseDocument, type Document } from 'yaml';
-import { REPO_ROOT, type ContractBundle } from './bundle-kinds';
+import { type ContractBundle } from './bundle-kinds';
 import { orderSections } from './section-order';
 import { webhookEventFragments, withWebhookEvents } from './asyncapi-webhook-events';
+import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
 
 /**
  * Who a section's channels are for.
@@ -50,13 +51,7 @@ type AsyncSectionName = string;
 const INTERNAL_SUFFIX = '-internal';
 
 /** Every module folder with a top-level `asyncapi.yaml` (never `.internal.yaml`), discovered from disk. */
-const modulesWithAsyncapi = (): string[] =>
-    readdirSync(path.join(REPO_ROOT, 'src', 'modules'), { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .filter((name) =>
-            existsSync(path.join(REPO_ROOT, 'src', 'modules', name, 'asyncapi.yaml'))
-        );
+const modulesWithAsyncapi = (): string[] => modulesWith(MODULES_ROOT, 'asyncapi.yaml');
 
 /** Which modules contribute a public section, in {@link MODULE_ASYNC_ORDER}'s order. */
 const resolveModuleAsyncSections = (): readonly ModuleAsyncSection[] =>
@@ -68,14 +63,9 @@ const resolveModuleAsyncSections = (): readonly ModuleAsyncSection[] =>
  * adding its own queue needs no change here. Sorted for a deterministic merge order.
  */
 const internalSections = (): AsyncSectionName[] =>
-    readdirSync(path.join(REPO_ROOT, 'src', 'modules'), { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .filter((name) =>
-            existsSync(path.join(REPO_ROOT, 'src', 'modules', name, 'asyncapi.internal.yaml'))
-        )
-        .toSorted()
-        .map((name): AsyncSectionName => `${name}${INTERNAL_SUFFIX}`);
+    modulesWith(MODULES_ROOT, 'asyncapi.internal.yaml').map(
+        (name): AsyncSectionName => `${name}${INTERNAL_SUFFIX}`
+    );
 
 /** The order sections are merged in, and therefore the order they appear in the output. */
 export const ASYNC_SECTION_ORDER: readonly AsyncSectionName[] = [

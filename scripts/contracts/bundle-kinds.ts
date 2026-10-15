@@ -19,10 +19,6 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import path from 'node:path';
-
-/** Repo root, from `scripts/contracts/`. */
-export const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 /** What every committed document declares, however it is produced. */
 interface BundleIdentity {

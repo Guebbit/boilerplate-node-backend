@@ -41,7 +41,8 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { runStryker } from './stryker-run';
 import { changedMutable, mutableFiles } from './mutate-scope';
-import { REPO_ROOT, mergeBase } from '../git-base';
+import { mergeBase } from '../git-base';
+import { REPO_ROOT } from '../modules-on-disk';
 
 /** The raw `--base=<ref>` argument, if given. */
 const baseArgument = process.argv.find((a) => a.startsWith('--base='));

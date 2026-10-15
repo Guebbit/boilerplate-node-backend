@@ -22,12 +22,10 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { REPO_ROOT as ROOT } from '../modules-on-disk';
 
 /** Report drift instead of rewriting the file — what `complete` runs. */
 const checkOnly = process.argv.includes('--check');
-
-/** Repo root, two levels up from `scripts/docker/`. */
-const ROOT = path.join(__dirname, '..', '..');
 
 /** The root `.dockerignore`, which this file is derived from. */
 const SOURCE = path.join(ROOT, '.dockerignore');

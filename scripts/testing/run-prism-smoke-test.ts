@@ -10,10 +10,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import path from 'node:path';
-
-/** The repo root — prism is spawned from here so it resolves `openapi.yaml`. */
-const REPO_ROOT = path.resolve(__dirname, '..', '..');
+import { REPO_ROOT } from '../modules-on-disk';
 
 /** Where the mock server listens. Overridable so a busy port doesn't fail the gate. */
 const PORT = Number(process.env.PRISM_PORT ?? 4010);

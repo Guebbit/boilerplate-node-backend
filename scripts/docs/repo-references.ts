@@ -15,11 +15,9 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { gitEnvironment } from '../git-base';
+import { REPO_ROOT as ROOT } from '../modules-on-disk';
 
 export { gitEnvironment } from '../git-base';
-
-/** The repo root, two levels up from `scripts/docs/`. */
-export const ROOT = path.join(__dirname, '..', '..');
 
 /**
  * Paths that legitimately do not exist in a clean checkout, each with the reason it is exempt.

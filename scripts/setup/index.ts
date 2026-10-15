@@ -30,9 +30,7 @@ import {
 import path from 'node:path';
 import { fillPlaceholders, readEnvironmentValue } from './environment-file';
 import { fillableKeys } from './required-keys';
-
-/** The repo root, two levels up from `scripts/setup/`. */
-const ROOT = path.join(__dirname, '..', '..');
+import { REPO_ROOT as ROOT } from '../modules-on-disk';
 
 /** The committed template `.env` is copied from. */
 const ENV_EXAMPLE = path.join(ROOT, '.env-example');
