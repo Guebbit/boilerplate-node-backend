@@ -6,7 +6,6 @@
  * one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
 
-import type { ClientSession } from 'mongoose';
 import type { FacetCount, Product } from '@types';
 import { productModel, applyProductTransform } from './model';
 import type { ProductDocument } from './model';
@@ -16,6 +15,11 @@ import {
     type Repository
 } from '@infrastructure/persistence/create-repository';
 import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
+import { imageWritebackFor } from '@infrastructure/persistence/image-writeback';
+import {
+    translatableColumnsOf,
+    type TranslatableColumns
+} from '@infrastructure/persistence/translatable-columns';
 
 /**
  * What a non-admin caller is allowed to see: published, not soft-deleted — spread into any filter;
@@ -42,13 +46,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
         productId: string,
         counters: { onHand: number; reserved: number }
     ) => Promise<void>;
-    writeTranslatedFields: (
-        productId: string,
-        fields: Record<string, string | null>,
-        session?: ClientSession
-    ) => Promise<void>;
-    markEdited: (productId: string, session?: ClientSession) => Promise<void>;
-    existsById: (productId: string) => Promise<boolean>;
+    translatable: TranslatableColumns;
     writebackImage: ImageWriteback;
 } = {
     ...createRepository<ProductDocument, Product>(productModel, {
@@ -151,64 +149,6 @@ export const productRepository: Repository<ProductDocument, Product> & {
             .then(() => undefined),
 
     /**
-     * The `locales` translation port's writeback — the `writeDerived` half of `TranslatableTarget`
-     * in `kernel/registry.ts`. Copies the fallback-locale row's fields onto this document's own
-     * columns, so a search or a listing never has to resolve a translation for the language the
-     * product's own row is already in. Same shape as {@link syncStockCache}: another module's
-     * derived write, narrowed to the fields it names, never an edit an admin made.
-     */
-    writeTranslatedFields: (
-        productId: string,
-        fields: Record<string, string | null>,
-        session?: ClientSession
-    ) =>
-        productModel
-            .updateOne(
-                { _id: toObjectId(productId) },
-                // A cleared field is an empty column: the product's own `description` has no
-                // "absent" state, only `''`.
-                {
-                    $set: Object.fromEntries(
-                        Object.entries(fields).map(([name, value]) => [name, value ?? ''])
-                    )
-                },
-                // `session` joins the caller's transaction; `undefined` stands alone.
-                { timestamps: false, session }
-            )
-            .exec()
-            .then(() => undefined),
-
-    /**
-     * The `locales` translation port's `markEdited` — a translation edit is an admin's edit, so the
-     * product's version (its ETag) moves even when no column on the document changed.
-     * Stamped by hand with `timestamps: false`, since Mongoose adds no `$set` to an empty update;
-     * the stamp is what the edit counter reads (`persistence/revision-plugin`), so it moves too.
-     *
-     * @param productId - the product whose translations were just written
-     * @param session - joins the translation rows' transaction; omitted, the write stands alone
-     */
-    markEdited: (productId: string, session?: ClientSession) =>
-        productModel
-            .updateOne(
-                { _id: toObjectId(productId) },
-                { $set: { updatedAt: new Date() } },
-                { timestamps: false, session }
-            )
-            .exec()
-            .then(() => undefined),
-
-    /**
-     * The `locales` translation port's existence check — the `exists` half of `TranslatableTarget`
-     * in `kernel/registry.ts`, checked before any translation write. `async` because `toObjectId`
-     * throws on a malformed id — see {@link findByIdScoped}.
-     *
-     * @param productId - the product's id
-     * @returns whether a product with this id exists, regardless of scope
-     */
-    existsById: async (productId: string) =>
-        (await productModel.exists({ _id: toObjectId(productId) }).exec()) !== null,
-
-    /**
      * The image digest pipeline's writeback for the `products` collection — see `ImageTarget` in
      * `kernel/registry.ts`. Conditional on `pendingImageKey` still matching `key`, so a stale or
      * duplicate job delivery cannot overwrite a later upload, and a hard-deleted product is a
@@ -216,25 +156,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
      *
      * `timestamps: false` — the digest finishing is not an edit an admin made.
      */
-    writebackImage: (documentId, key, urls) =>
-        productModel
-            .updateOne(
-                { _id: toObjectId(documentId), pendingImageKey: key },
-                {
-                    $set: { imageUrl: urls.imageUrl, thumbnailUrl: urls.thumbnailUrl },
-                    $unset: { pendingImageKey: '' }
-                },
-                { timestamps: false }
-            )
-            .exec()
-            .then(({ matchedCount }) =>
-                // A miss may be a duplicate run of this same job, whose twin already wrote these
-                // exact urls: that counts as held, or the caller deletes the live files.
-                matchedCount > 0
-                    ? true
-                    : productModel
-                          .exists({ _id: toObjectId(documentId), imageUrl: urls.imageUrl })
-                          .exec()
-                          .then((held) => held !== null)
-            )
+    translatable: translatableColumnsOf(productModel),
+
+    writebackImage: imageWritebackFor(productModel)
 };

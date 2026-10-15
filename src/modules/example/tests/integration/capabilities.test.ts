@@ -220,8 +220,8 @@ describe('the writes `locales` makes on this collection', () => {
         const owner = await createUser();
         const mine = await createExample({ userId: owner.id });
 
-        expect(await exampleRepository.existsById(String(mine._id))).toBe(true);
-        expect(await exampleRepository.existsById(MISSING_ID)).toBe(false);
+        expect(await exampleRepository.translatable.exists(String(mine._id))).toBe(true);
+        expect(await exampleRepository.translatable.exists(MISSING_ID)).toBe(false);
     });
 
     it('copies the fallback-language title onto the row without counting it as an edit', async () => {
@@ -229,7 +229,7 @@ describe('the writes `locales` makes on this collection', () => {
         const mine = await createExample({ userId: owner.id, title: 'Before' });
         const before = await fieldOf(String(mine._id), 'updatedAt');
 
-        await exampleRepository.writeTranslatedFields(String(mine._id), { title: 'After' });
+        await exampleRepository.translatable.writeDerived(String(mine._id), { title: 'After' });
 
         expect(await fieldOf(String(mine._id), 'title')).toBe('After');
         expect(await fieldOf(String(mine._id), 'updatedAt')).toEqual(before);
@@ -239,7 +239,7 @@ describe('the writes `locales` makes on this collection', () => {
         const owner = await createUser();
         const mine = await createExample({ userId: owner.id, title: 'Before' });
 
-        await exampleRepository.writeTranslatedFields(String(mine._id), { title: null });
+        await exampleRepository.translatable.writeDerived(String(mine._id), { title: null });
 
         expect(await fieldOf(String(mine._id), 'title')).toBe('');
     });
@@ -250,7 +250,7 @@ describe('the writes `locales` makes on this collection', () => {
         const before = await fieldOf(String(mine._id), 'updatedAt');
         await new Promise((resolve) => setTimeout(resolve, 5));
 
-        await exampleRepository.markEdited(String(mine._id));
+        await exampleRepository.translatable.markEdited(String(mine._id));
 
         const after = await fieldOf(String(mine._id), 'updatedAt');
         expect(after?.getTime()).toBeGreaterThan(before?.getTime() ?? Infinity);

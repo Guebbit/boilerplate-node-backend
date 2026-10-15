@@ -66,9 +66,7 @@ beforeAll(() => {
             collection: 'products',
             fields: ['title', 'description'],
             cacheTag: 'products',
-            exists: productRepository.existsById,
-            writeDerived: productRepository.writeTranslatedFields,
-            markEdited: productRepository.markEdited
+            ...productRepository.translatable
         }
     });
 });

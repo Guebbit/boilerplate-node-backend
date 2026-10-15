@@ -20,6 +20,11 @@ import {
     type Repository
 } from '@infrastructure/persistence/create-repository';
 import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
+import { imageWritebackFor } from '@infrastructure/persistence/image-writeback';
+import {
+    translatableColumnsOf,
+    type TranslatableColumns
+} from '@infrastructure/persistence/translatable-columns';
 
 /**
  * The repository, written out as a type: Mongoose's generics are too large for TypeScript to
@@ -28,13 +33,7 @@ import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
     findScoped: (id: string, scope: Record<string, unknown>) => Promise<ExampleDocument | null>;
     deleteAllOf: (userId: string, session: ClientSession) => Promise<string[]>;
-    existsById: (id: string) => Promise<boolean>;
-    writeTranslatedFields: (
-        id: string,
-        fields: Record<string, string | null>,
-        session?: ClientSession
-    ) => Promise<void>;
-    markEdited: (id: string, session?: ClientSession) => Promise<void>;
+    translatable: TranslatableColumns;
     publishFrom: (
         id: string,
         before: ExampleDocument['status'],
@@ -86,54 +85,6 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
             ),
 
     /**
-     * The `locales` port's existence check — see `TranslatableTarget.exists`.
-     *
-     * @param id - the id as it arrived on the path
-     */
-    existsById: async (id) => (await exampleModel.exists({ _id: toObjectId(id) }).exec()) !== null,
-
-    /**
-     * The `locales` port's writeback: copies the fallback-language title onto this document's own
-     * column, so a list never resolves a translation for the language the row is already in.
-     * `timestamps: false`: a derived copy is not an edit the owner made.
-     *
-     * @param id - the example
-     * @param fields - the fallback locale's fields; `null` clears one
-     */
-    writeTranslatedFields: (id, fields, session) =>
-        exampleModel
-            .updateOne(
-                { _id: toObjectId(id) },
-                {
-                    $set: Object.fromEntries(
-                        Object.entries(fields).map(([key, value]) => [key, value ?? ''])
-                    )
-                },
-                // `session` joins the caller's transaction; `undefined` stands alone.
-                { timestamps: false, session }
-            )
-            .exec()
-            .then(() => undefined),
-
-    /**
-     * The `locales` port's `markEdited`: a translation edit is an edit, so the version (the ETag)
-     * moves even when no column changed. The hand-written `updatedAt` stamp is what the edit
-     * counter reads (`persistence/revision-plugin`).
-     *
-     * @param id - the example whose translations were just written
-     * @param session - joins the translation rows' transaction; omitted, the write stands alone
-     */
-    markEdited: (id, session) =>
-        exampleModel
-            .updateOne(
-                { _id: toObjectId(id) },
-                { $set: { updatedAt: new Date() } },
-                { timestamps: false, session }
-            )
-            .exec()
-            .then(() => undefined),
-
-    /**
      * Move an example into published, but only while it still holds the status the caller read.
      * Two requests publishing one draft both read `draft`; only one write matches, so only one
      * of them announces.
@@ -159,25 +110,7 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
      * The image pipeline's writeback — see `ImageTarget.writeback`. Matches on the pending key, so
      * a stale or repeated job changes nothing.
      */
-    writebackImage: (documentId, key, urls) =>
-        exampleModel
-            .updateOne(
-                { _id: toObjectId(documentId), pendingImageKey: key },
-                {
-                    $set: { imageUrl: urls.imageUrl, thumbnailUrl: urls.thumbnailUrl },
-                    $unset: { pendingImageKey: '' }
-                },
-                { timestamps: false }
-            )
-            .exec()
-            .then(({ matchedCount }) =>
-                // A miss may be a repeat of the same job whose twin already wrote these urls: that
-                // counts as held, or the caller deletes the live files.
-                matchedCount > 0
-                    ? true
-                    : exampleModel
-                          .exists({ _id: toObjectId(documentId), imageUrl: urls.imageUrl })
-                          .exec()
-                          .then((held) => held !== null)
-            )
+    translatable: translatableColumnsOf(exampleModel),
+
+    writebackImage: imageWritebackFor(exampleModel)
 };

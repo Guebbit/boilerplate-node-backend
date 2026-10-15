@@ -33,6 +33,7 @@ import {
     type Repository
 } from '@infrastructure/persistence/create-repository';
 import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
+import { imageWritebackFor } from '@infrastructure/persistence/image-writeback';
 
 /**
  * `password`, the 2FA secret fields, `reauthCode`, `oauthAccounts` and `pendingEmail` are
@@ -611,27 +612,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * detectable miss rather than a write to nothing. `timestamps: false` — the digest finishing
      * isn't an edit the account holder made.
      */
-    writebackImage: (documentId, key, urls) =>
-        userModel
-            .updateOne(
-                { _id: toObjectId(documentId), pendingImageKey: key },
-                {
-                    $set: { imageUrl: urls.imageUrl, thumbnailUrl: urls.thumbnailUrl },
-                    $unset: { pendingImageKey: '' }
-                },
-                { timestamps: false }
-            )
-            .exec()
-            .then(({ matchedCount }) =>
-                // A miss may be a duplicate run of this same job, whose twin already wrote these
-                // exact urls: that counts as held, or the caller deletes the live files.
-                matchedCount > 0
-                    ? true
-                    : userModel
-                          .exists({ _id: toObjectId(documentId), imageUrl: urls.imageUrl })
-                          .exec()
-                          .then((held) => held !== null)
-            ),
+    writebackImage: imageWritebackFor(userModel),
 
     /**
      * Stamp the account's `lastActiveAt`, at most once a day: the filter matches only an account

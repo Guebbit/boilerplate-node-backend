@@ -66,9 +66,7 @@ export default {
             collection: 'examples',
             fields: ['title'],
             cacheTag: 'examples',
-            exists: exampleRepository.existsById,
-            writeDerived: exampleRepository.writeTranslatedFields,
-            markEdited: exampleRepository.markEdited
+            ...exampleRepository.translatable
         }
     },
     // An export lists the person's examples; an erasure deletes them, inside its transaction.
