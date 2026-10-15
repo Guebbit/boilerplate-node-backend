@@ -6,7 +6,17 @@
  * the public directory (a disk, or a mounted volume). So the EXDEV fallback is not a defensive
  * branch for an exotic host — on a normal Linux deployment it is the only branch that ever runs.
  */
-import { mkdir, mkdtemp, readFile, rm, symlink, unlink, utimes, writeFile } from 'node:fs/promises';
+import {
+    mkdir,
+    mkdtemp,
+    readdir,
+    readFile,
+    rm,
+    symlink,
+    unlink,
+    utimes,
+    writeFile
+} from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -25,6 +35,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
     await rm(root, { recursive: true, force: true });
+    // A `doMock` outlives `resetModules`; later describes need the real filesystem.
+    jest.dontMock('node:fs/promises');
     jest.resetModules();
 });
 
@@ -239,5 +251,43 @@ describe('pruneUnreferenced', () => {
 
         expect(result).toEqual({ checked: 1, reaped: 0 });
         expect(existsSync(kept)).toBe(true);
+    });
+});
+
+describe('writeFileAtomically', () => {
+    it('puts the written bytes at the target and leaves no temporary file', async () => {
+        const { writeFileAtomically } = await import('@infrastructure/adapters/filesystem');
+        const target = path.join(root, 'final.bin');
+
+        await writeFileAtomically(target, (temporary) => writeFile(temporary, 'whole'));
+
+        expect(await readFile(target, 'utf8')).toBe('whole');
+        expect(await readdir(root)).toEqual(['final.bin']);
+    });
+
+    it('keeps the previous file whole and removes its temporary file when the write fails', async () => {
+        const { writeFileAtomically } = await import('@infrastructure/adapters/filesystem');
+        const target = await stage('final.bin', 'previous');
+
+        await expect(
+            writeFileAtomically(target, (temporary) =>
+                writeFile(temporary, 'half').then(() => {
+                    throw new Error('disk full');
+                })
+            )
+        ).rejects.toThrow('disk full');
+
+        expect(await readFile(target, 'utf8')).toBe('previous');
+        expect(await readdir(root)).toEqual(['final.bin']);
+    });
+
+    it('rethrows the write error even when it never created its temporary file', async () => {
+        const { writeFileAtomically } = await import('@infrastructure/adapters/filesystem');
+
+        await expect(
+            writeFileAtomically(path.join(root, 'final.bin'), () =>
+                Promise.reject(new Error('refused'))
+            )
+        ).rejects.toThrow('refused');
     });
 });

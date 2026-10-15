@@ -17,9 +17,8 @@
  */
 
 import path from 'node:path';
-import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { reapDirectory, unlinkIfPresent, type ReapResult } from './filesystem';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { reapDirectory, writeFileAtomically, type ReapResult } from './filesystem';
 import { pdfConfig } from '@infrastructure/adapters/config';
 
 /** Where stored documents live. Mount a volume here in a deployment; the default is dev-only. */
@@ -73,19 +72,9 @@ export const writeDocument = (name: string, bytes: Buffer | Uint8Array): Promise
     const target = resolveName(name);
     if (!target) return Promise.reject(new Error(`Not a storable document name: ${name}`));
 
-    // Random suffix, so two simultaneous first downloads write their own temp file.
-    const temporary = `${target}.${randomBytes(6).toString('hex')}.tmp`;
-    return mkdir(documentRoot(), { recursive: true })
-        .then(() => writeFile(temporary, bytes))
-        .then(() => rename(temporary, target))
-        .catch((error: unknown) =>
-            // A failed write must not leave its temporary file behind.
-            unlinkIfPresent(temporary, 'Could not remove a temporary document.', { name }).then(
-                () => {
-                    throw error;
-                }
-            )
-        );
+    return mkdir(documentRoot(), { recursive: true }).then(() =>
+        writeFileAtomically(target, (temporary) => writeFile(temporary, bytes))
+    );
 };
 
 /**

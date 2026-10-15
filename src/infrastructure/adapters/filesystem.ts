@@ -1,11 +1,12 @@
 /**
  * @module
- * Filesystem helpers: a move that works across mounts, a delete that never throws, and an
+ * Filesystem helpers: a move that works across mounts, a delete that never throws, an atomic write, and an
  * age-based sweep of a flat directory. Kept small and dependency-light so every other adapter
  * that touches disk builds on these instead of re-deriving the EXDEV fallback, the
  * log-and-swallow pattern, or the `readdir`/`stat`/`unlink` sweep on its own.
  */
 
+import { randomBytes } from 'node:crypto';
 import { copyFile, readdir, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 // Shared toolkit helper: unlinks a file and routes any error to the callback instead of
@@ -86,6 +87,33 @@ export const unlinkIfPresent = (
             return false;
         }
     );
+
+/**
+ * Write a file so a reader sees either no file or a whole one, never half of one: the bytes go to
+ * a sibling temporary file, which is renamed over `target` (atomic within one directory on POSIX).
+ * A failed write removes its temporary file and rethrows.
+ *
+ * @param target - the final path; its directory must exist
+ * @param write - fills the temporary path it is given, however the caller produces the bytes
+ * @throws {Error} whatever `write` or the rename threw
+ */
+export const writeFileAtomically = (
+    target: string,
+    write: (temporary: string) => Promise<void>
+): Promise<void> => {
+    // Random suffix, so two simultaneous writers of one name never share a temporary file.
+    const temporary = `${target}.${randomBytes(6).toString('hex')}.tmp`;
+
+    return write(temporary)
+        .then(() => rename(temporary, target))
+        .catch((error: unknown) =>
+            unlinkIfPresent(temporary, 'Could not remove a temporary file.', {
+                file: path.basename(target)
+            }).then(() => {
+                throw error;
+            })
+        );
+};
 
 /**
  * Rewrite a filesystem path as a URL path: every backslash becomes a forward slash.

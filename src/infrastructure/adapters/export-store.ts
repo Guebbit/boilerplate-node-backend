@@ -17,10 +17,9 @@
  */
 
 import path from 'node:path';
-import { randomBytes } from 'node:crypto';
-import { mkdir, open, rename } from 'node:fs/promises';
+import { mkdir, open } from 'node:fs/promises';
 import type { Readable } from 'node:stream';
-import { reapDirectory, unlinkIfPresent, type ReapResult } from './filesystem';
+import { reapDirectory, unlinkIfPresent, writeFileAtomically, type ReapResult } from './filesystem';
 import { exportStoreConfig } from '@infrastructure/adapters/config';
 
 /** Where built exports live. Mount a volume here in a deployment; the default is dev-only. */
@@ -64,28 +63,18 @@ export const writeExport = (
     const target = resolveName(name);
     if (!target) return Promise.reject(new Error(`Not a storable export name: ${name}`));
 
-    // Random suffix, so two builds of one name never share a temporary file.
-    const temporary = `${target}.${randomBytes(6).toString('hex')}.tmp`;
-
-    return mkdir(exportRoot(), { recursive: true })
-        .then(() => open(temporary, 'w'))
-        .then((handle) =>
-            // `FileHandle#write(string)` resolves once the bytes are handed to the OS, so a slow
-            // disk paces the producer without a drain handler of our own.
-            // https://nodejs.org/api/fs.html#filehandlewritestring-position-encoding
-            produce((text) => handle.write(text).then(() => undefined)).finally(() =>
-                handle.close()
+    return mkdir(exportRoot(), { recursive: true }).then(() =>
+        writeFileAtomically(target, (temporary) =>
+            open(temporary, 'w').then((handle) =>
+                // `FileHandle#write(string)` resolves once the bytes are handed to the OS, so a slow
+                // disk paces the producer without a drain handler of our own.
+                // https://nodejs.org/api/fs.html#filehandlewritestring-position-encoding
+                produce((text) => handle.write(text).then(() => undefined)).finally(() =>
+                    handle.close()
+                )
             )
         )
-        .then(() => rename(temporary, target))
-        .catch((error: unknown) =>
-            // A failed build must not leave its temporary file behind.
-            unlinkIfPresent(temporary, 'Could not remove a temporary export.', { name }).then(
-                () => {
-                    throw error;
-                }
-            )
-        );
+    );
 };
 
 /**

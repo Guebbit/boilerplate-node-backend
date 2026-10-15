@@ -11,9 +11,13 @@
  */
 
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { deleteFile, moveFile, toPosixPath } from '@infrastructure/adapters/filesystem';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import {
+    deleteFile,
+    moveFile,
+    toPosixPath,
+    writeFileAtomically
+} from '@infrastructure/adapters/filesystem';
 import type { ReencodableImageMime } from '@infrastructure/adapters/image';
 import { imageConfig } from '@infrastructure/adapters/config';
 import type { ServerImageFields } from '@types';
@@ -175,7 +179,7 @@ const isRemoteUrl = (value: string) =>
     /^[a-z][\d+.a-z-]*:\/\//i.test(value) || value.startsWith('//');
 
 /**
- * Write `bytes` to `target` through a sibling temp file and a rename. The target is served with a
+ * Write `bytes` to `target` atomically (see `writeFileAtomically`). The target is served with a
  * one-year immutable cache, and a duplicate digest run writes the same name again: a plain
  * `writeFile` truncates first, so a request landing mid-write would cache a half-written image
  * for a year. A rename within one directory is atomic on POSIX.
@@ -183,11 +187,8 @@ const isRemoteUrl = (value: string) =>
  * @param target - the final path
  * @param bytes - what to write there
  */
-const writeAtomically = async (target: string, bytes: Buffer): Promise<void> => {
-    const temporary = `${target}.${randomUUID()}.tmp`;
-    await writeFile(temporary, bytes);
-    await rename(temporary, target);
-};
+const writeAtomically = (target: string, bytes: Buffer): Promise<void> =>
+    writeFileAtomically(target, (temporary) => writeFile(temporary, bytes));
 
 /**
  * The store this API has always had: files under `NODE_PUBLIC_PATH/images/`, served by
