@@ -23,7 +23,6 @@ export {
     DELIVERED_CODE_RESEND_SECONDS,
     DELIVERED_CODE_TTL_MS,
     armDeliveredCode,
-    clearDeliveredCode,
     checkDeliveredCode,
     deliveryCooldownRemaining,
     generateDeliveredCode,

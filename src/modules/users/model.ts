@@ -138,6 +138,14 @@ export interface UserRecord extends Omit<
     previousEmail?: string;
 }
 
+/** The four fields one delivered code occupies — in a method's entry and in `reauthCode` alike. */
+export const DELIVERED_CODE_FIELDS = [
+    'codeHash',
+    'codeExpiresAt',
+    'codeSentAt',
+    'codeAttempts'
+] as const;
+
 /**
  * A delivered one-time code in flight: its digest, its clock and its attempt count. One shape for
  * a second factor's code and for a step-up code alike, so `account/two-factor/delivered-codes.ts`

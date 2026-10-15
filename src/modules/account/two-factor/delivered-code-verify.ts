@@ -18,16 +18,15 @@ import { DELIVERED_CODE_MAX_ATTEMPTS, checkDeliveredCode } from './delivered-cod
  * @param slot - where the code in flight is stored
  * @param state - that slot as loaded on `user`
  * @param code - the digits the caller typed
- * @param now - the clock, injectable for tests
  * @returns whether THIS call spent the code
  */
 export const verifyDeliveredCode = (
     user: UserDocument,
     slot: DeliveredCodeSlot,
     state: DeliveredCodeState | undefined,
-    code: string,
-    now: Date = new Date()
+    code: string
 ): Promise<boolean> => {
+    const now = new Date();
     const hash = state?.codeHash;
     if (!state || !hash) return Promise.resolve(false);
 

@@ -81,14 +81,6 @@ export const armDeliveredCode = (
     entry.codeAttempts = 0;
 };
 
-/** Forget the code in flight — after it is spent, or after too many wrong guesses. */
-export const clearDeliveredCode = (entry: DeliveredCodeState): void => {
-    entry.codeHash = undefined;
-    entry.codeSentAt = undefined;
-    entry.codeExpiresAt = undefined;
-    entry.codeAttempts = undefined;
-};
-
 /**
  * What a typed code is against the one in flight: nothing to compare (`none`: no code, or its
  * attempts are spent), too late (`expired`), the right one (`match`), or a wrong one (`miss`).

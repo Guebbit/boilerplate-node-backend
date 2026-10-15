@@ -4,12 +4,8 @@
  */
 
 import { Error as MongooseError, type ClientSession } from 'mongoose';
-import type {
-    DeliveredCodeSlot,
-    MfaReservation,
-    TwoFactorMethodRecord,
-    UserDocument
-} from '../model';
+import { DELIVERED_CODE_FIELDS } from '../model';
+import type { DeliveredCodeSlot, DeliveredCodeState, MfaReservation, UserDocument } from '../model';
 import { userRepository } from '../repository';
 import {
     isEmptyWrite,
@@ -20,14 +16,13 @@ import {
     type TwoFactorWriteOutcome
 } from '../two-factor-write';
 
-/** Forget the delivered code on a loaded entry — the copy of what the spend just did in the database. */
-const clearEntryCode = (entry: TwoFactorMethodRecord): void => {
-    entry.codeHash = undefined;
-    entry.codeExpiresAt = undefined;
-    entry.codeSentAt = undefined;
-    entry.codeAttempts = undefined;
+/**
+ * Forget the delivered code on a loaded entry — the copy of what a spend just did in the
+ * database, or the reset before a method is re-armed.
+ */
+export const clearDeliveredCode = (entry: DeliveredCodeState): void => {
+    for (const field of DELIVERED_CODE_FIELDS) entry[field] = undefined;
 };
-
 /**
  * Set an account's password — `account/services/password.ts`'s `passwordChange` is the only
  * caller, itself the funnel both a password reset and an authenticated password change go
@@ -232,7 +227,7 @@ const mirrorSpentCode = (user: UserDocument, slot: DeliveredCodeSlot): void => {
     }
     const entry = user.twoFactorMethods.find((candidate) => candidate.method === slot.method);
     if (!entry) return;
-    clearEntryCode(entry);
+    clearDeliveredCode(entry);
     markEntryWritten(entry);
 };
 
@@ -337,16 +332,14 @@ export const bumpSessionEpoch = (
  * Stamp the account's last proof of life — a session was minted or refreshed. Throttled to one
  * write a day in the repository, so a caller may call it on every mint without counting.
  * @param id - the account
- * @param now - the moment to stamp
  */
-export const touchLastActive = (id: string, now: Date = new Date()): Promise<void> =>
-    userRepository.touchLastActive(id, now);
+export const touchLastActive = (id: string): Promise<void> =>
+    userRepository.touchLastActive(id, new Date());
 
 /**
  * Stamp the account as active because a key it minted was just used. Throttled to one write a day
  * in the repository, so the resolve path may call it on every request.
  * @param id - the account that minted the key
- * @param now - the moment to stamp
  */
 export const touchApiKeyUse = (id: string, now: Date = new Date()): Promise<void> =>
     userRepository.touchApiKeyUse(id, now);

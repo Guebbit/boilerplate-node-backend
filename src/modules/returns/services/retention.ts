@@ -18,12 +18,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * `updatedAt` is older than `NODE_RETURN_TEXT_RETENTION_DAYS`. `updatedAt`, not the closing date:
  * an approved return whose goods never arrive never closes.
  *
- * @param now - the clock; injectable so a test needs no fake timers
  * @returns how many returns lost their text
  */
-export const scrubReturnText = (now: Date = new Date()): Promise<number> =>
+export const scrubReturnText = (): Promise<number> =>
     returnRepository
-        .scrubFreeTextBefore(new Date(now.getTime() - returnTextRetentionDays() * DAY_MS))
+        .scrubFreeTextBefore(new Date(Date.now() - returnTextRetentionDays() * DAY_MS))
         .then((scrubbed) => {
             if (scrubbed > 0)
                 // Stryker disable next-line all

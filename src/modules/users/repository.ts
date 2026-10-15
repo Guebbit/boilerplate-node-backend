@@ -17,7 +17,7 @@ import {
     type TwoFactorWrite,
     type TwoFactorWriteOutcome
 } from './two-factor-write';
-import { userModel, applyUserTransform } from './model';
+import { userModel, applyUserTransform, DELIVERED_CODE_FIELDS } from './model';
 import type {
     UserDocument,
     OAuthAccount,
@@ -88,11 +88,8 @@ const stampDaily = (id: string, field: 'lastActiveAt' | 'lastApiKeyUseAt', now: 
         .exec()
         .then(() => undefined);
 
-/** The four fields one delivered code occupies, in a slot. */
-const CODE_FIELDS = ['codeHash', 'codeExpiresAt', 'codeSentAt', 'codeAttempts'] as const;
-
 /** One delivered-code field. */
-type CodeField = (typeof CODE_FIELDS)[number];
+type CodeField = (typeof DELIVERED_CODE_FIELDS)[number];
 
 /**
  * The filter that finds one delivered code's slot on an account. A step-up code sits at
@@ -123,7 +120,7 @@ const codeSlotPath = (slot: DeliveredCodeSlot, name: CodeField): string =>
 
 /** An `$unset` document that clears every field of the code in a slot. */
 const clearedCode = (slot: DeliveredCodeSlot): Record<string, ''> =>
-    Object.fromEntries(CODE_FIELDS.map((name) => [codeSlotPath(slot, name), '']));
+    Object.fromEntries(DELIVERED_CODE_FIELDS.map((name) => [codeSlotPath(slot, name), '']));
 
 /**
  * Standard CRUD via the repository factory, plus credential reads and soft-delete scoping. The

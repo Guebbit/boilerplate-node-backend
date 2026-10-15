@@ -148,12 +148,11 @@ export const clearTimelineActor = (userId: string, session: ClientSession): Prom
  * `scripts/ops/reap-orders.ts`'s second sweep: unset the free text of every row older than
  * `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`. The row, its type and its codes stay.
  *
- * @param now - the instant the window is counted back from
  * @returns how many rows lost their text
  */
-export const scrubTimelineText = (now: Date = new Date()): Promise<number> =>
+export const scrubTimelineText = (): Promise<number> =>
     orderEventRepository
-        .scrubTextBefore(new Date(now.getTime() - orderEventTextRetentionDays() * DAY_MS))
+        .scrubTextBefore(new Date(Date.now() - orderEventTextRetentionDays() * DAY_MS))
         .then((scrubbed) => {
             if (scrubbed > 0)
                 // Stryker disable next-line all

@@ -6,7 +6,12 @@
  */
 
 import { t } from '@infrastructure/i18n';
-import { userService, type TwoFactorMethodRecord, type UserDocument } from '@modules/users';
+import {
+    clearDeliveredCode,
+    userService,
+    type TwoFactorMethodRecord,
+    type UserDocument
+} from '@modules/users';
 import {
     generateSuccess,
     generateReject,
@@ -26,7 +31,6 @@ import { accountAuditActions } from '../audit';
 import { revokeFor } from './revocation';
 import {
     availableTwoFactorMethods,
-    clearDeliveredCode,
     deliveryCooldownRemaining,
     generateBackupCodes,
     generateBackupCodeSalt,

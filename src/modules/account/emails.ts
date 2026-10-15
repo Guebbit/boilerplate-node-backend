@@ -245,7 +245,7 @@ export const twoFactorChangedEmail = (
     locale: string,
     name: string,
     change: TwoFactorChange,
-    method = ''
+    method: string
 ): EmailContent => {
     return accountMail({
         template: 'account.two-factor-changed',

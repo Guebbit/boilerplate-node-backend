@@ -132,12 +132,9 @@ export const requestEmailVerification = (
  */
 export const resendCooldownRemaining = (
     user: UserDocument,
-    type: VerifyLinkType,
-    now: Date = new Date()
+    type: VerifyLinkType
 ): Promise<number> =>
-    tokenSentAt(user.id, type).then((sentAt) =>
-        cooldownRemaining(sentAt, VERIFY_RESEND_SECONDS, now)
-    );
+    tokenSentAt(user.id, type).then((sentAt) => cooldownRemaining(sentAt, VERIFY_RESEND_SECONDS));
 
 /**
  * The pacing every verification re-send shares: the cooldown first, then the recipient's mailbox
