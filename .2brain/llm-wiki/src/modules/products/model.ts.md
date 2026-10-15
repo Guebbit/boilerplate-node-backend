@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/model.ts
-sha256: ec8f879813b4d0fe60e915b6f9a2f311a24d1ffe8a3c56ce799e37dcd3126efe
-generated_at: 2026-09-27T15:32:26.880900+00:00
+sha256: a329be59bf0241e4bb4ebc12478d3918b06301a60357551cd255024cacfb8867
+generated_at: 2026-10-15T11:42:26.343386+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schema and document types for the `products` collection, the Zod validation schemas for the create/replace/update API operations, and the `ProductRecord` / `ProductSnapshot` type split that separates "what the shop stores" from "what an order line remembers." It owns the collection's shape but delegates stock mutations to `@modules/inventory` and derives `available` at serialization time so it can never drift.
+Defines the Mongoose schema, Zod validation schemas, and TypeScript interfaces for the `products` collection. It is the single source of truth for what a product document looks like (both as a plain record and as a Mongoose document), what the API accepts on create/replace/update, and how stock fields are declared but left to `@modules/inventory` to write. Derived fields (`available`, `inStock`, `lowStock`, `preorder`) are intentionally excluded from storage and computed at serialization time.
 
 ## Key elements
 
-- **`ProductRecord`** — Plain-object shape of a stored product (Mongoose fields with real `Date`s, `_id` as `ObjectId`). Excludes `available` (derived) and `currency` (from config).
-- **`ProductSnapshot`** — `ProductRecord` minus `onHand` / `reserved`. The "customer-facing" view embedded in order line items; the warehouse counters never travel with an order.
-- **`ProductDocument`** — `ProductRecord` ∩ Mongoose `Document`; adds the string `id` getter and `pendingImageKey` (image-digest pipeline bookkeeping, never on `ProductSnapshot`).
-- **`ProductModel`** — `Model<ProductDocument, …>` type alias used by the repository and services.
-- **`zodProductCreateSchema` / `zodProductReplaceSchema` / `zodProductUpdateSchema`** — Built on the OpenAPI-generated Zod bodies; override `price` and `translations` with i18n-aware messages, then `superRefine` the fallback-locale invariant (never `null`; must be present on create).
-- **`refineFallbackLocale`** — Shared helper that rejects a `null` fallback-locale entry (all ops) and, when `mustBePresent` is true, also rejects its absence (create only).
-- **`DEFAULT_PRODUCT_IMAGE_URL`** — Exported constant (env-overridable) used as the schema default and as the reset target for `imageUrl: null` in the service.
-- **`productSchema`** — The Mongoose `Schema` declaring every stored field, its types, defaults, and `min`/`enum` constraints (e.g., `taxClass` enum, `onHand`/`reserved` ≥ 0, `sku` sparse unique via index).
+- **`ProductRecord`** — Plain-object shape of stored fields (no Mongoose `Document`). Excludes `available`, `inStock`, `lowStock`, `preorder`, `currency`, and `id` (uses `_id` instead). Dates are real `Date` objects.
+- **`ProductSnapshot`** — `ProductRecord` minus `onHand`, `reserved`, `active`, `purchasable`. The frozen shape an order line embeds; the two stock counters and purchasability flags describe live warehouse state, not the historical purchase.
+- **`ProductDocument`** — `ProductRecord` + Mongoose `Document` + `id` string getter + `pendingImageKey` (image-digest bookkeeping, deliberately absent from `ProductSnapshot`).
+- **`ProductModel`** — `Model<ProductDocument>` type; business logic lives in `./service`, queries in `./repository`.
+- **`checkProductTranslationFields`** — Validates one locale's translation fields against the contract's Zod schema and returns `TranslationFieldIssue[]` (field + message). Used by the kernel's `translatables` registry.
+- **`zodProductCreateSchema` / `zodProductReplaceSchema` / `zodProductUpdateSchema`** — Zod superRefine schemas wrapping the generated API body schemas (`CreateProductBody`, `ReplaceProductByIdBody`, `UpdateProductByIdBody`) with three business refinements: fallback-locale must not be deleted (and must be present for create/PUT), release date ≤ 1 year ahead, price decimal places ≤ shop currency's minor unit.
+- **`productSchema`** — Mongoose `Schema` declaring `title`, `price` (via `moneyPath`), `taxClass`, `rateType`, `sku`, `onHand`/`reserved` (defaults 0, min 0, **read-only from this module's perspective**), `description`, `imageUrl`, `thumbnailUrl`, `translations`, `releaseDate`, soft-delete (`deletedAt`), and a sparse unique index on `sku`.
 
 ## Relationships
 
-- **`@infrastructure/i18n` (`index.ts`, `catalog.ts`, `context.ts`)** — Imports `t` and `getFallbackLocale`; all Zod error messages are i18n thunks resolved at parse time, and the fallback-locale guard reads the runtime locale.
-- **`@infrastructure/persistence/serialize.ts`** — Imports `applySerialization`, the pipeline that calls `availableStock` to compute `available` at read time.
-- **`./domain/stock.ts`** — Imports `availableStock`, the pure function that derives `available` from `onHand` − `reserved`.
-- **`./config.ts`** — Imports `productCurrency` (the shop's standard currency, applied at serialization rather than stored per product).
-- **`src/modules/orders/model.ts`** — Embeds a Mongoose schema mirroring `ProductSnapshot` (deliberately *not* `productSchema`) so `onHand`/`reserved` are unreachable in an order document; `OrderDocumentItem.product` is typed by `ProductSnapshot`.
-- **`src/modules/orders/services/snapshot.ts` / `place.ts`** — Produce/consume the `ProductSnapshot` shape when a product is embedded into an order.
-- **`src/modules/products/repository.ts`** — Consumes `ProductModel` for all queries against the collection.
-- **`src/modules/products/factories.ts`** — Constructs `ProductRecord` / `ProductDocument` fixtures that satisfy the shapes defined here.
-- **`src/modules/products/index.ts`** — Barrel-exports the public names from this file.
+- **`src/infrastructure/persistence/money-field.ts`** — Provides `moneyPath` (used for the `price` schema field) and `moneyPlugin` (applied to the schema for serialization).
+- **`src/infrastructure/persistence/revision-plugin.ts`** — `revisionPlugin` is registered on `productSchema` for audit/revision tracking.
+- **`src/infrastructure/persistence/serialize.ts`** — `applySerialization` is used in the schema's serialization pipeline to compute derived fields (e.g. `available`) at read time.
+- **`src/infrastructure/i18n/index.ts`** — Exports `t` (used in refinement error messages) and `getFallbackLocale` (used by `refineFallbackLocale`).
+- **`src/kernel/registry.ts`** — Source of the `TranslationFieldIssue` type consumed by `checkProductTranslationFields`.
+- **`src/modules/orders/model.ts`** — Embeds its own Mongoose schema that mirrors `ProductSnapshot` (not `productSchema` itself), so `onHand`/`reserved` are structurally unreachable in an order line.
+- **`src/modules/orders/services/snapshot.ts`** — Produces `ProductSnapshot` objects from a live product at order-placement time.
+- **`src/modules/cart/services/*.ts`** (`preorder`, `reorder`, `shelf`, `view`) — Read product fields (price, `taxClass`, `rateType`, `releaseDate`) to compute cart-level pricing and availability.
 
 ## Notes
 
-- **`.extend()` replaces, not merges.** A Zod `.extend({ price: … })` that omits `.min(0)` silently drops the contract's `minimum: 0`. All three schemas restate `.min(0)` explicitly; a prior bare `.refine()` override caused a regression where a negative price passed.
-- **i18n messages must be thunks.** `t('…')` is called lazily inside `error: () => t(…)` so it runs after `i18next.init()`; an eager call would capture an uninitialized translator.
-- **`onHand` / `reserved` are read-only here.** This module declares the columns (it owns the collection) but never writes them. All stock transitions go through `@modules/inventory`; writing them here would bypass the ledger.
-- **`available` is a phantom field.** It appears in the `Product` API type and in serialized output but has no column. Any code that tries to `product.available = …` is setting a property on the JS object, not persisting anything.
-- **`pendingImageKey` is document-scoped.** It exists on `ProductDocument` but is intentionally absent from `ProductSnapshot` and `ProductRecord`, so an order's embedded copy can never carry a stale quarantine key.
-- **`DEFAULT_PRODUCT_IMAGE_URL` is a single source of truth.** Both the schema default and the service's `imageUrl: null` reset resolve to the same exported constant to prevent drift.
+- **`onHand` / `reserved` are declared here but never written by this module.** All stock mutations go through `@modules/inventory`, which owns the state transitions and ledger. This file only declares the columns because it owns the collection.
+- **`available` is never persisted.** It is computed from `onHand - reserved` at serialization time (`applyProductTransform` / `derivedStockFields`), so no writer can let it drift.
+- **`ProductSnapshot` vs `ProductRecord`:** When building order fixtures or serializing order lines, use `ProductSnapshot` — it structurally excludes the two mutable stock counters and the `active`/`purchasable` flags (which would always be `true` for a purchasable product at the time of sale).
+- **`taxClass` and `rateType` absence means "shop default."** The `./tax` resolver (`resolveTaxRate`) never returns "no rate"; absence narrows to the shop's standard configuration.
+- **`sku` uniqueness is enforced by a sparse unique index (`products_sku`), not by the schema definition.** The schema only declares the field shape.
+- **`imageUrl` has no default.** A product without an image simply lacks the field; `imageUrl: null` on update explicitly unsets it.
+- **`pendingImageKey`** exists only on `ProductDocument` (not `ProductRecord` or `ProductSnapshot`), so it never appears in order snapshots or API responses.

@@ -154,7 +154,6 @@ export const DEV_GROUPS: DependencyGroup[] = [
             'eslint-import-resolver-typescript',
             'eslint-plugin-jest',
             'eslint-plugin-jsdoc',
-            'eslint-plugin-prettier',
             'eslint-plugin-unicorn',
             '@eslint/js',
             '@eslint-community/eslint-plugin-eslint-comments',
