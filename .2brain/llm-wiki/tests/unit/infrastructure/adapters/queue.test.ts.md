@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/queue.test.ts
-sha256: 62428cf73fd9299858c433e8627292f3c14a315e05574a63d2dfa6b1a0f1f244
-generated_at: 2026-09-27T16:05:44.998996+00:00
+sha256: cbb3c5a2f3f7de7f6d7735d28406ae38e72d5e020468f5d4763fc205a7aee190
+generated_at: 2026-10-15T13:09:03.664052+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the RabbitMQ queue adapter (`src/infrastructure/adapters/queue.ts`). Validates queue enablement logic, publish confirmation semantics, dead-letter/retry topology, connection lifecycle (start/stop/reconnect), and `parkedCounts()`. Fully mocks `amqplib` so no live broker is needed.
+Unit tests for the RabbitMQ queue adapter (`src/infrastructure/adapters/queue.ts`). Verifies connection lifecycle (start/stop/reconnect), the confirm-channel publish path, dead-letter parking, and environment-based enablement. The heavy mocking of `amqplib` (including its recovery protocol) lets the suite exercise adapter logic without a live broker.
 
 ## Key elements
 
-- **`QUORUM_QUEUE_TYPE` / `AT_LEAST_ONCE_DEAD_LETTERING`** — local copies of queue.ts's non-exported argument objects; used in `assertQueue` call assertions.
-- **`mockSendToQueue`** — simulates a confirm channel's `sendToQueue`; its *callback* (not return value) is treated as the broker's accept/reject signal. Individual tests override it to exercise backpressure, refusal, and timeout.
-- **`channelMock()`** — returns the shared confirm-channel mock surface (assertQueue, sendToQueue, consume, ack/nack, etc.).
-- **`mockCreateConfirmChannel` / `mockCreateChannel`** — separate mocks: the confirm channel (publish/consume) vs. the plain channel `parkedCounts()` uses exclusively.
-- **`mockConnect`** — replays amqplib's real contract: awaits `recovery.setup` before resolving, resolves exactly once, captures the `setup` callback for reconnect simulation.
-- **`simulateReconnect()`** — re-runs `setup` on a fresh model, then emits `connect`, matching amqplib's `recovery.js` ordering.
-- **`enableRabbitMQ` / `disableRabbitMQ`** — set/clear the `NODE_RABBITMQ_*` env vars that gate `isQueueEnabled()`.
-- **`ensureConnected()`** — enables the queue, stops then starts it, and awaits the connect promise so tests can assume a live channel.
-- **Test suites** (visible before truncation): `isQueueEnabled()`, `publishToQueue()` — covering disabled state, successful publish, backpressure, broker refusal, confirm timeout, and dead-letter retry topology.
+- **Mirrored constants** (`QUORUM_QUEUE_TYPE`, `DEAD_LETER_ARGUMENTS`, `AT_LEAST_ONCE_DEAD_LETTERING`) — replicate `queue.ts`'s non-exported per-queue argument objects so assertions catch unintended changes.
+- **`channelMock()` / `mockConnect` / `simulateReconnect`** — hand-rolled `amqplib` stubs. `mockConnect` replays the library's real contract (awaits `recovery.setup` before resolving). `simulateReconnect` re-runs `setup` then fires the `connect` event, mirroring `amqplib/lib/recovery.js`.
+- **`mockSendToQueue`** — models the confirm-channel callback; the default invokes it synchronously (success). Tests override it to simulate backpressure (`return false` + success callback), broker refusal (error callback), or a never-arriving confirm.
+- **`enableRabbitMQ` / `disableRabbitMQ`** — set/clear the `NODE_RABBITMQ_*` env vars via `setEnvironment`.
+- **`ensureConnected`** — enables the queue, calls `stopQueue` → `startQueue`, then awaits the pending `mockConnect` promise so subsequent tests run against a "connected" channel.
+- **`describe('isQueueEnabled()')`** — env-var detection, explicit disable, and URL credential encoding.
+- **`describe('publishToQueue()')`** — success path (persistent, priority 4), backpressure-then-confirm, broker refusal, publish timeout, and disabled-queue no-op.
+- Additional suites (truncated in source) cover `consumeFromQueue`, `parkedCounts`, dead-letter routing, and stop/cleanup.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/queue.ts`** — the module under test; every public export (`isQueueEnabled`, `publishToQueue`, `consumeFromQueue`, `startQueue`, `stopQueue`, `parkedCounts`, `DEAD_LETTER_EXCHANGE`, `deadLetterQueueOf`) is imported and exercised here.
-- **`src/infrastructure/observability/metrics-queue.ts`** — imports `queueJobsDeadLetteredTotal`; the test asserts it increments when `handleDelivery` parks a message to the dead-letter queue.
-- **`src/types/index.ts`** — imports `EmailJobPayloadSchema` and `WORKER_CHANNELS` for payload-validation assertions in publish tests.
+- **`src/infrastructure/adapters/queue.ts`** — the system under test; every exported symbol in that file is exercised here.
+- **`src/infrastructure/adapters/logger.ts`** — imported (likely for log-output assertions or to confirm no unhandled-exception logs leak).
+- **`src/infrastructure/observability/metrics-queue.ts`** — `queueJobsDeadLetteredTotal` imported for dead-letter metric assertions.
+- **`src/types/index.ts`** — provides `EmailJobPayloadSchema` and `WORKER_CHANNELS` used in payload/consumer tests.
+- **`tests/support/environment.ts`** — `setEnvironment` is the single mechanism for mutating env vars across the suite.
 
 ## Notes
 
-- **Mirrored constants:** `QUORUM_QUEUE_TYPE` and `AT_LEAST_ONCE_DEAD_LETTERING` are *not* imported from `queue.ts` because they are internal to its `assertJobQueue` helper. If the production file changes either, these assertions will catch the drift.
-- **Confirm-channel semantics:** The test encodes the invariant that `sendToQueue`'s boolean return is a local write-buffer signal (backpressure), *not* a success/failure indicator. The callback is the only source of truth for broker acceptance. A test that conflates the two would mask the double-run fallback bug the confirm design exists to prevent.
-- **Priority 4, not 0:** Quorum queues treat unmarked messages as priority 4. The test asserts `priority: 4` in the publish options to guard against a regression that would silently demote normal messages.
-- **Two distinct channel mocks:** The confirm channel (shared by publish/consume) and the plain channel (used only by `parkedCounts()`) are kept as separate mock objects so a broker error on one is never misattributed to the other.
-- **Reconnect simulation ordering:** `simulateReconnect` awaits `setup` *before* emitting `connect`, mirroring `node_modules/amqplib/lib/recovery.js` exactly. Swapping the order would test an impossible amqplib state.
+- Quorum-queue arguments are **mirrored, not imported**: they live as internal details of `assertJobQueue` in `queue.ts`. If those objects change, the mirrored constants here must be updated in lockstep or assertions will silently pass with wrong expectations.
+- **Priority is 4, not 0.** A quorum queue treats an unmarked message as priority 4; `publishToQueue` must send `priority: 4` so "normal" messages are not ranked below unmarked ones.
+- **Confirm-channel semantics:** `sendToQueue`'s boolean return is only a local write-buffer signal. The adapter waits for the broker's confirmation *callback*. A test that treats the boolean as success/failure would mask the double-run bug the confirm design prevents.
+- **`parkedCounts` uses a separate plain channel** (`model.createChannel()`), distinct from the shared confirm channel. The mock models this explicitly so a broker error on the parking query cannot be confused with one on the publish path.
+- **`ensureConnected` is required** because `queue.ts`'s `getChannel()` deliberately does not await the connection (documented as "rule 2" in that file). Tests that need a live channel must go through this helper.
+- Reconnect simulation follows `amqplib`'s actual `recovery.js` ordering: `setup` is awaited **before** the `connect` event fires. Tests that fire the event first would not reflect real library behavior.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/controllers/delete-products.ts
-sha256: 0d7771d5698923c7a3326713c8f61eb7dcee125be031427ca64cb41dae92c300
-generated_at: 2026-09-23T19:25:40.175301+00:00
+sha256: c3466b8313964f361aa495693d965bb91b14b0be2c818e3ac64524d84e4ef1ff
+generated_at: 2026-10-15T11:40:06.442606+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Admin-facing delete endpoint for the product catalogue. It is a thin, one-line wiring of the shared `createDeleteController` factory to the product domain, delegating all delete logic to the service layer so the controller itself contains no business logic.
+Admin endpoint controller for deleting a product by ID. It is a thin wiring layer that plugs `productService.removeById` into the shared `createDeleteController` factory, so the actual HTTP handling (route parsing, `?hardDelete` flag, 404 response) is inherited rather than re-implemented.
 
 ## Key elements
 
-- **`deleteProducts`** (export) — The HTTP handler for `DELETE /products/:id`. Configured via `createDeleteController` with:
-    - `entity: 'product'`
-    - `remove: (id, hardDelete) => productService.removeById(id, hardDelete)` — delegates the actual delete to the product service.
-    - `auditAction: productsAuditActions.ADMIN_PRODUCT_DELETED`
-    - `notFoundKey: 'products.not-found'`
-    - Query param `?hardDelete=true` triggers a permanent delete (plus image cleanup and a `PRODUCT_DELETED` announcement); omitting it performs a soft delete.
+- **`deleteProducts`** (named export) — the controller returned by `createDeleteController`. Handles `DELETE /products/:id`.
+  - **`remove` callback** — calls `productService.removeById(id, hardDelete, callerContextOf(request))`.
+  - **`entity`** — set to `'product'` (used by the factory for error/audit framing).
+  - **`notFoundKey`** — `'products.not-found'`, the i18n key for the 404 body.
 
 ## Relationships
 
-- **`src/infrastructure/surfaces/create-delete-controller.ts`** — Provides the `createDeleteController` factory that this file calls. All request parsing, error handling, audit emission, and response shaping live in that factory; this file only supplies the domain-specific options.
-- **`src/modules/products/service.ts`** — `productService.removeById(id, hardDelete)` is the actual persistence operation. The controller has no direct database access.
-- **`src/modules/products/audit.ts`** — Supplies `productsAuditActions.ADMIN_PRODUCT_DELETED`, the audit-log action key recorded on every successful delete.
-- **`src/modules/products/routes.ts`** — Expected to import `deleteProducts` and mount it on the `DELETE /products/:id` route.
+- **`@infrastructure/surfaces/create-delete-controller`** — provides the `createDeleteController` factory that supplies the HTTP verb handling, query-param parsing for `hardDelete`, and the 404 short-circuit. This file only supplies the entity name and the `remove` callback.
+- **`@infrastructure/http/request`** — `callerContextOf(request)` extracts the authenticated caller's context, which is forwarded into the service call.
+- **`../services/index`** — `productService.removeById` performs the actual deletion (soft or hard), emits the `ADMIN_PRODUCT_DELETED` audit event, and (on hard delete) announces `PRODUCT_DELETED` and removes the product image.
+- **`src/modules/products/routes.ts`** — registers `deleteProducts` on the `DELETE /products/:id` route (admin-protected).
 
 ## Notes
 
-- The controller file intentionally contains no logic beyond the factory call. Any behavioral change (e.g., adding validation, changing the not-found response) belongs in `createDeleteController` or `productService`, not here.
-- Hard delete has side effects beyond the DB row: it emits a `PRODUCT_DELETED` event and removes the product's image from disk. Soft delete does neither.
+- Default deletion is **soft**; pass `?hardDelete=true` to delete permanently.
+- Hard delete has two side effects beyond row removal: it fires a `PRODUCT_DELETED` domain event (so wishlists etc. can react) and deletes the product's image file from disk.
+- The `ADMIN_PRODUCT_DELETED` audit emission lives inside `productService.removeById`, **not** in this controller — so auditing is guaranteed even if the controller layer changes.
+- The file exports a controller, not a raw handler; it has no direct dependency on Express/Fastify — the framework binding happens inside `createDeleteController`.

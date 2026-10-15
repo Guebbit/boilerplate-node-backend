@@ -1,7 +1,7 @@
 ---
 source: tests/integration/product-removal-protects-orders.test.ts
-sha256: b543535b03e7fc54b1b7ba3f8cd50665ce9b8f3d07873598b5dfce350f025ef9
-generated_at: 2026-09-27T15:57:24.232197+00:00
+sha256: 3d754e42f899edbce4e768f0d260c3dee3ef94aa3c3ffd3cd03ece9606aaecc9
+generated_at: 2026-10-15T12:51:17.892739+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,42 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that verifies the cross-module cascade triggered when a product is hard-deleted, deactivated, soft-deleted/restored, or disappears mid-transaction. It asserts that `products` announces the event, `inventory` drops (or keeps) the stock-level row, `orders` cancels pending orders and emails the buyer, and `payments` refuses a racing intent while still allowing an admin offline record. It lives in `tests/integration/` rather than any single module's `tests/` because it exercises four modules' real `subscribe()` hooks together.
+Cross-module integration test that verifies a product removed, soft-deleted, or deactivated **after** an order has been placed does not disrupt that order: it stays `pending`, remains payable by card or offline method, triggers no cancellation email, and (for soft-delete/restore/deactivation) retains its inventory level row. Also asserts that a failed write on the product does **not** emit the `PRODUCT_DELETED` domain event, leaving the buyer's cart intact. Lives in `tests/integration/` (not a single module's `tests/`) because it exercises the real `subscribe()` hooks of `products`, `inventory`, `orders`, `payments`, and `cart` simultaneously.
 
 ## Key elements
 
-- **`placePendingOrder(product)`** — helper that creates a user, adds the product to the cart, sets pickup shipping, confirms the order via `orderConfirm`, flushes the fire-and-forget confirmation email, then clears the mailer mock so subsequent assertions only see cancellation emails.
-- **`flush()`** — `setImmediate`-based promise that waits for the `sendOrderPlacedEmail` → `renderInvoicePdf` → `enqueueEmail` microtask chain to complete before assertions run.
-- **`renderInvoicePdfMock`** — mocks `renderInvoicePdf` to resolve `undefined`, preventing a real Chromium launch from stretching test time while keeping the rest of the invoice module real.
-- **`describe('hard-deleting…')`** — calls `productService.remove(product, true)`; asserts product is gone, order is `cancelled`, exactly one email with template `orders.order-product-unavailable` was sent, and `stockLevelRepository.findByProductId` resolves to `null`.
-- **`describe('deactivating…')`** — calls `productService.updateById(…, { active: false })`; asserts order cancelled + email sent, but the stock-level row is **retained** (deactivation is reversible).
-- **`describe('a soft delete or a restore')`** — calls `productService.remove(product, false)` (soft delete) then again (restore); asserts the stock-level row survives both operations.
-- **`describe('a payment attempt racing the removal event')`** — bypasses the domain-event listener by directly deleting the stock row and setting `deletedAt` on the product document; calls `createIntent` and asserts a `409` with error code `ORDER_PRODUCT_UNAVAILABLE` and product name in `details.lines`.
-- **`describe('admin offline recording…')`** — same race setup, then calls `recordOfflinePayment`; asserts it still succeeds and the order reaches `paid` status (money already moved).
+- **`placePendingOrder(product)`** – Shared helper: creates a user, adds the product to the cart, sets a shipping method, and runs the real `orderConfirm` checkout. Calls `flush()` then clears the mailer mock so later assertions only see post-removal effects.
+- **`flush()`** – Resolves after `setImmediate`, letting the fire-and-forget `sendOrderPlacedEmail` chain land its `enqueueEmail` call before the mock is cleared.
+- **`describe('hard-deleting a product…')`** – 3 tests: level row is dropped, order stays `pending`, no email; card intent still succeeds; offline payment still succeeds.
+- **`describe('soft-deleting a product…')`** – 1 test: order stays pending/payable, no email.
+- **`describe('deactivating a product…')`** – 3 tests: order stays pending, stock hold retained, no email; card and offline payments still succeed.
+- **`describe('a soft delete or a restore')`** – Confirms the inventory level row survives both a soft delete and a subsequent restore (only hard delete removes it).
+- **`describe('a write that fails…')`** – 2 tests: spies on `productRepository.deleteOne` (hard) or `.save` (soft) to force a rejection; asserts the cart line is untouched and the product row still exists (or `deletedAt` is unset), proving the event was never emitted.
+- **`jest.mock('@infrastructure/adapters/mailer')`** – Replaces `enqueueEmail` with a jest mock; all "no email" assertions target `mockEnqueueEmail`.
 
 ## Relationships
 
 | Neighbor | Interaction |
 |---|---|
-| `src/modules/products/service.ts` | System under test: `productService.remove` and `productService.updateById` trigger the cascade. |
-| `src/modules/products/index.ts` | Re-exports `productService` (imported from here). |
-| `src/modules/products/tests/factories.ts` | `createProduct` / `readProduct` for setup and post-state assertions. |
-| `src/modules/cart/services/index.ts` | `cartItemSetById` and `orderConfirm` drive the real checkout flow. |
-| `src/modules/cart/services/checkout.ts` | Implements `orderConfirm`, which publishes the `orderConfirm` domain event. |
-| `src/modules/cart/services/items.ts` | Source of `cartItemSetById`. |
-| `src/modules/cart/repository.ts` | `cartRepository.setShippingMethod` sets pickup before checkout. |
-| `src/modules/inventory/repository.ts` | `stockLevelRepository` — asserted on for row existence; also mutated directly to simulate the race gap. |
-| `src/modules/orders/tests/factories.ts` | `readOrder` reads order status after the cascade. |
-| `src/modules/payments/module.ts` | `paymentsModule` registered via `registerCheckoutModules` so its `subscribe()` hooks are live. |
-| `src/modules/payments/services/intent.ts` | `createIntent` is the backstop checked in the race-condition test. |
-| `src/modules/payments/services/offline.ts` | `recordOfflinePayment` tested for the "money already moved" case. |
-| `src/kernel/events.ts` | `resetDomainEvents()` in `afterEach` prevents cross-test event leakage. |
-| `src/infrastructure/adapters/mailer.ts` | `enqueueEmail` is fully mocked; call count and template are asserted. |
-| `src/infrastructure/http/response.ts` | `ResponseReject` type used to safely access `status`/`errors` on the failed intent result. |
+| `src/infrastructure/adapters/mailer.ts` | `enqueueEmail` is fully mocked; tests assert it was **not** called post-removal. |
+| `src/kernel/events.ts` | `resetDomainEvents()` in `afterEach` clears the in-process event bus between tests. |
+| `src/kernel/outbox.ts` | `settleOutboxNudges()` awaits all pending outbox-driven subscriber runs so assertions see final state. |
+| `src/modules/products/index.ts` | `productService.remove()` and `productService.updateById()` are the system-under-test entry points. |
+| `src/modules/products/repository.ts` | `productRepository` is spied on in the failure tests; `createProduct` / `readProduct` from the module's test factories. |
+| `src/modules/inventory/repository.ts` | `stockLevelRepository.findByProductId` is queried to confirm the level row's presence or absence. |
+| `src/modules/cart/services/checkout.ts` | `orderConfirm` performs the real checkout that creates the pending order. |
+| `src/modules/cart/services/items.ts` | `cartItemSetById` adds the product to the cart before checkout. |
+| `src/modules/cart/repository.ts` | `cartRepository.setShippingMethod` (setup) and `cartRepository.findByUserId` (failure-test assertion). |
+| `src/modules/orders/tests/factories.ts` | `readOrder` fetches the order to check its `status`. |
+| `src/modules/payments/module.ts` | `paymentsModule` is registered via `registerCheckoutModules` so checkout includes payment logic. |
+| `src/modules/payments/services/intent.ts` | `createIntent` simulates a card-payment start; tests assert it still succeeds after removal. |
+| `src/modules/payments/services/offline.ts` | `recordOfflinePayment` simulates an admin recording an offline payment; tests assert it still succeeds. |
+| `src/modules/addresses/tests/factories.ts` | `giveAddress` supplies the shipping/billing address required by checkout. |
 
 ## Notes
 
-- **Fire-and-forget email:** `sendOrderPlacedEmail` dispatches without awaiting `enqueueEmail`. Tests must call `flush()` (a `setImmediate` tick) before asserting on the mailer mock, or the call may not have landed yet.
-- **Race-condition simulation:** The two "race" tests deliberately bypass the domain-event listener (which would cancel the order) by mutating the DB directly (`stockLevelRepository.deleteByProductId` + setting `deletedAt`). This isolates `createIntent`'s own in-flight check as the sole guard.
-- **Hard vs. soft vs. deactivate:** The stock-level row is deleted **only** on hard delete. Soft delete, restore, and deactivation all leave it intact — an invariant the tests pin down.
-- **Mailer mock is global per file:** `jest.mock` at the top replaces the module for the entire test file; the mock is cleared in `beforeEach` and after `placePendingOrder` so each assertion sees only the email it expects.
+- **`flush()` before every mock clear.** `sendOrderPlacedEmail` is fire-and-forget; without the `setImmediate` tick, `mockClear()` could race ahead of the email dispatch, making "no email" assertions vacuously true or falsely failing.
+- **Soft-delete is idempotent/restore.** Calling `productService.remove(product, false)` on an already soft-deleted product acts as a restore (sets `deletedAt = null`). The "soft delete or a restore" block relies on this.
+- **Event emission is post-write.** The failure tests encode the invariant that `PRODUCT_DELETED` is emitted only *after* the repository write succeeds. If the implementation ever reorders this, the cart-listener test will catch it.
+- **Business rule provenance.** The file-header comment references "Q14 of the merge-alert plan" as the originating requirement; the test is the executable specification for that rule.

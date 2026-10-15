@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/domain/stock.ts
-sha256: 78c3c370e12d03e458274edc587b3d1b199b22f27c0ffd83e3066597f49ea746
-generated_at: 2026-09-27T15:31:46.480337+00:00
+sha256: c53eb5f3b2687a91dc9d600d7e724f39bece500e0eb2edf05c2c2df08cfc5dee
+generated_at: 2026-10-15T11:41:36.333044+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Derives a customer-facing "available to buy" count from the two inventory counters (`onHand`, `reserved`) that `@modules/inventory` writes onto every product. It lives in the products domain (not in inventory or cart) because a product's catalogue availability is the product module's own invariant, following the same layering rationale as `tax.ts`'s `resolveTaxRate`.
+Pure domain functions that derive customer-facing stock information (`available` count, `inStock`/`lowStock` flags) from the two raw counters (`onHand`, `reserved`) that the inventory module writes onto products. Lives here rather than in `inventory` or `cart` because stock availability is a product-domain invariant, mirroring how `tax.ts` owns `resolveTaxRate`.
 
 ## Key elements
 
-- **`availableStock(onHand?: number, reserved?: number): number`** — Pure function that returns `Math.max(0, (onHand ?? 0) - (reserved ?? 0))`. Both parameters are optional and read as zero when absent. The result is clamped at zero so a negative count can never reach the UI.
+- **`availableStock(onHand?, reserved?)`** — Returns `max(0, onHand − reserved)`. Both parameters are optional and default to `0` when absent. Guarantees the result is never negative.
+- **`stockFlags(available, threshold)`** — Returns `{ inStock: boolean; lowStock: boolean }`. `inStock` is true when `available > 0`. `lowStock` is true only when `available > 0 && available <= threshold` — an empty shelf yields `{ inStock: false, lowStock: false }`, never `lowStock: true` on its own.
 
 ## Relationships
 
-- **`src/modules/products/model.ts`** — The product model carries the `onHand` and `reserved` counters that this function consumes; `availableStock` is the domain rule that turns those raw counters into a sellable quantity.
-- **`src/modules/products/domain/index.ts`** — Barrel file that re-exports `availableStock` for consumers importing from the domain namespace.
-- **`src/modules/cart/services/checkout.ts`** — Downstream consumer; calls `availableStock` to validate that requested quantities are within what a customer may actually buy.
-- **`src/modules/products/tests/unit/stock.test.ts`** — Unit tests exercising the clamp-at-zero and optional-parameter behaviors.
-- **`src/modules/products/tests/factories.ts`** — Test factories that produce product fixtures with specific `onHand`/`reserved` values for the above tests.
+- **`src/modules/products/domain/index.ts`** — Re-exports both functions so the rest of the module tree can import them from the domain barrel.
+- **`src/modules/products/presenter.ts`** — Calls `availableStock` and `stockFlags` to populate the `available`, `inStock`, and `lowStock` fields on product response objects.
+- **`src/modules/products/tests/factories.ts`** — Provides fixture products whose `onHand`/`reserved` values feed into these functions during tests.
+- **`src/modules/products/tests/unit/stock.test.ts`** — Unit-tests the clamp-at-zero behavior, the undefined-input defaults, and the `lowStock` mutual-exclusivity rule.
 
 ## Notes
 
-- `reserved` is expected to never exceed `onHand` (every inventory transition guards it), but the function still clamps defensively — treat the zero-floor as a safety net, not a business rule.
-- Both parameters are optional by design: a product that has never been inventoried has no counters, and both read as zero.
+- `lowStock` and `inStock` are not independent booleans: `lowStock: true` always implies `inStock: true`. Consumers should not treat them as a free 2×2 combination.
+- Both functions are pure and side-effect-free; there is no state, no imports, and no async work.
+- The `??` (nullish) default means a `null` or `undefined` counter is treated as zero — but a `NaN` input would propagate through `Math.max` and yield `NaN`. Callers upstream are expected to never pass `NaN`.

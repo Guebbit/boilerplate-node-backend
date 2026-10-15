@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/http/middlewares/rate-limit-store.test.ts
-sha256: e9151c0fe9ea405edd65ddd9084ac62681f322a73e5cb730dac006506e81a9d7
-generated_at: 2026-09-27T16:07:33.374701+00:00
+sha256: 58b30b6c9355b3de034b77ddf032ff88dc9f8314417119e677aa9ea6f4432748
+generated_at: 2026-10-15T13:14:00.560919+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Guards a specific regression in the rate-limit store: when two `connect()` calls race during the Redis handshake (the pattern `RedisStore.init()` triggers by loading two Lua scripts back-to-back), node-redis rejects the second call and the failure path destroys the shared client, silently disabling the rate limiter. This test reproduces that race without Redis, a container, or a cluster, so the fix stays covered by `npm test` while the slower cluster suite (`tests/cluster/rate-limit.test.ts`) runs only in CI.
+Unit test guarding the `rateLimitStore` Redis connection against a specific regression: two back-to-back commands issued before the `connect()` handshake finishes both see `isReady === false`, the second `connect()` throws "Socket already opened", and the resulting `destroy()` tears down the shared client the first command still needs. The limiter then silently passes every request unbudgeted. This test reproduces that race with a fake client—no Redis, no container—and runs in the contributor's default `npm test` gate, complementing the slower cluster suite.
 
 ## Key elements
 
-- **`connectCalls`** — module-level counter incremented by the fake client's `connect` to assert exactly one socket is opened.
-- **`fakeClient()`** — returns a mock Redis client whose `isReady` getter stays `false` until a 10 ms timer resolves; a second `connect()` while one is in-flight throws `'Socket already opened'`, mirroring real node-redis behavior. Also stubs `sendCommand` to answer `SCRIPT` with a SHA and increments with `[totalHits, resetMs]`.
-- **`seam`** — a typed alias of `globalThis` carrying an optional `rateLimitFakeClient` property. Exists solely so the hoisted `jest.mock` factory can reference the fake client at call time (it cannot close over module-scoped `const`s).
-- **`jest.mock('redis', …)`** — replaces `createClient` with a function that returns `seam.rateLimitFakeClient`.
-- **`describe('the rate limiter's Redis connection')`** — three tests:
-  - *opens one socket for commands issued before the handshake finishes* — fires two concurrent `increment` calls, asserts `connectCalls === 1`.
-  - *answers both of them rather than destroying the client one is using* — asserts both promises resolve and `destroy` is never called.
-  - *counts in memory when no Redis is configured* — sets `NODE_RATE_LIMIT_REDIS_ENABLED=0`, asserts zero `connect` calls.
+- **`fakeClient()`** – Returns a mock Redis client whose `connect()` resolves after 10 ms (keeping `isReady` false in the interim) and throws `'Socket already opened'` on a second call while one is in flight. Also provides a `sendCommand` that answers `SCRIPT LOAD` with a sha string and the increment script with `[totalHits, resetMs]`, the shapes `rate-limit-redis` requires.
+- **`connectCalls`** (module-level counter) – Tracks total `connect()` invocations across the fake client to assert exactly one socket was opened.
+- **`seam`** (`globalThis.rateLimitFakeClient`) – A `globalThis` property that bridges the `beforeEach` setup to the hoisted `jest.mock` factory, which cannot close over module-scoped `const`s.
+- **`jest.mock('redis', …)`** – Replaces `createClient` so it returns the fake client stored on `globalThis`.
+- **Test: "opens one socket for commands issued before the handshake finishes"** – Fires `store.increment('a')` and `store.increment('b')` concurrently after `store.init()` and asserts `connectCalls === 1`.
+- **Test: "answers both of them rather than destroying the client one is using"** – Same concurrent pair; asserts both results resolve and `destroy` was never called.
+- **Test: "counts in memory when no Redis is configured"** – Sets `NODE_RATE_LIMIT_REDIS_URL` to `undefined` and asserts `connectCalls === 0`, confirming the in-memory fallback path is exercised.
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/rate-limit-store.ts`** — the module under test. The test imports `rateLimitStore` (factory) and `stopRateLimitStore` (teardown called in `afterEach`). All assertions are on the behavior of these exports.
-- **`tests/cluster/rate-limit.test.ts`** (referenced in the header comment) — the integration counterpart that proves the same property across real forked workers. This file exists because that test is gated behind `complete:manual` / CI and does not run in the contributor-facing `npm test`.
+- **`src/infrastructure/http/middlewares/rate-limit-store.ts`** – The module under test. The test imports `rateLimitStore` and exercises its `init` and `increment` methods.
+- **`src/infrastructure/adapters/limits-redis.ts`** – Imported for `stopLimitsRedis()`, called in `afterEach` to clean up any state the store may have registered.
+- **`tests/support/environment.ts`** – Provides `setEnvironment()` to inject `NODE_RATE_LIMIT_REDIS_URL` (or remove it) per test without mutating `process.env` permanently.
 
 ## Notes
 
-- The `globalThis` seam is a workaround for Jest's factory hoisting: `jest.mock` callbacks execute before any `const` in the module is initialized, so a module-scoped variable would be `undefined` when the factory reads it. A `globalThis` property sidesteps this.
-- `void store.init?.({ windowMs: 60_000 } as never)` is deliberately fire-and-forget: the test needs `init` to start (triggering the two script loads) but does not await it, which is precisely what creates the race under test.
-- `afterEach` calls `stopRateLimitStore()` to prevent a leaked client from leaking into the next test's `connectCalls` count.
-- The fake client's 10 ms handshake delay is the minimum needed to overlap the two concurrent `increment` calls; it is not a realistic Redis latency.
+- The `globalThis` seam is a workaround for `jest.mock` hoisting: the mock factory runs before any `const` in the file is initialized, so it cannot reference a module-scoped variable directly.
+- The fake client's `sendCommand` must return a **string** for `SCRIPT LOAD` and a **two-element array** for the increment call; returning anything else makes `rate-limit-redis` throw before the connection logic is even exercised.
+- This test is intentionally paired with `tests/cluster/rate-limit.test.ts` (which proves the end-to-end budget across real forked workers). The cluster test lives in `complete:manual` / CI; this file is the fast gate that catches the same regression locally.
+- `store.init?.()` is called with `as never` because the public type expects options the test doesn't care about; the `?.` guards against the init being undefined in the in-memory path.

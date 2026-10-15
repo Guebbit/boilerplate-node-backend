@@ -1,7 +1,7 @@
 ---
 source: tests/unit/scripts/mutation/sharding.test.ts
-sha256: 435460aadf0f334a4249148aab3b16d918eac41c5775e076d3ed2017dc557785
-generated_at: 2026-09-23T20:31:42.824691+00:00
+sha256: 90c4edeabd62d2f7c49d2cefaea2f3ce4fecd0d48e9aa1e9be26b67be10ab16c
+generated_at: 2026-10-15T13:29:05.460350+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `packIntoShards`, the function that partitions a list of files (by line count) into evenly-sized shards for the mutation-testing CI matrix. Tests run against synthetic file lists only—no directory walks—mirroring the thin-CLI-wrapper / testable-core split used elsewhere in this project.
+Unit tests for the pure packing logic in `scripts/mutation/sharding.ts`. Verifies that `packIntoShards` correctly partitions a list of files into mutation shards by line count, using synthetic fixtures rather than a real directory walk (the walk half lives in `mutate-scope.ts` and has its own test).
 
 ## Key elements
 
-- **`files(...entries)`** — small helper that converts `[name, lines]` tuples into `{ file, lines }` objects so fixtures read as positional pairs.
+- **`files(...entries)`** — local helper that converts `[name, lines]` tuples into `{ file, lines }` objects so fixtures read like plain pairs.
 - **`describe('packIntoShards')`** — six cases:
-    - _Every file lands in exactly one shard_ — asserts completeness and that total lines are preserved across shards.
-    - _Explicit target overrides CI default_ — passing `2500` as the target yields 2 shards instead of the ~9 the 600-line default would produce.
-    - _Shard count derives from total lines, not file count_ — 10 × 500-line files produce `Math.ceil(5000 / TARGET_LINES_PER_SHARD)` shards.
-    - _Lopsided input is balanced_ — one 6000-line file plus twenty 50-line files; asserts the max/min shard ratio ≤ `6000/50` (the ceiling set by the un-splittable huge file).
-    - _No empty shards_ — a single 10-line input still produces a shard with `mutate.length > 0`.
-    - _Deterministic naming_ — identical input yields `toEqual`-equal output on repeated calls.
+  - Every file lands in exactly one shard (partition + line-total invariant).
+  - An explicit target argument overrides the `TARGET_LINES_PER_SHARD` default.
+  - Shard count is `ceil(totalLines / target)`, independent of file count.
+  - Lopsided input (one 6000-line file + twenty 50-line files) stays balanced; the asserted ratio ceiling is `6000 / 50`, the huge file's own lines over the smallest possible bin, so the bound is independent of the target constant.
+  - No shard is ever empty.
+  - Output is deterministic: same input → identical shard list (stable naming).
 
 ## Relationships
 
-- **`scripts/mutation/sharding.ts`** — sole import source. Provides `packIntoShards` (the function under test) and the exported constant `TARGET_LINES_PER_SHARD` (used in the shard-count assertion and implicitly as the default when no target is passed).
+- **`scripts/mutation/sharding.ts`** — the module under test. Imports `packIntoShards` (the function being verified) and `TARGET_LINES_PER_SHARD` (used to compute the expected shard count in one case).
+- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — sibling test in the same mutation-test directory; shares the convention of testing the pure-logic half of a script in isolation from its filesystem-walking half.
 
 ## Notes
 
-- The lopsided-input test encodes the design motivation in comments: a single huge module (e.g. `account`) must not set the wall clock for the entire matrix.
-- The balance bound (`6000/50`) is deliberately the _input-derived ceiling_ (the huge file's lines over the smallest bin a tiny file can leave), not an arbitrary constant, so it stays valid if `TARGET_LINES_PER_SHARD` changes.
-- Shard shape is `{ mutate: string, lines: number }` where `mutate` is a comma-separated file list.
+- The default target is 600 lines/shard (referenced in the explicit-target test's comment). The tests never hard-code this; they import `TARGET_LINES_PER_SHARD` where needed so the suite keeps passing if the constant changes.
+- The balance test's bound is intentionally derived (`huge / tiny`) rather than a magic number, so it remains valid for any future value of `TARGET_LINES_PER_SHARD`.
+- Fixtures use small, hand-written file lists. There is no `fs` or `path` usage in this file.

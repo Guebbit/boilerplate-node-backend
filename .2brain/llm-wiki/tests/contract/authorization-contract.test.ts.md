@@ -1,7 +1,7 @@
 ---
 source: tests/contract/authorization-contract.test.ts
-sha256: c028cea2d1570b8ee36698b0c4f0ffc097ee7076d04046067bb1e0df97ff40e5
-generated_at: 2026-09-23T19:51:40.829720+00:00
+sha256: 6688af143df86184df445dffea5ce416fb63eea6c9fe6f9445ea55e3f6e826dc
+generated_at: 2026-10-15T12:32:01.056382+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A contract-derived authorization sweep that asserts, for every route discovered behind `isAuth` or `requirePermissionGuard`, that the HTTP status matches what `shared/authorization-roles.yaml` dictates for each of the six non-admin tenant roles. It closes the gap where intermediate roles were never exercised through the HTTP surface, and it derives the expected allow/deny decision from the same `holdsKey` query the runtime guard uses, eliminating a hand-maintained expectation.
+A table-driven authorization sweep that derives expected 401/403 outcomes for **every** mounted HTTP route from the authorization model itself (`shared/authorization-roles.yaml` via `holdsKey`), rather than from hand-maintained per-route expectations. It closes the gap where intermediate tenant roles (manager, warehouse, support, editor, moderator) were never exercised against the HTTP surface individually.
 
 ## Key elements
 
-- **`PLACEHOLDER_ID`** / **`fillParams`** — Fills `:param` path segments with a syntactically valid but nonexistent 24-char id so the auth guard runs before any field validation.
-- **`request(method, path)`** — Type-safe supertest dispatcher (GET/POST/PUT/DELETE/PATCH) that avoids an unsafe indexed call.
-- **`describe('…requiring a caller…')`** — Iterates every `isAuth`-guarded route; asserts 401 + API-spec conformance with no credentials.
-- **`describe('…requiring an admin…')`** — Iterates `requirePermissionGuard` routes (excluding `cart.self.checkout`, which a plain customer legitimately holds); asserts 403 for `authenticateAs('user')`.
-- **`NON_ADMIN_TENANT_ROLES`** — The six roles (`customer`, `manager`, `warehouse`, `support`, `editor`, `moderator`) swept in the per-role loop.
-- **`describe('…agrees with the role file…')`** — For each guarded route × each non-admin role, calls `holdsKey(callerAs(role), route.permissionKey)` to derive the expected decision, then asserts non-403 when allowed and 403 + spec when denied.
+- **`fillParams(path)`** — replaces `:param` segments with a fixed placeholder UUID (`000000000000000000000000`) so the auth guard runs before any per-field validation that might reject a bad id.
+- **`request(method, path)`** — thin dispatch wrapper over the supertest `api()` handle; avoids an unsafe indexed call.
+- **`NON_ADMIN_TENANT_ROLES`** — the six roles swept in the per-role describe block (`customer`, `manager`, `warehouse`, `support`, `editor`, `moderator`); `admin` is deliberately excluded.
+- **`describe` block 1 — "requires a caller"** — asserts 401 for every route whose guards include `isAuth`.
+- **`describe` block 2 — "requires an admin"** — asserts 403 for routes guarded by `requirePermissionGuard` whose `permissionKey` is one a plain `customer` does **not** hold (routes a `customer` legitimately holds are skipped here and covered in block 3).
+- **`describe` block 3 — "agrees with the role file, for every non-admin role"** — for each route with a `permissionKey`, iterates all six roles, computes `allowed` via `holdsKey` + the `exactPermission` / `heldKeys` check, and asserts 403 when not allowed or **not-403** (could be 404/422) when allowed. This is the sweep that catches a wrong-key bug (e.g. guard reads `users.any.update` when the role file only grants `users.any.read`).
 
 ## Relationships
 
-- **`src/kernel/ability.ts`** — Provides `holdsKey`, the same predicate the runtime guard evaluates; the test uses it to derive expected outcomes from the model rather than hardcoding them.
-- **`tests/support/contract-routes.ts`** — Source of `everyMountedRoute()` and the `MountedRoute` type; supplies the route inventory (method, path, guards, permissionKey) that drives all three `it.each` tables.
-- **`tests/support/http.ts`** — Provides `api()` (supertest agent), `authenticateAs`, and `authenticateAsRole` for issuing requests with specific callers.
-- **`tests/support/callers.ts`** — Provides `callerAs(role)`, which constructs the caller object passed to `holdsKey` for the per-role derivation.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` runs once to give the HTTP server a reachable database (guards hit the DB before responding).
-- **`tests/support/contract.ts`** — Side-effect import that registers the `toSatisfyApiSpec` matcher used in every assertion.
+- **`src/kernel/ability.ts`** — imports `heldKeys` and `holdsKey`; the test uses the same functions the `requirePermissionGuard` uses internally, so "should this role reach this route" is derived from the model, not hardcoded.
+- **`tests/support/contract-routes.ts`** — imports `everyMountedRoute()` and the `MountedRoute` type; this is the single source of truth for which routes exist and which guards/permissions they carry.
+- **`tests/support/callers.ts`** — imports `callerAs(role)` to construct a caller object for the `holdsKey` check.
+- **`tests/support/http.ts`** — imports `api` (supertest handle), `authenticateAs`, and `authenticateAsRole` to issue authenticated requests.
+- **`tests/support/contract.ts`** — side-effect import; installs shared contract matchers/expectations used by the assertions.
+- **`tests/support/setup-test-db.ts`** — calls `setupTestDb()` before any test runs so the guard's session/permission lookups can resolve.
 
 ## Notes
 
-- The test is table-driven (`it.each` over the route list), so adding a new guarded route automatically adds a case — no per-module test file needed.
-- `cart.self.checkout` is explicitly excluded from the generic non-admin 403 block because `customer` holds that key by design; the per-role sweep covers it correctly.
-- "Allowed" does not mean 200: a route may still return 404 or 422 on a placeholder id or empty body. The invariant is only _not_ 403.
-- Path params are filled with a nonexistent id on purpose — the guard must short-circuit before any resolution logic, and a route where the id _did_ change the 401/403 outcome would be a defect this sweep catches.
-- This file is the authorization mirror of `request-contract.test.ts` (which sweeps request bodies instead).
+- The test is a **mirror** of `request-contract.test.ts`, which sweeps request *bodies* against the contract; this file sweeps *authorization headers/roles*.
+- The per-role loop in block 3 asserts `not.toBe(403)` (not a specific success code) for allowed roles because a placeholder id or empty body may legitimately yield 404/422 — the invariant under test is purely "the guard does not reject on a grant the role file says exists."
+- `exactPermission` routes require the *literal* key in `heldKeys(caller)`, not just a broader sibling key; the test mirrors that logic so a wide-read grant does not falsely satisfy an exact-guard route.
+- `admin` is excluded from the per-role sweep by design: it holds every tenant key by construction, so asserting 403-for-allowed for it would just re-verify the role file key-by-key (already covered by `tests/unit/kernel/permissions.test.ts`).

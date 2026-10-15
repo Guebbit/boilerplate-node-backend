@@ -1,7 +1,7 @@
 ---
 source: tests/integration/order-snapshot-locale.test.ts
-sha256: 5ccbf6a3cc1b20574deeafdc65e265a4ccde2c53480cf2d292d38cfdfa11b220
-generated_at: 2026-09-27T15:56:37.153192+00:00
+sha256: 28ab231c487cebf022611cf8786af41a8d8af8aa25dd71c710ed48abc3895760
+generated_at: 2026-10-15T12:49:07.426199+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that verifies the order line-item snapshot freezes the **buyer's stored locale** (from `user.locale`) at order-creation time, regardless of the caller's locale. Covers both creation paths — `orderService.create` and `cartService.orderConfirm` — and asserts the embedded product title/description come from the correct locale translation. Lives at the top-level `tests/integration/` (not under any single module) because the logic spans `orders`, `cart`, and `locales` simultaneously, mirroring the placement rationale documented in `translation-resolution.test.ts`.
+Integration test that verifies an order line's snapshot freezes the **buyer's** stored locale (not the caller's or the request's) at the moment the product is embedded. It covers both entry points — `orderService.create` (direct order) and `cartService.orderConfirm` (cart checkout) — and asserts that the snapshot retains the correct translated title/description and the original product `_id`. It lives at the top level under `tests/integration/` (not under any single module) because the behavior crosses `orders`, `cart`, and `locales`; the file header notes this mirrors the placement rationale in `translation-resolution.test.ts`.
 
 ## Key elements
 
-- **`FALLBACK`** – constant set to `'en'`; the locale that needs no `digest` flag when upserting a translation.
-- **`givenTranslation(productId, locale, fields)`** – local helper wrapping `translationRepository.upsertEntityLocale` with source `'human'` and `digest` for non-fallback locales.
-- **`describe("orderService.create freezes…")`** – two tests: (1) Italian buyer, English caller → snapshot carries Italian text and `locale: 'it'`; (2) no Italian translation exists → source text is used but still tagged with the buyer's locale.
-- **`describe("cartService.orderConfirm freezes…")`** – one test exercising the cart-confirm path with the same locale-freezing expectation, including `cartRepository.setShippingMethod` setup.
+- **`FALLBACK`** — constant `'en'`, the universal fallback locale (see `.env-example`).
+- **`givenTranslation(productId, locale, fields)`** — thin wrapper around `translationRepository.upsertEntityLocale` that upserts a product translation; passes `'digest'` as the source flag only when the locale differs from `FALLBACK`.
+- **`describe("orderService.create …")`** — two cases:
+  - Translation present → asserts `items[0].locale === 'it'`, Italian title/description, and that `product._id` matches the original Mongo id.
+  - No Italian translation → asserts fallback to the English source title while `locale` is still `'it'`.
+- **`describe("cartService.orderConfirm …")`** — one case exercising the full cart → confirm flow (`cartItemSetById`, `setShippingMethod`, `orderConfirm`) and asserting the same snapshot invariants.
 
 ## Relationships
 
-- **`src/modules/orders/index.ts`** – source of `orderService.create`, the primary system under test.
-- **`src/modules/cart/index.ts`** – source of `cartService.cartItemSetById` / `orderConfirm`, the second creation path.
-- **`src/modules/cart/repository.ts`** – `cartRepository.setShippingMethod` is called to satisfy cart-confirm preconditions.
-- **`src/modules/locales/repository.ts`** – `translationRepository.upsertEntityLocale` is called by `givenTranslation` to seed per-locale product rows.
-- **`src/modules/locales/tests/factories.ts`** – `givenLocale('it')` registers the locale so the repository can resolve it.
-- **`src/modules/users/tests/factories.ts`** – `createUser({ locale: 'it' })` provisions the buyer.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` provisions the product whose snapshot is asserted.
-- **`tests/support/callers.ts`** – `testCallerContext` supplies the (deliberately mismatched) caller identity.
-- **`tests/support/http.ts`** – imported for side-effect setup (HTTP-level test infrastructure).
-- **`tests/support/response.ts`** – `asSuccess` unwraps the result union to access `.data`.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises the in-memory database once for the file.
+- **`src/modules/orders/index.ts`** — exports `orderService`; the test calls `orderService.create`.
+- **`src/modules/cart/index.ts`** — exports `cartService`; the test calls `cartService.cartItemSetById` and `cartService.orderConfirm`.
+- **`src/modules/cart/repository.ts`** — exports `cartRepository`; the test calls `cartRepository.setShippingMethod` before confirming.
+- **`src/modules/locales/repository.ts`** — exports `translationRepository`; `givenTranslation` delegates to `upsertEntityLocale`.
+- **`src/modules/locales/tests/factories.ts`** — exports `givenLocale`; seeds a locale row before tests run.
+- **`src/modules/users/tests/factories.ts`** — exports `createUser`; creates the buyer with a chosen `locale`.
+- **`src/modules/products/tests/factories.ts`** — exports `createProduct`; creates the product whose snapshot is asserted.
+- **`src/modules/addresses/tests/factories.ts`** — exports `giveAddress`; required by the cart-confirm flow.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory DB.
+- **`tests/support/http.ts`** — side-effect import (Jest setup / request interception).
+- **`tests/support/callers.ts`** — `callerContextAs('admin')` and `testCallerContext` build the caller payloads.
+- **`tests/support/response.ts`** — `asSuccess` unwraps the `Result` envelope for assertions.
 
 ## Notes
 
-- The Italian-vs-English locale mismatch is **intentional**: the caller is always `locale: 'en'` while the buyer is `'it'`, so any regression to "use the caller's locale" is caught immediately.
-- The `product._id` equality assertion (`String(order.items[0].product._id) === String(product._id)`) guards against a `.toJSON()` serialisation that would rename the field to `id`; the implementation must go through `.toObject()`.
-- `FALLBACK` is environment-bound (documented as `'en'` per `.env-example`); changing the default locale in environment config without updating this constant will silently alter the `digest` flag passed to `upsertEntityLocale`.
+- The caller's locale is deliberately set to `'en'` in every case while the buyer is `'it'` — this is the adversarial scenario the test guards against (an admin accidentally overwriting the buyer's language).
+- The assertion `String(order.items[0].product._id) === String(product._id)` is intentional: `resolveSnapshotProducts` merges via `.toObject()`, **not** `.toJSON()`, specifically so the original Mongo ObjectId survives the snapshot. A regression to `.toJSON()` would mint a new id and break downstream references.
+- The file is a *mirror* of the read-path test (`translation-resolution.test.ts`); keep the two in sync if the snapshot schema or locale-resolution contract changes.

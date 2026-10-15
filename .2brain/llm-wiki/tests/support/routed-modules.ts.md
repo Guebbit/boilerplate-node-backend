@@ -1,7 +1,7 @@
 ---
 source: tests/support/routed-modules.ts
-sha256: 02321ab406d5093629c3cc439a1ecd9cd943c4996bf82d2e8a7bb49654941f95
-generated_at: 2026-09-23T20:13:23.499494+00:00
+sha256: 0fac3c7f9e93d0b2325f85a4571e6aeb156fb4588b7f7da11510ee1f5afe4da0
+generated_at: 2026-10-15T13:00:41.468513+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,20 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central registry of every Express router mounted under `src/modules/`, exposed as a single `Record<string, Router>` map for test consumption. It exists as a separate file (not folded into `@tests/routes`) so that `jest.requireActual('@tests/routes')` never transitively loads the real middlewares (`rate-limit`, `cache`, `upload`, `route-flag`) while a `jest.mock` factory is still being evaluated. It also enforces completeness: a module added to `src/modules/` without a line here fails the "imports one router per module directory" check in `write-routes-are-guarded.test.ts`.
+Single-purpose re-export of every module that mounts an Express router, keyed by directory name. It reads the list dynamically from the module registry (`src/modules.ts`) so any newly enabled routed module is automatically included without updating a hardcoded list.
 
 ## Key elements
 
-- **`ROUTED_MODULES: Record<string, Router>`** — The sole export. Keys are the directory names under `src/modules/` (e.g. `"account"`, `"api-keys"`); values are the named `router` default-export from each module's `routes.ts`. Contains 18 entries.
+- **`ROUTED_MODULES: Record<string, Router>`** — The sole export. Built by calling `routedModulesOf(enabledModules)` (from `@tests/routes`) against the registry's `enabledModules` (from `src/modules.ts`). Each key is the module's directory name under `src/modules/`; each value is the module's `Router`.
 
 ## Relationships
 
-- **Imported from** test files that need to iterate or reference all module routers in a single lookup (e.g. the "imports one router per module directory" guard test).
-- **Imports from** every graph neighbor listed below, pulling the `router` export from each:
-    - `src/modules/account/routes.ts` → `accountRouter`
-    - `src/modules/addresses/routes.ts` → `addressesRouter`
-    - `src/modules/antibot/routes.ts` → `antibotRouter`
-    - `src/modules/api-keys/routes.ts` → `apiKeysRouter`
-    - `src/modules/audit-logs/routes.ts` → `auditLogsRouter`
-    - `src/modules/cart/routes.ts` → `cartRouter`
-    - `src/modules/delivery/routes.ts` → `deliveryRouter`
-    - `src/modules/feedback/routes.ts` → `feedbackRouter`
-    - `src/modules/inventory/routes.ts` → `inventoryRouter`
-    - `src/modules/locales/routes.ts` → `localesRouter`
-    - `src/modules/observability/routes.ts` → `observabilityRouter`
-    - `src/modules/orders/routes.ts` → `ordersRouter`
-    - `src/modules/payments/routes.ts` → `paymentsRouter`
-    - `src/modules/products/routes.ts` → `productsRouter`
-    - `src/modules/users/routes.ts` → `usersRouter`
-- Also imports `webhooks` and `wishlist` routers (not in the graph-neighbor list above but present in the file).
+- **`src/modules.ts`** — Provides `enabledModules`, the input that determines *which* modules appear in `ROUTED_MODULES`. Adding a module to the registry makes it appear here automatically.
+- **`tests/support/routes.ts`** — Provides the `routedModulesOf` helper that filters the registry to only routed modules and maps them to their routers.
+- **`tests/cross-cutting/authenticated-controllers.test.ts`**, **`tests/cross-cutting/role-hierarchy-routes.test.ts`**, **`tests/cross-cutting/write-routes-are-guarded.test.ts`** — Consume `ROUTED_MODULES` to iterate over all routers in a single pass (e.g., asserting every route is guarded, or that auth middleware is present).
 
 ## Notes
 
-- **Static list, not auto-discovered.** Adding a new module directory under `src/modules/` requires a manual import line and a new key in `ROUTED_MODULES`; omission is caught by a dedicated test, not by the type system.
-- **Consuming tests must still call `jest.mock` for middleware factories _before_ importing this file**, exactly as they would when importing any single router directly. The header of `@tests/routes` documents the underlying `jest.mock`/`requireActual` ordering constraint.
-- Deliberately **not** routed through `src/modules.ts` (the app-level registry) so that importing this file pulls in only the 18 routers, not the full application wiring.
-- Two routers (`webhooks`, `wishlist`) appear in this file but are **not** among the graph-neighbor list provided here; they are real imports in the source.
+- **Why a separate file from `@tests/routes`:** `routes.ts` contains mock factories that are pulled in via `jest.requireActual('@tests/routes')` inside a `jest.mock` factory. If the real router imports lived there, that `requireActual` would evaluate real middleware modules (`rate-limit`, `cache`, `upload`, `route-flag`) while their own mocks are still being defined, causing those factories to resolve to `undefined`. Keeping the router imports in this file isolates them from that evaluation path.
+- **Consumer responsibility:** A test file that imports `ROUTED_MODULES` must still declare its own `jest.mock(...)` calls for the middleware factories *before* the import, exactly as if it were importing each router directly. See the header in `@tests/routes` for the full reasoning.
+- **Unregistered module folders** (present on disk but absent from the registry) are *not* included here; that gap is deliberately left to `write-routes-are-guarded.test.ts` to flag.

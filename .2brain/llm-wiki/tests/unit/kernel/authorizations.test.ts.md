@@ -1,7 +1,7 @@
 ---
 source: tests/unit/kernel/authorizations.test.ts
-sha256: 8909c1b289acc9f3ac7ee60f722fa0b63d5fb701c60bfe5e3df1241da266cc60
-generated_at: 2026-09-27T16:11:40.485491+00:00
+sha256: 75cac3712d0bdf2fe4f5de63a4651f64e16cd570d6622524c860c630dec7a32a
+generated_at: 2026-10-15T13:21:50.816331+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the three authorization middlewares (`getAuth`, `isAuth`, `requirePermission`) and their helpers in `src/kernel/middlewares/authorizations.ts`. The file exists to lock in the deliberately distinct failure semantics of each guard (fail-open vs. 401 vs. 403), to verify that the real response envelope reaches the client, and to confirm audit events are emitted with the correct shape—without mocking the response layer or the audit vocabulary.
+Unit tests for the authorization middlewares in `src/kernel/middlewares/authorizations.ts`. The file verifies that the three-tier guard model (`getAuth` → optional, fails open; `isAuth` → required, 401; `requirePermission` → elevation, 401/403) behaves correctly at every branch boundary, using a real response layer so asserted status codes match what a client would receive. Only the audit sink and the JWT/DB resolver boundaries are stubbed.
 
 ## Key elements
 
-- **`jest.mock('@infrastructure/observability/audit', …)`** — Replaces only `emitAuditEvent`; spreads the real module so `buildAuditEvent` and `coreAuditActions` stay intact. Manually reroutes `recordAudit` through the fake `emitAuditEvent` because `recordAudit` closes over its own module's real function.
-- **`fromAccessToken` / `fromRefreshToken` / `fromBearerToken`** — `jest.fn` resolvers registered via `registerAuthResolver` / `registerCredentialResolver` to control what the JWT/credential boundaries return on each test.
-- **`ADMIN_ONLY_KEY`** (`'apikeys.any.delete'`) — A key held only by the `admin` role; stands in for "the elevated permission" in `requirePermission` tests.
-- **`makeRequest`** — Builds an Express `Request` stub with an optional `Authorization` header and pre-resolved `authContext`/`caller`.
-- **`makeCookieRequest`** — Request stub carrying a `jwt` cookie for the cookie-authenticated middleware paths.
-- **`makeCredentialRequest`** — Request stub shaped like `getAuth`'s `sk_…` branch (`caller` + `credentialId`, no `authContext`).
-- **`makeStepUpResponseStub`** — Extends `makeResponseStub` with a `setHeader` mock needed by `requireFreshAuth`.
-- **`runUntilNext`** — Helper that invokes an async middleware and resolves once `next()` is called, returning the `next` mock for assertions.
-- **`describe('getTokenBearer')`** — Covers Bearer-prefix stripping, absent header, and scheme-without-token.
-- **`describe('getAuth')`** — Verifies fail-open behaviour (no token, invalid token, deleted user, unexpected rejection) and fail-through-to-error-handler for infrastructure outages (`MongooseServerSelectionError` → `next(err)`).
-- **`describe('isAuth')`** (truncated) — Required identification; asserts 401 on failure.
-- **`describe('requirePermission')` / `requirePermissionViaCookie` / `requireFreshAuth`** — Elevation and freshness checks; 401 vs. 403 distinction; step-up header emission.
+- **`describe('getTokenBearer')`** — table-driven tests for Bearer-token extraction: prefix stripping, case-insensitive scheme, rejection of non-Bearer schemes.
+- **`describe('getAuth')`** — the optional-identification middleware. Covers: no token (no-op), valid token (attaches `authContext` + `caller`), invalid/expired token (fails open, anonymous), valid token but deleted user (`ok: undefined`), non-infrastructure rejection.
+- **Additional describe blocks** (truncated in view) — `isAuth`, `isAuthOrCredential`, `requirePermission`, `requirePermissionViaCookie`, `stillHoldsKeyViaCookie`, `requireFreshAuth`, `requireFreshAuthWhen`.
+- **`makeRequest` / `makeCookieRequest` / `makeCredentialRequest`** — typed request-stub factories for bearer, cookie, and `sk_…` credential branches respectively.
+- **`runUntilNext`** — helper that invokes an async middleware and resolves once `next()` is called, returning the `next` mock for assertion.
+- **`makeStepUpResponseStub`** — adds `setHeader` (needed by `requireFreshAuth`) on top of `makeResponseStub`.
+- **`ADMIN_ONLY_KEY = 'apikeys.any.delete'`** — a real permission key used as the elevated-permission stand-in throughout.
+- **Partial mock of `@infrastructure/observability/audit`** — replaces `emitAuditEvent` with a `jest.fn()` while keeping `buildAuditEvent` and `coreAuditActions` real; includes a `recordAudit` shim so the inner call path still hits the mock.
+- **Resolver injection via `registerAuthResolver` / `registerCredentialResolver`** — fakes `fromAccessToken`, `fromRefreshToken`, `fromBearerToken`, `recheckFamily`, `clearDeadCookie`.
 
 ## Relationships
 
-- **`src/kernel/middlewares/authorizations.ts`** — System under test; all exported middlewares and `getTokenBearer` are imported here.
-- **`src/kernel/authentication.ts`** — `registerAuthResolver` and `registerCredentialResolver` are called at module scope to install the fake resolvers before tests run.
-- **`src/infrastructure/observability/audit.ts`** — `emitAuditEvent` is mocked; `buildAuditEvent` and `coreAuditActions` are consumed from the real module (via the `requireActual` spread).
-- **`src/kernel/permissions.ts`** — `callerInScope` is used to compute the expected `request.caller` value.
-- **`src/types/auth-context.ts` / `src/types/index.ts`** — `AuthContext` and `Caller` types shape the request stubs and resolver return values.
-- **`tests/support/stub.ts`** — `asStub` is the universal partial-stub constructor for every object in the file.
-- **`tests/support/express.ts`** — `makeResponseStub` provides the base chainable `status().json()` response mock.
-- **`tests/support/callers.ts`** — `asCustomer` and `asAdmin` produce realistic caller fixtures for auth-context assertions.
+- **`src/kernel/middlewares/authorizations.ts`** — the module under test; all exported guards are exercised here.
+- **`src/kernel/authentication.ts`** — provides `registerAuthResolver` and `registerCredentialResolver`; the test injects fake resolvers through these to control token-verification outcomes.
+- **`src/infrastructure/observability/audit.ts`** — partially mocked; `emitAuditEvent` is stubbed, `buildAuditEvent`/`coreAuditActions` remain real to catch shape regressions.
+- **`src/infrastructure/observability/security-events.ts`** — `securityEventsTotal` and `staleCredentialsTotal` counters are imported for metric assertions.
+- **`src/kernel/permissions.ts`** — `callerInScope` is used to build the expected `caller` object that `getAuth` should attach.
+- **`src/types/auth-context.ts` / `src/types/index.ts`** — `AuthContext` and `Caller` types shape the stubs and resolver fakes.
+- **`tests/support/callers.ts`** — `asCustomer` and `asAdmin` factories produce realistic identity objects for resolver return values.
+- **`tests/support/express.ts`** — `makeResponseStub` supplies the chainable `status().json()` response mock.
+- **`tests/support/stub.ts`** — `asStub` creates the typed partial objects used for `Request`, `Response`, `NextFunction`, and `Caller` stubs.
 
 ## Notes
 
-- **`recordAudit` workaround**: The mock must manually rewire `recordAudit` because that function closes over the real module's `emitAuditEvent`, making it immune to the top-level mock. Omitting this reroute silently drops audit assertions.
-- **`getAuth` fail-open is intentional**: A rejected or resolved-`undefined` token must call `next()` with no error; only true infrastructure errors (e.g. `MongooseServerSelectionError`) are forwarded to `next(err)` for a 503. Tests assert both paths distinctly.
-- **`caller` must be set alongside `authContext`**: The request stub sets both because the middleware under test populates both; omitting `caller` from the stub would mask drift in key resolution.
-- **`authTime` is epoch seconds**: `staleRequest()` subtracts 999 s from `nowSeconds()` to fall outside any freshness tier window; the unit is seconds (matching the JWT `auth_time` claim), not milliseconds.
-- **Response is real, not mocked**: Status codes asserted in tests are the ones a client actually receives; only the audit sink and JWT/DB boundaries are stubbed.
+- **Fail-open is intentional and tested as a requirement.** `getAuth` must call `next()` exactly once on every path, including the invalid-token path, because it guards public routes. Tests assert `next` is called and `authContext` stays `undefined`.
+- **The audit mock has a subtlety:** `recordAudit` in production closes over its own module's `emitAuditEvent`, which is immune to the outer mock. The test file re-implements `recordAudit` to route through the mocked `emitAuditEvent` explicitly.
+- **`ADMIN_ONLY_KEY` is a literal permission string**, not a scope-wide shortcut. Tests that reference "the elevated permission" always use this constant.
+- **`runUntilNext` resolves on `next()`**, not on middleware completion — a middleware that forgets to call `next` will hang the test (intentional, mirrors the production contract).
+- **Response is real (not mocked at the status-code level):** the test asserts the exact numeric status a client receives, so the middleware's own `res.status(…).json(…)` calls are exercised.

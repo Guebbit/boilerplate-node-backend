@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/erasure-registry.ts
-sha256: 4c325e25444cb93058cffcde0b21ef1df0e2cb8d9f86a67bc09cb98ee7c0fa7e
-generated_at: 2026-09-27T15:37:05.065812+00:00
+sha256: efbf6b6766b1b276a84140f30046861031b6cdf3d6975f4c2e696f3bdce8ab57
+generated_at: 2026-10-15T12:07:39.794615+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Holds the `users` module's view of the DDD-D6 `personalData.erase` registry. Because `users` cannot import sibling modules under `src/modules/*` to collect their manifest entries itself (the same circular-dependency wall that motivates `@modules/account/services/personal-data-registry.ts`), the list is **supplied in once at boot** by the `onRegistered` hook rather than assembled here.
+Holds the module-local lists of personal-data erasers and minimisers that the `users` module operates on. Because `users` cannot import from other `src/modules/*` packages (circular-dependency wall), this file acts as a passive registry: it stores whatever list the app tier injects at boot and exposes it to in-module consumers. It does not assemble, resolve, or own the eraser definitions itself.
 
 ## Key elements
 
-- **`PersonalDataEraser`** (type, not exported) — signature for one module's erase hook: `(userId: string, session: ClientSession) => Promise<void>`.
-- **`erasers`** (module-level `let`) — the current readonly list of erasers; empty until the app tier supplies them.
-- **`setPersonalDataErasers(registered)`** (exported) — replaces the entire list. Called once at boot by `module.ts`; tests call it to install a fixture and to restore the empty default.
-- **`personalDataErasers()`** (exported) — getter returning the current list in declaration order.
+- **`setPersonalDataErasers(registered: readonly PersonalDataEraser[])`** — Replaces the stored eraser list. Called once at boot by `module.ts`; re-called in tests to swap in fixtures or reset.
+- **`personalDataErasers(): readonly PersonalDataEraser[]`** — Returns the current eraser list in declaration order. Empty until the setter has been called.
+- **`setPersonalDataMinimisers(registered: readonly PersonalDataMinimiser[])`** — Same pattern for minimisers.
+- **`personalDataMinimisers(): readonly PersonalDataMinimiser[]`** — Returns the current minimiser list.
+- **`erasers` / `minimisers`** (module-level, non-exported) — The mutable backing arrays; start as `[]`.
+- **Types imported from `@kernel/registry`** — `PersonalDataEraser`, `PersonalDataMinimiser` (type-only).
 
 ## Relationships
 
-- **`src/modules/users/module.ts`** — Its `onRegistered` hook calls `resolvePersonalDataErasers(modules)` once every enabled module is known, then hands the result to `setPersonalDataErasers` in this file.
-- **`src/modules/users/service.ts`** — Consumes `personalDataErasers()` to iterate and invoke each eraser when performing a user-data erasure.
-- **`src/modules/users/tests/integration/service.test.ts`** — Calls `setPersonalDataErasers` to install a test fixture before exercising the service, and again with an empty array to restore the default state.
+- **`src/kernel/registry.ts`** — Source of the `PersonalDataEraser` and `PersonalDataMinimiser` types consumed here.
+- **`src/modules/users/module.ts`** — Calls `setPersonalDataErasers` (and likely `setPersonalDataMinimisers`) inside its `onRegistered` hook, passing the resolved list produced by `resolvePersonalDataErasers(modules)`. This is the single injection point at boot.
+- **`src/modules/users/services/reaper.ts`** / **`src/modules/users/services/remove.ts`** — In-module consumers that read `personalDataErasers()` / `personalDataMinimisers()` to know which erasers/minimisers to invoke during user-removal flows.
+- **`src/modules/users/tests/integration/erasure-roles.test.ts`** / **`service.test.ts`** — Call the setters to install fixture erasers/minimisers, then restore the empty list in teardown.
 
 ## Notes
 
-- The list is **replaced wholesale** on each `setPersonalDataErasers` call; there is no append/remove API. Order of the returned array reflects the order in which modules registered their erasers.
-- The variable is `let` (reassignable) but the public surface only exposes a `readonly` tuple, so consumers cannot mutate the array in place.
-- This file intentionally contains no logic beyond the getter/setter pair — all resolution happens in `module.ts`.
+- The lists are **replace-on-write**: calling a setter discards any previous list entirely. There is no append or merge.
+- Order is preserved as given by the caller ("declaration order"); this file does not sort or filter.
+- Until the setter is called (e.g., if a service is exercised in isolation without boot), the getters return an **empty array**—not `undefined`. Guard accordingly if you assume at least one entry.
+- The design mirrors `@modules/account/services/personal-data-registry.ts`; the same circular-import constraint that necessitated that file is why this one exists rather than a static import of every module's manifest.

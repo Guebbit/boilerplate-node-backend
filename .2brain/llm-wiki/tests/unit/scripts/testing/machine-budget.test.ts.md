@@ -1,7 +1,7 @@
 ---
 source: tests/unit/scripts/testing/machine-budget.test.ts
-sha256: c4a3be4b9060e754c1aa37d60c4c9cf0407c01ed57b254c34e981f75a0bc8f4a
-generated_at: 2026-09-23T20:32:05.762939+00:00
+sha256: 535786365fd62a777187bab54b5306065944cdb86cd2f6d764c0a5f386ef732c
+generated_at: 2026-10-15T13:32:28.487098+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the sizing arithmetic in `scripts/testing/machine-budget.ts`. Every assertion guards one of two failure modes: a budget too high (OOM killer terminates a worker mid-file) or too low (a fast machine pays unnecessary sharding overhead). The suite asserts both directions for each function.
+Unit tests for the memory-budget and shard-sizing arithmetic in `scripts/testing/machine-budget.ts`. Every assertion guards against the two failure modes the budget exists to prevent: allocating too much (OOM kill mid-run) or too little (a shard that executes zero files and reports green). A final integration-style block verifies the full pipeline produces one shard on a roomy machine and multiple shards on a constrained one.
 
 ## Key elements
 
-- **`positiveInteger`** – parses a string into a positive `int`; returns `undefined` for zero, negatives, floats, blanks, and non-numeric input.
-- **`environmentKnob`** – reads a named env var; tests confirm invalid values (`'0'`, `'-1'`, `'plenty'`, `''`) are treated as _unset_ rather than as a value. Uses a test-only var name (`JEST_WORKERS_TEST_ONLY`) and cleans up in `afterEach`.
-- **`availableMemoryMb`** – asserts the returned figure is positive and never exceeds `os.totalmem()`.
-- **`processBudgetMb`** – explicit override wins; computed value is floored at `MIN_PROCESS_BUDGET_MB`.
-- **`shardTargetMb`** – caps at `MAX_SHARD_PEAK_MB`, passes modest values through, raises values below the floor.
-- **`filesPerShard`** – subtracts `PROCESS_BASELINE_MB` before dividing by `PER_FILE_RETENTION_MB`; never returns zero.
-- **`shardCount`** – ceiling division of file count by files-per-shard; clamps to `[1, fileCount]`; treats `0` files as 1 shard.
-- **`clampShards`** – caps an override at the file count (prevents empty shards), floors at 1, treats `0` files as 1.
-- **`heapCapMb`** – divides the budget by concurrent worker count using floor division; single-process case returns the full budget.
-- **`workerCount`** – explicit override wins; bounded by both memory and available cores; never returns zero.
-- **`the two machines this all exists for`** – end-to-end composition: a 30 GB machine yields 1 shard for 75 integration files; a 2.6 GB machine yields >1 shard for the same layer.
+- **`describe('positiveInteger')`** — table-driven checks that the string→int parser accepts valid input and returns `undefined` for zero, negatives, floats, blanks, and non-numeric strings.
+- **`describe('environmentKnob')`** — verifies `environmentKnob` reads a valid integer from the real process environment and treats `'0'`, `'-1'`, non-numeric, and empty values as *unset* (`undefined`), not as a numeric zero.
+- **`describe('availableMemoryMb')`** — asserts the return is positive and ≤ `os.totalmem()`.
+- **`describe('processBudgetMb')`** — confirms an explicit override is returned verbatim; the computed floor is ≥ `MIN_PROCESS_BUDGET_MB`.
+- **`describe('shardTargetMb')`** — caps at `MAX_SHARD_PEAK_MB`, passes modest values through, and raises sub-floor values to `MIN_PROCESS_BUDGET_MB`.
+- **`describe('filesPerShard')`** — subtracts `PROCESS_BASELINE_MB` before dividing; floors the result at 1 for any target (including 0).
+- **`describe('shardCount')`** — ceil division of files by per-shard; never exceeds the file count; treats a file count of 0 as 1 shard.
+- **`describe('clampShards')`** — passes sane overrides through, caps at the file count (so no shard runs empty), floors at 1, and treats 0 files as 1 shard.
+- **`describe('heapCapMb')`** — single process gets full budget; multi-process divides with floor (never ceil) so workers never jointly exceed the budget.
+- **`describe('workerCount')`** — explicit override wins; result is ≥ 1 and ≤ `os.cpus().length - cpuReserve`.
+- **`describe('the two machines this all exists for')`** — end-to-end pipeline (`processBudgetMb → shardTargetMb → filesPerShard → shardCount`) against the 75-file integration layer: a 30 GB machine yields 1 shard; a 2600 MB machine yields > 1 shard.
+- **`INTEGRATION_FILES`** (const, 75) — test-local fixture representing the integration suite's file count; used only in the final describe block.
 
 ## Relationships
 
-- **`scripts/testing/machine-budget.ts`** – the module under test. All functions and constants (`MAX_SHARD_PEAK_MB`, `MIN_PROCESS_BUDGET_MB`, `PER_FILE_RETENTION_MB`, `PROCESS_BASELINE_MB`) are imported from this single file.
+- **`scripts/testing/machine-budget.ts`** — the module under test. All functions (`positiveInteger`, `environmentKnob`, `availableMemoryMb`, `processBudgetMb`, `shardTargetMb`, `filesPerShard`, `shardCount`, `clampShards`, `heapCapMb`, `workerCount`) and constants (`MAX_SHARD_PEAK_MB`, `MIN_PROCESS_BUDGET_MB`, `PER_FILE_RETENTION_MB`, `PROCESS_BASELINE_MB`) are imported from here.
+- **`tests/support/environment.ts`** — supplies `setProcessEnvironment`, used exclusively in the `environmentKnob` block to inject a value into the real `process.env` for each test case.
 
 ## Notes
 
-- `INTEGRATION_FILES = 75` is a hardcoded snapshot of the current integration test file count; if that layer grows or shrinks, the final describe block's expectations must be revisited.
-- Tests that touch `os.totalmem()` / `os.cpus()` are machine-dependent but only assert inequalities, so they pass on any hardware.
-- The env-var tests use a deliberately unique variable name to avoid clobbering a real `JEST_WORKERS` setting in the developer's shell.
-- `heapCapMb` uses floor division intentionally: workers must never _jointly_ exceed the budget, so rounding up is forbidden.
+- The `environmentKnob` tests use a throwaway variable name (`JEST_WORKERS_TEST_ONLY`) to avoid colliding with real CI configuration.
+- The dominant invariant tested across multiple blocks is *never-zero*: `filesPerShard` ≥ 1, `shardCount` ≥ 1, `workerCount` ≥ 1. A zero in any of these would produce a "green" run that tested nothing.
+- `heapCapMb` uses floor division (not round) so that N workers × cap ≤ budget; the 2601/4 → 650 case pins this down.
+- The final describe block chains four functions together rather than testing them in isolation, making it the only test that can catch a unit-passing but pipeline-failing regression.

@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/mailer-templates.test.ts
-sha256: 748ae72b83cf2a792cd0556b2654ac0eb6876064c9152d776d51b7b21d1382f3
-generated_at: 2026-09-27T16:04:59.589648+00:00
+sha256: abc83346cd1082ca993cf5117f407d6e8ace1c202a2cc8a5d9db366de488ef6c
+generated_at: 2026-10-15T13:08:03.955809+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Guards the email template pipeline end-to-end at the filesystem and rendering level: asserts that `EMAIL_TEMPLATES_DIR` points at a real directory of `.ejs` files, that every template has a matching entry in the `contentFor` map, and that each template renders in every supported locale with no unresolved i18n keys. This is the only test that can catch a wrong template path or a missing translation before a customer receives a broken email, because i18next silently returns the raw key string (a valid value) when a translation is absent.
+Guards the email/PDF template collection end-to-end. It replicates exactly how `app.ts` boots the template registry (via each enabled module's own `templates/` manifest), asserts every registered name resolves to a real file, and renders every template in every supported locale to catch missing i18next keys before a customer ever receives a broken email. Because a wrong path or a missing translation key produces no type error and no runtime exception, this suite is the only automated net that catches both.
 
 ## Key elements
 
-- **`contentFor(locale)`** — Builds a `Record<string, EmailContent>` mapping every template filename (e.g. `orders.order-confirm.ejs`) to the `EmailContent` object produced by the corresponding module email-builder function, all parameterised with the given locale.
-- **`describe('email templates')`** — Filesystem-level assertions: directory exists, contains at least one `.ejs` file, and four specific template paths resolve to real files.
-- **`describe('email templates render in every supported locale')`** — The main rendering suite:
-  - Cross-checks that `contentFor` keys exactly match the `.ejs` files in the directory (prevents a new template arriving without locale coverage).
-  - `it.each` over every (template × locale) pair: renders via `ejs.renderFile`, asserts `<html lang="…">` is present and no dotted i18n identifier (e.g. `account.reset.subject`) appears in the HTML.
-  - Invoice document test: renders `shared/templates/documents/invoicing.document.ejs` via `buildDocumentView` with the same locale assertions.
-  - Locale-differentiation test: asserts `account.reset-confirm.ejs` produces different HTML in `en` vs `it`, proving dictionaries are actually consulted.
+- **`registerTemplateDirectories(enabledModuleDirectories('templates'))`** — populates the registry identically to production boot so subsequent assertions operate on the real collection.
+- **`contentFor(locale)`** — a single function that maps every template name to its `EmailContent` by calling the owning module's builder (e.g. `verifyRequestEmail`, `orderConfirmEmail`, `returnNoticeEmail`). Serves as the source-of-truth list for coverage checks.
+- **`render(name, locale)`** — renders a template via `ejs.renderFile` with `root: process.cwd()`, matching the production include-resolution path used by `sendTemplatedEmail`.
+- **Template collection tests** — assert ≥ 1 template is registered, sample names resolve to real files, and hostile names (`../etc/passwd`, backslash, `constructor`, etc.) are rejected before path resolution.
+- **Locale rendering tests** — for every (template × locale) pair: assert `<html lang="…">` is present and that no dotted i18next identifier (a missing-key tell) survives in the HTML. Also asserts coverage parity between `contentFor` keys and registered names.
+- **Invoice document test** — renders `invoicing.document.ejs` directly (it lives outside the name-resolved map) and applies the same no-unresolved-keys rule.
+- **Locale-divergence test** — renders `account.reset-confirm` in `en` and `it`, asserting the outputs differ so dictionaries are actually consulted.
+- **Apostrophe-escaping test** — verifies a name like `O'Brien` reaches the template raw and is HTML-escaped exactly once by the template, not pre-escaped by i18next.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — Imports `emailTemplatesDirectory()` (the path under test) and the `EmailContent` type that shapes every rendered payload.
-- **`src/infrastructure/i18n/index.ts`** — Imports `listSupportedLocales()` to drive the locale cross-product.
-- **`src/modules/account/emails.ts`** — Source of 9 builder functions (verify, reset, setup, delete, inactivity, 2FA, email-change) feeding `contentFor`.
-- **`src/modules/orders/emails.ts`** — Source of 6 builder functions (confirm, paid, bank-transfer ×2, card-expired, product-unavailable) feeding `contentFor`.
-- **`src/modules/feedback/emails.ts`** — Source of `contactRequestEmail`.
-- **`src/modules/delivery/emails.ts`** — Source of `shipmentShippedEmail`.
-- **`src/modules/webhooks/index.ts`** — Source of `subscriptionDisabledEmail`.
+- **`src/infrastructure/adapters/mailer.ts`** — imports `registerTemplateDirectories`, `registeredTemplateNames`, `templateFile`, and the `EmailContent` type; the registry this suite exercises.
+- **`src/modules.ts`** — imports `enabledModuleDirectories('templates')` to discover each module's template directory exactly as `app.ts` does.
+- **`src/infrastructure/i18n/index.ts` / `catalog.ts`** — provides `listSupportedLocales()` which drives the per-locale test matrix.
+- **Module `emails.ts` files** (`account`, `orders`, `payments`, `delivery`, `returns`, `api-keys`, `feedback`, `invoicing`, `example`, `webhooks`) — each exports the builder function that fills its own template; this suite calls every one of them to produce render-ready content.
+- **`src/modules/example/index.ts`** — re-exports `examplePublishedEmail` used in `contentFor`.
 
 ## Notes
 
-- **No filesystem mocking.** The tests deliberately call `existsSync` / `readdirSync` against the real filesystem so a misconfigured `EMAIL_TEMPLATES_DIR` is caught immediately, not hidden by a mock.
-- **EJS, not nodemailer.** Rendering goes through `ejs.renderFile` directly; no SMTP transport or `nodemailer` mailer is involved. The scope is template correctness and copy, not delivery.
-- **Unresolved-key detection is regex-based.** i18next returns the missing key string itself (e.g. `orders.confirm.heading`), which is syntactically valid HTML. The only reliable signal is a dotted identifier with two or more segments inside an HTML tag body — the test asserts none appear.
-- **`contentFor` completeness is a hard invariant.** The test asserts `Object.keys(contentFor('en')).toSorted()` equals the directory listing. Adding a new `.ejs` file without adding its builder entry to `contentFor` will fail this test.
-- **The invoice document is a first-class citizen here** even though it lives outside `templates/emails/`; it is held to the identical "no unresolved keys in any locale" rule.
+- Rendering goes through **EJS directly**, not `nodemailer`, so no SMTP transport is needed; the concern is copy, not delivery.
+- `root: process.cwd()` is required because templates use root-relative includes like `/shared/templates/layouts/...`.
+- The "no unresolved key" assertion relies on i18next's silent fallback: a missing key returns the key string itself (e.g. `account.reset.title`), which is valid HTML and throws nothing — the regex `/>[^<>]*\b[a-z]+(?:\.[\da-z-]+){2,}\b[^<>]*</` is the only detector.
+- The invoice PDF is **not** in the name-resolved registry (nothing calls `templateFile` for it), so the test reaches the file by relative path, mirroring how the invoicing module itself accesses it.
+- Adding a new template without adding its builder to `contentFor` will fail the coverage-parity assertion; adding a builder without registering the template will fail the "resolves to a real file" check.

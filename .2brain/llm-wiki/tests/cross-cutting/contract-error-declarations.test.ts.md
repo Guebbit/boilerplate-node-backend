@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/contract-error-declarations.test.ts
-sha256: e39056171268147f31bcaf9cf979e254debbc03e1c2d6d63f39d58b6752aeff0
-generated_at: 2026-09-27T15:49:54.411004+00:00
+sha256: 0d8dae304345a23c455b91b4c44f8fa375e59ff0846290aab213c8216d9da4a1
+generated_at: 2026-10-15T12:36:48.030746+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract-level guard that every OpenAPI operation accepting an id parameter declares a `422` response. It exists because `databaseErrorInterpreter` answers 422 for malformed ids on *any* such route, so an omission in one fragment makes the shared contract inconsistent and breaks the generated client and the PHP twin. The test reads the per-module fragments (the editable source of truth) rather than the generated bundle.
+Guards the per-module OpenAPI fragments against a missing `404` response on any operation whose path template carries an id parameter. Because the contract is a shared artifact (bundled, consumed by a generated frontend client, and mirrored in a PHP twin), an undeclared status is a hard integration break, not a documentation gap. The test reads the source fragments directly so a failure names the file a developer actually edits.
 
 ## Key elements
 
-- **`operations()`** — Walks every module directory under `MODULES_ROOT`, parses its `openapi.yaml` fragment, and returns a flat array of `{ module, route, method, codes }` for every HTTP method entry found.
-- **`TAKES_AN_ID`** (regex) — Matches route paths containing an id-like template parameter (`{id}`, `{orderId}`, `{userId}`, …). Used instead of a hardcoded route list so new id-bearing endpoints are covered automatically.
-- **`takingAnId()`** — Filters `operations()` to id-taking routes.
-- **Canary assertion** (`expect(operations().length).toBeGreaterThan(40)`) — Fails loudly if a fragment is renamed or the path shape changes, preventing a silently empty sweep from passing.
-- **422 assertion** — Fails with a per-operation message listing every id-taking route that omits `422` from its declared response codes.
+- **`METHODS`** — `Set` of the five HTTP verbs recognised as operation keys in an OpenAPI path item.
+- **`TAKES_AN_ID`** — regex (`/{[^}]*[Ii]d}/`) matching any path template parameter whose name contains `id`; used as the trigger for the assertion rather than a hardcoded route list.
+- **`Operation`** (interface) — `{ module, route, method, codes }` shape returned by the sweep.
+- **`operations()`** — reads every `<module>/openapi.yaml` under `MODULES_ROOT`, parses it with `yaml`, and flat-maps all method-keyed operations with their declared response codes.
+- **`takingAnId()`** — filters `operations()` to those whose route matches `TAKES_AN_ID`.
+- **`describe('declared error responses')`** — the test suite:
+  - *Canary case* — asserts `operations().length > 40` and `takingAnId().length ≥ 20` so a renamed fragment or restructured path shape doesn't let the real assertion pass vacuously.
+  - *Main case* — asserts no id-taking operation is missing `404` in its declared responses; failures list `module: METHOD route` with an explanatory suffix.
 
 ## Relationships
 
-- **`tests/support/paths.ts`** — Provides `MODULES_ROOT`, the filesystem root under which each module's `openapi.yaml` fragment is expected. The test is entirely dependent on this path being correct; if it points to the generated bundle or a stale directory, every assertion sweeps the wrong files.
-- **`package.json`** — Supplies the `yaml` dependency used to parse the fragments and the `@tests` path alias that resolves `@tests/paths`.
+- **`tests/support/paths.ts`** — supplies the `MODULES_ROOT` constant; the test uses it as the base directory to discover per-module `openapi.yaml` fragments.
+- **`package.json`** — provides the `yaml` and `node:fs`/`node:path` dependencies and the `@tests/paths` import alias.
 
 ## Notes
 
-- **Reads fragments, not the bundle.** The generated `openapi.yaml` at the repo root is a build artifact; this test deliberately parses the per-module sources so a failure names a file a developer actually edits.
-- **Scope is intentionally 422 only.** A 500 sweep finds three gaps (`GET /account`, `GET /observability/events`, `GET /observability/metrics`) that are left unasserted here because resolving them requires coordinated edits across three repositories. The test states one rule it can defend rather than two it cannot.
-- **Method filtering uses a fixed `Set`.** Only `get`, `post`, `put`, `patch`, `delete` are treated as operations; any non-standard key in a path object is silently ignored.
-- **The canary is load-bearing.** Both assertions depend on `operations()` returning a non-trivial list; without the canary, a broken `MODULES_ROOT` would produce an empty array and the 422 check would pass vacuously.
+- Scope is **404 on a path id only**. The 422 case for malformed ids in a body or query is covered separately by `tests/integration/malformed-ids.test.ts`.
+- A 500 sweep was run but the three hits (`GET /account`, `GET /observability/events`, `GET /observability/metrics`) are **deliberately excluded** from this test; resolving them requires editing a file that must move in lockstep across three repositories.
+- The test reads fragments, **not** the generated bundle, so error messages point at the file a developer edits.
+- The canary test is load-bearing: without it, a rename or schema restructuring would make `takingAnId()` return `[]`, and the 404 assertion would pass while checking nothing.

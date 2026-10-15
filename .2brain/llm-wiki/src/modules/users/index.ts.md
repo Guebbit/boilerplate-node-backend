@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/index.ts
-sha256: 70d127f544625d0b7fe5d303cb7aa65445b8db2d802d5d843bf11e656a1ddc82
-generated_at: 2026-09-27T15:37:24.595766+00:00
+sha256: 61e34b5ca11c086d19d23f5cb6c4f8ac4786ff3eefdddcd5827980dd37dcc7ef
+generated_at: 2026-10-15T12:08:02.097043+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,20 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Public barrel for the `users` module — the sole import surface available to sibling modules (enforced per `docs/theory/strategic-ddd.md` §5). It re-exports the service, events, and selected model members so that external code never reaches into internal files directly.
+Public barrel for the `users` module. It is the **only** import surface exposed to sibling modules (per the rule in `docs/theory/strategic-ddd.md` §5). The `account` module imports exclusively through this file; no other entry point exists.
 
 ## Key elements
 
-- **`export * from './service'`** — exposes `userService` (and any other service members) as the only sanctioned path for reads/writes.
-- **`export * from './events'`** — exposes the module's event definitions/subscriptions.
-- **Named exports from `./model`** — `TokenType`, `zodUserSchema`, `hashToken`, `isLiveRefreshSession`, `normalizeEmail`, `DEFAULT_USER_IMAGE_URL`: the schema, token-type enum, pure helpers, and default avatar URL.
-- **`export type * from './model'`** — re-exports all type-only members (interfaces, type aliases) from the model.
-- **`userModel` and `userRepository`** — deliberately **not** exported; no external code may call them.
+- **`export * from './services'`** — re-exports the public service layer (including `userService`), the sole gateway for all user reads and writes.
+- **`export * from './events'`** — re-exports domain events emitted by the module.
+- **`export type * from './model'`** — re-exports the Zod schema types (the "schema's Zod twin") so consumers can type-check payloads without importing the runtime model.
+- **`userRepository`, `userModel`** — deliberately *not* re-exported. They remain internal to the module.
 
 ## Relationships
 
-- **`account` module** (controllers, services, routes, module) is the one shared-kernel consumer in the repo. `account` authenticates and co-administers the same user document this module owns. All of `account`'s reads and writes flow through `userService` — never through `userRepository` or `userModel` directly.
-- **Scripts** (`scripts/db/access-grant.ts`, `scripts/ops/reap-inactive-accounts.ts`) appear as graph neighbors, implying they consume exports from this barrel for their respective DB/ops tasks.
+- **`src/modules/account/module.ts`** and all `src/modules/account/services/*` / `src/modules/account/controllers/*` import from this barrel (services, events, or types) to authenticate users, read or mutate the shared user document, and handle signup / login / password-reset / email-change / deletion / export flows. They never reach past this file into `userRepository` or `userModel`.
 
 ## Notes
 
-- `userModel` stays unexported by design; nothing outside this module calls it. Any new external need must go through `userService`.
-- The barrel is intentionally wider than a typical module's because of the `account` shared-kernel coupling — but the internal repo and model runtime remain private.
-- For the architectural rationale see `docs/theory/strategic-ddd.md` §5; for module-level docs see `docs/modules/users.md`.
+- `userModel` is unexported by design: nothing outside this module calls it directly. Every cross-module read or write—`account`'s included—must go through `userService`.
+- This file is the concrete enforcement point of the users↔account "shared-kernel" boundary: widen the exports here and you widen the API surface every sibling module can touch.

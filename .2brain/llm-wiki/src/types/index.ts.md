@@ -1,7 +1,7 @@
 ---
 source: src/types/index.ts
-sha256: bcc553aea4548a90c1f57e3bcb5a4771eccb7934b53755d00e86111d283d8b84
-generated_at: 2026-09-23T19:50:14.202010+00:00
+sha256: f89ce006c43a42b918737c76d0db9afa6a33d2c92ba2d489e11e9e1bd9dff41f
+generated_at: 2026-10-15T12:29:54.985758+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A type-only barrel that consolidates three type sources — generated API models, generated AsyncAPI types, and hand-written auth/rate-limit DTOs — behind a single import path (`@types`). Consumers never need to know which physical file a given type actually lives in.
+A public type barrel that re-exports generated API models, generated AsyncAPI types, and hand-written domain DTOs under a single import path (`@types`). Consumers never need to know which of the three sources a type originates from.
 
 ## Key elements
 
-- **`export * from '@api/models'`** — re-exports all generated OpenAPI/API model types.
+- **`export * from '@api/models'`** — re-exports all generated API request/response models.
 - **`export * from './asyncapi.generated'`** — re-exports types generated from `asyncapi.yaml` (via `npm run gen:asyncapi`).
-- **Auth-context types** (`AuthContext`, `AuthorizationScope`, `Caller`, `CallerContext`, `PlatformCaller`, `TenantCaller`, `TenantCallerContext`) — re-exported from `./auth-context`; a transport-safe, DIP-compliant user representation.
-- **`RateLimitBudget`** — re-exported from `./rate-limit-budget`; the shared shape used by both the kernel registry manifest and the infrastructure rate-limiter factory.
+- **Type re-exports from `./auth-context`** — `AuthContext`, `AuthorizationScope`, `Caller`, `CallerContext`, `PlatformCaller`, `RoleLevel`, `Resolution`, `ResolveMissReason`, `ResolveOptions`, `TenantCaller`, `TenantCallerContext`.
+- **`AUTHORIZATION_SCOPES`** (value, not type) — the concrete scope list, exported so a schema's `enum` field can reference it at runtime.
+- **`WithServerImage`** (from `./server-image`) — the server-decided image half of a write; wire `imageUrl` is `null`-only.
+- **`RateLimitBudget`** (from `./rate-limit-budget`) — shared between `kernel/registry.ts`'s manifest field and infrastructure's limiter factory (which is prohibited from importing kernel).
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — consumes `RateLimitBudget` (and likely API model types) from this barrel; the barrel exists partly so this module can reference the budget shape without importing kernel.
-- **`src/infrastructure/http/request.ts`** — consumes auth-context and/or API model types for request typing.
-- **`scripts/docs/generate-rate-limit-budgets.ts`** — operates on the `RateLimitBudget` shape defined via this module.
-- **Infrastructure adapters** (`queue.ts`, `mailer.ts`, `email.worker.ts`, `image.worker.ts`, `demo-outbox.ts`, antibot providers) — import generated API models or AsyncAPI types through this barrel.
-- **`src/app/workers.ts`**, **`scenarios/products.ts`**, **`scripts/db/*.ts`** — import API model types via the `@types` alias.
+- **Depends on (upstream):** `@api/models` (generated package), `./asyncapi.generated`, `./auth-context`, `./server-image`, `./rate-limit-budget`.
+- **Consumed by (downstream):** all listed neighbors — scenario files, infrastructure adapters (`mail-transports`, `mailer`, `queue`, `email.worker`, `image.worker`), `src/app/workers.ts`, `src/infrastructure/http/config.ts`, `src/infrastructure/http/middlewares/rate-limit-store.ts`, and the docs-generation scripts (`generate-rate-limit-budgets.ts`, `generate-role-matrix.ts`) import types through this barrel rather than reaching into the sub-modules directly.
 
 ## Notes
 
-- `./asyncapi.generated` is a **generated artifact** (written by `npm run gen:asyncapi` from `asyncapi.yaml`). Do not hand-edit; regenerate instead. The paired frontend keeps its own copy named identically.
-- `@api/models` is likewise generated — treat as read-only.
-- Only the auth-context and rate-limit-budget exports are hand-written; the other two star-exports are fully mechanical.
-- The barrel is types-only (`export type` for the hand-written entries, star-exports for the generated ones); it carries no runtime code.
+- `AUTHORIZATION_SCOPES` is a **value** export, not a type. Consumers importing it for runtime use (e.g., populating a JSON-schema `enum`) should use a value import, not `import type`.
+- `RateLimitBudget` exists as a shared type here specifically to break a forbidden dependency: infrastructure's limiter factory cannot import from `kernel/registry.ts`, so both sides import the type from this barrel instead.
+- The `asyncapi.generated` file is **not** hand-edited; regenerate with `npm run gen:asyncapi`. The frontend repository maintains its own copy with the same filename, generated from the shared half of the spec.
+- All sub-module imports are type-only (`export type`) except `AUTHORIZATION_SCOPES` and the two wildcard `export *` lines, which may carry runtime values from the generated packages.

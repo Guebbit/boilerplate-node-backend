@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/controllers/restore-users.ts
-sha256: fd986aa30d73998490191189c08e4d5e8492dee52644df3f0658dd526c1d6bf2
-generated_at: 2026-09-27T15:36:48.166067+00:00
+sha256: 17cee68aa082e3b87c546ccd10f358b5fc152765e360786c0213a6d5240f7694
+generated_at: 2026-10-15T12:07:18.474883+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin controller for `POST /users/:id/restore` that undoes an admin soft-delete of a user. It exists to keep the route layer declarative while delegating business logic to the users service and reusing the shared restore-controller factory.
+Thin controller that wires the `POST /users/:id/restore` endpoint (admin-only) to the user service. It delegates the actual restore logic and response shaping to `userService`, while relying on the shared `createRestoreController` factory for request validation, 404/409 handling, and audit-emit conventions.
 
 ## Key elements
 
-- **`restoreUsers`** (exported const) — The HTTP handler. Built via `createRestoreController` with:
-  - `restore` → calls `userService.restoreById(id)` to clear the soft-delete flag.
-  - `present` → calls `userService.toUserContract(user)` to shape the response body.
-  - `auditAction` → `usersAuditActions.ADMIN_USER_RESTORED`, passed to the audit pipeline.
-  - `notFoundKey` → `'users.not-found'` (i18n key for the 404 body).
-  - `entity: 'user'` — singular identifier used by the factory (likely for logging/error messages).
+- **`restoreUsers`** (exported const) — The finished controller instance produced by `createRestoreController`. Accepts a `POST /users/:id/restore` request and:
+  - Calls `userService.restoreById(id, callerContextOf(request))` to perform the soft-delete undo.
+  - Serialises the result via `userService.toUserContract(user, request.caller)`.
+  - Returns 409 if the account is not currently in a deleted state; 404 (key `users.not-found`) if the id doesn't exist.
 
 ## Relationships
 
-- **`src/infrastructure/surfaces/create-restore-controller.ts`** — Supplies the `createRestoreController` factory that wires up the handler, response shaping, audit emission, and error handling. This file is the sole consumer of that factory for the users module.
-- **`src/modules/users/service.ts`** — Provides `userService.restoreById` (the actual DB restore) and `userService.toUserContract` (entity → API DTO mapping).
-- **`src/modules/users/audit.ts`** — Provides the `usersAuditActions.ADMIN_USER_RESTORED` enum member used as the audit action tag.
-- **`src/modules/users/routes.ts`** — Registers `restoreUsers` on the `POST /users/:id/restore` route (admin-gated).
+- **`src/infrastructure/surfaces/create-restore-controller.ts`** — Supplies the `createRestoreController` factory that assembles the HTTP handler, status-code logic, and response envelope. This file is a concrete configuration of that factory for the `user` entity.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, used to extract the authenticated caller's identity/permissions from the incoming request before passing it to the service.
+- **`src/modules/users/services/index.ts`** — Source of `userService`, whose `restoreById` performs the restore + `ADMIN_USER_RESTORED` audit emit, and whose `toUserContract` shapes the response payload.
+- **`src/modules/users/routes.ts`** — Registers `restoreUsers` on the router for the `POST /users/:id/restore` path.
 
 ## Notes
 
-- Returns **409** (not 404) when the target user exists but is *not* currently soft-deleted; 404 (with the `users.not-found` key) only when the id doesn't match any record.
-- The handler is a pure composition of the factory + service methods; there is no direct `req`/`res` handling in this file.
-- The controller is admin-scoped (per the doc comment); auth/role checks live in the route or middleware, not here.
+- The `ADMIN_USER_RESTORED` audit event is emitted inside `userService.restoreById`, **not** in this controller. The controller itself is side-effect-free beyond invoking the service.
+- The 409 response (account not deleted) is a convention of the shared `createRestoreController` factory; this file does not explicitly set that status code.
+- `callerContextOf` is passed into `restoreById` as a second argument, meaning the service receives caller metadata (e.g. actor id) for audit purposes rather than the raw request object.

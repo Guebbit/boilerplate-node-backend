@@ -1,7 +1,7 @@
 ---
 source: tests/unit/scripts/eslint/self-barrel-import.test.ts
-sha256: c392e5f808f544257009e46964d06bb42f92ee69ac8fe5b1b9f194c2186084f3
-generated_at: 2026-09-27T16:13:28.191670+00:00
+sha256: ed76dc9a7fe837f3ba91ce37166438cc579c5c4c69935e8981046c5fb30ad04f
+generated_at: 2026-10-15T13:27:50.397660+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Liveness probe for the `boundaries/dependencies` ESLint policy ("a module does not import its own barrel"). It exists because the `checkInternals` flag, when left unset, causes same-module edges to skip evaluation silently — a dead policy and a passing lint look identical from the CLI. This test spawns the real `eslint` binary against a temporary probe file and asserts the rule actually fires, rather than trusting a clean `npm run lint` to mean the policy ran.
+Liveness probe for the `boundaries/dependencies` ESLint rule's "a module does not import its own barrel" policy. It exists because the bug it guards against (`checkInternals` unset) causes same-module edges to be skipped silently—`npm run lint` exits clean whether or not the rule ever fired. This test proves the rule actually evaluates by forcing a violation and asserting the rule ID appears in the output.
 
 ## Key elements
 
-- **`ESLINT_BIN`** — absolute path to `node_modules/.bin/eslint`, resolved via `REPO_ROOT`.
-- **`PROBE_PATH` / `PROBE_RELATIVE`** — location (`src/modules/products/__self-barrel-probe.ts`) and repo-relative form of a temporary file that imports from its own barrel (`@modules/products`).
-- **`lintProbe()`** — runs the eslint CLI with `--format json` on the probe file, parses stdout into a `message[]` list. Treats a non-zero exit (i.e. a finding) as success; only a JSON parse failure is an error.
-- **`describe('a module cannot import its own barrel')`** — single test that writes the probe file, calls `lintProbe()`, and asserts at least one message carries `ruleId === 'boundaries/dependencies'`.
-- **`afterEach`** — removes the probe file (`rmSync`, `force: true`) so it does not leak into the working tree.
+- **`lintProbe()`** — Spawns the real `eslint` binary (`node_modules/.bin/eslint`) with `--format json` against the probe file. Treats a non-zero exit as expected (a finding was reported) and only rejects on failure to parse ESLint's JSON output. Returns an array of `{ ruleId }` messages.
+- **`describe('a module cannot import its own barrel')`** — Single test that writes a probe file importing from its own barrel (`@modules/users`), runs `lintProbe()`, and asserts `boundaries/dependencies` is present in the messages.
+- **`afterEach`** — Removes the probe file via `rmSync` so it never lingers in the tree.
+- **`PROBE_PATH` / `PROBE_RELATIVE`** — The temporary file is placed under `src/modules/users/` so `parserOptions.project` can resolve it against a real TypeScript program.
 
 ## Relationships
 
-- **`tests/support/paths.ts`** — imports `REPO_ROOT` to anchor both the eslint binary path and the probe file location to the repository root, independent of the CWD jest runs from.
+- **`tests/support/paths.ts`** — Imports `REPO_ROOT`, which anchors both the `ESLINT_BIN` path (`node_modules/.bin/eslint`) and the probe file location.
 
 ## Notes
 
-- The test deliberately spawns the `eslint` binary (a subprocess) instead of using `ESLint#lintFiles` via the Node API. The flat-config loader requires `jiti` to parse `eslint.config.ts`, which fails to resolve inside a jest worker's module system.
-- The probe file is a **real** file on disk under `src/modules/products/`, not a virtual path, because `parserOptions.project` must resolve against a physical TypeScript program before the boundaries rule can even evaluate.
-- The probe imports `productService` from `@modules/products` (its own barrel) — the exact pattern the rule is designed to reject.
-- Non-zero eslint exit is the *expected* outcome (a finding was produced); the promise only rejects on malformed JSON from `--format json`.
+- Spawns a subprocess rather than using the `ESLint#lintFiles` Node API: the config loader needs `jiti` to read `eslint.config.ts`, which does not resolve inside a Jest worker's module system. A subprocess also mirrors what `npm run lint` actually does.
+- The probe file must be a **real** file on disk under the module directory; a virtual path fails at `parserOptions.project` resolution before the boundaries rule executes.
+- A non-zero exit code from ESLint is the **expected** outcome (a lint finding was produced). The only true error path is unparseable JSON on stdout.
+- The probe file is created and destroyed within a single test; it is not a committed fixture.

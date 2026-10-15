@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/step-up-auth-routes.test.ts
-sha256: 0e066addde568fd5d8a864c6b8d2f1bd1e7107f644b51832cca05c02c275c7ac
-generated_at: 2026-09-27T15:53:04.595314+00:00
+sha256: a4a7e721250d692fac3ac6b31779f84da8a1d8990c4d1e1d0c153efa3850adc6
+generated_at: 2026-10-15T12:41:25.991700+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Bidirectional integrity check that the step-up authentication guards (`requireFreshAuth` / `requireFreshAuthWhen`) are applied to **exactly** the money and identity routes listed in `STEP_UP_ROUTES`, at the exact tier declared, and nowhere else. It catches both a guard silently removed from a route and a guard quietly added to one that was never documented here.
+Cross-cutting integration test that pins the **exact** set of routes carrying a step-up authentication guard (`requireFreshAuth` or `requireFreshAuthWhen`) across five money/identity routers. It enforces the `STEP_UP_ROUTES` table in both directions — every listed route must still be mounted, and every mounted step-up guard must appear in the table — so a new or changed guard is immediately visible here rather than silently appearing in a router file.
 
 ## Key elements
 
-- **`ROUTERS`** – Map of the four Express routers under test (`account`, `cart`, `payments`, `delivery`), keyed by module name to match the `STEP_UP_ROUTES` keys.
-- **`STEP_UP_ROUTES`** – The single source-of-truth table: each key is `"${module} ${METHOD} ${path}"`, each value is the expected guard label (e.g. `` `requireFreshAuth(${REAUTH_TIME_CRITICAL})` `` or a `requireFreshAuthWhen` variant). Covers 17 routes across checkout, payment intent/confirm/sync, account lifecycle, 2FA setup/confirm/disable/backup-codes, logout-all, session delete, export, and forced ship/deliver.
-- **`mountedStepUps()`** – Walks every route signature on every router via `routeSignatures` + `guardsOn`, collecting only entries that start with `requireFreshAuth(` or `requireFreshAuthWhen(`, keyed the same way as `STEP_UP_ROUTES`.
-- **Test suite** (4 cases):
-  1. *No stale entry* – every key in `STEP_UP_ROUTES` still corresponds to a mounted route.
-  2. *Per-route guard check* (`it.each`) – the declared guard label is actually present on the route.
-  3. *No undocumented guard* – `mountedStepUps()` deep-equals `STEP_UP_ROUTES` (catches both missing and extra).
-  4. *Tier sanity* – asserts `REAUTH_TIME_CRITICAL < REAUTH_TIME_SENSITIVE`, guarding against a constant swap that would pass checks 1–3.
+- **`STEP_UP_ROUTES`** — Canonical `Record<string, string>` table. Keys are `` `${module} ${METHOD} ${path}` ``; values are the exact guard label (e.g. `requireFreshAuth(critical)`, `requireFreshAuthWhen(sensitive)`) that `authGuardsMock` records. Serves as both the test's expected data and the project's single documentation of which routes demand step-up auth and at which tier.
+- **`ROUTERS`** — Map of the five routers under test (`account`, `cart`, `payments`, `delivery`, `returns`) to their Express `Router` instances.
+- **`mountedStepUps()`** — Introspects every route on every router via `routeSignatures` / `guardsOn`, collects the first step-up guard label found per route, and returns the result keyed the same way as `STEP_UP_ROUTES`. Used by the bidirectional-equality assertion.
+- **Three test cases** (under one `describe`):
+  1. *No stale entry* — every key in `STEP_UP_ROUTES` resolves to a mounted route.
+  2. *Carries the expected label* — `it.each` over the table; asserts `guardsOn` includes the exact label.
+  3. *Exact table match* — `mountedStepUps()` deep-equals `STEP_UP_ROUTES` (catches unlisted mounts and wrong-tier drift).
+- **Jest mocks** — `cache`, `rate-limit`, `upload`, and `authorizations` middlewares are all replaced with fakes from `@tests/routes` so the test isolates step-up-guard behavior from infrastructure.
 
 ## Relationships
 
-- **`src/kernel/middlewares/authorizations.ts`** – Source of `REAUTH_TIME_CRITICAL`, `REAUTH_TIME_SENSITIVE`, and the guard factories. The test imports the constants and asserts their relative ordering.
-- **`src/modules/{account,cart,payments,delivery}/routes.ts`** – The four routers whose mounted guards are inspected. This test is the cross-cutting counterpart to each module's own unit tests.
-- **`tests/support/routes.ts`** – Supplies `routeSignatures`, `guardsOn`, and the mock factories (`cacheMock`, `securityMock`, `storageMock`, `authGuardsMock`) that let the routers be imported without real middleware side-effects.
-- **`tests/contract/authorization-contract.test.ts`** – Complementary: verifies the *permission-key* path (`stepUp:` entries in `authorization-keys.yaml` enforced by `requirePermission`). This file covers the *route-mounted* path; together they close the two halves described in the file's header comment.
+- **`tests/support/routes.ts`** — Source of `guardsOn`, `routeSignatures`, and the mock factories (`cacheMock`, `securityMock`, `storageMock`, `authGuardsMock`). All introspection and mock wiring flows through this module.
+- **`src/modules/account/routes.ts`, `src/modules/cart/routes.ts`, `src/modules/payments/routes.ts`, `src/modules/delivery/routes.ts`, `src/modules/returns/routes.ts`** — The routers whose mounted middleware stack the test reads. No route file imports from this test; the dependency is one-directional (test → routers).
+- **`tests/contract/authorization-contract.test.ts`** — Complementary coverage: that contract test exercises the `requirePermission` / `stepUp:` key path (action-based step-up, e.g. `users.any.delete`). This file covers the route-mounted guard path (caller's own identity). The file's header comment states the split explicitly.
 
 ## Notes
 
-- The file's header explicitly scopes itself: it covers guards mounted **on the route** (a property of the endpoint). Where step-up is a property of the **action** (e.g. `users.any.delete`, `payments.any.update`), the guard lives in `shared/authorization-keys.yaml` and is enforced by `requirePermission`; that path is covered by `tests/unit/kernel/step-up.test.ts`, not here.
-- The four `jest.mock` calls at the top replace infrastructure middleware (cache, rate-limit, upload, auth) with mocks so that importing the routers doesn't trigger real side-effects; they delegate to the mock factories in `tests/support/routes.ts`.
-- `STEP_UP_ROUTES` is intentionally a flat, hand-maintained table. Adding a new money/identity route without adding an entry here will fail test 3; removing a route without cleaning the table will fail test 1. The table is the contract.
-- The `payments POST /:id/sync` entry carries a comment explaining why it is at the CRITICAL tier (it settles money from the provider's response, same risk profile as `/confirm`), not a lower one—useful context if someone "simplifies" the tier.
+- **Two-step-up mechanisms, two test files.** A route mounts `requireFreshAuth(When)` directly when freshness is a property of the *route* (caller's own record). When freshness is a property of the *action*, `shared/authorization-keys.yaml` declares `stepUp:` and `requirePermission` enforces it; `tests/unit/kernel/step-up.test.ts` covers that path. Confusing the two will lead you to the wrong test file.
+- **Bidirectional equality is the core assertion.** Test 3 (`mountedStepUps()` equals `STEP_UP_ROUTES`) is the strongest check: it catches a new guard added to a router without a table entry *and* a table entry pointing to a route that no longer carries the guard. Tests 1 and 2 exist so a failure message identifies the specific route.
+- **`requireFreshAuthWhen` vs `requireFreshAuth`.** The `When` variant is conditional (e.g. `delivery` ship/deliver only step-up when `forced: true`; `account` password/profile changes only step-up when a second factor is armed). The table records the first guard label encountered on a route; `account DELETE /` has both a conditional and an unconditional guard, and the table key maps to the conditional one.
+- **Tier comments in `STEP_UP_ROUTES`** are load-bearing documentation (e.g. why `payments POST /:id/sync` is critical, why `returns POST /` is conditional). Treat them as the canonical "why this tier" rationale.

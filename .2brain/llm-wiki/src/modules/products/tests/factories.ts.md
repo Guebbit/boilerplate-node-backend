@@ -1,36 +1,36 @@
 ---
 source: src/modules/products/tests/factories.ts
-sha256: d844ba241d6b8f748d1d478ab768c1694612f97992bf017981fc15512fc86f6a
-generated_at: 2026-09-27T15:34:23.326199+00:00
+sha256: 4ed7295d13fa64a82ccc586bfcfcd3a38d68376bad3e5959e3c818b2d748ddc6
+generated_at: 2026-10-15T11:47:01.439759+00:00
 model: ollama:qwen3.8:27b
 ---
 
-# src/modules/products/tests/factories.ts
+# src/modules/products/products/tests/factories.ts
 
 ## Purpose
 
-Test-database-persisting helpers for the `products` module. It re-exports the pure in-memory builder from `../factories` and adds thin wrappers around `productRepository` so integration and contract tests across many modules can create, read, mutate, and delete product fixtures without importing the repository directly.
+Test-database persistence layer for the products module. It wraps the in-memory `makeProduct` builder (one level up in `../factories.ts`) with actual DB writes and a small set of read/mutate helpers so that checkout, cart, delivery, and account test suites can create, inspect, and clean up product fixtures without importing the production barrel or reaching into sibling modules.
 
 ## Key elements
 
-- **`makeProduct` / `ProductOverrides`** — re-exported from `../factories` (the single source of truth for in-memory product construction; also used by the demo catalogue).
-- **`seedStockLevel(product)`** *(internal)* — upserts a `stocklevels` row (`onHand`, `reserved`, `available`) so the inventory module's own collection agrees with the product's counters. Written via raw `db.collection('stocklevels')` to avoid importing the inventory module.
-- **`createProduct(overrides?)`** — persists a product through `productRepository.create`, then calls `seedStockLevel`. Defaults `onHand` to **10** (schema default is 0) so fixtures are sellable out of the box.
-- **`readProduct(id)`** — `productRepository.findById`; a plain hydrated read, deliberately routed through the repository rather than the service.
-- **`saveProduct(document)`** — `productRepository.save`; persist a doc a sibling test already mutated in memory.
-- **`deleteProduct(document)`** — `productRepository.deleteOne`; outright removal for cleanup or negative-path fixtures.
-- **`countersOf(productId)`** — reads `onHand` / `reserved` / `available` via `productService.findByIdRaw` and the `availableStock` helper; used by checkout, payment, and reservation tests to assert stock actually moved.
+- **`makeProduct` / `ProductOverrides`** (re-export) — the pure in-memory builder and its overrides type, so callers need only one import path.
+- **`productRepository`** (re-export) — the live repository object, exposed so a test can `jest.spyOn` the real binding that `productService` calls internally.
+- **`createProduct(overrides?)`** — inserts a product via `productRepository.create`, then seeds the `stocklevels` collection row. Defaults `onHand` to 10 (sellable) so the common "has stock" case doesn't require per-call-site pinning.
+- **`seedStockLevel(product)`** (private) — upserts into the raw `stocklevels` collection by string name, mirroring the fields `@modules/inventory`'s `$lookup` reads. Bypasses the `PRODUCT_CREATED` event for speed.
+- **`readProduct(id)`** — hydrates a stored document via `productRepository.findById`.
+- **`saveProduct(document)`** — persists an already-mutated in-memory document.
+- **`deleteProduct(document)`** — removes a product; used for cleanup or negative-path fixtures.
+- **`countersOf(productId)`** — reads the raw `onHand`/`reserved`/`available` triple via `productService.findByIdRaw` and computes `available` with the shared `availableStock` helper.
 
 ## Relationships
 
-- **Consumers (importers):** every listed graph-neighbor test file (cart, inventory, orders, delivery, locales, account, addresses) imports `createProduct`, `readProduct`, `saveProduct`, `deleteProduct`, and/or `countersOf` to build and tear down product fixtures.
-- **Upstream dependencies (this file imports):** `../model` (`productModel`), `../repository` (`productRepository`), `../factories` (`makeProduct`), `../domain/stock` (`availableStock`), `../service` (`productService.findByIdRaw`).
-- **Cross-module write:** `seedStockLevel` writes to the `stocklevels` collection (owned by the `inventory` module) by string name, the same reach the inventory module's `$lookup`s use in the opposite direction.
+- **Consumed by** cart integration/contract tests (`checkout`, `merge`, `stock`, `preorder`, `upsert-retry`, `line-availability`, `totals`, `service`, `stock-flag`), delivery contract tests, account shop contract tests, and addresses checkout integration tests. All use `createProduct` to seed a fixture product and `countersOf`/`readProduct` to assert persisted state after a domain operation.
+- **Depends on** `../factories` (the BUILDER), `../model` (`productModel` for the raw collection access), `../repository` (`productRepository`), `../domain/stock` (`availableStock`), and `../services` (`productService.findByIdRaw`).
+- **Touches `stocklevels` by string name** to avoid importing `@modules/inventory`; this is the same collection-name convention the inventory module's `$lookup` uses in the reverse direction.
 
 ## Notes
 
-- The split between `../factories` (pure builder, no DB) and this file (DB persistence) is intentional and mirrors the convention in `users/tests/factories`. Only one `makeProduct` exists.
-- `onHand` defaults to **10** here, not the schema's **0**. A test that needs zero stock must pin `onHand: 0` explicitly.
-- `seedStockLevel` uses `$setOnInsert` with `{ upsert: true }`, so it never overwrites an existing stock row.
-- `readProduct` and `saveProduct` go through `productRepository`, **not** `productService`. The service barrel deliberately omits a generic `save`/`update` to avoid an accidental write path; tests that need to mutate should use `saveProduct` explicitly.
-- `countersOf` calls `productService.findByIdRaw` — a read-only, untransformed accessor that is safe to call without risking a side-effect write.
+- `onHand` defaults to **10**, not 0. The schema default of 0 is correct for real writes but makes most checkout tests trivially fail. A test that specifically needs zero stock must pass `onHand: 0` explicitly.
+- `seedStockLevel` uses `$setOnInsert`, so a pre-existing `stocklevels` row (e.g. from a prior test) is **not** overwritten. Tests that need a clean slate should delete the product first (`deleteProduct`).
+- `countersOf` reads via `productService.findByIdRaw`, which is the untransformed stored document. Do not confuse this with a domain-model read that might apply virtuals or service-level mapping.
+- The file intentionally re-exports `productRepository` rather than wrapping its methods, because `jest.spyOn` on a wrapper function copies the call, not the binding, and would miss internal `productService` calls.

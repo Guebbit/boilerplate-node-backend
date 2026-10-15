@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/i18n/catalog.test.ts
-sha256: cce242b8c172331a05908f6a2c9176423f192d86e7127e5f6a7f3325eca8a756
-generated_at: 2026-09-23T20:24:08.743831+00:00
+sha256: 24c65512ffcb2dc5eb9dd1868ca679466558bb3d58c03270bdddc8b49a91a322
+generated_at: 2026-10-15T13:16:26.270951+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the locale-discovery and dictionary-loading layer of the i18n catalog. Verifies that supported-locale listing is cached (so it cannot drift from the resources `i18next.init()` registered), that per-locale dictionaries correctly merge the shared file with every registered module's contribution, and that `localeCandidatesFor` builds the expected exact → base → fallback chain without duplicates.
+Unit tests for the i18n catalog module, covering locale discovery, per-locale dictionary loading with module-level merging, the shape handed to `i18next.init()`, the deep-copy cache semantics, and the `localeCandidatesFor` negotiation chain. The file exists to guard against the most consequential failure mode: the supported-locales list drifting from the resources `i18next` actually registered, which would let negotiation offer a language the instance cannot resolve.
 
 ## Key elements
 
-- **`describe('locale discovery')`** — covers `listSupportedLocales`, `resetSupportedLocales`, `readLocaleDictionary`, and `loadLocaleResources`.
-    - _Lists every dictionary in src/locales_: asserts the default set contains `en` and `it`.
-    - _Honours NODE_SUPPORTED_LOCALES_: sets the env var, calls `resetSupportedLocales`, verifies trimming/whitespace handling, then restores.
-    - _Is cached_: calls `listSupportedLocales()` once, changes the env var, and asserts the second call returns the identical list — the critical non-drift guarantee.
-    - _Reads a dictionary off disk, merged with every registered module_: checks the shared half is verbatim **and** the `users` module namespace is present (guards against a silent merge drop).
-    - _Shapes every dictionary for i18next.init_: asserts `loadLocaleResources()` returns `{ en: { translation }, it: { translation } }`.
-    - _Finds the shared dictionaries whatever the working directory is_: `chdir('/')` then reads — confirms module-relative path resolution.
-    - _Carries the shared keys a module did not contribute to_: ensures the `users` namespace still appears for `en`.
-- **`describe('localeCandidatesFor')`** — covers the candidate-chain builder.
-    - Region-tagged input → `[exact, base, fallback]`.
-    - Base-tag input → no duplicate of the base in the chain.
-    - Fallback requested directly → single-element array.
-    - Region-tagged fallback → base derived, no repeat.
+- **`describe('locale discovery')`** — verifies `listSupportedLocales` returns the expected set, honours `NODE_SUPPORTED_LOCALES` (via `resetSupportedLocales`), and stays cached across subsequent calls so it cannot drift.
+- **`readLocaleDictionary` tests** — confirm the returned object carries the shared translation verbatim *and* layers each registered module's namespace (asserted per-module, e.g. `users`) on top.
+- **`loadLocaleResources` test** — asserts the top-level `{ locale: { translation: … } }` shape that `i18next.init()` consumes.
+- **CWD-independence test** — calls `process.chdir('/')` and verifies `readLocaleDictionary` still resolves the shared directory from the module's own location, not `process.cwd()`.
+- **`describe('the merged dictionary cache')`** — asserts each call returns a deep copy (`toEqual` but `not.toBe`), that mutations do not leak between reads, and that `registerLocaleDirectories` (called on a fresh module instance via `jest.isolateModulesAsync`) picks up newly-added locale files.
+- **`describe('localeCandidatesFor')`** — validates the candidate chain (`it-CH → it → en`), deduplication of a base tag, of the fallback itself, and of a region-tagged fallback.
 
 ## Relationships
 
-- **`src/infrastructure/i18n/catalog.ts`** — the SUT. All functions under test (`listSupportedLocales`, `loadLocaleResources`, `localeCandidatesFor`, `readLocaleDictionary`, `resetSupportedLocales`) are implemented here.
-- **`src/infrastructure/i18n/index.ts`** — barrel re-export. The test imports from the `@infrastructure/i18n` path, which resolves through this file to the catalog module. No behavior is exercised at the barrel level beyond confirming the named exports are reachable.
+- **`src/infrastructure/i18n/index.ts`** — barrel module the test imports five named exports (`listSupportedLocales`, `loadLocaleResources`, `localeCandidatesFor`, `readLocaleDictionary`, `resetSupportedLocales`) from via the `@infrastructure/i18n` alias.
+- **`src/infrastructure/i18n/catalog.ts`** — the concrete module under test; imported directly (not through the barrel) inside the `jest.isolateModulesAsync` block to access `registerLocaleDirectories` and to obtain a fresh module instance with its own cache.
+- **`tests/support/environment.ts`** — provides `setEnvironment`, used to set/clear `NODE_SUPPORTED_LOCALES` and `NODE_FALLBACK_LOCALE` deterministically for each test.
 
 ## Notes
 
-- **Caching is the central concern.** The file's header comment and the dedicated "is cached" test make explicit that the locale list must remain consistent with what `i18next.init()` registered. If you add or remove locales at runtime, `resetSupportedLocales()` must be called (as the env-var test demonstrates).
-- **Env-var mutation is manual.** There is no Jest `spyOn(process.env, …)` helper; each test saves, sets, and restores `NODE_SUPPORTED_LOCALES` / `NODE_FALLBACK_LOCALE` inside `try/finally`. When adding tests, follow the same pattern or the suite will leak state.
-- **Module-relative path resolution is tested explicitly** (`chdir('/')` case). If the catalog switches to `path.resolve(process.cwd(), …)` the test will catch it, but only because this guard exists.
-- **JSON fixtures are imported statically** (`en.json`, `it.json`, plus `@modules/users/locales/*.json`). They act as ground-truth snapshots; the tests compare against them with `toMatchObject` (partial match), so extra keys in the dictionary won't cause failure.
+- The `isolatedModules` test writes a temporary locale file, calls `catalog.registerLocaleDirectories([dir])`, then cleans up. It relies on `jest.isolateModulesAsync` to get a fresh module instance; calling `registerLocaleDirectories` on the shared singleton would pollute other tests.
+- `resetSupportedLocales` is a test-only escape hatch for re-reading `NODE_SUPPORTED_LOCALES`; it is imported through the barrel and must be called in a `finally` block (as done here) to avoid leaking state.
+- The `process.chdir('/')` test restores the original CWD in a `finally` block—forgetting this would break subsequent tests that resolve paths relative to the project root.
+- Fixture JSON files are imported statically (`en.json`, `it.json`, `enUsers`, `itUsers`) so tests assert against the *actual* shipped translations rather than inline literals.

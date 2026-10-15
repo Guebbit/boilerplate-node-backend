@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/i18n/context.test.ts
-sha256: edde0bdb656450c08a8d1a185721b0e12b94a5236bdbc1976c3d4a3c550a2f83
-generated_at: 2026-09-23T20:24:17.969496+00:00
+sha256: d14f9d8f0f9fab0c26355b4e85c942d7f5efd50b55d87cb3140b646b0a070b2c
+generated_at: 2026-10-15T13:16:36.754465+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the request-scoped i18n context built on `AsyncLocalStorage`. Verifies that the ambient `t` resolves against the correct locale inside a scope, falls back to the global instance outside one, survives async boundaries, and keeps concurrent scopes isolated from each other.
+Unit tests for the request-scoped translation context (AsyncLocalStorage-based `t`). Verifies that a locale scope correctly resolves translations, that code outside any scope falls back to the global instance, that the scope survives across `await` boundaries, and that two concurrent scopes never bleed into each other — the last being the concurrency bug the module exists to prevent.
 
 ## Key elements
 
-- **`describe('the ambient t')`** — the sole test suite; contains five cases covering the invariants listed above.
-- **Scope resolution test** — asserts `t`, `getCurrentLocale`, and `getLocaleContext` all reflect the scope's locale (`'it'`) inside `runWithLocale`.
-- **Global-fallback test** — asserts `getLocaleContext()` is `undefined` and `t` resolves via the global (English) instance when no scope is active.
-- **Async-survival test** — proves the context persists across `Promise.resolve` and a `setImmediate` hop inside the scope.
-- **Concurrent-scope isolation test** — runs two `runWithLocale` thunks (`'it'` and `'en'`) concurrently with staggered `setImmediate` hops so their microtask queues interleave; asserts each sees only its own locale.
-- **Non-mutation test** — confirms `createLocaleContext` does not change the result of `getCurrentLocale()`.
+- **`describe('the ambient t')`** — single suite covering five scenarios:
+  - *Scope resolution*: inside `runWithLocale('it', …)`, `t`, `getCurrentLocale`, and `getLocaleContext` all reflect `'it'`.
+  - *Global fallback*: outside any scope, `getLocaleContext()` is `undefined` and `t` resolves via the global (English) instance.
+  - *Async survival*: `t` still sees the scope after `Promise.resolve` and a `setImmediate` hop.
+  - *Interleaved scopes*: two concurrent `runWithLocale` calls (asymmetric task-hop counts) each resolve in their own language.
+  - *No global mutation*: `createLocaleContext('it')` does not change `getCurrentLocale()`.
+- **Fixture data** — `enUsers` / `itUsers` imported from `@modules/users/locales/*.json` provide the expected translated strings.
+- **Public API under test** — `createLocaleContext`, `getCurrentLocale`, `getLocaleContext`, `runWithLocale`, `t` (all imported from `@infrastructure/i18n`).
 
 ## Relationships
 
-- **`src/infrastructure/i18n/context.ts`** — the module under test; provides `createLocaleContext`, `getCurrentLocale`, `getLocaleContext`, `runWithLocale`, and `t` (imported via the barrel below).
-- **`src/infrastructure/i18n/index.ts`** — the barrel (`@infrastructure/i18n`) through which all exports are imported in this test; also the re-export surface consumers use in production.
+- **`src/infrastructure/i18n/context.ts`** — the implementation under test; provides the AsyncLocalStorage store and the functions this file exercises.
+- **`src/infrastructure/i18n/index.ts`** — barrel re-export; the test imports the public surface through it, so a rename or removal in the barrel breaks this file even if `context.ts` itself is unchanged.
 
 ## Notes
 
-- All async interleaving is forced with `setImmediate`, not `setTimeout`, to create a real task-boundary hop without depending on a wall-clock duration. This mirrors the exact boundary the `AsyncLocalStorage` store must survive.
-- The concurrent-scope test is the one that would fail on a regression where one request picks up another's language; it only triggers under deliberate interleaving, which is why the module lives in its own file rather than being tested inline with the i18n helpers.
-- Assertions compare against the raw JSON locale files (`enUsers`, `itUsers`) rather than hard-coded strings, so the tests track the source-of-truth translations.
+- Concurrency tests use `setImmediate` (not `setTimeout`) to force a real task hop without timing sensitivity; the interleaving case deliberately gives the two scopes different hop counts (`2` vs `1`) so their microtask/macrotask windows actually overlap.
+- The "no global mutation" test guards a subtle invariant: creating a context object is a pure allocation; only *entering* it (`runWithLocale`) changes the ambient locale.
+- The fallback test is load-bearing for out-of-band execution (jobs, scripts): a regression there manifests as raw i18n keys appearing in logs rather than a test failure until this test is run.

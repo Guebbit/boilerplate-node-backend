@@ -1,5 +1,5 @@
 ---
-generated_at: 2026-10-07T23:52:03.159314+00:00
+generated_at: 2026-10-15T13:33:53.309991+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -7,40 +7,53 @@ model: ollama:qwen3.8:27b
 
 ## What This Is
 
-A TypeScript/Node.js multi-tenant platform (evidenced by shop, product, account, and application domains) built with MongoDB, Docker, and an event-driven messaging layer. It follows a Domain-Driven Design (strategic DDD) structure with explicit infrastructure and module boundaries.
+A Node.js / TypeScript backend application with a REST API (OpenAPI) and an event/webhook layer (AsyncAPI). It manages users, accounts, addresses, and application/flow workflows. The codebase follows a modular, DDD-influenced structure (see `docs/theory/strategic-ddd.md`) and ships with a full Docker Compose stack including MongoDB (replica set), a proxy, and a complete observability suite.
 
-## Architecture at a Glance
+## Main Areas
 
-| Layer | Key evidence |
-|---|---|
-| **Domain modules** | `src/modules/*` (e.g. `users`); documented in `docs/theory/strategic-ddd.md` |
-| **Infrastructure** | `src/infrastructure/http/` (controller, request, response), `src/infrastructure/i18n/`, `src/infrastructure/adapters/` |
-| **Shared types** | `src/types/index.ts` (fan-out to 363 files) |
-| **API contracts** | `openapi.yaml` (REST), `asyncapi.yaml` / `asyncapi.public.yaml` (events), `orval.config.ts` (client generation) |
-| **Messaging / jobs** | `jest.config.broker.js`, SuperCronic installer (`docker/install-supercronic.mjs`) |
-| **Observability** | Prometheus, Grafana, Loki, Tempo, OpenTelemetry, Alertmanager, Umami (all under `docker/observability/`) |
-| **Deployment** | `docker-compose.yml` (dev), `docker-compose.production.yml`, `docker-compose.proxy.yml`, `docker-compose.test.yml` |
+| Area | Where | Notes |
+|---|---|---|
+| **Domain modules** | `src/modules/` | Bounded contexts (e.g. `users`). Each owns its entities, services, and tests. |
+| **Infrastructure** | `src/infrastructure/` | Cross-cutting: HTTP controllers/responses, logging, i18n, adapters. |
+| **Shared types** | `src/types/` | Central type definitions consumed by ~465 files (auth context, domain types, etc.). |
+| **API contracts** | `openapi.yaml`, `asyncapi.yaml` / `asyncapi.public.yaml` | REST + event schemas. Client code generated via `orval.config.ts`. |
+| **Web / docs site** | `docs/` (VitePress) | Internal developer docs: API contract guides, webhooks module, DDD theory, test references. |
+| **Scenarios (load/E2E)** | `scenarios/` | Scripted flows for accounts, addresses, apply, and action sequences. |
+| **Docker & ops** | `docker/`, `docker-compose*.yml` | App, proxy, test, and production compose stacks; MongoDB init; backup/restore/drill scripts; observability (Prometheus, Grafana, Loki, Tempo, OTel, Alertmanager, Umami). |
+| **Testing** | `tests/`, `jest.config.*.js` | Unit/integration (Jest), mutation testing, broker- and cluster-scoped suites. |
+| **Security** | `SECURITY.md` | Vulnerability reporting and security policies. |
 
-## Main Areas and How They Relate
+## How the Pieces Relate
 
-1. **`src/modules/`** – Bounded domain modules (users, products, shops, applications, …). Each module owns its business logic and exposes use cases to the HTTP/event layers.
-2. **`src/infrastructure/`** – Cross-cutting concerns: HTTP transport, i18n, logging adapters. Modules depend on these; infrastructure does not depend on modules.
-3. **`src/types/`** – Shared TypeScript contracts; the single largest fan-out node in the graph.
-4. **`scenarios/`** – End-to-end test fixtures and flow definitions (accounts, products, shops, backdating, rate-limits, jobs). Consumed by the Jest suite.
-5. **`tests/`** – Test harness (`setup-test-db.ts`, `environment.ts`) plus mutation-testing config (`jest.config.mutation.js`).
-6. **`docker/` + `docker/observability/`** – Containerised runtime (MongoDB replica set, app, scheduler) and a full monitoring stack.
-7. **`docs/`** – VitePress-based documentation covering API contracts, webhooks, DDD theory, and testing tooling.
-8. **Top-level specs** – `openapi.yaml`, `asyncapi.yaml`, `package.json`, `CLAUDE.md`.
+```
+scenarios / tests
+        │
+        ▼
+  src/modules/*  (domain logic, factories, services)
+        │
+        ▼
+  src/infrastructure/*  (HTTP layer, logger, i18n, adapters)
+        │
+        ▼
+  src/types/*  (shared types, auth context)
+        │
+        ▼
+  openapi.yaml / asyncapi.yaml  (external contracts)
+        │
+        ▼
+  docker/  (containers, DB, observability, backup)
+```
+
+The type layer and infrastructure adapters sit at the top of the dependency graph, confirming they are the shared foundation every module builds on.
 
 ## Where to Start Reading
 
-1. **`README.md`** – Project intro and quick-start.
-2. **`CLAUDE.md`** – Conventions and AI-assistant guidance (useful orientation).
-3. **`package.json`** – Scripts, dependencies, and the module map.
-4. **`openapi.yaml` / `asyncapi.yaml`** – The external contract; read before any source.
-5. **`src/types/index.ts`** – Central type definitions that most files import.
-6. **`src/infrastructure/http/controller.ts`** – The HTTP entry-point pattern.
-7. **`src/modules/users/`** – A representative module to see the DDD structure in practice.
-8. **`docs/theory/strategic-ddd.md`** – The architectural rationale.
-9. **`scenarios/index.ts`** – How integration tests are composed.
-10. **`docker-compose.yml`** – How all pieces are wired together at runtime.
+1. **`README.md`** – project purpose, quick-start, and link map.
+2. **`CLAUDE.md`** – conventions and context for AI-assisted work.
+3. **`docs/theory/strategic-ddd.md`** – the architectural vocabulary used across modules.
+4. **`src/types/index.ts`** – the single largest type hub; read this before diving into any module.
+5. **`src/infrastructure/http/controller.ts` → `response.ts`** – the request/response pattern every route follows.
+6. **`openapi.yaml` / `asyncapi.yaml`** – the external surface of the API; useful for understanding module boundaries without reading code.
+7. **`docker-compose.yml`** – the concrete list of running services and how they wire together.
+
+> **Tip:** The `jest.config.broker.js` and `jest.config.cluster.js` files indicate the test suite is split by concern. Run the base `jest.config.js` first; consult the others when touching broker or cluster-specific logic.

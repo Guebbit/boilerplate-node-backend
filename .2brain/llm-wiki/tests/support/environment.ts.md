@@ -1,7 +1,7 @@
 ---
 source: tests/support/environment.ts
-sha256: 7f4d57642b976b2cf9a3a0df80ca0100e7fad1ccb3e3ee492f557517c2baffb6
-generated_at: 2026-09-23T20:10:39.277746+00:00
+sha256: ebdeaef6705ec6fdd4559aafe956708e0350679e3b4b61ffe255f7fbfea00942
+generated_at: 2026-10-15T12:57:54.750830+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides test-scoped helpers for safely mutating `process.env` and guaranteeing restoration, so that config-driven behavior (read lazily at use time) can be varied per test case without leaking state into subsequent cases or files.
+Test-support utilities that manage environment-variable overrides scoped to individual cases, the remainder of a case, or an entire test file. They write to the config store's override layer (not `process.env`) so that slices re-read configuration through the real parser, and guarantee restoration via `finally` or Jest hooks so one case's setup never leaks into the next.
 
 ## Key elements
 
-- **`withEnvironment(key, value, body)`** — Sets a single env variable for the duration of an async `body`, then restores it. Convenience wrapper around `withEnvironmentOverrides`.
-- **`withEnvironmentOverrides(overrides, body)`** — Sets multiple env variables for the duration of an async `body`, restores all of them in a `finally` block (survives throws), and **returns whatever `body` resolves to**. Designed for the module-reload pattern: callers run `jest.resetModules()` + dynamic `import()` inside `body` and receive the freshly-instantiated module.
-- **`withoutEnvironment(keys, body)`** — Deletes the listed env variables for the duration of an async `body`, then restores whatever they previously held (including the "key was absent" distinction).
-- **`withoutEnvironmentInThisFile(keys)`** — File-level variant of `withoutEnvironment`: registers a `beforeEach` that deletes the keys and an `afterEach` that restores them, so every case in the file starts clean without per-case wrapping.
-- **`restore(previous)`** (module-private) — Core restore logic: for each captured key, deletes it if it was previously absent, or writes back its prior value.
+- **`withEnvironment(key, value, body)`** — Run an async body with a single variable set; restores afterwards.
+- **`withEnvironmentOverrides(overrides, body)`** — Same idea for multiple variables; additionally **returns** `body`'s resolved value so callers can do `jest.resetModules()` + dynamic `import()` inside `body` and receive the fresh module instance. Uses `try/finally` so restore runs on resolve, reject, or synchronous throw.
+- **`withoutEnvironment(keys, body)`** — Unset a set of variables (override to `undefined`) for the duration of `body`.
+- **`withoutEnvironmentInThisFile(keys)`** — Registers `beforeEach`/`afterEach` hooks so the listed keys are unset for every case in the file; intended for suites whose subject *is* the configuration.
+- **`setEnvironment(overrides)`** — Fire-and-forget: sets (or unsets, when value is `undefined`) overrides for the rest of the caller's scope; pair with `resetEnvironment`.
+- **`resetEnvironment()`** — Drops every override the file has made, returning all variables to the worker's starting values.
+- **`setProcessEnvironment(overrides)`** — Writes the **real** `process.env` (for scripts under `scripts/` or libraries like `mongodb-memory-server` that bypass the config store). Tracks originals in a module-level `Map`; `undefined` removes the key.
+- **`restoreProcessEnvironment()`** — Reverses every `setProcessEnvironment` call; restores removed keys to absent rather than empty.
 
 ## Relationships
 
-- **All graph-neighbor test files** (account, antibot, cart, inventory, orders, payments, products, webhooks, `required-config`, `mailer-transport`) import one or more of the above helpers to isolate config-dependent assertions.
-- **`tests/support/rate-limit-harness.ts`** — Likely a consumer; rate-limit budgets are captured at import time, making it a natural user of `withEnvironmentOverrides`'s return-value + module-reload pattern.
-- **`tests/support/setup.ts`** (referenced in JSDoc) — Establishes baseline env values (e.g., for the `shop`/`order.awaitingTransfer` scenario). The "without" helpers exist specifically to express "unset" against that baseline, since `delete` alone would lose the worker's original value.
+- **`src/infrastructure/config/store.ts`** — Source of `overrideEnvironment`, `resetEnvironmentOverrides`, and the `EnvironmentOverrides` type. Every config-store override in this file routes through that module's API.
+- **All listed account test files** (contract, integration) — Import the helpers above to drive configuration per case without touching `process.env` directly.
+- **`tests/support/setup-environment.ts`** (referenced in JSDoc) — Populates the worker's baseline env before any test file runs; the helpers here layer on top of and restore to that baseline.
+- **`setup-environment-reset.ts`** (referenced in JSDoc) — File-level cleanup that calls `restoreProcessEnvironment` after each case.
 
 ## Notes
 
-- **Restoration distinguishes "was absent" from "was empty string."** `restore` uses `undefined` in the captured `Map` to mean "key did not exist" and issues a `delete` rather than writing `""`. Leaving an empty string where no key was present is treated as an environment change.
-- **`withEnvironmentOverrides` is the only helper that passes through `body`'s resolved value.** The others return `void`. Use it when you need the result of a dynamic import (module-reload pattern).
-- **`withoutEnvironmentInThisFile` is the only helper that registers Jest lifecycle hooks** (`beforeEach`/`afterEach`) rather than wrapping a callback. Call it once at the top of a test file; it cannot be nested or used per-case.
-- All mutations go through `process.env` directly; there is no abstraction over the env object itself.
+- Overrides target the config store's override layer, **not** `process.env`. The store snapshots the process environment at import time, so only the override mechanism can change what a slice sees mid-test.
+- `withEnvironmentOverrides` deliberately returns `body`'s value (typed `<T>`) to support the "reload module under a new config" pattern; the `void`-returning siblings do not.
+- `setProcessEnvironment` records the original value on **first touch only** (first-wins `Map`), so repeated sets within one case don't clobber the restore target.
+- `withoutEnvironmentInThisFile` depends on Jest's `beforeEach`/`afterEach` being in scope at the call site — it is a plain function, not a hook itself.
+- Distinguishing "removed" from "empty string" in `process.env` restoration matters to consumers that check key existence vs. value.

@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/security/breached-passwords/index.test.ts
-sha256: 75cc86be22b1ebe3ed0b81ce80e8a173edcabc2b294bb110a76f57975ac93af2
-generated_at: 2026-09-23T20:26:28.685474+00:00
+sha256: 0fd8ccf8736544d1338078bfae06701062b8122a14ee67f10da32a45983d42da
+generated_at: 2026-10-15T13:19:53.385101+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the two-tier breached-password check (bundled list + HIBP k-anonymity API) and the combined `assertPasswordNotBreached` guard. Validates correct routing between the two rungs, the HIBP request format, fail-open semantics, and the shape of the user-facing validation error.
+Unit tests for the breached-password security module, verifying both lookup rungs (the bundled list and the HIBP k-anonymity API), their combined orchestration in `checkPasswordBreach`, and the user-facing `assertPasswordNotBreached` validation wrapper. All network I/O is faked via a global `fetch` spy.
 
 ## Key elements
 
-- **`textResponse(body, ok)`** – Factory that returns a minimal `Response`-shaped object (`ok`, `status`, `text()`), used to mock `globalThis.fetch` without a real network call.
-- **`IN_LIST_PASSWORD` / `NOT_IN_LIST_PASSWORD`** – Fixed fixtures: one guaranteed to be in the committed ~20 k-entry bundled list, one that is not.
-- **`original` + `afterEach`** – Saves and restores `NODE_PASSWORD_BREACH_LIST` / `NODE_PASSWORD_BREACH_HIBP` env vars around every test (same pattern as `antibot-providers`).
-- **`describe('isInBundledBreachList')`** – Two cases: hit and miss against the static list.
-- **`describe('checkHibpRange')`** – Verifies only the 5-hex-char prefix is sent in the URL, parses a matching suffix line, and confirms fail-open on network errors and non-200 responses.
-- **`describe('checkPasswordBreach')`** – Verifies short-circuit on rung 1, skip of rung 2 when disabled, and fall-through to rung 2.
-- **`describe('assertPasswordNotBreached')`** – Confirms the returned error is a generic `VALIDATION_ERROR` on the `password` field without leaking which rung triggered it, and returns `[]` for an acceptable password.
+- **`IN_LIST_PASSWORD` / `NOT_IN_LIST_PASSWORD`** — two fixed passwords; the first is guaranteed to be in the committed ~20k-entry bundled list, the second is composition-valid but absent.
+- **`textResponse(body, ok)`** — helper that builds a real `Response` (needed because the implementation reads the body through a capped stream). `ok = false` produces a 503 for non-200 cases.
+- **`describe('isInBundledBreachList')`** — asserts hit and miss against the static list.
+- **`describe('checkHibpRange')`** — verifies:
+  - Only the first 5 hex chars of the SHA-1 are sent in the URL (k-anonymity).
+  - A matching suffix in the response yields `{ breached: true, count }`.
+  - `redirect: 'error'` is always passed.
+  - Fail-open behaviour: oversized body (> 1 MiB), network rejection, and non-200 status all resolve to `{ breached: false }`.
+- **`describe('checkPasswordBreach')`** — confirms rung-1 short-circuit (no `fetch` call), HIBP-disabled skip, and fall-through to rung 2 when rung 1 misses.
+- **`describe('assertPasswordNotBreached')`** — checks the validation-error shape (`code: 'VALIDATION_ERROR'`, `details.field: 'password'`) without leaking which rung matched; also the clean `[]` path.
+- **`afterEach`** — calls `jest.restoreAllMocks()` to reset the `fetch` spy and any `setEnvironment` switches.
 
 ## Relationships
 
-- **`src/infrastructure/security/breached-passwords/index.ts`** – The sole SUT; this file imports `isInBundledBreachList`, `checkHibpRange`, `checkPasswordBreach`, and `assertPasswordNotBreached` from it.
-- **`scripts/ops/refresh-breached-passwords.ts`** – Referenced in a comment as the source of the committed bundled list that `IN_LIST_PASSWORD` is expected to appear in.
-- **`oauth-github.test.ts` / `oauth-google.test.ts`** – Cited in the module docstring as the origin of the `fetch`-mocking pattern reused here.
+- **`src/infrastructure/security/breached-passwords/index.ts`** — the module under test; all four exported functions (`isInBundledBreachList`, `checkHibpRange`, `checkPasswordBreach`, `assertPasswordNotBreached`) are imported and exercised here.
+- **`tests/support/environment.ts`** — provides `setEnvironment`, used to toggle the `NODE_PASSWORD_BREACH_LIST` and `NODE_PASSWORD_BREACH_HIBP` switches per test case.
 
 ## Notes
 
-- The HIBP check is intentionally **fail-open**: both a rejected `fetch` and a non-200 response resolve to `{ breached: false }`, so a HIBP outage never blocks a user from registering a valid password.
-- `assertPasswordNotBreached` deliberately does **not** disclose which rung (bundled list vs. HIBP) produced the rejection—only a generic validation error on the `password` field.
-- Env-var toggles (`NODE_PASSWORD_BREACH_LIST`, `NODE_PASSWORD_BREACH_HIBP`) gate each rung independently; tests set them per-case and rely on `afterEach` restoration.
+- The `fetch` spy replaces `globalThis.fetch` directly (not a module mock), matching the pattern used in the OAuth provider tests.
+- `textResponse` must produce a genuine `Response` object (not a plain `{ body }` stub) because `checkHibpRange` consumes the body as a byte-capped stream; a fake without a real stream would bypass the cap logic under test.
+- The fail-open contract (network down, non-200, oversized) is a deliberate product decision — the tests pin it so a future refactor that makes HIBP failures hard-error would be caught.
+- `assertPasswordNotBreached` intentionally omits the rung that matched from its error message; the test asserts only the generic shape to lock that behaviour in.

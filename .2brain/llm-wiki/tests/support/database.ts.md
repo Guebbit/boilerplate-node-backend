@@ -1,7 +1,7 @@
 ---
 source: tests/support/database.ts
-sha256: 5be3443423f671801cfa7d7390f03c0074678f6165be0b1f8df5f28340cd5ed0
-generated_at: 2026-09-23T20:10:27.754871+00:00
+sha256: e9ca077638e4ea2b38ca3451ec52f6d14e2e80b2c22a55a0f0dbbe658c694660
+generated_at: 2026-10-15T12:57:41.235315+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides per-file database connection lifecycle (connect, disconnect, clear) for the test suite. It connects to a single shared in-memory MongoDB started by `globalSetup`, assigning each test file a uniquely named database to preserve isolation while bounding disk and process costs (one server for all files instead of one per file).
+Provides per-file database connection helpers for the test suite. Each test file gets its own **database** on a single shared in-memory MongoDB instance (started once in `globalSetup`), avoiding the cost of spawning a `mongod` per file — a problem that previously stranded 88 GB of disk under mutation testing.
 
 ## Key elements
 
-- **`connect()`** – Reads `NODE_TEST_MONGO_URI` from the environment, calls `mongoose.connect` with a unique `dbName` (`test-<8-char uuid>`), then awaits `Model.init()` on every registered model to guarantee all indexes (including unique indexes) are built before the first test case runs.
-- **`disconnect()`** – Drops the current file's database and closes the Mongoose connection. The shared `mongod` process remains running for subsequent files.
-- **`clearAll()`** – Iterates `mongoose.connection.collections` and calls `deleteMany({})` on each, emptying all data without dropping the database or closing the connection.
+- **`connect()`** — Reads `NODE_TEST_MONGO_URI` from the environment, applies shared Mongoose configuration, connects with a unique `dbName` (`test-` + 8-char UUID slice), hooks command metrics, then awaits `Model.init()` for every registered model so all indexes exist before the first test runs.
+- **`disconnect()`** — Drops the file's database and closes the Mongoose connection; the shared server stays alive for subsequent files.
+- **`clearAll()`** — Empties every collection in the current database via `deleteMany({})` without dropping the database or closing the connection.
 
 ## Relationships
 
-- **`tests/support/setup-test-db.ts`** – Direct consumer. Calls `connect()` in `beforeAll`, `clearAll()` in `beforeEach`, and `disconnect()` in `afterAll` to manage the per-file lifecycle for any test file that imports it.
-- **`tests/integration/scenarios/shop.test.ts`** – Integration test suite that relies on the database state managed through `setup-test-db.ts`.
-- **`tests/integration/scripts/db/index-sync.test.ts`** – Integration test that exercises index synchronization; benefits from the `Model.init()` wait in `connect()` ensuring indexes exist before assertions.
+- **`src/infrastructure/runtime/database.ts`** — Imports `configureMongoose` and `COMMAND_MONITORING` so tests use the same Mongoose settings as production processes.
+- **`src/infrastructure/persistence/command-metrics.ts`** — Imports and calls `observeDatabaseCommands(mongoose.connection)` to instrument database commands in tests.
+- **`tests/support/setup-test-db.ts`** — The caller that invokes `connect()` / `disconnect()` from `beforeAll` / `afterAll` in each test file.
+- **`tests/integration/scenarios/shop.test.ts`**, **`tests/integration/scripts/db/index-sync.test.ts`** — Consumers that rely on the isolation guarantees (per-file database, `clearAll` between cases).
 
 ## Notes
 
-- **Requires `NODE_TEST_MONGO_URI`** – If unset, `connect()` throws with a pointer to `global-setup.ts`. Tests must run through Jest (which wires `globalSetup` in `jest.config.js`), not by importing this module standalone.
-- **Index race guard** – The `Promise.all(…model.init())` wait is deliberate. Without it, unique-index enforcement tests can pass or fail intermittently under parallel workers because Mongoose builds indexes asynchronously after `connect()` resolves.
-- **Per-file isolation model** – Isolation is achieved by unique database name + `clearAll` between cases + `disconnect` dropping the DB. The shared server is the only deviation from a per-file `MongoMemoryServer`; it cuts disk and process overhead without changing data separation.
-- **`disconnect` does not stop the server** – The `mongod` process is owned by `globalSetup`/`globalTeardown`; this file only manages the client-side connection and its named database.
+- Must be run **through jest** (wired via `globalSetup` in `jest.config.js`). Importing the module directly will throw because `NODE_TEST_MONGO_URI` will be unset.
+- The `Model.init()` await in `connect()` is load-bearing: without it, unique-index enforcement races the first insert, causing intermittent failures only under parallel workers.
+- `clearAll` clears collections in-place; it does **not** drop the database. Use `disconnect` for full teardown.
+- `process.env` is the intentional channel for the shared URI — jest gives each test file a fresh module registry, so a module-level singleton would not survive the boundary.

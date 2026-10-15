@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/surfaces/create-item-controller.test.ts
-sha256: 444788d0af66263fe1716b83982571e7ced012258679bd2c5609408763d69afd
-generated_at: 2026-09-27T16:10:49.731062+00:00
+sha256: 3e1bf1f50c230fa415dc935b19cf3e01f5fc156616f13e03a098ec77c1ca953d
+generated_at: 2026-10-15T13:20:44.943851+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `createItemController` factory. They pin the generated operation name (both the `get<Entity>Item` default and the `get<Entity><Suffix>` override via `handlerSuffix`) by observing the log line written by `rejectDatabaseError`, and they confirm that the found/not-found response contract (200 / 404) is unaffected by any naming change.
+Unit tests for `createItemController`, the shared read-one factory used by both `products` and `users` surfaces. The file pins three contracts: the generated operation name (default and `handlerSuffix` override), the found / not-found / malformed-id response round-trip, and ETag stamping from `editRevision`.
 
 ## Key elements
 
-- **`makeRequest(id)`** — returns a stubbed Express `Request` carrying only `params.id`, sufficient for the controller under test.
-- **`makeResponse()`** — returns a stubbed Express `Response` whose `status()` and `json()` are chainable `jest.fn()`s, used to assert on status code and body.
-- **`describe('createItemController — operation naming')`** — two tests: default name `getWidgetItem` when `handlerSuffix` is omitted, and `getWidgetAdmin` when `handlerSuffix: 'Admin'` is supplied. Both trigger a rejected `fetch` so the error path (and thus `logger.error`) fires.
-- **`describe('createItemController — found/not-found round trip…')`** — two tests: 200 + `{ success: true, data }` on a resolved row, and 404 + `{ success: false }` on `undefined`. Verifies response shape is independent of `handlerSuffix`.
+- **`OBJECT_ID`** – a valid 24-char hex ObjectId used as the canonical "well-formed" id in every test.
+- **`makeRequest(id)`** – builds a minimal `Request` stub (via `asStub`) carrying `params.id`.
+- **`makeResponse()`** – builds a minimal `Response` stub with chainable `status` / `json` mocks.
+- **`jest.mock('@infrastructure/adapters/logger')`** – replaces the real logger with a spy so tests can assert the operation name embedded in the `rejectDatabaseError` log line.
+- **`describe('operation naming')`** – two tests asserting `logger.error` is called with a string containing `getWidgetItem` (default) or `getWidgetAdmin` (with `handlerSuffix: 'Admin'`).
+- **`describe('found/not-found round trip')`** – three tests covering 200 + row, 404 + `success:false` on empty fetch, and 404 on a malformed id (verifying `fetch` is never invoked).
+- **`describe('ETag')`** – one test asserting `response.setHeader` is called with `'ETag'` and the quoted revision string (`'"12"'`).
 
 ## Relationships
 
-- **`src/infrastructure/surfaces/create-item-controller.ts`** — the system under test; the file imports and exercises `createItemController` directly.
-- **`src/infrastructure/adapters/logger.ts`** — module-mocked at the top of the file; tests assert on `logger.error` call arguments to observe the generated operation name.
-- **`tests/support/stub.ts`** — provides `asStub<T>()`, used to build the `Request` and `Response` objects without pulling in real Express types at runtime.
+- **`src/infrastructure/surfaces/create-item-controller.ts`** – the system under test; `createItemController` is imported and invoked directly with varying config objects.
+- **`src/infrastructure/adapters/logger.ts`** – mocked at module level; the test reads `logger.error` calls to observe the operation name the controller passes to `rejectDatabaseError`.
+- **`tests/support/stub.ts`** – provides the `asStub<T>` helper used to cast plain objects into typed `Request` / `Response` stubs.
 
 ## Notes
 
-- Operation name is asserted **through the log line**, not via `handler.name`. The file documents that `namedHandler`'s computed-key rename only applies to a function literal written at that property position; a reference passed in as an argument leaves `handler.name` as `''`. This is a known, pre-existing gap in the factory, unrelated to these tests.
-- The logger mock is a bare `jest.mock` with a single `error: jest.fn()`; no other logger methods are available in these tests.
-- The entity used throughout is the arbitrary `'widget'`; the tests are not tied to any real domain entity (`products`, `users`).
+- The operation name is **not** asserted on a return value; it is only visible through the logger call, so the test triggers the error path (`fetch` rejects) to force that log line.
+- `handlerSuffix` is exercised with the value `'Admin'` to mirror the real `get-product-admin.ts` collision-avoidance use case.
+- The ETag value is a **quoted** string (`'"12"'`), not a bare number — the controller serialises `editRevision` into HTTP-header form.
+- The malformed-id test explicitly asserts `fetch` was **not** called, guarding against a regression where validation is skipped.

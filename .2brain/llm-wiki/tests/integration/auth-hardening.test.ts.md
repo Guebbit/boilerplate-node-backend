@@ -1,7 +1,7 @@
 ---
 source: tests/integration/auth-hardening.test.ts
-sha256: daa23559fe6d4537450080d06182f31ca2af19f929c2e1a6568c09584ab1c39f
-generated_at: 2026-09-27T15:54:50.147795+00:00
+sha256: 848880b52c0ed183543f2288260550b548aed586c31dfd844d99e72035dbc55e
+generated_at: 2026-10-15T12:43:44.650489+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration suite for the global Express error handler (`handleUncaughtError`), exercising it over real HTTP via supertest. It verifies that the handler's translation of arbitrary thrown values into safe, structured JSON responses never leaks internal details, correctly maps genuine library rejections (body-parser, Multer) to their intended status and code, and enforces the `expose`-flag contract in both directions. The file exists at the root level because the global handler is system-wide—every module's uncaught throw unwinds through it.
+Integration suite that exercises the **global Express error handler** (`handleUncaughtError`) over real HTTP via supertest. It verifies that the handler sanitises unexpected 500s, honours body-parser rejections, respects the `expose` flag correctly, and passes through deliberate client-facing errors. It lives at the repo root (not inside any module) because the handler is system-wide — every uncaught throw and body-parser rejection in every module funnels through it.
 
 ## Key elements
 
-- **`answerFor(thrown: unknown)`** — Helper that builds a throwaway Express app, registers a `/boom` route that synchronously throws the given value, mounts `handleUncaughtError` as the error middleware, and returns the pending supertest request. Testing the mount + route-dispatch path (not just the function in isolation).
-- **`describe('the 500 handler')`** — Contains five tests:
-  - *No secret leakage*: a thrown `Error` with a connection string must produce `500 / INTERNAL_ERROR` without echoing the original message.
-  - *Genuine body-parser rejection*: drives `express.json({ limit: '100b' })` with an oversized payload; expects `413 / PAYLOAD_TOO_LARGE` using the fields body-parser actually sets.
-  - *`expose: false` with a 4xx status*: handler must return `500`, ignoring the thrower's `status`.
-  - *`expose: true` with a 5xx status*: handler must still return `500` and suppress the message.
-  - *MulterError translation*: the one remaining hand-rolled case—expects `400` and the human-readable `'File too large'` message.
+- **`answerFor(thrown: unknown)`** — helper that mounts a throwing route and `handleUncaughtError` on a throwaway Express app, then issues a GET via supertest. Used for the "thrown value" test cases.
+- **`describe('the 500 handler')`** — single suite containing five tests:
+  - *tells the client nothing about what actually threw* — asserts a 500 with `INTERNAL_ERROR` code, and that a planted Mongo URI (host, password) does not appear in the body.
+  - *answers a genuine oversized-body rejection with its own status* — drives `express.json({ limit: '100b' })` to produce a real body-parser rejection; expects 413 / `PAYLOAD_TOO_LARGE`.
+  - *ignores a client status on an error that does not expose itself* — `status: 400, expose: false` is coerced to 500.
+  - *does not hand a 5xx back to the client just because it is exposed* — `status: 503, expose: true` is still coerced to 500 and the message is stripped.
+  - *still returns the copy a deliberate error carries* — a `MulterError('LIMIT_FILE_SIZE')` passes through as 400 with its own message.
 
 ## Relationships
 
-- **`src/app/error-handling.ts`** — Imports and exercises `handleUncaughtError`, the sole SUT. All assertions are about the shape and status of that function's HTTP output.
+- **`src/app/error-handling.ts`** — the sole import. Provides `handleUncaughtError`, the Express error middleware under test. The tests mount it on throwaway apps and assert on the shape of the JSON responses it produces; they do not mock or stub it.
 
 ## Notes
 
-- The file's name still says "auth-hardening," but the rate-limiter and antibot-challenge tests it once carried now live in `src/modules/account/tests/integration/auth-hardening.test.ts`. Only the global error handler remains here.
-- Tests that involve a specific library (body-parser, Multer) are mounted in their own Express instance to produce a *real* rejection shape rather than hand-assigning `.status` on an `Error`. This prevents tautological assertions.
-- The `answerFor` helper deliberately tests that Express routes a synchronous throw to the error middleware—dropping the middleware would change the response, so the mount is part of the contract under test.
+- The file's header comment explicitly states that the **credential-endpoint rate limiter** and **antibot challenge gate** tests live in `src/modules/account/tests/integration/auth-hardening.test.ts`, not here. Do not conflate the two files when searching for hardening coverage.
+- The MulterError test uses a dynamic `await import('multer')` rather than a top-level import, keeping the dependency optional for the rest of the suite.
+- The `expose`-flag tests together encode the full policy: **4xx + expose:false → 500**, **5xx + expose:true → 500**. The only errors that keep their own status are those the handler explicitly translates (currently MulterError and body-parser).
+- The "genuine body-parser rejection" test intentionally does **not** hand-set `.status` on a fake error; it drives the real parser to avoid tautological assertions.

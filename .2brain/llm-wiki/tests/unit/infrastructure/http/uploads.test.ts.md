@@ -1,35 +1,34 @@
 ---
 source: tests/unit/infrastructure/http/uploads.test.ts
-sha256: 8d4bf131f56818cc30f41f6fa431ad3c3f53bf185697660ebb307b0934e5a5ea
-generated_at: 2026-09-27T16:08:08.291337+00:00
+sha256: 0c2831b60aeb7a6e5110f56e943d8d5f575df469952c6765fecb59174735cd9d
+generated_at: 2026-10-15T13:15:59.168562+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # tests/unit/infrastructure/http/uploads.test.ts
 
 ## Purpose
-
-Unit tests for the two upload-helper functions exported by `src/infrastructure/http/uploads.ts`. The tests exist to lock down two invariants: `getFormFiles` always yields a uniform array shape (or `undefined`), and `readUploadedImage` returns only the URL the store recorded—never a raw filesystem path.
+Unit test suite for the three upload helpers exported by `src/infrastructure/http/uploads.ts` (`getFormFiles`, `readUploadedImage`, `writeWithUploadedImage`). It verifies that filesystem paths never leak into response payloads, that pending (quarantined) and promoted (stored) uploads follow distinct read/undo paths, and that the `uploadClaimed` flag is set only on a successful write.
 
 ## Key elements
-
-- **`uploaded(path)`** – local helper that produces a minimal `Express.Multer.File` stub (only `path` is set).
-- **`requestWith(parts)`** – local helper that builds a partial `Request` with `body` defaulted to `{}`, preventing `readUploadedImage`'s `body.imageUrl` fallback branch from ever seeing `undefined`.
-- **`describe('getFormFiles')`** – verifies the single-file wrap (`multer.single` → `['path']`) and the no-upload case (`undefined`).
-- **`describe('readUploadedImage')`** – verifies:
-  - Stored relative URL is returned as-is.
-  - Absolute (remote/CDN) URLs pass through unchanged.
-  - Only the **first** entry in `storedImageUrls` is used; extras are ignored.
-  - `imageUrl` is `undefined` (not `''`) when nothing was uploaded.
-  - A staged `request.file` path that the store never committed is **not** used as a fallback.
+- **`jest.mock('@infrastructure/adapters/image-store', …)`** — replaces `imageStore` with `{ remove: jest.fn(), removeQuarantined: jest.fn() }` so no test touches disk.
+- **`uploaded(path)`** — builds a minimal `Express.Multer.File` stub (`{ path }`).
+- **`requestWith(parts)`** — builds a partial `Request` with `body` defaulted to `{}` to exercise the `readUploadedImage` fallback branch safely.
+- **`withUpload(parts)`** — like `requestWith` but also resets `storedThumbnailUrls` to `undefined`, modelling a fresh upload-middleware record.
+- **`promoted()`** — returns a request carrying a promoted upload (`storedImageUrls`) with `uploadClaimed: false`.
+- **`store`** — `jest.mocked(imageStore)` cast for typed call assertions.
+- **`describe('getFormFiles')`** — two cases: wraps `request.file` in a single-element array; returns `undefined` when no file is present.
+- **`describe('readUploadedImage')`** (first block) — url passthrough (relative & absolute), first-url-only selection, `undefined` when nothing uploaded, and the guard that a staged temp path is **not** used as a fallback.
+- **`describe('readUploadedImage — the pending and promoted paths')`** — asserts placeholder URLs + `pendingImageKey` for quarantine entries; `deleteUpload()` calls `removeQuarantined` for pending and `remove` for promoted; body-string `imageUrl` yields a no-op undo; body `null` is preserved; upload always beats body; missing body doesn't throw.
+- **`describe('writeWithUploadedImage — claim on success…')`** — sets `uploadClaimed = true` only when the write resolves with `success: true`; leaves the flag untouched on refusal or thrown error; passes `imageUrl: null` when nothing was uploaded; upload URL beats the `null` fill for both promoted and pending cases.
 
 ## Relationships
-
-- **`src/infrastructure/http/uploads.ts`** – the module under test; this file imports `getFormFiles` and `readUploadedImage` from it via the `@infrastructure/http/uploads` alias.
-- **Express types** – the stubs reference `Request` and `Express.Multer.File` to shape the objects the helpers consume.
+- **`src/infrastructure/http/uploads.ts`** — module under test; all three exported functions are imported and exercised.
+- **`src/infrastructure/adapters/image-store.ts`** — fully mocked; tests assert *which* method (`remove` vs `removeQuarantined`) is invoked and with what argument, never the filesystem.
+- **`src/infrastructure/http/config.ts`** — `uploadConfig()` is imported for its `NODE_PENDING_IMAGE_URL` / `NODE_PENDING_THUMBNAIL_URL` values, used in assertions to confirm the pending-path placeholders.
 
 ## Notes
-
-- The `undefined`-vs-`''` distinction in `readUploadedImage` is load-bearing: downstream cleanup logic treats `undefined` as "no image, skip delete" and an empty string as "image at site root, attempt delete." The test suite pins this contract.
-- The "ignore staged path" test is a regression guard: the store (not the middleware) is responsible for constructing URLs, so `readUploadedImage` must never fall back to `request.file.path`. If it did, a filesystem path would leak into `imageUrl` and persist to the database.
-- `requestWith` defaults `body` to `{}` specifically so the `body.imageUrl` fallback branch inside `readUploadedImage` is exercised with a known value; `getFormFiles` tests are unaffected because that function never reads `body`.
+- The `requestWith` helper defaults `body` to `{}` specifically so the `body.imageUrl` fallback branch inside `readUploadedImage` sees an object rather than `undefined`; `getFormFiles` cases are unaffected because they never read `body`.
+- The "staged file the store never committed" test is an intentional regression guard: if `readUploadedImage` ever fell back to `request.file.path`, a raw filesystem path would persist into `imageUrl` — the exact invariant the store exists to prevent.
+- `uploadClaimed` is mutated in-place on the request object; the `writeWithUploadedImage` tests rely on that shared reference to verify the flag transition.
+- The `deleteUpload()` no-op case (body-string imageUrl) asserts `resolves.toBe(false)`, confirming the method signals "nothing was deleted" rather than throwing.

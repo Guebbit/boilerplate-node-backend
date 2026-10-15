@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/persistence/mongo-errors.test.ts
-sha256: 4fbff24eac709b478c7f2bfca0ab11bf2d934c6bbfbbd62d627721a892542c6b
-generated_at: 2026-09-27T16:09:32.745303+00:00
+sha256: 44d71c268637b325cd4d8aac1c8b656dafa80ab404080b28e1f0bb70732a9cef
+generated_at: 2026-10-15T13:18:21.911267+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the three narrow error-detection guards in `mongo-errors.ts` (`isDuplicateKey`, `isBadObjectId`, `isConnectionError`). Each describe block pins down *how* the guard discriminates (code vs. message, `instanceof` vs. shape, `name` property vs. class) and that non-matching inputs—including `undefined`—return `false` without throwing.
+Unit tests for the two predicate helpers in `mongo-errors.ts` (`isDuplicateKey`, `isConnectionError`). They verify that detection relies on structured error fields (numeric `code`, error `name`) rather than fragile message-string matching, and cover both positive and negative edge cases including near-miss codes and unrelated `mongoose.Error` instances.
 
 ## Key elements
 
-- **`makeDuplicateKeyError()`** – local factory that produces a realistic `Error` with `code: 11000` attached, used to exercise `isDuplicateKey` against the driver's actual signal.
-- **`describe('isDuplicateKey', …)`** – verifies the guard reads the numeric `code` property (not the message text) and rejects near-miss codes (e.g. `11001`).
-- **`describe('isBadObjectId', …)`** – verifies the guard uses `instanceof mongoose.Error.CastError` *and* checks `kind === 'ObjectId'`; explicitly rejects plain objects that merely look like a CastError.
-- **`describe('isConnectionError', …)`** – verifies the guard matches on the `name` string across five driver/Mongoose error classes, plus the buffering-timeout `MongooseError` message; rejects unrelated `MongooseError` instances (e.g. "Aggregate has empty pipeline").
+- **`makeDuplicateKeyError`** (local helper) — builds a plain `Error` with `code: 11000` to simulate a driver duplicate-key error without importing the Mongo driver.
+- **`describe('isDuplicateKey', …)`** — asserts the function returns `true` only for `code === 11000`; returns `false` for message-only matches, other codes (`11001`), generic errors, and `undefined`.
+- **`describe('isConnectionError', …)`** — asserts the function recognises a fixed list of error `name` values (`MongoServerSelectionError`, `MongooseServerSelectionError`, `MongoNetworkError`, `MongoNotConnectedError`, `MongoNetworkTimeoutError`), the Mongoose buffering-timeout message, while rejecting unrelated `mongoose.Error` messages, generic errors, and `undefined`.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/mongo-errors.ts`** – the sole SUT. This file imports and exercises its three exported predicates; no other module is touched.
+- **`src/infrastructure/persistence/mongo-errors.ts`** — the module under test; this file imports `isDuplicateKey` and `isConnectionError` from it and exercises both.
+- **`mongoose`** (package) — imported solely to construct a real `mongoose.Error` instance for the buffering-timeout positive case and an unrelated one for the negative case. No other Mongoose functionality is used.
 
 ## Notes
 
-- The test comments encode design rationale that is otherwise invisible in the source: `code` over message (resilient to index renames), `instanceof` over duck-typing (prevents hand-built fixtures from passing), and `name` over `instanceof` (the driver classes are not all importable as a single base). When refactoring `mongo-errors.ts`, keep the guard's discrimination mechanism aligned with these expectations.
-- `isConnectionError` also matches a specific `MongooseError` message ("buffering timed out"), so that string is effectively part of the contract—renaming it in the driver would silently break detection.
+- The tests deliberately avoid `instanceof` and actual driver error classes (e.g. `MongoServerError`). Errors are simulated via `Object.assign(new Error(msg), { code }…)` or `{ name }`, mirroring the production code's duck-typing strategy.
+- The buffering-timeout case is the only test that constructs a genuine `mongoose.Error`; this is because that signal is the *message text* (a Mongoose-specific phrasing), not a `name` or `code` field.
+- Near-miss code `11001` is explicitly tested to guard against off-by-one or range-based checks.

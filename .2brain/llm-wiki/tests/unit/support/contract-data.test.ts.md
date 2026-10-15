@@ -1,7 +1,7 @@
 ---
 source: tests/unit/support/contract-data.test.ts
-sha256: 772021fbaf0d603f5adb082ad603f491778eefe5bbecb26bc1d5c0a4b373a2b2
-generated_at: 2026-09-23T20:32:12.727301+00:00
+sha256: 59157d948a3cb9730d2581c7e42dff69afbf7cfae1250088142e76f3df97ea5b
+generated_at: 2026-10-15T13:33:12.218531+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,20 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Regression test that pins the `format: email` behavior of the payload generator in `tests/support/contract-data.ts`. It exists because a single hand-picked sample shape (`word@example.com`) had previously masked two bugs (plus-tags and 8+ character TLDs being rejected by the email regex). By drawing 200 samples, it guarantees the generator's random selection actually exercises every shape it claims to support.
+Statistical test that guards the email-shape generator inside `validPayload`. It verifies two things: (1) across a batch of draws, the generator actually produces the less-common email shapes (plus-tag, long TLD, subdomain) rather than always emitting one canonical form, and (2) every single value it emits is accepted by the Zod `z.email()` schema it was generated for.
 
 ## Key elements
 
-- **`SAMPLE_COUNT`** (200) — number of random draws per test; chosen so a 4-way random pick hits every shape with near-certainty.
-- **`contract-data — email format`** (describe block) — scopes all assertions to the email field of the generator.
-- **Test: "generates a plus-tag, an 8+ character TLD, and a subdomain…"** — draws 200 payloads, asserts at least one contains `+`, one has a TLD of 8+ alphabetic chars, and one has a subdomain (two dot-separated local parts before the TLD).
-- **Test: "never emits a value the schema itself rejects"** — iterates 200 draws and confirms each generated email passes `z.email()` via `safeParse`, guarding against generator/schema drift.
+- **`SAMPLE_COUNT` (200)** – Draw count chosen so a 4-way random shape pick hits every branch with high probability. Used by both tests.
+- **"generates a plus-tag, an 8+ character TLD, and a subdomain…"** – Draws 200 emails and asserts that at least one contains `+`, at least one ends in a TLD of 8+ letters, and at least one has a subdomain (`user.sub.domain.tld` pattern).
+- **"never emits a value the schema itself rejects"** – Iterates 200 draws and asserts `schema.safeParse({ email }).success` is `true` every time.
 
 ## Relationships
 
-- **`tests/support/contract-data.ts`** — the module under test. This file imports `validPayload` from `@tests/contract-data` and asserts properties of the email values it returns. No other files depend on this test.
+- **`tests/support/contract-data.ts`** – Provides the `validPayload` function under test. This test file is the email-format half of that module's contract; a sibling test (or another describe block) covers the non-email payload shapes.
 
 ## Notes
 
-- The regex patterns in the assertions are intentionally _looser_ than `z.email()` (e.g. `[a-z]{8,}$` for TLD) so the test validates shape coverage rather than re-implementing the validator.
-- The second test calls `validPayload` 200 separate times inside a loop (rather than building an array first) so each assertion failure identifies the specific draw index via the `index` counter.
+- Coverage is probabilistic, not exhaustive. 200 draws makes it *very likely* every shape appears, but a theoretically possible (astronomically unlikely) run could skip one. There is no `Math.random` seed.
+- The three regex assertions in the first test are shape *existence* checks (`.some(...)`), not "every email matches one of these three." The generator is expected to randomize across shapes; the test only confirms none are structurally absent from the batch.
+- The second test re-draws independently per iteration rather than reusing the first test's array, so it is unaffected by any state the first test might leave behind.

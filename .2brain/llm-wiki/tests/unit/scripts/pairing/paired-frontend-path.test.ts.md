@@ -1,7 +1,7 @@
 ---
 source: tests/unit/scripts/pairing/paired-frontend-path.test.ts
-sha256: f44cffab7d3bb0dd24fc2698349190697380bf8f8890eb0a8f8a99d305ba4633
-generated_at: 2026-09-27T16:14:05.313171+00:00
+sha256: 3058ed8b2a1086e5f61a3cb86cee44b37aca8301226c9017bbbbdbbb0187705b
+generated_at: 2026-10-15T13:29:15.026773+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `resolveFrontendPath`, verifying that the resolver honors its three-source priority (shell env → `.env` file → sibling default) and handles edge cases like empty/whitespace values, relative paths, and environment non-leakage. Each case runs in a throwaway temp directory so the repo's own `.env` never interferes.
+Unit tests for `resolveFrontendPath`, verifying the three-tier resolution contract (shell env var → `.env` file → sibling default), empty-value semantics, relative-path handling, and that reading `.env` never mutates `process.env`.
 
 ## Key elements
 
-- **`writeEnvironmentFile(contents)`** – Writes a `.env` file into the case's working directory.
-- **`sibling()`** – Computes the expected sibling-default path (`path.resolve(workingDirectory, DEFAULT_FRONTEND_PATH)`) for assertions.
-- **`beforeEach` / `afterEach`** – Creates a unique `mkdtemp` directory, mocks `process.cwd()` to point there, clears `FRONTEND_PATH`; teardown removes the dir, restores all mocks, and restores the original `FRONTEND_PATH` (or deletes it if it was absent).
-- **`describe('resolveFrontendPath')`** – Seven test cases:
-  - No shell value, no `.env` → sibling default.
-  - `.env` value is used (the case `npm run` misses).
-  - Shell value wins over `.env`.
-  - Whitespace-only shell value is treated as unset; `.env` is read instead.
-  - `.env` with empty `FRONTEND_PATH=` (as in `.env-example`) is treated as unset, not as the current directory.
-  - Relative `.env` value is resolved against the working directory.
-  - Reading `.env` does **not** write any key back into `process.env`.
+- **`writeEnvironmentFile(contents)`** – writes a `.env` file into the per-test temp directory.
+- **`sibling()`** – returns the expected default path (`workingDirectory/DEFAULT_FRONTEND_PATH`) for assertions.
+- **`beforeEach` / `afterEach`** – creates a fresh `mkdtempSync` directory, mocks `process.cwd`, clears `FRONTEND_PATH` via `setProcessEnvironment`, then restores all jest mocks and removes the temp dir.
+- **`describe('resolveFrontendPath')`** – seven `it` blocks covering:
+  - Fallback to sibling when neither shell nor `.env` provides a value.
+  - Reading `FRONTEND_PATH` from `.env` (the case `npm run` would miss).
+  - Shell value taking priority over `.env`.
+  - Whitespace-only shell value treated as unset → falls through to `.env`.
+  - Empty `.env` declaration (e.g. `FRONTEND_PATH=` from `.env-example`) treated as unset → falls through to sibling.
+  - Relative `.env` values resolved against the working directory.
+  - `.env` contents not merged into `process.env` (no leakage).
 
 ## Relationships
 
-- **`scripts/pairing/paired-frontend-path.ts`** – The sole production dependency. This file imports `DEFAULT_FRONTEND_PATH` (used to build expected sibling paths) and `resolveFrontendPath` (the function under test). No other module is imported or exercised.
+- **`scripts/pairing/paired-frontend-path.ts`** – the system under test; imports `resolveFrontendPath` and `DEFAULT_FRONTEND_PATH`.
+- **`tests/support/environment.ts`** – provides `setProcessEnvironment`, used to assign or clear `FRONTEND_PATH` on `process.env` in a test-safe way.
 
 ## Notes
 
-- The resolution order (shell → `.env` → sibling) is the contract; the tests are ordered to mirror it.
-- The empty-value tests guard against a real pitfall: `.env-example` ships `FRONTEND_PATH=` (empty), and a naive reader would interpret that as "use the current directory."
-- The non-leakage test (`PAIRED_PATH_PROBE`) asserts that the resolver parses `.env` in isolation without mutating `process.env`, which matters because callers may rely on the environment being untouched.
-- The file header notes this mirrors a backend counterpart at `<paired-frontend>/tests/unit/scripts/pairing/paired-backend-path.spec.ts`.
+- `process.cwd` is spied via `jest.spyOn`, so the tests depend on jest's mock infrastructure; running them outside a jest runner will throw.
+- Every test executes in an isolated `os.tmpdir()` sub-directory, deliberately preventing the repository's own `.env` from influencing results.
+- The header comment states this file mirrors `paired-backend-path.spec.ts` in the paired frontend repo—keep the two in sync when the resolution contract changes.

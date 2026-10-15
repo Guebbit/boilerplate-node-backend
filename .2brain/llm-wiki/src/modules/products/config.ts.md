@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/config.ts
-sha256: 4598562bf3150fedb9e637f59b391af8763a85322532d83edca14cd1a97083b7
-generated_at: 2026-09-27T15:30:30.576468+00:00
+sha256: 7d959eb13699370812de68f3bbe569c6eb03740dce86f99db8dd607cb5c9d442
+generated_at: 2026-10-15T11:39:47.096973+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the two VAT rates (default and reduced) and the deployment's single currency code for the products module. All values are read per call via environment variables rather than captured at import, so a rate change takes effect on the next resolve without a restart. This file owns those reads because `products/tax.ts` is the sole consumer of a product's tax class → rate mapping.
+Defines the products module's runtime configuration — the two VAT rates (default and reduced) — and re-exposes two infrastructure-level values (currency, low-stock threshold) under product-domain names. Rates are read per call (not captured at import) so individual tests can vary them, following the same pattern as `inventory/config.ts`.
 
 ## Key elements
 
-- **`vatRateDefault()`** — Returns the shop's default VAT rate (`NODE_VAT_RATE_DEFAULT`, fallback `0.22`). Used for products with no `taxClass`.
-- **`vatRateReduced()`** — Returns the reduced-rate VAT (`NODE_VAT_RATE_REDUCED`, fallback `0.1`). Applied to products with `taxClass: 'reduced'`.
-- **`invalidVatRateConfig()`** — Boot-time `customCheck`; returns an array of env-var names that are *set* but don't parse as a decimal in `[0, 1)`. Complements the manifest's empty-string check by catching malformed values like `2.2` or `abc`.
-- **`productCurrency()`** — Returns the deployment's ISO-4217 code (`NODE_DEFAULT_CURRENCY`, fallback `'EUR'`).
-- **`isValidVatRate`** (internal) — Validates a raw env string through `parseEnvironmentDecimal` and the `[0, 1)` range.
+- **`productsConfig`** — `defineConfig` object declaring `NODE_VAT_RATE_DEFAULT` (default `0.22`) and `NODE_VAT_RATE_REDUCED` (default `0.1`), both as required `decimal` fields constrained to `[0, 1)`.
+- **`vatRateDefault()`** — returns the default VAT rate as a number; applied to products with no `taxClass`.
+- **`vatRateReduced()`** — returns the reduced VAT rate as a number; applied when `taxClass` is `reduced`.
+- **`productCurrency()`** — returns the deployment's ISO-4217 currency code (delegates to `currencyConfig`).
+- **`lowStockThreshold()`** — returns the stock count at-or-below which a product is flagged low (delegates to `stockConfig`).
 
 ## Relationships
 
-- **`src/infrastructure/runtime/environment.ts`** — Imports `environmentDecimal` (rate readers) and `parseEnvironmentDecimal` (validation). All numeric env reads go through these helpers.
-- **`src/modules/products/tax.ts`** — `resolveTaxRate` is the sole runtime consumer of `vatRateDefault` / `vatRateReduced`.
-- **`src/modules/products/module.ts`** — Registers `invalidVatRateConfig` as the module's `customCheck` for boot validation.
-- **`src/modules/products/tests/unit/config.test.ts`** — Unit-tests the rate readers, validator, and currency accessor.
+- **Imports from `src/infrastructure/config/define.ts`** — uses `defineConfig` to declare the shape.
+- **Imports from `src/infrastructure/config/fields.ts`** — uses `decimal` for field validation.
+- **Imports from `src/infrastructure/runtime/config.ts`** — pulls `currencyConfig` and `stockConfig` for the two re-exported getters.
+- **`src/modules/products/tax.ts`** — the sole consumer of `vatRateDefault` / `vatRateReduced`; resolves a product's tax class to a concrete rate.
+- **`src/modules/products/tests/unit/config.test.ts`** — exercises the per-call rate pattern and validation bounds.
 
 ## Notes
 
-- Reads are intentionally per-call (the `inventory/config.ts` pattern). Do not "optimise" this into a module-level constant — that would require a restart to pick up rate changes.
-- Validation and reading must stay on the same parser (`parseEnvironmentDecimal`). A looser check (e.g. bare `Number(raw)`) would accept strings the reader treats as unset, silently falling back to the default rate.
-- `productCurrency` reads the *same* env var as `orders`'s `shopCurrency` but lives here to avoid a `products → orders → products` cycle that `.dependency-cruiser.modules.cjs` rejects. Both readers share the same default (`'EUR'`), so a deployment sets the variable once.
-- The range check is `[0, 1)`: a value of `1` (100 %) is treated as a typo, not a valid rate.
-- `NODE_ENV=test` and the demo profile skip the `invalidVatRateConfig` gate entirely; the fallback defaults still apply.
+- The two VAT getters are the only place a tax rate is *read*; `orders` merely freezes whatever `tax.ts` returns onto a line item and never queries a rate itself.
+- Defaults (`0.22`, `0.1`) apply in `NODE_ENV=test`. In any real deployment (including the demo profile) both rates must be set explicitly at boot; the `required` flag enforces this.
+- A rate of `1` or above is rejected at validation — it is treated as a certain typo.
+- `productCurrency` and `lowStockThreshold` are not products-specific config; they are pass-throughs to shared infrastructure config so that callers within the products module (e.g. `presenter.ts`) use a domain-scoped name.

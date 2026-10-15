@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/unit/providers.test.ts
-sha256: fdbddce38a7dd8db1d3e1d17c9e51b0a5cad651f4fdbceaf2221f4656961f016
-generated_at: 2026-09-27T15:29:57.403926+00:00
+sha256: 9fa230d86844cb40b2e5fbb7fc432521d91ab038b1b56587842722bfe0877821
+generated_at: 2026-10-15T11:38:35.004388+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the payment provider port's **fake** implementation, the shared webhook-signature utilities, and the provider resolver. Deliberately kept out of `tests/integration/` because none of these code paths touch Mongo; `service.test.ts` (which persists a payment document) lives there instead.
+Unit tests for the payment-provider port: the shared webhook-signature discipline (signing, verification, secret-ring rotation) and the `resolvePaymentProvider` registry lookup. It lives in `tests/unit/` because it touches no database or persistence; the provider's own outcome logic is covered separately in `tests/unit/scenarios/`.
 
 ## Key elements
 
-- **`fakePaymentProvider.prepare` block** — Verifies reference idempotency (same payment → same ref), uniqueness across payments, and that `clientSecret` ≠ `providerRef`.
-- **`fakePaymentProvider.confirm` block** — Exercises every documented outcome path: decline, `requires_action` (challenge), `processing` (async settlement), success, and last-4-only card exposure.
-- **`fakePaymentProvider.retrieve` block** — Confirms post-confirm state (e.g. `requires_action` → `succeeded`), that declined stays declined, and that an *unknown* reference resolves to `processing` rather than throwing.
-- **`fakePaymentProvider.refund` / `.cancel` blocks** — Refund always resolves; cancel handles unconfirmed, double-cancel, post-decline, and (via `PaymentInFlightError`) post-success refusal.
-- **`webhook signatures` block** — Round-trip sign/verify, tampered-body rejection, wrong-secret rejection, replay-window rejection, malformed/short-signature rejection, and case-insensitive hex acceptance.
-- **`fakePaymentProvider.parseWebhook` block** — Accepts a valid signed event, rejects unsigned and missing-`id` deliveries with `WebhookRejected`.
-- **`loadResolver` helper** — Calls `jest.resetModules()` then dynamically imports `providers/index` so each test sees a fresh module scope (env-var-dependent).
-- **`resolvePaymentProvider` block** — Asserts default-to-fake, explicit `fake` selection, and that an *unknown* provider name throws rather than silently falling back.
+- **`signedWith(secret, payload, timestamp?)`** – helper that sets `NODE_PAYMENT_WEBHOOK_SECRET` in the test environment and returns the result of `signWebhookPayload`.
+- **`v1Of(header)`** – extracts the `v1=<hex>` fragment from a header string via regex.
+- **`loadResolver()`** – calls `jest.resetModules()` then dynamically re-imports `../../providers/index` to obtain a fresh `resolvePaymentProvider` reference.
+- **`describe('webhook signatures', …)`** – covers round-trip signing/verification, tampered body, wrong secret, replay (stale timestamp), malformed/undefined header, wrong-length hex, uppercase-hex acceptance.
+- **`describe('a ring of secrets…', …)`** – covers multi-secret rotation: first-entry signing, verification against any ring member, multiple `v1` values, forged-entry placement, trimming of whitespace in comma-separated entries, and empty-`v1` rejection.
+- **`describe('resolvePaymentProvider', …)`** – covers the no-provider case (returns `undefined`), explicit registered provider (`'fake'`), and refusal of an unregistered name (throws rather than silently falling back).
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `providers/fake.ts` | Source of `fakePaymentProvider`, `FAKE_DECLINE_METHOD`, `FAKE_SUCCESS_METHOD` — the primary system under test. |
-| `providers/webhook-signature.ts` | Source of `signWebhookPayload`, `verifyWebhookSignature`, `WebhookRejected`; exercised directly and indirectly through `parseWebhook`. |
-| `providers/index.ts` | Re-exports `PaymentInFlightError` (used as expected rejection) and provides `resolvePaymentProvider` (imported dynamically after `jest.resetModules()`). |
-| `providers/errors.ts` | Defines `PaymentInFlightError`, surfaced here via the `providers/index` barrel. |
+- **`src/modules/payments/providers/webhook-signature.ts`** – the module under test; imports `signWebhookPayload`, `verifyWebhookSignature`, and the `WebhookRejected` error class.
+- **`src/modules/payments/providers/index.ts`** – imported dynamically (via `jest.resetModules()` + `await import`) to test `resolvePaymentProvider` in a clean module scope.
+- **`tests/support/environment.ts`** – provides `setEnvironment` / `resetEnvironment` to mutate `NODE_PAYMENT_PROVIDER` and `NODE_PAYMENT_WEBHOOK_SECRET` between assertions without polluting the global process env.
 
 ## Notes
 
-- **Module-cache reset is load-bearing.** The `resolvePaymentProvider` suite depends on `jest.resetModules()` + a fresh dynamic import because the resolver reads `NODE_PAYMENT_PROVIDER` at call time from a cached module. Without the reset, the first test's env value leaks into later ones.
-- **Env-var hygiene.** The webhook-secret test mutates `process.env.NODE_PAYMENT_WEBHOOK_SECRET` inline and restores it in the same `it`; the resolver test saves/restores `NODE_PAYMENT_PROVIDER` in `afterEach`. Adding a new env-dependent test without a matching restore will poison sibling tests.
-- **Unknown-reference semantics.** `retrieve` on an unrecognised ref intentionally returns `processing` (the only status that moves no money in either direction). This is a contract for restarted/second-worker scenarios, not a fallback.
-- **No mocks, no DB.** The file header explicitly states this is the boundary: anything that persists a payment document belongs in `tests/integration/`.
+- Every `setEnvironment` call that sets a value should be paired with a `resetEnvironment()` (or overwritten by the next `setEnvironment`) before the test ends; the secret-ring tests interleave multiple set/verify cycles within a single `it`, so a missed reset can leak state into the next test.
+- `loadResolver` relies on `jest.resetModules()` **before** the dynamic import; the `afterEach` also calls `jest.resetModules()` to prevent the cached module from leaking between tests.
+- The uppercase-hex test only uppercases the `v1=` hex digest; the `t=` timestamp remains a plain decimal. Do not "fix" the regex to uppercase the whole header.
+- The comment on the forged-`v1`-placement test references a historical bug (a `Map` kept the **last** `v1`); the current implementation must accept a genuine `v1` regardless of its position among forged entries.

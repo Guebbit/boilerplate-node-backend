@@ -1,7 +1,7 @@
 ---
 source: tests/unit/support/file-sandbox.test.ts
-sha256: 6db09bc48d38c491ef5ef6e568aee8951a52250a4c088a80d8b8bc45657c2d8e
-generated_at: 2026-09-23T20:32:24.108264+00:00
+sha256: 2d524da6add15f21676d8f3d4e640381f24888422ff5c6fc9134f2c82d4ac61e
+generated_at: 2026-10-15T13:33:24.224956+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the file-sandbox support module. Verifies that `applyFileSandbox` redirects file-writing environment variables into a per-test-directory under a temp root, that `emptyFileSandbox` removes only files inside that sandbox, and that `leftoverFiles` / `describeLeftovers` correctly detect and report files left on disk. Uses real temp directories rather than a mocked `fs`, because the contract is about what ends up on the filesystem.
+Unit tests for the file-sandbox support module (`tests/support/file-sandbox.ts`). Verifies that test-file writes are redirected into per-test sandbox directories under a temp root, that the sandbox can be safely emptied, and that any leftover files are detected and reported with human-readable paths. Uses the **real filesystem** (no mocked `fs`) because the contract under test is what actually lands on disk.
 
 ## Key elements
 
-- **`OWNED_VARIABLES`** – tuple of the six env vars the sandbox manages (`FILE_SANDBOX_ROOT_VARIABLE`, `NODE_PUBLIC_PATH`, `NODE_QUARANTINE_PATH`, `NODE_UPLOAD_STAGING_PATH`, `NODE_INVOICE_CACHE_PATH`, `NODE_MAIL_SPOOL_PATH`). Snapshot-restored in `afterEach`.
-- **`TEST_PATH`** – a repo-relative path to a fake integration test, used as the input that `applyFileSandbox` / `sandboxDirectory` consume.
-- **`touch(file)`** – helper that `mkdir`s the parent chain and writes a one-byte file.
-- **`beforeEach` / `afterEach`** – create a fresh `mkdtemp` root per test, point `FILE_SANDBOX_ROOT_VARIABLE` at it, then `rm -rf` and restore all owned env vars.
-- **`describe('sandboxDirectory')`** – asserts the directory name is the repo-relative test path with `/` replaced by `__`.
-- **`describe('applyFileSandbox')`** – asserts all five sub-path env vars land under the sandbox directory; asserts it throws when the root variable is unset or the test path is `undefined`.
-- **`describe('emptyFileSandbox')`** – writes files into all five sub-directories, calls the function, and verifies they are gone; also verifies it _refuses_ to delete a file whose env-var path escapes the sandbox root.
-- **`describe('leftoverFiles')`** – returns `[]` for a missing root, ignores empty directories, and groups files by sandbox with name-sorted order.
-- **`describe('describeLeftovers')`** – checks the human-readable output rewrites `__` back to `/` and indents files under their test-file line.
+- **`touch(file)`** (local helper) — creates parent directories and writes a one-byte file; used to seed fixtures on disk.
+- **`beforeEach` / `afterEach`** — allocate a fresh `mkdtemp` root, inject it as `FILE_SANDBOX_ROOT_VARIABLE` via `setEnvironment`, and remove the root after each test.
+- **`describe('sandboxDirectory')`** — asserts the directory name is the repo-relative test path with separators flattened to `__`.
+- **`describe('applyFileSandbox')`** — asserts all four file-writing env vars (`NODE_PUBLIC_PATH`, `NODE_QUARANTINE_PATH`, `NODE_UPLOAD_STAGING_PATH`, `NODE_MAIL_SPOOL_PATH`) are rewritten into the sandbox directory; also asserts it throws when the sandbox root or test path is missing.
+- **`describe('emptyFileSandbox')`** — asserts all written files (across all four sub-directories) are deleted; also asserts it refuses to delete a file whose configured path is outside the sandbox root.
+- **`describe('leftoverFiles')`** — asserts it returns `[]` for a missing root, ignores empty directories, and groups nested files by their sandbox directory in sorted order.
+- **`describe('describeLeftovers')`** — asserts the human-readable message maps sandbox names back to repo-relative `/`-separated paths and lists files indented beneath.
 
 ## Relationships
 
-- **`tests/support/file-sandbox.ts`** (imported as `@tests/file-sandbox`) – the module under test. This file imports and exercises its five exports: `FILE_SANDBOX_ROOT_VARIABLE`, `applyFileSandbox`, `describeLeftovers`, `emptyFileSandbox`, `leftoverFiles`, `sandboxDirectory`.
+- **`tests/support/file-sandbox.ts`** — the module under test. The file imports `sandboxDirectory`, `applyFileSandbox`, `emptyFileSandbox`, `leftoverFiles`, `describeLeftovers`, and `FILE_SANDBOX_ROOT_VARIABLE` from here.
+- **`tests/support/environment.ts`** — provides `setEnvironment`, used to set/clear the sandbox-root variable and to override individual config paths before calling the functions under test.
+- **`src/infrastructure/config/store.ts`** — provides `currentEnvironment`, used after `applyFileSandbox` to read back the rewritten path values from the live config store.
 
 ## Notes
 
-- The test deliberately uses **real filesystem operations** (`mkdtemp`, `writeFile`, `rm`, `existsSync`) instead of mocking `fs`; the file's own docblock calls this out.
-- `emptyFileSandbox` has a safety guard: if any owned env var points outside the sandbox root, it throws and deletes **nothing**. The test creates a separate `mkdtemp` directory to prove a "precious" file survives.
-- `leftoverFiles` treats **directories as non-leftovers**; only actual files trigger a report. The test creates a nested empty directory tree to confirm this.
-- `describeLeftovers` converts the `__` separator convention back to `/` for display (e.g. `tests__integration__uploads.test.ts` → `tests/integration/uploads.test.ts`).
+- `TEST_PATH` is constructed as `path.join(__dirname, '..', '..', 'integration', 'uploads.test.ts')` — it mimics a jest-reported absolute path within the repo, so the sandbox-name derivation (`tests__integration__uploads.test.ts`) is exercised with a realistic depth.
+- The safety tests in `applyFileSandbox` and `emptyFileSandbox` deliberately assert **throwing** over silent fallback; the design intent is fail-fast rather than "best effort" deletion.
+- `leftoverFiles` returns relative paths (from the sandbox directory), not absolute paths — assertions use `path.join` on relative segments.
+- `describeLeftovers` converts the `__` separator back to `/` for display, so the message is what a developer would recognize as a repo path.

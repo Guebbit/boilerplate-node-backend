@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/api-key-authentication.test.ts
-sha256: 703bc71e4104bf658795bf3c824539a79f972b6dadba98a7f52881ec0d8cbf21
-generated_at: 2026-09-27T15:48:58.949089+00:00
+sha256: 34c6f7eb68f91d4ee6b528a91106a57fd9640cd04705b1b528bb2fa72353bcc9
+generated_at: 2026-10-15T12:35:06.505323+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting integration test proving that a real `sk_...` API-key credential clears the identity guard (`isAuthOrCredential`) on the actual mounted Express chain and is then admitted or refused by the downstream permission check. It also enforces, at the source level, that no module mounts *both* `isAuth` and `isAuthOrCredential`—keeping "which routes accept credentials" a per-module decision rather than an accidental line-ordering artifact.
+Proves that the identity guard layer (the "middle link" between credential resolution and permission checking) actually admits `sk_…` API-key credentials onto routes built to accept them, over the real mounted Express chain. No other suite covers this seam: the api-key suite drives `resolveCredential` directly, and the contract suite uses session tokens. This file splits into two halves — behavioral assertions against live routes, and a structural scan ensuring no module accidentally mounts both identity guards.
 
 ## Key elements
 
-- **`credentialHolding(permissions)`** – Creates a verified admin user, builds a `TenantCallerContext` (scoped to `DEPLOYMENT_TENANT_ID`), and calls the real `mint` service to produce a live secret with exactly the given permissions.
-- **`codeOf(file)`** – Reads a source file and strips all comment lines so the guard-split regex doesn't match guard names mentioned only in prose.
-- **`describe('an api key over the real chain')`** – Five integration tests over the live HTTP chain: 200 on a permitted route, 403 on a non-permitted route, 401 (never 500) on caller-subject routes (`/cart`, `/account/sessions`, `/account`), 401 for an unknown secret, and 401 when attempting to mint a second key via a credential.
-- **`describe('the guard split')`** – Iterates every `MODULES_ROOT/*/routes.ts`, strips comments, and asserts that `isAuth` and `isAuthOrCredential` do not co-occur in the same file.
+- **`describe('an api key over the real chain')`** — five behavioral tests:
+  - *200 on permitted route*: a credential holding `users.any.read` reaches `GET /users`.
+  - *403 on unpermitted route*: same credential hits `GET /webhooks/subscriptions`; 403 (not 401) confirms the identity guard passed but permission failed.
+  - *401 on caller-subject routes* (`/cart`, `/account/sessions`, `/account`): filters out non-deployed modules via `isDeployed`; asserts 401 rather than a 500 from a controller that assumes a session.
+  - *401 on unknown credential*: a garbage Bearer token is rejected at the guard.
+  - *401 on credential minting*: `POST /api-keys` with a valid credential is refused — minting stays a human act.
+- **`describe('the guard split')`** — iterates every `routes.ts` under `MODULES_ROOT`; asserts no file contains both `isAuth` and `isAuthOrCredential` in its code.
+- **`codeOf(file)`** — reads a source file, strips comment lines (`//`, `*`, `/*`), and returns the remaining code. Used so that prose comments *naming* a guard (e.g. in `orders`, `api-keys`) are not misread as mounts.
 
 ## Relationships
 
-- **`src/kernel/access/tenant.ts`** – Imports `DEPLOYMENT_TENANT_ID`; the minter's tenant membership is written under this constant, and the credential context must use it (not a test-only tenant) or `resolveCredential` resolves to zero permissions.
-- **`src/modules/api-keys/services/api-keys.ts`** – Imports `mint` to produce a genuine secret that `resolveCredential` will recognise.
-- **`src/modules/users/tests/factories.ts`** – Imports `createUser` to create the verified admin who is the minter of record.
-- **`src/types/index.ts`** – Re-exports `TenantCallerContext` used to build the minter's auth context.
-- **`tests/support/http.ts`** – Provides the `api()` helper that sends real HTTP requests through the mounted Express app.
-- **`tests/support/paths.ts`** – Provides `MODULES_ROOT` used by the guard-split scan to discover route files.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises the in-memory database before any test runs.
+- **`tests/support/credentials.ts`** — `credentialHolding(permissions)` mints a test credential with the specified permission set; every behavioral test relies on it.
+- **`tests/support/http.ts`** — `api()` returns a superagent instance wired to the real Express app under test; all HTTP calls go through it.
+- **`tests/support/paths.ts`** — `isDeployed(module)` gates the caller-subject route list; `MODULES_ROOT` is the directory scanned by the guard-split structural test.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is invoked at module top-level (before any test) to prepare the database the routes query.
 
 ## Notes
 
-- The tenant ID in the minter context **must** be `DEPLOYMENT_TENANT_ID`, not a test-scoped tenant. A mismatch causes `mint` to succeed but `resolveCredential` to return empty permissions, surfacing as a confusing 403.
-- 403 vs 401 distinction is deliberate: 403 means the credential authenticated but lacks the key; 401 means the identity guard itself rejected it. A 401 where 403 is expected (or vice versa) signals a guard-misrouting bug.
-- Caller-subject routes (`/cart`, `/account`) assert **401, never 500**—the invariant is that a credential must not leak through to a controller that does `request.authContext!.id`.
-- The guard-split test is source-level (regex over `routes.ts`), not request-level, because a request test can only reach routes someone already added; the regex catches the structural invariant as new routes appear.
-- `codeOf` strips comment lines specifically because modules like `orders` and `api-keys` document *why* they chose a guard in prose; a raw-text match would flag those deliberate decisions as violations.
+- The 403-vs-401 split is the core assertion: 403 means "credential valid, permission missing"; 401 means "identity guard rejected." Conflating them would mask a broken guard.
+- The structural test is source-level (regex over code text) rather than request-level, because a request test can only reach routes someone remembered to add. It intentionally scans code, not comments, to avoid false positives from well-documented exclusions.
+- This file does **not** assert that controllers behind `isAuthOrCredential` avoid reading `request.authContext`; that responsibility belongs to `tests/cross-cutting/authenticated-controllers.test.ts`, which checks per-route off Express's resolved stack.
+- The caller-subject route list is dynamically filtered by `isDeployed`, so tests for removed modules (e.g. `demo:remove`) are silently skipped rather than failing.

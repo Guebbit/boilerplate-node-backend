@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/mail-spool.test.ts
-sha256: 45924f939d9c0f9f033b079c53260eb7dce1dc204b84efe09188238e252d5045
-generated_at: 2026-09-23T20:18:23.611099+00:00
+sha256: 565cc98bc50a13490c0e901ae58694375b6ce08b6a12912975beb926339a5529
+generated_at: 2026-10-15T13:07:18.893387+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the mail-spool adapter. The central concern is verifying that `resolveSpooled` acts as the single choke-point where a caller-supplied key is turned into a filesystem path, and that any traversal, absolute-path, or otherwise malformed key resolves to `undefined` rather than a path outside the spool root. Remaining tests cover the basic write/read/discard/reap lifecycle.
+Unit tests for the mail-spool adapter (`src/infrastructure/adapters/mail-spool.ts`). The focus is on the security contract of `resolveSpooled` (path-traversal / absolute-path rejection) and the fail-safe behavior of `discardSpooled` (never throws, never escapes the spool root). Also covers key minting, idempotent reaping, and spool-directory auto-creation.
 
 ## Key elements
 
-- **`beforeEach` / `afterEach`** — Create a per-test temp directory via `mkdtemp`, point `process.env.NODE_MAIL_SPOOL_PATH` at it, and restore the original env value on teardown.
-- **`describe('spoolAttachment')`** — Verifies bytes are written under the spool root, the key matches `^[\da-f]{32}\.pdf$`, the directory is created on demand, and identical payloads still yield distinct keys.
-- **`describe('resolveSpooled')`** — Confirms a valid key maps to `path.join(spoolRoot, key)`, then uses `it.each` to assert `undefined` for traversal (`../../`), absolute paths, missing extension, embedded slashes, and uppercase extensions.
-- **`describe('discardSpooled')`** — Checks file deletion, that nonexistent or unresolvable keys resolve without rejecting, and (load-bearing test) that a file physically outside the spool root survives a discard call whose key attempts to name it via `..`.
-- **`describe('reapSpooled')`** — Uses `utimes` to age one file past the retention window; asserts only the stale file is deleted and the return count is `1`. Also asserts `0` when the spool directory was never created.
+- **`beforeEach` / `afterEach`** — Create a fresh `mkdtemp` directory, inject it as `NODE_MAIL_SPOOL_PATH` via `setEnvironment`, and recursively remove it after each test.
+- **`describe('spoolAttachment')`** — Verifies the returned key matches `/^[\da-f]{32}\.pdf$/`, that the file is readable under the spool root, that the spool directory is created on demand, and that identical bytes still produce distinct keys.
+- **`describe('resolveSpooled')`** — Positive: a valid hex+extension key resolves to `path.join(spoolRoot, key)`. Negative (parameterized with `it.each`): traversal segments, absolute paths, missing extensions, embedded slashes, and uppercase extensions all resolve to `undefined`.
+- **`describe('discardSpooled')`** — Confirms the file is deleted, that non-existent or unresolvable keys resolve to `undefined` (never reject), and a dedicated "load-bearing" test proving a file outside the spool root survives a `../`-shaped key.
+- **`describe('reapSpooled')`** — Stale file (mtime back-dated via `utimes`) is removed while a fresh file survives; returns the count. Also asserts a return of `0` when the spool directory does not exist.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mail-spool.ts`** — The sole import target. The test exercises all four exported functions (`spoolAttachment`, `resolveSpooled`, `discardSpooled`, `reapSpooled`) and relies on the module reading its spool root from `process.env.NODE_MAIL_SPOOL_PATH` rather than a hardcoded path.
+- **`src/infrastructure/adapters/mail-spool.ts`** — The module under test. All four exported functions (`spoolAttachment`, `resolveSpooled`, `discardSpooled`, `reapSpooled`) are imported and exercised here.
+- **`tests/support/environment.ts`** — Provides `setEnvironment`, used in `beforeEach` to point the adapter at the per-test temp directory via the `NODE_MAIL_SPOOL_PATH` key.
 
 ## Notes
 
-- The spool root is injected **only** through the `NODE_MAIL_SPOOL_PATH` environment variable; the test saves and restores the prior value (including the `undefined` case) to avoid cross-test pollution.
-- The "file outside the spool root survives `discardSpooled`" test exists to prove the traversal guard is enforced at the filesystem level, not merely by a regex/type check in the implementation.
-- Key shape is strictly `{32 lowercase hex}.{lowercase ext}`; any deviation (uppercase ext, slash, missing ext) is treated as invalid.
+- The spool path is set through the environment, not by passing it as an argument. If the adapter reads a different env var or a different default, these tests will silently target the wrong directory.
+- Key format is asserted as exactly 32 lowercase hex chars + a dot + the extension. Changing the hash algorithm or length in the adapter will break `spoolAttachment` and `resolveSpooled` tests simultaneously.
+- The "leaves a file outside the spool root untouched" test creates a second temp dir *outside* the spool root and cleans it up inline (not via `afterEach`); forgetting that cleanup would leak a directory on test failure.
+- `reapSpooled` retention is controlled by an explicit millisecond argument, not a config value, so the test is decoupled from any default retention constant in the adapter.

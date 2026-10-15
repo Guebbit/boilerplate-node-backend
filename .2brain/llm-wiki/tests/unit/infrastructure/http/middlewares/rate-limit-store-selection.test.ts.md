@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/http/middlewares/rate-limit-store-selection.test.ts
-sha256: ba1271c5f8a5fb4265d28ef17da176dba6bca617926565c2955852c110762fbf
-generated_at: 2026-09-27T16:07:20.052783+00:00
+sha256: e15803b105dd997628911a615f9eca059e786273d2fcd4e27e941a9c434a61a0
+generated_at: 2026-10-15T13:13:47.715490+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Tests the `rateLimitStore` factory function for store-selection logic: which store (in-process `MemoryStore` vs. `RedisStore`) is built, the URL-resolution priority chain, lazy Redis construction, the missing-config alert, and the fail-open behaviour when `RedisStore.init` rejects. Deliberately kept separate from `rate-limit-store.test.ts` because it mocks `RedisStore` itself (one `jest.mock('rate-limit-redis')` per file) rather than driving a real Lua-script round-trip through a fake low-level client.
+Unit tests for the `rateLimitStore` factory in the HTTP middleware layer. Covers which store (in-memory vs. Redis) is selected, URL-resolution priority, lazy Redis construction, the missing-config alert, and the fail-open behavior when `RedisStore.init` rejects. Deliberately split from `rate-limit-store.test.ts` because this file mocks `RedisStore` itself to control `init`/`increment` directly, while that sibling drives a real `RedisStore` against a fake low-level client to test the `connecting`-promise handshake.
 
 ## Key elements
 
-- **`ORIGINAL_ENVIRONMENT`** — snapshot of six `NODE_*` env vars, restored in `afterEach` for isolation.
-- **`mockSelectionClient` / `mockCreateClient`** — stand-in for the `redis` package's `createClient`, letting tests assert which URL string was passed at construction time.
-- **`MockRedisStore`** — replaces `rate-limit-redis`'s `RedisStore`; records constructor args (for prefix assertions) and exposes controllable `init` / `increment` mocks while still calling `this.sendCommand` so the production call-chain is exercised.
-- **`freshStore()`** — `jest.resetModules()` + `require('@infrastructure/http/middlewares/rate-limit-store')` to discard module-scope state (`client`, `connecting`, `degraded`).
-- **`freshLogger()`** — same re-require pattern for the logger mock, so assertions hit the same instance the SUT used.
-- **`freshMemoryStore()`** — re-requires `express-rate-limit`'s `MemoryStore` so `instanceof` compares against the same module copy the SUT actually imported.
-- **`urlUsedFor()`** — helper that triggers one `increment` and returns the `url` field from the most recent `createClient` call.
-- **Test suites** — "which store gets built", "the missing-config alert", "URL resolution priority", "an init failure fails open instead of crashing (regression)".
+- **`MockRedisStore`** — stand-in for `rate-limit-redis`'s `RedisStore`; records constructor args (`prefix`), `init`, and `increment` calls while still routing through `sendCommand` so the real client-creation chain is exercised.
+- **`freshStore()` / `freshLimits()` / `freshLogger()` / `freshMemoryStore()`** — helpers that `jest.resetModules()` + `require()` a fresh copy of the module under test (and its dependencies) to discard module-scope state (`client`, `connecting`, `degraded`) between cases.
+- **`mockSelectionClient` / `mockCreateClient`** — mock the low-level `redis` package so the connection is observable without a real socket.
+- **`urlUsedFor()`** — convenience helper that triggers one `increment` and returns the URL passed to `createClient`.
+- **`beforeEach`** — resets `connect`, `init`, and `sendCommand` to resolve successfully.
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/rate-limit-store.ts`** — the module under test. The file imports (freshly) `rateLimitStore` and asserts on the store it returns, the prefix it builds, and the URL handed to the Redis client.
-- **`src/infrastructure/adapters/logger.ts`** — mocked at the module boundary. Tests assert that `logger.error` is called (with `{ namespace: … }`) when Redis is unconfigured and `NODE_CLUSTER_WORKERS > 1`, and that it is *not* called for a single worker or on the init-failure path.
+- **`src/infrastructure/http/middlewares/rate-limit-store.ts`** — the module under test; `freshStore()` re-requires it each case.
+- **`src/infrastructure/adapters/limits-redis.ts`** — re-required via `freshLimits()` so assertions reference the same connection-state copy the store under test used.
+- **`src/infrastructure/adapters/logger.ts`** — mocked at module level; `freshLogger()` retrieves the same mock instance for assertions on alert/failure log calls.
+- **`tests/support/environment.ts`** — `setEnvironment` is called in every case to explicitly set or clear `NODE_RATE_LIMIT_REDIS_URL`, `NODE_REDIS_URL`, and `NODE_CLUSTER_WORKERS` (the global test setup blanks the rate-limit URL).
+- **`src/infrastructure/observability/metrics-rate-limit.ts`** — appears in the dependency graph but is not directly asserted or mocked in this file.
 
 ## Notes
 
-- **Module-scope state pattern.** The SUT keeps `client`, `connecting`, and `degraded` at module level, so every test case must re-import via `jest.resetModules()` + `require()`. This is the same pattern used in `cache.test.ts`.
-- **Global env default.** The suite's `tests/support/setup.ts` sets `NODE_RATE_LIMIT_REDIS_ENABLED ??= '0'`; any test exercising the Redis path must explicitly set it to `'1'`.
-- **`instanceof` across module copies.** Because `jest.resetModules()` re-instantiates `express-rate-limit`, a top-level `import { MemoryStore }` would be a *different* class than the one the SUT uses. `freshMemoryStore()` avoids a spurious `false` on every `toBeInstanceOf` check.
-- **Fail-open regression guard.** The last suite protects against an unhandled rejection from `inner.init(options)` (fired without `.catch()` inside `lazyRedisStore`). Since Node 15, unhandled rejections are fatal; the test asserts that `increment` still resolves even while `init` is rejecting on the same tick.
-- **Empty-string env values.** The URL-priority suite explicitly tests that an empty `NODE_RATE_LIMIT_REDIS_URL` is treated as unset, matching how `.env` files serialise absent variables.
+- The global test setup (`tests/support/setup-environment.ts`) blanks `NODE_RATE_LIMIT_REDIS_URL` for every test; any case that wants the Redis path must set it explicitly.
+- `jest.resetModules()` is mandatory between cases because `rate-limit-store` holds module-scope `client`/`connecting`/`degraded` state. Every re-require (store, limits adapter, logger, `express-rate-limit`) must go through the same reset or `instanceof` checks will compare across two copies of a class and always fail.
+- The `express-rate-limit` package is **not** mocked; `freshMemoryStore()` re-requires it to keep the `instanceof` comparison consistent with the copy `rateLimitStore()` actually used.
+- The init-failure regression test calls `store.init?.(options)` before `increment` because `express-rate-limit` invokes `init` on the real store before any request arrives — skipping it would exercise a path the middleware never leaves untaken.
+- Two microtask turns (`await Promise.resolve()` × 2) are needed after the fire-and-forgotten `init().catch()` before asserting the error log was written.

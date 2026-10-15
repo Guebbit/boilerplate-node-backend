@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/persistence/changes.test.ts
-sha256: cbc18b8767344d8fba67e4962774b8f3bdd80f9f50342a987795238c1eaa7e80
-generated_at: 2026-09-27T16:09:11.495986+00:00
+sha256: 386025b6459ad9e81ca655484260c4243c95bdfde3328a004239af46748b73bd
+generated_at: 2026-10-15T13:17:54.563233+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,19 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `clearedOrValue` helper, which every module's `update()` relies on to convert a change-set's `null` sentinel into `undefined` so that MongoDB emits `$unset` on save. The file exists to lock down this one-fact contract.
+Unit tests for the two helpers in `changes.ts` that turn a change-set into a Mongo `$set`/`$unset` pair before save. They pin down the exact null/undefined semantics every module's `update()` relies on.
 
 ## Key elements
 
-- **`describe('clearedOrValue')`** — single test suite covering the helper's two branches.
-  - *Test 1:* asserts `clearedOrValue(null)` returns `undefined`.
-  - *Test 2:* asserts that `'x'`, `0`, and `false` are returned unchanged (i.e., only `null` is special-cased; other falsy values are preserved).
+- **`describe('clearedOrValue')`** — verifies `null → undefined` (the signal for `$unset`) and that all other values (`'x'`, `0`, `false`) pass through unchanged.
+- **`describe('setAndUnset')`** — verifies the object-splitting logic:
+  - `undefined` values land in `$unset` (with a literal `1`); everything else lands in `$set`.
+  - Falsy-but-defined values (`0`, `false`, `''`, `null`) stay on the `$set` side.
+  - An empty half is omitted entirely (e.g. `{ $unset: { a: 1 } }` has no `$set` key; `{}` returns `{}`).
 
 ## Relationships
 
-- **`src/infrastructure/persistence/changes.ts`** — the module under test; this file imports `clearedOrValue` from it via the `@infrastructure/persistence/changes` path alias. No other production code is touched.
+- **Imports** `clearedOrValue` and `setAndUnset` from `@infrastructure/persistence/changes` → `src/infrastructure/persistence/changes.ts`. This is the sole production dependency; the file under test is the only module imported.
 
 ## Notes
 
-- The test intentionally covers `0` and `false` to guard against a common bug where a truthiness check (`if (!value)`) would incorrectly clear those values.
-- The expected output is `undefined` (not `null`) because the persistence layer maps `undefined` to a MongoDB `$unset` operator.
+- The critical convention under test: **only `undefined` triggers `$unset`**. `null`, `0`, `false`, and `''` are all treated as legitimate values to `$set`. If a future change makes `setAndUnset` also treat `null` as "clear," the second `setAndUnset` test (`gone: null` on the set side) will catch it.
+- `clearedOrValue` is the bridge: it converts `null → undefined` so that downstream `setAndUnset` can apply its single "undefined means unset" rule.

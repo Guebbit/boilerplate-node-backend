@@ -1,7 +1,7 @@
 ---
 source: tests/unit/scripts/mutation/mutate-scope.test.ts
-sha256: 339b07239ca88977a8a178b798c5968e9898f3368ee462e13b9b5207908a9fc0
-generated_at: 2026-09-23T20:31:33.615601+00:00
+sha256: d831a198a7660c5a0453c86253a9a0f3c890acf188768225cf3dd7646fd8a600
+generated_at: 2026-10-15T13:28:51.082903+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,20 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the two exported helpers in `mutate-scope.ts`: `isMutable` (does a path fall inside Stryker's mutate globs?) and `changedMutable` (intersection of a diff's changed-file list with that scope). The file keeps these pure path-filtering functions covered in isolation so the CLI wrapper in `run-diff.ts` stays thin and untested.
+Unit tests for the two pure helper functions exported by `scripts/mutation/mutate-scope.ts`: `isMutable` (does a single path fall inside Stryker's `mutate` glob set?) and `changedMutable` (intersection of a diff's changed paths with the mutable set). The tests are deliberately I/O-only so the surrounding CLI wrapper in `run-diff.ts` can remain a thin, untested adapter.
 
 ## Key elements
 
-- **`PATTERNS`** — a small, hand-reasonable fixture array of include/exclude globs that stands in for the real `mutate` field in `stryker.json`.
-- **`describe('isMutable')`** — five cases: accepts paths matched by include globs (`infrastructure/**`, `kernel/**`, `modules/*/**`), rejects barrel files (`*/index.ts`) and test files (`*/tests/**`) via the `!` exclusions, and rejects paths no include glob covers.
-- **`describe('changedMutable')`** — two cases: returns only the intersection of a changed list and a mutable list; returns `[]` when the two sets are disjoint.
+- **`PATTERNS`** – A fixed five-glob array (three positive, two negative) that stands in for the `mutate` field of `stryker.json`. Small enough to verify by hand.
+- **`describe('isMutable')`** – Five cases covering: positive matches (modules, infrastructure, kernel), negative matches (barrel `index.ts`, test files excluded by `!` globs), and files outside any include glob.
+- **`describe('changedMutable')`** – Two cases: intersection keeps only the file present in both lists, and returns an empty array when the two lists share nothing.
 
 ## Relationships
 
-- **`scripts/mutation/mutate-scope.ts`** — the sole subject under test. The test imports `isMutable` and `changedMutable` directly and exercises them with synthetic path arrays; no mocking, no filesystem access.
+- **`scripts/mutation/mutate-scope.ts`** – The only import. Provides `isMutable` and `changedMutable`, which are the subjects under test. No other modules are touched.
 
 ## Notes
 
-- Follows the same convention as `local-policy.test.ts`: test the pure logic, not the CLI wrapper that calls it.
-- The `changedMutable` test comment references a historical bug ("B27") that conflated _deleted files_ (absent from `mutableFiles()` output) with _glob-excluded files_ — both surface as "in the diff but not in scope." The test pins the expected behavior for both.
-- Globs use `*` (single segment) rather than `**` for the module pattern, which is why `src/modules/*/**/*.ts` matches `src/modules/orders/service.ts` but not `src/modules/service.ts`.
+- The negative-glob cases (`!src/modules/*/index.ts`, `!src/modules/*/tests/**`) exist to lock in the distinction between "file was deleted since the diff was computed" and "file is excluded by Stryker's own globs." Both must yield `false` from `isMutable`, but for different reasons the test comment calls out.
+- `changedMutable` is expected to return a **new** array (`.toEqual` rather than reference identity), so callers can rely on it not aliasing the input.
+- Test philosophy (stated in the file header): these are "pure input/output" tests in the same spirit as the neighbouring `local-policy.test.ts`; no mocking, no filesystem access.

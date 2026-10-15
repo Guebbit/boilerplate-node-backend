@@ -1,7 +1,7 @@
 ---
 source: src/types/auth-context.ts
-sha256: c7be08b4ca5b22ce2985f5512e619a2896032fada307790ff4ec6291f2f97ad7
-generated_at: 2026-09-23T19:50:01.028099+00:00
+sha256: b78484d1b7e7fdb7dbdb5e8496f79690cd00b7b351f9543a298084473cea275d
+generated_at: 2026-10-15T12:29:42.523429+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Type-only module that decouples the HTTP/auth flow from Mongoose document internals. It defines the shape of a resolved caller (`AuthContext`), the authorization-safe view of that caller (`Caller`), and the request-level context threaded into the service tier (`CallerContext`). Controllers, middleware, and the `@kernel` resolver port depend on these types rather than on `UserDocument`.
+Defines the core type vocabulary for authentication and authorization in the codebase: what a resolved caller *is* (`AuthContext`), what a rule may safely *ask* of them (`Caller`), and what a downstream service *sees* about the request that carried them (`CallerContext`). Exists to decouple HTTP/auth flow from Mongoose document internals — controllers, middleware, and the kernel resolver port depend on these types, never on `UserDocument`.
 
 ## Key elements
 
-- **`AuthorizationScope`** — `'tenant' | 'platform'`; the two worlds a caller can act in.
-- **`AuthContext`** — the full resolved caller: `id`, `email`, `username`, `roles.tenant`, `roles.platform`, `tenantId`, `imageUrl?`, `authTime`, `amr`, `analyticsConsent`. One interface so the resolver's answer and the DTO can't drift apart.
-- **`Caller`** — discriminated union (`TenantCaller | PlatformCaller`) representing what an authorization rule may safely read. Discriminated on `scope`; `permissions` is required (fail-closed), `id` is optional (a stranger has none).
-- **`TenantCaller`** — `scope: 'tenant'`, `tenantId: string` (compiler-proven), `permissions: readonly string[]`, `unrestricted: boolean`.
-- **`PlatformCaller`** — `scope: 'platform'`, `tenantId: null`, `permissions: readonly string[]`, `unrestricted: boolean`.
-- **`CallerContext`** — everything a service needs about the incoming request: `caller: Caller`, `actorRoleName?`, `actorCredentialId?`, `ip?`, `userAgent?`, `host?`, `requestId?`, `locale?`, `analyticsConsent`. Built once in the controller, threaded down; the service tier never sees a `Request`.
-- **`TenantCallerContext`** — extends `CallerContext` narrowing `caller` to `TenantCaller`, so tenant-only services can read `caller.tenantId` as a proven `string` without runtime narrowing.
+- **`AUTHORIZATION_SCOPES` / `AuthorizationScope`** — Const tuple `['tenant', 'platform']` and its element type. The two "worlds" a caller can act in; also the source for the schema's `enum`.
+- **`RoleLevel`** — `'admin' | 'staff' | 'user'`. Rank read from `shared/authorization-roles.yaml`; used by the access hierarchy rule (`assertCanActOn`).
+- **`AuthContext`** — The full resolved caller as the kernel authentication resolver produces it: id, email, username, per-scope role names (`roles.tenant`, `roles.platform`), `tenantId`, `imageUrl?`, `authTime`, `amr`, `twoFactorArmed`, `analyticsConsent?`. One interface shared by the resolver's answer and the transport DTO to prevent drift.
+- **`Caller`** (`TenantCaller | PlatformCaller`) — The authorization-decision view. Discriminated on `scope`; identity fields (`email`, `username`, etc.) are deliberately excluded. `scope` and `permissions` are required (fail-closed). `unrestricted` and `system` booleans are pre-computed to avoid importing `kernel/permissions` past the infrastructure boundary.
+- **`TenantCaller`** — `scope: 'tenant'`, `tenantId: string`, optional `id`, required `permissions`, `unrestricted`, `system`, `level`.
+- **`PlatformCaller`** — `scope: 'platform'`, `tenantId: null`, same permission/system/level fields.
+- **`CallerContext`** — Everything a service tier reads about the request: `caller` (always tenant-scope), `actorRoleName?`, `actorCredentialId?`, `ip?`, `userAgent?`, `host?`, `requestId?`, `clientRequestId?`, `locale?`, `analyticsConsent`. Built once in the controller, threaded down so a missing value is a compile error rather than a silent `AsyncLocalStorage` miss.
+- **`TenantCallerContext`** — (truncated in source) A `CallerContext` whose `caller` is narrowed to `TenantCaller`, letting tenant-only services demand `tenantId: string` in their signature without runtime narrowing.
 
 ## Relationships
 
-- **`src/infrastructure/http/request.ts`** — builds `CallerContext` from a live Express request; exports `callerFor` / `tenantCallerContextOf` (the runtime helpers that keep this file type-only).
-- **`src/kernel/authentication.ts`** — the resolver port whose return type is `AuthContext`.
-- **`src/kernel/permissions.ts`** — provides `keysInScope` (turns role names into permission keys) and `isUnrestricted` (computed into `Caller.unrestricted` at build time).
-- **`src/kernel/ability.ts`** — consumes `Caller` to evaluate ability rules.
-- **`src/infrastructure/observability/audit.ts`** — reads `CallerContext.actorRoleName` and `CallerContext.actorCredentialId` for the audit trail.
-- **`src/infrastructure/observability/analytics/index.ts`** — reads `CallerContext.analyticsConsent` as its opt-in gate in `emitAnalyticsEvent`.
-- **`src/modules/access/service.ts`** / **`src/modules/access/model.ts`** — service and model layers that operate on the caller types defined here.
-- **`src/modules/account/controllers/get-my-abilities.ts`** — controller that resolves the caller and returns abilities based on `AuthContext` / `Caller`.
-- **`src/globals.d.ts`** — ambient type declarations that these interfaces may reference.
+- **`src/kernel/authentication.ts`** — Produces `AuthContext` via the resolver; `callerFor` (referenced in docs) turns `AuthContext.roles` into a single `Caller` per key.
+- **`src/kernel/middlewares/authorizations.ts`** — Consumes `Caller` to make allow/deny decisions; reads `permissions` and `scope`.
+- **`src/kernel/permissions.ts`** — Source of truth for permission keys, `isUnrestricted`, `SYSTEM_ACTOR`, and `keysInScope`; the `unrestricted`/`system` booleans on `Caller` are pre-computed from this module to respect the `infrastructure → kernel` import boundary.
+- **`src/kernel/ability.ts`** — Uses `Caller` and `RoleLevel` for ability-level access checks.
+- **`src/kernel/access/query.ts`** — Queries access rules against `Caller`'s `permissions` and `scope`.
+- **`src/modules/access/service.ts`** — `assertCanActOn` uses `RoleLevel` to enforce the owner-below-caller rank rule.
+- **`src/modules/access/model.ts` / `repository.ts`** — Domain model and persistence layer for access rules that the `Caller` types evaluate against.
+- **`src/modules/access/tests/unit/hierarchy.test.ts`** — Unit tests exercising the `RoleLevel` hierarchy logic.
+- **`src/infrastructure/http/request.ts`** — `callerContextOf` and `tenantCallerContextOf` build `CallerContext` / `TenantCallerContext` from a live Express request (the "HTTP work" that stays out of this type file).
+- **`src/infrastructure/observability/audit.ts`** — Reads `CallerContext.actorRoleName`, `actorCredentialId`, `caller.unrestricted`/`caller.system` for audit-trail fields.
+- **`src/infrastructure/observability/analytics/index.ts`** — `emitAnalyticsEvent` reads `CallerContext.analyticsConsent` as its opt-in gate.
+- **`src/infrastructure/observability/security-events.ts`** — Records security-relevant events using the caller identity available in `CallerContext`.
+- **`src/globals.d.ts`** — Likely extends global type registrations so these types are available without explicit imports in certain contexts.
+- **`scripts/docs/generate-role-matrix.ts`** — Consumes `AUTHORIZATION_SCOPES` (and the role YAML) to generate the role/permission matrix documentation.
 
 ## Notes
 
-- This file is **types only**; all runtime helpers (`callerFor`, `tenantCallerContextOf`, `anonymousCaller`) live in `src/infrastructure/http/request.ts`. Importing from this file should never pull in HTTP or Mongoose dependencies.
-- `Caller` is intentionally narrower than `AuthContext`: `email`, `username`, `roles`, `imageUrl` are deliberately absent so an authorization rule cannot read identity fields (type-level auditability).
-- `TenantCaller.tenantId` is a non-optional `string`; `PlatformCaller.tenantId` is `null`. Narrowing on `scope` is the mechanism that eliminates runtime checks in tenant-only modules.
-- `CallerContext` is threaded as an explicit parameter rather than read from `AsyncLocalStorage`, so a missing context is a compile error rather than a silent `undefined` across an async boundary.
-- `analyticsConsent` appears on both `AuthContext` and `CallerContext`; the latter is the single reader (`emitAnalyticsEvent`), and `false` covers both "denied" and "never asked" (opt-in).
+- **Two type layers, not one.** `AuthContext` (identity) vs. `Caller` (permission view) is intentional. An authorization rule that reads `email` or `username` is unauditable by its type; `Caller` excludes those fields by design.
+- **Anonymous callers are values, not gaps.** `anonymousCaller()` builds a `Caller` directly (level `user`, empty permissions). They never appear as `null`/`undefined` in a `Caller` field — a rule that needs an `id` and gets `undefined` drops its own rule rather than widening.
+- **`unrestricted` and `system` are denormalised booleans.** Computed once at caller-build time (from `kernel/permissions.ts`) so infrastructure code never imports the kernel. Removing them would re-introduce a boundary violation.
+- **`CallerContext.caller` is always tenant-scope.** Platform-scope work resolves its own caller per key in the guard and does not travel on `CallerContext`. This is why `TenantCallerContext` exists — it lets tenant-only services state the requirement in their type signature.
+- **`analyticsConsent` defaults to opt-out.** `false` covers both "denied" and "never asked"; the analytics emitter is the sole reader.
+- **`authTime`/`amr` come from the JWT's `auth_time` claim** (RFC 8176), never derived. `requireFreshAuth` is the only consumer.
+- **`callerContextOf` / `tenantCallerContextOf` live in `http/request.ts`**, not here. This file is types only; request-building is HTTP concern.

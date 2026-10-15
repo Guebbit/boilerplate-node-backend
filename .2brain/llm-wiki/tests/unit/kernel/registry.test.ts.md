@@ -1,7 +1,7 @@
 ---
 source: tests/unit/kernel/registry.test.ts
-sha256: e72cc97e01667867dbf3ce3a0c1fc543df01d8ccd538661219796030ff46d53a
-generated_at: 2026-09-27T16:11:59.213545+00:00
+sha256: 8298cb4bf1b268e22a16535ca1a3ffab438f1f94f38524ae1aa8ede3a6d00b8a
+generated_at: 2026-10-15T13:22:50.941768+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the four boot-time resolution functions exported by `@kernel/registry`. Each test verifies the structural contract (flattening, ordering, duplicate rejection) of one function in isolation, without exercising runtime behavior like actual DB writes or event emission.
+Unit tests for the boot-time resolution functions exported by `@kernel/registry`. Verifies the contract of each resolver (what it returns, what it throws on) using inline `AppModule` fixtures — no integration with real module definitions or the filesystem.
 
 ## Key elements
 
-- **`registerModules` tests** — Asserts that `subscribe` is called exactly once per module that declares it, and that a module omitting `subscribe` is a valid no-op (not an error).
-- **`resolveTranslatables` tests** — Verifies that per-module `translatables` maps are merged into a single object keyed by `entityType`; returns `{}` when no module declares any; throws (with the colliding key in the message) when two modules claim the same `entityType`.
-- **`resolvePersonalDataSections` tests** — Verifies that per-module `personalData` arrays are concatenated into one flat array in declaration order; `'none'` contributes nothing; a single module may contribute multiple sections.
-- **`resolvePublicEvents` tests** — Same pattern as translatables but keyed by domain-event name (e.g. `'order.created'`); throws on duplicate event registration.
+- **`registerModules` tests** — asserts that `subscribe` is invoked exactly once per module that declares it, and that a module with no `subscribe` is silently skipped (not an error).
+- **`describe('resolveTranslatables')`** — verifies the flat lookup keyed by `entityType`, the empty-object case, and the duplicate-`entityType` throw (message includes the key in quotes).
+- **`describe('resolvePersonalDataSections')`** — verifies the flat array in declaration order, `'none'` contributing nothing, multiple sections from one module all appearing.
+- **`describe('resolvePersonalDataMinimisers')`** — verifies only sections that declare a `minimise` hook are collected, in order.
+- **`describe('resolvePublicEvents')`** — verifies the flat lookup keyed by domain-event name, the empty-object case, and the duplicate-event-name throw.
+- **`describe('resolveBrowserEvents')`** — verifies the flat lookup keyed by browser-event name (identity check via `toBe`), and the duplicate-name throw with a descriptive message.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — The module under test. This file imports `registerModules`, `resolveTranslatables`, `resolvePersonalDataSections`, `resolvePublicEvents`, and the `AppModule` type from it, and asserts on their return values / thrown errors.
+- **`src/kernel/registry.ts`** — the sole dependency. All imports (`registerModules`, `resolveTranslatables`, `resolvePersonalDataSections`, `resolvePersonalDataMinimisers`, `resolvePublicEvents`, `resolveBrowserEvents`, `type AppModule`) come from this module. The tests exercise its public API exclusively; no other file is imported.
 
 ## Notes
 
-- The file deliberately does **not** test dependency-cycle detection, unknown-dependency resolution, or duplicate-module-name guards. Those concerns live in `.dependency-cruiser.cjs` and in each module's `module.yaml`, not in the runtime `registerModules` path.
-- Cross-cutting validation (e.g. that a translatable target names a real collection, or that a public event actually fires) is delegated to `tests/cross-cutting/translatable-targets.test.ts` and `tests/cross-cutting/webhook-event-producers.test.ts` respectively.
-- Duplicate-key rejection for both `resolveTranslatables` and `resolvePublicEvents` asserts that the thrown message includes the offending key (regex match on the stringified key), ensuring the error is actionable.
+- The file explicitly documents (via doc comments) what it does **not** assert: dependency-graph validation (`dependsOn`, cycles) is enforced by `.dependency-cruiser.cjs` and per-module `module.yaml`, not at boot. Cross-cutting correctness (e.g. that a translatable target names a real collection) lives in `tests/cross-cutting/translatable-targets.test.ts` and `tests/cross-cutting/webhook-event-producers.test.ts`.
+- Duplicate-key collisions (translatables, public events, browser events) are hard throws, not "last one wins" — the tests assert the error message contains the offending key.
+- `personalData: 'none'` is a sentinel string meaning "contributes nothing" to both sections and minimisers; it is not an empty array.
+- No `jest.config` or setup file is imported; the file assumes Jest globals (`it`, `describe`, `expect`, `jest.fn`).

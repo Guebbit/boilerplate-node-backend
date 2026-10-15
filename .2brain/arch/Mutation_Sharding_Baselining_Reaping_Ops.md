@@ -12,7 +12,7 @@ graph LR
     Observability_Analytics_Provider_Layer["Observability & Analytics Provider Layer"]
     Observability_Metrics_Readback_Frontend_Sync_Surface["Observability Metrics Readback & Frontend Sync Surface"]
     Mutation_Baseline_Ratchet_Sharding_Orchestration["Mutation Baseline Ratchet & Sharding Orchestration"]
-    Observability_Analytics_Provider_Layer -- "Publishes metrics to a shared prom-client registry that the readback surface reads by metric name" --> Observability_Metrics_Readback_Frontend_Sync_Surface
+    Observability_Analytics_Provider_Layer -- "Publishes metrics to the shared Prometheus registry that the readback surface consumes by name" --> Observability_Metrics_Readback_Frontend_Sync_Surface
 ```
 
 ## Details
@@ -25,9 +25,9 @@ The provider/registry surface that the harness and reaping ops report into. It d
 **Related Classes/Methods**:
 
 - `src.infrastructure.observability.analytics.index.AnalyticsProvider`:83-108
-- `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge`:79-95
+- `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge`:105-113
 - `src.modules.observability.services.job-health.jobHealth`:19-26
-- `src.infrastructure.persistence.lease.listLeaseSummaries`:117-129
+- `src.infrastructure.persistence.lease.listLeaseSummaries`:99-112
 
 **Source Files:**
 
@@ -55,14 +55,19 @@ The provider/registry surface that the harness and reaping ops report into. It d
   - `src.infrastructure.observability.analytics.umami.umamiAnalyticsProvider.capture.catch() callback` (L143-L149) - Function
   - `src.infrastructure.observability.analytics.umami.umamiAnalyticsProvider.shutdown` (L157-L159) - Method
 - `src/infrastructure/observability/metrics-registry.ts`
-  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge` (L79-L95) - Class
-  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge.collect` (L84-L94) - Method
-  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge.collect.then() callback` (L88-L92) - Function
-  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge.collect.catch() callback` (L93-L93) - Function
+  - `src.infrastructure.observability.metrics-registry.collectJobGauge` (L81-L95) - Class
+  - `src.infrastructure.observability.metrics-registry.collectJobGauge.then() callback` (L88-L93) - Function
+  - `src.infrastructure.observability.metrics-registry.collectJobGauge.catch() callback` (L94-L94) - Function
+  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge` (L105-L113) - Class
+  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge.collect` (L110-L112) - Method
+  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge.collect.collectJobGauge() callback` (L111-L111) - Function
+  - `src.infrastructure.observability.metrics-registry._jobLastRunGauge` (L121-L129) - Class
+  - `src.infrastructure.observability.metrics-registry._jobLastRunGauge.collect` (L126-L128) - Method
+  - `src.infrastructure.observability.metrics-registry._jobLastRunGauge.collect.collectJobGauge() callback` (L127-L127) - Function
 - `src/infrastructure/persistence/lease.ts`
-  - `src.infrastructure.persistence.lease.listLeaseSummaries` (L117-L129) - Class
-  - `src.infrastructure.persistence.lease.listLeaseSummaries.then() callback` (L123-L128) - Function
-  - `src.infrastructure.persistence.lease.listLeaseSummaries.then() callback.rows.map() callback` (L124-L128) - Function
+  - `src.infrastructure.persistence.lease.listLeaseSummaries` (L99-L112) - Class
+  - `src.infrastructure.persistence.lease.listLeaseSummaries.then() callback` (L105-L111) - Function
+  - `src.infrastructure.persistence.lease.listLeaseSummaries.then() callback.rows.map() callback` (L106-L111) - Function
 - `src/modules/observability/services/dependency-health.ts`
   - `src.modules.observability.services.dependency-health.overallStatus` (L52-L55) - Class
   - `src.modules.observability.services.dependency-health.overallStatus.every() callback` (L53-L53) - Function
@@ -79,7 +84,7 @@ The read-side surface that exposes harness/job metrics for the observability das
 
 **Related Classes/Methods**:
 
-- `src.modules.observability.controllers.get-observability-metrics-overview.getObservabilityMetricsOverview`:74-142
+- `src.modules.observability.controllers.get-observability-metrics-overview.getObservabilityMetricsOverview`:86-155
 - `src.modules.observability.http-readback.getLatencyPercentiles`:126-135
 
 **Source Files:**
@@ -89,16 +94,19 @@ The read-side surface that exposes harness/job metrics for the observability das
   - `scripts.pairing.sync-to-frontend.of.outcomes.filter() callback` (L148-L148) - Function
 - `src/modules/observability/controllers/get-observability-metrics-overview.ts`
   - `src.modules.observability.controllers.get-observability-metrics-overview.MetricSample` (L21-L24) - Interface
-  - `src.modules.observability.controllers.get-observability-metrics-overview.readCounter` (L40-L45) - Class
-  - `src.modules.observability.controllers.get-observability-metrics-overview.readCounter.then() callback` (L44-L44) - Function
-  - `src.modules.observability.controllers.get-observability-metrics-overview.hasShopMetrics` (L59-L60) - Class
-  - `src.modules.observability.controllers.get-observability-metrics-overview.hasShopMetrics.SHOP_METRIC_NAMES.some() callback` (L60-L60) - Function
-  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels` (L65-L68) - Class
-  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels.values.filter() callback` (L67-L67) - Function
-  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels.values.filter() callback.every() callback` (L67-L67) - Function
-  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels.reduce() callback` (L68-L68) - Function
-  - `src.modules.observability.controllers.get-observability-metrics-overview.getObservabilityMetricsOverview` (L74-L142) - Class
-  - `src.modules.observability.controllers.get-observability-metrics-overview.getObservabilityMetricsOverview.then() callback` (L91-L140) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.readCounter` (L40-L50) - Class
+  - `src.modules.observability.controllers.get-observability-metrics-overview.readCounter.then() callback` (L47-L48) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.hasShopMetrics` (L64-L65) - Class
+  - `src.modules.observability.controllers.get-observability-metrics-overview.hasShopMetrics.SHOP_METRIC_NAMES.some() callback` (L65-L65) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.histogramCounts` (L71-L72) - Class
+  - `src.modules.observability.controllers.get-observability-metrics-overview.histogramCounts.values.filter() callback` (L72-L72) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels` (L77-L80) - Class
+  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels.values.filter() callback` (L79-L79) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels.values.filter() callback.every() callback` (L79-L79) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels.reduce() callback` (L80-L80) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.getObservabilityMetricsOverview` (L86-L155) - Class
+  - `src.modules.observability.controllers.get-observability-metrics-overview.getObservabilityMetricsOverview.then() callback` (L102-L153) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.getObservabilityMetricsOverview.then() callback.data.database.errorsTotal.databaseCommands.filter() callback` (L142-L142) - Function
 - `src/modules/observability/http-readback.ts`
   - `src.modules.observability.http-readback.sumMetricValues` (L23-L24) - Class
   - `src.modules.observability.http-readback.sumMetricValues.values.reduce() callback` (L24-L24) - Function
@@ -129,13 +137,13 @@ The core of the subsystem. It owns the mutation baseline lifecycle (read/write/c
 
 **Related Classes/Methods**:
 
-- `scripts.mutation.baseline.compareMerged`:193-212
+- `scripts.mutation.baseline.compareMerged`:193-197
 
 **Source Files:**
 
 - `scripts/contracts/generate-asyncapi-types.ts`
-  - `scripts.contracts.generate-asyncapi-types.renderLiteralArray.lines` (L254-L254) - Class
-  - `scripts.contracts.generate-asyncapi-types.renderLiteralArray.lines.values.map() callback` (L254-L254) - Function
+  - `scripts.contracts.generate-asyncapi-types.renderLiteralArray.lines` (L238-L238) - Class
+  - `scripts.contracts.generate-asyncapi-types.renderLiteralArray.lines.values.map() callback` (L238-L238) - Function
 - `scripts/contracts/section-order.ts`
   - `scripts.contracts.section-order.orderSections.extra` (L23-L23) - Class
   - `scripts.contracts.section-order.orderSections.extra.present.filter() callback` (L23-L23) - Function
@@ -145,41 +153,34 @@ The core of the subsystem. It owns the mutation baseline lifecycle (read/write/c
   - `scripts.mutation.baseline.FileComparison` (L57-L62) - Interface
   - `scripts.mutation.baseline.scoresFromReport.scored` (L82-L82) - Class
   - `scripts.mutation.baseline.scoresFromReport.scored.mutants.filter() callback` (L82-L82) - Function
-  - `scripts.mutation.baseline.compareMerged` (L193-L212) - Class
-  - `scripts.mutation.baseline.compareMerged.map() callback` (L201-L211) - Function
+  - `scripts.mutation.baseline.compareMerged` (L193-L197) - Class
 - `scripts/mutation/ci/waves.ts`
-  - `scripts.mutation.ci.waves.packUnits.slices` (L126-L126) - Class
-  - `scripts.mutation.ci.waves.packUnits.slices.map() callback` (L126-L126) - Function
-  - `scripts.mutation.ci.waves.packUnits.slices.units.filter() callback` (L126-L126) - Function
+  - `scripts.mutation.ci.waves.packUnits.slices` (L124-L124) - Class
+  - `scripts.mutation.ci.waves.packUnits.slices.map() callback` (L124-L124) - Function
+  - `scripts.mutation.ci.waves.packUnits.slices.units.filter() callback` (L124-L124) - Function
 - `scripts/mutation/run-shards.ts`
-  - `scripts.mutation.run-shards.main.recorded` (L201-L201) - Class
-  - `scripts.mutation.run-shards.main.recorded.shards.filter() callback` (L201-L201) - Function
+  - `scripts.mutation.run-shards.main.recorded` (L200-L200) - Class
+  - `scripts.mutation.run-shards.main.recorded.shards.filter() callback` (L200-L200) - Function
 - `scripts/mutation/sharding.ts`
   - `scripts.mutation.sharding.packIntoShards.totalLines` (L46-L46) - Class
   - `scripts.mutation.sharding.packIntoShards.totalLines.files.reduce() callback` (L46-L46) - Function
-- `scripts/ops/demo-remove-registry.ts`
-  - `scripts.ops.demo-remove-registry.removePackageJsonScripts.after` (L144-L153) - Class
-  - `scripts.ops.demo-remove-registry.removePackageJsonScripts.after.before.replaceAll() callback` (L149-L152) - Function
-- `scripts/ops/reap-invoice-pdfs.ts`
-  - `scripts.ops.reap-invoice-pdfs.main` (L35-L40) - Class
-  - `scripts.ops.reap-invoice-pdfs.then() callback` (L37-L38) - Function
-  - `scripts.ops.reap-invoice-pdfs.main.then() callback` (L40-L40) - Function
 - `scripts/scaffold/central-edits.ts`
   - `scripts.scaffold.central-edits.addParityEntry.rows` (L75-L75) - Class
   - `scripts.scaffold.central-edits.addParityEntry.rows.map() callback` (L75-L75) - Function
 - `src/kernel/middlewares/authorizations.ts`
-  - `src.kernel.middlewares.authorizations.then() callback` (L186-L195) - Function
-  - `src.kernel.middlewares.authorizations.catch() callback` (L196-L198) - Function
-  - `src.kernel.middlewares.authorizations.stillHoldsKeyViaCookie` (L588-L595) - Class
-  - `src.kernel.middlewares.authorizations.stillHoldsKeyViaCookie.then() callback` (L594-L594) - Function
-  - `src.kernel.middlewares.authorizations.stillHoldsKeyViaCookie.catch() callback` (L595-L595) - Function
-  - `src.kernel.middlewares.authorizations.FreshAuthOptions` (L609-L617) - Interface
-  - `src.kernel.middlewares.authorizations.requireFreshAuth.<function>.hasRequiredMethods.every() callback` (L645-L646) - Function
-  - `src.kernel.middlewares.authorizations.requireFreshAuth.<function>.hasRequiredMethods` (L645-L647) - Class
+  - `src.kernel.middlewares.authorizations.stillHoldsKeyViaCookie` (L704-L708) - Class
+  - `src.kernel.middlewares.authorizations.stillHoldsKeyViaCookie.then() callback` (L707-L707) - Function
+  - `src.kernel.middlewares.authorizations.stillHoldsKeyViaCookie.catch() callback` (L708-L708) - Function
+  - `src.kernel.middlewares.authorizations.FreshAuthOptions` (L711-L719) - Interface
+  - `src.kernel.middlewares.authorizations.requireFreshAuth.<function>.hasRequiredMethods.every() callback` (L749-L750) - Function
+  - `src.kernel.middlewares.authorizations.requireFreshAuth.<function>.hasRequiredMethods` (L749-L751) - Class
 - `src/modules/observability/controllers/get-observability-events.ts`
-  - `src.modules.observability.controllers.get-observability-events.getObservabilityEvents` (L29-L37) - Class
-  - `src.modules.observability.controllers.get-observability-events.getObservabilityEvents.streamObservabilityMetrics() callback` (L34-L35) - Function
+  - `src.modules.observability.controllers.get-observability-events.getObservabilityEvents` (L28-L34) - Class
+  - `src.modules.observability.controllers.get-observability-events.getObservabilityEvents.streamObservabilityMetrics() callback` (L31-L32) - Function
 - `src/modules/observability/controllers/get-observability-metrics.ts`
   - `src.modules.observability.controllers.get-observability-metrics.getObservabilityMetrics` (L18-L29) - Class
   - `src.modules.observability.controllers.get-observability-metrics.getObservabilityMetrics.then() callback` (L20-L23) - Function
   - `src.modules.observability.controllers.get-observability-metrics.getObservabilityMetrics.catch() callback` (L24-L28) - Function
+- `src/modules/observability/metrics.ts`
+  - `src.modules.observability.metrics._dependencyUp` (L21-L31) - Class
+  - `src.modules.observability.metrics._dependencyUp.collect` (L26-L30) - Method

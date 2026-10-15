@@ -1,27 +1,30 @@
 ---
 source: src/modules/webhooks/services/enqueue.ts
-sha256: 5ee3bb4949708acd08a7423f3369cea3d93a2d2786deaa736f94a6a8cc78bfcb
-generated_at: 2026-09-27T15:44:03.861444+00:00
+sha256: e54b0a087d643bbaa1dcb9117d88890f6d34323de43c58493bbf67f8fb006186
+generated_at: 2026-10-15T12:21:29.407597+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/webhooks/services/enqueue.ts
 
 ## Purpose
-Single shared function that publishes a delivery-row's next attempt onto the worker queue. Both the fast path (`publish.ts`, right after a row is created) and the retry sweep (`sweep.ts`, for a row already due) call this same helper. It implements the **Claim Check** pattern: the message carries only the delivery row's `_id`, because the row itself is the source of truth for everything an attempt needs.
+
+Single-point enqueue helper for webhook delivery attempts. Both the fast path (`publish.ts`, right after a delivery row is created) and the retry sweep (`sweep.ts`, for rows already due) call this instead of touching the queue adapter directly. It implements the **Claim Check** EIP: the queue message carries only the delivery row's `_id`, treating the row in the database as the source of truth for everything an attempt needs.
 
 ## Key elements
-- **`enqueueDeliveryAttempt(delivery: WebhookDeliveryDocument): Promise<void>`** — The sole export. Builds a `WebhookDeliverJobPayload` containing only `deliveryId`, then calls `publishToQueue` on the `WORKER_CHANNELS.WEBHOOK_DELIVER` channel. Returns a resolved `void` promise (discards any value the adapter might resolve with).
-- **Not a claim** — Publishing the same row twice is explicitly safe; the worker-side `attempt.ts` is what performs the exclusive claim and the actual HTTP call.
+
+- **`enqueueDeliveryAttempt(delivery: WebhookDeliveryDocument): Promise<boolean>`** — Sole export. Builds a `WebhookDeliverJobPayload` (`{ deliveryId }`) and publishes it to `WORKER_CHANNELS.WEBHOOK_DELIVER` via `publishToQueue`. Returns `true` if the broker accepted the message, `false` if it was refused or unavailable.
 
 ## Relationships
-- **`src/infrastructure/adapters/queue.ts`** — Imports `publishToQueue`, the thin wrapper over the underlying queue broker.
-- **`src/types/index.ts`** — Imports `WORKER_CHANNELS` (route key) and the `WebhookDeliverJobPayload` type.
-- **`src/modules/webhooks/model.ts`** — Imports the `WebhookDeliveryDocument` type used as the function's input parameter.
-- **`src/modules/webhooks/services/publish.ts`** — Caller on the fast path (immediately after a new delivery row is written).
-- **`src/modules/webhooks/services/sweep.ts`** — Caller on the retry path (picks up rows that are already due).
+
+- **`src/infrastructure/adapters/queue.ts`** — Provides `publishToQueue`, the generic broker publish used here.
+- **`src/modules/webhooks/model.ts`** — Supplies the `WebhookDeliveryDocument` type for the function parameter.
+- **`src/modules/webhooks/services/publish.ts`** — Calls `enqueueDeliveryAttempt` on the fast path immediately after creating a delivery row.
+- **`src/modules/webhooks/services/sweep.ts`** — Calls `enqueueDeliveryAttempt` for each due row; uses the `false` return value as a cue to fall back to in-process handling.
+- **`src/types/index.ts`** — Source of the `WORKER_CHANNELS.WEBHOOK_DELIVER` channel name and the `WebhookDeliverJobPayload` payload type.
 
 ## Notes
-- The function is intentionally side-effect-light: it only enqueues. No status change, no claim, no retry counter increment happens here.
-- Because it never claims, there is no risk of "double-enqueue" causing a double-attempt; the worker's own claim (`./attempt.ts`) is the single gate.
-- The module docblock references `../asyncapi.internal.yaml` as the canonical schema description for the queue message contract.
+
+- **Never claims.** Publishing the same row's ID twice is safe; the worker's own claim (in `attempt.ts`) is what arbitricates who performs the single real HTTP call. Do not add claim logic here.
+- **`false` return is a signal, not an error.** It means "nobody will consume this message," which `sweep.ts` specifically checks to decide whether to process the row itself.
+- The message schema is documented in `../asyncapi.internal.yaml`; keep the payload shape in sync with that spec.

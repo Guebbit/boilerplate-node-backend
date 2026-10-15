@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/controllers/delete-subscription.ts
-sha256: 45b04c67543973960a0ac342d8e0c4f9ee72caac6b0b93bf7e78c1b870f26807
-generated_at: 2026-09-23T19:38:38.609288+00:00
+sha256: b2bf898e6a7b63a6e6768f03cc6eca9ab63b5f1523a0aa8816138169d564413f
+generated_at: 2026-10-15T12:17:59.076610+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles `DELETE /webhooks/subscriptions/:id`. It permanently removes a webhook subscription (delivery log is left in place). Hand-written rather than built on `createDeleteController`, which is designed for the soft/hard delete triplet and doesn't fit this single-permanent-delete use case.
+Hand-written Express handler for `DELETE /webhooks/subscriptions/:id`. It permanently removes a single webhook subscription (its delivery log is intentionally left in place). It bypasses the `createDeleteController` factory because that factory is designed for soft/hard delete triplets, and this module only performs a permanent delete.
 
 ## Key elements
 
-- **`deleteWebhookSubscription`** (exported) — Express handler. Extracts and validates the `:id` path param as a well-formed ObjectId, delegates to `webhooksService.removeSubscription` with tenant caller context, then responds with `successResponse` (200) or early-returns on refusal/catch.
+- **`deleteWebhookSubscription`** (exported) — The sole route handler. Accepts `(request, response)`, validates the `:id` param, delegates to `webhooksService.removeSubscription`, and writes the HTTP response (200 on success, 404/403 on refusal or malformed id).
+- **`requireId`** — Validates the path-parameter id *before* any database call; a malformed id short-circuits with a generic 404 response.
+- **`refused`** — Inspects the service result and, if the operation was denied, sends the appropriate refusal response and halts the chain.
+- **`successResponse`** — Emits a 200 JSON body carrying `result.message` on successful deletion.
+- **`catchAs(response, 'deleteWebhookSubscription')`** — Terminal `.catch` handler that translates thrown errors into the standard error envelope, tagged with the handler name for logging.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — Provides `catchAs` (uniform error mapping) and `refused` (short-circuit on denied results).
-- **`@infrastructure/http/request`** — Provides `extractAndValidateId` (ObjectId validation, early-exit on failure) and `tenantCallerContextOf` (tenant scope for the service call).
-- **`@infrastructure/http/response`** — Provides `successResponse` for the 200 reply.
-- **`../services` (webhooksService)** — The domain service whose `removeSubscription(id, tenantCtx)` performs the actual deletion.
-- **`../routes`** — Registers this handler on the `DELETE /webhooks/subscriptions/:id` route.
+- **`src/infrastructure/http/controller.ts`** — Source of `catchAs` and `refused`, the two utility helpers for error translation and refusal handling.
+- **`src/infrastructure/http/ids.ts`** — Provides `requireId`, which parses/validates the `:id` path parameter.
+- **`src/infrastructure/http/request.ts`** — Provides `tenantCallerContextOf`, extracting tenant and caller context from the request for the service call.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, the shared helper for emitting 200 JSON responses.
+- **`src/modules/webhooks/services/index.ts`** — Exports `webhooksService`; its `removeSubscription(id, ctx)` method performs the actual deletion.
+- **`src/modules/webhooks/routes.ts`** — Registers this handler on the `DELETE /webhooks/subscriptions/:id` route.
 
 ## Notes
 
-- The route is **params-only** (no body), unlike the `write` handler's params-then-body shape.
-- Because `extractAndValidateId` guarantees a well-formed ObjectId before the service call, `removeSubscription` will never raise a CastError; no not-found mapping is needed in the `.catch`.
-- The JSDoc explicitly documents why this file is not generated via the factory — future contributors should not "refactor" it into `createDeleteController` without re-evaluating the soft/hard triplet assumption.
+- Deliberately **not** built on `createDeleteController`; that factory assumes a soft/hard pair, which doesn't apply here.
+- A malformed id returns **404** (treated as "unknown"), not 400, so the API doesn't reveal id format to callers.
+- Success returns **200** (not 204) with a message body, matching the convention of other webhook endpoints.

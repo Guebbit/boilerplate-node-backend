@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/controllers/create-product.ts
-sha256: b1ec3414d4954af3fa956ca53e9efa92653e334780718c2d3987204d3e065313
-generated_at: 2026-09-27T15:30:53.445758+00:00
+sha256: 3f643f6db077a9c85cdc1d3a765bcbfbed8765c0fb5e949a8fefd880cd21a54d
+generated_at: 2026-10-15T11:39:58.185014+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Admin "create product" HTTP controller for the catalogue. Decodes the typed request body (JSON or multipart) and the image upload, then delegates to `productService.writeCreate` so that the product and all its language translations are validated and persisted in a single atomic operation.
+Admin-facing controller that handles `POST /products`. It decodes a mixed JSON/multipart request body (scalar fields + `translations` JSON), reads an optional image upload, validates the assembled payload against the Zod schema, and delegates the actual write to `productService.writeCreate`.
 
 ## Key elements
 
-- **`createProduct`** (exported) — The sole handler for `POST /products`.
-  - Calls `readInput` to decode booleans (`active`, `requiresShipping`), numbers (`price`, `onHand`, `weight`), string arrays (`categories`, `tags`), and a JSON field (`translations`) from the request body.
-  - Calls `readUploadedImage` to extract `imageUrl`, `thumbnailUrl`, `pendingImageKey`, and a `deleteUpload` cleanup callback.
-  - Delegates to `productService.writeCreate` with the decoded payload, caller context, and image metadata.
-  - On domain failure: invokes `deleteUpload()` (errors swallowed), then `rejectResponse`.
-  - On success: responds `201` with `productService.toProduct(result.data)`.
-  - On unexpected/DB error: invokes `deleteUpload()` (errors swallowed), then `rejectDatabaseError`.
+- **`createProduct`** (exported function, signature `(request, response) => void`)
+  - Parses typed fields (`booleans`, `numbers`, `stringArrays`, `jsonFields`) via `readInput`.
+  - Reads the image upload (`imageUrl`, `thumbnailUrl`, `pendingImageKey`) via `readUploadedImage`; `pendingImageKey` is `undefined` when no image is supplied.
+  - Validates the full body with `parseBody(productService.zodProductCreateSchema, …)`; on 422 the function returns early.
+  - Calls `productService.writeCreate(body, callerContextOf(request), { imageUrl, thumbnailUrl, pendingImageKey })`.
+  - On success: `claimUpload(request)`, maps result to a `Product` via `productService.toProduct`, responds `201` with a `Location` header.
+  - On service-level refusal (`!result.success`): responds with the returned status + errors; the upload is cleaned up by the middleware close hook.
+  - On unhandled error: `rejectDatabaseError` sends a 500.
 
 ## Relationships
 
-- **`src/modules/products/service.ts`** — All business logic (validation, persistence, product mapping) is delegated here via `productService.writeCreate` and `productService.toProduct`.
-- **`src/modules/products/routes.ts`** — Wires the `POST /products` route to this controller function.
-- **`src/infrastructure/http/request.ts`** — Provides `readInput` (typed field decoding) and `callerContextOf` (caller identity for the service layer).
-- **`src/infrastructure/http/uploads.ts`** — Provides `readUploadedImage` for image extraction and the `deleteUpload` cleanup callback.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` / `rejectResponse` for building HTTP replies.
-- **`src/infrastructure/http/errors.ts`** — Provides `rejectDatabaseError` for unexpected persistence failures.
-- **`src/types/index.ts`** — Source of `CreateProductRequest`, `CreateProductRequestMultipart`, and `Product` types used in signatures and the success payload.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/products/services/index.ts` | Imports `productService`; calls `writeCreate`, `zodProductCreateSchema`, `toProduct`. |
+| `src/infrastructure/http/controller.ts` | Imports `parseBody` for Zod validation. |
+| `src/infrastructure/http/request.ts` | Imports `readInput` (typed field decoding) and `callerContextOf` (caller metadata). |
+| `src/infrastructure/http/uploads.ts` | Imports `readUploadedImage` (extract image metadata) and `claimUpload` (prevent close-hook deletion on success). |
+| `src/infrastructure/http/response.ts` | Imports `createdResponse` (201) and `rejectResponse` (4xx service refusal). |
+| `src/infrastructure/http/errors.ts` | Imports `rejectDatabaseError` (500 fallback). |
+| `src/modules/products/routes.ts` | Consumes this handler as the route target for `POST /products`. |
+| `src/types/index.ts` | Provides `CreateProductRequest`, `CreateProductRequestMultipart`, `Product` type imports. |
 
 ## Notes
 
-- **Multipart `translations`:** In a `multipart/form-data` request, `translations` arrives as a JSON-encoded *string* (multipart parts cannot carry nested objects). It is therefore listed under `jsonFields` in `readInput` so it is `JSON.parse`-d before reaching the service.
-- **Image "absent" sentinel:** When no image is uploaded, `imageUrl` is left `undefined` (not `''`) so that `zodProductCreateSchema`'s `.optional()` field treats it as "no image" rather than a validation error (`ImageUrl` enforces `minLength: 1`).
-- **Upload cleanup:** On both the failure and the catch path, `deleteUpload()` is called with its rejection swallowed (`.catch(() => undefined)`) to remove the server-side file before the response is sent.
-- **Status code:** Successful creation returns **201**, not 200.
+- `translations` can arrive as a nested JSON object (`application/json`) **or** a JSON-encoded string (multipart part). `readInput`'s `jsonFields` option handles both via the same decode path used for `numbers`/`stringArrays`.
+- Image URLs must not default to `''`; `ImageUrl` schema has `minLength: 1`. "No image" is expressed as `undefined` on the schema's `.optional()` field.
+- Upload lifecycle is implicit: on any non-2xx path the upload middleware's close hook deletes the file. The controller only calls `claimUpload` on the success path to signal "keep it."
+- `imageUrl` / `thumbnailUrl` / `pendingImageKey` are **server-decided** and passed as a third argument to `writeCreate`; they are intentionally excluded from the Zod-validated body.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/domain/index.ts
-sha256: bfa69112f147458bd8a12eecf4b4fcf93c073f65c5cd5e1984055ffde9830334
-generated_at: 2026-09-27T15:31:37.685366+00:00
+sha256: b81f277c669939556da57a7f1789b87dc1730a4cfe92c23969348ca0d9baac61
+generated_at: 2026-10-15T11:41:18.079291+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,18 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file that exposes the products domain layer's public API. It lets consumers import pure domain logic (e.g. stock calculations) without pulling in the module's HTTP surface or other infrastructure.
+Barrel file for the products domain layer. It re-exports the pure business rules (stock and preorder logic) so callers can import domain functions without pulling in the module's HTTP/API surface.
 
 ## Key elements
 
-- **`availableStock`** (re-export from `./stock`) — the single domain rule currently exposed through this barrel. Callers import it as `import { availableStock } from '…/products/domain'`.
+- **`availableStock`** (re-export from `./stock`) — stock availability check.
+- **`stockFlags`** (re-export from `./stock`) — returns stock-related flags.
+- **`isPreorder`** (re-export from `./preorder`) — determines whether a product is a preorder.
+- **`latestReleaseDate`** (re-export from `./preorder`) — resolves the most recent release date.
+- **`PreorderFacts`** (type re-export from `./preorder`) — type describing preorder-related data.
 
 ## Relationships
 
-- **`./stock`** (`src/modules/products/domain/stock.ts`) — defines `availableStock`; this file is its re-export point.
-- **`src/modules/products/index.ts`** — the module's top-level (HTTP) entry point. This domain barrel is intentionally *separate* from it so that importing domain rules does not drag in route handlers or transport concerns.
+- **`src/modules/products/domain/stock.ts`** and **`src/modules/products/domain/preorder.ts`** — source modules whose symbols this file re-exports; no logic of its own.
+- **`src/modules/products/index.ts`** — the module's public entry point that consumes these domain exports alongside its HTTP-facing definitions.
 
 ## Notes
 
-- Adding a new domain rule here is the sanctioned way to widen the domain's public surface. Consumers should import from this barrel (or the full path to `stock`) rather than reaching into internal files.
-- The JSDoc points to `docs/theory/domain-layer.md` for the layering rationale; consult it before adding non-domain logic to this barrel.
+- This file contains **no logic**—it is purely a re-export surface. Change an export here only if you are adding/removing a domain symbol; implementation changes belong in `stock.ts` or `preorder.ts`.
+- The docstring explicitly scopes this as the importable domain boundary (see `docs/theory/domain-layer.md`); treat it as the contract for "products rules without HTTP."

@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/mailer-dispatch.test.ts
-sha256: b12805b69837e31e2460bbfb7211b648b584990cd1457243fcdce970dc4515e5
-generated_at: 2026-09-27T16:04:38.895892+00:00
+sha256: bbe4104938404372db3a5d0d3651d7dd6bd059c29cf003c3d2f9d39bbdae5fe4
+generated_at: 2026-10-15T13:07:48.952731+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `enqueueEmail` in `mailer.ts`, pinning the queue-or-send-inline dispatch contract: when `publishToQueue` resolves `true` the email is enqueued (and **not** sent inline); when it resolves `false` the email is sent inline (and **not** enqueued). Also covers the edge case where publish rejects, mutual exclusivity of the two paths, and attachment lifecycle on each path. The file exists because `enqueueEmail` resolves `void` on every path, so a broken dispatch is invisible to callers—these tests are the only guard.
+Unit tests for the `enqueueEmail` dispatch logic in `mailer.ts`. Verifies the two-branch contract (publish-to-queue vs. inline send), their mutual exclusivity, the error path where `publishToQueue` rejects instead of resolving `false`, and attachment-spool cleanup on the inline path. Exists because `enqueueEmail` resolves `void` on every path, so a broken dispatch is silently invisible to callers.
 
 ## Key elements
 
-- **Path 1 suite** (`publish resolves true`) — asserts one `publishToQueue` call, zero `sendMail` calls, priority defaulting (`normal`) and pass-through (`high`), payload carries template name + raw data (no rendered HTML), and a `debug`-level log.
-- **Path 2 suite** (`publish resolves false`) — asserts the publish is still attempted (no `isQueueEnabled` pre-check), inline send fires, no enqueue log, and the return value is `undefined` (shared `Promise<void>` contract).
-- **Publish-rejects suite** — mock rejects with `Error('Channel closed')`; asserts `enqueueEmail` resolves (does not throw), logs an `error` with template + recipient, and does **not** attempt inline fallback.
-- **Mutual-exclusivity table** — `it.each` over both outcomes asserting `enqueued + sentInline === 1`.
-- **Attachment-discarding suite** — uses `spoolAttachment` to create a real spool file, then verifies it is deleted on both inline paths (publish-false and inline-send-reject) but left intact on the queued path (which has a downstream retry chain).
-- **`sendMailMock` / `publishToQueueMock` / `loggerMock`** — module-level jest mocks set up via `jest.mock` factories; logger uses **getter properties** to dodge a hoisting race (see Notes).
-- **`beforeEach` / `afterEach`** — create a fresh temp dir via `mkdtemp`, set `NODE_MAIL_SPOOL_PATH`, clear all mocks; `afterEach` removes the dir and restores the original env value.
+- **`sendMailMock` / `publishToQueueMock` / `loggerMock`** — jest module mocks for `nodemailer`, `@infrastructure/adapters/queue`, and `@infrastructure/adapters/logger` respectively. The logger mock uses **getters** (not direct property values) to survive swc's ESM-import hoisting past the `const` declaration.
+- **`REQUEST`, `TEMPLATE`, `DATA`** — shared fixtures: a password-reset email request, the EJS template name, and the full data object the template interpolates.
+- **`spoolRoot`** — a per-test `mkdtemp` directory wired in via `setEnvironment({ NODE_MAIL_SPOOL_PATH })`; used to verify attachment files are (or are not) cleaned up.
+- **`describe` blocks (one per scenario group):**
+  - *path 1 (publish → true):* publishes exactly once, does **not** send inline, defaults to `'normal'` priority, passes explicit priority through, carries template name + raw data (no rendered HTML), logs at `debug`.
+  - *path 2 (publish → false):* still calls `publishToQueue`, falls back to inline send, does not log an enqueue, resolves `undefined`.
+  - *publish rejects:* logs `error` with template + recipient, resolves `undefined`, does **not** attempt inline send.
+  - *mutual exclusivity (table):* exactly one of {enqueued, sent-inline} equals 1.
+  - *inline attachment discard:* inline paths delete the spooled file after settle; queued path leaves it in place (consumer owns it).
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — SUT; `enqueueEmail` is the only import under test.
-- **`src/infrastructure/adapters/mail-spool.ts`** — `spoolAttachment` is called in the attachment suites to produce a real spool key that `enqueueEmail`'s inline paths are expected to delete.
-- **`src/types/index.ts`** — provides the `EmailJobPayload` type used to shape the `REQUEST` fixture.
-- **`tests/support/file-sandbox.ts`** — `fileExists` is used to assert spool-file presence/absence after each path.
-- **`@infrastructure/adapters/queue`** (mocked) — `publishToQueue` is the branch-deciding dependency; its boolean return drives which path executes.
-- **`@infrastructure/adapters/logger`** (mocked) — assertions check which log level fired on each path.
-- **`nodemailer`** (mocked) — `sendMail` is the inline-delivery sink; only the transport is mocked, EJS rendering runs for real.
+- **`src/infrastructure/adapters/mailer.ts`** — module under test; imports `enqueueEmail`.
+- **`src/infrastructure/adapters/mail-spool.ts`** — imports `spoolAttachment` to create real temp files for the attachment-cleanup tests.
+- **`src/types/index.ts`** — imports `EmailJobPayload` for type-annotating the `REQUEST` fixture.
+- **`tests/support/environment.ts`** — calls `setEnvironment` to point `NODE_MAIL_SPOOL_PATH` at the per-test temp dir.
+- **`tests/support/file-sandbox.ts`** — uses `fileExists` to assert attachment files were removed (or preserved).
+- **`tests/unit/infrastructure/adapters/queue.test.ts`** — referenced in comments as the file that pins `publishToQueue`'s own contract (resolves `false` with no I/O when unconfigured; never rejects). This file deliberately does **not** re-test that behavior.
 
 ## Notes
 
-- **Logger mock uses getters, not a direct reference.** `jest.mock` factories are hoisted above all `const` declarations. Under swc (ESM-style import hoisting) the factory runs before `loggerMock` is initialised, so `logger: loggerMock` would throw a TDZ error. Getters defer access to property-read time, after the `const` is live. The `nodemailer` and `queue` mocks are safe because each accesses its variable from inside a function body, not at object-literal top level.
-- **Inline paths render templates for real.** Only the SMTP transport is mocked; EJS interpolation executes. A missing `DATA` key surfaces as an `EJS ReferenceError` rather than a silently blank line in the output—useful for catching incomplete fixtures.
-- **No `isQueueEnabled` pre-check is tested here.** The contract "unconfigured broker → `publishToQueue` resolves `false` with no I/O" is owned by `queue.test.ts`; this file only verifies the caller always calls `publishToQueue` and branches on the result.
-- **Temp-dir isolation.** Each test gets its own `mkdtemp` directory for `NODE_MAIL_SPOOL_PATH`; `afterEach` removes it and restores (or deletes) the original env value. Tests must not assume a shared spool location.
-- **Attachment test relies on `spoolAttachment` writing a real file** into the temp spool dir, so the discarding assertions are filesystem-level (`fileExists`), not mock-level.
+- **Logger-mock getter trick:** `jest.mock` factories execute before module-level `const` initializers when swc hoists ESM imports to the top. Reading `loggerMock` directly in the factory body would throw `Cannot access before initialization`. Getters defer the read to property-access time, which is safe under both TS and swc transforms. The `nodemailer` and `queue` mocks are already safe because they access their variables from inside arrow functions, not at object-literal top level.
+- **No `isQueueEnabled()` pre-check:** `enqueueEmail` always calls `publishToQueue`; the "broker unconfigured" case is handled inside that function (resolves `false`). This test file does not assert that internal behavior.
+- **Inline path renders for real:** only the SMTP transport is mocked. A missing variable in `DATA` would surface as an EJS `ReferenceError` at test time, not as a silently blank email.
+- **Return type is `Promise<void>` on both paths:** callers cannot (and should not) inspect a `SentMessageInfo`; this test pins that with `resolves.toBeUndefined()`.

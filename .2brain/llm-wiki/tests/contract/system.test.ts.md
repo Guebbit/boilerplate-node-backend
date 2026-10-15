@@ -1,7 +1,7 @@
 ---
 source: tests/contract/system.test.ts
-sha256: 144a31fc17114b5bdd76802ca995d623e4c87eb4f1a71974edb4c71db52d8c86
-generated_at: 2026-09-27T15:48:35.516295+00:00
+sha256: 3964ab28c3fbba70270569adfdf58b91c3848d9a419ea2694359bcb15478a54d
+generated_at: 2026-10-15T12:34:03.875703+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests that verify system-level routes (`GET /`, `GET /readyz`) and shared error envelopes (404, 422) return responses matching their declared shapes. Exists to catch drift between the actual HTTP responses and the response types defined in the API spec.
+Contract tests for system-level routes (`/`, `/livez`, `/readyz`, `/.well-known/security.txt`) and the shared error-envelope shape (404 / 422). Each assertion pins the status code, body structure, or header that the typed contract promises, so a spec drift is caught as a test failure.
 
 ## Key elements
 
-- **`describe('GET /')`** — asserts the root health endpoint returns `200` with `body.data.status === 'ok'`.
-- **`describe('GET /readyz')`** — two ordered tests: first asserts `503` (booting phase), then calls `markServerListening()` and asserts `200` (ready phase).
-- **`describe('error envelopes')`** — asserts the 404 body has `success: false` and an `errors` array; asserts `POST /account/login` with an invalid email returns `422`.
-- No exports; the file is a pure test suite.
+- **`describe('GET /')`** — asserts 200 and `body.data.status === 'ok'` (the `HealthPingEnvelope` shape).
+- **`describe('GET /livez')`** — asserts a bare 200.
+- **`describe('GET /readyz')`** — two sequential tests: first expects 503 (booting), then calls `markServerListening()` and expects 200 (ready).
+- **`describe('GET /.well-known/security.txt')`** — three cases driven by `setEnvironment`: configured (200, `text/plain`, body contains Contact/Expires), expired (404 even with a contact), and unconfigured (404). Cleans up env vars in `afterEach`.
+- **`describe('error envelopes')`** — verifies the 404 body (`success: false`, `errors` array) for an unknown route, and a 422 for an invalid `/account/login` payload.
+- **Module-level `setupTestDb()`** — ensures a clean database before any test runs.
 
 ## Relationships
 
-- **`src/infrastructure/runtime/readiness.ts`** — imports `markServerListening`, called mid-suite to flip the readiness state from *booting* to *ready* between the two `/readyz` tests.
-- **`tests/support/contract.ts`** — imported for side effects (likely registers contract-aware matchers or global test setup).
-- **`tests/support/http.ts`** — imports the `api` helper used to issue HTTP requests against the in-process test server.
-- **`tests/support/setup-test-db.ts`** — imports `setupTestDb`; called once at module load to provision a test database before any test runs.
+- **`tests/support/contract.ts`** — imported as a side-effect (`import '@tests/contract'`); likely registers schema/contract validators used by the `api` helper or assertion layer.
+- **`tests/support/http.ts`** — provides the `api()` function used to issue all HTTP requests in this file.
+- **`tests/support/environment.ts`** — provides `setEnvironment()` to inject and clear `NODE_SECURITY_CONTACT` / `NODE_SECURITY_EXPIRES` for the security.txt cases.
+- **`src/infrastructure/runtime/readiness.ts`** — provides `markServerListening()`, called mid-suite to transition the server from "booting" to "ready" so the second readyz test sees the 200 path.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()`, called once at import time to prepare the test database.
 
 ## Notes
 
-- **Order dependency within `/readyz`:** the `503` test must run before the `200` test because `markServerListening()` mutates shared state. This relies on Jest's top-to-bottom `it` execution order within a `describe` block.
-- **`NODE_ENV=test` suppresses auto-start:** `src/app.ts`'s auto-start logic never fires in the test process, so the server stays in the *booting* phase until a test explicitly calls `markServerListening()`. This is what makes the `503` assertion deterministic.
-- **Historical type fix (documented in file header):** `GET /` was previously typed as `MessageResponse` while actually returning `data: { status: 'ok' }`. The spec was corrected to `HealthPingEnvelope` when the contract was hardened.
+- The file header documents a real spec fix: `GET /` was originally typed as `MessageResponse` but returned `data: { status: 'ok' }`; after hardening it is now typed `HealthPingEnvelope`.
+- The readyz "booting" test relies on the fact that `src/app.ts`'s auto-start never fires under `NODE_ENV=test`, so the process stays in the booting phase until `markServerListening()` is explicitly called. Test ordering within the `describe` block is therefore load-bearing.
+- `setEnvironment` is used both to set values and to clear them (passing `undefined`); the `afterEach` in the security.txt block prevents cross-test leakage.

@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/email.worker.test.ts
-sha256: 71cd76f5cb275c53fbb8c2463360bca1faa6d56f88511edeb20cdedeef646213
-generated_at: 2026-09-27T16:03:16.000883+00:00
+sha256: 791b610b4f640d343f5867082e2379996047238fc601a9834d1ed40d26fd7854
+generated_at: 2026-10-15T13:05:22.961087+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test for `handleEmailJob` in `email.worker.ts`. It verifies the worker's **decision logic** — which payloads are permanently refused (resolve `false`), which failures are allowed to escape as rejections (broker requeue), and which succeed (resolve `true`) — without exercising real SMTP delivery. PDF generation is explicitly out of scope and covered in `orders/tests/unit/invoice.test.ts`.
+Unit tests for `handleEmailJob`, the queue consumer that dispatches templated emails via SMTP. The file verifies the three-outcome contract (ack / permanent reject / requeue-on-failure), guards against malformed broker payloads reaching nodemailer, and pins the spooled-attachment lifecycle (discard on final outcomes, preserve on retryable failure). SMTP and PDF generation are mocked out; the test target is the *decision logic*, not delivery.
 
 ## Key elements
 
-- **`it('re-exports the email queue unchanged')`** — asserts `workerEmailQueue === EMAIL_QUEUE` (identity, not value), guarding against a silent queue-name drift between producer and consumer.
-- **`describe('handleEmailJob')`** — the main block, containing:
-  - Happy-path send: asserts `sendTemplatedEmail` is called with the job's `data` forwarded verbatim (not re-resolved in worker's locale).
-  - Default `data` to `{}` when the field is absent (rather than `undefined`).
-  - `it.each` over six malformed/null payloads: each must resolve `false`, never call the mailer, and emit `logger.warn`.
-  - SMTP-failure case: the worker must **reject** (not resolve `false`), and log via `logger.error` with the original error object.
-- **`describe('discarding the spooled attachment')`** — pins three spool-lifecycle rules:
-  - Success → `discardSpooled(key)` called once.
-  - Permanent refusal (e.g. empty recipient) → `discardSpooled(key)` called.
-  - Transient failure (SMTP reject) → `discardSpooled` **not** called, so a retry can still resolve the attachment.
-- **Mocks** — `mailer.sendTemplatedEmail`, `mail-spool.discardSpooled`, and `logger.warn`/`logger.error` are all jest-mocked; no network or filesystem I/O occurs.
+- **`handleEmailJob`** (imported from `email.worker.ts`) — the function under test. Accepts a job payload, validates it, calls the mailer, and returns `true` (ack), `false` (permanent reject), or throws (requeue).
+- **`EMAIL_QUEUE` / `workerEmailQueue`** — identity assertion confirming the worker re-exports the same queue-name constant from `queue.ts`, preventing silent producer/consumer drift.
+- **Mocked `sendTemplatedEmail`** (`mailer.ts`) — stubbed to control success/failure of the SMTP step.
+- **Mocked `discardSpooled`** (`mail-spool`) — verifies attachment cleanup on final outcomes and absence on requeueable failures.
+- **`logger.warn` / `logger.error`** spies — assert that refusals log only the template name (no payload leak) and that requeueable failures log the thrown error.
+- **`it.each` malformed-payload suite** — six variants (empty `to`, missing `request`, missing `templateName`, empty object, `null`, `undefined`) all resolve `false` without invoking the mailer.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/email.worker.ts`** — the unit under test. The file imports `handleEmailJob` and the re-exported `EMAIL_QUEUE` constant.
-- **`src/infrastructure/adapters/queue.ts`** — imported solely for `EMAIL_QUEUE` so the re-export identity assertion compares against the canonical spelling.
-- **`src/infrastructure/adapters/mailer.ts`** — `sendTemplatedEmail` is the sole side-effect dependency; fully mocked at module level.
-- **`src/infrastructure/adapters/logger.ts`** — spied on (`warn`, `error`) to assert the worker logs refusals and failures without asserting message text.
+- **`src/infrastructure/adapters/email.worker.ts`** — module under test; source of `handleEmailJob` and the `EMAIL_QUEUE` re-export.
+- **`src/infrastructure/adapters/queue.ts`** — provides the canonical `EMAIL_QUEUE` constant; the test imports it here to assert identity with the worker's re-export.
+- **`src/infrastructure/adapters/mailer.ts`** — `sendTemplatedEmail` is the sole external side effect, fully mocked so tests isolate the worker's branching logic.
+- **`src/infrastructure/adapters/logger.ts`** — spied on to verify the shape and scope of log output for refusals and failures.
 
 ## Notes
 
-- The `beforeEach` resets all mocks **and** re-sets `discardSpooledMock` to resolve `undefined`, since `jest.clearAllMocks()` alone would wipe the `mockResolvedValue`.
-- The worker's three-outcome contract (true / false / throw) is the central invariant. The test suite is structured to make the **false-vs-throw** boundary explicit: a refused payload is a *fact about the message*; a thrown error is a *fact about the infrastructure*.
-- The mail-spool mock is set up with `jest.mock` at module scope (hoisted) rather than inline, because `discardSpooled` is imported inside the worker, not directly here.
-- `null` and `undefined` jobs are included in the malformed-payload table because a broker can deliver a null body; the worker's `job?.` guard is what makes those safe.
+- The test imports `discardSpooled` from `@infrastructure/adapters/mail-spool`, a module **not** listed among the graph neighbors; it is an additional dependency of `email.worker.ts` that the test must mock independently.
+- `jest.mock` calls use `require`-style factory mocks placed *before* the SUT import, relying on hoisting. The `discardSpooledMock` reference is hoisted via the `mockResolvedValue` pattern — keep that ordering if adding new spool interactions.
+- The "defaults absent template data to `{}`" test encodes a contract with the mailer: `data` is never `undefined` at the call boundary.
+- Attachment key is `key` (the spool handle), not `filename`; `discardSpooled` is called with the spool key.

@@ -12,6 +12,9 @@ graph LR
     Contract_Bundle_Assembly_Registry["Contract Bundle Assembly & Registry"]
     Structural_Conventions_Mutation_Testing_Harness["Structural Conventions & Mutation-Testing Harness"]
     Shop_History_Narrative_Flow_Contract_Driver["Shop History Narrative & Flow Contract Driver"]
+    Contract_Bundle_Assembly_Registry -- "calls" --> Shop_History_Narrative_Flow_Contract_Driver
+    Structural_Conventions_Mutation_Testing_Harness -- "enforces the module barrel and layering structure the bundle assembly reads as fragments" --> Contract_Bundle_Assembly_Registry
+    Shop_History_Narrative_Flow_Contract_Driver -- "serves as the behavioral oracle that the mutation harness verifies in the scenarios scope" --> Structural_Conventions_Mutation_Testing_Harness
 ```
 
 ## Details
@@ -23,48 +26,45 @@ The contract-artifact machinery that defines, registers, and rebuilds the AsyncA
 
 **Related Classes/Methods**:
 
-- `scripts.contracts.asyncapi-bundles.asyncapiBundle`:239-250
+- `scripts.contracts.asyncapi-bundles.asyncapiBundle`:243-255
 - `scripts.contracts.client-collections-bundle.collectionContent`:250-256
 
 **Source Files:**
 
 - `scripts/contracts/asyncapi-bundles.ts`
-  - `scripts.contracts.asyncapi-bundles.modulesWithAsyncapi` (L52-L58) - Class
-  - `scripts.contracts.asyncapi-bundles.modulesWithAsyncapi.map() callback` (L55-L55) - Function
-  - `scripts.contracts.asyncapi-bundles.modulesWithAsyncapi.filter() callback` (L56-L57) - Function
-  - `scripts.contracts.asyncapi-bundles.sectionsInScope` (L99-L102) - Class
-  - `scripts.contracts.asyncapi-bundles.sectionsInScope.ASYNC_SECTION_ORDER.filter() callback` (L102-L102) - Function
-  - `scripts.contracts.asyncapi-bundles.asyncapiBundle` (L239-L250) - Class
-  - `scripts.contracts.asyncapi-bundles.asyncapiBundle.content` (L244-L244) - Method
-  - `scripts.contracts.asyncapi-bundles.asyncapiBundle.sources` (L245-L248) - Method
-  - `scripts.contracts.asyncapi-bundles.asyncapiBundle.sources.map() callback` (L247-L247) - Function
-  - `scripts.contracts.asyncapi-bundles.asyncapiPublicBundle` (L259-L269) - Class
-  - `scripts.contracts.asyncapi-bundles.asyncapiPublicBundle.content` (L263-L263) - Method
-  - `scripts.contracts.asyncapi-bundles.asyncapiPublicBundle.sources` (L264-L267) - Method
-  - `scripts.contracts.asyncapi-bundles.asyncapiPublicBundle.sources.map() callback` (L266-L266) - Function
+  - `scripts.contracts.asyncapi-bundles.modulesWithAsyncapi` (L54-L54) - Class
+  - `scripts.contracts.asyncapi-bundles.sectionsInScope` (L90-L93) - Class
+  - `scripts.contracts.asyncapi-bundles.sectionsInScope.ASYNC_SECTION_ORDER.filter() callback` (L93-L93) - Function
+  - `scripts.contracts.asyncapi-bundles.asyncapiBundle` (L243-L255) - Class
+  - `scripts.contracts.asyncapi-bundles.asyncapiBundle.content` (L248-L248) - Method
+  - `scripts.contracts.asyncapi-bundles.asyncapiBundle.sources` (L249-L253) - Method
+  - `scripts.contracts.asyncapi-bundles.asyncapiBundle.sources.map() callback` (L251-L251) - Function
+  - `scripts.contracts.asyncapi-bundles.asyncapiPublicBundle` (L264-L275) - Class
+  - `scripts.contracts.asyncapi-bundles.asyncapiPublicBundle.content` (L268-L268) - Method
+  - `scripts.contracts.asyncapi-bundles.asyncapiPublicBundle.sources` (L269-L273) - Method
+  - `scripts.contracts.asyncapi-bundles.asyncapiPublicBundle.sources.map() callback` (L271-L271) - Function
 - `scripts/contracts/build-bundles.ts`
   - `scripts.contracts.build-bundles.CONTRACT_BUNDLES.map() callback` (L48-L48) - Function
   - `scripts.contracts.build-bundles.bundle.then() callback.stale` (L61-L63) - Class
   - `scripts.contracts.build-bundles.bundle.then() callback.stale.assembled.filter() callback` (L62-L62) - Function
   - `scripts.contracts.build-bundles.bundle.then() callback.stale.map() callback` (L65-L65) - Function
-  - `scripts.contracts.build-bundles.generated.map() callback` (L91-L91) - Function
-  - `scripts.contracts.build-bundles.run.authored` (L123-L123) - Class
-  - `scripts.contracts.build-bundles.run.authored.CONTRACT_BUNDLES.filter() callback` (L123-L123) - Function
-  - `scripts.contracts.build-bundles.catch() callback` (L149-L152) - Function
+  - `scripts.contracts.build-bundles.generated.map() callback` (L121-L121) - Function
+  - `scripts.contracts.build-bundles.run.authored` (L143-L143) - Class
+  - `scripts.contracts.build-bundles.run.authored.CONTRACT_BUNDLES.filter() callback` (L143-L143) - Function
+  - `scripts.contracts.build-bundles.catch() callback` (L156-L159) - Function
 - `scripts/contracts/bundle-kinds.ts`
-  - `scripts.contracts.bundle-kinds.BundleIdentity` (L28-L49) - Interface
-  - `scripts.contracts.bundle-kinds.CompiledBundle` (L59-L64) - Interface
-  - `scripts.contracts.bundle-kinds.GeneratedBundle` (L74-L78) - Interface
+  - `scripts.contracts.bundle-kinds.BundleIdentity` (L24-L45) - Interface
+  - `scripts.contracts.bundle-kinds.CompiledBundle` (L55-L60) - Interface
+  - `scripts.contracts.bundle-kinds.GeneratedBundle` (L70-L74) - Interface
 - `scripts/contracts/bundle-registry.ts`
   - `scripts.contracts.bundle-registry.collectionBundle` (L41-L48) - Class
   - `scripts.contracts.bundle-registry.collectionBundle.content` (L47-L47) - Method
   - `scripts.contracts.bundle-registry.collectionBundle.content.then() callback` (L47-L47) - Function
 - `scripts/contracts/client-collections-bundle.ts`
-  - `scripts.contracts.client-collections-bundle.sections` (L68-L69) - Class
-  - `scripts.contracts.client-collections-bundle.sections.SECTION_ORDER.map() callback` (L69-L69) - Function
-  - `scripts.contracts.client-collections-bundle.modulesDeclaringProbes` (L166-L173) - Class
-  - `scripts.contracts.client-collections-bundle.modulesDeclaringProbes.map() callback` (L171-L171) - Function
-  - `scripts.contracts.client-collections-bundle.modulesDeclaringProbes.filter() callback` (L172-L172) - Function
+  - `scripts.contracts.client-collections-bundle.sections` (L71-L74) - Class
+  - `scripts.contracts.client-collections-bundle.sections.SECTION_ORDER.map() callback` (L72-L72) - Function
+  - `scripts.contracts.client-collections-bundle.sections.filter() callback` (L73-L73) - Function
+  - `scripts.contracts.client-collections-bundle.modulesDeclaringProbes` (L172-L173) - Class
   - `scripts.contracts.client-collections-bundle.loadProbes` (L191-L212) - Class
   - `scripts.contracts.client-collections-bundle.loadProbes.<function>` (L191-L212) - Function
   - `scripts.contracts.client-collections-bundle.loadProbes.<function>.<function>` (L194-L211) - Function
@@ -78,46 +78,60 @@ The contract-artifact machinery that defines, registers, and rebuilds the AsyncA
   - `scripts.contracts.client-collections-bundle.allProbes.then() callback.result.requests.filter() callback` (L239-L239) - Function
   - `scripts.contracts.client-collections-bundle.collectionContent` (L250-L256) - Class
   - `scripts.contracts.client-collections-bundle.collectionContent.then() callback` (L251-L256) - Function
+- `scripts/contracts/cookie-auth.ts`
+  - `scripts.contracts.cookie-auth.takesBearer` (L37-L40) - Class
+  - `scripts.contracts.cookie-auth.takesBearer.security.some() callback` (L40-L40) - Function
+  - `scripts.contracts.cookie-auth.withCookieAuth` (L55-L77) - Class
+  - `scripts.contracts.cookie-auth.withCookieAuth.flatMap() callback` (L60-L61) - Function
+  - `scripts.contracts.cookie-auth.withCookieAuth.flatMap() callback.OPERATION_METHODS.map() callback` (L61-L61) - Function
+  - `scripts.contracts.cookie-auth.withCookieAuth.operation.security.every() callback` (L65-L65) - Function
 - `scripts/contracts/generate-asyncapi-types.ts`
-  - `scripts.contracts.generate-asyncapi-types.collectChannelMessageEntries` (L184-L201) - Class
-  - `scripts.contracts.generate-asyncapi-types.collectChannelMessageEntries.filter() callback` (L190-L190) - Function
-  - `scripts.contracts.generate-asyncapi-types.collectChannelMessageEntries.map() callback` (L191-L200) - Function
-  - `scripts.contracts.generate-asyncapi-types.collectChannelMessageEntries.toSorted() callback` (L201-L201) - Function
-  - `scripts.contracts.generate-asyncapi-types.renderPayloadMap.rows` (L269-L273) - Class
-  - `scripts.contracts.generate-asyncapi-types.renderPayloadMap.rows.entries.map() callback` (L271-L271) - Function
-  - `scripts.contracts.generate-asyncapi-types.sseEntries` (L381-L385) - Class
-  - `scripts.contracts.generate-asyncapi-types.sseEntries.collectChannelMessageEntries() callback` (L384-L384) - Function
-  - `scripts.contracts.generate-asyncapi-types.channelNamespaceBlocks` (L400-L402) - Class
-  - `scripts.contracts.generate-asyncapi-types.channelNamespaceBlocks.map() callback` (L401-L401) - Function
+  - `scripts.contracts.generate-asyncapi-types.collectChannelMessageEntries` (L168-L185) - Class
+  - `scripts.contracts.generate-asyncapi-types.collectChannelMessageEntries.filter() callback` (L174-L174) - Function
+  - `scripts.contracts.generate-asyncapi-types.collectChannelMessageEntries.map() callback` (L175-L184) - Function
+  - `scripts.contracts.generate-asyncapi-types.collectChannelMessageEntries.toSorted() callback` (L185-L185) - Function
+  - `scripts.contracts.generate-asyncapi-types.renderPayloadMap.rows` (L253-L257) - Class
+  - `scripts.contracts.generate-asyncapi-types.renderPayloadMap.rows.entries.map() callback` (L255-L255) - Function
+  - `scripts.contracts.generate-asyncapi-types.sseEntries` (L365-L369) - Class
+  - `scripts.contracts.generate-asyncapi-types.sseEntries.collectChannelMessageEntries() callback` (L368-L368) - Function
+  - `scripts.contracts.generate-asyncapi-types.channelNamespaceBlocks` (L384-L386) - Class
+  - `scripts.contracts.generate-asyncapi-types.channelNamespaceBlocks.map() callback` (L385-L385) - Function
 - `scripts/contracts/generate-request-content-types.ts`
-  - `scripts.contracts.generate-request-content-types.OperationObject` (L23-L25) - Interface
-  - `scripts.contracts.generate-request-content-types.OpenApiDocument` (L28-L30) - Interface
-  - `scripts.contracts.generate-request-content-types.compileTemplate.parameterCount.segments.filter() callback` (L83-L83) - Function
-  - `scripts.contracts.generate-request-content-types.renderRows` (L94-L114) - Class
-  - `scripts.contracts.generate-request-content-types.renderRows.flatMap() callback` (L96-L108) - Function
-  - `scripts.contracts.generate-request-content-types.renderRows.flatMap() callback.BODY_METHODS.flatMap() callback` (L97-L108) - Function
-  - `scripts.contracts.generate-request-content-types.renderRows.toSorted() callback` (L111-L112) - Function
-  - `scripts.contracts.generate-request-content-types.renderRows.map() callback` (L114-L114) - Function
+  - `scripts.contracts.generate-request-content-types.OperationObject` (L24-L26) - Interface
+  - `scripts.contracts.generate-request-content-types.OpenApiDocument` (L29-L31) - Interface
+  - `scripts.contracts.generate-request-content-types.compileTemplate.parameterCount.segments.filter() callback` (L70-L70) - Function
+  - `scripts.contracts.generate-request-content-types.renderRows` (L81-L101) - Class
+  - `scripts.contracts.generate-request-content-types.renderRows.flatMap() callback` (L83-L95) - Function
+  - `scripts.contracts.generate-request-content-types.renderRows.flatMap() callback.BODY_METHODS.flatMap() callback` (L84-L95) - Function
+  - `scripts.contracts.generate-request-content-types.renderRows.toSorted() callback` (L98-L99) - Function
+  - `scripts.contracts.generate-request-content-types.renderRows.map() callback` (L101-L101) - Function
 - `scripts/contracts/openapi-bundle.ts`
-  - `scripts.contracts.openapi-bundle.rootPaths` (L123-L130) - Class
-  - `scripts.contracts.openapi-bundle.rootPaths.filter() callback` (L128-L128) - Function
-  - `scripts.contracts.openapi-bundle.rootPaths.map() callback` (L129-L129) - Function
-  - `scripts.contracts.openapi-bundle.sectionPaths` (L133-L138) - Class
-  - `scripts.contracts.openapi-bundle.sectionPaths.map() callback` (L137-L137) - Function
-  - `scripts.contracts.openapi-bundle.operationsOf` (L190-L193) - Class
-  - `scripts.contracts.openapi-bundle.operationsOf.flatMap() callback` (L191-L192) - Function
-  - `scripts.contracts.openapi-bundle.operationsOf.flatMap() callback.OPERATION_METHODS.map() callback` (L192-L192) - Function
-  - `scripts.contracts.openapi-bundle.operationsOf.flatMap() callback.filter() callback` (L192-L192) - Function
-  - `scripts.contracts.openapi-bundle.openapiBundle` (L575-L582) - Class
-  - `scripts.contracts.openapi-bundle.openapiBundle.sources` (L581-L581) - Method
-  - `scripts.contracts.openapi-bundle.openapiBundle.sources.MODULE_SECTIONS.map() callback` (L581-L581) - Function
+  - `scripts.contracts.openapi-bundle.rootPaths` (L120-L127) - Class
+  - `scripts.contracts.openapi-bundle.rootPaths.filter() callback` (L125-L125) - Function
+  - `scripts.contracts.openapi-bundle.rootPaths.map() callback` (L126-L126) - Function
+  - `scripts.contracts.openapi-bundle.sectionPaths` (L130-L135) - Class
+  - `scripts.contracts.openapi-bundle.sectionPaths.map() callback` (L134-L134) - Function
+  - `scripts.contracts.openapi-bundle.operationsOf` (L187-L190) - Class
+  - `scripts.contracts.openapi-bundle.operationsOf.flatMap() callback` (L188-L189) - Function
+  - `scripts.contracts.openapi-bundle.operationsOf.flatMap() callback.OPERATION_METHODS.map() callback` (L189-L189) - Function
+  - `scripts.contracts.openapi-bundle.operationsOf.flatMap() callback.filter() callback` (L189-L189) - Function
+  - `scripts.contracts.openapi-bundle.openapiBundle` (L574-L581) - Class
+  - `scripts.contracts.openapi-bundle.openapiBundle.sources` (L580-L580) - Method
+  - `scripts.contracts.openapi-bundle.openapiBundle.sources.MODULE_SECTIONS.map() callback` (L580-L580) - Function
 - `scripts/contracts/permission-actions-render.ts`
   - `scripts.contracts.permission-actions-render.readPermissionActions` (L17-L27) - Class
   - `scripts.contracts.permission-actions-render.readPermissionActions.actions.every() callback` (L22-L22) - Function
+- `scripts/contracts/prune-unused.ts`
+  - `scripts.contracts.prune-unused.reachable` (L80-L91) - Class
+  - `scripts.contracts.prune-unused.reachable.filter() callback` (L89-L89) - Function
+  - `scripts.contracts.prune-unused.pruneUnused` (L100-L124) - Class
+  - `scripts.contracts.prune-unused.pruneUnused.document.tags.filter() callback` (L119-L119) - Function
 - `scripts/contracts/root-assembly.ts`
-  - `scripts.contracts.root-assembly.pruneStaleReferences.declared` (L57-L59) - Class
-  - `scripts.contracts.root-assembly.pruneStaleReferences.declared.fragments.flatMap() callback` (L58-L58) - Function
-  - `scripts.contracts.root-assembly.pruneStaleReferences.declared.fragments.flatMap() callback.urls.map() callback` (L58-L58) - Function
+  - `scripts.contracts.root-assembly.pruneStaleReferences.declared` (L59-L61) - Class
+  - `scripts.contracts.root-assembly.pruneStaleReferences.declared.fragments.flatMap() callback` (L60-L60) - Function
+  - `scripts.contracts.root-assembly.pruneStaleReferences.declared.fragments.flatMap() callback.urls.map() callback` (L60-L60) - Function
+  - `scripts.contracts.root-assembly.appendMissingTags` (L94-L114) - Class
+  - `scripts.contracts.root-assembly.appendMissingTags.fragments.flatMap() callback` (L105-L105) - Function
 - `scripts/contracts/section-order.ts`
   - `scripts.contracts.section-order.orderSections.known` (L22-L22) - Class
   - `scripts.contracts.section-order.orderSections.known.preferred.filter() callback` (L22-L22) - Function
@@ -125,32 +139,20 @@ The contract-artifact machinery that defines, registers, and rebuilds the AsyncA
   - `scripts.eslint.no-hardcoded-user-text.noHardcodedUserText` (L32-L84) - Class
   - `scripts.eslint.no-hardcoded-user-text.noHardcodedUserText.create` (L44-L83) - Method
   - `scripts.eslint.no-hardcoded-user-text.noHardcodedUserText.create.CallExpression` (L46-L81) - Method
-- `scripts/ops/demo-remove-authorization.ts`
-  - `scripts.ops.demo-remove-authorization.readRemovedAuthorization.survivors` (L49-L51) - Class
-  - `scripts.ops.demo-remove-authorization.readRemovedAuthorization.survivors.filter() callback` (L50-L50) - Function
-  - `scripts.ops.demo-remove-authorization.readRemovedAuthorization.survivors.flatMap() callback` (L51-L51) - Function
-  - `scripts.ops.demo-remove-authorization.stripRoleGrants.out.lines.map() callback.next` (L82-L82) - Class
-  - `scripts.ops.demo-remove-authorization.stripRoleGrants.out.lines.map() callback.next.find() callback` (L82-L82) - Function
-- `scripts/ops/demo-remove-contract.ts`
-  - `scripts.ops.demo-remove-contract.stripAccountExportSchema.mustReplace` (L30-L37) - Class
-  - `scripts.ops.demo-remove-contract.stripAccountExportSchema.mustReplace.content.replace() callback` (L36-L36) - Function
-- `scripts/ops/demo-remove-scenarios.ts`
-  - `scripts.ops.demo-remove-scenarios.replaceOnce` (L24-L31) - Class
-  - `scripts.ops.demo-remove-scenarios.replaceOnce.content.replace() callback` (L30-L30) - Function
-  - `scripts.ops.demo-remove-scenarios.stripModuleDoubles` (L175-L205) - Class
-  - `scripts.ops.demo-remove-scenarios.stripModuleDoubles.names.filter() callback` (L180-L180) - Function
-  - `scripts.ops.demo-remove-scenarios.stripModuleDoubles.map() callback` (L181-L204) - Function
-- `scripts/ops/reap-orphaned-images.ts`
-  - `scripts.ops.reap-orphaned-images.main` (L77-L97) - Class
-  - `scripts.ops.reap-orphaned-images.main.then() callback` (L78-L97) - Function
 - `scripts/scaffold/central-edits.ts`
   - `scripts.scaffold.central-edits.appendToList.blank` (L41-L41) - Class
   - `scripts.scaffold.central-edits.appendToList.blank.lines.findIndex() callback` (L41-L41) - Function
+- `scripts/scaffold/demo-remove-authorization.ts`
+  - `scripts.scaffold.demo-remove-authorization.readRemovedAuthorization.removed` (L46-L46) - Class
+  - `scripts.scaffold.demo-remove-authorization.readRemovedAuthorization.removed.names.flatMap() callback` (L46-L46) - Function
+- `scripts/scaffold/demo-remove-registry.ts`
+  - `scripts.scaffold.demo-remove-registry.stripModuleLines` (L38-L48) - Class
+  - `scripts.scaffold.demo-remove-registry.stripModuleLines.filter() callback` (L42-L46) - Function
 - `scripts/scaffold/registry.ts`
-  - `scripts.scaffold.registry.retermRun.first` (L71-L71) - Class
-  - `scripts.scaffold.registry.retermRun.first.lines.findIndex() callback` (L71-L71) - Function
-  - `scripts.scaffold.registry.registerModule.withImport` (L113-L119) - Class
-  - `scripts.scaffold.registry.registerModule.withImport.insertInRun() callback` (L115-L115) - Function
+  - `scripts.scaffold.registry.retermRun.first` (L72-L72) - Class
+  - `scripts.scaffold.registry.retermRun.first.lines.findIndex() callback` (L72-L72) - Function
+  - `scripts.scaffold.registry.registerModule.withImport` (L114-L120) - Class
+  - `scripts.scaffold.registry.registerModule.withImport.insertInRun() callback` (L116-L116) - Function
 - `scripts/setup/environment-file.ts`
   - `scripts.setup.environment-file.readEnvironmentValue` (L51-L55) - Class
   - `scripts.setup.environment-file.readEnvironmentValue.find() callback` (L54-L54) - Function
@@ -163,7 +165,7 @@ The guardrails that keep the subsystem's code conforming to the repo's structura
 - `scripts.eslint.no-persistence-imports.noPersistenceImports`:77-138
 - `scripts.eslint.controller-chain-must-catch.controllerChainMustCatch`:125-164
 - `scripts.eslint.barrel-allowed-sources.barrelAllowedSources`:80-279
-- `scripts.mutation.mutate-scope.mutableFiles`:57-72
+- `scripts.mutation.mutate-scope.mutableFiles`:55-70
 
 **Source Files:**
 
@@ -183,28 +185,27 @@ The guardrails that keep the subsystem's code conforming to the repo's structura
   - `scripts.eslint.no-persistence-imports.noPersistenceImports.create` (L109-L137) - Method
   - `scripts.eslint.no-persistence-imports.noPersistenceImports.create.ImportDeclaration` (L115-L135) - Method
 - `scripts/mutation/baseline.ts`
-  - `scripts.mutation.baseline.formatRegressions.regressed` (L277-L277) - Class
-  - `scripts.mutation.baseline.formatRegressions.regressed.comparisons.filter() callback` (L277-L277) - Function
+  - `scripts.mutation.baseline.formatRegressions.regressed` (L262-L262) - Class
+  - `scripts.mutation.baseline.formatRegressions.regressed.comparisons.filter() callback` (L262-L262) - Function
 - `scripts/mutation/ci/cli.ts`
-  - `scripts.mutation.ci.cli.option.value` (L41-L43) - Class
-  - `scripts.mutation.ci.cli.option.value.process.argv.find() callback` (L42-L42) - Function
-  - `scripts.mutation.ci.cli.scope` (L87-L92) - Class
-  - `scripts.mutation.ci.cli.scope.map() callback` (L88-L92) - Function
-  - `scripts.mutation.ci.cli.readOutcomes` (L95-L108) - Class
-  - `scripts.mutation.ci.cli.readOutcomes.filter() callback` (L99-L99) - Function
-  - `scripts.mutation.ci.cli.readOutcomes.map() callback` (L100-L106) - Function
-  - `scripts.mutation.ci.cli.planWave` (L111-L125) - Class
-  - `scripts.mutation.ci.cli.planWave.plan.shards.map() callback` (L123-L123) - Function
-  - `scripts.mutation.ci.cli.showShard.shard` (L130-L130) - Class
-  - `scripts.mutation.ci.cli.showShard.shard.shards.find() callback` (L130-L130) - Function
-  - `scripts.mutation.ci.cli.readFinished` (L149-L163) - Class
-  - `scripts.mutation.ci.cli.readFinished.flatMap() callback` (L156-L162) - Function
-  - `scripts.mutation.ci.cli.merge.plans` (L168-L171) - Class
-  - `scripts.mutation.ci.cli.merge.plans.filter() callback` (L169-L169) - Function
-  - `scripts.mutation.ci.cli.merge.plans.map() callback` (L170-L170) - Function
-  - `scripts.mutation.ci.cli.merge.plans.toSorted() callback` (L171-L171) - Function
-  - `scripts.mutation.ci.cli.weakest` (L189-L191) - Class
-  - `scripts.mutation.ci.cli.merge.weakest.toSorted() callback` (L190-L190) - Function
+  - `scripts.mutation.ci.cli.option.value` (L42-L42) - Class
+  - `scripts.mutation.ci.cli.scope` (L86-L91) - Class
+  - `scripts.mutation.ci.cli.scope.map() callback` (L87-L91) - Function
+  - `scripts.mutation.ci.cli.readOutcomes` (L94-L107) - Class
+  - `scripts.mutation.ci.cli.readOutcomes.filter() callback` (L98-L98) - Function
+  - `scripts.mutation.ci.cli.readOutcomes.map() callback` (L99-L105) - Function
+  - `scripts.mutation.ci.cli.planWave` (L110-L124) - Class
+  - `scripts.mutation.ci.cli.planWave.plan.shards.map() callback` (L122-L122) - Function
+  - `scripts.mutation.ci.cli.showShard.shard` (L129-L129) - Class
+  - `scripts.mutation.ci.cli.showShard.shard.shards.find() callback` (L129-L129) - Function
+  - `scripts.mutation.ci.cli.readFinished` (L148-L162) - Class
+  - `scripts.mutation.ci.cli.readFinished.flatMap() callback` (L155-L161) - Function
+  - `scripts.mutation.ci.cli.merge.plans` (L167-L170) - Class
+  - `scripts.mutation.ci.cli.merge.plans.filter() callback` (L168-L168) - Function
+  - `scripts.mutation.ci.cli.merge.plans.map() callback` (L169-L169) - Function
+  - `scripts.mutation.ci.cli.merge.plans.toSorted() callback` (L170-L170) - Function
+  - `scripts.mutation.ci.cli.weakest` (L188-L190) - Class
+  - `scripts.mutation.ci.cli.merge.weakest.toSorted() callback` (L189-L189) - Function
 - `scripts/mutation/ci/merge.ts`
   - `scripts.mutation.ci.merge.incompleteFiles` (L73-L93) - Class
   - `scripts.mutation.ci.merge.incompleteFiles.finished.flatMap() callback` (L78-L78) - Function
@@ -235,67 +236,49 @@ The guardrails that keep the subsystem's code conforming to the repo's structura
   - `scripts.mutation.ci.waves.cut.bounds` (L92-L95) - Class
   - `scripts.mutation.ci.waves.cut.bounds.Array.from() callback` (L94-L94) - Function
   - `scripts.mutation.ci.waves.cut.Array.from() callback` (L97-L102) - Function
-  - `scripts.mutation.ci.waves.packUnits` (L125-L138) - Class
-  - `scripts.mutation.ci.waves.packUnits.toSorted() callback` (L129-L129) - Function
-  - `scripts.mutation.ci.waves.packUnits.units.filter() callback` (L129-L129) - Function
-  - `scripts.mutation.ci.waves.packUnits.bin` (L130-L130) - Class
-  - `scripts.mutation.ci.waves.packUnits.bin.bins.find() callback` (L130-L130) - Function
-  - `scripts.mutation.ci.waves.packUnits.bins.map() callback` (L137-L137) - Function
-  - `scripts.mutation.ci.waves.firstWave` (L164-L172) - Class
-  - `scripts.mutation.ci.waves.firstWave.scope.flatMap() callback` (L168-L168) - Function
-  - `scripts.mutation.ci.waves.firstWave.map() callback` (L170-L170) - Function
-  - `scripts.mutation.ci.waves.retryOf.retry.shard.units.map() callback` (L187-L187) - Function
-  - `scripts.mutation.ci.waves.retryOf.retry.pieces.map() callback` (L190-L190) - Function
-  - `scripts.mutation.ci.waves.nextWave` (L203-L215) - Class
-  - `scripts.mutation.ci.waves.nextWave.abandoned.results.flatMap() callback` (L208-L208) - Function
-  - `scripts.mutation.ci.waves.strykerArguments.mutate.shard.units.map() callback` (L235-L235) - Function
+  - `scripts.mutation.ci.waves.packUnits` (L123-L136) - Class
+  - `scripts.mutation.ci.waves.packUnits.toSorted() callback` (L127-L127) - Function
+  - `scripts.mutation.ci.waves.packUnits.units.filter() callback` (L127-L127) - Function
+  - `scripts.mutation.ci.waves.packUnits.bin` (L128-L128) - Class
+  - `scripts.mutation.ci.waves.packUnits.bin.bins.find() callback` (L128-L128) - Function
+  - `scripts.mutation.ci.waves.packUnits.bins.map() callback` (L135-L135) - Function
+  - `scripts.mutation.ci.waves.firstWave` (L158-L163) - Class
+  - `scripts.mutation.ci.waves.firstWave.map() callback` (L161-L161) - Function
+  - `scripts.mutation.ci.waves.firstWave.scope.flatMap() callback` (L161-L161) - Function
+  - `scripts.mutation.ci.waves.retryOf.retry.shard.units.map() callback` (L178-L178) - Function
+  - `scripts.mutation.ci.waves.retryOf.retry.pieces.map() callback` (L181-L181) - Function
+  - `scripts.mutation.ci.waves.nextWave` (L194-L206) - Class
+  - `scripts.mutation.ci.waves.nextWave.abandoned.results.flatMap() callback` (L199-L199) - Function
+  - `scripts.mutation.ci.waves.strykerArguments.mutate.shard.units.map() callback` (L226-L226) - Function
 - `scripts/mutation/mutate-scope.ts`
-  - `scripts.mutation.mutate-scope.StrykerConfig` (L23-L25) - Interface
-  - `scripts.mutation.mutate-scope.isMutable` (L43-L54) - Class
-  - `scripts.mutation.mutate-scope.isMutable.include` (L44-L44) - Class
-  - `scripts.mutation.mutate-scope.isMutable.include.patterns.filter() callback` (L44-L44) - Function
-  - `scripts.mutation.mutate-scope.isMutable.include.some() callback` (L51-L51) - Function
-  - `scripts.mutation.mutate-scope.mutableFiles` (L57-L72) - Class
-  - `scripts.mutation.mutate-scope.mutableFiles.files.map() callback` (L70-L70) - Function
-  - `scripts.mutation.mutate-scope.mutableFiles.filter() callback` (L71-L71) - Function
-  - `scripts.mutation.mutate-scope.lineCount` (L75-L78) - Class
-  - `scripts.mutation.mutate-scope.lineCount.filter() callback` (L78-L78) - Function
-  - `scripts.mutation.mutate-scope.scopeWithLines` (L81-L82) - Class
-  - `scripts.mutation.mutate-scope.scopeWithLines.map() callback` (L82-L82) - Function
-  - `scripts.mutation.mutate-scope.changedMutable` (L95-L98) - Class
-  - `scripts.mutation.mutate-scope.changedMutable.changed.filter() callback` (L97-L97) - Function
+  - `scripts.mutation.mutate-scope.StrykerConfig` (L21-L23) - Interface
+  - `scripts.mutation.mutate-scope.isMutable` (L41-L52) - Class
+  - `scripts.mutation.mutate-scope.isMutable.include` (L42-L42) - Class
+  - `scripts.mutation.mutate-scope.isMutable.include.patterns.filter() callback` (L42-L42) - Function
+  - `scripts.mutation.mutate-scope.isMutable.include.some() callback` (L49-L49) - Function
+  - `scripts.mutation.mutate-scope.mutableFiles` (L55-L70) - Class
+  - `scripts.mutation.mutate-scope.mutableFiles.files.map() callback` (L68-L68) - Function
+  - `scripts.mutation.mutate-scope.mutableFiles.filter() callback` (L69-L69) - Function
+  - `scripts.mutation.mutate-scope.lineCount` (L73-L76) - Class
+  - `scripts.mutation.mutate-scope.lineCount.filter() callback` (L76-L76) - Function
+  - `scripts.mutation.mutate-scope.scopeWithLines` (L79-L80) - Class
+  - `scripts.mutation.mutate-scope.scopeWithLines.map() callback` (L80-L80) - Function
+  - `scripts.mutation.mutate-scope.changedMutable` (L93-L96) - Class
+  - `scripts.mutation.mutate-scope.changedMutable.changed.filter() callback` (L95-L95) - Function
 - `scripts/mutation/run-diff.ts`
   - `scripts.mutation.run-diff.changedFiles` (L52-L59) - Class
   - `scripts.mutation.run-diff.changedFiles.map() callback` (L58-L58) - Function
   - `scripts.mutation.run-diff.changedFiles.filter() callback` (L59-L59) - Function
 - `scripts/mutation/run-shards.ts`
-  - `scripts.mutation.run-shards.listArgument` (L45-L51) - Class
-  - `scripts.mutation.run-shards.listArgument.process.argv.find() callback` (L47-L47) - Function
+  - `scripts.mutation.run-shards.listArgument` (L47-L51) - Class
   - `scripts.mutation.run-shards.listArgument.map() callback` (L50-L50) - Function
-  - `scripts.mutation.run-shards.numberArgument.raw` (L55-L55) - Class
-  - `scripts.mutation.run-shards.numberArgument.raw.process.argv.find() callback` (L55-L55) - Function
 - `scripts/mutation/sharding.ts`
   - `scripts.mutation.sharding.Shard` (L16-L20) - Interface
   - `scripts.mutation.sharding.packIntoShards` (L42-L66) - Class
   - `scripts.mutation.sharding.packIntoShards.files.toSorted() callback` (L53-L53) - Function
-- `scripts/ops/demo-remove-authorization.ts`
-  - `scripts.ops.demo-remove-authorization.pruneCase.chunk.replaceAll() callback.kept` (L119-L122) - Class
-  - `scripts.ops.demo-remove-authorization.pruneCase.chunk.replaceAll() callback.kept.map() callback` (L121-L121) - Function
-  - `scripts.ops.demo-remove-authorization.pruneCase.chunk.replaceAll() callback.kept.filter() callback` (L122-L122) - Function
-- `scripts/ops/demo-remove-tests.ts`
-  - `scripts.ops.demo-remove-tests.testRoots` (L17-L25) - Class
-  - `scripts.ops.demo-remove-tests.testRoots.moduleTests` (L19-L23) - Class
-  - `scripts.ops.demo-remove-tests.testRoots.moduleTests.filter() callback` (L21-L21) - Function
-  - `scripts.ops.demo-remove-tests.testRoots.moduleTests.map() callback` (L22-L22) - Function
-  - `scripts.ops.demo-remove-tests.testRoots.filter() callback` (L24-L24) - Function
-  - `scripts.ops.demo-remove-tests.walkTypeScript` (L28-L33) - Class
-  - `scripts.ops.demo-remove-tests.walkTypeScript.flatMap() callback` (L29-L33) - Function
-  - `scripts.ops.demo-remove-tests.removeResidueTests.files` (L109-L109) - Class
-  - `scripts.ops.demo-remove-tests.removeResidueTests.files.flatMap() callback` (L109-L109) - Function
-  - `scripts.ops.demo-remove-tests.removeResidueTests.files.filter() callback` (L122-L122) - Function
 - `scripts/scaffold/scaffold-module.ts`
-  - `scripts.scaffold.scaffold-module.main.plan` (L41-L46) - Class
-  - `scripts.scaffold.scaffold-module.main.plan.catch() callback` (L42-L45) - Function
+  - `scripts.scaffold.scaffold-module.main.plan` (L38-L43) - Class
+  - `scripts.scaffold.scaffold-module.main.plan.catch() callback` (L39-L42) - Function
 - `scripts/setup/required-keys.ts`
   - `scripts.setup.required-keys.FillableKey` (L12-L15) - Interface
   - `scripts.setup.required-keys.fillableKeys` (L22-L29) - Class
@@ -306,7 +289,7 @@ The story-and-contract halves of the flow driver. shop-history.ts defines the co
 
 **Related Classes/Methods**:
 
-- `scenarios.flows.shop-history.signInCustomerBase`:258-263
+- `scenarios.flows.shop-history.signInCustomerBase`:263-268
 - `scenarios.flows.client.ScenarioFlowError`:39-53
 
 **Source Files:**
@@ -319,34 +302,48 @@ The story-and-contract halves of the flow driver. shop-history.ts defines the co
   - `scenarios.flows.client.Caller` (L56-L72) - Interface
   - `scenarios.flows.client.then() callback` (L77-L85) - Function
   - `scenarios.flows.client.send.headers.filter() callback` (L109-L109) - Function
-  - `scenarios.flows.client.signIn` (L128-L154) - Class
-  - `scenarios.flows.client.signIn.then() callback` (L132-L154) - Function
-  - `scenarios.flows.client.signIn.then() callback.call` (L147-L152) - Method
-  - `scenarios.flows.client.signIn.then() callback.call.then() callback` (L148-L152) - Function
+  - `scenarios.flows.client.signIn` (L128-L157) - Class
+  - `scenarios.flows.client.signIn.then() callback` (L133-L157) - Function
+  - `scenarios.flows.client.signIn.then() callback.call` (L150-L155) - Method
+  - `scenarios.flows.client.signIn.then() callback.call.then() callback` (L151-L155) - Function
 - `scenarios/flows/shop-history.ts`
-  - `scenarios.flows.shop-history.ShopHistory` (L50-L59) - Interface
-  - `scenarios.flows.shop-history.FillerOrder` (L71-L74) - Interface
-  - `scenarios.flows.shop-history.signInCustomerBase` (L258-L263) - Class
-  - `scenarios.flows.shop-history.signInCustomerBase.map() callback` (L260-L261) - Function
-  - `scenarios.flows.shop-history.signInCustomerBase.map() callback.then() callback` (L261-L261) - Function
-  - `scenarios.flows.shop-history.signInCustomerBase.then() callback` (L263-L263) - Function
-  - `scenarios.flows.shop-history.driveShopHistory.orderId.lines.map() callback` (L391-L391) - Function
-  - `scenarios.flows.shop-history.ages` (L595-L600) - Class
-  - `scenarios.flows.shop-history.driveShopHistory.ages.placed.map() callback` (L596-L599) - Function
+  - `scenarios.flows.shop-history.ShopHistory` (L53-L62) - Interface
+  - `scenarios.flows.shop-history.FillerOrder` (L74-L77) - Interface
+  - `scenarios.flows.shop-history.signInCustomerBase` (L263-L268) - Class
+  - `scenarios.flows.shop-history.signInCustomerBase.map() callback` (L265-L266) - Function
+  - `scenarios.flows.shop-history.signInCustomerBase.map() callback.then() callback` (L266-L266) - Function
+  - `scenarios.flows.shop-history.signInCustomerBase.then() callback` (L268-L268) - Function
+  - `scenarios.flows.shop-history.driveShopHistory.orderId.lines.map() callback` (L396-L396) - Function
+  - `scenarios.flows.shop-history.ages` (L631-L636) - Class
+  - `scenarios.flows.shop-history.driveShopHistory.ages.placed.map() callback` (L632-L635) - Function
+- `scripts/contracts/analytics-browser-events.ts`
+  - `scripts.contracts.analytics-browser-events.browserEventFragments` (L48-L53) - Class
+  - `scripts.contracts.analytics-browser-events.browserEventFragments.map() callback` (L50-L51) - Function
+  - `scripts.contracts.analytics-browser-events.localiseReferences` (L61-L72) - Class
+  - `scripts.contracts.analytics-browser-events.localiseReferences.node.map() callback` (L62-L62) - Function
+  - `scripts.contracts.analytics-browser-events.localiseReferences.map() callback` (L65-L70) - Function
+  - `scripts.contracts.analytics-browser-events.withBrowserEvents` (L99-L145) - Class
+  - `scripts.contracts.analytics-browser-events.withBrowserEvents.flatMap() callback` (L126-L138) - Function
+  - `scripts.contracts.analytics-browser-events.withBrowserEvents.flatMap() callback.oneOf.map() callback` (L132-L132) - Function
+- `scripts/contracts/asyncapi-breaking.ts`
+  - `scripts.contracts.asyncapi-breaking.AcknowledgedBreak` (L20-L25) - Interface
+  - `scripts.contracts.asyncapi-breaking.breakingChanges` (L51-L64) - Class
+  - `scripts.contracts.asyncapi-breaking.breakingChanges.found.filter() callback` (L63-L63) - Function
+  - `scripts.contracts.asyncapi-breaking.breakingChanges.found.filter() callback.acknowledged.every() callback` (L63-L63) - Function
 - `scripts/contracts/asyncapi-bundles.ts`
-  - `scripts.contracts.asyncapi-bundles.internalSections` (L69-L77) - Class
-  - `scripts.contracts.asyncapi-bundles.filter() callback` (L71-L71) - Function
-  - `scripts.contracts.asyncapi-bundles.internalSections.filter() callback` (L73-L74) - Function
-  - `scripts.contracts.asyncapi-bundles.internalSections.map() callback` (L77-L77) - Function
-  - `scripts.contracts.asyncapi-bundles.marker` (L143-L148) - Class
-  - `scripts.contracts.asyncapi-bundles.marker.sections.map() callback` (L147-L147) - Function
+  - `scripts.contracts.asyncapi-bundles.internalSections` (L65-L68) - Class
+  - `scripts.contracts.asyncapi-bundles.internalSections.map() callback` (L67-L67) - Function
+  - `scripts.contracts.asyncapi-bundles.marker` (L138-L143) - Class
+  - `scripts.contracts.asyncapi-bundles.marker.sections.map() callback` (L141-L141) - Function
+  - `scripts.contracts.asyncapi-bundles.marker.map() callback` (L142-L142) - Function
+- `scripts/contracts/asyncapi-webhook-events.ts`
+  - `scripts.contracts.asyncapi-webhook-events.webhookEventFragments` (L37-L42) - Class
+  - `scripts.contracts.asyncapi-webhook-events.webhookEventFragments.map() callback` (L39-L40) - Function
 - `scripts/contracts/authorization-bundle.ts`
-  - `scripts.contracts.authorization-bundle.fragmentKeysBlock` (L92-L109) - Class
-  - `scripts.contracts.authorization-bundle.sectionsOnDisk` (L112-L120) - Class
-  - `scripts.contracts.authorization-bundle.sectionsOnDisk.map() callback` (L115-L115) - Function
-  - `scripts.contracts.authorization-bundle.sectionsOnDisk.filter() callback` (L116-L117) - Function
-  - `scripts.contracts.authorization-bundle.assembleAuthorizationKeys.keys` (L132-L134) - Class
-  - `scripts.contracts.authorization-bundle.assembleAuthorizationKeys.keys.map() callback` (L133-L133) - Function
+  - `scripts.contracts.authorization-bundle.fragmentKeysBlock` (L81-L97) - Class
+  - `scripts.contracts.authorization-bundle.sectionsOnDisk` (L100-L100) - Class
+  - `scripts.contracts.authorization-bundle.assembleAuthorizationKeys.keys` (L112-L114) - Class
+  - `scripts.contracts.authorization-bundle.assembleAuthorizationKeys.keys.map() callback` (L113-L113) - Function
 - `scripts/contracts/build-bundles.ts`
   - `scripts.contracts.build-bundles.unknown` (L42-L42) - Class
   - `scripts.contracts.build-bundles.unknown.named.filter() callback` (L42-L42) - Function
@@ -354,63 +351,69 @@ The story-and-contract halves of the flow driver. shop-history.ts defines the co
   - `scripts.contracts.build-bundles.bundle.bundles.map() callback` (L59-L59) - Function
   - `scripts.contracts.build-bundles.bundle.bundles.map() callback.then() callback` (L59-L59) - Function
   - `scripts.contracts.build-bundles.bundle.then() callback` (L60-L66) - Function
-  - `scripts.contracts.build-bundles.run` (L75-L146) - Class
-  - `scripts.contracts.build-bundles.run.selected` (L79-L79) - Class
-  - `scripts.contracts.build-bundles.run.selected.named.map() callback` (L79-L79) - Function
-  - `scripts.contracts.build-bundles.run.generated` (L87-L87) - Class
-  - `scripts.contracts.build-bundles.run.generated.selected.filter() callback` (L87-L87) - Function
-  - `scripts.contracts.build-bundles.run.generated.map() callback` (L95-L95) - Function
-  - `scripts.contracts.build-bundles.run.stale.map() callback` (L144-L144) - Function
+  - `scripts.contracts.build-bundles.report` (L83-L102) - Class
+  - `scripts.contracts.build-bundles.report.stale.map() callback` (L100-L100) - Function
+  - `scripts.contracts.build-bundles.run` (L105-L153) - Class
+  - `scripts.contracts.build-bundles.run.selected` (L109-L109) - Class
+  - `scripts.contracts.build-bundles.run.selected.named.map() callback` (L109-L109) - Function
+  - `scripts.contracts.build-bundles.run.generated` (L117-L117) - Class
+  - `scripts.contracts.build-bundles.run.generated.selected.filter() callback` (L117-L117) - Function
+  - `scripts.contracts.build-bundles.run.generated.map() callback` (L125-L125) - Function
 - `scripts/contracts/bundle-registry.ts`
   - `scripts.contracts.bundle-registry.findBundle` (L77-L78) - Class
   - `scripts.contracts.bundle-registry.findBundle.CONTRACT_BUNDLES.find() callback` (L78-L78) - Function
 - `scripts/contracts/generate-asyncapi-types.ts`
-  - `scripts.contracts.generate-asyncapi-types.AsyncApiChannel` (L32-L44) - Interface
-  - `scripts.contracts.generate-asyncapi-types.AsyncApiMessage` (L47-L49) - Interface
-  - `scripts.contracts.generate-asyncapi-types.AsyncApiServer` (L52-L54) - Interface
-  - `scripts.contracts.generate-asyncapi-types.JsonSchema` (L57-L70) - Interface
-  - `scripts.contracts.generate-asyncapi-types.AsyncApiDocument` (L73-L81) - Interface
-  - `scripts.contracts.generate-asyncapi-types.toPascalCase` (L116-L123) - Class
-  - `scripts.contracts.generate-asyncapi-types.toPascalCase.map() callback` (L122-L122) - Function
-  - `scripts.contracts.generate-asyncapi-types.channelProtocols` (L213-L227) - Class
-  - `scripts.contracts.generate-asyncapi-types.channelProtocols.map() callback` (L218-L226) - Function
-  - `scripts.contracts.generate-asyncapi-types.channelProtocols.filter() callback` (L227-L227) - Function
-  - `scripts.contracts.generate-asyncapi-types.channelPayloadSchemaNames` (L236-L244) - Class
-  - `scripts.contracts.generate-asyncapi-types.filter() callback` (L242-L242) - Function
-  - `scripts.contracts.generate-asyncapi-types.channelPayloadSchemaNames.map() callback` (L243-L243) - Function
-  - `scripts.contracts.generate-asyncapi-types.channelPayloadSchemaNames.filter() callback` (L244-L244) - Function
-  - `scripts.contracts.generate-asyncapi-types.renderChannelNamespace.entries` (L304-L306) - Class
-  - `scripts.contracts.generate-asyncapi-types.renderChannelNamespace.entries.channelNames.map() callback` (L305-L305) - Function
-  - `scripts.contracts.generate-asyncapi-types.modelNameConstraints` (L341-L343) - Class
-  - `scripts.contracts.generate-asyncapi-types.modelNameConstraints.NAMING_FORMATTER` (L342-L342) - Method
-  - `scripts.contracts.generate-asyncapi-types.queuePayloadSchemaNames` (L393-L397) - Class
-  - `scripts.contracts.generate-asyncapi-types.queuePayloadSchemaNames.filter() callback` (L395-L395) - Function
-  - `scripts.contracts.generate-asyncapi-types.queuePayloadSchemaNames.flatMap() callback` (L396-L396) - Function
-  - `scripts.contracts.generate-asyncapi-types.messageTypeBlocks` (L405-L413) - Class
-  - `scripts.contracts.generate-asyncapi-types.messageTypeBlocks.map() callback` (L406-L412) - Function
-  - `scripts.contracts.generate-asyncapi-types.zodExpression` (L430-L508) - Class
-  - `scripts.contracts.generate-asyncapi-types.zodExpression.schema.enum.map() callback` (L434-L434) - Function
-  - `scripts.contracts.generate-asyncapi-types.zodExpression.members` (L443-L443) - Class
-  - `scripts.contracts.generate-asyncapi-types.zodExpression.members.schema.oneOf.map() callback` (L443-L443) - Function
-  - `scripts.contracts.generate-asyncapi-types.zodExpression.fields` (L482-L489) - Class
-  - `scripts.contracts.generate-asyncapi-types.zodExpression.fields.map() callback` (L484-L487) - Function
-  - `scripts.contracts.generate-asyncapi-types.renderZodSchemas` (L520-L527) - Class
-  - `scripts.contracts.generate-asyncapi-types.renderZodSchemas.map() callback` (L525-L526) - Function
-  - `scripts.contracts.generate-asyncapi-types.then() callback` (L587-L612) - Function
-  - `scripts.contracts.generate-asyncapi-types.catch() callback` (L613-L616) - Function
+  - `scripts.contracts.generate-asyncapi-types.AsyncApiChannel` (L34-L46) - Interface
+  - `scripts.contracts.generate-asyncapi-types.AsyncApiMessage` (L49-L51) - Interface
+  - `scripts.contracts.generate-asyncapi-types.AsyncApiServer` (L54-L56) - Interface
+  - `scripts.contracts.generate-asyncapi-types.JsonSchema` (L59-L72) - Interface
+  - `scripts.contracts.generate-asyncapi-types.AsyncApiDocument` (L75-L83) - Interface
+  - `scripts.contracts.generate-asyncapi-types.toPascalCase` (L100-L107) - Class
+  - `scripts.contracts.generate-asyncapi-types.toPascalCase.map() callback` (L106-L106) - Function
+  - `scripts.contracts.generate-asyncapi-types.channelProtocols` (L197-L211) - Class
+  - `scripts.contracts.generate-asyncapi-types.channelProtocols.map() callback` (L202-L210) - Function
+  - `scripts.contracts.generate-asyncapi-types.channelProtocols.filter() callback` (L211-L211) - Function
+  - `scripts.contracts.generate-asyncapi-types.channelPayloadSchemaNames` (L220-L228) - Class
+  - `scripts.contracts.generate-asyncapi-types.filter() callback` (L226-L226) - Function
+  - `scripts.contracts.generate-asyncapi-types.channelPayloadSchemaNames.map() callback` (L227-L227) - Function
+  - `scripts.contracts.generate-asyncapi-types.channelPayloadSchemaNames.filter() callback` (L228-L228) - Function
+  - `scripts.contracts.generate-asyncapi-types.renderChannelNamespace.entries` (L288-L290) - Class
+  - `scripts.contracts.generate-asyncapi-types.renderChannelNamespace.entries.channelNames.map() callback` (L289-L289) - Function
+  - `scripts.contracts.generate-asyncapi-types.modelNameConstraints` (L325-L327) - Class
+  - `scripts.contracts.generate-asyncapi-types.modelNameConstraints.NAMING_FORMATTER` (L326-L326) - Method
+  - `scripts.contracts.generate-asyncapi-types.queuePayloadSchemaNames` (L377-L381) - Class
+  - `scripts.contracts.generate-asyncapi-types.queuePayloadSchemaNames.filter() callback` (L379-L379) - Function
+  - `scripts.contracts.generate-asyncapi-types.queuePayloadSchemaNames.flatMap() callback` (L380-L380) - Function
+  - `scripts.contracts.generate-asyncapi-types.messageTypeBlocks` (L389-L397) - Class
+  - `scripts.contracts.generate-asyncapi-types.messageTypeBlocks.map() callback` (L390-L396) - Function
+  - `scripts.contracts.generate-asyncapi-types.zodExpression` (L414-L492) - Class
+  - `scripts.contracts.generate-asyncapi-types.zodExpression.schema.enum.map() callback` (L418-L418) - Function
+  - `scripts.contracts.generate-asyncapi-types.zodExpression.members` (L427-L427) - Class
+  - `scripts.contracts.generate-asyncapi-types.zodExpression.members.schema.oneOf.map() callback` (L427-L427) - Function
+  - `scripts.contracts.generate-asyncapi-types.zodExpression.fields` (L466-L473) - Class
+  - `scripts.contracts.generate-asyncapi-types.zodExpression.fields.map() callback` (L468-L471) - Function
+  - `scripts.contracts.generate-asyncapi-types.renderZodSchemas` (L504-L511) - Class
+  - `scripts.contracts.generate-asyncapi-types.renderZodSchemas.map() callback` (L509-L510) - Function
+  - `scripts.contracts.generate-asyncapi-types.then() callback` (L571-L579) - Function
+  - `scripts.contracts.generate-asyncapi-types.catch() callback` (L580-L583) - Function
 - `scripts/contracts/openapi-bundle.ts`
-  - `scripts.contracts.openapi-bundle.modulesWithOpenapi` (L73-L77) - Class
-  - `scripts.contracts.openapi-bundle.modulesWithOpenapi.map() callback` (L76-L76) - Function
-  - `scripts.contracts.openapi-bundle.modulesWithOpenapi.filter() callback` (L77-L77) - Function
-  - `scripts.contracts.openapi-bundle.withErrorCodes` (L397-L418) - Class
-  - `scripts.contracts.openapi-bundle.withErrorCodes.codes.map() callback` (L413-L413) - Function
+  - `scripts.contracts.openapi-bundle.modulesWithOpenapi` (L74-L74) - Class
+  - `scripts.contracts.openapi-bundle.withErrorCodes` (L387-L408) - Class
+  - `scripts.contracts.openapi-bundle.withErrorCodes.codes.map() callback` (L403-L403) - Function
 - `scripts/contracts/permission-actions-render.ts`
   - `scripts.contracts.permission-actions-render.renderPermissionActions.rows` (L36-L36) - Class
   - `scripts.contracts.permission-actions-render.renderPermissionActions.rows.actions.map() callback` (L36-L36) - Function
+- `scripts/contracts/personal-data-assembly.ts`
+  - `scripts.contracts.personal-data-assembly.retarget` (L49-L61) - Class
+  - `scripts.contracts.personal-data-assembly.retarget.node.map() callback` (L50-L50) - Function
+  - `scripts.contracts.personal-data-assembly.retarget.map() callback` (L54-L59) - Function
+  - `scripts.contracts.personal-data-assembly.readPersonalDataSections` (L72-L86) - Class
+  - `scripts.contracts.personal-data-assembly.readPersonalDataSections.modules.flatMap() callback` (L76-L86) - Function
+  - `scripts.contracts.personal-data-assembly.readPersonalDataSections.modules.flatMap() callback.map() callback` (L80-L85) - Function
 - `scripts/contracts/root-assembly.ts`
-  - `scripts.contracts.root-assembly.readModuleFragments` (L149-L172) - Class
-  - `scripts.contracts.root-assembly.readModuleFragments.map() callback` (L158-L171) - Function
-  - `scripts.contracts.root-assembly.readModuleFragments.map() callback.tags.operations.flatMap() callback` (L169-L169) - Function
+  - `scripts.contracts.root-assembly.readModuleFragments` (L151-L168) - Class
+  - `scripts.contracts.root-assembly.readModuleFragments.map() callback` (L157-L167) - Function
+  - `scripts.contracts.root-assembly.readModuleFragments.map() callback.tags.operations.flatMap() callback` (L164-L164) - Function
 - `scripts/contracts/validate-asyncapi.ts`
   - `scripts.contracts.validate-asyncapi.isInvalid` (L38-L43) - Class
   - `scripts.contracts.validate-asyncapi.isInvalid.diagnostics.some() callback` (L40-L42) - Function
@@ -418,41 +421,28 @@ The story-and-contract halves of the flow driver. shop-history.ts defines the co
   - `scripts.contracts.validate-asyncapi.files.map() callback.then() callback` (L51-L62) - Function
   - `scripts.contracts.validate-asyncapi.then() callback` (L65-L69) - Function
   - `scripts.contracts.validate-asyncapi.catch() callback` (L70-L73) - Function
-- `scripts/ops/demo-remove-authorization.ts`
-  - `scripts.ops.demo-remove-authorization.readRemovedAuthorization.removed` (L55-L55) - Class
-  - `scripts.ops.demo-remove-authorization.readRemovedAuthorization.removed.names.flatMap() callback` (L55-L55) - Function
-- `scripts/ops/demo-remove-registry.ts`
-  - `scripts.ops.demo-remove-registry.removeModuleFolders` (L25-L29) - Class
-  - `scripts.ops.demo-remove-registry.removeModuleFolders.names.map() callback` (L26-L29) - Function
-  - `scripts.ops.demo-remove-registry.removeShopOwnedOpsScripts` (L107-L130) - Class
-- `scripts/ops/demo-remove-scenarios.ts`
-  - `scripts.ops.demo-remove-scenarios.removeShopOnlyScenarioFiles` (L55-L59) - Class
-  - `scripts.ops.demo-remove-scenarios.removeShopOnlyScenarioFiles.SHOP_ONLY_FILES.map() callback` (L56-L59) - Function
-  - `scripts.ops.demo-remove-scenarios.stripScenarioModuleEntries` (L124-L161) - Class
-  - `scripts.ops.demo-remove-scenarios.stripScenarioModuleEntries.content.replaceAll() callback` (L149-L157) - Function
-  - `scripts.ops.demo-remove-scenarios.stripScenarioModuleEntries.content.replaceAll() callback.kept` (L150-L153) - Class
-  - `scripts.ops.demo-remove-scenarios.stripScenarioModuleEntries.content.replaceAll() callback.kept.map() callback` (L152-L152) - Function
-  - `scripts.ops.demo-remove-scenarios.stripScenarioModuleEntries.content.replaceAll() callback.kept.filter() callback` (L153-L153) - Function
-  - `scripts.ops.demo-remove-scenarios.stripScenarioModuleEntries.content.replaceAll() callback.kept.filter() callback.names.every() callback` (L153-L153) - Function
-- `scripts/ops/demo-remove-tests.ts`
-  - `scripts.ops.demo-remove-tests.removeResidueTests` (L108-L141) - Class
-  - `scripts.ops.demo-remove-tests.removeResidueTests.deleted.map() callback` (L137-L140) - Function
-- `scripts/ops/reap-orphaned-images.ts`
-  - `scripts.ops.reap-orphaned-images.referencedFilenames.rows` (L54-L61) - Class
-  - `scripts.ops.reap-orphaned-images.referencedFilenames.rows.collections.map() callback` (L55-L59) - Function
+- `scripts/modules-on-disk.ts`
+  - `scripts.modules-on-disk.modulesWith` (L26-L31) - Class
+  - `scripts.modules-on-disk.modulesWith.map() callback` (L29-L29) - Function
+  - `scripts.modules-on-disk.modulesWith.filter() callback` (L30-L30) - Function
 - `scripts/scaffold/apply.ts`
-  - `scripts.scaffold.apply.takenSchemaNames.names` (L33-L40) - Class
-  - `scripts.scaffold.apply.takenSchemaNames.names.map() callback` (L34-L34) - Function
-  - `scripts.scaffold.apply.takenSchemaNames.names.filter() callback` (L35-L35) - Function
-  - `scripts.scaffold.apply.takenSchemaNames.names.flatMap() callback` (L36-L40) - Function
+  - `scripts.scaffold.apply.takenSchemaNames.names.flatMap() callback` (L29-L30) - Function
+  - `scripts.scaffold.apply.takenSchemaNames.names` (L29-L31) - Class
 - `scripts/scaffold/central-edits.ts`
   - `scripts.scaffold.central-edits.addParityEntry.closes` (L74-L74) - Class
   - `scripts.scaffold.central-edits.addParityEntry.closes.lines.findIndex() callback` (L74-L74) - Function
+- `scripts/scaffold/demo-remove-authorization.ts`
+  - `scripts.scaffold.demo-remove-authorization.readRemovedAuthorization.survivors` (L40-L42) - Class
+  - `scripts.scaffold.demo-remove-authorization.readRemovedAuthorization.survivors.filter() callback` (L41-L41) - Function
+  - `scripts.scaffold.demo-remove-authorization.readRemovedAuthorization.survivors.flatMap() callback` (L42-L42) - Function
+- `scripts/scaffold/demo-remove-tests.ts`
+  - `scripts.scaffold.demo-remove-tests.testRoots.moduleTests` (L20-L24) - Class
+  - `scripts.scaffold.demo-remove-tests.testRoots.moduleTests.map() callback` (L21-L22) - Function
 - `scripts/scaffold/registry.ts`
-  - `scripts.scaffold.registry.isRegistered` (L53-L54) - Class
-  - `scripts.scaffold.registry.isRegistered.some() callback` (L54-L54) - Function
-  - `scripts.scaffold.registry.retermRun` (L65-L80) - Class
-  - `scripts.scaffold.registry.retermRun.lines.map() callback` (L75-L78) - Function
+  - `scripts.scaffold.registry.isRegistered` (L54-L55) - Class
+  - `scripts.scaffold.registry.isRegistered.some() callback` (L55-L55) - Function
+  - `scripts.scaffold.registry.retermRun` (L66-L81) - Class
+  - `scripts.scaffold.registry.retermRun.lines.map() callback` (L76-L79) - Function
 - `scripts/setup/environment-file.ts`
   - `scripts.setup.environment-file.FillResult` (L16-L21) - Interface
   - `scripts.setup.environment-file.fillPlaceholders` (L31-L48) - Class

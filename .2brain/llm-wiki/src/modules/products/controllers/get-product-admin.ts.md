@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/controllers/get-product-admin.ts
-sha256: 2c64a2ebbaeef6c256e7ec59aa1127c676942f8021a52cf720ba8ec3dd2a8a6f
-generated_at: 2026-09-27T15:31:01.244023+00:00
+sha256: 36f7a9c79fa6cc790714695099b7948e907c9750b4f097d3fb6074fb79df65cd
+generated_at: 2026-10-15T11:40:22.654889+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Admin-only read controller that returns a product together with every language row it has, used by the editor's form to populate its language tabs. It is a thin wrapper around the `createItemController` factory, differing from the public `get-product-item` controller only in its fetch method and handler name.
+Admin-only read controller that returns a product together with every language row it has, intended to populate the editor's language tabs. It is a thin wrapper over the shared `createItemController` factory, configured with an explicit handler suffix to avoid a name collision with the customer-facing `get-product-item` controller.
 
 ## Key elements
 
-- **`getProductAdmin`** (exported const) — the single handler exported from this file. Created via `createItemController` with:
+- **`getProductAdmin`** (exported const) — the controller for `GET /products/:id/admin`. Built via `createItemController` with:
   - `entity: 'product'`
-  - `notFoundKey: 'products.not-found'` — i18n key for the 404 response.
-  - `handlerSuffix: 'Admin'` — overrides the factory's default suffix so the generated handler name doesn't collide with `get-product-item.ts`.
-  - `fetch: (id) => productService.getAdmin(id)` — delegates the actual data retrieval to the product service's admin variant.
+  - `notFoundKey: 'products.not-found'` — i18n key returned when the product is missing.
+  - `handlerSuffix: 'Admin'` — disambiguates the generated handler name from the default (`getProductItem`).
+  - `fetch(id, request)` — delegates to `productService.getAdmin(id, request.caller)`.
 
 ## Relationships
 
-- **`src/infrastructure/surfaces/create-item-controller.ts`** — provides the `createItemController` factory. This file passes configuration and a fetch function to it; the factory handles route param extraction, CastError → 404 mapping, and handler naming.
-- **`src/modules/products/service.ts`** — provides `productService.getAdmin(id)`, the data-fetching call invoked when the handler runs.
-- **`src/modules/products/routes.ts`** — wires `GET /products/:id/admin` to the handler exported here (and presumably guards it behind an admin role check).
+- **`src/infrastructure/surfaces/create-item-controller.ts`** — supplies the `createItemController` factory that produces this controller (validation, 404 handling, response shaping).
+- **`src/modules/products/services/index.ts`** — exports `productService`; this controller calls its `getAdmin` method to retrieve the multi-language product.
+- **`src/modules/products/routes.ts`** — registers this handler on the `GET /products/:id/admin` route (admin-only surface).
 
 ## Notes
 
-- The `handlerSuffix: 'Admin'` override exists solely to avoid a name collision with `get-product-item.ts`, which targets the same `product` entity. Omitting it would cause the factory to generate the same handler identifier.
-- CastError-to-404 mapping (malformed id vs. genuinely missing id are indistinguishable to the caller) is handled by the factory's built-in defaults — no extra try/catch is present in this file.
+- `handlerSuffix: 'Admin'` is required, not optional: the factory's default naming would produce the same handler identifier as `get-product-item.ts`, causing a collision on the same entity.
+- Malformed IDs (non-numeric) and unknown IDs both yield the same 404 response — this is the factory's built-in behaviour; no extra guard is needed here.
+- The controller passes `request.caller` into the service call, implying the service can apply caller-scoped filtering (e.g., tenant or role checks).

@@ -1,7 +1,7 @@
 ---
 source: tests/unit/kernel/authentication.test.ts
-sha256: 9b71294257454baaedfb09c9caa776444a48c82e20eb6846489196ebc68e56ab
-generated_at: 2026-09-27T16:11:23.298900+00:00
+sha256: 6e1a961eeaa7d4a83dc1cc11969d06bfe7d3d6601dd1ecf13a642d1989f2a4c9
+generated_at: 2026-10-15T13:21:32.330768+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that exercises the "no auth resolver registered" branch of `resolveAccessToken` / `resolveRefreshToken`. It exists as a separate file (rather than a case inside `authorizations.test.ts`) because Jest gives each file its own module registry — here the `@kernel/authentication` module is imported *without* first calling `registerAuthResolver`, which is the one code path the sibling test file cannot reach.
+Exercises the "no auth resolver registered" branch of the authentication kernel — the one path that `authorizations.test.ts` cannot reach because that file calls `registerAuthResolver` at module load. Jest's per-file module registry makes this separation possible: importing `@kernel/authentication` here without registering a resolver leaves the module in its default (no-account) state.
 
 ## Key elements
 
-- **`describe` block** — single test suite: *"resolveAccessToken / resolveRefreshToken with no resolver registered"*.
-- **Single `it` case** — asserts three things in one test:
-  - `resolveAccessToken('any.token.here')` rejects with a plain `Error` (not an `InfrastructureError`).
-  - `isInfrastructureError(rejection)` is `false`, confirming guards will **not** translate this into a 503.
-  - `resolveRefreshToken('any.token.here')` also rejects (`.rejects.toThrow()`).
+- **`describe` block** — `"resolveBearer / resolveCookie with no resolver registered"`; two test cases covering the two public behaviors of that branch.
+- **Test 1** (`rejects the way a bad token does…`) — asserts `resolveBearer` rejects with a plain `Error` that is **not** an `InfrastructureError`, and that `resolveCookie` also rejects (throws).
+- **Test 2** (`says the cookie authenticates nothing…`) — asserts `cookieAuthenticatesRequests()` returns `false` without throwing, since `getAuth` invokes it on every cookie-carrying request.
 
 ## Relationships
 
-- **`src/kernel/authentication.ts`** — the module under test. The test imports `resolveAccessToken` and `resolveRefreshToken` and deliberately does *not* call `registerAuthResolver`, leaving the internal resolver unset.
-- **`src/infrastructure/http/errors.ts`** — provides `isInfrastructureError`, used solely to assert the rejection is *not* an infrastructure error (i.e., not the kind of failure that maps to an HTTP 503).
+- **`src/kernel/authentication.ts`** — the module under test. Imports `resolveBearer`, `resolveCookie`, and `cookieAuthenticatesRequests`. Deliberately does **not** call `registerAuthResolver`, leaving the kernel in its no-account state.
+- **`src/infrastructure/http/errors.ts`** — imports `isInfrastructureError` solely to assert the rejection is *not* that type, guarding against a misclassification that would cause guards to answer 503 instead of a 401-class failure.
 
 ## Notes
 
-- The file's existence is a **module-registry side-effect trick**: importing `@kernel/authentication` here without a prior `registerAuthResolver` call is the only way to reach the "no `account` module in this build" branch, because `authorizations.test.ts` registers a resolver at module load time and cannot un-register it within the same Jest module instance.
-- The test uses a single `catch` to capture the rejection object, then asserts on it directly, rather than using `rejects.toBeInstanceOf` — this lets the same rejection be checked with `isInfrastructureError` in the same assertion block.
+- This file must stay separate from `authorizations.test.ts`. Merging them would cause `registerAuthResolver` (called at that file's module-load time) to alter the module state, and the no-resolver branch would never be exercised.
+- The critical contract: the no-resolver path must surface a plain `Error`, never an `InfrastructureError`. An infrastructure error would make HTTP guards respond 503 (outage semantics), which is incorrect for "this build has no account module" (authentication-failure semantics).
+- `cookieAuthenticatesRequests()` is tested as a return value (`false`), not a throw, because it sits on a hot path invoked per-request by `getAuth`.

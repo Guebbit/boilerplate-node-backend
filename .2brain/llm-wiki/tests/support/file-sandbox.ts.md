@@ -1,7 +1,7 @@
 ---
 source: tests/support/file-sandbox.ts
-sha256: bb4ffd98e05880f8c49794eb688a416d24c4546e96a46989d2cdea2402795371
-generated_at: 2026-09-27T15:59:52.668914+00:00
+sha256: eba02dc9dde138978396c83ba5771f010fafe4bff86795b13f484ee8c7945c09
+generated_at: 2026-10-15T12:58:14.059810+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Redirects every file-writing application setting into a per-test-file sandbox directory so tests never write to real application folders on the developer's machine. Provides the cleanup, leftover-detection, and failure-reporting primitives that the jest global teardown uses to fail a run when a test leaves files behind.
+Redirects all application file-writing paths (public assets, quarantine, upload staging, mail spool) into a per-test-file sandbox directory so that integration and contract tests never write into the developer's real application directories. Provides helpers to apply the sandbox, clean it, detect and report leftovers, and check file existence.
 
 ## Key elements
 
-- **`FILE_SANDBOX_ROOT_VARIABLE`** – Env-var name (`NODE_TEST_FILES_ROOT`) that `global-setup.ts` uses to publish the sandbox root to workers.
-- **`SANDBOXED_VARIABLES`** (private) – Maps five application env vars (`NODE_PUBLIC_PATH`, `NODE_QUARANTINE_PATH`, `NODE_UPLOAD_STAGING_PATH`, `NODE_INVOICE_CACHE_PATH`, `NODE_MAIL_SPOOL_PATH`) to their sandbox subdirectory names.
-- **`sandboxDirectory(root, testPath)`** – Computes the per-test-file sandbox path by flattening the repo-relative test path with `__` separators.
-- **`applyFileSandbox(testPath)`** – Assigns every sandboxed env var to a path under the test file's sandbox directory. Uses `=`, not `??=`, so it overrides any `.env` or shell value.
-- **`emptyFileSandbox()`** – Recursively deletes all sandbox subdirectories. Refuses to delete if any sandboxed setting points outside the sandbox root (prevents accidental `rm` of a real directory).
-- **`leftoverFiles(root)`** – Scans the sandbox root for files (ignoring directories) still present after a test file ran; returns `SandboxLeftovers[]` sorted by sandbox name.
-- **`fileExists(target)`** – `stat`-based existence check; resolves `false` on any error rather than throwing.
-- **`describeLeftovers(leftovers)`** – Formats the multi-line failure message naming each test file and its leftover files.
+- **`FILE_SANDBOX_ROOT_VARIABLE`** – Env var name (`NODE_TEST_FILES_ROOT`) that `global-setup.ts` sets to the jest instance's sandbox root.
+- **`SANDBOXED_VARIABLES`** – Mapping of the four app env vars to their subdirectory names (`public`, `quarantine`, `uploads`, `mail-spool`).
+- **`sandboxDirectory(root, testPath)`** – Derives a per-test-file directory name by flattening the repo-relative path separators into `__`.
+- **`applyFileSandbox(testPath)`** – Calls `overrideEnvironment` to point every sandboxed variable at the test file's subdirectory. Must be called before the code under test reads its config.
+- **`emptyFileSandbox()`** – Recursively deletes the test file's four sandbox subdirectories. Throws if any resolved path falls outside the sandbox root (safety guard).
+- **`leftoverFiles(root)`** – Scans a sandbox root and returns `SandboxLeftovers[]` for every subdirectory that still contains files (directories are ignored).
+- **`fileExists(target)`** – Promise-based existence check (`stat`-based) that resolves `false` instead of rejecting on ENOENT.
+- **`describeLeftovers(leftovers)`** – Formats a human-readable error message listing each test file and its leftover files.
 - **`SandboxLeftovers`** – Interface: `{ sandbox: string; files: string[] }`.
 
 ## Relationships
 
-- **`tests/support/paths.ts`** – Supplies `REPO_ROOT`, used by `sandboxDirectory` to compute the relative test path.
-- **`tests/support/global-setup.ts`** – Creates the sandbox root directory and sets `FILE_SANDBOX_ROOT_VARIABLE` before workers start.
-- **`tests/support/global-teardown.ts`** – Calls `leftoverFiles` and `describeLeftovers` to detect and report uncleaned files, failing the run.
-- **`tests/support/setup-file-sandbox.ts`** – Invokes `applyFileSandbox` for each test file before it executes.
-- **`tests/unit/support/file-sandbox.test.ts`** – Unit tests exercising the public exports of this module.
-- **Test files that write files** (e.g. `invoice.test.ts`, `product-multipart-write.test.ts`, `upload-security.test.ts`, `mailer-attachments.test.ts`, `mailer-dispatch.test.ts`) – Rely on the sandbox redirect so their writes land in the sandbox; use `fileExists` to assert files were created or cleaned up.
+- **`src/infrastructure/config/store.ts`** – Imports `currentEnvironment` and `overrideEnvironment`; the sandbox is an *override* of the store's env, not a `process.env` write (the store reads `process.env` once at load).
+- **`tests/support/paths.ts`** – Imports `REPO_ROOT` used by `sandboxDirectory` to compute the relative path.
+- **`tests/support/global-setup.ts`** – Creates the sandbox root and publishes it via `FILE_SANDBOX_ROOT_VARIABLE`.
+- **`tests/support/global-teardown.ts`** – Calls `leftoverFiles` and `describeLeftovers` to fail the run if any test left files behind.
+- **`tests/support/setup-file-sandbox.ts`** – Per-test-file setup hook that calls `applyFileSandbox` / `emptyFileSandbox`.
+- **Integration & contract tests** (`image-acl`, `orphaned-images`, `product-multipart-write`, `upload-claim`, `upload-security`, `role-hierarchy`, `shop`, `demo-routes`, `mailer-attachments`, `api.contract`) – Rely on the sandbox to receive redirected file paths and use `fileExists` for assertions.
 
 ## Notes
 
-- **Relative imports only.** `globalSetup` and `globalTeardown` load this module outside jest's `moduleNameMapper`, so no aliased/package imports are permitted.
-- **Assignment, not coalescing.** `applyFileSandbox` uses `process.env[variable] = …` deliberately: a value inherited from `.env` or the shell names a real directory and must be overridden.
-- **Sandbox name encoding.** Path separators in the test file's relative path become `__`; `describeLeftovers` reverses this with `split('__').join('/')` for human-readable output.
-- **`leftoverFiles` ignores directories.** The code under test creates subdirectories on demand; only files (things a test actively caused) count as leftovers.
-- **`fileExists` swallows all stat errors.** Any rejection (permission denied, race, etc.) resolves to `false`, not just ENOENT. Callers should be aware a permission issue looks identical to "file not there."
+- **Relative imports only.** `globalSetup` and `globalTeardown` load this file outside Jest's `moduleNameMapper`, so `../../src/...` paths are required rather than alias imports.
+- **Override, not assign-if-absent.** `applyFileSandbox` uses `overrideEnvironment` (unconditional set) deliberately: a value inherited from `.env` or the shell names a *real* directory, which a test must never write into.
+- **`sandboxDirectory` flattening.** Path separators become `__`, so `tests/integration/shop.test.ts` maps to a directory named `tests__integration__shop.test.ts`. Teardown inverts this with `replaceAll('__', '/')` in the error message.
+- **`leftoverFiles` counts files only.** The code under test creates directories on demand; those are not considered test residue.
+- **`emptyFileSandbox` safety check.** Before deleting, it verifies every resolved path is a child of the sandbox root; a misconfigured run fails fast rather than risking deletion of a real `public/` or `uploads/` directory.

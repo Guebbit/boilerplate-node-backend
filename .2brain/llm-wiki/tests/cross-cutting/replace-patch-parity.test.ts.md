@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/replace-patch-parity.test.ts
-sha256: 1eaa015b27add9690a6ef73022d6fdcac67a58c8de3a02975736e6552da1b4fc
-generated_at: 2026-09-27T15:52:08.157511+00:00
+sha256: 8e98f5f1abdf72909cded9c508ff748e88bf6e9ab6f7a4212ef96881f8d6bc53
+generated_at: 2026-10-15T12:40:17.431878+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting invariant test that enforces `Replace<Entity>Request` (PUT) and `Update<Entity>Request` (PATCH) schemas declare identical property *names* across every factory-backed resource. The shared `createUpdateController` factory only works because the two shapes differ solely in `required`, so a field added to one schema and forgotten on the other is silently lost. The test reads each module's own `openapi.yaml` fragment (not the bundled output) so a failure points to a line someone actually edits.
+Guarantees that for every factory-backed resource, the `Replace<Entity>Request` (PUT) and `Update<Entity>Request` (PATCH) schemas declare the **same set of writable property names**. A field added to one schema and forgotten on the other is invisible in either schema alone, so this cross-cutting test sweeps all per-module OpenAPI fragments and flags the drift.
 
 ## Key elements
 
-- **`REPLACE_OR_UPDATE`** — regex `/^(Replace|Update)(.+)Request$/` used to strip the verb prefix and group schemas by entity. Multipart and `Merge*` schemas are deliberately excluded.
-- **`schemas()`** — walks `MODULES_ROOT`, reads every `<module>/openapi.yaml`, and returns a flat array of `{ module, name, properties: Set<string> }` for each `components.schemas` entry.
-- **`pairedSchemas()`** — filters `schemas()` down to entities that have *both* a Replace and an Update schema (exactly two). A lone schema is dropped so the canary below can detect a regex or rename regression as an empty sweep.
-- **Canary test** (`finds exactly the known Replace/Update pairs`) — asserts the *exact* sorted key set (8 entities). Prevents a silent naming drift from producing a false-pass with zero pairs.
-- **Parity test** (`declares the same property names…`) — for every paired entity, diffs the two `Set<string>` property lists in both directions and asserts the mismatch list is empty.
+- **`SchemaShape`** (interface) — captures a single `components.schemas` entry: owning module, schema name, and the set of top-level `properties` keys.
+- **`REPLACE_OR_UPDATE`** (regex) — `/^(Replace|Update)(.+)Request$/`; identifies the two verb prefixes the `createUpdateController` factory uses and extracts the shared entity name.
+- **`schemas()`** — walks `MODULES_ROOT`, reads each module's `openapi.yaml`, and returns every declared schema as a `SchemaShape`.
+- **`pairedSchemas()`** — groups `schemas()` by entity name; keeps only entities where **both** a `Replace*` and an `Update*` schema exist (lone schemas are dropped so they can't mask an empty sweep).
+- **Test: "finds exactly the known Replace/Update pairs"** — canary assertion that the paired set matches a hard-coded list (filtered by `isDeployed`), using `toEqual` on sorted keys so any naming drift or regex break fails immediately.
+- **Test: "declares the same property names on both verbs"** — for every pair, diffs the two `properties` Sets and asserts no field appears on one side only; reports a human-readable string naming both schemas and the missing fields.
 
 ## Relationships
 
-- **`tests/support/paths.ts`** — imports `MODULES_ROOT` to locate the per-module `openapi.yaml` fragments without hard-coding relative paths.
-- **`package.json`** — provides the `yaml` runtime dependency used to parse each fragment as YAML.
+- **`tests/support/paths.ts`** — provides `MODULES_ROOT` (directory to scan for `openapi.yaml` fragments) and `isDeployed` (filters the canary's expected entity list to currently-deployed modules).
+- **`package.json`** — test runner configuration (Vitest); the file uses `describe`/`it`/`expect` from the configured framework.
+- **`tests/cross-cutting/validation-attributes.test.ts`** — sibling cross-cutting test; both share the convention of reading per-module fragments rather than the bundled OpenAPI spec (so a failure points at a line a developer actually edits).
 
 ## Notes
 
-- Reads fragments, not the bundle — mirrors the rationale documented in `contract-error-declarations.test.ts` (a bundle failure names a generated line nobody edits).
-- The canary asserts an *exact* set, not a minimum (`≥ N`), so a renamed entity that no longer matches the regex drops the pair and the test fails.
-- Adding a new resource to the factory requires appending its entity name to the expected array in the canary test.
-- `pairedSchemas()` requires exactly 2 matches per entity; a third (e.g., a typo producing `ReplaceFooRequest` twice) silently drops the whole entity.
+- Reads from **per-module `openapi.yaml` fragments**, not the generated bundle. A bundle failure names a line nobody edits; a fragment failure points at the source file.
+- **Multipart** schemas are excluded (the factory validates the JSON-shaped schema for both content types, so a multipart-only variant is not in scope).
+- **`Merge*`** schemas (e.g., locales bulk-entry replace) are deliberately out of scope — they follow a separate convention, not the `createUpdateController` factory.
+- The canary test asserts **exact equality** of the entity set, not a minimum count. A silent rename that breaks the pairing regex would drop a pair, and `>= N` would still pass.
+- The known-pairs list must be updated when a new resource moves onto the factory; `isDeployed` filtering means removing a module naturally shrinks the expected set without editing the list.

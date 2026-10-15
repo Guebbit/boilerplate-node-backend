@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/http/middlewares/human-challenge.test.ts
-sha256: 937af9ab915980deba41ca5383b86691a2f9b4bb235d4fa1aa5396953014d977
-generated_at: 2026-09-23T20:20:56.566620+00:00
+sha256: b1d19dcb52721176955c783324a41f98a0578cc466daf4a3e124086474305834
+generated_at: 2026-10-15T13:12:08.412606+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `humanChallengeGate` Express middleware (rung 3 of the anti-bot stack). This suite owns the **HTTP contract** around provider delegation: which header is inspected, what status a refusal returns, and the invariant that when the gate is off the middleware is a zero-cost pass-through (not even a header lookup). Provider-selection logic is explicitly out of scope here.
+Unit tests for the `humanChallengeGate` middleware's HTTP contract: which request header it reads, what a refusal returns (401), and the invariant that when the gate is OFF it costs nothing—not even a `header()` call. Provider-selection logic is explicitly out of scope (owned by `antibot-providers/index.test.ts`).
 
 ## Key elements
 
-- **`ORIGINAL`** — captures `process.env.NODE_ANTIBOT_PROVIDER` before the suite runs so `afterEach` can restore the original value (or delete it if it was unset).
-- **`afterEach`** — restores the provider env var, deletes `NODE_ANTIBOT_TURNSTILE_SECRET`, and calls `jest.restoreAllMocks()`.
-- **`makeRequest(token?)`** — builds a minimal stub `Request` whose `header()` method returns the supplied token only for `x-antibot-challenge-token`; all other names resolve to `undefined`.
-- **`describe('humanChallengeGate')`** — four cases:
-    - _off by default_: no provider env → `next()` called once, `header` never called.
-    - _no token sent_: provider set → `next` not called, `response.status(401)`.
-    - _valid token_: `fetch` mocked to `{ success: true }` → `next` called (verified after `process.nextTick`).
-    - _provider throws_: `fetch` rejected → `next` not called, `response.status(401)` (fail-closed).
+- **`makeRequest(token?)`** – Local helper that returns an `asStub<Request>` whose only meaningful property is the `x-antibot-challenge-token` header value (or `undefined`).
+- **`afterEach`** – Resets `NODE_ANTIBOT_TURNSTILE_SECRET` to `undefined` and calls `jest.restoreAllMocks()` so no env leak or spy leak affects other suites.
+- **"is off by default"** – Asserts `next()` is called once and `request.header` is *never* called when `NODE_ANTIBOT_PROVIDER` is unset.
+- **"refuses with 401 … no token"** – Provider set to `'turnstile'`, token absent → `next` not called, `response.status(401)`.
+- **"calls next() when the provider vouches"** – Mocks `globalThis.fetch` to resolve `{ success: true }`; awaits `process.nextTick`; asserts `next()` called once.
+- **"asks Cloudflare without following a redirect … oversized answer"** – Asserts the `fetch` call uses `redirect: 'error'`, and that a body > 1 MiB (1 048 577 chars of padding) is refused even if `success: true`.
+- **`it.each` refusal cases** – Parameterized over `{ success: false }` and a 503-status `{ success: true }`; both must yield 401 and no `next()`.
+- **"refuses when the provider throws"** – `fetch` rejects with a network error; asserts 401, never a pass-through.
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/human-challenge.ts`** — the unit under test; the single import of `humanChallengeGate`.
-- **`tests/support/express.ts`** — provides `makeResponseStub()` used to capture `status()` / `json()` calls without a real Express app.
-- **`tests/support/stub.ts`** — provides `asStub<T>()` for typing the lightweight request objects passed to the middleware.
+- **`src/infrastructure/http/middlewares/human-challenge.ts`** – The module under test; imports `humanChallengeGate`.
+- **`tests/support/environment.ts`** – Provides `setEnvironment` used to toggle `NODE_ANTIBOT_PROVIDER` and `NODE_ANTIBOT_TURNSTILE_SECRET` per test case.
+- **`tests/support/express.ts`** – Provides `makeResponseStub` for capturing `status()` calls.
+- **`tests/support/stub.ts`** – Provides `asStub<T>` to create typed, callable stubs (used for `Request` and the header function).
 
 ## Notes
 
-- The middleware is invoked **synchronously** in every test (`humanChallengeGate(req, res, next)` with no `await`), but the two cases involving `fetch` rely on a single `await new Promise(process.nextTick)` to let the internal async chain settle before asserting. This means the middleware returns `void` (or a synchronously-completed promise) while performing async work internally.
-- The "off costs nothing" test asserts `header` was **never called**, not merely that the token was absent — this is a deliberate perf/contract guarantee.
-- The header name `x-antibot-challenge-token` is hard-coded in the stub; if the middleware changes the header name, the stub and this suite must be updated together.
-- The suite does **not** exercise provider selection or Turnstile-specific validation logic; those live in `antibot-providers/index.test.ts`.
+- Async resolution is handled by `await new Promise(process.nextTick)` or a 50 ms `setTimeout`—there is no explicit return/Promise from the middleware, so tests must flush the microtask or event loop before asserting.
+- The oversized-response test constructs a 1 MiB + 1-byte JSON string inline; the threshold is not imported from a constant, so a change in the production limit won't be caught by this test.
+- `redirect: 'error'` is asserted on the *second* argument of the `fetch` call (`fetchSpy.mock.calls[0][1]`); if the implementation switches to a `Headers`-based or `AbortSignal` approach, this assertion will break.
+- The file's doc-comment explicitly carves out provider-selection tests to a different suite to avoid a single file owning two concerns.

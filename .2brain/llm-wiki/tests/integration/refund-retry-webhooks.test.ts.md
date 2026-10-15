@@ -1,7 +1,7 @@
 ---
 source: tests/integration/refund-retry-webhooks.test.ts
-sha256: b338617626916b599e77c2bb79be7c6bac495865a47b7d3e5178170af7f966d5
-generated_at: 2026-09-27T15:57:54.510131+00:00
+sha256: d6b8d172ebb08c8a58e5b933165f66452a31cd70352aa9d149d8e4800e803012
+generated_at: 2026-10-15T12:51:46.640512+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Guarantees that the refund-retry sweep (`orderService.retryPendingEffects`) does **not** re-trigger the `order.cancelled` webhook for every subscriber. It exists at the integration level because the invariant spans three modules (orders, payments, webhooks) whose real `subscribe()` hooks must all be wired simultaneously.
+Integration test verifying that retrying a stuck (previously failed) refund does **not** re-deliver the `order.cancelled` webhook to subscribers. Because `payments` subscribes to its own `ORDER_REFUND_OWED` event rather than the `ORDER_CANCELLED` event that `webhooks` fans out on, the retry path must not create a second delivery row. The test exercises the real `subscribe()` hooks of orders, payments, and webhooks together, which is why it lives in `tests/integration/` rather than any single module's own `tests/`.
 
 ## Key elements
 
-- **`paidOrder()`** — fixture helper that creates a user, a $20 product, an order, and a confirmed card payment via the fake provider. Returns `{ user, order }` for the test body.
-- **`retries the owed refund without re-announcing the cancellation, and delivers it once`** — the single test case. Sequence:
-  1. Sets `NODE_ORDER_EFFECT_RETRY_MINUTES=0` so the retry sweep runs immediately.
-  2. Registers `paymentsModule` and `webhooksModule`; creates a wildcard (`'*'`) webhook subscription.
-  3. Calls `paidOrder()`, then spies on `fakePaymentProvider.refund` with `mockRejectedValueOnce` to simulate a provider outage during the initial cancel.
-  4. Cancels the order → refund fails → `ORDER_REFUND_OWED` marker is left.
-  5. Calls `orderService.retryPendingEffects()` → second (unmocked) refund succeeds; expects return value `1`.
-  6. Queries `webhookDeliveryRepository.findAll({ eventType: 'order.cancelled' })` and asserts **exactly one** row.
+- **`paidOrder()`** – Local fixture that creates a user, product, order, and a confirmed card payment, then calls `settleOutboxNudges()` so the settlement relay rows are published before the cancel arrives (mimicking the real one-request-later gap).
+- **The single `it(...)` block** – Registers `paymentsModule` and `webhooksModule`, creates a wildcard webhook subscription, mocks `fakePaymentProvider.refund` to fail once, cancels the order, calls `orderService.retryPendingEffects()`, and asserts exactly **one** `order.cancelled` delivery row exists.
+- **`afterEach`** – Resets domain events (`resetDomainEvents`) and restores all Jest spies.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/kernel/events.ts` | `resetDomainEvents()` in `afterEach` clears in-memory event bus state between tests. |
-| `src/modules/orders/index.ts` | Provides `orderService` used for `create`, `cancelById`, and `retryPendingEffects`. |
-| `src/modules/payments/module.ts` | Registered via `registerCheckoutModules` so its `ORDER_REFUND_OWED` subscriber is active. |
-| `src/modules/payments/providers/fake.ts` | `fakePaymentProvider.refund` is spied on (`mockRejectedValueOnce`) to simulate the first refund failure. |
-| `src/modules/payments/services/index.ts` | Exports `createIntent` and `confirmPayment` used by the `paidOrder` fixture. |
-| `src/modules/products/tests/factories.ts` | `createProduct` builds the line-item product. |
-| `src/modules/users/tests/factories.ts` | `createUser` builds the buyer. |
-| `src/modules/webhooks/module.ts` | Registered so its `ORDER_CANCELLED` fan-out subscriber is active. |
-| `src/modules/webhooks/repository.ts` | `webhookDeliveryRepository.findAll` is the assertion target (delivery-row count). |
-| `src/modules/webhooks/services/subscriptions.ts` | `createSubscription` registers the wildcard endpoint under test. |
-| `tests/support/callers.ts` | `callerAs`, `asCustomer`, `testCallerContext`, `TEST_TENANT_ID` for tenant-scoped auth. |
-| `tests/support/checkout-modules.ts` | `registerCheckoutModules` wires the two modules into the test container. |
+- **`scenarios/support/doubles/payments/fake.ts`** – Provides `fakePaymentProvider`; the test spies on its `refund` method to simulate a one-time provider outage.
+- **`src/kernel/events.ts`** – `resetDomainEvents()` is called in `afterEach` to clear the in-memory event bus between tests.
+- **`src/kernel/outbox.ts`** – `settleOutboxNudges()` is awaited after `confirmPayment` to flush settlement relay rows before the cancel.
+- **`src/modules/orders/index.ts`** – `orderService` is used for `create`, `cancelById`, and `retryPendingEffects`.
+- **`src/modules/payments/module.ts`** – `paymentsModule` is registered via `registerCheckoutModules` so its `subscribe()` hooks are active.
+- **`src/modules/payments/services/index.ts`** – Exports `createIntent` and `confirmPayment`, used in the `paidOrder` fixture.
+- **`src/modules/products/tests/factories.ts`** – `createProduct` creates the fixture product.
+- **`src/modules/users/tests/factories.ts`** – `createUser` creates the fixture customer.
+- **`src/modules/webhooks/module.ts`** – `webhooksModule` is registered so its event-fan-out subscriber is live.
+- **`src/modules/webhooks/repository.ts`** – `webhookDeliveryRepository.findAll` is used for the final delivery-count assertion.
+- **`src/modules/webhooks/services/subscriptions.ts`** – `createSubscription` sets up the wildcard (`*`) webhook endpoint.
+- **`tests/support/callers.ts`** – Provides `callerAs`, `testCallerContext`, `asCustomer`, `TEST_TENANT_ID`, and `callerContextAs` for authentication context.
 
 ## Notes
 
-- **Why integration, not unit:** the invariant depends on the *absence* of a payments→`ORDER_CANCELLED` subscription and the *presence* of a payments→`ORDER_REFUND_OWED` subscription. Neither is visible from a single module's unit tests.
-- **`mockRejectedValueOnce` is critical:** only the first refund call is rejected. The retry call hits the real fake provider and succeeds. Using a persistent mock would make the retry fail too, masking the assertion.
-- **Environment variable:** `NODE_ORDER_EFFECT_RETRY_MINUTES` is set to `'0'` via `withEnvironment` so the sweep doesn't wait a real timer; the helper restores the prior value on exit.
-- The inline comment references **B6**, an internal ticket for the "refund_owed carries no webhook of its own" behaviour — the test encodes that contract.
+- **Cross-module placement:** The file intentionally lives in `tests/integration/` because the invariant spans three modules' real subscriber registrations; it cannot be meaningfully scoped to one module's unit tests.
+- **Environment override:** `withEnvironment('NODE_ORDER_EFFECT_RETRY_MINUTES', '0', …)` zeroes out the retry delay so `retryPendingEffects()` acts immediately within the test.
+- **Single-failure mock:** `mockRejectedValueOnce` ensures the *second* (retry) call hits the real (unmocked) provider, proving the success path works without permanently breaking the fake.
+- **Timing assumption:** `settleOutboxNudges()` is a deliberate stand-in for the real "one request later" gap between payment confirmation and cancellation; omitting it would race the relay and make the test flaky.

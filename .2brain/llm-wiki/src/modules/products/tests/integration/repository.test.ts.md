@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/integration/repository.test.ts
-sha256: 4afec23970dc9fa4400c1c155ef3fca104b529ff4994925a40ece8001f2eaee1
-generated_at: 2026-09-27T15:34:47.709621+00:00
+sha256: 7b9acb9748f8e3ee67541281e7d1c48dcf6215a93a47d1d295d319cdb9abcdf2
+generated_at: 2026-10-15T11:49:00.850636+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for `productRepository` CRUD operations and aggregate reads (`facets`) executed against a real MongoDB instance. The file also pins the empty-catalogue behavior of aggregate pipelines (which return *no* row rather than a zeroed one) and the idempotency/staleness semantics of `writebackImage`.
+Integration test suite for `productRepository` that exercises CRUD operations, aggregate reads (`facets`), and image-writeback logic against a real MongoDB instance. It specifically pins down the empty-catalogue arms of `$group`/`$facet` pipelines (which return no row rather than a zeroed one) and the idempotent/stale-job behaviour of `writebackImage`. Stock-level aggregates are explicitly out of scope and live in the inventory module's own tests.
 
 ## Key elements
 
-- **`describe('productRepository')`** — covers `create`, `findById`, `findOne`, `findAll`, `count`, `save`, and `deleteOne`. Each sub-block seeds documents via the test factory and asserts repository-level contracts (e.g. `findById` returns `null` on miss, `findAll` returns lean plain-JS objects, `findAll` honors `limit`/`skip`).
-- **`describe('an empty catalogue')`** — runs after `productModel.deleteMany({})` to verify:
-  - `facets()` resolves to `{ categories: [], tags: [] }` (no crash on the absent `$facet` aggregate row).
-  - `writebackImage` returns `true` on a matching `pendingImageKey`, `true` again on a duplicate run (idempotent — prevents twin-file deletion), and `false` when the key is stale.
-- **`setupTestDb()`** — called at module top level to establish a real Mongo connection before any test runs.
+- **`describe('productRepository')`** — top-level suite covering `create`, `findById`, `findOne`, `findAll`, `count`, `save`, `deleteOne`.
+- **`describe('an empty catalogue')`** — second top-level suite that wipes the collection in `beforeEach` and asserts:
+  - `facets()` resolves to `{ categories: [], tags: [] }` (no crash on absent aggregate row).
+  - `writebackImage` returns `true` on match, `true` on duplicate (idempotent), and `false` on a stale `pendingImageKey`.
+- **`setupTestDb()`** — called at module scope to boot and reset the test MongoDB before any test runs.
+- **`makeProduct` / `createProduct`** — test factories for building and persisting fixture products.
+- **`asStub`** — utility cast used to verify `findAll` returns lean (plain-JS) objects with no Mongoose methods like `save`.
 
 ## Relationships
 
-- **`src/modules/products/repository.ts`** — the system under test; every assertion targets a `productRepository` method.
-- **`src/modules/products/model.ts`** — imported as `productModel` and used to manipulate raw DB state that the repository API doesn't expose (e.g. setting `pendingImageKey` via `updateOne`, wiping the collection via `deleteMany`).
-- **`src/modules/products/tests/factories.ts`** — supplies `makeProduct` (plain in-memory object for `create`) and `createProduct` (persists and returns a Mongoose document for subsequent tests).
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()` to spin up and clean a real Mongo instance per test run.
-- **`tests/support/stub.ts`** — provides `asStub<T>()`, a type-only cast used to assert that `findAll` results lack Mongoose instance methods (e.g. `.save`).
+- **`src/modules/products/repository.ts`** — system under test; `productRepository` is the sole subject of every assertion.
+- **`src/modules/products/model.ts`** — `productModel` is imported directly to perform raw `deleteMany({})` (empty-catalogue reset) and `updateOne` (to set `pendingImageKey` before calling `writebackImage`).
+- **`src/modules/products/tests/factories.ts`** — provides `makeProduct` (in-memory object) and `createProduct` (insert + return doc) used throughout the suite.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the shared test database connection and collection cleanup.
+- **`tests/support/stub.ts`** — `asStub<T>()` cast lets the lean-object assertion type-check without adding a real dependency on Mongoose types.
+- **`src/modules/products/factories.ts`** — transitive dependency pulled in by the test factories (`tests/factories.ts`); not imported directly by this file.
 
 ## Notes
 
-- Stock aggregates (`sumReserved`, `countLowAvailability`, stock board) are deliberately **not** tested here; they belong to `@modules/inventory`'s `stockLevelRepository`.
-- The empty-catalogue block exists because a MongoDB `$group`/`$facet` pipeline over zero documents yields **no row**, not a zeroed row. The `.at(0)` guard in calling code is asserted here rather than assumed.
-- `findAll` is expected to return **lean** objects (no Mongoose methods), while `create`/`findById`/`findOne` return full Mongoose documents — the test suite asserts both sides of that distinction.
+- The empty-catalogue suite relies on `productModel.deleteMany({})` in `beforeEach`, not on the repository API, to guarantee a clean slate for the aggregate edge cases.
+- `findAll` is asserted to return **lean** documents (no `.save` method). If the repository implementation ever switches to returning hydrated Mongoose docs, the `asStub` check will catch it.
+- The `findOne` multi-match test deliberately avoids asserting which document is returned, since insertion order is not guaranteed; it only checks that a document is returned.
+- `writebackImage` idempotency (duplicate job → `true`) is a contractual guarantee for the image-pipeline caller so that twin files are not deleted on a re-run.

@@ -12,9 +12,10 @@ graph LR
     Cart_Orders_Domain_Core["Cart & Orders Domain Core"]
     Contract_Bundle_Assembly_CI_Validation_Gates["Contract Bundle Assembly & CI Validation Gates"]
     Mutation_Testing_Policy_Scaffold_Tooling["Mutation Testing Policy & Scaffold Tooling"]
-    Cart_Orders_Domain_Core -- "Supplies per-module OpenAPI and authorization YAML fragments for root bundle assembly" --> Contract_Bundle_Assembly_CI_Validation_Gates
-    Contract_Bundle_Assembly_CI_Validation_Gates -- "Delegates shard bin-packing, baseline ratchet scoring, and Stryker subprocess execution to the policy layer" --> Mutation_Testing_Policy_Scaffold_Tooling
-    Mutation_Testing_Policy_Scaffold_Tooling -- "Defines mutation measurement scope over domain source and scaffolds module registry entries" --> Cart_Orders_Domain_Core
+    Cart_Orders_Domain_Core -- "Supplies per-module contract fragments for root bundle assembly" --> Contract_Bundle_Assembly_CI_Validation_Gates
+    Cart_Orders_Domain_Core -- "calls" --> Mutation_Testing_Policy_Scaffold_Tooling
+    Contract_Bundle_Assembly_CI_Validation_Gates -- "calls" --> Mutation_Testing_Policy_Scaffold_Tooling
+    Mutation_Testing_Policy_Scaffold_Tooling -- "Generates new module contract fragments and central authorization registry entries consumed by bundle assembly" --> Contract_Bundle_Assembly_CI_Validation_Gates
 ```
 
 ## Details
@@ -29,7 +30,7 @@ The bounded-context core that the contract tooling validates against: the cart m
 - `src.modules.cart.module.default`:24-50
 - `src.modules.cart.repository.cartRepository`:184-343
 - `src.modules.orders.pii.encryptOrderPii`:75-87
-- `src.modules.orders.repository.findByIdScoped`:148-155
+- `src.modules.orders.repository.findByIdScoped`:229-236
 
 **Source Files:**
 
@@ -51,10 +52,10 @@ The bounded-context core that the contract tooling validates against: the cart m
   - `src.modules.cart.repository.cartRepository.deleteByUserId.then() callback` (L318-L320) - Function
   - `src.modules.cart.repository.cartRepository.removeProductFromAll` (L332-L342) - Method
 - `src/modules/cart/services/checkout.ts`
-  - `src.modules.cart.services.checkout.runCheckout.outcome` (L526-L561) - Class
-  - `src.modules.cart.services.checkout.runCheckout.outcome.lines.joined.map() callback` (L531-L536) - Function
-  - `src.modules.cart.services.checkout.runCheckout.outcome.commitWith` (L557-L560) - Method
-  - `src.modules.cart.services.checkout.runCheckout.outcome.commitWith.then() callback` (L560-L560) - Function
+  - `src.modules.cart.services.checkout.runCheckout.outcome` (L537-L572) - Class
+  - `src.modules.cart.services.checkout.runCheckout.outcome.lines.joined.map() callback` (L542-L547) - Function
+  - `src.modules.cart.services.checkout.runCheckout.outcome.commitWith` (L568-L571) - Method
+  - `src.modules.cart.services.checkout.runCheckout.outcome.commitWith.then() callback` (L571-L571) - Function
 - `src/modules/cart/services/cleanup.ts`
   - `src.modules.cart.services.cleanup.productRemoveFromCartsById` (L39-L48) - Class
   - `src.modules.cart.services.cleanup.productRemoveFromCartsById.then() callback` (L43-L48) - Function
@@ -71,10 +72,66 @@ The bounded-context core that the contract tooling validates against: the cart m
   - `src.modules.cart.services.merge.mergeLine` (L89-L125) - Class
   - `src.modules.cart.services.merge.mergeLine.written.then() callback` (L108-L124) - Function
 - `src/modules/cart/services/view.ts`
-  - `src.modules.cart.services.view.readCartLines` (L75-L90) - Class
-  - `src.modules.cart.services.view.readCartLines.then() callback` (L81-L89) - Function
-  - `src.modules.cart.services.view.readCartLines.then() callback.cart.items.map() callback` (L84-L88) - Function
-  - `src.modules.cart.services.view.buildView.items.lines.map() callback` (L165-L172) - Function
+  - `src.modules.cart.services.view.readCartLines` (L76-L91) - Class
+  - `src.modules.cart.services.view.readCartLines.then() callback` (L82-L90) - Function
+  - `src.modules.cart.services.view.readCartLines.then() callback.cart.items.map() callback` (L85-L89) - Function
+  - `src.modules.cart.services.view.buildView.items.lines.map() callback` (L166-L174) - Function
+- `src/modules/delivery/domain/fulfillment.ts`
+  - `src.modules.delivery.domain.fulfillment.GroupableLine` (L26-L36) - Interface
+  - `src.modules.delivery.domain.fulfillment.FulfillmentOrderDraft` (L39-L47) - Interface
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.waiting` (L114-L114) - Class
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.waiting.lines.filter() callback` (L114-L114) - Function
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.now` (L115-L115) - Class
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.now.lines.filter() callback` (L115-L115) - Function
+  - `src.modules.delivery.domain.fulfillment.drafts.map() callback` (L135-L142) - Function
+  - `src.modules.delivery.domain.fulfillment.ProductQuantity` (L171-L174) - Interface
+  - `src.modules.delivery.domain.fulfillment.checkShipLines.left` (L194-L194) - Class
+  - `src.modules.delivery.domain.fulfillment.checkShipLines.left.lines.map() callback` (L194-L194) - Function
+  - `src.modules.delivery.domain.fulfillment.SummaryInputs` (L269-L279) - Interface
+  - `src.modules.delivery.domain.fulfillment.summarize.held` (L302-L302) - Class
+  - `src.modules.delivery.domain.fulfillment.summarize.held.live.filter() callback` (L302-L302) - Function
+  - `src.modules.delivery.domain.fulfillment.summarize.arrivals` (L305-L307) - Class
+  - `src.modules.delivery.domain.fulfillment.summarize.arrivals.shipments.map() callback` (L306-L306) - Function
+  - `src.modules.delivery.domain.fulfillment.summarize.arrivals.filter() callback` (L307-L307) - Function
+- `src/modules/delivery/presenter.ts`
+  - `src.modules.delivery.presenter.presentLines` (L28-L36) - Class
+  - `src.modules.delivery.presenter.presentLines.lines.map() callback` (L29-L36) - Function
+- `src/modules/delivery/repository.ts`
+  - `src.modules.delivery.repository.shipmentRepository.findByFulfillmentOrderIds.fulfillmentOrderId.$in.fulfillmentOrderIds.map() callback` (L549-L549) - Function
+  - `src.modules.delivery.repository.shipmentRepository.markDelivered` (L585-L592) - Method
+  - `src.modules.delivery.repository.shipmentRepository.setTrackingCode` (L600-L607) - Method
+- `src/modules/delivery/services/announce.ts`
+  - `src.modules.delivery.services.announce.announceDelivered` (L78-L105) - Class
+  - `src.modules.delivery.services.announce.announceDelivered.then() callback` (L98-L104) - Function
+  - `src.modules.delivery.services.announce.announceReleased` (L151-L176) - Class
+  - `src.modules.delivery.services.announce.announceReleased.then() callback` (L166-L175) - Function
+- `src/modules/delivery/services/deliver.ts`
+  - `src.modules.delivery.services.deliver.DeliverInput` (L36-L41) - Interface
+  - `src.modules.delivery.services.deliver.Delivered` (L44-L47) - Interface
+  - `src.modules.delivery.services.deliver.then() callback.then() callback.then() callback.then() callback.then() callback` (L135-L143) - Function
+- `src/modules/delivery/services/notice.ts`
+  - `src.modules.delivery.services.notice.NoticeInput` (L24-L33) - Interface
+  - `src.modules.delivery.services.notice.payloadOf.titles.fulfillmentOrder.lines.map() callback` (L58-L58) - Function
+- `src/modules/delivery/services/read.ts`
+  - `src.modules.delivery.services.read.remainderOptions` (L101-L118) - Class
+  - `src.modules.delivery.services.read.remainderOptions.then() callback` (L103-L116) - Function
+  - `src.modules.delivery.services.read.remainderOptions.then() callback.all.filter() callback` (L105-L105) - Function
+  - `src.modules.delivery.services.read.remainderOptions.then() callback.map() callback` (L106-L116) - Function
+  - `src.modules.delivery.services.read.remainderOptions.then() callback.map() callback.lines.fulfillmentOrder.lines.filter() callback` (L110-L110) - Function
+  - `src.modules.delivery.services.read.remainderOptions.then() callback.map() callback.lines.map() callback` (L111-L115) - Function
+  - `src.modules.delivery.services.read.waitHasExpired` (L151-L162) - Class
+  - `src.modules.delivery.services.read.waitHasExpired.then() callback` (L158-L161) - Function
+- `src/modules/delivery/services/split.ts`
+  - `src.modules.delivery.services.split.withoutAllocated` (L40-L57) - Class
+  - `src.modules.delivery.services.split.withoutAllocated.moved` (L44-L44) - Class
+  - `src.modules.delivery.services.split.withoutAllocated.moved.allocated.map() callback` (L44-L44) - Function
+  - `src.modules.delivery.services.split.withoutAllocated.lines.map() callback` (L47-L53) - Function
+  - `src.modules.delivery.services.split.withoutAllocated.filter() callback` (L55-L55) - Function
+  - `src.modules.delivery.services.split.allocatedLines` (L64-L74) - Class
+  - `src.modules.delivery.services.split.allocatedLines.allocated.map() callback` (L68-L74) - Function
+  - `src.modules.delivery.services.split.allocatedLines.allocated.map() callback.title.held.lines.find() callback` (L70-L70) - Function
+  - `src.modules.delivery.services.split.splitAct.covers.held.lines.every() callback.taken` (L101-L101) - Class
+  - `src.modules.delivery.services.split.splitAct.covers.held.lines.every() callback.taken.units.find() callback` (L101-L101) - Function
 - `src/modules/orders/domain/transfer-reference.ts`
   - `src.modules.orders.domain.transfer-reference.numericStringFor` (L39-L40) - Class
   - `src.modules.orders.domain.transfer-reference.numericStringFor.value.replaceAll() callback` (L40-L40) - Function
@@ -86,123 +143,119 @@ The bounded-context core that the contract tooling validates against: the cart m
   - `src.modules.orders.pii.decryptOrderAddress` (L94-L101) - Class
   - `src.modules.orders.pii.decryptOrderAddress.mapAddress() callback` (L99-L100) - Function
 - `src/modules/orders/repository.ts`
-  - `src.modules.orders.repository.findByIdScoped` (L148-L155) - Class
-  - `src.modules.orders.repository.findByIdScoped.then() callback` (L155-L155) - Function
-  - `src.modules.orders.repository.setProjection` (L274-L292) - Class
-  - `src.modules.orders.repository.setProjection.then() callback` (L291-L291) - Function
-  - `src.modules.orders.repository.clearPendingEffect` (L359-L367) - Class
-  - `src.modules.orders.repository.clearPendingEffect.then() callback` (L367-L367) - Function
-  - `src.modules.orders.repository.addPendingEffect` (L383-L387) - Class
-  - `src.modules.orders.repository.addPendingEffect.then() callback` (L387-L387) - Function
-  - `src.modules.orders.repository.findOpenUnpaidIdsOf` (L399-L411) - Class
-  - `src.modules.orders.repository.findOpenUnpaidIdsOf.then() callback` (L411-L411) - Function
-  - `src.modules.orders.repository.findOpenUnpaidIdsOf.then() callback.orders.map() callback` (L411-L411) - Function
-  - `src.modules.orders.repository.detachUserId` (L429-L477) - Class
-  - `src.modules.orders.repository.detachUserId.then() callback` (L476-L476) - Function
+  - `src.modules.orders.repository.findByIdScoped` (L229-L236) - Class
+  - `src.modules.orders.repository.findByIdScoped.then() callback` (L236-L236) - Function
+  - `src.modules.orders.repository.setProjection` (L356-L375) - Class
+  - `src.modules.orders.repository.setProjection.then() callback` (L374-L374) - Function
+  - `src.modules.orders.repository.clearPendingEffect` (L498-L506) - Class
+  - `src.modules.orders.repository.clearPendingEffect.then() callback` (L506-L506) - Function
+  - `src.modules.orders.repository.addPendingEffect` (L522-L526) - Class
+  - `src.modules.orders.repository.addPendingEffect.then() callback` (L526-L526) - Function
+  - `src.modules.orders.repository.findOpenUnpaidIdsOf` (L538-L550) - Class
+  - `src.modules.orders.repository.findOpenUnpaidIdsOf.then() callback` (L550-L550) - Function
+  - `src.modules.orders.repository.findOpenUnpaidIdsOf.then() callback.orders.map() callback` (L550-L550) - Function
+  - `src.modules.orders.repository.detachUserId` (L595-L618) - Class
+  - `src.modules.orders.repository.detachUserId.then() callback` (L618-L618) - Function
 - `src/modules/orders/services/order-numbering.ts`
-  - `src.modules.orders.services.order-numbering.allocateOrderNumber` (L29-L35) - Class
-  - `src.modules.orders.services.order-numbering.allocateOrderNumber.then() callback` (L34-L34) - Function
+  - `src.modules.orders.services.order-numbering.allocateOrderNumber` (L32-L38) - Class
+  - `src.modules.orders.services.order-numbering.allocateOrderNumber.then() callback` (L37-L37) - Function
 - `src/modules/orders/services/place.ts`
-  - `src.modules.orders.services.place.PlaceOrderLine` (L39-L42) - Interface
-  - `src.modules.orders.services.place.PlaceOrderAddress` (L45-L52) - Interface
-  - `src.modules.orders.services.place.PlaceOrderShipping` (L63-L68) - Interface
-  - `src.modules.orders.services.place.PlaceOrderInput` (L71-L90) - Interface
-  - `src.modules.orders.services.place.OrderSuperseded` (L101-L101) - Class
-  - `src.modules.orders.services.place.placeOrder` (L120-L226) - Class
-  - `src.modules.orders.services.place.orderItems.input.lines.map() callback` (L129-L129) - Function
-  - `src.modules.orders.services.place.placeOrder.order.announceInTransaction() callback.then() callback` (L199-L206) - Function
-  - `src.modules.orders.services.place.placeOrder.order.announceInTransaction() callback.then() callback.then() callback` (L202-L205) - Function
-  - `src.modules.orders.services.place.placeOrder.order.announceInTransaction() callback` (L208-L208) - Function
-  - `src.modules.orders.services.place.placeOrder.catch() callback` (L215-L222) - Function
+  - `src.modules.orders.services.place.PlaceOrderLine` (L40-L43) - Interface
+  - `src.modules.orders.services.place.PlaceOrderAddress` (L46-L53) - Interface
+  - `src.modules.orders.services.place.PlaceOrderShipping` (L64-L69) - Interface
+  - `src.modules.orders.services.place.PlaceOrderInput` (L72-L91) - Interface
+  - `src.modules.orders.services.place.OrderSuperseded` (L102-L102) - Class
+  - `src.modules.orders.services.place.placeOrder` (L121-L240) - Class
+  - `src.modules.orders.services.place.orderItems.input.lines.map() callback` (L130-L130) - Function
+  - `src.modules.orders.services.place.placeOrder.order.announceInTransaction() callback.then() callback` (L213-L220) - Function
+  - `src.modules.orders.services.place.placeOrder.order.announceInTransaction() callback.then() callback.then() callback` (L216-L219) - Function
+  - `src.modules.orders.services.place.placeOrder.order.announceInTransaction() callback` (L222-L222) - Function
+  - `src.modules.orders.services.place.placeOrder.catch() callback` (L229-L236) - Function
 - `src/modules/orders/services/reencrypt.ts`
   - `src.modules.orders.services.reencrypt.fieldsOf.addresses.ADDRESS_PATHS.flatMap() callback` (L16-L29) - Function
   - `src.modules.orders.services.reencrypt.fieldsOf.addresses` (L16-L30) - Class
   - `src.modules.orders.services.reencrypt.fieldsOf.addresses.ADDRESS_PATHS.flatMap() callback.ADDRESS_FIELDS.flatMap() callback` (L17-L29) - Function
+- `src/modules/returns/services/cancel-remainder.ts`
+  - `src.modules.returns.services.cancel-remainder.cancelUnanswered` (L377-L396) - Class
+  - `src.modules.returns.services.cancel-remainder.cancelUnanswered.then() callback` (L382-L396) - Function
+  - `src.modules.returns.services.cancel-remainder.cancelUnanswered.then() callback.then() callback` (L385-L395) - Function
+  - `src.modules.returns.services.cancel-remainder.cancelUnanswered.then() callback.then() callback.then() callback` (L390-L393) - Function
+  - `src.modules.returns.services.cancel-remainder.cancelUnanswered.then() callback.then() callback.then() callback.live.every() callback` (L391-L391) - Function
+  - `src.modules.returns.services.cancel-remainder.cancelUnanswered.then() callback.then() callback.then() callback.then() callback` (L392-L392) - Function
+- `src/modules/stats/domain/calendar.ts`
+  - `src.modules.stats.domain.calendar.CalendarDay` (L9-L13) - Interface
+- `src/modules/stats/services/breakdowns.ts`
+  - `src.modules.stats.services.breakdowns.getProductSeries.then() callback.ordered` (L78-L78) - Class
+  - `src.modules.stats.services.breakdowns.getProductSeries.then() callback.ordered.sold.buckets.map() callback` (L78-L78) - Function
+  - `src.modules.stats.services.breakdowns.getOperationsStats.then() callback.refunds.currencies.map() callback.rows` (L127-L127) - Class
+  - `src.modules.stats.services.breakdowns.getOperationsStats.then() callback.refunds.currencies.map() callback.rows.money.filter() callback` (L127-L127) - Function
+- `src/modules/stats/services/sales.ts`
+  - `src.modules.stats.services.sales.rawFiguresFor` (L38-L64) - Class
+  - `src.modules.stats.services.sales.rawFiguresFor.then() callback` (L43-L64) - Function
+  - `src.modules.stats.services.sales.getSalesStats` (L84-L107) - Class
+  - `src.modules.stats.services.sales.getSalesStats.then() callback` (L86-L106) - Function
+  - `src.modules.stats.services.sales.getSalesStats.then() callback.currencies.map() callback` (L90-L104) - Function
+  - `src.modules.stats.services.sales.getSalesStats.then() callback.currencies.map() callback.buckets.period.bucketStarts.map() callback` (L96-L102) - Function
 
 ### Contract Bundle Assembly & CI Validation Gates
 The subsystem's namesake: assembles the downstream contract artifacts and enforces the CI gates that protect contract stability. It splices the authorization-keys bundle from per-module fragments + root residual, generates the four API client collections on demand, emits the AsyncAPI TypeScript types, and assembles the root OpenAPI document. It also hosts the AsyncAPI breaking-change detector (merge-base diff vs origin/main), the mutation baseline checker, and the shard-based mutation runner entry points.
 
-**Related Classes/Methods**:
-
-- `scripts.contracts.check-asyncapi-breaking.baseArgument`
+**Related Classes/Methods**: _None_
 
 **Source Files:**
 
 - `scripts/contracts/authorization-bundle.ts`
-  - `scripts.contracts.authorization-bundle.FragmentKey` (L69-L71) - Interface
-  - `scripts.contracts.authorization-bundle.FragmentDocument` (L74-L76) - Interface
-  - `scripts.contracts.authorization-bundle.fragmentKeysBlock.misattributed` (L100-L100) - Class
-  - `scripts.contracts.authorization-bundle.fragmentKeysBlock.misattributed.parsed.keys.filter() callback` (L100-L100) - Function
-  - `scripts.contracts.authorization-bundle.fragmentKeysBlock.misattributed.map() callback` (L104-L104) - Function
-  - `scripts.contracts.authorization-bundle.filter() callback` (L114-L114) - Function
-- `scripts/contracts/check-asyncapi-breaking.ts`
-  - `scripts.contracts.check-asyncapi-breaking.baseArgument` (L32-L32) - Class
-  - `scripts.contracts.check-asyncapi-breaking.baseArgument.process.argv.find() callback` (L32-L32) - Function
+  - `scripts.contracts.authorization-bundle.fragmentKeysBlock.misattributed` (L88-L88) - Class
+  - `scripts.contracts.authorization-bundle.fragmentKeysBlock.misattributed.parsed.keys.filter() callback` (L88-L88) - Function
+  - `scripts.contracts.authorization-bundle.fragmentKeysBlock.misattributed.map() callback` (L92-L92) - Function
 - `scripts/contracts/client-collections-bundle.ts`
-  - `scripts.contracts.client-collections-bundle.values` (L79-L156) - Class
-  - `scripts.contracts.client-collections-bundle.values.pathParam` (L126-L135) - Method
-  - `scripts.contracts.client-collections-bundle.filter() callback` (L170-L170) - Function
+  - `scripts.contracts.client-collections-bundle.values` (L84-L162) - Class
+  - `scripts.contracts.client-collections-bundle.values.pathParam` (L131-L140) - Method
 - `scripts/contracts/generate-asyncapi-types.ts`
-  - `scripts.contracts.generate-asyncapi-types.then() callback.modelBlocks` (L588-L591) - Class
-  - `scripts.contracts.generate-asyncapi-types.then() callback.modelBlocks.models.map() callback` (L589-L590) - Function
+  - `scripts.contracts.generate-asyncapi-types.then() callback.modelBlocks` (L572-L575) - Class
+  - `scripts.contracts.generate-asyncapi-types.then() callback.modelBlocks.models.map() callback` (L573-L574) - Function
 - `scripts/contracts/root-assembly.ts`
-  - `scripts.contracts.root-assembly.pruneStaleReferences.stale` (L62-L67) - Class
-  - `scripts.contracts.root-assembly.pruneStaleReferences.stale.paths.items.filter() callback` (L62-L67) - Function
-  - `scripts.contracts.root-assembly.readModuleFragments.map() callback.operations` (L164-L164) - Class
-  - `scripts.contracts.root-assembly.readModuleFragments.map() callback.operations.flatMap() callback` (L164-L164) - Function
+  - `scripts.contracts.root-assembly.pruneStaleReferences.stale` (L64-L69) - Class
+  - `scripts.contracts.root-assembly.pruneStaleReferences.stale.paths.items.filter() callback` (L64-L69) - Function
+  - `scripts.contracts.root-assembly.readModuleFragments.map() callback.operations` (L159-L159) - Class
+  - `scripts.contracts.root-assembly.readModuleFragments.map() callback.operations.flatMap() callback` (L159-L159) - Function
 - `scripts/docker/generate-dockerfile-dockerignore.ts`
-  - `scripts.docker.generate-dockerfile-dockerignore.derive.kept` (L62-L62) - Class
-  - `scripts.docker.generate-dockerfile-dockerignore.derive.kept.filter() callback` (L62-L62) - Function
+  - `scripts.docker.generate-dockerfile-dockerignore.derive.kept` (L58-L58) - Class
+  - `scripts.docker.generate-dockerfile-dockerignore.derive.kept.filter() callback` (L58-L58) - Function
 - `scripts/mutation/check-baseline.ts`
-  - `scripts.mutation.check-baseline.mergeDirectoryArgument` (L42-L42) - Class
-  - `scripts.mutation.check-baseline.mergeDirectoryArgument.process.argv.find() callback` (L42-L42) - Function
-  - `scripts.mutation.check-baseline.map() callback` (L147-L147) - Function
-  - `scripts.mutation.check-baseline.counts.held.comparisons.filter() callback` (L162-L162) - Function
-  - `scripts.mutation.check-baseline.counts.improved.comparisons.filter() callback` (L163-L163) - Function
-  - `scripts.mutation.check-baseline.counts.added.comparisons.filter() callback` (L164-L164) - Function
-  - `scripts.mutation.check-baseline.counts.removed.comparisons.filter() callback` (L165-L165) - Function
-  - `scripts.mutation.check-baseline.comparisons.filter() callback` (L184-L184) - Function
+  - `scripts.mutation.check-baseline.map() callback` (L158-L158) - Function
+  - `scripts.mutation.check-baseline.counts.held.comparisons.filter() callback` (L173-L173) - Function
+  - `scripts.mutation.check-baseline.counts.improved.comparisons.filter() callback` (L174-L174) - Function
+  - `scripts.mutation.check-baseline.counts.added.comparisons.filter() callback` (L175-L175) - Function
+  - `scripts.mutation.check-baseline.counts.removed.comparisons.filter() callback` (L176-L176) - Function
+  - `scripts.mutation.check-baseline.comparisons.filter() callback` (L182-L182) - Function
 - `scripts/mutation/ci/waves.ts`
-  - `scripts.mutation.ci.waves.nextWave.results` (L207-L207) - Class
-  - `scripts.mutation.ci.waves.nextWave.results.previous.shards.map() callback` (L207-L207) - Function
-  - `scripts.mutation.ci.waves.nextWave.results.flatMap() callback` (L212-L212) - Function
+  - `scripts.mutation.ci.waves.nextWave.results` (L198-L198) - Class
+  - `scripts.mutation.ci.waves.nextWave.results.previous.shards.map() callback` (L198-L198) - Function
+  - `scripts.mutation.ci.waves.nextWave.results.flatMap() callback` (L203-L203) - Function
 - `scripts/mutation/local-policy.ts`
   - `scripts.mutation.local-policy.selectShards.asked` (L47-L47) - Class
   - `scripts.mutation.local-policy.selectShards.asked.shards.filter() callback` (L47-L47) - Function
-- `scripts/mutation/run-diff.ts`
-  - `scripts.mutation.run-diff.baseArgument` (L47-L47) - Class
-  - `scripts.mutation.run-diff.baseArgument.process.argv.find() callback` (L47-L47) - Function
 - `scripts/mutation/run-shards.ts`
-  - `scripts.mutation.run-shards.runShard.written` (L141-L141) - Class
-  - `scripts.mutation.run-shards.runShard.written.catch() callback` (L141-L141) - Function
-  - `scripts.mutation.run-shards.then() callback` (L222-L222) - Function
+  - `scripts.mutation.run-shards.runShard.written` (L140-L140) - Class
+  - `scripts.mutation.run-shards.runShard.written.catch() callback` (L140-L140) - Function
+  - `scripts.mutation.run-shards.then() callback` (L221-L221) - Function
 - `scripts/mutation/sharding.ts`
   - `scripts.mutation.sharding.packIntoShards.bins` (L48-L51) - Class
   - `scripts.mutation.sharding.packIntoShards.bins.Array.from() callback` (L48-L51) - Function
   - `scripts.mutation.sharding.packIntoShards.bins.map() callback` (L61-L65) - Function
 - `scripts/mutation/stryker-run.ts`
-  - `scripts.mutation.stryker-run.StrykerOutcome` (L80-L83) - Interface
-  - `scripts.mutation.stryker-run.runStryker.passedConcurrency` (L101-L101) - Class
-  - `scripts.mutation.stryker-run.runStryker.passedConcurrency.args.some() callback` (L101-L101) - Function
-- `scripts/ops/demo-remove-authorization.ts`
-  - `scripts.ops.demo-remove-authorization.readRemovedAuthorization.stillUsed` (L57-L57) - Class
-  - `scripts.ops.demo-remove-authorization.readRemovedAuthorization.stillUsed.map() callback` (L57-L57) - Function
-  - `scripts.ops.demo-remove-authorization.stripRoleGrants.lines` (L75-L77) - Class
-  - `scripts.ops.demo-remove-authorization.stripRoleGrants.lines.filter() callback` (L77-L77) - Function
-  - `scripts.ops.demo-remove-authorization.pruneCase.emptied` (L113-L115) - Class
-  - `scripts.ops.demo-remove-authorization.pruneCase.emptied.lists.some() callback` (L114-L114) - Function
-  - `scripts.ops.demo-remove-authorization.pruneCase.emptied.lists.some() callback.all.every() callback` (L114-L114) - Function
-- `scripts/ops/demo-remove-registry.ts`
-  - `scripts.ops.demo-remove-registry.removeCrontabEntries.escaped.scriptNames.map() callback` (L172-L173) - Function
-  - `scripts.ops.demo-remove-registry.removeCrontabEntries.escaped` (L172-L174) - Class
+  - `scripts.mutation.stryker-run.StrykerOutcome` (L78-L81) - Interface
+  - `scripts.mutation.stryker-run.runStryker.passedConcurrency` (L99-L99) - Class
+  - `scripts.mutation.stryker-run.runStryker.passedConcurrency.args.some() callback` (L99-L99) - Function
 - `scripts/ops/reencrypt.ts`
-  - `scripts.ops.reencrypt.runAll` (L53-L60) - Class
-  - `scripts.ops.reencrypt.runAll.then() callback` (L59-L59) - Function
-  - `scripts.ops.reencrypt.then() callback` (L65-L65) - Function
-- `scripts/ops/sweep-order-effects.ts`
-  - `scripts.ops.sweep-order-effects.main` (L42-L48) - Class
-  - `scripts.ops.sweep-order-effects.then() callback` (L44-L46) - Function
-  - `scripts.ops.sweep-order-effects.main.then() callback` (L48-L48) - Function
+  - `scripts.ops.reencrypt.walks.enabledModules.flatMap() callback` (L33-L34) - Function
+  - `scripts.ops.reencrypt.walks` (L33-L35) - Class
+  - `scripts.ops.reencrypt.runAll` (L43-L50) - Class
+  - `scripts.ops.reencrypt.runAll.then() callback` (L49-L49) - Function
+  - `scripts.ops.reencrypt.then() callback` (L55-L55) - Function
+- `scripts/ops/run-job.ts`
+  - `scripts.ops.run-job.then() callback` (L68-L68) - Function
 - `scripts/pairing/spec-identity.ts`
   - `scripts.pairing.spec-identity.formatSharedFileProblems.lines` (L210-L226) - Class
   - `scripts.pairing.spec-identity.formatSharedFileProblems.lines.problems.map() callback` (L210-L226) - Function
@@ -213,8 +266,8 @@ The subsystem's namesake: assembles the downstream contract artifacts and enforc
   - `scripts.scaffold.names.pascal` (L57-L61) - Class
   - `scripts.scaffold.names.pascal.map() callback` (L60-L60) - Function
 - `scripts/scaffold/registry.ts`
-  - `scripts.scaffold.registry.splitAfter.at` (L99-L99) - Class
-  - `scripts.scaffold.registry.splitAfter.at.lines.findIndex() callback` (L99-L99) - Function
+  - `scripts.scaffold.registry.splitAfter.at` (L100-L100) - Class
+  - `scripts.scaffold.registry.splitAfter.at.lines.findIndex() callback` (L100-L100) - Function
 - `src/modules/cart/repository.ts`
   - `src.modules.cart.repository.pushNewLine` (L46-L58) - Class
   - `src.modules.cart.repository.pushNewLine.then() callback` (L58-L58) - Function
@@ -224,6 +277,108 @@ The subsystem's namesake: assembles the downstream contract artifacts and enforc
   - `src.modules.cart.repository.upsertLine.then() callback` (L143-L170) - Function
   - `src.modules.cart.repository.upsertLine.then() callback.then() callback` (L150-L169) - Function
   - `src.modules.cart.repository.upsertLine.catch() callback` (L171-L174) - Function
+- `src/modules/delivery/controllers/get-preorder-fulfillment-orders.ts`
+  - `src.modules.delivery.controllers.get-preorder-fulfillment-orders.getPreorderSummary` (L28-L35) - Class
+  - `src.modules.delivery.controllers.get-preorder-fulfillment-orders.getPreorderSummary.runList` (L34-L34) - Method
+- `src/modules/delivery/domain/fulfillment.ts`
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines` (L113-L146) - Class
+- `src/modules/delivery/module.ts`
+  - `src.modules.delivery.module.default.subscribe` (L114-L128) - Method
+- `src/modules/delivery/repository.ts`
+  - `src.modules.delivery.repository.fulfillmentOrderRepository` (L160-L495) - Class
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.findByOrderId` (L207-L212) - Method
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.findByOrderIds` (L219-L223) - Method
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.findByOrderIds.orderId.$in.orderIds.map() callback` (L221-L221) - Function
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.findInSession` (L230-L231) - Method
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.insertIfAbsent` (L244-L265) - Method
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.insertIfAbsent.then() callback` (L265-L265) - Function
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.claim` (L277-L290) - Method
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.findWaitingForProduct` (L297-L304) - Method
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.findDatePassed` (L311-L318) - Method
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.findWaitsExpired` (L325-L335) - Method
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.searchBoard` (L345-L356) - Method
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.searchBoard.then() callback` (L355-L355) - Function
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.summarizeProducts` (L369-L473) - Method
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.summarizeProducts.then() callback` (L468-L471) - Function
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.summarizeProducts.then() callback.items.result.items.map() callback` (L469-L469) - Function
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.scrubHoldNotesBefore` (L486-L494) - Method
+  - `src.modules.delivery.repository.fulfillmentOrderRepository.scrubHoldNotesBefore.then() callback` (L494-L494) - Function
+- `src/modules/delivery/services/act.ts`
+  - `src.modules.delivery.services.act.runAct` (L67-L76) - Class
+  - `src.modules.delivery.services.act.runAct.then() callback` (L69-L72) - Function
+  - `src.modules.delivery.services.act.runAct.catch() callback` (L73-L76) - Function
+- `src/modules/delivery/services/announce.ts`
+  - `src.modules.delivery.services.announce.announceShipped` (L41-L69) - Class
+  - `src.modules.delivery.services.announce.announceShipped.then() callback` (L62-L68) - Function
+  - `src.modules.delivery.services.announce.announceWaitExpired` (L252-L275) - Class
+  - `src.modules.delivery.services.announce.announceWaitExpired.then() callback` (L265-L274) - Function
+- `src/modules/delivery/services/confirm-wait.ts`
+  - `src.modules.delivery.services.confirm-wait.confirmWait` (L37-L103) - Class
+  - `src.modules.delivery.services.confirm-wait.confirmWait.then() callback` (L42-L103) - Function
+  - `src.modules.delivery.services.confirm-wait.confirmWait.then() callback.then() callback.runAct() callback` (L53-L89) - Function
+  - `src.modules.delivery.services.confirm-wait.confirmWait.then() callback.then() callback.then() callback` (L89-L101) - Function
+  - `src.modules.delivery.services.confirm-wait.confirmWait.then() callback.then() callback.then() callback.then() callback` (L98-L99) - Function
+- `src/modules/delivery/services/ensure.ts`
+  - `src.modules.delivery.services.ensure.ensureFulfillmentOrders` (L51-L78) - Class
+  - `src.modules.delivery.services.ensure.ensureFulfillmentOrders.then() callback` (L52-L78) - Function
+  - `src.modules.delivery.services.ensure.ensureFulfillmentOrders.then() callback.then() callback` (L55-L77) - Function
+  - `src.modules.delivery.services.ensure.ensureFulfillmentOrders.then() callback.then() callback.withTransaction() callback` (L59-L76) - Function
+- `src/modules/delivery/services/notice.ts`
+  - `src.modules.delivery.services.notice.SentNotice` (L36-L40) - Interface
+- `src/modules/delivery/services/override-sync.ts`
+  - `src.modules.delivery.services.override-sync.syncWithOverride` (L76-L86) - Class
+  - `src.modules.delivery.services.override-sync.syncWithOverride.runAct() callback` (L79-L85) - Function
+  - `src.modules.delivery.services.override-sync.syncWithOverride.then() callback` (L85-L85) - Function
+- `src/modules/delivery/services/preorder-sweep.ts`
+  - `src.modules.delivery.services.preorder-sweep.askOne` (L45-L64) - Class
+  - `src.modules.delivery.services.preorder-sweep.askOne.runAct() callback` (L46-L64) - Function
+  - `src.modules.delivery.services.preorder-sweep.askOne.then() callback` (L64-L64) - Function
+  - `src.modules.delivery.services.preorder-sweep.expireOne` (L73-L95) - Class
+  - `src.modules.delivery.services.preorder-sweep.expireOne.runAct() callback` (L74-L95) - Function
+  - `src.modules.delivery.services.preorder-sweep.expireOne.then() callback` (L95-L95) - Function
+- `src/modules/delivery/services/progress.ts`
+  - `src.modules.delivery.services.progress.reportProgress` (L37-L54) - Class
+  - `src.modules.delivery.services.progress.reportProgress.then() callback` (L39-L53) - Function
+  - `src.modules.delivery.services.progress.reportProgress.then() callback.then() callback` (L40-L53) - Function
+  - `src.modules.delivery.services.progress.reportProgress.then() callback.then() callback.then() callback` (L44-L52) - Function
+- `src/modules/delivery/services/read.ts`
+  - `src.modules.delivery.services.read.shippedQuantities` (L75-L84) - Class
+  - `src.modules.delivery.services.read.shippedQuantities.then() callback` (L76-L84) - Function
+  - `src.modules.delivery.services.read.shippedQuantities.then() callback.filter() callback` (L82-L82) - Function
+  - `src.modules.delivery.services.read.shippedQuantities.then() callback.map() callback` (L83-L83) - Function
+- `src/modules/delivery/services/release-allocated.ts`
+  - `src.modules.delivery.services.release-allocated.waitingOn` (L27-L30) - Class
+  - `src.modules.delivery.services.release-allocated.waitingOn.fulfillmentOrder.lines.filter() callback` (L29-L29) - Function
+  - `src.modules.delivery.services.release-allocated.waitingOn.reduce() callback` (L30-L30) - Function
+  - `src.modules.delivery.services.release-allocated.heldFor` (L39-L55) - Class
+  - `src.modules.delivery.services.release-allocated.heldFor.then() callback` (L42-L54) - Function
+  - `src.modules.delivery.services.release-allocated.heldFor.then() callback.all.filter() callback` (L45-L48) - Function
+  - `src.modules.delivery.services.release-allocated.heldFor.then() callback.toSorted() callback` (L51-L53) - Function
+  - `src.modules.delivery.services.release-allocated.releaseAllocated` (L65-L83) - Class
+  - `src.modules.delivery.services.release-allocated.releaseAllocated.then() callback` (L73-L83) - Function
+  - `src.modules.delivery.services.release-allocated.releaseAllocated.then() callback.total` (L74-L74) - Class
+  - `src.modules.delivery.services.release-allocated.releaseAllocated.then() callback.total.held.reduce() callback` (L74-L74) - Function
+- `src/modules/delivery/services/slip.ts`
+  - `src.modules.delivery.services.slip.expectedFrom` (L39-L53) - Class
+  - `src.modules.delivery.services.slip.expectedFrom.fulfillmentOrder.lines.filter() callback` (L43-L43) - Function
+  - `src.modules.delivery.services.slip.expectedFrom.map() callback` (L44-L44) - Function
+  - `src.modules.delivery.services.slip.expectedFrom.then() callback` (L46-L53) - Function
+  - `src.modules.delivery.services.slip.judgeOne` (L138-L154) - Class
+  - `src.modules.delivery.services.slip.judgeOne.runAct() callback` (L139-L154) - Function
+  - `src.modules.delivery.services.slip.judgeOne.then() callback` (L154-L154) - Function
+- `src/modules/delivery/services/split.ts`
+  - `src.modules.delivery.services.split.Split` (L27-L32) - Interface
+  - `src.modules.delivery.services.split.splitAct.covers` (L100-L103) - Class
+  - `src.modules.delivery.services.split.splitAct.covers.held.lines.every() callback` (L100-L103) - Function
+  - `src.modules.delivery.services.split.splitAct.released.number.siblings.map() callback` (L135-L135) - Function
+  - `src.modules.delivery.services.split.splitForAllocation` (L161-L175) - Class
+  - `src.modules.delivery.services.split.splitForAllocation.then() callback` (L165-L175) - Function
+  - `src.modules.delivery.services.split.splitForAllocation.then() callback.then() callback` (L168-L174) - Function
+  - `src.modules.delivery.services.split.splitForAllocation.then() callback.then() callback.runAct() callback` (L171-L171) - Function
+  - `src.modules.delivery.services.split.splitForAllocation.then() callback.then() callback.then() callback` (L172-L172) - Function
+- `src/modules/stats/services/breakdowns.ts`
+  - `src.modules.stats.services.breakdowns.getProductSeries.then() callback.reversed` (L79-L79) - Class
+  - `src.modules.stats.services.breakdowns.getProductSeries.then() callback.reversed.returned.map() callback` (L79-L79) - Function
 
 ### Mutation Testing Policy & Scaffold Tooling
 The supporting tooling layer around the mutation gates and repo scaffolding: the local shard-selection policy and baseline scoring that drive the shard-based mutation runner, the CI CLI that reads finished shards, and the scaffold central-edits/options/registry machinery used to keep generated artifacts and module registries in sync. It also carries the cart domain model/rules and webhooks failure-recording hooks that the tooling references.
@@ -236,9 +391,9 @@ The supporting tooling layer around the mutation gates and repo scaffolding: the
   - `scripts.mutation.baseline.scoresFromReport.killed` (L90-L90) - Class
   - `scripts.mutation.baseline.scoresFromReport.killed.scored.filter() callback` (L90-L90) - Function
 - `scripts/mutation/ci/cli.ts`
-  - `scripts.mutation.ci.cli.readFinished.shards` (L150-L152) - Class
-  - `scripts.mutation.ci.cli.readFinished.shards.plans.flatMap() callback` (L151-L151) - Function
-  - `scripts.mutation.ci.cli.readFinished.shards.plans.flatMap() callback.each.map() callback` (L151-L151) - Function
+  - `scripts.mutation.ci.cli.readFinished.shards` (L149-L151) - Class
+  - `scripts.mutation.ci.cli.readFinished.shards.plans.flatMap() callback` (L150-L150) - Function
+  - `scripts.mutation.ci.cli.readFinished.shards.plans.flatMap() callback.each.map() callback` (L150-L150) - Function
 - `scripts/mutation/local-policy.ts`
   - `scripts.mutation.local-policy.ShardSelection` (L14-L19) - Interface
   - `scripts.mutation.local-policy.done` (L48-L48) - Class
@@ -252,33 +407,30 @@ The supporting tooling layer around the mutation gates and repo scaffolding: the
   - `scripts.scaffold.central-edits.addParityEntry.at` (L77-L77) - Class
   - `scripts.scaffold.central-edits.addParityEntry.at.rows.findIndex() callback` (L77-L77) - Function
 - `scripts/scaffold/options.ts`
-  - `scripts.scaffold.options.parseArguments.positional` (L59-L65) - Class
-  - `scripts.scaffold.options.parseArguments.positional.argv.filter() callback` (L59-L65) - Function
+  - `scripts.scaffold.options.parseArguments.positional` (L60-L66) - Class
+  - `scripts.scaffold.options.parseArguments.positional.argv.filter() callback` (L60-L66) - Function
 - `scripts/scaffold/registry.ts`
   - `scripts.scaffold.registry.insertInRun.first` (L27-L27) - Class
   - `scripts.scaffold.registry.insertInRun.first.lines.findIndex() callback` (L27-L27) - Function
 - `src/modules/cart/domain/rules.ts`
-  - `src.modules.cart.domain.rules.CartLineCandidate` (L16-L32) - Interface
-  - `src.modules.cart.domain.rules.UnavailableCartLine` (L35-L39) - Interface
-  - `src.modules.cart.domain.rules.CheckoutShortfall` (L45-L49) - Interface
-  - `src.modules.cart.domain.rules.WeighedCartLine` (L52-L55) - Interface
-  - `src.modules.cart.domain.rules.evaluateCheckout.unavailable` (L156-L160) - Class
-  - `src.modules.cart.domain.rules.evaluateCheckout.unavailable.lines.filter() callback` (L158-L158) - Function
-  - `src.modules.cart.domain.rules.evaluateCheckout.unavailable.map() callback` (L160-L160) - Function
-  - `src.modules.cart.domain.rules.shortfalls` (L167-L173) - Class
-  - `src.modules.cart.domain.rules.evaluateCheckout.shortfalls.lines.filter() callback` (L168-L168) - Function
-  - `src.modules.cart.domain.rules.evaluateCheckout.shortfalls.map() callback` (L169-L173) - Function
+  - `src.modules.cart.domain.rules.CartLineCandidate` (L16-L35) - Interface
+  - `src.modules.cart.domain.rules.UnavailableCartLine` (L38-L42) - Interface
+  - `src.modules.cart.domain.rules.CheckoutShortfall` (L48-L54) - Interface
+  - `src.modules.cart.domain.rules.WeighedCartLine` (L57-L60) - Interface
+  - `src.modules.cart.domain.rules.evaluateCheckout.unavailable` (L170-L172) - Class
+  - `src.modules.cart.domain.rules.evaluateCheckout.unavailable.map() callback` (L172-L172) - Function
+  - `src.modules.cart.domain.rules.shortfalls` (L177-L188) - Class
 - `src/modules/cart/model.ts`
   - `src.modules.cart.model.CartItem` (L24-L27) - Interface
 - `src/modules/cart/services/checkout.ts`
-  - `src.modules.cart.services.checkout.runCheckout.joined` (L412-L412) - Class
-  - `src.modules.cart.services.checkout.runCheckout.joined.lines.filter() callback` (L412-L412) - Function
-  - `src.modules.cart.services.checkout.runCheckout.availableByProduct` (L441-L443) - Class
-  - `src.modules.cart.services.checkout.runCheckout.availableByProduct.lines.map() callback` (L442-L442) - Function
-  - `src.modules.cart.services.checkout.runCheckout.verdict` (L444-L454) - Class
-  - `src.modules.cart.services.checkout.runCheckout.verdict.lines.map() callback` (L445-L453) - Function
-  - `src.modules.cart.services.checkout.runCheckout.overLimit` (L471-L471) - Class
-  - `src.modules.cart.services.checkout.runCheckout.overLimit.joined.filter() callback` (L471-L471) - Function
+  - `src.modules.cart.services.checkout.runCheckout.joined` (L419-L419) - Class
+  - `src.modules.cart.services.checkout.runCheckout.joined.lines.filter() callback` (L419-L419) - Function
+  - `src.modules.cart.services.checkout.runCheckout.availableByProduct` (L448-L451) - Class
+  - `src.modules.cart.services.checkout.runCheckout.availableByProduct.lines.map() callback` (L449-L449) - Function
+  - `src.modules.cart.services.checkout.runCheckout.verdict` (L452-L461) - Class
+  - `src.modules.cart.services.checkout.runCheckout.verdict.lines.map() callback` (L453-L460) - Function
+  - `src.modules.cart.services.checkout.runCheckout.overLimit` (L478-L478) - Class
+  - `src.modules.cart.services.checkout.runCheckout.overLimit.joined.filter() callback` (L478-L478) - Function
 - `src/modules/cart/services/items.ts`
   - `src.modules.cart.services.items.cartShippingMethodSet.then() callback.then() callback.joined` (L268-L268) - Class
   - `src.modules.cart.services.items.cartShippingMethodSet.then() callback.then() callback.joined.lines.filter() callback` (L268-L268) - Function
@@ -287,10 +439,6 @@ The supporting tooling layer around the mutation gates and repo scaffolding: the
   - `src.modules.cart.services.merge.MergeStep` (L35-L38) - Interface
   - `src.modules.cart.services.merge.mergeLines.shelves` (L139-L139) - Class
   - `src.modules.cart.services.merge.mergeLines.shelves.lines.map() callback` (L139-L139) - Function
-  - `src.modules.cart.services.merge.announceUnavailable.unavailable` (L164-L164) - Class
-  - `src.modules.cart.services.merge.announceUnavailable.unavailable.results.filter() callback` (L164-L164) - Function
-  - `src.modules.cart.services.merge.announceUnavailable.unavailable.map() callback` (L168-L171) - Function
-  - `src.modules.cart.services.merge.announceUnavailable.unavailable.map() callback.then() callback` (L171-L171) - Function
 - `src/modules/cart/services/reorder.ts`
   - `src.modules.cart.services.reorder.resolveReorderLines.requested` (L51-L54) - Class
   - `src.modules.cart.services.reorder.resolveReorderLines.requested.order.items.map() callback` (L51-L54) - Function
@@ -299,22 +447,118 @@ The supporting tooling layer around the mutation gates and repo scaffolding: the
   - `src.modules.cart.services.reorder.addLinesToCart.quantities` (L77-L79) - Class
   - `src.modules.cart.services.reorder.addLinesToCart.quantities.map() callback` (L78-L78) - Function
 - `src/modules/cart/services/shelf.ts`
-  - `src.modules.cart.services.shelf.Shelf` (L15-L20) - Interface
-  - `src.modules.cart.services.shelf.readShelf` (L28-L39) - Class
-  - `src.modules.cart.services.shelf.readShelf.then() callback` (L33-L38) - Function
+  - `src.modules.cart.services.shelf.Shelf` (L17-L22) - Interface
+  - `src.modules.cart.services.shelf.readShelf` (L31-L51) - Class
+  - `src.modules.cart.services.shelf.readShelf.then() callback` (L33-L50) - Function
   - `src.modules.cart.services.shelf.readShelf.then() callback.byId` (L34-L34) - Class
   - `src.modules.cart.services.shelf.readShelf.then() callback.byId.products.map() callback` (L34-L34) - Function
-  - `src.modules.cart.services.shelf.readShelf.then() callback.ids.map() callback` (L36-L36) - Function
 - `src/modules/cart/services/view.ts`
-  - `src.modules.cart.services.view.CartLine` (L35-L38) - Interface
-  - `src.modules.cart.services.view.readCartLines.productIds` (L79-L79) - Class
-  - `src.modules.cart.services.view.readCartLines.productIds.cart.items.map() callback` (L79-L79) - Function
-  - `src.modules.cart.services.view.readCartLines.then() callback.byId` (L82-L82) - Class
-  - `src.modules.cart.services.view.readCartLines.then() callback.byId.products.map() callback` (L82-L82) - Function
-  - `src.modules.cart.services.view.buildView.joined` (L160-L160) - Class
-  - `src.modules.cart.services.view.buildView.joined.lines.filter() callback` (L160-L160) - Function
-  - `src.modules.cart.services.view.buildView.shippingCost` (L163-L163) - Class
-  - `src.modules.cart.services.view.buildView.shippingCost.options.find() callback` (L163-L163) - Function
+  - `src.modules.cart.services.view.CartLine` (L36-L39) - Interface
+  - `src.modules.cart.services.view.readCartLines.productIds` (L80-L80) - Class
+  - `src.modules.cart.services.view.readCartLines.productIds.cart.items.map() callback` (L80-L80) - Function
+  - `src.modules.cart.services.view.readCartLines.then() callback.byId` (L83-L83) - Class
+  - `src.modules.cart.services.view.readCartLines.then() callback.byId.products.map() callback` (L83-L83) - Function
+  - `src.modules.cart.services.view.buildView.joined` (L161-L161) - Class
+  - `src.modules.cart.services.view.buildView.joined.lines.filter() callback` (L161-L161) - Function
+  - `src.modules.cart.services.view.buildView.shippingCost` (L164-L164) - Class
+  - `src.modules.cart.services.view.buildView.shippingCost.options.find() callback` (L164-L164) - Function
+- `src/modules/delivery/domain/fulfillment.ts`
+  - `src.modules.delivery.domain.fulfillment.FulfillmentLine` (L16-L23) - Interface
+  - `src.modules.delivery.domain.fulfillment.remainingOf` (L60-L61) - Class
+  - `src.modules.delivery.domain.fulfillment.remainingOf.lines.reduce() callback` (L61-L61) - Function
+  - `src.modules.delivery.domain.fulfillment.kindOf` (L67-L68) - Class
+  - `src.modules.delivery.domain.fulfillment.kindOf.lines.some() callback` (L68-L68) - Function
+  - `src.modules.delivery.domain.fulfillment.promisedAt` (L94-L95) - Class
+  - `src.modules.delivery.domain.fulfillment.promisedAt.group.map() callback` (L95-L95) - Function
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.drafts` (L123-L143) - Class
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.drafts.lines.now.map() callback` (L129-L129) - Function
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.drafts.toSorted() callback` (L134-L134) - Function
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.drafts.map() callback.lines.group.map() callback` (L138-L138) - Function
+  - `src.modules.delivery.domain.fulfillment.groupOrderLines.drafts.map() callback` (L145-L145) - Function
+  - `src.modules.delivery.domain.fulfillment.statusOfLines` (L156-L168) - Class
+  - `src.modules.delivery.domain.fulfillment.statusOfLines.lines.some() callback` (L165-L165) - Function
+  - `src.modules.delivery.domain.fulfillment.checkShipLines.all` (L197-L199) - Class
+  - `src.modules.delivery.domain.fulfillment.checkShipLines.all.filter() callback` (L198-L198) - Function
+  - `src.modules.delivery.domain.fulfillment.checkShipLines.all.map() callback` (L199-L199) - Function
+  - `src.modules.delivery.domain.fulfillment.checkShipLines.lines.map() callback` (L214-L214) - Function
+  - `src.modules.delivery.domain.fulfillment.withShipped` (L237-L246) - Class
+  - `src.modules.delivery.domain.fulfillment.withShipped.lines.map() callback` (L242-L245) - Function
+  - `src.modules.delivery.domain.fulfillment.withRemainderCancelled` (L252-L256) - Class
+  - `src.modules.delivery.domain.fulfillment.withRemainderCancelled.lines.map() callback` (L253-L256) - Function
+  - `src.modules.delivery.domain.fulfillment.remainderLines` (L263-L266) - Class
+  - `src.modules.delivery.domain.fulfillment.remainderLines.lines.filter() callback` (L265-L265) - Function
+  - `src.modules.delivery.domain.fulfillment.remainderLines.map() callback` (L266-L266) - Function
+  - `src.modules.delivery.domain.fulfillment.FulfillmentReport` (L282-L289) - Interface
+  - `src.modules.delivery.domain.fulfillment.summarize.live` (L298-L301) - Class
+  - `src.modules.delivery.domain.fulfillment.summarize.live.fulfillmentOrders.filter() callback` (L299-L300) - Function
+  - `src.modules.delivery.domain.fulfillment.summarize.units` (L303-L304) - Class
+  - `src.modules.delivery.domain.fulfillment.summarize.units.group.reduce() callback` (L304-L304) - Function
+  - `src.modules.delivery.domain.fulfillment.summarize.awaitingStock.held.filter() callback` (L315-L315) - Function
+  - `src.modules.delivery.domain.fulfillment.ActionCandidate` (L323-L329) - Interface
+- `src/modules/delivery/domain/preorder.ts`
+  - `src.modules.delivery.domain.preorder.SlipFacts` (L47-L56) - Interface
+  - `src.modules.delivery.domain.preorder.SweepFacts` (L78-L83) - Interface
+  - `src.modules.delivery.domain.preorder.BoardFacts` (L123-L127) - Interface
+- `src/modules/delivery/repository.ts`
+  - `src.modules.delivery.repository.BoardFilters` (L32-L43) - Interface
+  - `src.modules.delivery.repository.ProductSummaryRow` (L46-L57) - Interface
+  - `src.modules.delivery.repository.boardWhere.orderId.$in.filters.orderIds.map() callback` (L135-L135) - Function
+  - `src.modules.delivery.repository.shipmentRepository.findByFulfillmentOrderIds` (L546-L551) - Method
+  - `src.modules.delivery.repository.shipmentRepository.findInSession` (L558-L558) - Method
+  - `src.modules.delivery.repository.shipmentRepository.nextNumber` (L567-L572) - Method
+  - `src.modules.delivery.repository.shipmentRepository.nextNumber.then() callback` (L572-L572) - Function
+- `src/modules/delivery/services/act.ts`
+  - `src.modules.delivery.services.act.ActRefusal` (L23-L34) - Class
+  - `src.modules.delivery.services.act.ActRefusal.constructor` (L30-L33) - Constructor
+- `src/modules/delivery/services/actions.ts`
+  - `src.modules.delivery.services.actions.Standing` (L26-L33) - Interface
+- `src/modules/delivery/services/announce.ts`
+  - `src.modules.delivery.services.announce.shipmentPayload.lines.shipment.lines.map() callback` (L31-L31) - Function
+  - `src.modules.delivery.services.announce.announceHeld` (L114-L143) - Class
+  - `src.modules.delivery.services.announce.announceHeld.then() callback` (L132-L142) - Function
+  - `src.modules.delivery.services.announce.announceDelayed` (L223-L244) - Class
+  - `src.modules.delivery.services.announce.announceDelayed.then() callback` (L242-L243) - Function
+- `src/modules/delivery/services/board.ts`
+  - `src.modules.delivery.services.board.BoardQuery` (L37-L43) - Interface
+  - `src.modules.delivery.services.board.listPreorderFulfillmentOrders.items.items.map() callback.shipments.filter() callback` (L107-L107) - Function
+- `src/modules/delivery/services/cancel-remainder.ts`
+  - `src.modules.delivery.services.cancel-remainder.cancelAllForOrder` (L116-L140) - Class
+  - `src.modules.delivery.services.cancel-remainder.cancelAllForOrder.runAct() callback` (L117-L140) - Function
+  - `src.modules.delivery.services.cancel-remainder.cancelAllForOrder.then() callback` (L140-L140) - Function
+- `src/modules/delivery/services/cut.ts`
+  - `src.modules.delivery.services.cut.cutShipment` (L49-L99) - Class
+  - `src.modules.delivery.services.cut.cutShipment.then() callback` (L66-L98) - Function
+  - `src.modules.delivery.services.cut.cutShipment.then() callback.then() callback` (L69-L96) - Function
+  - `src.modules.delivery.services.cut.cutShipment.then() callback.then() callback.lines.lines.map() callback` (L77-L83) - Function
+  - `src.modules.delivery.services.cut.cutShipment.then() callback.then() callback.lines.lines.map() callback.title.before.lines.find() callback` (L81-L81) - Function
+  - `src.modules.delivery.services.cut.cutShipment.then() callback.then() callback.then() callback` (L91-L95) - Function
+  - `src.modules.delivery.services.cut.cutShipment.then() callback.then() callback.then() callback.then() callback` (L95-L95) - Function
+- `src/modules/delivery/services/fulfill.ts`
+  - `src.modules.delivery.services.fulfill.then() callback.then() callback.then() callback.then() callback.then() callback` (L117-L117) - Function
+- `src/modules/delivery/services/holds.ts`
+  - `src.modules.delivery.services.holds.then() callback.then() callback.then() callback.then() callback.then() callback` (L178-L183) - Function
+  - `src.modules.delivery.services.holds.holdFulfillmentOrder` (L199-L211) - Class
+  - `src.modules.delivery.services.holds.holdFulfillmentOrder.guarded() callback` (L207-L207) - Function
+  - `src.modules.delivery.services.holds.releaseFulfillmentOrder` (L220-L231) - Class
+  - `src.modules.delivery.services.holds.releaseFulfillmentOrder.guarded() callback` (L227-L227) - Function
+- `src/modules/delivery/services/override-sync.ts`
+  - `src.modules.delivery.services.override-sync.shipRemainder` (L31-L49) - Class
+  - `src.modules.delivery.services.override-sync.shipRemainder.then() callback` (L49-L49) - Function
+- `src/modules/delivery/services/progress.ts`
+  - `src.modules.delivery.services.progress.ProgressReport` (L20-L26) - Interface
+- `src/modules/delivery/services/ship.ts`
+  - `src.modules.delivery.services.ship.Shipped` (L55-L59) - Interface
+  - `src.modules.delivery.services.ship.then() callback.then() callback.then() callback.then() callback.then() callback` (L243-L244) - Function
+- `src/modules/delivery/services/start.ts`
+  - `src.modules.delivery.services.start.listMethods.methods.SHIPPING_METHODS.map() callback` (L37-L37) - Function
+  - `src.modules.delivery.services.start.then() callback.then() callback.then() callback` (L69-L69) - Function
+- `src/modules/delivery/services/tracking.ts`
+  - `src.modules.delivery.services.tracking.then() callback.then() callback.then() callback.then() callback` (L46-L47) - Function
+- `src/modules/stats/services/breakdowns.ts`
+  - `src.modules.stats.services.breakdowns.getOperationsStats.then() callback.unitsReturned` (L120-L120) - Class
+  - `src.modules.stats.services.breakdowns.getOperationsStats.then() callback.unitsReturned.returned.reduce() callback` (L120-L120) - Function
+- `src/modules/stats/services/range.ts`
+  - `src.modules.stats.services.range.Period` (L15-L24) - Interface
 - `src/modules/webhooks/repository.ts`
   - `src.modules.webhooks.repository.recordFailure` (L66-L81) - Class
   - `src.modules.webhooks.repository.recordFailure.then() callback` (L73-L80) - Function

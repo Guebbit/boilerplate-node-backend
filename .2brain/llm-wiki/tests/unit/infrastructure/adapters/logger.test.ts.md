@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/logger.test.ts
-sha256: ff6027e44a1fd5b2f69d2da9168d4bbe50f596843fb45f56690491d592dd82fa
-generated_at: 2026-09-27T16:04:09.074606+00:00
+sha256: 89f8338111724703b67ee37718e14514354743aab2442e7d178bc8e43b2f2ea0
+generated_at: 2026-10-15T13:07:07.805071+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit and property-based tests for the log redaction and error-serialization utilities in `src/infrastructure/adapters/logger.ts`. The file exists to guarantee that credentials never leak into aggregated logs, that circular and shared structures don't crash the logger, and that two explicitly stated invariants (no input mutation, object-identity preservation) hold for arbitrary caller-supplied metadata.
+Unit and property-based tests for the logger adapter's two security-critical jobs: redacting sensitive credentials from arbitrary log metadata and safely serialising errors. The file exists because a gap in either function means a live password reaches a log aggregator permanently.
 
 ## Key elements
 
-- **`describe('redactSensitiveFields')`** — Deterministic cases covering: primitives pass-through, redaction of `password`/`token`/`authorization`/`cookie` (case-insensitive, camelCase, kebab-case, API-specific spellings), nested objects, arrays, circular-reference marking (`[Circular]`), shared-reference preservation, and inline `Error` serialisation.
-- **`describe('serializeError')`** — Extracts `name`/`message`/`cause` from `Error` instances; wraps non-Error values under `raw`; preserves custom error names.
-- **`describe('serializeError — the production stack guard')`** — Asserts that `stack` is present when `NODE_ENV` is unset or non-production, and **absent** when `NODE_ENV === 'production'`; `name`/`message` always survive.
-- **`describe('redactSensitiveFields — invariants')`** — `fast-check` property tests (seed `20260809`, 200 runs): input is never mutated; redaction is idempotent; no sensitive *value* appears anywhere in the output at any depth; arrays stay arrays; function never throws on `fc.anything()`.
-- **`stringValuesOf`** (local helper) — Recursively collects all string *values* from a structure (keys ignored), used by the property assertions.
-- **`metadata`** (local helper) — `fc.dictionary` arbitrary that mixes known sensitive keys with random keys and `fc.jsonValue()` values.
-- **`RUN`** (local constant) — Shared `fast-check` config object (`{ seed, numRuns: 200, endOnFailure: true }`).
+- **`describe('redactSensitiveFields')`** — Unit tests covering: pass-through of primitives, redaction of password/token/authorization/cookie fields, case-insensitive key matching, nested object redaction, key-fragment matching (camelCase, kebab-case, API-specific spellings like `passwordConfirm`), circular-reference marking (`[Circular]`), shared-reference preservation, inline `Error` serialisation, and array traversal.
+- **`describe('serializeError')`** — Unit tests for: `cause` preservation, `name`/`message` extraction, non-Error values wrapped under `raw`, custom error subclass names.
+- **`describe('serializeError — the production stack guard')`** — Verifies that `stack` is **present** only when `NODE_ENV` is `development` or `test`, and **absent** for `production`, `staging`, `''`, and `undefined`. Confirms `name`/`message` survive regardless.
+- **`describe('redactSensitiveFields — invariants')`** — Property-based tests (fast-check, fixed seed `20_260_809`, 200 runs) asserting: the input object is never mutated, redaction is idempotent, no sensitive *value* appears at any nesting depth, arrays remain arrays, array length and non-sensitive primitives are preserved, and the function never throws.
+- **`stringValuesOf`** — Local helper that recursively collects all string *values* (ignoring keys) from a structure; used by the invariant tests to avoid false positives when a secret appears as a substring of a key name.
+- **Imports** — All SUT symbols (`redactSensitiveFields`, `serializeError`, `SENSITIVE_FIELDS`, `SENSITIVE_KEY_FRAGMENTS`, `PERSONAL_FIELDS`, `redactFormat`, `resolveLogLevel`, `resolveConsoleFormat`, `resolvePersonalFieldMode`) come from `@infrastructure/adapters/logger`. `setEnvironment` comes from `@tests/environment`.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/logger.ts`** — Sole production dependency. Every test imports and exercises the functions and constants exported there (`redactSensitiveFields`, `serializeError`, `redactFormat`, `resolveLogLevel`, `resolveConsoleFormat`, `resolvePersonalFieldMode`, `SENSITIVE_FIELDS`, `PERSONAL_FIELDS`). The test file's comments reference the source's docblock invariants and mutation-testing history, indicating it was written (or expanded) specifically to close gaps identified by a mutation run.
+- **`src/infrastructure/adapters/logger.ts`** — The module under test. Every function and constant exercised in this file is imported from there.
+- **`tests/support/environment.ts`** — Supplies `setEnvironment`, which mutates `process.env.NODE_ENV` before each assertion in the production-stack-guard block so the same code path can be tested under different environments.
 
 ## Notes
 
-- The production-stack-guard block **mutates `process.env.NODE_ENV`** in each test and restores it in `afterEach`. Any test running in parallel on the same worker that also reads `NODE_ENV` will see a torn value.
-- The "no sensitive value in output" property asserts over **values only**, not over `JSON.stringify` of the whole tree. A naive `JSON.stringify` assertion fails on the legitimate counter-example where the secret string `"p"` appears inside the key `"password"`.
-- Circular vs. shared references are deliberately distinguished: a self-referencing object yields `'[Circular]'`, while the *same* object reached via two different parent keys is kept intact (identity preserved).
-- The file header comment records a 25.74% mutation score with 73 survivors clustered in the production stack guard, the winston `redactFormat` wiring, and the two untested invariants — context for why those blocks exist.
-- `redactFormat`, `resolveLogLevel`, `resolveConsoleFormat`, and `resolvePersonalFieldMode` are imported but the visible portion of the file (truncated) does not show test cases for them; they may be exercised further down.
+- The file header documents a prior mutation-testing run (25.74% killed, 73 survivors). Survivors clustered in the production stack-trace guard, the winston `redactFormat` wiring, and the two invariants (no-mutation, identity preservation) that had no test coverage — all are now explicitly tested here.
+- The "no sensitive value" invariant asserts over **values only** (via `stringValuesOf`), not over `JSON.stringify` of the whole object. A naive whole-string check false-positives when a generated secret is a substring of a *key* name (e.g. secret `"p"` inside key `"password"`).
+- `email` is classified as a **PERSONAL** field (hashed, not `REDACTED`) since "G6"; the nested-object test deliberately uses `username` to avoid conflating the two categories.
+- Shared references (an object reachable via two paths) are preserved as the same reference; only true cycles get the `[Circular]` marker.
+- Property tests use a hard-coded seed for reproducibility; `endOnFailure: true` stops at the first counterexample.

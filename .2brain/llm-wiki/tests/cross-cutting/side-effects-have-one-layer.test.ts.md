@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/side-effects-have-one-layer.test.ts
-sha256: a0601d05c3d8fe0e03618eeea5ad7ab4a95474acd8e03ea6af577dbafd34ac11
-generated_at: 2026-09-27T15:52:47.854094+00:00
+sha256: b67c5f4ad800722def4f2dbcfccda03fd461af02b8074f63126b8514521e6e3f
+generated_at: 2026-10-15T12:41:09.383802+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A cross-cutting architectural test that enforces the rule: each domain side-effect (queued email, audit record, analytics event, domain event) is published from exactly one layer — the service layer — or the departure is explicitly justified in the allowlist. It exists because ESLint reads one file at a time and cannot see that fourteen call sites of the same function live at inconsistent layers; this test scans the whole module tree and asserts the set is consistent.
+Enforces a cross-cutting architectural invariant: four side-effect functions (`enqueueEmail`, `recordAudit`, `emitAnalyticsEvent`, `emitDomainEvent`) must be called from exactly one layer (`service`) across all modules. It exists because this is a *set-level* constraint—no per-file lint rule can see that fourteen call sites collectively violate a layering intent—so it is expressed as a test that scans the whole tree.
 
 ## Key elements
 
-- **`EXPECTED_LAYER`** — `Readonly<Record<string, Layer>>` mapping each side-effect marker (`enqueueEmail`, `recordAudit`, `emitAnalyticsEvent`, `emitDomainEvent`) to the layer it must be called from. Written as an intention, not derived from current code.
-- **`ALLOWED_ELSEWHERE`** — `Readonly<Record<string, string>>` of documented exceptions, keyed as `"<marker> @ <module>/<path>"` so one file's excuse never silently covers a second marker. Currently permits three exceptions in the `account` module's login/reset path.
-- **`moduleFiles()`** — walks `MODULES_ROOT` recursively, returning every `.ts` file while skipping `tests/` subdirectories.
-- **`layerOf(file)`** — classifies a file into a `Layer` by its path segment relative to `MODULES_ROOT` (e.g. `controllers/` → `'controller'`, `services/` or `service.ts` → `'service'`).
-- **`callSites()`** — reads every module file, strips block and line comments, then regex-matches call expressions (`marker(`) to build a `Map<marker, {file, layer}[]>`.
-- **Four `it` blocks** — (1) canary: each marker must have ≥ 1 call site so a broken regex doesn't silently pass; (2) core assertion: no call site sits in a non-expected layer unless in the allowlist; (3) stale-exception guard: every allowlist entry must still correspond to a live call site; (4) meta-guard: every layer name in `EXPECTED_LAYER` must be a known `Layer` value.
+- **`EXPECTED_LAYER`** — Readonly map from side-effect marker to the single layer that owns it. All four entries are `'service'`.
+- **`ALLOWED_ELSEWHERE`** — Readonly map of named exceptions, keyed `"<marker> @ <module>/<path>"`, each value being the one-sentence justification that earns the departure.
+- **`moduleFiles()`** — Recursively walks `MODULES_ROOT`, returning every `.ts` file while skipping `tests/` subdirectories.
+- **`layerOf(file)`** — Classifies a file into `controller | service | repository | model | routes | domain | other` from its path segment relative to the module root. `services/` directory and bare `service.ts` map to the same layer.
+- **`callSites()`** — Reads every module file as text, strips comments, then regex-matches each marker in `EXPECTED_LAYER` (word-boundary anchored, `marker(`). Returns a `Map<string, { file, layer }[]>`.
+- **`label(file)`** — Produces the `<module>/<path>` string used in failure messages and allowlist keys.
+- **Test suite (4 cases)**:
+  - *Canary* — asserts the sweep actually finds call sites (prevents a silent no-op if the regex stops matching).
+  - *Layer enforcement* — collects all call sites whose layer differs from `EXPECTED_LAYER` and are not in `ALLOWED_ELSEWHERE`; asserts the list is empty.
+  - *Stale exceptions* — asserts no key in `ALLOWED_ELSEWHERE` points to a file that no longer calls that marker.
+  - *Valid layer names* — guards `EXPECTED_LAYER` values against typos outside the `Layer` union.
 
 ## Relationships
 
-- **`tests/support/paths.ts`** — imported as `@tests/paths`; provides `MODULES_ROOT`, the root directory the file-walk starts from. Changing this constant changes which files the test scans.
-- **`src/modules/account/tests/unit/two-factor.test.ts`** — the `ALLOWED_ELSEWHERE` entries reference the 2FA login path (`post-login-2fa.ts`, `login-observability.ts`) that this unit test exercises. If the controller-layer emit is moved into a service, the exception here must be removed and the two-factor flow re-wired.
-- **`src/modules/addresses/factories.ts`** — lives under the same `MODULES_ROOT` tree the test scans; any side-effect call added to the addresses module would be subject to this assertion.
+- **`tests/support/paths.ts`** — provides `MODULES_ROOT` (the directory tree the test scans) and `isDeployed('orders')` (used in the canary to conditionally require `emitDomainEvent` call sites only when the `orders` module is present).
 
 ## Notes
 
-- The regex matches the **call** (`marker(`), not imports or comment mentions. Comments are stripped before matching, so a docstring naming `recordAudit` will not register as a call site.
-- `EXPECTED_LAYER` is intentionally **not** auto-derived from the codebase. The test asserts code against a declared intention; deriving it from the tree would make the test tautological.
-- The allowlist key format `marker @ file` is deliberate: an exception for `recordAudit` in a given file does **not** also permit `enqueueEmail` in that same file.
-- The canary test (`finds the emits it means to check`) is the safety net that prevents this entire file from becoming a silent no-op if a marker name is renamed in production code.
-- `services/` folder and a bare `service.ts` are treated as the **same** layer — splitting into a folder is a size decision and must not create a new legal emit site.
+- Matching is plain-text regex, not AST: it looks for `marker(` with a word-boundary lookbehind after stripping `/* */` and `//` comments. This means a call hidden behind a template literal or dynamic invocation would be missed—intentional simplicity over completeness.
+- `ALLOWED_ELSEWHERE` keys are scoped to both marker *and* file, so an exception for `recordAudit` in a given file does not implicitly permit `enqueueEmail` in the same file.
+- The canary for `emitDomainEvent` is conditional on `isDeployed('orders')` because only shop modules publish domain events; the other three markers are unconditional.
+- The test lives under `cross-cutting/` (not `unit/` or `integration/`) because it asserts a property of the *set* of files rather than the behavior of a single module.

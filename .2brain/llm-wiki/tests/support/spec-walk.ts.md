@@ -1,7 +1,7 @@
 ---
 source: tests/support/spec-walk.ts
-sha256: d2e30a768bcaaa56a36f0850118e548e9b6c5846d642a8379c4f5c09f6d0bd7c
-generated_at: 2026-09-27T16:01:35.061170+00:00
+sha256: 6a0aa3b7614333097b3fe190ec4da0e215c8cc1c17a673499c723007888f973f
+generated_at: 2026-10-15T13:02:52.024189+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Enumerates every HTTP operation declared in `openapi.yaml` and resolves its schemas into a flat structure the fuzzing and contract test suites can consume. The endpoint list is derived from the spec at test time rather than hardcoded, so adding a route to the spec automatically extends coverage. The file is deliberately scoped to the subset of JSON Schema/OpenAPI the repo actually uses and includes two tripwire functions (`unsupportedKeywords`, `ungeneratablePatterns`) that fail tests if the spec grows vocabulary this walker silently ignores.
+Enumerates every operation declared in `openapi.yaml` and resolves the schema details the fuzzer needs to call it (path/query parameters, request-body schemas, auth flag, required response headers). The endpoint list is *derived* from the spec, never hardcoded, so adding a route to the YAML automatically extends fuzzer coverage with no bookkeeping. The file is deliberately scoped: it is not a general OpenAPI library and should not grow into one.
 
 ## Key elements
 
-- **`HttpMethod`** — union type of the five HTTP verbs the walker enumerates.
-- **`SchemaNode`** — interface for the JSON Schema subset this repo's spec uses (type, constraints, composition keywords, `$ref`).
-- **`Operation`** — one endpoint with its path, method, path parameters, resolved query parameters, resolved body schema, `isMultipart` flag, and `requiresAuth` flag.
-- **`QueryParameter`** — a single `in: query` parameter with name, required flag, and resolved schema.
-- **`readSpec()`** — reads and caches `openapi.yaml` (one-time parse of ~120 KB YAML).
-- **`resolveSchema()`** — resolves `$ref` into `components.schemas` and flattens `allOf`; uses a `seen` set to break self-referential cycles.
-- **`listOperations()`** — walks `spec.paths` × methods, assembles every `Operation`, resolving parameters and body schemas.
-- **`SUPPORTED_KEYWORDS`** — a `Set` of every JSON Schema keyword this walker honours (including documentation-only keys like `description`, `example`).
-- **`unsupportedKeywords()`** — returns any schema keyword present in the spec but missing from `SUPPORTED_KEYWORDS`; empty means the spec is safe for this walker.
-- **`ungeneratablePatterns()`** — returns `pattern` values that use lookaround and have no registered sample in `pattern-samples.ts`; these would cause the fuzzer to omit the field.
+- **`HttpMethod`** — union type of the five HTTP verbs the walk scans for.
+- **`SchemaNode`** — interface describing the subset of JSON Schema / OpenAPI 3.1 keywords the repo's spec actually uses (`type`, `format`, `enum`, bounds, `properties`, `items`, `oneOf`/`anyOf`/`allOf`, `$ref`, etc.).
+- **`Operation`** — the fully-resolved shape of one endpoint: path, method, path/query parameters, required headers, body schemas (JSON and merge-patch), multipart flag, and `requiresAuth`.
+- **`QueryParameter`** — a single resolved `in: query` parameter (name, required, schema).
+- **`readSpec()`** — lazily parses and caches `openapi.yaml` (a ~120 KB document) so every test file shares one parse.
+- **`resolveSchema(schema, spec?, seen?)`** — resolves `$ref`s into `components.schemas`, folds `allOf` and `oneOf: [X, {type:'null'}]` into a single flat node. Bounded by a `seen` set to prevent infinite recursion on self-referential schemas.
+- **`isNullable(node)`** — checks whether a resolved node's `type` (string or array) includes `'null'`.
+- **`requiredResponseHeaders(spec?)`** — walks every operation's responses and returns `{ operationId: { status: string[] } }` of required header names (lower-cased), used by shared `afterEach` assertions.
+- **`mergeAllOf`** *(internal)* — folds an `allOf` array into one node; own siblings override, `properties` are merged, `required` is unioned.
+- **`foldNullUnion`** *(internal)* — rewrites `oneOf: [X, {type:'null'}]` into `X` with `'null'` appended to its type array.
+- **`parametersIn` / `queryParametersOf`** *(internal)* — resolve `$ref`d parameters from `components.parameters` and filter by location.
+- **`requiredHeadersOf`** *(internal)* — resolves `components.headers` `$ref`s for a given response status.
+- **`assertSpecVocabulary`** — tripwire that fails the test suite if the spec begins using a keyword this walk does not handle (e.g. `discriminator`, `callbacks`, `links`), preventing silent coverage gaps.
 
 ## Relationships
 
-- **`tests/fuzz/endpoints.fuzz.test.ts`** — primary consumer; calls `listOperations()` to get the endpoint list and passes `Operation` objects into the fuzzer.
-- **`tests/contract/request-contract.test.ts`** — consumes `listOperations()` to drive contract tests across all spec-declared operations.
-- **`tests/support/spec-arbitraries.ts`** — imports `SchemaNode` and `Operation` to build `fast-check` arbitraries from the resolved schemas.
-- **`tests/support/pattern-samples.ts`** — imported directly; `sampleForPattern` and `usesLookaround` are used by `ungeneratablePatterns()` to detect patterns no generator can satisfy.
-- **`src/modules/audit-logs/service.ts`** — the service whose endpoints appear in `openapi.yaml` and are therefore enumerated here.
-- **`package.json`** — provides the `yaml` runtime dependency used by `readSpec()`.
+- **`tests/support/pattern-samples.ts`** — imported for `sampleForPattern` and `usesLookaround` (used when generating sample values for `pattern` constraints).
+- **`tests/support/spec-arbitraries.ts`** — consumes `resolveSchema`, `Operation`, and `SchemaNode` to build fast-check arbitraries for each endpoint.
+- **`tests/support/spec-world.ts`** — uses `readSpec()` / `Operation` to set up the shared test-world state.
+- **`tests/support/spec-ids.ts`** — reads `Operation.pathParameters` and `pathParameterSchemas` to generate valid path IDs.
+- **`tests/support/response-contract.ts`** — uses `requiredResponseHeaders()` to assert that documented status codes carry their required headers.
+- **`tests/fuzz/endpoints.fuzz.test.ts`** — iterates over the operation list produced here to drive property-based fuzzing.
+- **`tests/contract/request-contract.test.ts`** — consumes `Operation` and resolved schemas to validate request shapes.
+- **`tests/integration/malformed-ids.test.ts`** — reads `Operation` entries to construct malformed-ID scenarios.
+- **`tests/unit/spec-walk.test.ts`** — unit-tests the functions in this file directly (`resolveSchema`, `isNullable`, `readSpec`, etc.).
+- **`package.json`** — provides the `yaml` dependency used for parsing and the `npm run contracts:bundle` script that produces `openapi.yaml`.
 
 ## Notes
 
-- The spec file path is resolved relative to `__dirname` as `../../openapi.yaml`; it will not work if the file is moved out of `tests/support/`.
-- `readSpec()` caches in a module-level `let`; there is no invalidation mechanism. If the spec file changes at runtime (it doesn't in practice), the cache would be stale.
-- `resolveSchema` breaks cycles by returning `{ type: 'object' }` for a re-encountered ref name. This is a deliberate approximation, not a faithful resolution.
-- `allOf` flattening only merges `properties` and `required`; other keyword-level interactions (e.g. `allOf` with `enum` constraints) are not handled and would be silently dropped.
-- `childSchemasOf` is structural on purpose: it only recurses into known schema-bearing slots (`properties` values, `items`, `additionalProperties`, `oneOf`/`anyOf`/`allOf` arrays) so that field *names* inside `properties` are never mistaken for schema keywords.
-- The file is explicitly not a general OpenAPI library. The doc comment names the trip: if `discriminator`, callbacks, or links are needed, the project should adopt a real library rather than extending this file.
+- `SPEC_PATH` is resolved relative to `__dirname/../..`, i.e. the repo-root `openapi.yaml` produced by the `contracts:bundle` script. If the bundled spec is missing or stale, every consumer fails at load time.
+- `readSpec()` caches the parsed document in a module-level `let`. Mutating the returned object in one test will corrupt it for all subsequent tests in the same process.
+- `resolveSchema` returns `{ type: 'object' }` as a sentinel when it detects a cycle via the `seen` set; downstream code should not assume that object has `properties`.
+- The doc comment explicitly warns: if the spec starts using `discriminator`, `callbacks`, or `links`, the correct response is to adopt a real OpenAPI tool rather than extending this file further. `assertSpecVocabulary` enforces that boundary at test time.

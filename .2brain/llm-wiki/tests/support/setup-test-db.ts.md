@@ -1,7 +1,7 @@
 ---
 source: tests/support/setup-test-db.ts
-sha256: 48895427c9f34236450d552c1da02025d2ccc6229fb9dc74f85bdfd9d2105f50
-generated_at: 2026-09-23T20:14:08.915609+00:00
+sha256: 0b44ea2b8ef7c77a21bce051a31b9cf0a96091a3a302ca04783d1d19d39806a7
+generated_at: 2026-10-15T13:01:57.116031+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides a one-liner test-setup function that wires up the shared in-memory MongoDB connection for any test suite that persists data. It ensures each test starts against an empty database so assertions can rely on absolute document counts.
+Jest lifecycle-hook installer for any test suite that uses the in-memory MongoDB. Call `setupTestDb()` once at the **top level** of a test file (not inside a `describe`) to get a fresh, empty database for every `it()` and to guarantee background event-delivery passes are drained before the next test or teardown runs.
 
 ## Key elements
 
-- **`setupTestDb()`** (exported) — Registers three hooks: `beforeAll(connect)` to start the connection, `afterAll(disconnect)` to tear it down, and `beforeEach(clearAll)` to wipe every collection before each `it()`.
-- **`connect`, `disconnect`, `clearAll`** — Imported from the sibling `./database` module; this file only composes them into lifecycle hooks.
+- **`setupTestDb()`** — the sole export. Registers four hooks:
+  - `beforeAll(connect)` — connects the shared in-memory mongod.
+  - `afterEach(settleOutboxNudges)` — waits for any in-flight event relay passes to finish before the next test starts.
+  - `afterAll(() => settleOutboxNudges().then(disconnect))` — final drain, then disconnects.
+  - `beforeEach(clearAll)` — wipes every collection so each test starts from an empty DB.
 
 ## Relationships
 
-- **`./database`** — Source of the three lifecycle functions; this file is a thin hook wrapper around them.
-- **Test files across modules** (e.g. `access.test.ts`, `jwt.test.ts`, `oauth-link.test.ts`, `addresses.test.ts`, `api.contract.test.ts`, `api-keys.test.ts`) — Each calls `setupTestDb()` at the top level to gain the connect/clear/disconnect behavior without re-implementing it.
+- **`src/kernel/outbox.ts`** — provides `settleOutboxNudges`, the function that blocks until background event-delivery passes complete. Called in `afterEach` and `afterAll`.
+- **`./database`** (sibling in `tests/support/`) — provides `connect`, `disconnect`, and `clearAll` used by the hooks.
+- **Consumer test files** (e.g. `src/modules/account/tests/contract/*.test.ts`, `src/modules/account/tests/integration/*.test.ts`) — call `setupTestDb()` at module top level to inherit the connect/clear/drain/disconnect cycle.
 
 ## Notes
 
-- **Must be called at the top level of the test file**, not inside a `describe` block. Nesting it in `describe` scopes the hooks to only that block.
-- **Per-test wiping, not per-file.** `beforeEach(clearAll)` guarantees each `it()` sees an empty DB, preventing order-dependent failures (e.g. a new test added above a sibling, or a single `it.only` run).
-- **Intentionally seeds nothing.** Tests that need pre-existing data create it via their module's `tests/factories.ts`, keeping dependencies visible within the test case itself.
-- The per-test `deleteMany` cost is negligible against an in-memory mongod.
+- Must be called at **top level**, not inside a `describe`. If nested, the hooks only wrap that block and the outer file's tests run without isolation.
+- `settleOutboxNudges` is declared in `afterEach` **before** any file-level `afterEach` that unregisters event listeners, because jest-circus runs `afterEach` hooks in declaration order. Reordering can let a relay pass write into the next test's DB or touch a disconnected client.
+- The file deliberately **seeds nothing**. Tests that need fixture data should create it via their module's `tests/factories.ts` so dependencies are visible in the test body.
+- Per-test `clearAll` (a `deleteMany` per collection) is the intended trade-off: it eliminates order-dependent failures at negligible cost on an in-memory server.

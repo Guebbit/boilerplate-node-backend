@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/cache.test.ts
-sha256: 0fb764f626e9f97e5a3628c9fc559ef7161f90bbc4af149a1346618fdde93942
-generated_at: 2026-09-27T16:03:03.259079+00:00
+sha256: e323e33ff9920fa754d3011a54d18457c8794ff6a8ce3935753474ccffb882f1
+generated_at: 2026-10-15T13:05:01.787708+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the cache adapter (`src/infrastructure/adapters/cache.ts`), covering its three public functions—`clearCache`, `getCacheValue`, and `setCacheValue`—and their fail-open behaviour when Redis is unreachable, disabled, or returns errors. The file exists because the adapter previously sat at 48 % coverage with no execution at all on the read/write/invalidate paths.
+Unit tests for the cache adapter (`@infrastructure/adapters/cache.ts`), covering the two paths the caching middleware depends on: `clearCache` (which must distinguish "nothing to clear" from "could not clear" so `db:cache:clear` can exit non-zero) and the read/write/invalidate trio (`getCacheValue`, `setCacheValue`). The file exists to enforce the adapter's two invariants — fail-open (never reject) and key prefixing (namespace isolation) — without a live Redis.
 
 ## Key elements
 
-- **`freshCache()`** – Re-requires the adapter module after `jest.resetModules()` so each test case gets a fresh module-level Redis client and connection promise.
-- **`freshObservability()`** – Re-requires `logger` and `metrics-cache` from the *same* fresh epoch so assertions target the instances the adapter actually calls.
-- **`scanBatches(batches)`** – Builds an `AsyncIterable` that mimics node-redis `scanIterator` output for `clearCache` tests.
-- **`mockClient` / `mockCreateClient`** – A single mock Redis client (`isReady: false`, `isOpen: false`) injected via `jest.mock('redis', …)` to force the connect path where reachable/unreachable is decided.
-- **`describe('clearCache')`** – Verifies the `{ deleted, reachable }` contract: reachable-with-count, caching-off short-circuit, `NODE_REDIS_CACHE_ENABLED=0` kill switch, connection-refused, mid-scan socket death, and the "never rejects" guarantee.
-- **`describe('getCacheValue')`** – Verifies hit (opaque bytes returned verbatim), namespaced key format (`:key:GET:/…`), miss (`null` → `undefined`), Redis rejection → `undefined`, and caching-off without connecting.
-- **`describe('setCacheValue tag index')`** – Verifies `EX`-based TTL on the value key, `NX`/`GT` expiry on each tag set, and `SADD` registration of the entry under every supplied tag (the reverse index that makes group invalidation possible).
-- **`afterEach` env restore** – Saves and restores `NODE_REDIS_*` env vars so tests are order-independent.
+- **`freshCache()`** — Calls `jest.resetModules()` then `require()`s the adapter, discarding the module-scope memoised Redis client so each test gets an independent connection verdict.
+- **`freshObservability()`** — Re-requires `@infrastructure/adapters/logger` and `@infrastructure/observability/metrics-cache` from the *same* fresh module epoch as `freshCache()`, so assertions on `logger` and `cacheInvalidationFailuresTotal` target the instances the adapter actually called.
+- **`scanBatches(batches)`** — Wraps a list of string arrays in an `async function*` to satisfy node-redis' `scanIterator` AsyncIterable contract.
+- **`describe('clearCache')`** — Six cases: happy-path count, caching-off (no URL), `NODE_REDIS_CACHE_ENABLED=0` kill switch, ECONNREFUSED, mid-scan throw, and "never rejects."
+- **`describe('getCacheValue')`** — Hit returns opaque bytes verbatim, namespaced key assertion, `null` → `undefined` miss, Redis rejection → `undefined`, caching-off short-circuit (no `connect` call).
+- **`describe('setCacheValue tag index')`** — Tag ZSET expiry (`NX` + `GT`), `SET` with `{ EX }`, per-tag `ZADD` registration, and index pruning via `ZRemRangeByScore`.
+- **Module mocks** — `redis.createClient` returns a single `mockClient` (with `isReady: false` to force the connect path); `@infrastructure/adapters/logger` is stubbed to keep passing runs quiet.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/cache.ts`** – The module under test; imported (via `require`) inside `freshCache()` and exercised for `clearCache`, `getCacheValue`, `setCacheValue`.
-- **`src/infrastructure/adapters/logger.ts`** – Mocked at the `jest.mock` level to silence `warn`/`info` calls the adapter makes on every fail-open path; re-required inside `freshObservability()` for direct assertion.
-- **`src/infrastructure/observability/metrics-cache.ts`** – `cacheInvalidationFailuresTotal` counter is re-required in `freshObservability()` and available for assertion when invalidation fails.
+- **`src/infrastructure/adapters/cache.ts`** — The system under test; re-required per test via `freshCache()`.
+- **`src/infrastructure/adapters/logger.ts`** — Mocked at module level to suppress warnings; re-required via `freshObservability()` to spy on invalidation-failure log calls.
+- **`src/infrastructure/observability/metrics-cache.ts`** — Re-required via `freshObservability()` to assert `cacheInvalidationFailuresTotal` increments on failure paths.
+- **`tests/support/environment.ts`** — Supplies `setEnvironment` to toggle `NODE_REDIS_URL`, `NODE_REDIS_PORT`, and `NODE_REDIS_CACHE_ENABLED` per test without touching process.env directly.
 
 ## Notes
 
-- **Module-scoped memoisation trap:** The adapter stores its Redis client and a `connectPromise` in module-level variables. A plain top-level `import` would share state across tests, which is why every test case goes through `freshCache()` (and observability asserts through `freshObservability()`).
-- **`clearMocks: true` interaction:** Jest's config wipes mock implementations between cases, so each `beforeEach` must re-arm `mockConnect`, `mockDel`, `mockScanIterator`, etc.
-- **What is deliberately *not* tested here:** TTL clamping, per-entry byte limits, and the response envelope. Those belong to the middleware and are covered in `tests/unit/infrastructure/http/middlewares/cache.test.ts`.
-- **`isReady: false` on the mock:** Forces the adapter down the explicit `connect()` path rather than the already-ready shortcut, which is where the reachable/unreachable branch actually lives.
-- **`clearCache` is the exception to fail-open:** It must distinguish "0 keys deleted, Redis fine" from "couldn't reach Redis" so the `db:cache:clear` CLI can exit non-zero on genuine failure. All other paths simply resolve to `undefined` or the stored value.
+- The adapter stores `client` and `connectPromise` at **module scope**, so without `jest.resetModules()` a second test reuses the first test's connection outcome. `freshCache()` / `freshObservability()` exist solely for this.
+- `mockClient.isReady` is hardcoded to `false` because the adapter's lifecycle short-circuits on that flag; keeping it false forces the `connect` path where reachability is actually decided.
+- `clearMocks: true` is set project-wide, so every `beforeEach` must re-arm mock implementations (`mockConnect`, `mockDel`, etc.) — they do not persist across tests.
+- This file deliberately does **not** test the TTL clamp, per-entry byte limit, or response envelope; those live with their sole consumer in `tests/unit/infrastructure/http/middlewares/cache.test.ts`.
+- `clearCache` is the **one** adapter function that does *not* collapse fail-open: it must resolve `{ deleted: 0, reachable: false }` (not `{ deleted: 0, reachable: true }`) when Redis is down, so the CLI can exit non-zero.

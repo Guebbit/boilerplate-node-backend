@@ -1,7 +1,7 @@
 ---
 source: src/modules/wishlist/tests/integration/service.test.ts
-sha256: 449a7a8321d1e96b6e527a77b6f0bda81fc8ebf0e998ca4cdf3e563ae4ca152d
-generated_at: 2026-09-23T19:49:01.320532+00:00
+sha256: 3007d3c8137aa3422bcd18ffc6ecda8c7508560ccb46ad6cfe9858e69ac7cfa9
+generated_at: 2026-10-15T12:28:28.493724+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the wishlist service, exercising the full request path (service → repository → DB) against a real test database. Covers the four core operations (add, remove, move-to-cart), their error contracts, the "write cart before dropping line" ordering guarantee, and the event-driven cleanup subscriptions that fire on product/user hard-deletion.
+Integration tests that pin the domain rules of the wishlist service: idempotent saves via `$addToSet`, 404 on non-public products, move-to-cart ordering (cart write precedes wishlist-line removal so a refusal never "vanishes" the line), and correct per-line availability labelling in the read view. Exercises the real service, repository, cart, and product modules against a test database.
 
 ## Key elements
 
-- **`savedIds(userId)`** — local helper that calls `wishlistService.wishlistGet` and extracts the array of product IDs, used as the primary assertion target throughout.
-- **`describe('wishlistAdd')`** — verifies a successful save, idempotency (`$addToSet` leaves one line), and the catalogue gate (inactive product → `404`, nothing written).
-- **`describe('wishlistRemove')`** — verifies targeted removal of one line while keeping others, and `404` when the caller never saved the product.
-- **`describe('wishlistMoveToCart')`** — the largest block. Confirms the line lands in the cart and is dropped from the wishlist, that an existing cart line is incremented, and that refusals (never-saved, de-activated, soft-deleted product) return `404` with **no cart write and the wishlist line intact**. Also asserts the one exception: a cart-level `422` (line already at 999) is forwarded verbatim rather than collapsed to `404`.
-- **`describe('the module subscriptions')`** — registers modules and resets domain events in `beforeEach`; then verifies that hard-deleting a product purges it from every user's wishlist (event-driven), and hard-deleting a user removes their wishlist row entirely.
+- **`wishlistRepository.addLine`** block — verifies the repository returns `added: true` on first save and `added: false` on repeat, with the collection staying at one line.
+- **`wishlistGet: availability per line`** block — asserts the four availability labels (`in_stock`, `out_of_stock`, `unavailable`, `removed`), confirms `insufficient_stock` is never emitted (wishlists hold no quantity), checks the hidden→shown transition restores the stock value, and verifies an off-sale product can still be saved and moved to cart.
+- **`wishlistExportLines`** block — confirms the export shape carries only `productId` fields, no availability.
+- **`wishlistAdd`** block — happy-path save, idempotency (two calls → one line), single `WISHLIST_ITEM_ADDED` analytics event across three saves, 404 for soft-deleted and for inactive (non-public) products.
+- **`wishlistRemove`** block — removes the named line while leaving others; returns 404 when the caller does not hold the line.
+- **`wishlistMoveToCart`** block — product lands in cart and line is dropped; increments an existing cart quantity (2 → 3); 404 for a never-saved product with no cart side-effect; catalogue gate enforced through the cart's own refusal.
+- **`savedIds`** — small helper wrapping `wishlistService.wishlistGet` to extract the array of saved product IDs for assertions.
 
 ## Relationships
 
-- **`src/modules/wishlist/service.ts`** — the unit under test; every operation is invoked through `wishlistService`.
-- **`src/modules/wishlist/repository.ts`** — used directly in the user-deletion test (`findByUserId`) because the service view is not meaningful once the user row is gone.
-- **`src/modules/cart/index.ts`** / **`src/modules/cart/services/index.ts`** — `cartService.cartGetForBadge` and `cartItemAddById` verify post-move cart state and pre-seed cart lines.
-- **`src/modules/products/service.ts`** — `productService.updateById` (deactivate) and `productService.removeById` (soft/hard delete) drive mid-test catalogue changes.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` builds fixture products, optionally with `{ active: false }`.
-- **`src/modules/users/service.ts`** — `userService.removeById(id, true)` triggers the user-deletion subscription.
-- **`src/modules/users/tests/factories.ts`** — `createUser` builds fixture users.
-- **`src/kernel/events.ts`** — `resetDomainEvents` clears the event bus between subscription tests.
-- **`src/kernel/registry.ts`** — `registerModules` wires module event subscriptions so the subscription tests actually fire.
-- **`src/modules.ts`** — `enabledModules` provides the module list passed to `registerModules`.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises/clears the test database for the suite.
-- **`tests/support/callers.ts`** — `testCallerContext` supplies the caller identity every service call expects.
+- **`src/modules/wishlist/service.ts`** — primary system under test; every `describe` block calls one of its exported methods.
+- **`src/modules/wishlist/repository.ts`** — used directly in the `addLine` idempotency test and to seed lines before `wishlistGet` / `wishlistRemove` / `wishlistMoveToCart` scenarios.
+- **`src/modules/cart/index.ts`** (`cartService`) — used to pre-seed cart lines, to verify move-to-cart results via `cartGetForBadge`, and to assert the catalogue-gate 404 path.
+- **`src/modules/products/index.ts`** (`productService`) — toggles `active` / `purchasable` flags mid-test to drive availability transitions.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds products with controlled stock, sale, and deletion states.
+- **`src/modules/users/tests/factories.ts`** — `createUser` seeds the acting user.
+- **`tests/support/callers.ts`** — `testCallerContext` supplies the caller identity passed to every service mutation.
+- **`src/kernel/outbox.ts`** — `settleOutboxNudges` is imported (flushes pending outbox entries between assertions).
+- **`src/kernel/events.ts`** — `resetDomainEvents` clears the in-memory event bus between tests.
+- **`src/kernel/registry.ts`** — `registerModules` wires module event subscriptions (e.g. product/user deletion cleanup) into the test process.
+- **`src/modules.ts`** — `enabledModules` is referenced for module registration scope.
+- **`@infrastructure/observability/analytics`** — mocked at the port level; `observePort` (from `tests/support/ports.ts`) inspects emitted analytics calls.
 
 ## Notes
 
-- **Withdrawal ≠ deletion.** De-activating a product (`active: false`) is the "withdrawal" case: the wishlist line _survives_ and the move-to-cart fails with 404, but the line is still there. Hard-deletion (`removeById(id, true)`) fires the `PRODUCT_DELETED` subscription and _purges_ the line. Tests for both shapes exist deliberately.
-- **Ordering guarantee.** Every move-to-cart refusal assertion checks both that the cart is empty _and_ that `savedIds` still contains the product — encoding the "write cart before dropping line" rule from the module docstring.
-- **Subscription tests require fresh wiring.** `resetDomainEvents()` + `registerModules(enabledModules)` in `beforeEach` is mandatory; without it, stale listeners from other suites produce flaky cleanup behaviour.
-- **The 422 case is the only non-404 refusal.** It exists to guard against a regression where the service naively maps every cart failure to its own 404, swallowing the "line is already at max quantity" message the shopper needs to see.
+- The analytics port is **replaced** (not spied on) via `jest.mock` + spread of `requireActual`; the file comment points to `tests/support/ports.ts` for the rationale. Use `observePort` to read calls—`jest.fn().mock.calls` works but the project convention is the port helper.
+- The `withEnvironment` import is present but not exercised in the visible test bodies; it may guard an environment variable for a test below the truncation point.
+- Tests rely on `setupTestDb()` (imported from `@tests/setup-test-db`) for per-test database isolation rather than manual teardown.
+- The move-to-cart "catalogue gate" tests deliberately trigger the 404 *through* the cart's own refusal rather than asserting a direct product-catalogue check, so a regression in either the cart rule or the wishlist's interpretation of that refusal will fail the test.

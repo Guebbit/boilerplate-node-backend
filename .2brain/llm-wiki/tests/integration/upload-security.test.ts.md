@@ -1,7 +1,7 @@
 ---
 source: tests/integration/upload-security.test.ts
-sha256: 8e12abc5a6c6c9b232741042ad224c7067eced659bfc7c48f90dd17f88135e87
-generated_at: 2026-09-23T20:08:51.009025+00:00
+sha256: d457900d200ff097878c55d6839b785c6ecabb3aeeb4ef305c808002aa3b97d8
+generated_at: 2026-10-15T12:55:40.949856+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite that verifies the `POST /account/signup` upload path enforces server-side content validation and that the static-file serving layer is secure. It asserts against the **filesystem** (what actually landed on disk) and the **response headers** (what a browser would do with the bytes), not merely against HTTP status codes.
+Integration tests for the `PATCH /account` avatar-upload route and the static-serving of the upload directory. The focus is on what actually reaches the filesystem (not just HTTP status codes), guarding against client-controlled `Content-Type`, filename, and extension being used to store executable content, exceed size limits, or be served with a dangerous MIME type. A final block pins that `POST /account/signup` accepts no file at all.
 
 ## Key elements
 
-- **`PNG_BYTES`** — a real 4×4 PNG generated via `sharp` in `beforeAll`; must be genuinely decodable because the digest pipeline calls `sharp` to process it.
-- **`UPLOAD_DIRECTORY`** — resolved absolute path (`NODE_PUBLIC_PATH/images`) that every assertion inspects.
-- **`uploadedFiles()`** — lists regular files (excludes `thumbs/`) in the upload directory so tests can confirm nothing was stored.
-- **`signupWith(content, filename, contentType)`** — posts a signup form with a multipart file attachment; the workhorse for every test case.
-- **`describe('upload content validation')`** — rejects HTML/SVG/PHP disguised as PNG (422 + empty disk), accepts a real PNG, drops a PNG declared as `application/pdf` (201 + empty disk), and refuses files over `maxUploadBytes()` (400 + empty disk).
-- **`describe('serving the upload directory')`** — verifies correct `Content-Type`, `cross-origin-resource-policy: cross-origin`, `x-content-type-options: nosniff`; confirms the stored extension comes from declared type (not filename) so a file named `payload.html` still resolves to `.png`; blocks dotfiles, directory listing, and `..` / `%2e%2e` path-traversal attempts.
+- **`uploadAvatarWith(content, filename, contentType)`** — Authenticates as `user`, then issues `PATCH /account` with a multipart file attachment. The central helper every test uses to drive a real upload.
+- **`uploadedFiles()`** — Lists regular files (excluding subdirectories like `thumbs/`) in the resolved upload directory, so assertions can confirm what a request left on disk.
+- **`PNG_BYTES`** (set in `beforeAll`) — A real 4×4 PNG generated via `sharp`, needed because the digest pipeline decodes every upload inline; a magic-byte stub would 500.
+- **`describe('upload content validation')`** — Rejects HTML/SVG/PHP disguised as PNG; accepts a genuine PNG; drops a real image whose declared type is non-image; rejects a file exceeding `maxUploadBytes()`.
+- **`describe('serving the upload directory')`** — Verifies correct `Content-Type`, `cross-origin-resource-policy`, `x-content-type-options`; confirms stored extension is derived from declared type (not client filename); blocks dotfiles, directory listing, and path-traversal escapes.
+- **`describe('signup takes no upload')`** — Confirms a multipart signup with an attached file is refused and writes nothing.
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/upload.ts`** — imports `maxUploadBytes()` to size the oversized-file test from the same source the middleware uses; tests exercise the `fileFilter` logic defined there.
-- **`src/modules/users/tests/factories.ts`** — imports `PLAIN_PASSWORD` to fill the signup form fields.
-- **`tests/support/file-sandbox.ts`** — imports `emptyFileSandbox`, called in `afterEach` to wipe the upload directory between tests.
-- **`tests/support/http.ts`** — imports `api()` for issuing real HTTP requests against the running server.
-- **`tests/support/setup-test-db.ts`** — imports `setupTestDb()` to reset the database before each test.
+- **`src/infrastructure/config/store.ts`** — Imports `currentEnvironment` to resolve `NODE_PUBLIC_PATH` and compute `UPLOAD_DIRECTORY`.
+- **`src/infrastructure/http/middlewares/upload.ts`** — Imports `maxUploadBytes` to build an oversized buffer in the size-limit test (reads the cap from the adapter rather than restating a constant).
+- **`tests/support/http.ts`** — Imports `api` and `authenticateAs` for making authenticated/unauthenticated HTTP requests.
+- **`tests/support/file-sandbox.ts`** — Imports `emptyFileSandbox`, called in `afterEach` to guarantee each test starts from an empty upload directory.
+- **`tests/support/setup-test-db.ts`** — Calls `setupTestDb()` at module top level to ensure a clean database before any test runs.
 
 ## Notes
 
-- The decisive assertion in every rejection test is `uploadedFiles()` being `[]`, not the status code. A 201 with no file on disk is acceptable (multer treats a dropped file as a no-op); a 422 with a file on disk is the real failure.
-- The test uses a **decodable** PNG rather than a magic-byte stub because `quarantineUploadedImages` calls `sharp` to decode; a stub would 500 with "unsupported image format," which is not the behavior under test.
-- The oversized-file test reads `maxUploadBytes()` from the adapter instead of hardcoding a number, so it stays correct if the limit changes.
-- `process.env.NODE_PUBLIC_PATH!` uses a non-null assertion because the file-sandbox sandbox sets it before any test file's top-level code executes; the `!` only satisfies the compiler.
-- The serving tests pin `cross-origin-resource-policy: cross-origin` explicitly because Helmet's default (`same-origin`) would cause a cross-port SPA to fetch the image bytes successfully but refuse to render them.
-- Extension derivation (from declared `Content-Type`, not the client filename) is the mechanism that prevents a file named `shell.html` from being served as `text/html` and executing script in a PNG metadata chunk.
+- The non-null assertion on `NODE_PUBLIC_PATH!` is safe because `setup-file-sandbox.ts` (a test setup file) assigns it before any test file's top-level code executes; the `!` only satisfies the compiler.
+- `uploadedFiles()` deliberately filters to files only — the `thumbs/` derivative directory sits alongside uploads and is irrelevant to these assertions.
+- The size-limit test constructs the oversized buffer as `PNG_BYTES + (maxUploadBytes() + 1024)` bytes of padding, so the PNG header remains valid and the rejection is purely size-based.
+- The path-traversal tests (`/../package.json`, `/%2e%2e/…`) pin `express.static`'s resolution behaviour as a regression guard rather than assuming it.

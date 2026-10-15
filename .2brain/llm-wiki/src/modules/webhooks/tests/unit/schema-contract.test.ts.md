@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/tests/unit/schema-contract.test.ts
-sha256: 9fc68bdc0070ca17096c3254e23ee28ece8c4b1d6eab57313570c1fe8d73bc66
-generated_at: 2026-09-23T19:45:12.933972+00:00
+sha256: db5708222388e2e210059c73eaa4f0845cc16b5a6a74f1a5955aa826a6755f98
+generated_at: 2026-10-15T12:25:07.007227+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Schema-contract tests for the two webhook Mongoose schemas (`webhookSubscriptionSchema`, `webhookDeliverySchema`). Instead of saving valid documents, these tests read the schema objects directly, so regressions in `required` flags, defaults, enum sets, index specs, index options (TTL, uniqueness), and sub-schema options are caught even when every integration fixture remains valid.
+Validates the *declarations* of the two webhook Mongoose schemas (`webhookSubscriptionSchema`, `webhookDeliverySchema`) by inspecting the schema objects directly—required paths, defaults, enums, index specs, index options, and TTL—without ever creating or saving a document. This catches regressions (dropped `required`, flipped defaults, detached TTL, accidental unique/sparse flags) that a document-level integration test, which only ever exercises valid fixtures, would miss.
 
 ## Key elements
 
-- **`DELIVERY_RETENTION_SECONDS`** – Module-level constant computed from `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` (default 30). Used to assert the TTL `expireAfterSeconds` value dynamically so the test tracks the configured retention window.
-- **`describe('webhookSubscriptionSchema')`** – Asserts: required paths (`consecutiveFailures`, `enabled`, `eventTypes`, `tenant`, `url`); defaults (`enabled: true`, `consecutiveFailures: 0`, `secrets: []`); sub-schema options (`_id: false` on `secrets`); ring-entry required paths (`ciphertext`, `id`); the two compound indexes and their non-unique/non-sparse options; `timestamps: true`.
-- **`describe('webhookDeliverySchema')`** – Asserts: required paths (7 fields); that outcome/lease fields (`responseCode`, `durationMs`, `error`, `nextAttemptAt`, `leaseToken`, `leaseExpiresAt`) have **no** default; defaults (`attempt: 1`, `status: 'pending'`); the `status` enum (`pending`, `in-flight`, `succeeded`, `exhausted`); six index specs; that only the `createdAt_1` index carries `expireAfterSeconds` (equal to `DELIVERY_RETENTION_SECONDS`); that the TTL index is ascending; `timestamps: true`.
+- **`DELIVERY_RETENTION_SECONDS`** – module-level constant; reads `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` from the current environment and converts to seconds. Used to assert the TTL index value against the configured policy rather than a hardcoded literal.
+- **`describe('webhookSubscriptionSchema')`** – asserts required fields (five), defaults (`enabled: true`, `consecutiveFailures: 0`, `secrets: []`), `secrets` sub-schema options (`_id: false`), ring-entry required fields, two index specs, no unique/sparse options, and `timestamps: true`.
+- **`describe('webhookDeliverySchema')`** – asserts required fields (seven), absence of outcome/lease fields, defaults (`attempt: 1`, `status: 'pending'`), the `status` enum (four values, no `failed`), seven index specs, index options (TTL on `createdAt_1`, unique on `subscriptionId_1_eventId_1`), TTL direction, and `timestamps: true`.
 
 ## Relationships
 
-- **`src/modules/webhooks/model.ts`** – Source of the two schema objects under test (`webhookSubscriptionSchema`, `webhookDeliverySchema`).
-- **`tests/support/schema.ts`** – Provides the introspection helpers this file uses exclusively: `requiredPaths`, `defaultOf`, `enumOf`, `optionsOf`, `subSchema`, `indexSpecs`, `indexOptionSpecs`.
+- **`src/modules/webhooks/model.ts`** – source of the two schema objects under test (`webhookSubscriptionSchema`, `webhookDeliverySchema`).
+- **`tests/support/schema.ts`** – provides the introspection helpers (`requiredPaths`, `defaultOf`, `enumOf`, `indexSpecs`, `indexOptionSpecs`, `optionsOf`, `subSchema`) that this file uses to read schema declarations without instantiating documents.
+- **`src/infrastructure/config/store.ts`** – `currentEnvironment()` supplies `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS`, which feeds the TTL assertion.
 
 ## Notes
 
-- The TTL assertion is **not** a hardcoded number; it is derived from the same env var the model reads, so changing the retention policy moves the test and the schema together.
-- Index-uniqueness absence is explicitly tested: the subscription-count cap lives in `services/subscriptions.ts`, not in a unique index. A regression that adds `unique: true` to either subscription index would be caught here.
-- The `secrets` sub-schema sets `_id: false` because `secrets.ts` mints its own `id`; a Mongoose-assigned `_id` would create a redundant second identity.
-- Outcome/lease fields deliberately have **no** default: their absence encodes "never attempted / never claimed," and a `default` would silently change that semantic.
-- The TTL index must be ascending (`createdAt_1`); the same field appears descending in two compound indexes. A flip to `-1` on the TTL index produces an index that never expires documents, and this file guards against that specific confusion.
+- The TTL assertion is tied to the environment variable, not a literal, so changing `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` moves both the schema default and the test together.
+- The TTL index must be **ascending** (`createdAt_1`); a descending variant on the same field (present in two compound indexes) would silently never expire documents.
+- Neither subscription index is unique—the per-tenant cap is enforced in application code (`services/subscriptions.ts`), not at the database level.
+- The `secrets` sub-schema sets `_id: false` because the application mints its own `id` per entry; an auto-assigned Mongoose `_id` would create a redundant identity.
+- The delivery `status` enum intentionally omits `failed`; a retryable failure returns to `pending`, and only `exhausted` is terminal.

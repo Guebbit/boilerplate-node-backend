@@ -1,7 +1,7 @@
 ---
 source: src/modules/wishlist/tests/contract/api.contract.test.ts
-sha256: 70a225dcd77395870b6e3d7a5b650231298260f6c8d8d74c206b67cc7922b2ef
-generated_at: 2026-09-27T15:46:45.600855+00:00
+sha256: e1b13f52f81766bed282a095b716ffcea5666a03b510b723b26d703474234c78
+generated_at: 2026-10-15T12:27:59.061354+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/wishlist` HTTP surface. They assert that every declared response shape (success and each error branch) is actually reachable over the wire, so the API cannot silently drop a documented response. Behavioural logic lives in the unit suite; this file only verifies the wire contract.
+Contract tests for the `/wishlist` API surface. Every route requires authentication and returns the same `WishlistResponseEnvelope` shape the cart uses. These tests verify that each declared response branch (success, 404, 403) is actually reachable over HTTP; they do not assert behavioural logic (that belongs to the unit suite).
 
 ## Key elements
 
-- **`MALFORMED_ID`** (`'not-an-object-id'`) — a string that passes JSON parsing but fails the per-route `ObjectId` check, exercising the 422 malformed-id branch distinct from the 422 invalid-body branch.
-- **`authenticateWithWishlist()`** — helper that logs in as `'user'`, creates a product via the products factory, and `POST`s it to `/wishlist`; returns `{ bearer, product }` for subsequent assertions.
-- **`GET /wishlist`** — two cases: empty list and list with one item.
-- **`POST /wishlist`** — four cases: success, empty body (422), malformed `productId` (422), valid-but-nonexistent `productId` (404).
-- **`DELETE /wishlist/{productId}`** — three cases: success (list empty), never-saved id (404), malformed id (422).
-- **`POST /wishlist/{productId}/move-to-cart`** — three cases: success (wishlist empty **and** cart reflects the item with quantity 1), never-saved (404), malformed id (422).
+- **`MALFORMED_ID`** — local constant (`'not-an-object-id'`) used to exercise the "invalid path param" branch, which the API treats identically to a missing id (404).
+- **`authenticateWithWishlist()`** — helper that logs in as `user`, creates a product, saves it to the wishlist, and returns `{ bearer, product }`. Reused by PUT/DELETE/move-to-cart tests to avoid repeating setup.
+- **`describe('GET /wishlist')`** — covers empty wishlist and wishlist-with-items.
+- **`describe('PUT /wishlist/{productId}')`** — covers save, idempotent re-save (RFC 9110 §9.3.4), malformed id (404), and non-existent id (404).
+- **`describe('DELETE /wishlist/{productId}')`** — covers successful removal, role-restriction (manager/moderator/admin get 403 on move-to-cart while wishlist line persists), never-saved id (404), and malformed id (404).
+- **`describe('POST /wishlist/{productId}/move-to-cart')`** — covers successful move (cross-checks `/cart` to confirm the line landed), never-saved id (404), and malformed id (404).
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — imported for side effects; likely registers contract-aware matchers or assertion helpers.
-- **`tests/support/http.ts`** — source of `api()` (HTTP client) and `authenticateAs()` (auth setup) used by every test.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module load to provision an in-memory/test database.
-- **`tests/support/ids.ts`** — source of `MISSING_ID`, a well-formed ObjectId that does not exist in the DB (exercises 404 branches).
-- **`src/modules/products/tests/factories.ts`** — source of `createProduct()`, used to seed a real product the wishlist tests reference.
+- **`@tests/contract`** (`tests/support/contract.ts`) — imported at module level; provides shared contract-test infrastructure (likely envelope matchers or setup hooks).
+- **`@tests/setup-test-db`** (`tests/support/setup-test-db.ts`) — calls `setupTestDb()` at module scope to provision a clean database before the suite runs.
+- **`@tests/http`** (`tests/support/http.ts`) — supplies `api()` (HTTP client), `authenticateAs(role)`, and `authenticateAsRole(role)` used in every test.
+- **`@modules/products/tests/factories`** (`src/modules/products/tests/factories.ts`) — provides `createProduct()` to seed a valid product for wishlist operations.
+- **`@tests/ids`** (`tests/support/ids.ts`) — provides `MISSING_ID` (a validly-shaped but non-existent ObjectId) for the "not found" error-path tests.
 
 ## Notes
 
-- Two distinct 422 branches exist for `POST /wishlist`: an empty/missing `productId` (body-validation) vs. a syntactically valid string that is not a 24-char hex ObjectId. The test file calls them out explicitly in a comment so they are not accidentally collapsed.
-- `MISSING_ID` (valid ObjectId format, absent from DB → 404) and `MALFORMED_ID` (invalid format → 422) are different constants; confusing them would test the wrong branch.
-- The `move-to-cart` success case is the only test that crosses into the cart module's endpoint (`GET /cart`) to assert cross-resource consistency.
-- All routes require a Bearer token; no anonymous-access case is exercised.
-- The response envelope is always `{ data: { items: [...] } }`; tests assert shape via `response.body.data.items` rather than full-body equality.
+- **Malformed vs. missing id are intentionally equivalent.** The contract treats an unparseable path param the same as a nonexistent one (both 404). `MALFORMED_ID` is defined locally because `@tests/ids` only supplies a well-formed-but-absent id.
+- **Role test lives inside the DELETE block** even though it exercises `POST /move-to-cart`. The assertion is that the wishlist line *survives* the forbidden move, so the test is grouped with the deletion-adjacent scenarios.
+- **Cross-module assertion:** the move-to-cart success test issues a `GET /cart` call and asserts on the cart's response shape, coupling this file's correctness to the cart contract.
+- **Idempotency is tested explicitly** (PUT twice → same 200, same list), citing RFC 9110 §9.3.4 in a comment.

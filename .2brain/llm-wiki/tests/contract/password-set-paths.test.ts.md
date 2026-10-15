@@ -1,7 +1,7 @@
 ---
 source: tests/contract/password-set-paths.test.ts
-sha256: df973e678e4eca12bfbe24eda1ea3c61d7bc1e706554ff1ae63efcbd2d50343f
-generated_at: 2026-09-27T15:47:48.310408+00:00
+sha256: a7c4b6d3fe0efd545cfe051ad22bcf9727aa01aee6696f43f1d0ff2c28c6a218
+generated_at: 2026-10-15T12:32:35.102967+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract test for the **S10 password-set-paths** rule: every code path that writes a password must reject a breached password with a 422 and leave no side-effect. It was introduced after bug **B25** (admin-create skipped the breach check entirely) and lives at the system level because the five affected paths span both the `account` and `users` modules.
+Contract-level test that asserts **every** HTTP route which writes a password rejects a known-breach password with a 422 and leaves no trace (no new user row, no credential change). It also pins the exhaustive set of password-setting routes against the bundled OpenAPI spec so a newly added staff or admin route that sets a password cannot appear without first gaining a breach-check case here.
 
 ## Key elements
 
-- **`PasswordSetPath`** (interface) — describes one entry point by `name` and an `attempt()` that returns the HTTP `response` plus an `assertNoChange` closure proving no state was written.
-- **`BREACHED_PASSWORD`** (`'Password1!'`) — a fixed fixture from `breached-passwords/list.txt`, chosen so that rejection is attributable to the breach list rather than to composition/validator rules.
-- **`signupPath`** — `POST /account/signup`; verifies no user row is created.
-- **`changePath`** — `POST /account/password`; verifies the original password still logs in.
-- **`resetPath`** — `POST /account/reset-confirm` (one-time token, no session); same no-change assertion as change.
-- **`adminCreatePath`** — `POST /users` (admin bearer); verifies no user row is created.
-- **`adminUpdatePath`** — `PUT /users/{id}` (admin bearer); verifies the target's original password still logs in.
-- **`describe.each([...])`** — drives all five paths through a single `it` block: expects status 422 and calls `assertNoChange`.
+- **`PasswordSetPath`** — interface describing one password-setting route: a `name` and an `attempt()` that fires the request and returns a `response` plus an `assertNoChange` callback.
+- **`signupPath`** — exercises `POST /account/signup`; asserts no user row is created after a 422.
+- **`changePath`** — exercises `POST /account/password` (authenticated); asserts the old credential still logs in after a 422.
+- **`resetPath`** — exercises `POST /account/reset-confirm` (one-time token, no session); asserts the old credential still logs in after a 422.
+- **`describe.each([signupPath, changePath, resetPath])`** — parameterized block that runs the 422 + no-mutation assertions for all three paths.
+- **`operationsThatSetAPassword()`** — reads `openapi.yaml` from disk, walks every operation's `requestBody` schema, and collects route+method pairs whose request schema references a `PasswordNew` field.
+- **`describe('the routes that can set a password')`** — canary test asserting the result of the above is *exactly* `['POST /account/password', 'POST /account/reset-confirm', 'POST /account/signup']`.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — side-effect import (`@tests/contract`) that registers the S10 contract metadata for reporting.
-- **`tests/support/http.ts`** — provides `api()` (supertest wrapper) and `authenticateAs()` used by every path.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module top to prepare a clean database.
-- **`src/modules/users/tests/factories.ts`** — supplies `createUser`, `PLAIN_PASSWORD`, and `userRepository` for fixture creation and no-change assertions.
-- **`src/modules/users/index.ts`** — source of the `TokenType` enum used to issue the reset token in `resetPath`.
-- **`src/modules/users/repository.ts`** — the `userRepository` instance (imported via factories) is queried inside `assertNoChange` for create paths.
-- **`src/modules/users/model.ts`** — underlying model for the user rows that `createUser` and `userRepository` operate on.
+- **`tests/support/contract.ts`** — imported for side-effects (likely registers contract-test globals or Vitest setup).
+- **`tests/support/http.ts`** — supplies `api()` (supertest instance) and `authenticateAs()` used by all three path attempts.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module level to provision a test database.
+- **`src/modules/users/tests/factories.ts`** — provides `createUser`, `PLAIN_PASSWORD`, and `userRepository` used in the reset-path setup and the signup no-mutation assertion.
+- **`src/modules/account/tests/factories.ts`** — provides `plantToken` to seed a password-reset token for the reset-path test.
+- **`src/modules/users/repository.ts`** — the `userRepository.findOne` call backs the signup "no row created" check.
+- **`package.json`** — the `npm run contracts:bundle` script produces the `openapi.yaml` file the canary reads; dev dependencies (`yaml`, `supertest`, `vitest`) power the test.
 
 ## Notes
 
-- `changePath` and `resetPath` share one internal implementation (`passwordChange` in `account/services/profile.ts`); the test deliberately exercises them as two independent HTTP entry points rather than deduplicating the check.
-- The no-change assertion strategy differs by path: create paths check for a missing row via the repository; update/change/reset paths confirm the **old** password still authenticates. There is no single uniform assertion.
-- `resetPath` mints its own token (`'breach-reset-token'`) via `user.tokenAdd` rather than going through the reset-request flow, keeping the test scoped to the confirm endpoint.
-- The file uses `setupTestDb()` at module scope (not in a `beforeAll`), consistent with other contract tests in `tests/contract/`.
+- The canary reads `openapi.yaml` at **runtime** via `readFileSync` relative to `__dirname/../../openapi.yaml`. If the spec file is missing or stale (i.e., `contracts:bundle` wasn't run), the canary will throw or give a false pass/fail.
+- The breach password constant (`'Password1!'`) must exist in `breached-passwords/list.txt`; the comment notes this is the same fixture used by every other breach test in the repo.
+- Change and reset are two *entry points* into the same `passwordChange` service function; signup is a separate implementation. The test treats them uniformly at the HTTP level, so the funneling is invisible to this file.
+- The test is intentionally **system-scoped** (not tied to one module) because the invariant spans the account contract.

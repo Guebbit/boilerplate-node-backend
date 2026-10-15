@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/controllers/restore-products.ts
-sha256: c0991dd153affd5dfc2f6654a45132ac6cfec045dc38a1be0554d19efa7f4abf
-generated_at: 2026-09-27T15:31:21.992971+00:00
+sha256: 92814b9581c66dcd0818e2d2109ae73019ec6de21a25e64b76e1b7b7eff23011
+generated_at: 2026-10-15T11:41:00.158553+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin wiring module that exposes the admin **restore** endpoint (`POST /products/:id/restore`) for the catalogue. It delegates all HTTP-handling logic to the shared `createRestoreController` factory and simply supplies product-specific collaborators (service, audit action, i18n key). The file exists to keep the module boundary clean so `routes.ts` can import a single named export without re-implementing restore semantics.
+Thin admin controller that wires the shared `createRestoreController` factory to the product service, exposing a single endpoint to undo a soft-deleted product (`POST /products/:id/restore`). The file contains no business logic; all domain behavior lives in `productService`.
 
 ## Key elements
 
-- **`restoreProducts`** (export) – The controller handler produced by `createRestoreController`. Handles the full request lifecycle (lookup, 409 guard, service call, audit, serialization, response) per the factory's contract.
-- **`entity: 'product'`** – Identifies the resource in audit logs and error messages.
-- **`restore: (id) => productService.restoreById(id)`** – Performs the actual soft-delete undo.
-- **`present: (product) => productService.toProduct(product)`** – Serializes the restored row into the public DTO.
-- **`auditAction: productsAuditActions.ADMIN_PRODUCT_RESTORED`** – Audit-trail constant recorded on success.
-- **`notFoundKey: 'products.not-found'`** – i18n key used for the 404 response body.
+- **`restoreProducts`** (exported) — The controller produced by `createRestoreController`. Accepts `{ id, request }`, calls `productService.restoreById(id, callerContextOf(request))` to restore, then maps the result through `productService.toProduct(product, request.caller)`. Returns 404 when the product doesn't exist (`products.not-found` key) and 409 when it isn't actually deleted.
 
 ## Relationships
 
-- **`create-restore-controller.ts`** – Supplies the `createRestoreController` factory that this file calls once at module load to obtain the handler.
-- **`service.ts`** – Provides `productService.restoreById` (state change) and `productService.toProduct` (presentation mapping) injected into the factory config.
-- **`audit.ts`** – Exports `productsAuditActions.ADMIN_PRODUCT_RESTORED`, the audit constant recorded when a restore succeeds.
-- **`routes.ts`** – Consumes the `restoreProducts` export to register the `POST /products/:id/restore` route in the admin router.
+- **`@infrastructure/surfaces/create-restore-controller`** — Supplies the `createRestoreController` factory. This file passes the entity name, the `restore` callback, the `present` serializer, and the not-found i18n key.
+- **`@infrastructure/http/request`** — Provides `callerContextOf(request)` so the service can act on behalf of the authenticated admin without the controller parsing headers/claims itself.
+- **`../services/index`** — Exports `productService`, which owns `restoreById` (including the `ADMIN_PRODUCT_RESTORED` audit event emission) and `toProduct` (domain → DTO mapping).
+- **`routes.ts`** — Registers `restoreProducts` on the product router at `POST /products/:id/restore` (admin-protected).
 
 ## Notes
 
-- The file contains **zero business logic**; any behavior change (validation, 409 semantics, response shape) must be made in `create-restore-controller.ts` or the service layer.
-- A product that is **not** in a deleted state yields a **409**, not a 404 (documented in the JSDoc; enforced by the factory).
-- `notFoundKey` is an i18n key, not a literal string—localisation lives outside this file.
+- The audit emit (`ADMIN_PRODUCT_RESTORED`) is handled inside `productService.restoreById`, not here. If you search for audit logic, go to the service layer.
+- The `entity` string (`'product'`) is used by the factory for generic messages/logging; keep it lowercase singular to match other product controllers.
+- Because this is a pure wiring file, any change to the restore flow (validation, permissions, side-effects) should land in `productService`, not in this controller.

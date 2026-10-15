@@ -1,7 +1,7 @@
 ---
 source: tests/unit/kernel/access-query.test.ts
-sha256: 302fda70d44518b7936654ef6d70b1700db69225d5b71ebe7244165a78f4a78f
-generated_at: 2026-09-27T16:11:16.699573+00:00
+sha256: 5df381d44333b44c554f318897a757f2e5c8fd57d7b3be9858f21f4ed4648924
+generated_at: 2026-10-15T13:21:22.881189+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `accessibleFilter` and `hasAnonymousReadScope` in `@kernel/access/query`. They pin down the two invariants that motivated replacing four hand-written query fragments with a single rules-compiled filter: an unrestricted role narrows nothing (`{}`), and a caller with no applicable rule gets an explicit "match nothing" filter rather than an absent one.
+Unit tests that pin down the two invariants a developer would otherwise have to remember by hand: an unrestricted role compiles to `{}` (narrows nothing), and a caller with no applicable rule compiles to a filter that matches nothing (`{ $expr: { $eq: [0, 1] }}`) rather than to a missing filter. Replaces the old hand-written per-collection fragments with assertions against the single `accessibleFilter` compile.
 
 ## Key elements
 
-- **`describe('accessibleFilter')`** — eight cases covering:
-  - Admin / unrestricted role → `{}` (not `undefined`).
-  - Customer on `Product` → `{ active: true, deletedAt: null }`.
-  - Customer (owner-scope) on `Order` → `{ userId: <ObjectId>, deletedAt: null }`; asserts the string ID is converted to a `Types.ObjectId`.
-  - Operator (no rule for `Order`) → `{ $expr: { $eq: [0, 1] } }` (CASL `EMPTY_RESULT_QUERY`).
-  - Anonymous (`undefined`) on `Order` → same empty-result filter.
-  - Anonymous on `Product` → guest catalogue filter.
-  - Manager on `Product` → filter does **not** contain `tenantId` (single-tenant deployment).
-  - Write action (`'update'`) → same compiled filter shape as the read; customer update on `Product` yields the empty-result filter.
-- **`productScope` / `orderScope`** — thin wrappers around `accessibleFilter` matching the `(context?) => Filter` signature that `hasAnonymousReadScope` expects from a module's own scope function.
-- **`describe('hasAnonymousReadScope')`** — four cases asserting the comparison logic used by `infrastructure/http/middlewares/cache.ts`:
-  - Anonymous vs. anonymous → `true`.
-  - Customer (identical guest filter on `Product`) → `true`.
-  - Admin (strictly wider) → `false`.
-  - Customer with a specific `userId` on `Order` vs. anonymous (neither is a superset) → `false`.
+- **`describe('accessibleFilter')`** — asserts filter output for admin, customer, owner-scoped customer, operator, anonymous, and manager against `Product` and `Order` subjects, including write actions (`'update'`).
+- **`describe('accessibleFilterFor')`** — verifies the Caller-based entry point (`accessibleFilterFor`) produces the same result as the session-based `accessibleFilter` for the same logical caller, and degrades to guest scope when `caller` is `undefined`.
+- **`describe('hasAnonymousReadScope')`** — tests the comparison predicate (used by the cache middleware): true when a role's filter equals the anonymous filter, false when it is strictly wider *or* merely different (owner-scope vs. deny-all).
+- **`productScope` / `orderScope`** — thin local wrappers matching the `callerScope`-shaped signature `hasAnonymousReadScope` expects.
+- **`Types.ObjectId`** (mongoose) — used in the owner-scope test to confirm the compiled filter carries a real `ObjectId`, not a raw string.
 
 ## Relationships
 
-- **`src/kernel/access/query.ts`** — the module under test. Provides `accessibleFilter` (rules → MongoDB filter) and `hasAnonymousReadScope` (filter-equality comparison for cache sharing).
-- **`tests/support/callers.ts`** — supplies `asCustomer`, `asManager`, `asAdmin`, `asOperator` fixtures that build CASL ability contexts for the test cases.
+- **`src/kernel/access/query.ts`** — the module under test. Exports `accessibleFilter`, `accessibleFilterFor`, and `hasAnonymousReadScope`, all exercised here.
+- **`tests/support/callers.ts`** — supplies the role fixtures (`asAdmin`, `asCustomer`, `asManager`, `asOperator`) and the `callerAs` helper used by the `accessibleFilterFor` block.
 
 ## Notes
 
-- The "unrestricted" case asserts `{}`, not `undefined`, because the caller spreads the result into a Mongo query; the two must be distinguishable.
-- The owner-scope test exists specifically to catch the silent-failure mode where a raw string ID in the filter matches zero rows.
-- The `tenantId` absence test is deployment-specific: the boilerplate ships a single shop, so compiling a discriminator over a non-partitioned collection would lock everyone out.
-- `hasAnonymousReadScope` tests deliberately do **not** re-prove individual role rules; they assume `accessibleFilter` is correct (verified above) and isolate the comparison semantics.
+- `{}` (no restriction) and `{ $expr: { $eq: [0, 1] } }` (deny all) are intentionally distinct; the first two tests exist to keep them from being conflated downstream.
+- The owner-scope test hard-codes an `ObjectId` to catch a regression where the filter would silently match nothing if the id stayed a string.
+- The deployment is single-tenant; the tests explicitly assert `tenantId` is **absent** from the compiled filter to prevent a model that *does* store it from being accidentally filtered here.
+- The `requires-module: products, orders` pragma at the top declares which domain modules' schemas/rules must be loaded before these tests run.
+- `hasAnonymousReadScope` is the gate used by `infrastructure/http/middlewares/cache.ts` to decide whether a caller may share a guest cache entry — tests here are about the comparison semantics, not re-proving individual role rules.

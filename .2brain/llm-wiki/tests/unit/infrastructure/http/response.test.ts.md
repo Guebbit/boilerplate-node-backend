@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/http/response.test.ts
-sha256: 12ae3a3ba0d5563b6af75957e58a28f4f3898259714207e1585c3428af6562f6
-generated_at: 2026-09-23T20:23:15.167101+00:00
+sha256: 28c064c8d36015dde2b0cbe32c95657ee71e20bb3a87d456630214b495217b21
+generated_at: 2026-10-15T13:15:43.884386+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the response-envelope helpers in `src/infrastructure/http/response.ts`. They pin the public API contract: the shape of success/reject payloads, the status-to-code mapping, the guarantee that `errors` is never empty on a failure, and the "status written twice" convention that keeps the HTTP status and body status in lockstep.
+Unit tests for the response-envelope module (`src/infrastructure/http/response.ts`). The file pins the API's public dialect — the exact shape of success and reject payloads, the status→`code` mapping, and the error-normalisation rules — because those contracts are what every client branches on. The tests are deliberately exhaustive over status codes and edge cases so that no "well-meaning simplification" can silently drop a guarantee (e.g. empty `errors` array, missing `data` key, or a 5xx leaking a specific status code).
 
 ## Key elements
 
-- **`generateSuccess` tests** — Verify the success payload shape: `data` passthrough (including `undefined`, primitives, and Mongo-style objects), default 200 / `''` message, explicit status+message override, and that `errors` is absent from the runtime object.
-- **`generateReject` tests** — Verify the reject payload shape: structured error-item construction from plain strings, preservation of caller-supplied items, default 400, synthesis of a fallback item when `errors` is empty, mixed string/structured normalization, and filling missing `code`/`message` fields from the envelope.
-- **`codeFor` helper** — Local utility that extracts `errors[0].code` for a given status; used to assert the status→code map (400→`BAD_REQUEST`, 404→`NOT_FOUND`, all 5xx→`INTERNAL_ERROR`, unmapped 4xx→`REQUEST_ERROR`, 499→`REQUEST_ERROR`).
-- **`resolveErrorMessage` tests** — Assert that every mapped status (and the two catch-all buckets) produces the same canonical message string, independent of caller-supplied errors.
-- **`details` omission tests** — Confirm that a `details` key is absent (not `undefined`) when not provided, preventing serializer artefacts.
-- **`successResponse` / `rejectResponse` tests** — Verify the Express-level helpers call `res.status(code)` and `res.json(body)` with matching status, and that `rejectResponse` never throws (so a forgotten `return` is the developer's bug, not a silent crash).
+- **`generateSuccess` tests** — verify plain-object passthrough (no implicit Mongo normalisation), primitive data, default `200`/`''`, explicit status/message, absence of a runtime `errors` key, and preservation of `undefined` data.
+- **`generateReject` tests** — the bulk of the file. Asserts:
+  - String errors are wrapped into `{ code, message }` items; structured items pass through untouched.
+  - Default status is `400` (safer than `500` for an unannotated reject).
+  - An empty `errors` array is replaced with a synthesised item (never empty on failure).
+  - Per-status `message` wording is identical regardless of caller-supplied errors.
+  - Per-status `code` mapping (400→`BAD_REQUEST`, 401→`UNAUTHORIZED`, …) and two catch-alls: unmapped 4xx → `REQUEST_ERROR`, all 5xx → `INTERNAL_ERROR`.
+  - `data` key is always present (value `undefined`).
+  - Mixed string + structured error arrays normalise correctly.
+  - Falsy `code`/`message` on a structured item are filled from the status.
+  - `details` key is omitted (not serialised as `undefined`) when absent, retained when present.
+- **`successResponse` tests** — confirm the HTTP status is written to both the response header and the body (intentional duplication to prevent disagreement).
+- **`createdOrOk` tests** — 201 path calls `Location` header; 200 path does not.
+- **Helpers** — `codeFor(status)` extracts the mapped code from a reject; `stubWithLocation()` extends `makeResponseStub` with a mockable `location()` for the 201 test.
 
 ## Relationships
 
-- **`src/infrastructure/http/response.ts`** — The module under test. This file imports `generateSuccess`, `generateReject`, `resolveErrorMessage`, `successResponse`, and `rejectResponse`, and asserts their full behavioral contract.
-- **`tests/support/express.ts`** — Provides `makeResponseStub`, a chainable mock of `Express.Response` (`.status()` and `.json()` as jest spies) used by the `successResponse` and `rejectResponse` describe blocks.
+- **`src/infrastructure/http/response.ts`** — the module under test. All exported helpers (`fieldError`, `generateReject`, `generateSuccess`, `resolveErrorMessage`, `successResponse`, `createdOrOk`, `rejectResponse`) are imported and exercised here.
+- **`tests/support/express.ts`** — provides `makeResponseStub()`, a chainable Express `res` mock (`status().json()`) used by `successResponse` and `createdOrOk` tests.
 
 ## Notes
 
-- The `errors` array is guaranteed non-empty on every reject; tests assert this from multiple angles (no-errors call, mixed list, single string) so a refactoring that drops the fallback synthesis will fail.
-- The status→code map is exhaustive: every mapped status is asserted individually, and the two catch-alls (`>=500` → `INTERNAL_ERROR`, other 4xx → `REQUEST_ERROR`) are tested with boundary values (499, 500, 599). Partial coverage is explicitly flagged as a risk in inline comments.
-- `details` must be _absent_, not `undefined`, because some JSON serializers emit `"details": null` which breaks contract validation.
-- `rejectResponse` is documented as non-throwing; controllers are expected to `return` it. A test pins this so the contract cannot silently change.
+- `errors: never` on the success type exists **only** for TS narrowing; the tests assert the key is *absent* at runtime (`Object.keys` check). Emitting it would put a stray field on every 200 response.
+- The `data` key is asserted present-but-`undefined` on rejects so that `result.data` type-checks on both union branches; omitting it would break client code that unconditionally reads `.data`.
+- The 499 vs 500 boundary is explicitly tested: `499` maps to `REQUEST_ERROR` (client error), `500+` maps to `INTERNAL_ERROR`. A `> 500` check instead of `>= 500` would silently misclassify a bare 500.
+- `resolveErrorMessage(status)` is cross-checked against `generateReject(status).message` in every status case to keep the two in lockstep.
+- The truncated tail likely contains additional tests for `rejectResponse` and `fieldError`, which are imported but whose describe blocks were cut off.

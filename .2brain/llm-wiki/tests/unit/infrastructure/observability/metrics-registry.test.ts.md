@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/observability/metrics-registry.test.ts
-sha256: da301e33c6e73a7cbf277528f71be0f17a8de427801cef6e968881612483c12b
-generated_at: 2026-09-27T16:08:56.065838+00:00
+sha256: 570701d256f19fcb1c491c9fd0196fb82e728968201fea0429dadd73ddf26502
+generated_at: 2026-10-15T13:17:36.285530+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `getPrometheusMetrics`, verifying that the Prometheus scrape output includes expected metric families and that the `job_last_success_timestamp_seconds` metric behaves correctly across Mongo connection states and query failures.
+Unit tests for `getPrometheusMetrics`, verifying that the scrape output contains the expected standard families, that job timestamp gauges behave correctly across connection states and query failures, and that labelled alert counters are registered at zero from the start.
 
 ## Key elements
 
-- **`withReadyState(state)`** — local helper that overrides `connection.readyState` via `Object.defineProperty` so tests can simulate Mongo connected/disconnected without opening a real socket.
-- **`jest.mock('@infrastructure/persistence/lease', …)`** — replaces `listLeaseSummaries` with a `jest.fn()` so lease queries are controlled per-test.
-- **`describe('getPrometheusMetrics — standard families')`** — asserts `process_uptime_seconds` and `nodejs_eventloop_lag_seconds` appear in the output.
-- **`describe('job_last_success_timestamp_seconds — D9')`** — three cases: (1) skips the query entirely when `readyState` is 0, (2) emits one series per job that has a `lastSuccessAt` and omits jobs that never succeeded, (3) a rejected query resolves the scrape with all other metrics intact (no throw).
+- **`withReadyState(state: number)`** — Helper that redefines `connection.readyState` on the shared `connection` object without opening a real database. Same pattern as `dependency-health.test.ts`.
+- **`describe('standard families')`** — Asserts `process_uptime_seconds` and `nodejs_eventloop_lag_seconds` are present in the scrape text.
+- **`describe('job_last_success_timestamp_seconds — D9')`** — Covers three cases: (1) gauge is omitted and `listLeaseSummaries` is never called when `readyState` is 0; (2) one series per job with a non-null `lastSuccessAt`, omitted when undefined; (3) a rejected query degrades to "no series" rather than rejecting the entire scrape.
+- **`describe('job_last_run_timestamp_seconds')`** — Same three patterns plus a distinguishing case: a job that has run but never succeeded appears in the run gauge but is absent from the success gauge.
+- **`describe('labelled alert counters')`** — Dynamically imports `security-events`, `account/metrics`, and `payments/metrics` to register their counters, then asserts each starts at `0` so a Prometheus `increase()` alert fires on the first event after restart.
 
 ## Relationships
 
-- **`src/infrastructure/observability/metrics-registry.ts`** — the module under test; the test imports and exercises its exported `getPrometheusMetrics`.
-- **`src/infrastructure/persistence/lease.ts`** — dependency mocked at module level; `listLeaseSummaries` is the only symbol the test stubs from this file.
-- **`src/infrastructure/runtime/database.ts`** — provides `connection`; the test reads and overrides `connection.readyState` to gate the lease query.
+- **`src/infrastructure/observability/metrics-registry.ts`** — System under test; exports `getPrometheusMetrics`.
+- **`src/infrastructure/persistence/lease.ts`** — Mocked module; `listLeaseSummaries` is the data source the registry calls to build the job timestamp gauges.
+- **`src/infrastructure/runtime/database.ts`** — Provides the `connection` singleton whose `readyState` the registry checks before issuing the lease query; the `withReadyState` helper mutates this property directly.
 
 ## Notes
 
-- The `withReadyState` helper is intentionally duplicated (not shared) with `dependency-health.test.ts` to keep each test file self-contained; see the comment in the source.
-- The "resolves rather than rejects" test encodes a deliberate design choice: a lease-query failure must not poison the entire `/metrics` scrape.
-- `job_last_success_timestamp_seconds` is labeled **D9** in the describe block, referencing a design-decision identifier used elsewhere in the codebase.
+- The `afterEach` in each job-gauge block calls `mockReset()` to prevent cross-test leakage of resolved/rejected values.
+- The "D9" label in the success-gauge describe block is a cross-reference to a design decision (see project decision log); it is not a test framework concept.
+- The alert-counters test relies on side-effect imports to trigger counter registration; the scrape must happen *after* those imports resolve.
+- The resilience contract (query failure → partial scrape, not a rejection) is tested identically for both gauges; a regression in either would break Prometheus scraping for all other metric families.

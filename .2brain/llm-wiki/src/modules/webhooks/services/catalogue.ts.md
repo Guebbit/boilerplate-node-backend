@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/services/catalogue.ts
-sha256: bda5d82ef64c0d763dd4008bfb696b7d9d2ed6374d63a34479769602d8f42d2d
-generated_at: 2026-09-27T15:43:43.706505+00:00
+sha256: 0d587f31c85f728be1bbbcb026227b8446856983480ceaed70f4560aef42bc04
+generated_at: 2026-10-15T12:21:06.855562+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides a static, in-memory list of the webhook events this module can emit, sourced directly from the local `asyncapi.yaml` fragment. By reading the same file that `asyncapi.public.yaml` is generated from, the public event endpoint and the module's actual capabilities cannot drift apart.
+Defines the public webhook event catalogue: the set of events shipped by **registered** modules, read from each module's `asyncapi.webhooks.yaml` fragment at boot. This single source of truth keeps `GET /webhooks/events`, subscription validation, and the bundled public contract (`asyncapi.public.yaml`) from drifting apart.
 
 ## Key elements
 
-- **`catalogue`** (module-level constant) — Parsed once at import time via an IIFE: reads `../asyncapi.yaml` from disk, parses it with `yaml.parse`, and maps `channels` into an array of `{ name, description }` objects. Never re-parsed per request.
-- **`listWebhookEventCatalogue()`** (exported function) — Returns the frozen `catalogue` array. This is the sole public API of the module.
-- **`AsyncApiChannelsDocument`** (local interface) — Minimal structural type describing the subset of the AsyncAPI YAML this file actually reads (just `channels` with optional `description`).
+- **`registerWebhookCatalogue(moduleNames)`** — Called once from the module's `onRegistered` hook. Iterates the given module names, reads each module's `asyncapi.webhooks.yaml`, and flattens all channel entries into the module-level `catalogue` array.
+- **`listWebhookEventCatalogue()`** — Returns the full `readonly WebhookEventCatalogueEntry[]` (name + description). Intended for the `GET /webhooks/events` endpoint.
+- **`unknownEventTypes(eventTypes)`** — Given a subscription's event filter, returns the names not present in the catalogue (deduplicated, request order). The wildcard `ALL_EVENTS` (`*`) is always treated as valid.
+- **`eventsOf(moduleName)`** *(private)* — Resolves `src/modules/<moduleName>/asyncapi.webhooks.yaml`, parses it with `yaml.parse`, and extracts channel names/descriptions. Returns `[]` if the file is absent.
+- **`catalogue`** *(module-level mutable)* — Populated by `registerWebhookCatalogue`; empty until that call.
 
 ## Relationships
 
-- **`src/modules/webhooks/controllers/list-events.ts`** — Consumes `listWebhookEventCatalogue()` to populate the `GET /webhooks/events` response.
-- **`src/modules/webhooks/services/index.ts`** — Re-exports this module so other services can import the catalogue function through the services barrel.
-- **`src/types/index.ts`** — Supplies the `WebhookEventCatalogueEntry` type that shapes both the parsed array and the return type of the exported function.
+- **`src/modules/webhooks/module.ts`** — Invokes `registerWebhookCatalogue` during its `onRegistered` lifecycle, passing the list of enabled module names.
+- **`src/modules/webhooks/domain/index.ts`** — Provides the `ALL_EVENTS` constant used in `unknownEventTypes`.
+- **`src/modules/webhooks/controllers/list-events.ts`** — Consumes `listWebhookEventCatalogue()` to serve the events listing endpoint.
+- **`src/modules/webhooks/services/subscriptions.ts`** — Calls `unknownEventTypes()` to validate a subscription's event filter before persisting it.
+- **`src/modules/webhooks/services/index.ts`** — Re-exports this module's public API.
+- **`src/types/index.ts`** — Source of the `WebhookEventCatalogueEntry` type imported here.
+- **`src/modules/webhooks/tests/unit/catalogue.test.ts`** — Unit tests for `registerWebhookCatalogue`, `listWebhookEventCatalogue`, and `unknownEventTypes`.
+- **`src/modules/webhooks/tests/integration/subscription-lifecycle.test.ts`** — Exercises subscription validation that depends on the catalogue.
+- **`tests/cross-cutting/webhook-event-producers.test.ts`** — Verifies that producers emit events present in the catalogue.
 
 ## Notes
 
-- The YAML file is read **synchronously at import time** using `readFileSync`. There is no caching layer, no watch, and no refresh mechanism — if the YAML changes at runtime (it shouldn't; it's a build-time artifact), the in-memory copy will not update until the process restarts.
-- The path resolution uses `__dirname/../asyncapi.yaml`, so the file must sit one directory above this service file. A mis-located YAML will throw at import, crashing the entire module tree.
-- Only `channels` and their `description` are extracted; operation IDs, payloads, and other AsyncAPI metadata are intentionally ignored.
+- **Build-time vs. request-time:** The YAML fragments are read once at boot. No `fs` call happens per request.
+- **Folder = registry name:** A module's directory under `src/modules/` must match its `AppModule.name`; there is no separate mapping.
+- **Minimal YAML contract:** Only the `channels` map and each channel's `description` field are read. Other AsyncAPI fields are ignored.
+- **Unregistered modules contribute nothing:** If a module is not in the `moduleNames` list (or its fragment file is missing), its events simply don't appear.
+- **`*` is a special case:** `ALL_EVENTS` is never flagged as unknown, so a subscription filtering on `*` always passes regardless of catalogue contents.

@@ -13,15 +13,14 @@ graph LR
     Scenario_Apply_Runner_Registry["Scenario Apply Runner & Registry"]
     Redis_Cache_Rate_Limit_Adapters["Redis Cache & Rate-Limit Adapters"]
     In_Process_App_Boot_Worker_Assembly["In-Process App Boot & Worker Assembly"]
-    One_Shot_Script_Harness_Ops_Jobs -- "npm-script delegation with exit-code contract and cleanup guarantee" --> Scenario_Apply_Runner_Registry
-    One_Shot_Script_Harness_Ops_Jobs -- "Cluster fork — supervisor spawns workers that boot the full app" --> In_Process_App_Boot_Worker_Assembly
+    One_Shot_Script_Harness_Ops_Jobs -- "supervises and forks long-running worker processes that boot the app" --> In_Process_App_Boot_Worker_Assembly
     Scenario_Apply_Runner_Registry -- "calls" --> One_Shot_Script_Harness_Ops_Jobs
     Scenario_Apply_Runner_Registry -- "Post-seed cache invalidation and rate-limit counter reset (fail-open)" --> Redis_Cache_Rate_Limit_Adapters
-    Scenario_Apply_Runner_Registry -- "In-process app lifecycle boot + loopback HTTP flow driving" --> In_Process_App_Boot_Worker_Assembly
+    Scenario_Apply_Runner_Registry -- "boots in-process and drives loopback HTTP flows against the black-box Express instance" --> In_Process_App_Boot_Worker_Assembly
     Redis_Cache_Rate_Limit_Adapters -- "calls" --> One_Shot_Script_Harness_Ops_Jobs
     Redis_Cache_Rate_Limit_Adapters -- "calls" --> In_Process_App_Boot_Worker_Assembly
     In_Process_App_Boot_Worker_Assembly -- "Runtime outbox nudge dispatch + job outcome recording" --> One_Shot_Script_Harness_Ops_Jobs
-    In_Process_App_Boot_Worker_Assembly -- "Managed-connection lifecycle assembly (start/stop/clear) for shared cache and rate-limit stores" --> Redis_Cache_Rate_Limit_Adapters
+    In_Process_App_Boot_Worker_Assembly -- "starts the shared cache connection and wires the rate-limit store into HTTP middleware" --> Redis_Cache_Rate_Limit_Adapters
 ```
 
 ## Details
@@ -36,7 +35,7 @@ The shared one-shot harness that every db: and ops: npm script delegates to. run
 - `scripts.run-script.runScript`:106-118
 - `scripts.run-script.refuseToRun`:32-48
 - `src.cluster.supervise`:41-174
-- `src.kernel.outbox.relayOutbox`:309-325
+- `src.kernel.outbox.relayOutbox`:310-326
 
 **Source Files:**
 
@@ -46,15 +45,7 @@ The shared one-shot harness that every db: and ops: npm script delegates to. run
   - `scenarios.support.doubles.mail-outbox.recordDemoEmail.lines.map() callback` (L62-L62) - Function
   - `scenarios.support.doubles.mail-outbox.recordDemoEmail.attachments.request.attachments.map() callback` (L64-L64) - Function
 - `scripts/docs/generate-role-matrix.ts`
-  - `scripts.docs.generate-role-matrix.then() callback` (L172-L174) - Function
-- `scripts/ops/refresh-breached-passwords.ts`
-  - `scripts.ops.refresh-breached-passwords.main.survivors.lines.filter() callback` (L88-L88) - Function
-  - `scripts.ops.refresh-breached-passwords.survivors` (L88-L88) - Class
-  - `scripts.ops.refresh-breached-passwords.runScript() callback` (L102-L102) - Function
-- `scripts/ops/sweep-outbox.ts`
-  - `scripts.ops.sweep-outbox.main` (L31-L40) - Class
-  - `scripts.ops.sweep-outbox.then() callback` (L33-L35) - Function
-  - `scripts.ops.sweep-outbox.main.then() callback` (L37-L40) - Function
+  - `scripts.docs.generate-role-matrix.then() callback` (L170-L172) - Function
 - `scripts/run-script.ts`
   - `scripts.run-script.refuseToRun` (L32-L48) - Class
   - `scripts.run-script.then() callback` (L39-L39) - Function
@@ -71,9 +62,9 @@ The shared one-shot harness that every db: and ops: npm script delegates to. run
 - `src/infrastructure/adapters/export-store.ts`
   - `src.infrastructure.adapters.export-store.then() callback` (L103-L103) - Function
 - `src/infrastructure/adapters/logger.ts`
-  - `src.infrastructure.adapters.logger.Logger` (L29-L44) - Interface
-  - `src.infrastructure.adapters.logger.Logger.warn` (L37-L37) - Method
-  - `src.infrastructure.adapters.logger.Logger.log` (L43-L43) - Method
+  - `src.infrastructure.adapters.logger.Logger` (L30-L45) - Interface
+  - `src.infrastructure.adapters.logger.Logger.warn` (L38-L38) - Method
+  - `src.infrastructure.adapters.logger.Logger.log` (L44-L44) - Method
 - `src/infrastructure/adapters/pinned-https.ts`
   - `src.infrastructure.adapters.pinned-https.PinnedHttpsRequestOptions` (L17-L26) - Interface
   - `src.infrastructure.adapters.pinned-https.pinnedHttpsRequest` (L41-L72) - Class
@@ -91,62 +82,71 @@ The shared one-shot harness that every db: and ops: npm script delegates to. run
 - `src/infrastructure/adapters/ssrf-guard.ts`
   - `src.infrastructure.adapters.ssrf-guard.SsrfRefusedError` (L30-L43) - Class
   - `src.infrastructure.adapters.ssrf-guard.SsrfRefusedError.constructor` (L38-L42) - Constructor
-  - `src.infrastructure.adapters.ssrf-guard.resolveAllAddresses.lookup` (L165-L175) - Class
-  - `src.infrastructure.adapters.ssrf-guard.resolveAllAddresses.lookup.then() callback` (L165-L175) - Function
-  - `src.infrastructure.adapters.ssrf-guard.buildPinnedLookup` (L229-L240) - Class
-  - `src.infrastructure.adapters.ssrf-guard.buildPinnedLookup.<function>` (L231-L239) - Function
-  - `src.infrastructure.adapters.ssrf-guard.resolveSafeOutboundTarget` (L261-L298) - Class
-  - `src.infrastructure.adapters.ssrf-guard.resolveSafeOutboundTarget.then() callback` (L278-L297) - Function
-  - `src.infrastructure.adapters.ssrf-guard.resolveSafeOutboundTarget.then() callback.then() callback` (L279-L297) - Function
+  - `src.infrastructure.adapters.ssrf-guard.resolveAllAddresses.lookup` (L166-L176) - Class
+  - `src.infrastructure.adapters.ssrf-guard.resolveAllAddresses.lookup.then() callback` (L166-L176) - Function
+  - `src.infrastructure.adapters.ssrf-guard.buildPinnedLookup` (L231-L242) - Class
+  - `src.infrastructure.adapters.ssrf-guard.buildPinnedLookup.<function>` (L233-L241) - Function
+  - `src.infrastructure.adapters.ssrf-guard.resolveSafeOutboundTarget` (L263-L300) - Class
+  - `src.infrastructure.adapters.ssrf-guard.resolveSafeOutboundTarget.then() callback` (L280-L299) - Function
+  - `src.infrastructure.adapters.ssrf-guard.resolveSafeOutboundTarget.then() callback.then() callback` (L281-L299) - Function
 - `src/infrastructure/http/middlewares/rate-limit.ts`
   - `src.infrastructure.http.middlewares.rate-limit.limiterLogger` (L96-L101) - Class
   - `src.infrastructure.http.middlewares.rate-limit.limiterLogger.warn` (L97-L98) - Method
   - `src.infrastructure.http.middlewares.rate-limit.limiterLogger.error` (L99-L100) - Method
+- `src/infrastructure/persistence/command-metrics.ts`
+  - `src.infrastructure.persistence.command-metrics.observeDatabaseCommands` (L57-L85) - Class
+  - `src.infrastructure.persistence.command-metrics.observeDatabaseCommands.client.on('commandStarted') callback` (L77-L82) - Function
+  - `src.infrastructure.persistence.command-metrics.observeDatabaseCommands.client.on('commandSucceeded') callback` (L83-L83) - Function
+  - `src.infrastructure.persistence.command-metrics.observeDatabaseCommands.client.on('commandFailed') callback` (L84-L84) - Function
 - `src/infrastructure/persistence/lease.ts`
-  - `src.infrastructure.persistence.lease.recordJobOutcome` (L222-L251) - Class
-  - `src.infrastructure.persistence.lease.recordJobOutcome.catch() callback` (L242-L251) - Function
+  - `src.infrastructure.persistence.lease.recordJobOutcome` (L205-L234) - Class
+  - `src.infrastructure.persistence.lease.recordJobOutcome.catch() callback` (L225-L234) - Function
 - `src/infrastructure/runtime/cluster-policy.ts`
   - `src.infrastructure.runtime.cluster-policy.CrashPolicy` (L27-L36) - Interface
   - `src.infrastructure.runtime.cluster-policy.recentCrashes` (L51-L54) - Class
   - `src.infrastructure.runtime.cluster-policy.crashVerdict.recentCrashes.history.filter() callback` (L52-L52) - Function
 - `src/infrastructure/runtime/database.ts`
-  - `src.infrastructure.runtime.database.start.attemptConnect` (L125-L152) - Class
-  - `src.infrastructure.runtime.database.attemptConnect.then() callback` (L130-L130) - Function
-  - `src.infrastructure.runtime.database.start.attemptConnect.then() callback` (L131-L151) - Function
-  - `src.infrastructure.runtime.database.start.attemptConnect.then() callback.then() callback` (L150-L150) - Function
-  - `src.infrastructure.runtime.database.watchConnection` (L175-L184) - Class
-  - `src.infrastructure.runtime.database.watchConnection.mongoose.connection.on('disconnected') callback` (L179-L181) - Function
-  - `src.infrastructure.runtime.database.watchConnection.mongoose.connection.on('reconnected') callback` (L182-L182) - Function
+  - `src.infrastructure.runtime.database.start.attemptConnect` (L133-L160) - Class
+  - `src.infrastructure.runtime.database.attemptConnect.then() callback` (L138-L138) - Function
+  - `src.infrastructure.runtime.database.start.attemptConnect.then() callback` (L139-L159) - Function
+  - `src.infrastructure.runtime.database.start.attemptConnect.then() callback.then() callback` (L158-L158) - Function
+  - `src.infrastructure.runtime.database.watchConnection` (L183-L192) - Class
+  - `src.infrastructure.runtime.database.watchConnection.mongoose.connection.on('disconnected') callback` (L187-L189) - Function
+  - `src.infrastructure.runtime.database.watchConnection.mongoose.connection.on('reconnected') callback` (L190-L190) - Function
 - `src/kernel/outbox.ts`
-  - `src.kernel.outbox.relayOutbox` (L309-L325) - Class
-  - `src.kernel.outbox.nudgeOutbox.pass` (L337-L343) - Class
-  - `src.kernel.outbox.nudgeOutbox.pass.catch() callback` (L337-L343) - Function
-  - `src.kernel.outbox.nudgeOutbox.pass.finally() callback` (L345-L345) - Function
-- `src/modules/account/services/two-factor.ts`
-  - `src.modules.account.services.two-factor.notifyChange` (L86-L104) - Class
-  - `src.modules.account.services.two-factor.notifyChange.catch() callback` (L101-L103) - Function
-  - `src.modules.account.services.two-factor.notifyLocked` (L157-L169) - Class
-  - `src.modules.account.services.two-factor.notifyLocked.catch() callback` (L166-L168) - Function
+  - `src.kernel.outbox.relayOutbox` (L310-L326) - Class
+  - `src.kernel.outbox.nudgeOutbox.pass` (L338-L344) - Class
+  - `src.kernel.outbox.nudgeOutbox.pass.catch() callback` (L338-L344) - Function
+  - `src.kernel.outbox.nudgeOutbox.pass.finally() callback` (L346-L346) - Function
+- `src/modules/account/emails.ts`
+  - `src.modules.account.emails.twoFactorChangedEmail` (L244-L259) - Class
+  - `src.modules.account.emails.twoFactorChangedEmail.body` (L254-L257) - Method
+  - `src.modules.account.emails.twoFactorLockedEmail` (L268-L282) - Class
+  - `src.modules.account.emails.twoFactorLockedEmail.body` (L277-L280) - Method
+- `src/modules/account/rate-limits.ts`
+  - `src.modules.account.rate-limits.CREDENTIAL_IDENTITY_BUDGET` (L71-L91) - Class
+  - `src.modules.account.rate-limits.CREDENTIAL_IDENTITY_BUDGET.skip` (L90-L90) - Method
+- `src/modules/account/services/two-factor-outcomes.ts`
+  - `src.modules.account.services.two-factor-outcomes.notifyChange` (L54-L72) - Class
+  - `src.modules.account.services.two-factor-outcomes.notifyChange.catch() callback` (L69-L71) - Function
+  - `src.modules.account.services.two-factor-outcomes.notifyLocked` (L126-L138) - Class
+  - `src.modules.account.services.two-factor-outcomes.notifyLocked.catch() callback` (L135-L137) - Function
 - `src/modules/account/session/device-cookie.ts`
   - `src.modules.account.session.device-cookie.holdsDeviceCookie` (L77-L84) - Class
   - `src.modules.account.session.device-cookie.holdsDeviceCookie.some() callback` (L82-L82) - Function
-  - `src.modules.account.session.device-cookie.rememberDevice.tokens.filter() callback` (L109-L109) - Function
-  - `src.modules.account.session.device-cookie.rememberDevice.tokens` (L109-L112) - Class
-- `src/modules/account/session/session.ts`
-  - `src.modules.account.session.session.retireRefreshToken` (L73-L81) - Class
-  - `src.modules.account.session.session.retireRefreshToken.then() callback` (L77-L77) - Function
-  - `src.modules.account.session.session.retireRefreshToken.catch() callback` (L78-L80) - Function
+  - `src.modules.account.session.device-cookie.rememberDevice.tokens.filter() callback` (L112-L112) - Function
+  - `src.modules.account.session.device-cookie.rememberDevice.tokens` (L112-L115) - Class
 - `src/modules/api-keys/services/api-keys.ts`
-  - `src.modules.api-keys.services.api-keys.notifyMinted` (L70-L96) - Class
-  - `src.modules.api-keys.services.api-keys.notifyMinted.catch() callback` (L93-L95) - Function
-  - `src.modules.api-keys.services.api-keys.notifyRevoked` (L245-L271) - Class
-  - `src.modules.api-keys.services.api-keys.notifyRevoked.then() callback` (L252-L264) - Function
-  - `src.modules.api-keys.services.api-keys.notifyRevoked.then() callback.mail` (L254-L258) - Class
-  - `src.modules.api-keys.services.api-keys.notifyRevoked.catch() callback` (L265-L271) - Function
-  - `src.modules.api-keys.services.api-keys.revokeAllMintedBy` (L282-L301) - Class
-  - `src.modules.api-keys.services.api-keys.revokeAllMintedBy.then() callback` (L283-L301) - Function
-  - `src.modules.api-keys.services.api-keys.revokeAllMintedBy.then() callback.live.map() callback` (L288-L288) - Function
-  - `src.modules.api-keys.services.api-keys.revokeAllMintedBy.then() callback.then() callback` (L291-L300) - Function
+  - `src.modules.api-keys.services.api-keys.notifyMinted` (L79-L105) - Class
+  - `src.modules.api-keys.services.api-keys.notifyMinted.catch() callback` (L102-L104) - Function
+  - `src.modules.api-keys.services.api-keys.notifyRevoked` (L250-L276) - Class
+  - `src.modules.api-keys.services.api-keys.notifyRevoked.then() callback` (L257-L269) - Function
+  - `src.modules.api-keys.services.api-keys.notifyRevoked.then() callback.mail` (L259-L263) - Class
+  - `src.modules.api-keys.services.api-keys.notifyRevoked.catch() callback` (L270-L276) - Function
+  - `src.modules.api-keys.services.api-keys.revokeAllMintedBy` (L287-L306) - Class
+  - `src.modules.api-keys.services.api-keys.revokeAllMintedBy.then() callback` (L288-L306) - Function
+  - `src.modules.api-keys.services.api-keys.revokeAllMintedBy.then() callback.live.map() callback` (L293-L293) - Function
+  - `src.modules.api-keys.services.api-keys.revokeAllMintedBy.then() callback.then() callback` (L296-L305) - Function
 - `src/modules/audit-logs/service.ts`
   - `src.modules.audit-logs.service.record` (L34-L46) - Class
   - `src.modules.audit-logs.service.record.catch() callback` (L35-L45) - Function
@@ -159,28 +159,34 @@ The shared one-shot harness that every db: and ops: npm script delegates to. run
   - `src.modules.orders.domain.totals.LineItemTotals` (L28-L35) - Interface
   - `src.modules.orders.domain.totals.OrderTotalInput` (L63-L75) - Interface
 - `src/modules/orders/emails.ts`
-  - `src.modules.orders.emails.OrderLines` (L32-L48) - Interface
-  - `src.modules.orders.emails.WithdrawalNotice` (L67-L77) - Interface
-  - `src.modules.orders.emails.withdrawalNotice.excludedNote.titles.excluded.map() callback` (L159-L159) - Function
-  - `src.modules.orders.emails.orderConfirmEmail.data.lines.order.items.map() callback` (L233-L238) - Function
-  - `src.modules.orders.emails.paymentSucceededEmail.data.lines.order.items.map() callback` (L276-L281) - Function
+  - `src.modules.orders.emails.OrderLines` (L26-L42) - Interface
+  - `src.modules.orders.emails.WithdrawalNotice` (L61-L71) - Interface
+  - `src.modules.orders.emails.withdrawalNotice.excludedNote.titles.excluded.map() callback` (L153-L153) - Function
+  - `src.modules.orders.emails.orderConfirmEmail.data.lines.order.items.map() callback` (L226-L231) - Function
 - `src/modules/orders/factories.ts`
-  - `src.modules.orders.factories.makeOrder.items.map() callback` (L146-L150) - Function
+  - `src.modules.orders.factories.makeOrder.items.map() callback` (L149-L153) - Function
 - `src/modules/payments/config.ts`
   - `src.modules.payments.config.PaymentMethodInfo` (L29-L33) - Interface
-- `src/modules/payments/services/intent.ts`
-  - `src.modules.payments.services.intent.resolvePayerId` (L79-L94) - Class
-  - `src.modules.payments.services.intent.resolvePayerId.then() callback` (L84-L92) - Function
-  - `src.modules.payments.services.intent.resolvePayerId.catch() callback` (L93-L93) - Function
-- `src/modules/returns/services/refund-amount.ts`
-  - `src.modules.returns.services.refund-amount.RefundInputs` (L22-L35) - Interface
-  - `src.modules.returns.services.refund-amount.RefundBreakdown` (L38-L43) - Interface
+- `src/modules/stats/domain/range.ts`
+  - `src.modules.stats.domain.range.CalendarRange` (L27-L33) - Interface
+- `src/modules/webhooks/module.ts`
+  - `src.modules.webhooks.module.onRegistered` (L40-L49) - Class
+  - `src.modules.webhooks.module.onRegistered.modules.map() callback` (L42-L42) - Function
 - `src/modules/webhooks/services/attempt.ts`
   - `src.modules.webhooks.services.attempt.recordSuccess` (L117-L139) - Class
   - `src.modules.webhooks.services.attempt.recordSuccess.then() callback` (L132-L137) - Function
   - `src.modules.webhooks.services.attempt.recordSuccess.then() callback.then() callback` (L136-L136) - Function
   - `src.modules.webhooks.services.attempt.attemptDelivery` (L228-L256) - Class
   - `src.modules.webhooks.services.attempt.attemptDelivery.then() callback` (L251-L254) - Function
+- `src/modules/webhooks/services/catalogue.ts`
+  - `src.modules.webhooks.services.catalogue.eventsOf` (L34-L43) - Class
+  - `src.modules.webhooks.services.catalogue.eventsOf.map() callback` (L39-L42) - Function
+  - `src.modules.webhooks.services.catalogue.registerWebhookCatalogue` (L51-L53) - Class
+  - `src.modules.webhooks.services.catalogue.registerWebhookCatalogue.moduleNames.flatMap() callback` (L52-L52) - Function
+  - `src.modules.webhooks.services.catalogue.unknownEventTypes` (L65-L68) - Class
+  - `src.modules.webhooks.services.catalogue.unknownEventTypes.known` (L66-L66) - Class
+  - `src.modules.webhooks.services.catalogue.unknownEventTypes.known.catalogue.map() callback` (L66-L66) - Function
+  - `src.modules.webhooks.services.catalogue.unknownEventTypes.filter() callback` (L67-L67) - Function
 - `src/modules/webhooks/transport/webhook-delivery.ts`
   - `src.modules.webhooks.transport.webhook-delivery.WebhookDeliveryAttempt` (L31-L42) - Interface
   - `src.modules.webhooks.transport.webhook-delivery.WebhookDeliveryResult` (L45-L54) - Interface
@@ -202,7 +208,7 @@ The core of the subsystem. seed (in apply.ts) is the CLI entry: it validates the
 - `scenarios.apply.seed`:126-198
 - `scenarios.apply.bootAppInProcess`:118-123
 - `scenarios.index.buildScenario`:107-133
-- `scenarios.flows.backdate.backdateHistory`:140-145
+- `scenarios.flows.backdate.backdateHistory`:152-157
 
 **Source Files:**
 
@@ -215,13 +221,13 @@ The core of the subsystem. seed (in apply.ts) is the CLI entry: it validates the
   - `scenarios.apply.then() callback` (L227-L228) - Function
 - `scenarios/flows/backdate.ts`
   - `scenarios.flows.backdate.mover() callback` (L66-L66) - Function
-  - `scenarios.flows.backdate.backdateOrder` (L106-L109) - Class
-  - `scenarios.flows.backdate.backdateOrder.TRAILS.map() callback` (L109-L109) - Function
-  - `scenarios.flows.backdate.backdateOrder.then() callback` (L109-L109) - Function
-  - `scenarios.flows.backdate.backdateHistory` (L140-L145) - Class
-  - `scenarios.flows.backdate.then() callback` (L142-L143) - Function
-  - `scenarios.flows.backdate.backdateHistory.then() callback.map() callback` (L143-L143) - Function
-  - `scenarios.flows.backdate.backdateHistory.then() callback` (L145-L145) - Function
+  - `scenarios.flows.backdate.backdateOrder` (L118-L121) - Class
+  - `scenarios.flows.backdate.backdateOrder.TRAILS.map() callback` (L121-L121) - Function
+  - `scenarios.flows.backdate.backdateOrder.then() callback` (L121-L121) - Function
+  - `scenarios.flows.backdate.backdateHistory` (L152-L157) - Class
+  - `scenarios.flows.backdate.then() callback` (L154-L155) - Function
+  - `scenarios.flows.backdate.backdateHistory.then() callback.map() callback` (L155-L155) - Function
+  - `scenarios.flows.backdate.backdateHistory.then() callback` (L157-L157) - Function
 - `scenarios/flows/loopback.ts`
   - `scenarios.flows.loopback.withLoopbackServer` (L25-L47) - Class
   - `scenarios.flows.loopback.withLoopbackServer.<function>` (L29-L39) - Function
@@ -257,36 +263,40 @@ The core of the subsystem. seed (in apply.ts) is the CLI entry: it validates the
   - `scenarios.support.demo-clock.installDemoClock.advance` (L77-L82) - Method
   - `scenarios.support.demo-clock.installDemoClock.reset` (L83-L85) - Method
 - `scenarios/support/demo.ts`
-  - `scenarios.support.demo.UnknownScenarioError` (L43-L48) - Class
-  - `scenarios.support.demo.UnknownScenarioError.constructor` (L45-L47) - Constructor
-  - `scenarios.support.demo.ScenarioCopy` (L51-L56) - Interface
-  - `scenarios.support.demo.buildOnce` (L84-L101) - Class
-  - `scenarios.support.demo.buildOnce.then() callback` (L85-L101) - Function
-  - `scenarios.support.demo.then() callback.then() callback` (L93-L93) - Function
-  - `scenarios.support.demo.buildOnce.then() callback.then() callback` (L94-L99) - Function
-  - `scenarios.support.demo.buildOnce.then() callback.then() callback.then() callback` (L95-L99) - Function
-  - `scenarios.support.demo.runRestore` (L120-L134) - Class
-  - `scenarios.support.demo.runRestore.then() callback.then() callback` (L123-L125) - Function
-  - `scenarios.support.demo.runRestore.then() callback` (L134-L134) - Function
-  - `scenarios.support.demo.restoreScenario` (L148-L155) - Class
-  - `scenarios.support.demo.restoreScenario.outcome` (L149-L149) - Class
-  - `scenarios.support.demo.restoreScenario.outcome.restoreQueue.then() callback` (L149-L149) - Function
-  - `scenarios.support.demo.outcome.then() callback` (L151-L151) - Function
-  - `scenarios.support.demo.restoreScenario.outcome.then() callback` (L152-L152) - Function
-  - `scenarios.support.demo.installDemo` (L186-L265) - Class
-  - `scenarios.support.demo.installDemo.app.post('/__test/restore') callback` (L191-L212) - Function
-  - `scenarios.support.demo.installDemo.app.post('/__test/restore') callback.then() callback` (L202-L202) - Function
-  - `scenarios.support.demo.installDemo.app.post('/__test/restore') callback.catch() callback` (L203-L211) - Function
-  - `scenarios.support.demo.installDemo.app.get('/__test/scenario') callback` (L214-L216) - Function
-  - `scenarios.support.demo.installDemo.app.get('/__test/clock') callback` (L218-L222) - Function
-  - `scenarios.support.demo.installDemo.app.post('/__test/clock') callback` (L224-L238) - Function
-  - `scenarios.support.demo.installDemo.app.post('/__test/jobs/:name') callback` (L240-L260) - Function
-  - `scenarios.support.demo.installDemo.app.post('/__test/jobs/:name') callback.then() callback` (L245-L254) - Function
-  - `scenarios.support.demo.installDemo.app.post('/__test/jobs/:name') callback.then() callback.then() callback` (L251-L253) - Function
-  - `scenarios.support.demo.installDemo.app.post('/__test/jobs/:name') callback.catch() callback` (L255-L259) - Function
-  - `scenarios.support.demo.installDemo.app.get('/__test/emails') callback` (L262-L264) - Function
+  - `scenarios.support.demo.UnknownScenarioError` (L44-L49) - Class
+  - `scenarios.support.demo.UnknownScenarioError.constructor` (L46-L48) - Constructor
+  - `scenarios.support.demo.ScenarioCopy` (L52-L57) - Interface
+  - `scenarios.support.demo.buildOnce` (L85-L102) - Class
+  - `scenarios.support.demo.buildOnce.then() callback` (L86-L102) - Function
+  - `scenarios.support.demo.then() callback.then() callback` (L94-L94) - Function
+  - `scenarios.support.demo.buildOnce.then() callback.then() callback` (L95-L100) - Function
+  - `scenarios.support.demo.buildOnce.then() callback.then() callback.then() callback` (L96-L100) - Function
+  - `scenarios.support.demo.runRestore` (L121-L135) - Class
+  - `scenarios.support.demo.runRestore.then() callback.then() callback` (L124-L126) - Function
+  - `scenarios.support.demo.runRestore.then() callback` (L135-L135) - Function
+  - `scenarios.support.demo.restoreScenario` (L149-L156) - Class
+  - `scenarios.support.demo.restoreScenario.outcome` (L150-L150) - Class
+  - `scenarios.support.demo.restoreScenario.outcome.restoreQueue.then() callback` (L150-L150) - Function
+  - `scenarios.support.demo.outcome.then() callback` (L152-L152) - Function
+  - `scenarios.support.demo.restoreScenario.outcome.then() callback` (L153-L153) - Function
+  - `scenarios.support.demo.installDemo` (L193-L267) - Class
+  - `scenarios.support.demo.installDemo.app.post('/__test/restore') callback` (L198-L216) - Function
+  - `scenarios.support.demo.installDemo.app.post('/__test/restore') callback.then() callback` (L206-L206) - Function
+  - `scenarios.support.demo.installDemo.app.post('/__test/restore') callback.catch() callback` (L207-L215) - Function
+  - `scenarios.support.demo.installDemo.app.get('/__test/scenario') callback` (L218-L220) - Function
+  - `scenarios.support.demo.installDemo.app.get('/__test/clock') callback` (L222-L226) - Function
+  - `scenarios.support.demo.installDemo.app.post('/__test/clock') callback` (L228-L240) - Function
+  - `scenarios.support.demo.installDemo.app.post('/__test/jobs/:name') callback` (L242-L262) - Function
+  - `scenarios.support.demo.installDemo.app.post('/__test/jobs/:name') callback.then() callback` (L247-L256) - Function
+  - `scenarios.support.demo.installDemo.app.post('/__test/jobs/:name') callback.then() callback.then() callback` (L253-L255) - Function
+  - `scenarios.support.demo.installDemo.app.post('/__test/jobs/:name') callback.catch() callback` (L257-L261) - Function
+  - `scenarios.support.demo.installDemo.app.get('/__test/emails') callback` (L264-L266) - Function
 - `scripts/db/cache-clear.ts`
   - `scripts.db.cache-clear.runScript() callback` (L45-L45) - Function
+- `scripts/security/refresh-breached-passwords.ts`
+  - `scripts.security.refresh-breached-passwords.downloadCorpus` (L73-L80) - Class
+  - `scripts.security.refresh-breached-passwords.downloadCorpus.map() callback` (L79-L79) - Function
+  - `scripts.security.refresh-breached-passwords.runScript() callback` (L102-L102) - Function
 - `src/infrastructure/adapters/cache.ts`
   - `src.infrastructure.adapters.cache.clearCache` (L404-L436) - Class
   - `src.infrastructure.adapters.cache.clearCache.then() callback` (L407-L421) - Function
@@ -306,7 +316,7 @@ The Redis-backed infrastructure adapters that the scenario apply runner depends 
 
 - `src.infrastructure.adapters.cache.invalidateCacheTags`:272-317
 - `src.infrastructure.adapters.cache.claimCacheRefresh`:241-260
-- `src.infrastructure.http.middlewares.rate-limit-store.clearRateLimitCounters`:332-350
+- `src.infrastructure.http.middlewares.rate-limit-store.clearRateLimitCounters`:342-360
 - `src.infrastructure.adapters.cache.startCache`
 
 **Source Files:**
@@ -376,9 +386,9 @@ The Redis-backed infrastructure adapters that the scenario apply runner depends 
   - `src.infrastructure.adapters.managed-connection.manageConnection.stop.catch() callback` (L273-L273) - Function
   - `src.infrastructure.adapters.managed-connection.manageConnection.stop.finally() callback` (L274-L278) - Function
 - `src/infrastructure/adapters/redis.ts`
-  - `src.infrastructure.adapters.redis.closeRedisClient` (L111-L117) - Class
-  - `src.infrastructure.adapters.redis.then() callback` (L114-L114) - Function
-  - `src.infrastructure.adapters.redis.closeRedisClient.then() callback` (L115-L115) - Function
+  - `src.infrastructure.adapters.redis.closeRedisClient` (L120-L126) - Class
+  - `src.infrastructure.adapters.redis.then() callback` (L123-L123) - Function
+  - `src.infrastructure.adapters.redis.closeRedisClient.then() callback` (L124-L124) - Function
 - `src/infrastructure/http/middlewares/cache.ts`
   - `src.infrastructure.http.middlewares.cache.armCacheWrite` (L333-L361) - Class
   - `src.infrastructure.http.middlewares.cache.armCacheWrite.<function>` (L341-L360) - Function
@@ -387,10 +397,10 @@ The Redis-backed infrastructure adapters that the scenario apply runner depends 
   - `src.infrastructure.http.middlewares.cache.serveOrArm.then() callback.then() callback` (L491-L503) - Function
 - `src/infrastructure/http/middlewares/rate-limit-store.ts`
   - `src.infrastructure.http.middlewares.rate-limit-store.lazyRedisStore.store.sendCommand` (L62-L62) - Method
-  - `src.infrastructure.http.middlewares.rate-limit-store.clearRateLimitCounters` (L332-L350) - Class
-  - `src.infrastructure.http.middlewares.rate-limit-store.clearRateLimitCounters.then() callback` (L342-L342) - Function
-  - `src.infrastructure.http.middlewares.rate-limit-store.clearRateLimitCounters.catch() callback` (L343-L348) - Function
-  - `src.infrastructure.http.middlewares.rate-limit-store.clearRateLimitCounters.finally() callback` (L349-L349) - Function
+  - `src.infrastructure.http.middlewares.rate-limit-store.clearRateLimitCounters` (L342-L360) - Class
+  - `src.infrastructure.http.middlewares.rate-limit-store.clearRateLimitCounters.then() callback` (L352-L352) - Function
+  - `src.infrastructure.http.middlewares.rate-limit-store.clearRateLimitCounters.catch() callback` (L353-L358) - Function
+  - `src.infrastructure.http.middlewares.rate-limit-store.clearRateLimitCounters.finally() callback` (L359-L359) - Function
 
 ### In-Process App Boot & Worker Assembly
 The production app assembly that bootAppInProcess imports and boots. createApp wires the Express instance, mounts all module routes, registers middleware (security, observability, error handling), and exposes a boot()/stop() lifecycle. AppInstance is the returned handle that the scenario runner holds for cleanup. registerWorkers wires the RabbitMQ consumers and scheduled jobs (outbox relay, reservation sweep, inactive-account reaping) that the kernel registry resolves. The managed-connection adapters (Mongo, Redis, RabbitMQ) are assembled here and shared across the app's lifetime. In the scenario context, this is the black-box HTTP target that the loopback flow driver talks to — the scenario runner never touches its internals, only its Express instance.
@@ -398,14 +408,16 @@ The production app assembly that bootAppInProcess imports and boots. createApp w
 **Related Classes/Methods**:
 
 - `src.app.workers.registerWorkers`:29-67
-- `src.kernel.registry.resolveConsumers`:471-472
+- `src.kernel.registry.resolveConsumers`:580-581
 
 **Source Files:**
 
-- `scripts/ops/reap-inactive-accounts.ts`
-  - `scripts.ops.reap-inactive-accounts.runScript() callback` (L150-L150) - Function
-- `scripts/ops/sweep-reservations.ts`
-  - `scripts.ops.sweep-reservations.runScript() callback` (L66-L66) - Function
+- `scripts/ops/run-job.ts`
+  - `scripts.ops.run-job.execute` (L65-L72) - Class
+  - `scripts.ops.run-job.execute.then() callback` (L72-L72) - Function
+  - `scripts.ops.run-job.runScript() callback` (L99-L99) - Function
+- `scripts/security/refresh-breached-passwords.ts`
+  - `scripts.security.refresh-breached-passwords.survivors` (L88-L88) - Class
 - `src/app.ts`
   - `src.app.AppInstance` (L63-L85) - Interface
   - `src.app.AppOptions` (L108-L120) - Interface
@@ -466,9 +478,9 @@ The production app assembly that bootAppInProcess imports and boots. createApp w
   - `src.infrastructure.adapters.queue.consumeFromQueue` (L1018-L1024) - Class
   - `src.infrastructure.adapters.queue.consumeFromQueue.consumerBindings.set() callback` (L1021-L1021) - Function
 - `src/infrastructure/runtime/database.ts`
-  - `src.infrastructure.runtime.database.stopDatabase` (L193-L211) - Class
-  - `src.infrastructure.runtime.database.stopDatabase.then() callback` (L199-L206) - Function
-  - `src.infrastructure.runtime.database.stopDatabase.finally() callback` (L208-L210) - Function
+  - `src.infrastructure.runtime.database.stopDatabase` (L201-L219) - Class
+  - `src.infrastructure.runtime.database.stopDatabase.then() callback` (L207-L214) - Function
+  - `src.infrastructure.runtime.database.stopDatabase.finally() callback` (L216-L218) - Function
 - `src/infrastructure/runtime/server-lifecycle.ts`
   - `src.infrastructure.runtime.server-lifecycle.closeServer` (L104-L121) - Class
   - `src.infrastructure.runtime.server-lifecycle.closeServer.<function>` (L105-L121) - Function
@@ -480,10 +492,45 @@ The production app assembly that bootAppInProcess imports and boots. createApp w
   - `src.infrastructure.runtime.settle.settleWithin.then() callback` (L27-L27) - Function
   - `src.infrastructure.runtime.settle.settleWithin.finally() callback` (L27-L28) - Function
 - `src/kernel/registry.ts`
-  - `src.kernel.registry.resolveImageTargets` (L452-L460) - Class
-  - `src.kernel.registry.resolveImageTargets.appModules.flatMap() callback` (L458-L458) - Function
-  - `src.kernel.registry.resolveConsumers` (L471-L472) - Class
-  - `src.kernel.registry.resolveConsumers.appModules.flatMap() callback` (L472-L472) - Function
+  - `src.kernel.registry.resolveImageTargets` (L561-L569) - Class
+  - `src.kernel.registry.resolveImageTargets.appModules.flatMap() callback` (L567-L567) - Function
+  - `src.kernel.registry.resolveConsumers` (L580-L581) - Class
+  - `src.kernel.registry.resolveConsumers.appModules.flatMap() callback` (L581-L581) - Function
+  - `src.kernel.registry.resolveBrowserEvents` (L636-L643) - Class
+  - `src.kernel.registry.resolveBrowserEvents.appModules.flatMap() callback` (L641-L641) - Function
+- `src/modules/account/emails.ts`
+  - `src.modules.account.emails.setupRequestEmail` (L161-L173) - Class
+  - `src.modules.account.emails.setupRequestEmail.body` (L166-L171) - Method
+- `src/modules/account/services/email-change.ts`
+  - `src.modules.account.services.email-change.applyEmailChangeRequest` (L63-L80) - Class
+  - `src.modules.account.services.email-change.applyEmailChangeRequest.then() callback` (L75-L79) - Function
 - `src/modules/account/services/export.ts`
-  - `src.modules.account.services.export.dispatch` (L117-L136) - Class
-  - `src.modules.account.services.export.dispatch.then() callback` (L121-L136) - Function
+  - `src.modules.account.services.export.dispatch` (L118-L137) - Class
+  - `src.modules.account.services.export.dispatch.then() callback` (L122-L137) - Function
+- `src/modules/account/services/password-reset-request.ts`
+  - `src.modules.account.services.password-reset-request.requestAccountSetup` (L139-L148) - Class
+  - `src.modules.account.services.password-reset-request.requestAccountSetup.then() callback` (L140-L148) - Function
+- `src/modules/stats/services/breakdowns.ts`
+  - `src.modules.stats.services.breakdowns.getProductStats.then() callback.reversed` (L35-L35) - Class
+  - `src.modules.stats.services.breakdowns.getProductStats.then() callback.reversed.returned.map() callback` (L35-L35) - Function
+  - `src.modules.stats.services.breakdowns.getCategoryStats` (L57-L66) - Class
+  - `src.modules.stats.services.breakdowns.getCategoryStats.then() callback` (L58-L66) - Function
+  - `src.modules.stats.services.breakdowns.getCategoryStats.then() callback.categories.rows.map() callback` (L60-L65) - Function
+  - `src.modules.stats.services.breakdowns.getOperationsStats` (L112-L138) - Class
+  - `src.modules.stats.services.breakdowns.getOperationsStats.then() callback` (L118-L138) - Function
+  - `src.modules.stats.services.breakdowns.getOperationsStats.then() callback.unitsOrdered` (L119-L119) - Class
+  - `src.modules.stats.services.breakdowns.getOperationsStats.then() callback.unitsOrdered.paid.reduce() callback` (L119-L119) - Function
+  - `src.modules.stats.services.breakdowns.getOperationsStats.then() callback.currencies` (L121-L121) - Class
+  - `src.modules.stats.services.breakdowns.getOperationsStats.then() callback.currencies.money.map() callback` (L121-L121) - Function
+  - `src.modules.stats.services.breakdowns.getOperationsStats.then() callback.refunds.currencies.map() callback` (L126-L136) - Function
+  - `src.modules.stats.services.breakdowns.getOperationsStats.then() callback.refunds.currencies.map() callback.invoiced.rows.map() callback` (L128-L128) - Function
+  - `src.modules.stats.services.breakdowns.then() callback.refunds.currencies.map() callback.invoiced` (L128-L128) - Class
+  - `src.modules.stats.services.breakdowns.getOperationsStats.then() callback.refunds.currencies.map() callback.credited.rows.map() callback` (L129-L129) - Function
+  - `src.modules.stats.services.breakdowns.then() callback.refunds.currencies.map() callback.credited` (L129-L129) - Class
+  - `src.modules.stats.services.breakdowns.getCustomerStats` (L144-L151) - Class
+  - `src.modules.stats.services.breakdowns.getCustomerStats.then() callback` (L145-L151) - Function
+  - `src.modules.stats.services.breakdowns.getPipelineStats` (L154-L163) - Class
+  - `src.modules.stats.services.breakdowns.getPipelineStats.then() callback` (L155-L163) - Function
+  - `src.modules.stats.services.breakdowns.getPipelineStats.then() callback.awaitingTransfers.snapshot.awaitingTransfers.map() callback` (L157-L162) - Function
+- `src/modules/stats/services/figures.ts`
+  - `src.modules.stats.services.figures.RawFigures` (L20-L32) - Interface

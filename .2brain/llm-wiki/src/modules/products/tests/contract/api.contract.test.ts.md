@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/contract/api.contract.test.ts
-sha256: 0d46c2b20f02cac02e7692ff29001a2faee055db1c6d5358ff52115c0f3fc559
-generated_at: 2026-09-27T15:34:09.477962+00:00
+sha256: 1eb94b07b3756836d0872d68a5e5e58954fa5a84ad259403827f457e15e1749d
+generated_at: 2026-10-15T11:46:39.003489+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/products` API. They assert that every wire response (and error shape) conforms to the schema declared in `openapi.yaml`, including `additionalProperties: false` guards that catch accidental field leaks. Behavioural logic (visibility by role, pagination math) is deferred to unit/service suites; this file only ensures each contract branch is actually exercised and the response *shape* is correct.
+Contract tests for the `/products` endpoints. They validate the **shape** of wire responses against `openapi.yaml` (including `additionalProperties: false`) and assert that every filter, pagination, sort, and search parameter the contract publishes is actually enforced. Behavioural assertions (which products a role may see) live in the unit/service suites; this file exists so that each contract branch is exercised and so that a field leaking into a payload or a limit being silently ignored is caught here.
 
 ## Key elements
 
-- **`GET /products` describe block** — Anonymous, admin, empty-list, and paginated calls must match the contract. Also pins pagination boundary rejections (`page=0`, `page=abc`, `page=1.5`, `pageSize=500` → 422) and blank-param tolerance.
-- **Repeated `?id=` batch filter tests** — Validates the widened array schema, the 100-element cap (422), empty-string rejection, duplicate-ID dedup, and that one malformed ObjectId poisons the whole batch (422).
-- **Text-length guard test** — `?text=` over 200 chars → 422, preventing an unbounded regex from reaching Mongo.
-- **`POST /products/search`** — Single contract-shape check for the search endpoint.
-- **`GET /products/{id}`** — 200 for existing, 404 for missing, and a `withEnvironment` case proving `NODE_DEFAULT_CURRENCY` is read live (FA37: no hard-coded EUR).
-- **`DELETE /products/{id}`** — Soft-delete default, `hardDelete=false` string-truthiness guard, `hardDelete=true` hard path, non-boolean rejection (422), and contradictory-source resolution (OR semantics: any `true` wins; any undecodable value still 422).
-- **`stored(id)` helper** — Reads the row via `productRepository.findByIdRaw` so soft-deleted records remain visible for assertion.
+- **`setupTestDb()`** — called at module scope; initialises the test database before any test runs.
+- **`describe('GET /products — the filters it now publishes')`** — exercises the `title` and `active` query filters and asserts a stranger cannot read past their visibility scope regardless of which filter is supplied.
+- **`describe('GET /products')`** — validates contract shape for anonymous/admin/empty/paginated responses; enforces `422` for out-of-range pagination (`page=0`, `page=abc`, `pageSize=500`); treats blank pagination as absent; tests the batch `?id=` filter (repeated values, cap of 100, empty string → 422, duplicate collapse, one malformed id → 422); rejects search text over 200 characters.
+- **`describe('POST /products/search')`** — validates contract shape; rejects `title`/`category`/`tag` over 200 chars; rejects bodies nested past the depth limit with `400`.
+- **`describe('sort …')`** — verifies single/multi-field sort, descending `-` prefix, case-insensitive text sort, cross-page ordering consistency, CSV (query) vs array (body) parsing, blank-sort-as-absent, whitelist enforcement (`422`), and that body sort items must each be a single clean token.
+- **`titlesOf`** (module-local helper) — extracts `body.data.items[].title` from a response for compact assertions.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/contract.ts` | Imported as `@tests/contract`; injects global response-schema validation against `openapi.yaml` for every request made through the `api()` helper. |
-| `tests/support/http.ts` | Provides `api()` (request builder) and `authenticateAs()` (role bearer token) used in every test. |
-| `tests/support/setup-test-db.ts` | Called once at module scope (`setupTestDb()`) to provision the in-memory database before any test runs. |
-| `tests/support/environment.ts` | `withEnvironment` overrides `NODE_DEFAULT_CURRENCY` for the currency test, then restores it. |
-| `src/modules/products/tests/factories.ts` | `createProduct` seeds rows with controllable fields (title, active, etc.) for each scenario. |
-| `src/modules/products/repository.ts` | `productRepository.findByIdRaw` is used by the local `stored()` helper to verify soft vs. hard delete state directly from the collection. |
+- **`tests/support/contract.ts`** (`@tests/contract`) — imported for side effect; registers OpenAPI response validation so every `api()` call is automatically checked against `openapi.yaml`.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()` to create/tear down a per-file test database.
+- **`tests/support/http.ts`** — provides the `api()` supertest-style client and `authenticateAs(role)` for bearer-token setup.
+- **`tests/support/environment.ts`** — provides `withEnvironment` (imported, used for environment-scoped setup if needed).
+- **`src/modules/products/tests/factories.ts`** — provides `createProduct()` to seed deterministic fixtures.
+- **`src/modules/products/repository.ts`** — `productRepository` is imported; the tests indirectly exercise its query-building (filter merging, sort, pagination) through the HTTP layer.
 
 ## Notes
 
-- The `hardDelete` boolean is parsed from a **string** query param; the test explicitly pins that `?hardDelete=false` must **not** be treated as a truthy string (a classic bug the test guards against).
-- Contradictory `hardDelete` sources (query vs. body) resolve by **OR**, not precedence: any `true` triggers a hard delete, but any undecodable value still yields 422 even if the other source says `true`.
-- The `title`/`active` filter tests assert the *invariant* (a stranger never sees inactive rows) rather than the specific merge strategy, so the test stays valid across backend implementations.
-- All pagination and `id`-batch limits are inherited from shared OpenAPI schemas (`shared/contracts/openapi.root.yaml`), not hard-coded here.
+- The stranger-scope test deliberately asserts **the guarantee** (unlisted rows are hidden) rather than **the mechanism** (merge-order vs. clause-contradiction), so it stays valid across backends.
+- Blank query-string values (`page=`, `pageSize=`, `sort=`) are treated as *absent*, not invalid — a form submitting an untouched field must not produce a `422`.
+- The 200-character text limit and the `pageSize`/`page` range come from the shared OpenAPI schema (`shared/contracts/openapi.root.yaml`); the tests pin the `422` response, not the specific limit value, so a schema change is caught by the contract layer, not here.
+- The nesting-depth guard returns **400** (not 422) because the body is rejected before it reaches parameter validation.
+- Body `sort` is an array where each element must be exactly one token (e.g. `-title`); a CSV string inside a single array item is a `422`. Query-string `sort` accepts both CSV and repeated keys.

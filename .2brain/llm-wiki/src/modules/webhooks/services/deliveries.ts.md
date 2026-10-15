@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/services/deliveries.ts
-sha256: 7fb42c73ecea97ba6ffd44fb310727bd38cb4caee578ea428ce38e37a2b2a5e8
-generated_at: 2026-09-27T15:43:56.325318+00:00
+sha256: 1d0cb8dd78f8d63f8215ace204665a0d5f5fb3f23c864e5646fdcdb4d9301c4c
+generated_at: 2026-10-15T12:21:20.512724+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer for the webhook delivery log. Provides the two read-and-write operations surfaced by the API: `list` (paged, filterable log of deliveries) and `replay` (synchronous re-send of a single delivery against the subscription's *current* URL and secret ring).
+Provides the two read-and-write operations exposed on the delivery log endpoint: a paged, filterable `list` for `GET /webhooks/deliveries` and a synchronous `replay` that re-sends a single delivery against the subscription's *current* URL and secret ring.
 
 ## Key elements
 
-- **`DeliveryListFilters`** – Interface mirroring the query parameters declared in `openapi.yaml` for `GET /webhooks/deliveries` (`subscriptionId`, `status`, `page`, `pageSize`).
-- **`list(context, filters)`** – Paged search over the tenant's delivery log, newest first. Remaps the wire-level filter keys to the repository's internal keys (e.g. `subscriptionId` → `subscription`) before delegating to `webhookDeliveryRepository.search`.
-- **`rejectInProgress()`** – Private helper returning a pre-built 409 `ResponseReject` with the `WEBHOOK_DELIVERY_IN_PROGRESS` error code and an i18n message.
-- **`replay(id, context)`** – Re-sends a single delivery synchronously. Sequence: find delivery in tenant → verify subscription still exists → `claimForReplay` (lease) → delegate to `attemptDelivery` → record audit. Returns 404 (delivery or subscription missing), 409 (lease already held), or 200 with the updated document.
+- **`DeliveryListFilters`** – Interface mirroring the query parameters declared in `openapi.yaml` (`subscriptionId`, `status`, `page`, `pageSize`). Used as the `list` input.
+- **`list(context, filters)`** – Delegates to `webhookDeliveryRepository.search` with the tenant scope and the shared `WEBHOOK_DELIVERY_SORT` spec. Remaps `subscriptionId` → `subscription` at this layer so the wire name and the collection field name can diverge independently.
+- **`replay(id, context)`** – (1) Loads the delivery in-tenant (404 if absent). (2) Loads the subscription by `delivery.subscriptionId` (404 if gone). (3) Claims the row via `webhookDeliveryRepository.claimForReplay` (409 if lease held). (4) Calls `attemptDelivery` with the *current* subscription. (5) Records an audit entry and returns the updated document.
+- **`rejectInProgress()`** – Small helper that builds the shared 409 response (`WEBHOOK_DELIVERY_IN_PROGRESS` + i18n message) used for both the claim and the `attemptDelivery` failure paths.
 
 ## Relationships
 
-- **`../repository.ts`** – Calls `webhookDeliveryRepository.search`, `.findByIdInTenant`, `.claimForReplay`; uses `WEBHOOK_DELIVERY_SORT` and `webhookSubscriptionRepository.findById`.
-- **`./attempt.ts`** – `replay` delegates the actual HTTP attempt to `attemptDelivery`, sharing its bookkeeping (attempt counter, backoff tiers) rather than managing state independently.
-- **`@infrastructure/http/response`** – Builds all API responses via `generateSuccess` / `generateReject`.
-- **`@infrastructure/i18n`** – Translates error messages (`webhooks.delivery-in-progress`, `webhooks.subscription-not-found`, `generic.error-not-found`).
-- **`@infrastructure/observability/audit`** – Records an audit event (`recordAudit`) after a successful replay.
-- **`../audit.ts`** – Supplies the `webhooksAuditActions.ADMIN_WEBHOOK_DELIVERY_REPLAYED` action constant.
-- **`@types`** – Consumes `TenantCallerContext` (caller/tenant identity) and `WebhookDelivery` (domain type for list results).
-- **`../model.ts`** – Uses `WebhookDeliveryDocument` as the return type of `replay`.
-- **`services/index.ts`** – Barrel re-export so routes can import `list`/`replay` from the services namespace.
-- **`tests/integration/delivery.test.ts`** – Integration tests exercising both `list` and `replay` paths.
+- **`../repository` (`src/modules/webhooks/repository.ts`)** – Source of `webhookDeliveryRepository`, `webhookSubscriptionRepository`, and `WEBHOOK_DELIVERY_SORT`. Both `list` and `replay` call into it.
+- **`./attempt` (`src/modules/webhooks/services/attempt.ts`)** – `replay` delegates the actual HTTP send and row-update to `attemptDelivery`, sharing the same attempt-counting / backoff logic as the queued worker path.
+- **`../audit` (`src/modules/webhooks/audit.ts`)** – Supplies `webhooksAuditActions.ADMIN_WEBHOOK_DELIVERY_REPLAYED` for the audit record written after a successful replay.
+- **`@infrastructure/http/response`** – `generateSuccess` / `generateReject` shape every HTTP response returned by `list`'s caller and by `replay`.
+- **`@infrastructure/i18n`** – `t()` provides localized error and status messages.
+- **`@infrastructure/observability/audit`** – `recordAudit` is called once per successful replay.
+- **`@infrastructure/persistence/create-repository`** – Provides the `PaginatedResult<T>` return type for `list`.
+- **`@types`** – `TenantCallerContext` (auth/tenant scope) and `WebhookDelivery` (list element type).
+- **`../model`** – `WebhookDeliveryDocument` is the success-payload type for `replay`.
+- **`services/index.ts`** – Re-exports `list` and `replay` for route handlers.
+- **Tests** – `delivery-log.test.ts` exercises `list`; `delivery.test.ts` exercises `replay` (404, 409, success paths).
 
 ## Notes
 
-- **Filter-key remapping is intentional.** The API query param is `subscriptionId`; the repository's internal filter key is `subscription`. The mapping lives here (not in the repository) so the wire contract and the collection schema can evolve independently.
-- **Replay uses the subscription's *current* URL and secret ring**, not the values captured when the delivery row was originally written. This is a deliberate design choice for re-sending after a URL or key rotation.
-- **Subscription lookup precedes `claimForReplay`.** A 404 must never claim the lease first, because an orphaned 60-second lease would strand the row in `in-flight` until the sweep reclaims it as `exhausted`.
-- **Attempt counting is shared with the queued path.** `attemptDelivery` handles the `attempt` ordinal; `replay` does *not* pre-increment it. A caller-side bump would double-count the single HTTP call the replay actually makes.
-- **409 semantics:** both a live queued worker holding the lease and a concurrent replay produce the same `WEBHOOK_DELIVERY_IN_PROGRESS` 409 — the lease is the single concurrency guard.
+- **Claim-before-attempt, but look-up-before-claim.** The subscription is resolved *before* `claimForReplay` is called. If the subscription is gone, the row is left unclaimed, avoiding a 60-second stranded lease that would only be reclaimed as `exhausted` by the sweep.
+- **Replay does not pre-increment `attempt`.** `attemptDelivery` owns the ordinal bump; calling a caller-side bump first would double-count the single real HTTP attempt.
+- **Replay uses the subscription's *current* URL and secret ring**, not the values captured when the delivery row was originally created. This is intentional: the row is updated in place to reflect the re-send.
+- **Filter remapping is local to this file.** `subscriptionId` (wire name) is mapped to `subscription` (collection field) inside `list`; neither the OpenAPI contract nor the repository spec is aware of the other's naming.

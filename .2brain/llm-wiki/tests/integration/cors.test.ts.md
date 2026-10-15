@@ -1,7 +1,7 @@
 ---
 source: tests/integration/cors.test.ts
-sha256: d94deb798c2a18c8b286356279123097a62f6ec556c8c876068f40e7dc8165ae
-generated_at: 2026-09-27T15:56:05.341223+00:00
+sha256: cece19dfc46625ebe2c307391b9b3049086909777f6fc3a3fdebca34ec9f9929
+generated_at: 2026-10-15T12:46:51.802865+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that pins the app's CORS contract: a disallowed origin must receive a normal response **without** the `Access-Control-Allow-Origin` header, never a 500. It drives the real Express app (full middleware order) via the shared HTTP harness, covering allowed-origin reflection, disallowed-origin omission, no-origin passthrough, preflight short-circuiting, and the specific custom headers (`x-antibot-challenge-token`, `x-analytics-consent`) that must be pre-cleared.
+Integration tests that pin the app's CORS contract end-to-end through the real middleware stack. The core property under test: a disallowed origin is handled by **omitting** the `Access-Control-Allow-Origin` header, never by throwing into Express's error chain (which would turn a valid request into a 500 and let an attacker drive 5xx rates). Also verifies `Vary` correctness, preflight behavior, and that specific custom headers (`x-antibot-challenge-token`, `x-analytics-consent`, `If-Match`, `ETag`) pass through preflight and exposure as the browser requires.
 
 ## Key elements
 
-- **`ALLOWED_ORIGIN`** — derived from `process.env.NODE_CORS_ORIGIN` (first CSV entry) with a `http://localhost:8080` fallback. Avoids hardcoding a value that would silently assert the fallback once the env var is set.
-- **`DISALLOWED_ORIGIN`** — fixed string `https://evil.example.com`; guaranteed to be absent from any allowlist regardless of environment.
-- **`describe('CORS')`** — six tests:
-  - *reflects an allowed origin* — 200 + header echoed back.
-  - *serves a disallowed origin normally* — 200 + body intact + header **absent**.
-  - *does not turn a disallowed origin into a server error on a real endpoint* — `POST /account/login` with bad creds; asserts `< 500` and no allow header.
-  - *allows a request that carries no origin* — 200 + no allow header (correct for reflect-mode config).
-  - *answers a disallowed preflight* — `OPTIONS` with disallowed origin; asserts `< 500` and no allow header.
-  - *allows the antibot and analytics-consent headers through preflight* — `OPTIONS` with `Access-Control-Request-Headers`; asserts both appear in `Access-Control-Allow-Headers`.
+- **`ALLOWED_ORIGIN`** — first entry of `NODE_CORS_ORIGIN` (comma-split) or the fallback `http://localhost:8080`. Read from the environment so the test asserts the configured allowlist, not the hardcoded default.
+- **`DISALLOWED_ORIGIN`** — `'https://evil.example.com'`, an origin no deployment would allow.
+- **`describe('CORS')`** — single suite, 8 tests covering:
+  - Allowed origin is reflected; disallowed origin gets 200 + no allow header.
+  - `Vary: Origin` is present for allowed, disallowed, and no-origin requests, and appears exactly once (deduplication between the app and the `cors` package).
+  - `POST /account/login` with wrong credentials still returns its own rejection status (not 500) regardless of origin.
+  - No-origin requests (curl, healthcheck, server-to-server) are untouched.
+  - Disallowed preflight (`OPTIONS`) returns non-5xx without the allow header.
+  - Preflight allows `x-antibot-challenge-token` and `x-analytics-consent`.
+  - Preflight allows `If-Match`; response exposes `ETag`.
 
 ## Relationships
 
-- **`tests/support/http.ts`** — imported as `api`; supplies the supertest-style request helper bound to the real app instance. Every test issues requests through `api()`.
-- **`tests/support/setup-test-db.ts`** — imported as `setupTestDb`; called once at module top-level to seed/reset the test database before the suite runs.
+- **`tests/support/http.ts`** — provides `api()`, the supertest wrapper that drives the real, fully-assembled Express app (correct middleware order, real routes).
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()`, called once at module top to provision the test database before any test runs.
+- References (not imports): `src/app/security.ts` (the allowlist `ALLOWED_ORIGIN` mirrors), `src/infrastructure/http/middlewares/human-challenge.ts` (reads `x-antibot-challenge-token`), `docs/tools/security.md`.
 
 ## Notes
 
-- The file intentionally tests against the **real** middleware chain (not a hand-assembled Express stack), so a regression in middleware *order* (e.g., `cors` positioned after a throwing auth guard) is caught here but would pass in a unit test.
-- The "no-origin" test asserts the header is **absent**, not `*`. The config reflects the caller's origin; with none sent there is nothing to reflect. A literal `*` would be wrong (incompatible with `credentials: true`).
-- The preflight test for custom headers references two downstream consumers by name: `humanChallengeGate` (`src/infrastructure/http/middlewares/human-challenge.ts`) and `callerContextOf`. If either of those headers stops being pre-cleared, the break is silent (no 4xx), so this test is the only guard.
-- `setupTestDb()` runs at import time (module scope), not inside a `beforeAll`, so it executes before Jest's test registration completes for this file.
+- The file header documents the **reason** the test exists: the `cors` package's callback, when called with an `Error`, signals request failure to Express rather than "origin not allowed," which would short-circuit before the route and produce a generic 500. This test guards against that regression.
+- `ALLOWED_ORIGIN` is deliberately derived from the env var. Hardcoding the fallback would make the test silently pass for the wrong reason in any checkout that sets `NODE_CORS_ORIGIN`.
+- The `Vary: Origin` deduplication test exists because both the app and the `cors` package add it; a double entry would break cache-key discrimination.
+- The preflight tests note that `cors` short-circuits `OPTIONS` before the router, so a throw in the callback never reaches a route — which is why the original bug went unnoticed.
+- The no-origin test explicitly states that the absence of `Access-Control-Allow-Origin` is **correct** (nothing to reflect), not a second bug, and that a literal `*` must never appear (incompatible with `credentials: true`).

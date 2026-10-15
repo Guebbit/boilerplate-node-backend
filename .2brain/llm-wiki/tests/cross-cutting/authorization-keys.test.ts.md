@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/authorization-keys.test.ts
-sha256: dbd52f5fa67d6b3b18c75acea76202c7a072f8b4637105b57c90b95b52e1aeb3
-generated_at: 2026-09-23T19:54:07.218219+00:00
+sha256: 8d65ed4131680a02929453e2053759356e2b985668472ecbd86cdd5b98108b28
+generated_at: 2026-10-15T12:35:55.586644+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Validates the internal consistency of the permission-key registry and preset roles exported by `src/kernel/permissions.ts`. It ensures the data is well-formed (unique, correctly scoped, properly named) and that no preset role references a key no module declares. It complements the neighboring conformance suite (which proves two backends agree) by proving the shared data they both read is not nonsense in the first place.
+Integrity guard for the permission model's source data. It asserts that the two shared artefacts (the declared permission keys and the preset roles) are internally consistent: every key a role grants actually exists, keys follow their naming convention, scopes are respected, and the "unrestricted role" invariant holds exactly where expected. It does not compare backends (a neighbouring conformance suite does that); it catches nonsense in the data itself before anything runs.
 
 ## Key elements
 
-- **"the declared keys" block** — Asserts each `PERMISSION_KEYS` entry has a unique key, a key that ends with `.${action}`, a scope consistent with `scopeOfKey(key.key)`, and a lowercase-dotted format (because keys are stored verbatim and renaming is a migration).
-- **"the preset roles" block** — Iterates over `PRESET_ROLES` + `ANONYMOUS_ROLE` and asserts every held key passes `assertDeclared` (is actually declared) and belongs to the role's own scope. Pins that exactly one unrestricted TENANT role exists (`admin`), and documents that `operator` is currently unrestricted in platform scope solely because platform declares exactly one key.
-- **"assertDeclared" block** — Confirms the runtime guard throws `/not declared/` for both a genuinely unknown key and a plausible near-miss (e.g. `product.read` vs. `products.read`).
+- **`describe('the declared keys')`** — validates every entry in `PERMISSION_KEYS`:
+  - `scopeOfKey(key)` matches the key's own `scope` field.
+  - Key strings are unique.
+  - Each key ends with its declared `action`.
+  - Key strings match `/^[a-z][.a-z]*[a-z]$/` (lower-case, dotted).
+  - Any `deniedCode` on a key is a real property of `ERROR_CODES`.
+
+- **`describe('the preset roles')`** — iterates `PRESET_ROLES` plus `ANONYMOUS_ROLE`:
+  - Every permission a role holds passes `assertDeclared` (i.e. is in the declared set).
+  - Every permission a role holds belongs to the role's own scope.
+  - Exactly two TENANT-scope roles are unrestricted: `admin` and `system` (the latter aliases `admin` via YAML in `authorization-roles.yaml`).
+  - Pins that `operator` is currently unrestricted in platform scope *only because* exactly one platform key is declared; a second platform key would break the assertion and flag the change deliberately.
+
+- **`describe('assertDeclared')`** — unit-tests the runtime guard: it throws `/not declared/` for unknown keys and for plausible near-misses (e.g. `product.read` vs `products.read`).
 
 ## Relationships
 
-- **`src/kernel/permissions.ts`** — Sole dependency. The test imports `PERMISSION_KEYS`, `PRESET_ROLES`, `ANONYMOUS_ROLE`, `scopeOfKey`, `isUnrestrictedRole`, `assertDeclared`, and the `RoleLookup` type. Every assertion in this file is a check on the values or behavior of that module's exports.
+- **`src/kernel/permissions.ts`** — sole subject under test. The test imports `PERMISSION_KEYS`, `PRESET_ROLES`, `ANONYMOUS_ROLE`, `scopeOfKey`, `isUnrestrictedRole`, `assertDeclared`, and the `RoleLookup` type from this module, then cross-checks their internal coherence against each other and against `@api/error-codes`.
 
 ## Notes
 
-- The `operator`/platform-scope test (`toHaveLength(1)`) is a deliberate canary: adding a second platform-scoped key will break this test and force a conscious re-decision about whether `operator` should still be considered unrestricted. It is not a general "unrestricted = super-admin" claim.
-- Key format is treated as a stored, migration-sensitive value (lowercase, dotted, `[a-z][.a-z]*[a-z]`); do not relax the regex without considering existing persisted data.
-- `assertDeclared` is the _write-time_ guard (called when a grant is made); the preset-role loop here is the _read-time_ check that the static data is self-consistent. Both halves of the invariant are covered.
+- **Unrestricted is derived, not tokened.** `isUnrestrictedRole(name, scope)` means "holds every key currently declared in that scope." A scope with one key makes its sole holder trivially unrestricted; the test for `operator` exists to make that tautology visible and to flag it the moment a second platform key is added.
+- **Key strings are persisted.** The lower-case-dotted regex is enforced because renaming a key is a data migration, not a refactor; this test is the gate that catches accidental casing drift.
+- **`system` role is an alias, not a separate grant list.** It holds `admin`'s list via a YAML alias in `authorization-roles.yaml`, so it can never drift. The test asserts both names appear in the unrestricted list to lock that coupling.
+- **Sibling conformance suite.** The file header distinguishes this from a neighbouring test that proves two backends agree. This one is upstream of that concern: it proves the data they both read is not self-contradictory.

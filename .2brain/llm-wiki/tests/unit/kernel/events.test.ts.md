@@ -1,7 +1,7 @@
 ---
 source: tests/unit/kernel/events.test.ts
-sha256: a176de7f34637ce170f9513112e1cbf4c61cc1d11caf3afbf19b51107131d431
-generated_at: 2026-09-27T16:11:51.087903+00:00
+sha256: 391c38c98c69155eecf6b2d58668392e8d460626ca9a525b6c1da5bce9e9d8b0
+generated_at: 2026-10-15T13:22:05.867415+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the domain event bus (`@kernel/events`). They lock in the two guarantees the product-delete → cart-emptying flow depends on: the emitter awaits every handler before resolving, and one handler's failure does not propagate to the caller or to sibling handlers.
+Unit tests for the domain event bus (`@kernel/events`). The bus exists to break the product↔cart cycle (products must empty deleted items from carts; carts must read the catalogue to price lines). These tests assert the two safety properties that make that substitution correct: handlers are fully awaited before the emitter resolves, and a failing handler does not take down the emitting operation.
 
 ## Key elements
 
-- **`emitDomainEvent` (tested, not defined here)** — Assertions cover: payload delivery, async ordering (handler completes before `await` resolves), per-handler error isolation, and the boolean return contract (`true` = all settled, `false` = at least one failed).
-- **`onDomainEvent`** — Used to register test subscribers.
-- **`resetDomainEvents`** — Asserted to drop all subscriptions so handlers don't leak across test cases.
-- **`declare module '@kernel/events'`** — Augments `DomainEventMap` with a test-only event `'test.thing-happened'` so the bus can be exercised without polluting the production type.
-- **`jest.mock('@infrastructure/adapters/logger')`** — Replaces the real logger with a `jest.fn()` so tests can assert `logger.error` was called with the event name and the original thrown/rejected error.
+- **`jest.mock('@infrastructure/adapters/logger')`** — stubs the logger so the tests can assert on `logger.error` calls without side effects.
+- **`declare module '@kernel/events'`** — augments `DomainEventMap` with a `'test.thing-happened'` event (`{ id: string }`) so the tests are type-safe without touching production types.
+- **`afterEach` block** — calls `resetDomainEvents()` and `jest.clearAllMocks()` to prevent subscription leaks between tests.
+- **`describe('emitDomainEvent')`** — six tests covering: payload delivery, async-await ordering (handler completes before emitter continues), synchronous throw isolation (resolves `false`, remaining handlers still run), async rejection isolation (resolves `false`, rejection logged), clean-emit signal (resolves `true`), and no-subscriber no-op (resolves `true`).
+- **`describe('resetDomainEvents')`** — verifies that after reset, previously registered handlers are no longer invoked.
 
 ## Relationships
 
-- **`src/kernel/events.ts`** — The module under test. Provides `emitDomainEvent`, `onDomainEvent`, `resetDomainEvents`, and the `DomainEventMap` interface that the test augments.
-- **`src/infrastructure/adapters/logger.ts`** — Mocked. Tests verify that a failed handler's error is forwarded to `logger.error(event-name, error)` rather than being swallowed or re-thrown.
+- **`src/kernel/events.ts`** — the module under test. Provides `emitDomainEvent`, `onDomainEvent`, `resetDomainEvents`, and the `DomainEventMap` interface that the test augments.
+- **`src/infrastructure/adapters/logger.ts`** — the event bus calls `logger.error` when a handler throws or rejects; these tests mock it to assert the exact shape of the log payload (event name in the message, `Error` under an `error` key).
 
 ## Notes
 
-- The async-ordering test uses `setImmediate` (a task hop) instead of a timer. A fire-and-forget bus would still push `'emitter'` first via microtask scheduling, so a simple `setTimeout` delay could be fast enough to pass or slow enough to flake; a task hop makes the ordering deterministic.
-- The boolean return is the caller's signal: `orders` checks it to decide whether a refund marker should persist. The test asserts both `true` (clean) and `false` (failing) paths independently so a bus that always returned `false` would be caught.
-- `afterEach` calls both `resetDomainEvents()` and `jest.clearAllMocks()`; omitting either lets a subscription or a stale mock call leak into the next test.
+- The return type of `emitDomainEvent` is a **boolean**, not `void`: `true` means every handler settled successfully, `false` means at least one threw or rejected. Callers (e.g. `orders`) use this to decide whether to keep a refund marker standing.
+- The async-ordering test uses `setImmediate` (a task hop) rather than a timer, specifically so a fire-and-forget bus would push `'emitter'` first while a correct await-based bus pushes `'handler'` first — no timing race involved.
+- Error logging convention: the `Error` object is placed under an `error` key so the production logger serialises it and drops the stack trace.
+- `resetDomainEvents` is both a test-cleanup utility and a public API; the dedicated describe block guards against subscription leakage across test files.

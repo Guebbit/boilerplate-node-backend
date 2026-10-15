@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/controllers/replay-delivery.ts
-sha256: 7d0e9cb18a41c8804e7ec34f23eba64b59329f29d6fc8b0c176a4958f2a6942b
-generated_at: 2026-09-23T19:39:10.064609+00:00
+sha256: 7e6e6ad7236e76dfa06e1d648ff9f2da68ba9deb7ec5a06764fecbcd21160b71
+generated_at: 2026-10-15T12:18:18.844434+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller for `POST /webhooks/deliveries/:id/replay`. It re-sends a previously recorded webhook delivery synchronously against the subscription's **current** URL and secret ring (not the original ones at delivery time). Documented as the single most-requested support action in `docs/modules/webhooks.md`.
+Thin HTTP controller for `POST /webhooks/deliveries/:id/replay`. It validates the delivery ID, delegates the re-send to the webhooks service, and shapes the response. Documented in `docs/modules/webhooks.md` as the single most-requested support action.
 
 ## Key elements
 
-- **`replayWebhookDelivery(request, response)`** — the sole export. Validates the `:id` path param, delegates to the service, and shapes the HTTP response (success or refusal). No request body is read.
+- **`replayWebhookDelivery(request, response)`** — the sole export. Validates the `:id` param via `requireId`, calls `webhooksService.replayDelivery(id, tenantCtx)`, then either rejects (via `refused`) or returns a `successResponse` containing the presented `WebhookDelivery`. Errors fall through to `catchAs`.
 
 ## Relationships
 
-- **`@infrastructure/http/request`** — calls `extractAndValidateId` (coerces & validates the path param as an ObjectId) and `tenantCallerContextOf` (derives the tenant scope from the incoming request).
-- **`@infrastructure/http/controller`** — calls `refused` (short-circuits when the service signals refusal) and `catchAs` (unifies error → HTTP mapping).
-- **`@infrastructure/http/response`** — calls `successResponse` to serialize the `WebhookDelivery` payload.
-- **`../services` (`webhooksService`)** — invokes `replayDelivery(id, callerContext)`; all business logic lives there.
-- **`src/modules/webhooks/routes.ts`** — registers this handler on the `POST /webhooks/deliveries/:id/replay` path.
-- **`@types`** — imports the `WebhookDelivery` type for the response shape.
+- **`src/modules/webhooks/services/index.ts`** — calls `webhooksService.replayDelivery` to perform the actual re-send.
+- **`src/modules/webhooks/presenters.ts`** — calls `presentWebhookDelivery` to shape the service's raw data into the API response payload.
+- **`src/modules/webhooks/routes.ts`** — registers `replayWebhookDelivery` as the handler for the replay route.
+- **`src/infrastructure/http/controller.ts`** — imports `catchAs` (error-to-response mapping) and `refused` (rejection short-circuit).
+- **`src/infrastructure/http/ids.ts`** — imports `requireId` for ID validation.
+- **`src/infrastructure/http/request.ts`** — imports `tenantCallerContextOf` to extract tenant context for the service call.
+- **`src/infrastructure/http/response.ts`** — imports `successResponse` to emit the final 200 body.
+- **`src/types/index.ts`** — imports the `WebhookDelivery` type used in the response generic.
 
 ## Notes
 
-- **Params-only route.** Unlike the sibling `write` controller (params-then-body), this endpoint reads no request body.
-- **ID is pre-validated.** `extractAndValidateId` rejects malformed ObjectIds before the service call, so `replayDelivery` cannot throw a `CastError`; the `.catch` handler only deals with genuine service failures.
-- **Synchronous re-send.** The delivery is fired against the subscription's _current_ URL and secret ring at replay time, not the values captured at the original delivery.
+- A **malformed** ID is deliberately answered as **404 Not Found** (not 400), per the inline comment: it is treated as "an unknown one" before the database is consulted.
+- The replay targets the subscription's **current** URL and secret ring, not the values captured at the time of the original delivery.
+- The function is synchronous with respect to the HTTP request/response cycle (`.then`/`.catch` chain), not fire-and-forget.

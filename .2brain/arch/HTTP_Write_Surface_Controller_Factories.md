@@ -12,9 +12,13 @@ graph LR
     Domain_Module_Controller_Service_Layer["Domain Module Controller & Service Layer"]
     Generic_Controller_Factories_HTTP_Write_Primitives["Generic Controller Factories & HTTP Write Primitives"]
     Inventory_Admin_Stock_Transition_Service["Inventory Admin Stock Transition Service"]
+    Delivery_Fulfilment["Delivery Fulfilment"]
     Generic_Controller_Factories_HTTP_Write_Primitives -- "Runtime callback dispatch into the module's service at request time (plugin-hook invocation)" --> Domain_Module_Controller_Service_Layer
-    Inventory_Admin_Stock_Transition_Service -- "Cross-module read dependency on the product service for 404/409 disambiguation" --> Domain_Module_Controller_Service_Layer
-    Inventory_Admin_Stock_Transition_Service -- "Produces the ServiceResult envelope that the surface factories branch on via refused(); consumes the surface's response/i18n primitives" --> Generic_Controller_Factories_HTTP_Write_Primitives
+    Inventory_Admin_Stock_Transition_Service -- "Reads product existence via product service before stock write" --> Domain_Module_Controller_Service_Layer
+    Inventory_Admin_Stock_Transition_Service -- "Uses response envelope primitives for contract compliance (bypasses controller factories)" --> Generic_Controller_Factories_HTTP_Write_Primitives
+    Delivery_Fulfilment -- "Calls order service for status transitions and settlement" --> Domain_Module_Controller_Service_Layer
+    Delivery_Fulfilment -- "Uses response envelope primitives for structured API responses" --> Generic_Controller_Factories_HTTP_Write_Primitives
+    Delivery_Fulfilment -- "Triggers stock allocation within atomic fulfilment transaction" --> Inventory_Admin_Stock_Transition_Service
 ```
 
 ## Details
@@ -27,30 +31,29 @@ The bounded-context controllers and services that consume the shared HTTP surfac
 **Related Classes/Methods**:
 
 - `src.modules.addresses.service.addressAdd`:38-50
-- `src.modules.wishlist.service.wishlistMoveToCart`:97-125
-- `src.modules.account.controllers.delete-account-confirm.deleteAccountConfirm`:22-59
+- `src.modules.wishlist.service.wishlistMoveToCart`:118-148
+- `src.modules.account.controllers.delete-account-confirm.deleteAccountConfirm`:21-41
 - `src.modules.feedback.service.remove`:222-237
-- `src.infrastructure.http.ids.RequiredId`:65-76
+- `src.infrastructure.http.ids.RequiredId`:68-79
 
 **Source Files:**
 
 - `src/infrastructure/http/ids.ts`
-  - `src.infrastructure.http.ids.RequiredId` (L65-L76) - Interface
+  - `src.infrastructure.http.ids.RequiredId` (L68-L79) - Interface
 - `src/modules/account/controllers/cancel-pending-email.ts`
   - `src.modules.account.controllers.cancel-pending-email.cancelPendingEmail` (L19-L34) - Class
   - `src.modules.account.controllers.cancel-pending-email.cancelPendingEmail.then() callback` (L24-L32) - Function
 - `src/modules/account/controllers/delete-account-confirm.ts`
-  - `src.modules.account.controllers.delete-account-confirm.deleteAccountConfirm` (L22-L59) - Class
-  - `src.modules.account.controllers.delete-account-confirm.deleteAccountConfirm.then() callback` (L33-L53) - Function
-  - `src.modules.account.controllers.delete-account-confirm.deleteAccountConfirm.then() callback.then() callback` (L48-L52) - Function
-  - `src.modules.account.controllers.delete-account-confirm.deleteAccountConfirm.catch() callback` (L54-L58) - Function
+  - `src.modules.account.controllers.delete-account-confirm.deleteAccountConfirm` (L21-L41) - Class
+  - `src.modules.account.controllers.delete-account-confirm.deleteAccountConfirm.then() callback` (L30-L35) - Function
+  - `src.modules.account.controllers.delete-account-confirm.deleteAccountConfirm.catch() callback` (L36-L40) - Function
 - `src/modules/account/controllers/delete-account-request.ts`
   - `src.modules.account.controllers.delete-account-request.deleteAccountRequest` (L22-L51) - Class
   - `src.modules.account.controllers.delete-account-request.deleteAccountRequest.then() callback` (L28-L49) - Function
   - `src.modules.account.controllers.delete-account-request.deleteAccountRequest.then() callback.then() callback` (L40-L48) - Function
 - `src/modules/account/controllers/delete-session.ts`
-  - `src.modules.account.controllers.delete-session.deleteSession` (L24-L44) - Class
-  - `src.modules.account.controllers.delete-session.deleteSession.then() callback` (L35-L42) - Function
+  - `src.modules.account.controllers.delete-session.deleteSession` (L25-L49) - Class
+  - `src.modules.account.controllers.delete-session.deleteSession.then() callback` (L36-L47) - Function
 - `src/modules/account/controllers/get-2fa.ts`
   - `src.modules.account.controllers.get-2fa.get2fa` (L17-L31) - Class
   - `src.modules.account.controllers.get-2fa.get2fa.then() callback` (L22-L29) - Function
@@ -63,12 +66,12 @@ The bounded-context controllers and services that consume the shared HTTP surfac
   - `src.modules.account.controllers.get-oauth-links.getOAuthLinks.then() callback` (L19-L25) - Function
   - `src.modules.account.controllers.get-oauth-links.getOAuthLinks.then() callback.links.links.map() callback` (L21-L24) - Function
 - `src/modules/account/controllers/get-refresh-token.ts`
-  - `src.modules.account.controllers.get-refresh-token.getRefreshToken` (L22-L46) - Class
-  - `src.modules.account.controllers.get-refresh-token.getRefreshToken.then() callback` (L30-L38) - Function
-  - `src.modules.account.controllers.get-refresh-token.getRefreshToken.catch() callback` (L41-L44) - Function
+  - `src.modules.account.controllers.get-refresh-token.getRefreshToken` (L24-L57) - Class
+  - `src.modules.account.controllers.get-refresh-token.getRefreshToken.then() callback` (L37-L44) - Function
+  - `src.modules.account.controllers.get-refresh-token.getRefreshToken.catch() callback` (L48-L55) - Function
 - `src/modules/account/controllers/get-sessions.ts`
-  - `src.modules.account.controllers.get-sessions.getSessions` (L19-L32) - Class
-  - `src.modules.account.controllers.get-sessions.getSessions.then() callback` (L26-L30) - Function
+  - `src.modules.account.controllers.get-sessions.getSessions` (L17-L27) - Class
+  - `src.modules.account.controllers.get-sessions.getSessions.then() callback` (L23-L25) - Function
 - `src/modules/account/controllers/post-2fa-backup-codes.ts`
   - `src.modules.account.controllers.post-2fa-backup-codes.post2faBackupCodes` (L21-L50) - Class
   - `src.modules.account.controllers.post-2fa-backup-codes.post2faBackupCodes.then() callback` (L35-L48) - Function
@@ -76,15 +79,13 @@ The bounded-context controllers and services that consume the shared HTTP surfac
   - `src.modules.account.controllers.post-account-export.postAccountExport` (L19-L29) - Class
   - `src.modules.account.controllers.post-account-export.postAccountExport.then() callback` (L24-L27) - Function
 - `src/modules/account/controllers/post-email-change-confirm.ts`
-  - `src.modules.account.controllers.post-email-change-confirm.postEmailChangeConfirm` (L27-L62) - Class
-  - `src.modules.account.controllers.post-email-change-confirm.postEmailChangeConfirm.then() callback` (L41-L53) - Function
-  - `src.modules.account.controllers.post-email-change-confirm.postEmailChangeConfirm.then() callback.then() callback` (L49-L52) - Function
-  - `src.modules.account.controllers.post-email-change-confirm.postEmailChangeConfirm.catch() callback` (L54-L61) - Function
+  - `src.modules.account.controllers.post-email-change-confirm.postEmailChangeConfirm` (L24-L52) - Class
+  - `src.modules.account.controllers.post-email-change-confirm.postEmailChangeConfirm.then() callback` (L36-L43) - Function
+  - `src.modules.account.controllers.post-email-change-confirm.postEmailChangeConfirm.catch() callback` (L44-L51) - Function
 - `src/modules/account/controllers/post-email-change-undo.ts`
-  - `src.modules.account.controllers.post-email-change-undo.postEmailChangeUndo` (L24-L54) - Class
-  - `src.modules.account.controllers.post-email-change-undo.postEmailChangeUndo.then() callback` (L37-L48) - Function
-  - `src.modules.account.controllers.post-email-change-undo.postEmailChangeUndo.then() callback.then() callback` (L44-L47) - Function
-  - `src.modules.account.controllers.post-email-change-undo.postEmailChangeUndo.catch() callback` (L49-L53) - Function
+  - `src.modules.account.controllers.post-email-change-undo.postEmailChangeUndo` (L22-L48) - Class
+  - `src.modules.account.controllers.post-email-change-undo.postEmailChangeUndo.then() callback` (L35-L42) - Function
+  - `src.modules.account.controllers.post-email-change-undo.postEmailChangeUndo.catch() callback` (L43-L47) - Function
 - `src/modules/account/controllers/post-login-2fa-send.ts`
   - `src.modules.account.controllers.post-login-2fa-send.postLoginTwoFactorSend` (L23-L59) - Class
   - `src.modules.account.controllers.post-login-2fa-send.postLoginTwoFactorSend.then() callback` (L42-L54) - Function
@@ -93,22 +94,18 @@ The bounded-context controllers and services that consume the shared HTTP surfac
   - `src.modules.account.controllers.post-password-check.postPasswordCheck` (L16-L25) - Class
   - `src.modules.account.controllers.post-password-check.postPasswordCheck.then() callback` (L21-L23) - Function
 - `src/modules/account/controllers/post-reset-confirm.ts`
-  - `src.modules.account.controllers.post-reset-confirm.postResetConfirm` (L34-L63) - Class
-  - `src.modules.account.controllers.post-reset-confirm.postResetConfirm.then() callback` (L48-L58) - Function
-  - `src.modules.account.controllers.post-reset-confirm.postResetConfirm.catch() callback` (L59-L62) - Function
+  - `src.modules.account.controllers.post-reset-confirm.postResetConfirm` (L22-L50) - Class
+  - `src.modules.account.controllers.post-reset-confirm.postResetConfirm.then() callback` (L36-L45) - Function
+  - `src.modules.account.controllers.post-reset-confirm.postResetConfirm.catch() callback` (L46-L49) - Function
 - `src/modules/account/controllers/post-verify-confirm.ts`
-  - `src.modules.account.controllers.post-verify-confirm.postVerifyConfirm` (L24-L57) - Class
-  - `src.modules.account.controllers.post-verify-confirm.postVerifyConfirm.then() callback` (L38-L52) - Function
-  - `src.modules.account.controllers.post-verify-confirm.postVerifyConfirm.then() callback.then() callback` (L48-L51) - Function
-  - `src.modules.account.controllers.post-verify-confirm.postVerifyConfirm.catch() callback` (L53-L56) - Function
+  - `src.modules.account.controllers.post-verify-confirm.postVerifyConfirm` (L21-L45) - Class
+  - `src.modules.account.controllers.post-verify-confirm.postVerifyConfirm.then() callback` (L33-L40) - Function
+  - `src.modules.account.controllers.post-verify-confirm.postVerifyConfirm.catch() callback` (L41-L44) - Function
 - `src/modules/account/controllers/post-verify-request.ts`
   - `src.modules.account.controllers.post-verify-request.postVerifyRequest` (L18-L29) - Class
   - `src.modules.account.controllers.post-verify-request.postVerifyRequest.then() callback` (L24-L27) - Function
 - `src/modules/account/services/export.ts`
-  - `src.modules.account.services.export.requestExport` (L186-L222) - Class
-  - `src.modules.account.services.export.requestExport.then() callback` (L191-L222) - Function
-  - `src.modules.account.services.export.requestExport.then() callback.then() callback` (L194-L221) - Function
-  - `src.modules.account.services.export.requestExport.then() callback.then() callback.then() callback` (L214-L219) - Function
+  - `src.modules.account.services.export.requestExport` (L185-L224) - Class
 - `src/modules/addresses/controllers/delete-address.ts`
   - `src.modules.addresses.controllers.delete-address.deleteAddress` (L18-L35) - Class
   - `src.modules.addresses.controllers.delete-address.deleteAddress.then() callback` (L28-L33) - Function
@@ -164,18 +161,6 @@ The bounded-context controllers and services that consume the shared HTTP surfac
 - `src/modules/cart/controllers/put-cart-shipping-method.ts`
   - `src.modules.cart.controllers.put-cart-shipping-method.putCartShippingMethod` (L19-L36) - Class
   - `src.modules.cart.controllers.put-cart-shipping-method.putCartShippingMethod.then() callback` (L30-L34) - Function
-- `src/modules/delivery/controllers/get-shipment-by-order.ts`
-  - `src.modules.delivery.controllers.get-shipment-by-order.getShipmentByOrder` (L16-L30) - Class
-  - `src.modules.delivery.controllers.get-shipment-by-order.getShipmentByOrder.then() callback` (L25-L28) - Function
-- `src/modules/delivery/controllers/post-deliver-order.ts`
-  - `src.modules.delivery.controllers.post-deliver-order.postDeliverOrder` (L17-L34) - Class
-  - `src.modules.delivery.controllers.post-deliver-order.postDeliverOrder.then() callback` (L29-L32) - Function
-- `src/modules/delivery/controllers/post-fulfill-order.ts`
-  - `src.modules.delivery.controllers.post-fulfill-order.postFulfillOrder` (L18-L32) - Class
-  - `src.modules.delivery.controllers.post-fulfill-order.postFulfillOrder.then() callback` (L27-L30) - Function
-- `src/modules/delivery/controllers/post-ship-order.ts`
-  - `src.modules.delivery.controllers.post-ship-order.postShipOrder` (L18-L41) - Class
-  - `src.modules.delivery.controllers.post-ship-order.postShipOrder.then() callback` (L36-L39) - Function
 - `src/modules/delivery/controllers/post-start-order.ts`
   - `src.modules.delivery.controllers.post-start-order.postStartOrder` (L17-L31) - Class
   - `src.modules.delivery.controllers.post-start-order.postStartOrder.then() callback` (L26-L29) - Function
@@ -214,14 +199,14 @@ The bounded-context controllers and services that consume the shared HTTP surfac
   - `src.modules.locales.controllers.write-entity-translations.writeEntityTranslations.<function>.id` (L53-L55) - Class
   - `src.modules.locales.controllers.write-entity-translations.writeEntityTranslations.<function>.id.notFound` (L54-L54) - Method
 - `src/modules/locales/controllers/write-locale-entries.ts`
-  - `src.modules.locales.controllers.write-locale-entries.updateLocaleEntry` (L70-L91) - Class
-  - `src.modules.locales.controllers.write-locale-entries.updateLocaleEntry.then() callback` (L85-L89) - Function
+  - `src.modules.locales.controllers.write-locale-entries.updateLocaleEntry` (L65-L96) - Class
+  - `src.modules.locales.controllers.write-locale-entries.updateLocaleEntry.then() callback` (L90-L94) - Function
 - `src/modules/notifications/controllers/delete-notification.ts`
   - `src.modules.notifications.controllers.delete-notification.deleteNotification` (L17-L29) - Class
   - `src.modules.notifications.controllers.delete-notification.deleteNotification.then() callback` (L23-L27) - Function
 - `src/modules/notifications/controllers/get-notifications-stream.ts`
-  - `src.modules.notifications.controllers.get-notifications-stream.getNotificationsStream` (L28-L45) - Class
-  - `src.modules.notifications.controllers.get-notifications-stream.getNotificationsStream.streamNotifications() callback` (L42-L43) - Function
+  - `src.modules.notifications.controllers.get-notifications-stream.getNotificationsStream` (L27-L43) - Class
+  - `src.modules.notifications.controllers.get-notifications-stream.getNotificationsStream.streamNotifications() callback` (L40-L41) - Function
 - `src/modules/notifications/controllers/get-notifications.ts`
   - `src.modules.notifications.controllers.get-notifications.getNotifications` (L16-L23) - Class
   - `src.modules.notifications.controllers.get-notifications.getNotifications.then() callback` (L19-L21) - Function
@@ -257,6 +242,12 @@ The bounded-context controllers and services that consume the shared HTTP surfac
 - `src/modules/payments/controllers/get-payment-by-order.ts`
   - `src.modules.payments.controllers.get-payment-by-order.getPaymentByOrder` (L16-L30) - Class
   - `src.modules.payments.controllers.get-payment-by-order.getPaymentByOrder.then() callback` (L25-L28) - Function
+- `src/modules/payments/controllers/get-payments.ts`
+  - `src.modules.payments.controllers.get-payments.getPayments` (L30-L34) - Class
+  - `src.modules.payments.controllers.get-payments.getPayments.runSearch` (L33-L33) - Method
+- `src/modules/payments/controllers/get-refunds.ts`
+  - `src.modules.payments.controllers.get-refunds.getRefunds` (L18-L31) - Class
+  - `src.modules.payments.controllers.get-refunds.getRefunds.runSearch` (L21-L30) - Method
 - `src/modules/payments/controllers/post-payment-confirm.ts`
   - `src.modules.payments.controllers.post-payment-confirm.postPaymentConfirm` (L23-L56) - Class
   - `src.modules.payments.controllers.post-payment-confirm.postPaymentConfirm.then() callback` (L37-L54) - Function
@@ -267,49 +258,50 @@ The bounded-context controllers and services that consume the shared HTTP surfac
   - `src.modules.payments.controllers.post-payment-offline.postPaymentOffline` (L20-L45) - Class
   - `src.modules.payments.controllers.post-payment-offline.postPaymentOffline.then() callback` (L32-L43) - Function
 - `src/modules/payments/controllers/post-payment-refund.ts`
-  - `src.modules.payments.controllers.post-payment-refund.postPaymentRefund` (L21-L38) - Class
-  - `src.modules.payments.controllers.post-payment-refund.postPaymentRefund.then() callback` (L33-L36) - Function
+  - `src.modules.payments.controllers.post-payment-refund.postPaymentRefund` (L21-L43) - Class
+  - `src.modules.payments.controllers.post-payment-refund.postPaymentRefund.then() callback` (L33-L41) - Function
 - `src/modules/payments/controllers/post-payment-sync.ts`
   - `src.modules.payments.controllers.post-payment-sync.postPaymentSync` (L20-L32) - Class
   - `src.modules.payments.controllers.post-payment-sync.postPaymentSync.then() callback` (L26-L30) - Function
 - `src/modules/payments/providers/webhook-signature.ts`
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.matches.flatMap() callback` (L104-L107) - Function
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.matches` (L104-L108) - Class
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.matches.flatMap() callback.provided.map() callback` (L105-L106) - Function
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.matches.flatMap() callback` (L105-L108) - Function
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.matches` (L105-L109) - Class
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.matches.flatMap() callback.provided.map() callback` (L106-L107) - Function
 - `src/modules/payments/services/lookup.ts`
   - `src.modules.payments.services.lookup.getOrderByReference` (L27-L38) - Class
   - `src.modules.payments.services.lookup.getOrderByReference.then() callback` (L35-L36) - Function
 - `src/modules/payments/services/offline.ts`
-  - `src.modules.payments.services.offline.OfflinePaymentInput` (L33-L37) - Interface
-  - `src.modules.payments.services.offline.recordOfflinePayment.refusal` (L77-L85) - Class
-  - `src.modules.payments.services.offline.recordOfflinePayment.refusal.then() callback` (L78-L78) - Function
-  - `src.modules.payments.services.offline.recordOfflinePayment.refusal.catch() callback` (L79-L85) - Function
+  - `src.modules.payments.services.offline.OfflinePaymentInput` (L34-L38) - Interface
+  - `src.modules.payments.services.offline.recordOfflinePayment.refusal` (L78-L86) - Class
+  - `src.modules.payments.services.offline.recordOfflinePayment.refusal.then() callback` (L79-L79) - Function
+  - `src.modules.payments.services.offline.recordOfflinePayment.refusal.catch() callback` (L80-L86) - Function
 - `src/modules/payments/services/refunds.ts`
-  - `src.modules.payments.services.refunds.RefundRequest` (L57-L64) - Interface
-  - `src.modules.payments.services.refunds.OpenedRefund` (L70-L73) - Interface
-  - `src.modules.payments.services.refunds.then() callback` (L214-L214) - Function
-  - `src.modules.payments.services.refunds.announceInTransaction() callback` (L354-L354) - Function
-  - `src.modules.payments.services.refunds.refundByOrder` (L569-L604) - Class
-  - `src.modules.payments.services.refunds.refundByOrder.then() callback` (L580-L603) - Function
-  - `src.modules.payments.services.refunds.refundByOrder.then() callback.then() callback` (L584-L603) - Function
-  - `src.modules.payments.services.refunds.refundByOrder.then() callback.then() callback.then() callback` (L593-L601) - Function
+  - `src.modules.payments.services.refunds.RefundRequest` (L58-L72) - Interface
+  - `src.modules.payments.services.refunds.OpenedRefund` (L78-L81) - Interface
+  - `src.modules.payments.services.refunds.announceInTransaction() callback` (L381-L381) - Function
+  - `src.modules.payments.services.refunds.refundByOrder` (L629-L664) - Class
+  - `src.modules.payments.services.refunds.refundByOrder.then() callback` (L640-L663) - Function
+  - `src.modules.payments.services.refunds.refundByOrder.then() callback.then() callback` (L644-L663) - Function
+  - `src.modules.payments.services.refunds.refundByOrder.then() callback.then() callback.then() callback` (L653-L661) - Function
 - `src/modules/payments/services/settlement.ts`
-  - `src.modules.payments.services.settlement.Settlement` (L46-L57) - Interface
-  - `src.modules.payments.services.settlement.confirmableOrder` (L448-L458) - Class
-  - `src.modules.payments.services.settlement.confirmableOrder.then() callback.then() callback` (L455-L455) - Function
-  - `src.modules.payments.services.settlement.confirmableOrder.then() callback` (L458-L458) - Function
-  - `src.modules.payments.services.settlement.settleVia() callback` (L552-L552) - Function
-  - `src.modules.payments.services.settlement.then() callback.then() callback` (L665-L665) - Function
+  - `src.modules.payments.services.settlement.Settlement` (L46-L63) - Interface
+  - `src.modules.payments.services.settlement.confirmableOrder` (L521-L531) - Class
+  - `src.modules.payments.services.settlement.confirmableOrder.then() callback.then() callback` (L528-L528) - Function
+  - `src.modules.payments.services.settlement.confirmableOrder.then() callback` (L531-L531) - Function
+  - `src.modules.payments.services.settlement.settleVia() callback` (L641-L641) - Function
 - `src/modules/payments/services/view.ts`
-  - `src.modules.payments.services.view.getForOrder` (L31-L45) - Class
-  - `src.modules.payments.services.view.getForOrder.then() callback` (L35-L45) - Function
-  - `src.modules.payments.services.view.getForOrder.then() callback.then() callback` (L42-L43) - Function
-  - `src.modules.payments.services.view.getForOrder.then() callback.then() callback.then() callback` (L43-L43) - Function
-  - `src.modules.payments.services.view.withActions` (L66-L99) - Class
-  - `src.modules.payments.services.view.withActions.then() callback` (L72-L98) - Function
+  - `src.modules.payments.services.view.getForOrder` (L32-L46) - Class
+  - `src.modules.payments.services.view.getForOrder.then() callback` (L36-L46) - Function
+  - `src.modules.payments.services.view.getForOrder.then() callback.then() callback` (L43-L44) - Function
+  - `src.modules.payments.services.view.getForOrder.then() callback.then() callback.then() callback` (L44-L44) - Function
+  - `src.modules.payments.services.view.withActions` (L67-L101) - Class
+  - `src.modules.payments.services.view.withActions.then() callback` (L73-L100) - Function
 - `src/modules/returns/controllers/get-return-by-id.ts`
   - `src.modules.returns.controllers.get-return-by-id.getReturnById` (L17-L36) - Class
   - `src.modules.returns.controllers.get-return-by-id.getReturnById.then() callback` (L25-L34) - Function
+- `src/modules/returns/controllers/get-return-options.ts`
+  - `src.modules.returns.controllers.get-return-options.getReturnOptions` (L15-L29) - Class
+  - `src.modules.returns.controllers.get-return-options.getReturnOptions.then() callback` (L24-L27) - Function
 - `src/modules/returns/controllers/get-returns.ts`
   - `src.modules.returns.controllers.get-returns.getReturns` (L21-L34) - Class
   - `src.modules.returns.controllers.get-returns.getReturns.then() callback` (L30-L32) - Function
@@ -325,9 +317,9 @@ The bounded-context controllers and services that consume the shared HTTP surfac
   - `src.modules.returns.controllers.post-return-receive.postReturnReceive.then() callback` (L29-L34) - Function
   - `src.modules.returns.controllers.post-return-receive.postReturnReceive.then() callback.then() callback` (L31-L33) - Function
 - `src/modules/returns/controllers/post-return.ts`
-  - `src.modules.returns.controllers.post-return.postReturn` (L19-L44) - Class
-  - `src.modules.returns.controllers.post-return.postReturn.then() callback` (L28-L42) - Function
-  - `src.modules.returns.controllers.post-return.postReturn.then() callback.then() callback` (L33-L41) - Function
+  - `src.modules.returns.controllers.post-return.postReturn` (L19-L51) - Class
+  - `src.modules.returns.controllers.post-return.postReturn.then() callback` (L28-L49) - Function
+  - `src.modules.returns.controllers.post-return.postReturn.then() callback.then() callback` (L33-L48) - Function
 - `src/modules/webhooks/controllers/delete-subscription.ts`
   - `src.modules.webhooks.controllers.delete-subscription.deleteWebhookSubscription` (L19-L31) - Class
   - `src.modules.webhooks.controllers.delete-subscription.deleteWebhookSubscription.then() callback` (L26-L29) - Function
@@ -353,18 +345,16 @@ The bounded-context controllers and services that consume the shared HTTP surfac
   - `src.modules.wishlist.controllers.put-wishlist-item.putWishlistItem` (L21-L37) - Class
   - `src.modules.wishlist.controllers.put-wishlist-item.putWishlistItem.then() callback` (L31-L35) - Function
 - `src/modules/wishlist/service.ts`
-  - `src.modules.wishlist.service.wishlistGet` (L31-L32) - Class
-  - `src.modules.wishlist.service.wishlistGet.then() callback` (L32-L32) - Function
-  - `src.modules.wishlist.service.wishlistAdd` (L42-L59) - Class
-  - `src.modules.wishlist.service.wishlistAdd.then() callback` (L47-L59) - Function
-  - `src.modules.wishlist.service.wishlistAdd.then() callback.then() callback` (L49-L58) - Function
-  - `src.modules.wishlist.service.wishlistRemove` (L67-L80) - Class
-  - `src.modules.wishlist.service.wishlistRemove.then() callback` (L72-L80) - Function
-  - `src.modules.wishlist.service.wishlistMoveToCart` (L97-L125) - Class
-  - `src.modules.wishlist.service.wishlistMoveToCart.then() callback` (L102-L125) - Function
-  - `src.modules.wishlist.service.wishlistMoveToCart.then() callback.then() callback` (L106-L124) - Function
-  - `src.modules.wishlist.service.wishlistMoveToCart.then() callback.then() callback.added.errors.some() callback` (L112-L112) - Function
-  - `src.modules.wishlist.service.wishlistMoveToCart.then() callback.then() callback.then() callback` (L116-L123) - Function
+  - `src.modules.wishlist.service.wishlistAdd` (L61-L80) - Class
+  - `src.modules.wishlist.service.wishlistAdd.then() callback` (L66-L80) - Function
+  - `src.modules.wishlist.service.wishlistAdd.then() callback.then() callback` (L68-L79) - Function
+  - `src.modules.wishlist.service.wishlistRemove` (L88-L101) - Class
+  - `src.modules.wishlist.service.wishlistRemove.then() callback` (L93-L101) - Function
+  - `src.modules.wishlist.service.wishlistMoveToCart` (L118-L148) - Class
+  - `src.modules.wishlist.service.wishlistMoveToCart.then() callback` (L123-L148) - Function
+  - `src.modules.wishlist.service.wishlistMoveToCart.then() callback.then() callback` (L127-L147) - Function
+  - `src.modules.wishlist.service.wishlistMoveToCart.then() callback.then() callback.added.errors.some() callback` (L133-L133) - Function
+  - `src.modules.wishlist.service.wishlistMoveToCart.then() callback.then() callback.then() callback` (L137-L146) - Function
 
 ### Generic Controller Factories & HTTP Write Primitives
 The core of the subsystem — the spec-driven controller factories and the low-level HTTP primitives they compose. createItemController (read-one), createListController (paged list), createDeleteController (soft/hard delete triplet), and create-restore-controller (undo of a soft delete) each take a *ControllerSpec and return a named Express handler. They are built on namedHandler/operationName (stable handler naming for stack traces, logs, and generated docs), requireId (malformed-id-as-unknown-id contract), refused/catchAs (envelope branching and the mandatory .catch), and the upload helpers readUploadedImage/writeWithUploadedImage (image-bearing writes with claim/undo semantics). This is the single landing site for the API's write contract decisions, and the path the product seeder uses for translation writes.
@@ -415,8 +405,34 @@ The core of the subsystem — the spec-driven controller factories and the low-l
   - `src.modules.api-keys.controllers.mint-api-key.mintApiKey` (L19-L37) - Class
   - `src.modules.api-keys.controllers.mint-api-key.mintApiKey.then() callback` (L28-L35) - Function
 - `src/modules/audit-logs/controllers/get-audit.ts`
-  - `src.modules.audit-logs.controllers.get-audit.getAudit` (L16-L31) - Class
-  - `src.modules.audit-logs.controllers.get-audit.getAudit.runList` (L26-L30) - Method
+  - `src.modules.audit-logs.controllers.get-audit.getAudit` (L16-L30) - Class
+  - `src.modules.audit-logs.controllers.get-audit.getAudit.runList` (L25-L29) - Method
+- `src/modules/delivery/controllers/get-order-fulfillment.ts`
+  - `src.modules.delivery.controllers.get-order-fulfillment.getOrderFulfillment` (L16-L30) - Class
+  - `src.modules.delivery.controllers.get-order-fulfillment.getOrderFulfillment.then() callback` (L25-L28) - Function
+- `src/modules/delivery/controllers/get-preorder-fulfillment-orders.ts`
+  - `src.modules.delivery.controllers.get-preorder-fulfillment-orders.getPreorderFulfillmentOrders` (L16-L25) - Class
+  - `src.modules.delivery.controllers.get-preorder-fulfillment-orders.getPreorderFulfillmentOrders.runList` (L24-L24) - Method
+- `src/modules/delivery/controllers/patch-shipment.ts`
+  - `src.modules.delivery.controllers.patch-shipment.patchShipment` (L17-L31) - Class
+  - `src.modules.delivery.controllers.patch-shipment.patchShipment.then() callback` (L26-L29) - Function
+- `src/modules/delivery/controllers/post-confirm-wait.ts`
+  - `src.modules.delivery.controllers.post-confirm-wait.postConfirmWait` (L16-L27) - Class
+  - `src.modules.delivery.controllers.post-confirm-wait.postConfirmWait.then() callback` (L22-L25) - Function
+- `src/modules/delivery/controllers/post-deliver-shipment.ts`
+  - `src.modules.delivery.controllers.post-deliver-shipment.postDeliverShipment` (L18-L32) - Class
+  - `src.modules.delivery.controllers.post-deliver-shipment.postDeliverShipment.then() callback` (L27-L30) - Function
+- `src/modules/delivery/controllers/post-fulfill-fulfillment-order.ts`
+  - `src.modules.delivery.controllers.post-fulfill-fulfillment-order.postFulfillFulfillmentOrder` (L16-L30) - Class
+  - `src.modules.delivery.controllers.post-fulfill-fulfillment-order.postFulfillFulfillmentOrder.then() callback` (L25-L28) - Function
+- `src/modules/delivery/controllers/post-hold-fulfillment-order.ts`
+  - `src.modules.delivery.controllers.post-hold-fulfillment-order.postHoldFulfillmentOrder` (L17-L31) - Class
+  - `src.modules.delivery.controllers.post-hold-fulfillment-order.postHoldFulfillmentOrder.then() callback` (L26-L29) - Function
+  - `src.modules.delivery.controllers.post-hold-fulfillment-order.postReleaseFulfillmentOrder` (L34-L48) - Class
+  - `src.modules.delivery.controllers.post-hold-fulfillment-order.postReleaseFulfillmentOrder.then() callback` (L43-L46) - Function
+- `src/modules/delivery/controllers/post-ship-fulfillment-order.ts`
+  - `src.modules.delivery.controllers.post-ship-fulfillment-order.postShipFulfillmentOrder` (L17-L35) - Class
+  - `src.modules.delivery.controllers.post-ship-fulfillment-order.postShipFulfillmentOrder.then() callback` (L26-L33) - Function
 - `src/modules/example/controllers/get-example.ts`
   - `src.modules.example.controllers.get-example.getExample` (L15-L19) - Class
   - `src.modules.example.controllers.get-example.getExample.fetch` (L18-L18) - Method
@@ -433,6 +449,9 @@ The core of the subsystem — the spec-driven controller factories and the low-l
 - `src/modules/inventory/controllers/get-inventory-levels.ts`
   - `src.modules.inventory.controllers.get-inventory-levels.getInventoryLevels` (L13-L22) - Class
   - `src.modules.inventory.controllers.get-inventory-levels.getInventoryLevels.runList` (L21-L21) - Method
+- `src/modules/inventory/controllers/get-preorder-levels.ts`
+  - `src.modules.inventory.controllers.get-preorder-levels.getPreorderLevels` (L14-L21) - Class
+  - `src.modules.inventory.controllers.get-preorder-levels.getPreorderLevels.runList` (L20-L20) - Method
 - `src/modules/inventory/controllers/get-stock-movements.ts`
   - `src.modules.inventory.controllers.get-stock-movements.getStockMovements` (L13-L21) - Class
   - `src.modules.inventory.controllers.get-stock-movements.getStockMovements.runList` (L20-L20) - Method
@@ -445,23 +464,38 @@ The core of the subsystem — the spec-driven controller factories and the low-l
 - `src/modules/inventory/controllers/post-reservations-sweep.ts`
   - `src.modules.inventory.controllers.post-reservations-sweep.postReservationsSweep` (L20-L31) - Class
   - `src.modules.inventory.controllers.post-reservations-sweep.postReservationsSweep.then() callback` (L23-L30) - Function
+- `src/modules/inventory/controllers/put-preorder-limit.ts`
+  - `src.modules.inventory.controllers.put-preorder-limit.putPreorderLimit` (L18-L35) - Class
+  - `src.modules.inventory.controllers.put-preorder-limit.putPreorderLimit.then() callback` (L30-L33) - Function
 - `src/modules/observability/controllers/get-observability-audit.ts`
-  - `src.modules.observability.controllers.get-observability-audit.getObservabilityAuditLogs` (L21-L36) - Class
-  - `src.modules.observability.controllers.get-observability-audit.getObservabilityAuditLogs.runList` (L31-L35) - Method
+  - `src.modules.observability.controllers.get-observability-audit.getObservabilityAuditLogs` (L21-L35) - Class
+  - `src.modules.observability.controllers.get-observability-audit.getObservabilityAuditLogs.runList` (L30-L34) - Method
 - `src/modules/observability/controllers/get-observability-health.ts`
   - `src.modules.observability.controllers.get-observability-health.getObservabilityHealth` (L24-L29) - Class
   - `src.modules.observability.controllers.get-observability-health.getObservabilityHealth.then() callback` (L26-L28) - Function
 - `src/modules/orders/controllers/delete-orders.ts`
   - `src.modules.orders.controllers.delete-orders.deleteOrders` (L17-L22) - Class
   - `src.modules.orders.controllers.delete-orders.deleteOrders.remove` (L19-L20) - Method
+- `src/modules/orders/controllers/get-order-timeline.ts`
+  - `src.modules.orders.controllers.get-order-timeline.getOrderTimeline` (L20-L39) - Class
+  - `src.modules.orders.controllers.get-order-timeline.getOrderTimeline.then() callback` (L29-L37) - Function
+  - `src.modules.orders.controllers.get-order-timeline.getOrderTimeline.then() callback.then() callback` (L34-L36) - Function
+- `src/modules/orders/controllers/get-orders-export.ts`
+  - `src.modules.orders.controllers.get-orders-export.getOrdersExport` (L28-L67) - Class
+  - `src.modules.orders.controllers.get-orders-export.getOrdersExport.namedHandler('getOrdersExport') callback` (L30-L66) - Function
+  - `src.modules.orders.controllers.get-orders-export.getOrdersExport.namedHandler('getOrdersExport') callback.then() callback` (L40-L56) - Function
+  - `src.modules.orders.controllers.get-orders-export.getOrdersExport.namedHandler('getOrdersExport') callback.catch() callback` (L57-L65) - Function
 - `src/modules/orders/controllers/restore-orders.ts`
   - `src.modules.orders.controllers.restore-orders.restoreOrders` (L15-L20) - Class
   - `src.modules.orders.controllers.restore-orders.restoreOrders.restore` (L17-L17) - Method
   - `src.modules.orders.controllers.restore-orders.restoreOrders.present` (L18-L18) - Method
+- `src/modules/orders/domain/lifecycle.ts`
+  - `src.modules.orders.domain.lifecycle.canTransition` (L110-L113) - Class
+  - `src.modules.orders.domain.lifecycle.canTransition.EVERY_EVENT.some() callback` (L112-L112) - Function
 - `src/modules/products/controllers/create-product.ts`
-  - `src.modules.products.controllers.create-product.createProduct` (L23-L85) - Class
-  - `src.modules.products.controllers.create-product.createProduct.then() callback` (L71-L81) - Function
-  - `src.modules.products.controllers.create-product.createProduct.catch() callback` (L82-L84) - Function
+  - `src.modules.products.controllers.create-product.createProduct` (L23-L95) - Class
+  - `src.modules.products.controllers.create-product.createProduct.then() callback` (L81-L91) - Function
+  - `src.modules.products.controllers.create-product.createProduct.catch() callback` (L92-L94) - Function
 - `src/modules/products/controllers/delete-products.ts`
   - `src.modules.products.controllers.delete-products.deleteProducts` (L17-L22) - Class
   - `src.modules.products.controllers.delete-products.deleteProducts.remove` (L19-L20) - Method
@@ -475,15 +509,44 @@ The core of the subsystem — the spec-driven controller factories and the low-l
   - `src.modules.products.controllers.restore-products.restoreProducts` (L15-L20) - Class
   - `src.modules.products.controllers.restore-products.restoreProducts.restore` (L17-L17) - Method
   - `src.modules.products.controllers.restore-products.restoreProducts.present` (L18-L18) - Method
+- `src/modules/products/model.ts`
+  - `src.modules.products.model.zodProductCreateSchema.CreateProductBody.superRefine() callback` (L193-L197) - Function
+  - `src.modules.products.model.zodProductReplaceSchema.ReplaceProductByIdBody.superRefine() callback` (L204-L208) - Function
+  - `src.modules.products.model.zodProductUpdateSchema.UpdateProductByIdBody.superRefine() callback` (L214-L218) - Function
 - `src/modules/products/services/remove.ts`
-  - `src.modules.products.services.remove.restoreById` (L130-L148) - Class
-  - `src.modules.products.services.remove.restoreById.then() callback` (L134-L148) - Function
-  - `src.modules.products.services.remove.restoreById.then() callback.then() callback` (L138-L147) - Function
+  - `src.modules.products.services.remove.announceDeleted() callback` (L84-L88) - Function
+  - `src.modules.products.services.remove.announceDeleted() callback.then() callback` (L87-L87) - Function
+  - `src.modules.products.services.remove.remove.announceDeleted() callback.then() callback` (L88-L88) - Function
+  - `src.modules.products.services.remove.remove.announceDeleted() callback` (L99-L100) - Function
+  - `src.modules.products.services.remove.restoreById` (L135-L152) - Class
+  - `src.modules.products.services.remove.restoreById.then() callback` (L139-L152) - Function
+  - `src.modules.products.services.remove.restoreById.then() callback.then() callback` (L143-L151) - Function
+- `src/modules/stats/controllers/get-stats.ts`
+  - `src.modules.stats.controllers.get-stats.getSalesStats` (L17-L21) - Class
+  - `src.modules.stats.controllers.get-stats.getSalesStats.statsHandler('getSalesStats') callback` (L20-L20) - Function
+  - `src.modules.stats.controllers.get-stats.getProductStats` (L24-L31) - Class
+  - `src.modules.stats.controllers.get-stats.getProductStats.statsHandler('getProductStats') callback` (L30-L30) - Function
+  - `src.modules.stats.controllers.get-stats.productSeries` (L34-L39) - Class
+  - `src.modules.stats.controllers.get-stats.productSeries.statsHandler('getProductSalesSeries') callback` (L37-L38) - Function
+  - `src.modules.stats.controllers.get-stats.getProductSalesSeries` (L42-L48) - Class
+  - `src.modules.stats.controllers.get-stats.getProductSalesSeries.namedHandler('getProductSalesSeries') callback` (L44-L47) - Function
+  - `src.modules.stats.controllers.get-stats.getCategoryStats` (L51-L55) - Class
+  - `src.modules.stats.controllers.get-stats.getCategoryStats.statsHandler('getCategoryStats') callback` (L54-L54) - Function
+  - `src.modules.stats.controllers.get-stats.getPaymentMixStats` (L58-L62) - Class
+  - `src.modules.stats.controllers.get-stats.getPaymentMixStats.statsHandler('getPaymentMixStats') callback` (L61-L61) - Function
+  - `src.modules.stats.controllers.get-stats.getOperationsStats` (L65-L69) - Class
+  - `src.modules.stats.controllers.get-stats.getOperationsStats.statsHandler('getOperationsStats') callback` (L68-L68) - Function
+  - `src.modules.stats.controllers.get-stats.getCustomerStats` (L72-L76) - Class
+  - `src.modules.stats.controllers.get-stats.getCustomerStats.statsHandler('getCustomerStats') callback` (L75-L75) - Function
+- `src/modules/stats/controllers/respond.ts`
+  - `src.modules.stats.controllers.respond.statsHandler` (L35-L62) - Class
+  - `src.modules.stats.controllers.respond.statsHandler.namedHandler() callback` (L46-L62) - Function
+  - `src.modules.stats.controllers.respond.statsHandler.namedHandler() callback.then() callback` (L58-L60) - Function
 - `src/modules/users/controllers/create-user.ts`
-  - `src.modules.users.controllers.create-user.createUser` (L22-L107) - Class
-  - `src.modules.users.controllers.create-user.createUser.then() callback` (L91-L103) - Function
-  - `src.modules.users.controllers.create-user.createUser.then() callback.then() callback` (L100-L102) - Function
-  - `src.modules.users.controllers.create-user.createUser.catch() callback` (L104-L106) - Function
+  - `src.modules.users.controllers.create-user.createUser` (L21-L85) - Class
+  - `src.modules.users.controllers.create-user.createUser.then() callback` (L69-L81) - Function
+  - `src.modules.users.controllers.create-user.createUser.then() callback.then() callback` (L78-L80) - Function
+  - `src.modules.users.controllers.create-user.createUser.catch() callback` (L82-L84) - Function
 - `src/modules/users/controllers/delete-users.ts`
   - `src.modules.users.controllers.delete-users.deleteUsers` (L23-L28) - Class
   - `src.modules.users.controllers.delete-users.deleteUsers.remove` (L25-L26) - Method
@@ -495,6 +558,9 @@ The core of the subsystem — the spec-driven controller factories and the low-l
   - `src.modules.users.controllers.restore-users.restoreUsers` (L16-L21) - Class
   - `src.modules.users.controllers.restore-users.restoreUsers.restore` (L18-L18) - Method
   - `src.modules.users.controllers.restore-users.restoreUsers.present` (L19-L19) - Method
+- `src/modules/users/two-factor-write.ts`
+  - `src.modules.users.two-factor-write.modifiedFieldsOf` (L119-L123) - Class
+  - `src.modules.users.two-factor-write.modifiedFieldsOf.ENTRY_FIELDS.filter() callback` (L122-L122) - Function
 - `src/modules/webhooks/controllers/create-subscription.ts`
   - `src.modules.webhooks.controllers.create-subscription.createWebhookSubscription` (L22-L41) - Class
   - `src.modules.webhooks.controllers.create-subscription.createWebhookSubscription.then() callback` (L31-L39) - Function
@@ -510,18 +576,110 @@ The operator-facing inventory write path that produces audited stock changes thr
 
 **Related Classes/Methods**:
 
-- `src.modules.inventory.services.admin.AdminStockTransition`:47-64
-- `src.modules.inventory.services.admin.receive`:123-138
-- `src.modules.inventory.services.admin.adjust`:151-183
+- `src.modules.inventory.services.admin.AdminStockTransition`:80-99
+- `src.modules.inventory.services.admin.receive`:160-176
+- `src.modules.inventory.services.admin.adjust`:189-221
 - `src.modules.inventory.services.admin.adjust.buildAuditMetadata`
 
 **Source Files:**
 
 - `src/modules/inventory/services/admin.ts`
-  - `src.modules.inventory.services.admin.AdminStockTransition` (L47-L64) - Interface
-  - `src.modules.inventory.services.admin.receive` (L123-L138) - Class
-  - `src.modules.inventory.services.admin.receive.buildAuditMetadata` (L136-L136) - Method
-  - `src.modules.inventory.services.admin.adjust` (L151-L183) - Class
-  - `src.modules.inventory.services.admin.adjust.onFailure` (L169-L179) - Method
-  - `src.modules.inventory.services.admin.adjust.onFailure.then() callback` (L170-L179) - Function
-  - `src.modules.inventory.services.admin.adjust.buildAuditMetadata` (L181-L181) - Method
+  - `src.modules.inventory.services.admin.levelFor` (L31-L44) - Class
+  - `src.modules.inventory.services.admin.levelFor.then() callback` (L32-L43) - Function
+  - `src.modules.inventory.services.admin.AdminStockTransition` (L80-L99) - Interface
+  - `src.modules.inventory.services.admin.applyAdminStockTransition` (L105-L148) - Class
+  - `src.modules.inventory.services.admin.applyAdminStockTransition.then() callback` (L120-L148) - Function
+  - `src.modules.inventory.services.admin.applyAdminStockTransition.then() callback.applied.then() callback` (L127-L147) - Function
+  - `src.modules.inventory.services.admin.applyAdminStockTransition.then() callback.applied.then() callback.then() callback` (L134-L146) - Function
+  - `src.modules.inventory.services.admin.receive` (L160-L176) - Class
+  - `src.modules.inventory.services.admin.receive.buildAuditMetadata` (L174-L174) - Method
+  - `src.modules.inventory.services.admin.adjust` (L189-L221) - Class
+  - `src.modules.inventory.services.admin.adjust.onFailure` (L207-L217) - Method
+  - `src.modules.inventory.services.admin.adjust.onFailure.then() callback` (L208-L217) - Function
+  - `src.modules.inventory.services.admin.adjust.buildAuditMetadata` (L219-L219) - Method
+  - `src.modules.inventory.services.admin.setPreorderLimit` (L233-L257) - Class
+  - `src.modules.inventory.services.admin.setPreorderLimit.then() callback` (L238-L257) - Function
+  - `src.modules.inventory.services.admin.setPreorderLimit.then() callback.then() callback` (L244-L256) - Function
+- `src/modules/stats/controllers/get-stats.ts`
+  - `src.modules.stats.controllers.get-stats.getPipelineStats` (L79-L85) - Class
+  - `src.modules.stats.controllers.get-stats.getPipelineStats.then() callback` (L82-L84) - Function
+
+### Delivery Fulfilment
+The delivery module's service layer that drives the shipment lifecycle — starting fulfilment, shipping, recording arrival/delivery, settling the order, and managing holds and the staff board view.
+
+**Related Classes/Methods**: _None_
+
+**Source Files:**
+
+- `src/modules/delivery/presenter.ts`
+  - `src.modules.delivery.presenter.presentExportShipment.lines.shipment.lines.map() callback` (L64-L68) - Function
+- `src/modules/delivery/services/actions.ts`
+  - `src.modules.delivery.services.actions.standingOn` (L40-L50) - Class
+  - `src.modules.delivery.services.actions.standingOn.then() callback` (L45-L49) - Function
+  - `src.modules.delivery.services.actions.viewFulfillmentOrder` (L120-L131) - Class
+  - `src.modules.delivery.services.actions.viewFulfillmentOrder.then() callback` (L125-L130) - Function
+  - `src.modules.delivery.services.actions.viewShipment` (L139-L146) - Class
+  - `src.modules.delivery.services.actions.viewShipment.then() callback` (L144-L145) - Function
+- `src/modules/delivery/services/board.ts`
+  - `src.modules.delivery.services.board.isDelivered` (L65-L71) - Class
+  - `src.modules.delivery.services.board.isDelivered.shipped.every() callback` (L71-L71) - Function
+  - `src.modules.delivery.services.board.listPreorderFulfillmentOrders.items.items.map() callback` (L100-L111) - Function
+  - `src.modules.delivery.services.board.summarizePreorders.items.items.map() callback` (L139-L139) - Function
+- `src/modules/delivery/services/confirm-wait.ts`
+  - `src.modules.delivery.services.confirm-wait.confirmWait.then() callback.then() callback` (L48-L102) - Function
+- `src/modules/delivery/services/deliver.ts`
+  - `src.modules.delivery.services.deliver.deliverShipment` (L113-L151) - Class
+  - `src.modules.delivery.services.deliver.deliverShipment.then() callback` (L122-L150) - Function
+  - `src.modules.delivery.services.deliver.deliverShipment.then() callback.then() callback` (L125-L149) - Function
+  - `src.modules.delivery.services.deliver.deliverShipment.then() callback.then() callback.then() callback` (L128-L148) - Function
+  - `src.modules.delivery.services.deliver.deliverShipment.then() callback.then() callback.then() callback.runAct() callback` (L130-L130) - Function
+  - `src.modules.delivery.services.deliver.deliverShipment.then() callback.then() callback.then() callback.then() callback` (L131-L146) - Function
+  - `src.modules.delivery.services.deliver.deliverShipment.then() callback.then() callback.then() callback.then() callback.then() callback` (L145-L145) - Function
+- `src/modules/delivery/services/ensure.ts`
+  - `src.modules.delivery.services.ensure.groupableLinesOf` (L25-L33) - Class
+  - `src.modules.delivery.services.ensure.groupableLinesOf.order.items.map() callback` (L26-L33) - Function
+- `src/modules/delivery/services/fulfill.ts`
+  - `src.modules.delivery.services.fulfill.fulfillFulfillmentOrder` (L97-L132) - Class
+  - `src.modules.delivery.services.fulfill.fulfillFulfillmentOrder.then() callback` (L102-L132) - Function
+  - `src.modules.delivery.services.fulfill.fulfillFulfillmentOrder.then() callback.then() callback` (L105-L131) - Function
+  - `src.modules.delivery.services.fulfill.fulfillFulfillmentOrder.then() callback.then() callback.then() callback` (L108-L130) - Function
+  - `src.modules.delivery.services.fulfill.fulfillFulfillmentOrder.then() callback.then() callback.then() callback.runAct() callback` (L110-L111) - Function
+  - `src.modules.delivery.services.fulfill.fulfillFulfillmentOrder.then() callback.then() callback.then() callback.then() callback` (L112-L129) - Function
+  - `src.modules.delivery.services.fulfill.fulfillFulfillmentOrder.then() callback.then() callback.then() callback.then() callback.shipment.lines.map() callback` (L116-L116) - Function
+  - `src.modules.delivery.services.fulfill.fulfillFulfillmentOrder.then() callback.then() callback.then() callback.then() callback.then() callback` (L128-L128) - Function
+- `src/modules/delivery/services/holds.ts`
+  - `src.modules.delivery.services.holds.guarded` (L151-L189) - Class
+  - `src.modules.delivery.services.holds.guarded.then() callback` (L158-L189) - Function
+  - `src.modules.delivery.services.holds.guarded.then() callback.then() callback` (L161-L188) - Function
+  - `src.modules.delivery.services.holds.guarded.then() callback.then() callback.then() callback` (L164-L187) - Function
+  - `src.modules.delivery.services.holds.guarded.then() callback.then() callback.then() callback.then() callback` (L166-L186) - Function
+  - `src.modules.delivery.services.holds.guarded.then() callback.then() callback.then() callback.then() callback.then() callback` (L185-L185) - Function
+- `src/modules/delivery/services/read.ts`
+  - `src.modules.delivery.services.read.getForOrder` (L35-L67) - Class
+  - `src.modules.delivery.services.read.getForOrder.then() callback` (L39-L67) - Function
+  - `src.modules.delivery.services.read.getForOrder.then() callback.then() callback` (L51-L66) - Function
+  - `src.modules.delivery.services.read.getForOrder.then() callback.then() callback.fulfillmentOrders.fulfillmentOrders.map() callback` (L55-L60) - Function
+  - `src.modules.delivery.services.read.getForOrder.then() callback.then() callback.shipments.shipments.map() callback` (L62-L63) - Function
+- `src/modules/delivery/services/ship.ts`
+  - `src.modules.delivery.services.ship.afterShipped` (L194-L209) - Class
+  - `src.modules.delivery.services.ship.afterShipped.shipped.shipment.lines.map() callback` (L196-L196) - Function
+  - `src.modules.delivery.services.ship.afterShipped.then() callback` (L198-L209) - Function
+  - `src.modules.delivery.services.ship.shipFulfillmentOrder` (L220-L251) - Class
+  - `src.modules.delivery.services.ship.shipFulfillmentOrder.then() callback` (L229-L250) - Function
+  - `src.modules.delivery.services.ship.shipFulfillmentOrder.then() callback.then() callback` (L232-L249) - Function
+  - `src.modules.delivery.services.ship.shipFulfillmentOrder.then() callback.then() callback.then() callback` (L236-L248) - Function
+  - `src.modules.delivery.services.ship.shipFulfillmentOrder.then() callback.then() callback.then() callback.runAct() callback` (L238-L239) - Function
+  - `src.modules.delivery.services.ship.shipFulfillmentOrder.then() callback.then() callback.then() callback.then() callback` (L240-L247) - Function
+  - `src.modules.delivery.services.ship.shipFulfillmentOrder.then() callback.then() callback.then() callback.then() callback.then() callback` (L246-L246) - Function
+- `src/modules/delivery/services/start.ts`
+  - `src.modules.delivery.services.start.startFulfilment` (L56-L82) - Class
+  - `src.modules.delivery.services.start.startFulfilment.then() callback` (L61-L82) - Function
+  - `src.modules.delivery.services.start.startFulfilment.then() callback.then() callback` (L64-L81) - Function
+  - `src.modules.delivery.services.start.startFulfilment.then() callback.then() callback.then() callback` (L70-L80) - Function
+- `src/modules/delivery/services/tracking.ts`
+  - `src.modules.delivery.services.tracking.editShipmentTracking` (L31-L73) - Class
+  - `src.modules.delivery.services.tracking.editShipmentTracking.then() callback` (L37-L73) - Function
+  - `src.modules.delivery.services.tracking.editShipmentTracking.then() callback.then() callback` (L40-L72) - Function
+  - `src.modules.delivery.services.tracking.editShipmentTracking.then() callback.then() callback.then() callback` (L43-L71) - Function
+  - `src.modules.delivery.services.tracking.editShipmentTracking.then() callback.then() callback.then() callback.then() callback` (L52-L70) - Function
+  - `src.modules.delivery.services.tracking.editShipmentTracking.then() callback.then() callback.then() callback.then() callback.then() callback` (L67-L68) - Function

@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/translatable-targets.test.ts
-sha256: 6e37a762ea2aaf9305fcf34c0f1b27ead5ada0c211cbad30f22b28e918e8a374
-generated_at: 2026-09-23T20:00:56.414075+00:00
+sha256: 146eaf340634f8a3f1173dca9a3be01aa428da8fc8d3ecbce365568ee0f2ea40
+generated_at: 2026-10-15T12:41:34.590375+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Validates that every entry in the resolved `translatables` manifest references a real Mongoose collection and real fields declared on that collection's schema. This catches typos or renamed fields at test time rather than letting them surface as a 500 error on a user's first translation edit.
+Cross-cutting validation that every entry in the `translatables` manifest names a real Mongoose collection and real schema fields on it. Without this test, a typo or renamed field would remain invisible until a user's first translation edit triggers a 500. It exists so registry drift surfaces in CI, not in production.
 
 ## Key elements
 
-- **`translatables`** – The resolved map (keyed by entity type) produced by calling `resolveTranslatables(enabledModules)`. Each value carries `collection` and `fields`.
-- **`modelsByCollection`** – A `Map<string, Model>` built at module load from `mongoose.modelNames()`, indexed by the model's actual collection name. Used as the lookup table for both assertions.
-- **`it.each` – collection ownership check** – For every entity type, asserts `modelsByCollection.has(target.collection)` is true.
-- **`it.each` – field existence check** – For every entity type, resolves the model and asserts `model.schema.path(field)` is defined for each field in `target.fields`.
-- **Vacuity guard** – Asserts `Object.keys(translatables).length > 0` so the two `it.each` blocks can't pass silently on an empty manifest.
+- **`translatables`** — resolved via `resolveTranslatables(enabledModules)`; the full set of translatable targets for currently enabled modules.
+- **`modelsByCollection`** — `Map<collectionName, MongooseModel>` built from `mongoose.modelNames()`, used to look up whether a collection exists and to inspect its schema.
+- **`entries`** — `Object.entries(translatables)`; may be empty when no deployed module owns translatable content.
+- **`it.each` — "names a collection an actual model owns"** (conditional on `entries.length > 0`) — asserts `modelsByCollection.has(target.collection)`.
+- **`it.each` — "names fields the collection's schema actually declares"** (conditional on `entries.length > 0`) — for each field in `target.fields`, asserts `registeredModel.schema.path(field)` is defined.
+- **Canary test** — if the `products` module is deployed, `entries.length` must be > 0, guaranteeing the registry is actually being read and not silently empty.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** – Exports `resolveTranslatables`, which is called here to produce the manifest under test.
-- **`src/modules.ts`** – Exports `enabledModules`, the input passed to `resolveTranslatables`. Changing which modules are enabled directly changes the set of entries this test iterates over.
+- **`src/kernel/registry.ts`** — source of `resolveTranslatables`, which resolves the translatable manifest for a given set of modules. This test is its only consumer that validates the output against live Mongoose models.
+- **`src/modules.ts`** — source of `enabledModules`, the module list fed into `resolveTranslatables`.
+- **`tests/support/paths.ts`** — source of `isDeployed`, used in the canary test to check whether `products` is active.
 
 ## Notes
 
-- The test depends on all Mongoose models being registered at the time the test file is imported (i.e., the full app module graph must be loaded before this file executes). If a model is registered conditionally or lazily, it will be absent from `modelsByCollection` and the assertion will fail even though the manifest is correct.
-- `target!` (non-null assertion) is used throughout; the type system allows `target` to be `undefined`, but the test treats a missing target as a manifest bug rather than a valid state.
-- This test is intentionally cross-cutting: it doesn't test one module in isolation but the _consistency_ between the registry output and the live Mongoose schema.
+- The two `it.each` blocks are wrapped in an `if (entries.length > 0)` guard because Jest's `it.each` throws on an empty table. When no translatable content is deployed, those checks are skipped entirely rather than failing.
+- The canary test exists precisely to prevent the "empty registry" edge case from masking a broken `resolveTranslatables` call: if `products` is deployed, the registry *must* be non-empty.
+- The test depends on Mongoose models being registered (i.e., imported) before it runs; it reads the global Mongoose model registry rather than importing each schema directly.

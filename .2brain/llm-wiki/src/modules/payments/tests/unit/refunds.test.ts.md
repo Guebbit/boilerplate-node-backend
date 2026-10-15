@@ -1,7 +1,7 @@
 ---
 source: src/modules/payments/tests/unit/refunds.test.ts
-sha256: ed42832a6c7d86bd0f37ecbda9103d6f3f3c7536507b1c325131cbfd53162aeb
-generated_at: 2026-09-27T15:30:08.225194+00:00
+sha256: 45617c8b404a549b97a2f2cff2ba31c12fa0f602f71cc664efded8334c3d7582
+generated_at: 2026-10-15T11:38:58.784313+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test for the corrupted-row guard in `performRefund`: verifies that a `succeeded` payment missing `providerRef` (an impossible state, since nothing succeeds before the provider is called) still transitions to `refunded` but is audited as a **failure**, not a success.
+Unit test for the corrupted-row guard in `performRefund`: when a payment is marked `succeeded` but carries no `providerRef`, the system must audit the refund as a **failure** (no real money ever moved) even though the repository operations complete normally. The suite proves the audit outcome in isolation, without a database.
 
 ## Key elements
 
-- **`corruptedPayment`** — a `asStub<PaymentDocument>` fixture with `status: 'succeeded'` and `providerRef: undefined`; the single corrupted state under test.
-- **`jest.mock('@infrastructure/observability/audit', …)`** — full module replacement of `recordAudit` (not a spy). The mock delegates to a hoisted `jest.fn()` so the test can assert on it.
-- **`describe` / `it` block** — one test: spies `paymentRepository.findByOrderId` and `updateStatusIfIn`, dynamically imports `performRefund`, calls it with an admin caller, then asserts `result.status === 'refunded'` **and** `recordAudit` was called once with `outcome: 'failure'`.
-- **`afterEach(jest.restoreAllMocks)`** — restores the repository spies after each case.
+- **`recordAudit` mock** — a `jest.fn()` injected via `jest.mock('@infrastructure/observability/audit', …)`. Replaced wholesale (not spied) because the named ESM import compiles to a non-configurable getter on the CJS namespace that `jest.spyOn` cannot redefine.
+- **`announceInTransaction` / `withTransaction` mocks** — both reduced to no-op wrappers that call the callback with a dummy session. The suite has no database; atomicity is covered by integration suites.
+- **`corruptedPayment`** — a `PaymentDocument` fixture (built with `asStub`) in the impossible state `status: 'succeeded'`, `providerRef: undefined`.
+- **Single test case** — spies on `paymentRepository.findByOrderId`, `addRefund`, `settleRefund`, `updateStatusIfIn` and `orderService.markPaymentStatus`, `appendTimeline`. Then dynamically imports `performRefund` so it closes over the already-replaced `recordAudit`, invokes it, and asserts:
+  - `result.status === 'succeeded'` (the operation itself "succeeds" mechanically),
+  - `recordAudit` called once with `outcome: 'failure'`.
 
 ## Relationships
 
-- **`src/modules/payments/model.ts`** — provides the `PaymentDocument` type used by `asStub` and the repository spies.
-- **`src/modules/payments/repository.ts`** — `paymentRepository.findByOrderId` and `paymentRepository.updateStatusIfIn` are spied and mocked to return the corrupted fixture.
-- **`tests/support/stub.ts`** — `asStub` wraps both `corruptedPayment` and the post-update document, ensuring structural type compliance without a full implementation.
+- **`src/modules/payments/model.ts`** — imports the `PaymentDocument` type used to shape both the corrupted and refunded fixtures.
+- **`src/modules/payments/repository.ts`** — imports `paymentRepository`; four of its methods are spied on to drive the refund flow without a real Mongo.
+- **`src/modules/orders/index.ts`** — imports `orderService` from this barrel; two methods (`markPaymentStatus`, `appendTimeline`) are spied on to short-circuit order-side writes.
+- **`src/modules/orders/services/index.ts`** — the actual service implementation behind `orderService`; the test exercises its interface contract as called from the refund path.
+- **`tests/support/stub.ts`** — provides `asStub<T>()`, a type-safe assertion helper that lets fixtures carry intentionally partial or undefined fields (e.g. `providerRef: undefined`) without TS complaints.
 
 ## Notes
 
-- The audit module is **replaced** (`jest.mock`) rather than spied on (`jest.spyOn`). A named import in CommonJS compiles to a non-configurable getter on the module namespace, making `jest.spyOn` unable to redefine it. The same reasoning is documented in `create-audit.test.ts`.
-- `performRefund` is imported via `await import(…)` **after** the repository spies are installed, guaranteeing the module closes over the replaced `recordAudit` and the mocked repository methods.
-- The test asserts the status transition *does* happen (`'refunded'`) — the guard only suppresses the "success" audit, it does not block the state change.
+- The dynamic `await import('../../services/refunds')` is **load-bearing**: it guarantees `performRefund`'s module-level closure captures the mock-injected `recordAudit` rather than the real one. Moving the import to the top of the file silently breaks the test.
+- `afterEach(() => jest.restoreAllMocks())` restores all spies; the `jest.mock` factory mocks are module-scoped and persist for the whole file (intentional here — there is only one test).
+- The test asserts on `recordAudit.mock.calls[0][1]` (the second argument), meaning the audit signature is `(action, payload)`. The `action` string `'admin.payment.refunded'` encodes the actor role in the dotted path.

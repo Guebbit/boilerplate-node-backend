@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/tests/factories.ts
-sha256: 3b9783ebeea89f7e8a03885fb55fcebe8ad6418636738d0cd305cb64eff2bf5f
-generated_at: 2026-09-23T19:35:04.097714+00:00
+sha256: 1ac7925c76d91541587f147a6632904f7026edf3986890bf5ae812e25b2aaaed
+generated_at: 2026-10-15T12:12:53.252197+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Test-only database factory for the `users` module. It wraps the plain-payload builder in `../factories` with a persistence step (`userRepository.create`) and role assignment, giving integration and contract tests a single `createUser` / `createAdminUser` entry point that returns a live Mongoose document. It also centralises the full password vocabulary (minimal, legacy, weak, replacement) so policy tests and flow tests share the same fixtures.
+Test-database persistence layer for user fixtures. It re-exports the plain-payload builder (`makeUser`) from `../factories` and adds `createUser` / `createAdminUser`, which actually write rows to the Mongoose test database and optionally attach tenant/platform role memberships. Keeping this separate from the payload builder guarantees a single `makeUser` implementation while giving tests a one-call helper that returns a fully persisted, role-assigned `UserDocument`.
 
 ## Key elements
 
-- **`createUser(overrides?, role?)`** – Inserts a user via `userRepository.create(makeUser(overrides))`; if `role` is provided, immediately calls `assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', role)`. Omitting `role` leaves the user with no membership row (the anonymous-baseline case).
-- **`createAdminUser(overrides?)`** – Builds on `createUser` with `admin` tenant role, then adds a _tenant-less_ `platform` / `operator` role via `assignRole(user.id, null, 'platform', 'operator')`, mirroring the seeded `root` account's dual scope.
-- **`REPLACEMENT_PASSWORD`** (`'Replacement1!'`) – A policy-compliant password distinct from `PLAIN_PASSWORD`; use when a test asserts "the password actually changed."
-- **`MINIMAL_PASSWORD`** (`'Aa1!aaaa'`) – Exactly at the policy minimum length with one of each required class.
-- **`LEGACY_PASSWORD`** (`'correct-horse-battery'`) – Sufficient length but missing complexity classes; represents a pre-policy existing credential (valid as `currentPassword`, never settable).
-- **`WEAK_PASSWORD`** (`'weak'`) – Fails the policy; use in rejection-assertion tests.
-- **Re-exports** – `makeUser`, `PLAIN_PASSWORD`, `UserOverrides` (from `../factories`) and `userRepository` (from `../repository`). The repository export exists so callers can `jest.spyOn` the live binding rather than a wrapper.
+- **`createUser(overrides?, role?)`** — Inserts a user via `userRepository.create(makeUser(overrides))`. If `role` is provided, immediately calls `assignRole` to grant a tenant membership (`DEPLOYMENT_TENANT_ID`). Returns the Mongoose `UserDocument`.
+- **`createAdminUser(overrides?)`** — Creates the canonical `root` operator account (`owner@example.com` / `owneruser`). Assigns **two** memberships: `admin` under the tenant (via `createUser`'s `role` param) and `operator` under `platform` (tenant-less, `tenantId: null`). Mirrors the seeded deployment's root.
+- **`REPLACEMENT_PASSWORD`** (`'Replacement1!'`) — A policy-compliant password deliberately different from `PLAIN_PASSWORD`, for change/reset tests.
+- **`MINIMAL_PASSWORD`** (`'Aa1!aaaa'`) — Shortest password the policy accepts.
+- **`PASSPHRASE_PASSWORD`** (`'correct-horse-battery'`) — Long, single-class passphrase; exercises the "length-only" policy path.
+- **`WEAK_PASSWORD`** (`'weak'`) — Policy-failing password for rejection assertions.
+- **Re-exports** — `makeUser`, `PLAIN_PASSWORD`, `UserOverrides` (from `../factories`) and `userRepository` (from `../repository`, exposed so callers can `jest.spyOn` the live binding rather than a wrapper copy).
 
 ## Relationships
 
-- **`src/kernel/access/tenant.ts`** – Source of `DEPLOYMENT_TENANT_ID`, the tenant ID passed to `assignRole` inside `createUser`.
-- **`src/modules/access/index.ts`** – Provides `assignRole`, called by both `createUser` (tenant membership) and `createAdminUser` (platform operator membership).
-- **`src/modules/access/service.ts`** – Upstream of the access mutations this factory triggers; tests that verify those mutations depend on the role rows created here.
-- **Consumer tests** (`src/modules/account/tests/…`, `src/modules/addresses/tests/…`) – Integration, contract, and unit tests import `createUser` / `createAdminUser` and the password constants to seed their fixtures.
+- **`src/kernel/access/tenant.ts`** — Supplies `DEPLOYMENT_TENANT_ID`, the tenant scope used when `createUser` grants a role membership.
+- **`src/modules/access/index.ts` / `src/modules/access/service.ts`** — Provides `assignRole`, the function both `createUser` and `createAdminUser` call to attach role memberships. The `platform`-scoped, tenant-less `operator` role in `createAdminUser` follows the same pattern as `seedAccessModel`.
+- **`src/modules/account/tests/contract/*` and `src/modules/account/tests/integration/*`** — Downstream consumers that import these factories (and the re-exported `PLAIN_PASSWORD`, `userRepository`) to seed authenticated users before exercising auth flows. `contract/support.ts` likely composes or extends these helpers within the contract-test harness.
 
 ## Notes
 
-- Passwords are **plain text** at the factory level; hashing happens in the Mongoose model on `.save()`/`.create()`. Tests authenticate with `PLAIN_PASSWORD`, not the stored hash.
-- Defaulted model fields are intentionally **left unset** in `makeUser` so `createUser` exercises the real schema defaults rather than a factory-supplied value.
-- `createAdminUser` assigns **two** roles (tenant `admin` + tenant-less `platform operator`). A fixture with only one will pass shop-scoped tests but fail observability/platform-scoped ones.
-- `userRepository` is exported as the raw module binding specifically so `jest.spyOn` intercepts internal calls; a wrapper function would copy the binding and defeat interception.
-- `LEGACY_PASSWORD` is valid only as an _existing_ credential (`currentPassword`), never as a new one—matching the `Password` vs `PasswordNew` distinction in `openapi.yaml`.
+- **Single `makeUser` rule:** This file must not re-implement payload construction. If a new default field is needed, change `../factories`; this file only calls it.
+- **Defaulted fields left unset:** `makeUser` intentionally omits fields the schema defaults, so `createUser` exercises real DB defaults rather than shadowing them.
+- **`REPLACEMENT_PASSWORD` ≠ `PLAIN_PASSWORD` is a deliberate invariant.** Reusing the same string makes "password was changed" tests pass on a no-op. `unit/factories.test.ts` is the regression guard for each password constant's role.
+- **`userRepository` export exists for `jest.spyOn`.** A wrapper function would copy the call target, not the binding, so it cannot intercept internal calls. Prefer a named helper (`createUser`, etc.) unless you specifically need to intercept the repository.
+- **`createAdminUser` grants two roles, not one.** Omitting the `operator`/`platform` membership produces a fixture that passes shop-scoped tests but fails observability/platform-scoped ones.

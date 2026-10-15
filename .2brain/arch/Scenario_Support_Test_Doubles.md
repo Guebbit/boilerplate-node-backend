@@ -14,8 +14,12 @@ graph LR
     Mutation_Testing_Pipeline_Contract_Bundle_Building["Mutation Testing Pipeline & Contract Bundle Building"]
     Contract_Type_Code_Generation_Demo_Removal_Ops["Contract Type/Code Generation & Demo-Removal Ops"]
     Mutation_Sharding_Baselining_Reaping_Ops["Mutation Sharding/Baselining & Reaping Ops"]
+    Scenario_Account_Flows_Cross_Cutting_Tooling -- "Validates AsyncAPI contract breaking changes via generated-file sync check" --> Contract_Type_Code_Generation_Demo_Removal_Ops
     Ephemeral_Mongo_Mail_Test_Doubles_Demo_Server_Bootstrap -- "calls" --> Scenario_Account_Flows_Cross_Cutting_Tooling
     Ephemeral_Mongo_Mail_Test_Doubles_Demo_Server_Bootstrap -- "calls" --> Contract_Type_Code_Generation_Demo_Removal_Ops
+    Mutation_Testing_Pipeline_Contract_Bundle_Building -- "Uses generated-file utilities for artifact sync verification" --> Contract_Type_Code_Generation_Demo_Removal_Ops
+    Mutation_Testing_Pipeline_Contract_Bundle_Building -- "Consumes baseline paths, shard planning, and wave utilities for CI orchestration" --> Mutation_Sharding_Baselining_Reaping_Ops
+    Mutation_Sharding_Baselining_Reaping_Ops -- "calls" --> Ephemeral_Mongo_Mail_Test_Doubles_Demo_Server_Bootstrap
     click Scenario_Account_Flows_Cross_Cutting_Tooling href "./Scenario_Account_Flows_Cross_Cutting_Tooling.md" "Details"
     click Ephemeral_Mongo_Mail_Test_Doubles_Demo_Server_Bootstrap href "./Ephemeral_Mongo_Mail_Test_Doubles_Demo_Server_Bootstrap.md" "Details"
     click Mutation_Testing_Pipeline_Contract_Bundle_Building href "./Mutation_Testing_Pipeline_Contract_Bundle_Building.md" "Details"
@@ -39,16 +43,16 @@ The scenario-side account flow entry points plus the scattered cross-cutting too
 - `scenarios/accounts.ts`
   - `scenarios.accounts.then() callback` (L200-L219) - Function
 - `scenarios/support/doubles/payments/fake.ts`
-  - `scenarios.support.doubles.payments.fake.parseWebhook.then() callback` (L237-L237) - Function
+  - `scenarios.support.doubles.payments.fake.parseWebhook.then() callback` (L262-L262) - Function
 - `scripts/contracts/check-asyncapi-breaking.ts`
   - `scripts.contracts.check-asyncapi-breaking.catch() callback` (L132-L135) - Function
 - `scripts/mutation/run-diff.ts`
   - `scripts.mutation.run-diff.then() callback` (L106-L106) - Function
 - `scripts/scaffold/options.ts`
-  - `scripts.scaffold.options.ScaffoldOptions` (L10-L23) - Interface
-  - `scripts.scaffold.options.ParseRefusal` (L38-L40) - Interface
+  - `scripts.scaffold.options.ScaffoldOptions` (L11-L24) - Interface
+  - `scripts.scaffold.options.ParseRefusal` (L39-L41) - Interface
 - `scripts/scaffold/scaffold-module.ts`
-  - `scripts.scaffold.scaffold-module.then() callback` (L70-L73) - Function
+  - `scripts.scaffold.scaffold-module.then() callback` (L67-L70) - Function
 - `src/app/system-routes.ts`
   - `src.app.system-routes.router.get('/readyz') callback` (L40-L42) - Function
 - `src/infrastructure/adapters/antibot-providers/altcha-store.ts`
@@ -96,12 +100,12 @@ The scenario-side account flow entry points plus the scattered cross-cutting too
   - `src.infrastructure.adapters.config.mailConfig` (L27-L51) - Class
   - `src.infrastructure.adapters.config.mailConfig.check` (L39-L50) - Method
   - `src.infrastructure.adapters.config.mailConfig.check.SMTP_COMPANIONS.filter() callback` (L42-L42) - Function
-  - `src.infrastructure.adapters.config.outboundConfig` (L104-L113) - Class
-  - `src.infrastructure.adapters.config.outboundConfig.check` (L109-L112) - Method
-  - `src.infrastructure.adapters.config.outboundConfig.check.config.NODE_OUTBOUND_ALLOWED_PORTS.filter() callback` (L111-L111) - Function
-  - `src.infrastructure.adapters.config.outboundConfig.check.map() callback` (L112-L112) - Function
-  - `src.infrastructure.adapters.config.antibotConfig` (L136-L164) - Class
-  - `src.infrastructure.adapters.config.antibotConfig.check` (L148-L163) - Method
+  - `src.infrastructure.adapters.config.outboundConfig` (L107-L116) - Class
+  - `src.infrastructure.adapters.config.outboundConfig.check` (L112-L115) - Method
+  - `src.infrastructure.adapters.config.outboundConfig.check.config.NODE_OUTBOUND_ALLOWED_PORTS.filter() callback` (L114-L114) - Function
+  - `src.infrastructure.adapters.config.outboundConfig.check.map() callback` (L115-L115) - Function
+  - `src.infrastructure.adapters.config.antibotConfig` (L139-L167) - Class
+  - `src.infrastructure.adapters.config.antibotConfig.check` (L151-L166) - Method
 - `src/infrastructure/adapters/mail-transports.ts`
   - `src.infrastructure.adapters.mail-transports.mailTransportProbe` (L116-L120) - Class
   - `src.infrastructure.adapters.mail-transports.mailTransportProbe.check` (L119-L119) - Method
@@ -112,42 +116,44 @@ The scenario-side account flow entry points plus the scattered cross-cutting too
   - `src.infrastructure.config.define.SliceProblems` (L36-L43) - Interface
   - `src.infrastructure.config.define.ConfigSlice` (L46-L58) - Interface
   - `src.infrastructure.config.define.ConfigSlice.inspect` (L57-L57) - Method
-  - `src.infrastructure.config.define.presenceBroken` (L135-L147) - Class
-  - `src.infrastructure.config.define.presenceBroken.members` (L137-L137) - Class
-  - `src.infrastructure.config.define.presenceBroken.members.filter() callback` (L137-L137) - Function
-  - `src.infrastructure.config.define.presenceBroken.members.some() callback` (L141-L144) - Function
-  - `src.infrastructure.config.define.describeShape` (L150-L155) - Class
-  - `src.infrastructure.config.define.describeShape.map() callback` (L151-L155) - Function
-  - `src.infrastructure.config.define.ConfigDefinition` (L183-L193) - Interface
-  - `src.infrastructure.config.define.ConfigDefinition.check` (L192-L192) - Method
-  - `src.infrastructure.config.define.presenceProblems.presence.info.filter() callback` (L209-L212) - Function
-  - `src.infrastructure.config.define.presenceProblems.presence.map() callback` (L214-L214) - Function
-  - `src.infrastructure.config.define.slice` (L230-L243) - Class
-  - `src.infrastructure.config.define.defineConfig.slice.inspect` (L233-L242) - Method
-  - `src.infrastructure.config.define.configProblems.all` (L274-L274) - Class
-  - `src.infrastructure.config.define.configProblems.all.slices.map() callback` (L274-L274) - Function
-  - `src.infrastructure.config.define.configProblems.invalid.merged() callback` (L281-L281) - Function
-  - `src.infrastructure.config.define.configProblems.presence.merged() callback` (L282-L282) - Function
-  - `src.infrastructure.config.define.configProblems.checks.merged() callback` (L283-L283) - Function
+  - `src.infrastructure.config.define.presenceBroken` (L146-L158) - Class
+  - `src.infrastructure.config.define.presenceBroken.members` (L148-L148) - Class
+  - `src.infrastructure.config.define.presenceBroken.members.filter() callback` (L148-L148) - Function
+  - `src.infrastructure.config.define.presenceBroken.members.some() callback` (L152-L155) - Function
+  - `src.infrastructure.config.define.describeShape` (L161-L166) - Class
+  - `src.infrastructure.config.define.describeShape.map() callback` (L162-L166) - Function
+  - `src.infrastructure.config.define.ConfigDefinition` (L194-L204) - Interface
+  - `src.infrastructure.config.define.ConfigDefinition.check` (L203-L203) - Method
+  - `src.infrastructure.config.define.presenceProblems.presence.info.filter() callback` (L220-L224) - Function
+  - `src.infrastructure.config.define.presenceProblems.presence.map() callback` (L226-L226) - Function
+  - `src.infrastructure.config.define.slice` (L242-L255) - Class
+  - `src.infrastructure.config.define.defineConfig.slice.inspect` (L245-L254) - Method
+  - `src.infrastructure.config.define.configProblems.all` (L293-L293) - Class
+  - `src.infrastructure.config.define.configProblems.all.slices.map() callback` (L293-L293) - Function
+  - `src.infrastructure.config.define.configProblems.invalid.merged() callback` (L300-L300) - Function
+  - `src.infrastructure.config.define.configProblems.presence.merged() callback` (L301-L301) - Function
+  - `src.infrastructure.config.define.configProblems.checks.merged() callback` (L302-L302) - Function
 - `src/infrastructure/config/fields.ts`
-  - `src.infrastructure.config.fields.build` (L98-L109) - Function
-  - `src.infrastructure.config.fields.build.rule` (L102-L102) - Class
-  - `src.infrastructure.config.fields.build.rule.transform() callback` (L102-L102) - Function
-  - `src.infrastructure.config.fields.int` (L158-L169) - Function
-  - `src.infrastructure.config.fields.decimal` (L178-L192) - Function
-  - `src.infrastructure.config.fields.choice` (L232-L254) - Function
-  - `src.infrastructure.config.fields.text` (L285-L291) - Function
-  - `src.infrastructure.config.fields.email` (L300-L305) - Function
-  - `src.infrastructure.config.fields.listRule` (L342-L348) - Class
-  - `src.infrastructure.config.fields.listRule.transform() callback` (L343-L347) - Function
-  - `src.infrastructure.config.fields.listRule.transform() callback.map() callback` (L346-L346) - Function
-  - `src.infrastructure.config.fields.listRule.transform() callback.filter() callback` (L347-L347) - Function
-  - `src.infrastructure.config.fields.csv` (L355-L359) - Class
-  - `src.infrastructure.config.fields.csv.listRule() callback` (L357-L357) - Function
-  - `src.infrastructure.config.fields.keyRing` (L367-L371) - Class
-  - `src.infrastructure.config.fields.keyRing.listRule() callback` (L369-L369) - Function
-  - `src.infrastructure.config.fields.versionedKeyRing` (L378-L382) - Class
-  - `src.infrastructure.config.fields.versionedKeyRing.transform() callback` (L380-L380) - Function
+  - `src.infrastructure.config.fields.build` (L105-L116) - Function
+  - `src.infrastructure.config.fields.build.rule` (L109-L109) - Class
+  - `src.infrastructure.config.fields.build.rule.transform() callback` (L109-L109) - Function
+  - `src.infrastructure.config.fields.int` (L165-L176) - Function
+  - `src.infrastructure.config.fields.decimal` (L185-L199) - Function
+  - `src.infrastructure.config.fields.choice` (L239-L261) - Function
+  - `src.infrastructure.config.fields.text` (L292-L298) - Function
+  - `src.infrastructure.config.fields.email` (L307-L312) - Function
+  - `src.infrastructure.config.fields.timeZone` (L345-L357) - Function
+  - `src.infrastructure.config.fields.timeZone.transform() callback` (L349-L354) - Function
+  - `src.infrastructure.config.fields.listRule` (L395-L401) - Class
+  - `src.infrastructure.config.fields.listRule.transform() callback` (L396-L400) - Function
+  - `src.infrastructure.config.fields.listRule.transform() callback.map() callback` (L399-L399) - Function
+  - `src.infrastructure.config.fields.listRule.transform() callback.filter() callback` (L400-L400) - Function
+  - `src.infrastructure.config.fields.csv` (L408-L412) - Class
+  - `src.infrastructure.config.fields.csv.listRule() callback` (L410-L410) - Function
+  - `src.infrastructure.config.fields.keyRing` (L420-L424) - Class
+  - `src.infrastructure.config.fields.keyRing.listRule() callback` (L422-L422) - Function
+  - `src.infrastructure.config.fields.versionedKeyRing` (L431-L435) - Class
+  - `src.infrastructure.config.fields.versionedKeyRing.transform() callback` (L433-L433) - Function
 - `src/infrastructure/http/config.ts`
   - `src.infrastructure.http.config.rateLimitBudgetConfig.shape.budgets.map() callback` (L92-L95) - Function
 - `src/infrastructure/http/middlewares/cache.ts`
@@ -174,19 +180,42 @@ The scenario-side account flow entry points plus the scattered cross-cutting too
   - `src.infrastructure.security.versioned-secret.parseVersionedKeyRing` (L32-L41) - Class
   - `src.infrastructure.security.versioned-secret.parseVersionedKeyRing.filter() callback` (L35-L35) - Function
   - `src.infrastructure.security.versioned-secret.parseVersionedKeyRing.map() callback` (L36-L41) - Function
+- `src/modules/account/domain/email-change.ts`
+  - `src.modules.account.domain.email-change.EmailChangeFields` (L46-L52) - Interface
+- `src/modules/account/domain/revocation.ts`
+  - `src.modules.account.domain.revocation.RevocationRow` (L20-L26) - Interface
 - `src/modules/account/oauth/config.ts`
-  - `src.modules.account.oauth.config.oauthConfig` (L32-L51) - Class
-  - `src.modules.account.oauth.config.oauthConfig.check` (L43-L50) - Method
-  - `src.modules.account.oauth.config.oauthConfig.check.PROVIDER_PAIRS.some() callback` (L45-L45) - Function
-- `src/modules/account/oauth/providers/github.ts`
-  - `src.modules.account.oauth.providers.github.githubOAuthProvider.exchangeCode.then() callback.primary` (L126-L126) - Class
-  - `src.modules.account.oauth.providers.github.githubOAuthProvider.exchangeCode.then() callback.primary.emails.find() callback` (L126-L126) - Function
+  - `src.modules.account.oauth.config.oauthConfig` (L33-L52) - Class
+  - `src.modules.account.oauth.config.oauthConfig.check` (L44-L51) - Method
+  - `src.modules.account.oauth.config.oauthConfig.check.PROVIDER_PAIRS.some() callback` (L46-L46) - Function
 - `src/modules/account/oauth/providers/index.ts`
   - `src.modules.account.oauth.providers.index.enabledProviders` (L35-L36) - Class
   - `src.modules.account.oauth.providers.index.enabledProviders.filter() callback` (L36-L36) - Function
+- `src/modules/account/session/auth-context.ts`
+  - `src.modules.account.session.auth-context.SessionProof` (L16-L21) - Interface
 - `src/modules/account/session/config.ts`
-  - `src.modules.account.session.config.sessionConfig` (L45-L89) - Class
-  - `src.modules.account.session.config.sessionConfig.check` (L82-L88) - Method
+  - `src.modules.account.session.config.sessionConfig` (L70-L129) - Class
+  - `src.modules.account.session.config.sessionConfig.check` (L121-L128) - Method
+- `src/modules/account/session/jwt-strategy.ts`
+  - `src.modules.account.session.jwt-strategy.<function>.then() callback` (L168-L169) - Function
+- `src/modules/account/session/listing.ts`
+  - `src.modules.account.session.listing.listSessions.then() callback.rows` (L74-L79) - Class
+  - `src.modules.account.session.listing.listSessions.then() callback.rows.allRows.filter() callback` (L75-L78) - Function
+  - `src.modules.account.session.listing.listSessions.then() callback.current` (L81-L83) - Class
+  - `src.modules.account.session.listing.listSessions.then() callback.current.map() callback` (L82-L82) - Function
+  - `src.modules.account.session.listing.listSessions.then() callback.current.rows.filter() callback` (L82-L82) - Function
+- `src/modules/account/session/mint-guard.ts`
+  - `src.modules.account.session.mint-guard.SecondFactorRequiredError` (L20-L26) - Class
+  - `src.modules.account.session.mint-guard.SecondFactorRequiredError.constructor` (L22-L25) - Constructor
+  - `src.modules.account.session.mint-guard.StaleProofError` (L49-L55) - Class
+  - `src.modules.account.session.mint-guard.StaleProofError.constructor` (L51-L54) - Constructor
+- `src/modules/account/session/strategy.ts`
+  - `src.modules.account.session.strategy.IssueOptions` (L41-L54) - Interface
+  - `src.modules.account.session.strategy.SessionSnapshot` (L61-L67) - Interface
+  - `src.modules.account.session.strategy.IssuedSession` (L70-L75) - Interface
+  - `src.modules.account.session.strategy.ReissueOptions` (L78-L82) - Interface
+- `src/modules/account/two-factor/registry.ts`
+  - `src.modules.account.two-factor.registry.HANDLERS.map() callback` (L79-L79) - Function
 - `src/modules/antibot/controllers/get-antibot-challenge.ts`
   - `src.modules.antibot.controllers.get-antibot-challenge.getAntibotChallenge` (L20-L38) - Class
   - `src.modules.antibot.controllers.get-antibot-challenge.then() callback` (L22-L22) - Function
@@ -197,13 +226,13 @@ The scenario-side account flow entry points plus the scattered cross-cutting too
   - `src.modules.antibot.controllers.get-antibot-config.then() callback` (L31-L31) - Function
   - `src.modules.antibot.controllers.get-antibot-config.getAntibotConfig.then() callback` (L32-L40) - Function
 - `src/modules/invoicing/emails.ts`
-  - `src.modules.invoicing.emails.DocumentVatRow` (L42-L52) - Interface
-  - `src.modules.invoicing.emails.DocumentTaxSummaryRow` (L55-L61) - Interface
-  - `src.modules.invoicing.emails.DocumentVatBlock` (L64-L92) - Interface
-  - `src.modules.invoicing.emails.buildVatBlock.rows.document.lines.map() callback` (L160-L169) - Function
-  - `src.modules.invoicing.emails.rows` (L160-L169) - Class
-  - `src.modules.invoicing.emails.buildVatBlock.shipping.rows.shippingByRate.map() callback` (L208-L214) - Function
-  - `src.modules.invoicing.emails.buildVatBlock.summaryRows.taxSummary.map() callback` (L218-L222) - Function
+  - `src.modules.invoicing.emails.DocumentVatRow` (L43-L53) - Interface
+  - `src.modules.invoicing.emails.DocumentTaxSummaryRow` (L56-L62) - Interface
+  - `src.modules.invoicing.emails.DocumentVatBlock` (L65-L93) - Interface
+  - `src.modules.invoicing.emails.buildVatBlock.rows.document.lines.map() callback` (L164-L173) - Function
+  - `src.modules.invoicing.emails.rows` (L164-L173) - Class
+  - `src.modules.invoicing.emails.buildVatBlock.shipping.rows.shippingByRate.map() callback` (L212-L218) - Function
+  - `src.modules.invoicing.emails.buildVatBlock.summaryRows.taxSummary.map() callback` (L222-L226) - Function
 - `src/modules/invoicing/providers/index.ts`
   - `src.modules.invoicing.providers.index.invoicingProviderProbe` (L102-L106) - Class
   - `src.modules.invoicing.providers.index.invoicingProviderProbe.check` (L105-L105) - Method
@@ -214,19 +243,33 @@ The scenario-side account flow entry points plus the scattered cross-cutting too
   - `src.modules.payments.config.webhookSecretRing` (L86-L87) - Class
   - `src.modules.payments.config.webhookSecretRing.map() callback` (L87-L87) - Function
   - `src.modules.payments.config.paymentsConfig` (L98-L123) - Class
-  - `src.modules.payments.config.paymentsConfig.check` (L113-L122) - Method
-  - `src.modules.payments.config.paymentsConfig.check.some() callback` (L116-L116) - Function
+  - `src.modules.payments.config.paymentsConfig.check` (L114-L122) - Method
+  - `src.modules.payments.config.paymentsConfig.check.some() callback` (L117-L117) - Function
 - `src/modules/payments/providers/index.ts`
   - `src.modules.payments.providers.index.paymentProviderProbe` (L239-L243) - Class
   - `src.modules.payments.providers.index.paymentProviderProbe.check` (L242-L242) - Method
 - `src/modules/payments/providers/webhook-signature.ts`
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.pairs` (L85-L88) - Class
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.pairs.map() callback` (L85-L88) - Function
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.timestamp` (L90-L90) - Class
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.timestamp.pairs.find() callback` (L90-L90) - Function
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.provided` (L93-L93) - Class
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.provided.map() callback` (L93-L93) - Function
-  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.provided.pairs.filter() callback` (L93-L93) - Function
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.pairs` (L86-L89) - Class
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.pairs.map() callback` (L86-L89) - Function
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.timestamp` (L91-L91) - Class
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.timestamp.pairs.find() callback` (L91-L91) - Function
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.provided` (L94-L94) - Class
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.provided.map() callback` (L94-L94) - Function
+  - `src.modules.payments.providers.webhook-signature.verifyWebhookSignature.provided.pairs.filter() callback` (L94-L94) - Function
+- `src/modules/payments/services/intent.ts`
+  - `src.modules.payments.services.intent.then() callback.then() callback` (L183-L188) - Function
+  - `src.modules.payments.services.intent.then() callback.catch() callback` (L191-L198) - Function
+- `src/modules/payments/services/list.ts`
+  - `src.modules.payments.services.list.listPayments.then() callback.then() callback.byId` (L62-L62) - Class
+  - `src.modules.payments.services.list.listPayments.then() callback.then() callback.byId.orders.map() callback` (L62-L62) - Function
+- `src/modules/payments/services/notify.ts`
+  - `src.modules.payments.services.notify.mailRefundIssued.then() callback.refund` (L93-L93) - Class
+  - `src.modules.payments.services.notify.mailRefundIssued.then() callback.refund.payment.refunds.find() callback` (L93-L93) - Function
+- `src/modules/payments/services/settlement.ts`
+  - `src.modules.payments.services.settlement.then() callback` (L296-L300) - Function
+  - `src.modules.payments.services.settlement.catch() callback` (L306-L314) - Function
+- `src/modules/payments/services/stats.ts`
+  - `src.modules.payments.services.stats.MixRow` (L12-L18) - Interface
 
 ### Ephemeral Mongo & Mail Test Doubles / Demo Server Bootstrap [[Expand]](./Ephemeral_Mongo_Mail_Test_Doubles_Demo_Server_Bootstrap.md)
 The heart of the subsystem: the Mongo resolver/starter pair, the development mail doubles (outbox + log), and the demo server bootstrap that wires the app to run against ephemeral Mongo and fake providers. This is the disposable runtime the scenario layer depends on.
@@ -239,7 +282,7 @@ The heart of the subsystem: the Mongo resolver/starter pair, the development mai
 **Source Files:**
 
 - `scenarios/run-server.ts`
-  - `scenarios.run-server.then() callback.process.once() callback` (L175-L184) - Function
+  - `scenarios.run-server.then() callback.process.once() callback` (L169-L178) - Function
 - `scenarios/support/doubles/mail-log.ts`
   - `scenarios.support.doubles.mail-log.logMailTransport` (L20-L35) - Class
   - `scenarios.support.doubles.mail-log.logMailTransport.delivers` (L21-L21) - Method
@@ -257,13 +300,20 @@ The heart of the subsystem: the Mongo resolver/starter pair, the development mai
   - `scenarios.support.ephemeral-mongod.toEphemeralMongo` (L32-L35) - Class
   - `scenarios.support.ephemeral-mongod.toEphemeralMongo.stop` (L34-L34) - Method
   - `scenarios.support.ephemeral-mongod.toEphemeralMongo.stop.then() callback` (L34-L34) - Function
+- `scripts/contracts/analytics-browser-events.ts`
+  - `scripts.contracts.analytics-browser-events.OpenApiDocument` (L36-L38) - Interface
+- `scripts/contracts/cookie-auth.ts`
+  - `scripts.contracts.cookie-auth.Bundled` (L32-L34) - Interface
+- `scripts/contracts/fragments.ts`
+  - `scripts.contracts.fragments.DeclaredSection` (L22-L25) - Interface
+  - `scripts.contracts.fragments.OpenApiFragment` (L31-L37) - Interface
+  - `scripts.contracts.fragments.AuthorizationKey` (L59-L63) - Interface
+  - `scripts.contracts.fragments.AuthorizationFragment` (L66-L68) - Interface
 - `scripts/contracts/generate-request-content-types.ts`
-  - `scripts.contracts.generate-request-content-types.compileTemplate.source` (L74-L80) - Class
-  - `scripts.contracts.generate-request-content-types.compileTemplate.source.segments.map() callback` (L75-L78) - Function
-- `scripts/contracts/root-assembly.ts`
-  - `scripts.contracts.root-assembly.readModuleFragments.present` (L153-L156) - Class
-  - `scripts.contracts.root-assembly.readModuleFragments.present.map() callback` (L155-L155) - Function
-  - `scripts.contracts.root-assembly.readModuleFragments.present.filter() callback` (L156-L156) - Function
+  - `scripts.contracts.generate-request-content-types.compileTemplate.source` (L61-L67) - Class
+  - `scripts.contracts.generate-request-content-types.compileTemplate.source.segments.map() callback` (L62-L65) - Function
+- `scripts/contracts/prune-unused.ts`
+  - `scripts.contracts.prune-unused.Findings` (L39-L46) - Interface
 - `scripts/eslint/controller-chain-must-catch.ts`
   - `scripts.eslint.controller-chain-must-catch.controllerChainMustCatch.create.CallExpression.parents` (L144-L146) - Class
   - `scripts.eslint.controller-chain-must-catch.controllerChainMustCatch.create.CallExpression.parents.map() callback` (L145-L145) - Function
@@ -273,31 +323,12 @@ The heart of the subsystem: the Mongo resolver/starter pair, the development mai
 - `scripts/mutation/baseline.ts`
   - `scripts.mutation.baseline.compareToBaseline` (L166-L185) - Class
   - `scripts.mutation.baseline.compareToBaseline.files.map() callback` (L173-L184) - Function
+  - `scripts.mutation.baseline.compareMerged.filter() callback` (L197-L197) - Function
 - `scripts/mutation/mutate-scope.ts`
-  - `scripts.mutation.mutate-scope.isMutable.exclude` (L45-L47) - Class
-  - `scripts.mutation.mutate-scope.isMutable.exclude.patterns.filter() callback` (L46-L46) - Function
-  - `scripts.mutation.mutate-scope.isMutable.exclude.map() callback` (L47-L47) - Function
-  - `scripts.mutation.mutate-scope.isMutable.exclude.every() callback` (L52-L52) - Function
-- `scripts/ops/demo-remove-registry.ts`
-  - `scripts.ops.demo-remove-registry.RemovalNote` (L19-L22) - Interface
-  - `scripts.ops.demo-remove-registry.stripModuleLines` (L41-L57) - Class
-  - `scripts.ops.demo-remove-registry.stripModuleLines.filter() callback.names.every() callback` (L54-L54) - Function
-  - `scripts.ops.demo-remove-registry.stripModuleLines.filter() callback` (L55-L55) - Function
-  - `scripts.ops.demo-remove-registry.stripModuleRegistry.after` (L66-L70) - Class
-  - `scripts.ops.demo-remove-registry.stripModuleRegistry.after.stripModuleLines() callback` (L69-L69) - Function
-  - `scripts.ops.demo-remove-registry.OwnedOpsFile` (L76-L80) - Interface
-  - `scripts.ops.demo-remove-registry.readOwnedOpsFiles` (L87-L100) - Class
-  - `scripts.ops.demo-remove-registry.readOwnedOpsFiles.filter() callback` (L92-L92) - Function
-  - `scripts.ops.demo-remove-registry.readOwnedOpsFiles.flatMap() callback` (L93-L99) - Function
-  - `scripts.ops.demo-remove-registry.removeShopOwnedOpsScripts.owned` (L111-L111) - Class
-  - `scripts.ops.demo-remove-registry.removeShopOwnedOpsScripts.owned.filter() callback` (L111-L111) - Function
-  - `scripts.ops.demo-remove-registry.removeShopOwnedOpsScripts.removedScriptNames` (L114-L117) - Class
-  - `scripts.ops.demo-remove-registry.removeShopOwnedOpsScripts.removedScriptNames.owned.map() callback` (L116-L116) - Function
-  - `scripts.ops.demo-remove-registry.removeShopOwnedOpsScripts.owned.map() callback` (L121-L124) - Function
-  - `scripts.ops.demo-remove-registry.removeShopOwnedOpsScripts.removedScriptNames.map() callback` (L125-L128) - Function
-- `scripts/ops/demo-remove-tests.ts`
-  - `scripts.ops.demo-remove-tests.removeResidueTests.gone` (L113-L117) - Class
-  - `scripts.ops.demo-remove-tests.removeResidueTests.gone.names.flatMap() callback` (L113-L117) - Function
+  - `scripts.mutation.mutate-scope.isMutable.exclude` (L43-L45) - Class
+  - `scripts.mutation.mutate-scope.isMutable.exclude.patterns.filter() callback` (L44-L44) - Function
+  - `scripts.mutation.mutate-scope.isMutable.exclude.map() callback` (L45-L45) - Function
+  - `scripts.mutation.mutate-scope.isMutable.exclude.every() callback` (L50-L50) - Function
 - `scripts/pairing/spec-identity.ts`
   - `scripts.pairing.spec-identity.SharedFile` (L33-L36) - Interface
   - `scripts.pairing.spec-identity.SpecComparison` (L128-L138) - Interface
@@ -309,6 +340,8 @@ The heart of the subsystem: the Mongo resolver/starter pair, the development mai
 - `scripts/scaffold/plan.ts`
   - `scripts.scaffold.plan.collidingSchemas` (L126-L135) - Class
   - `scripts.scaffold.plan.collidingSchemas.filter() callback` (L135-L135) - Function
+- `src/app/jobs.ts`
+  - `src.app.jobs.run.then() callback` (L46-L48) - Function
 - `src/infrastructure/adapters/email.worker.ts`
   - `src.infrastructure.adapters.email.worker.discardJobAttachments` (L26-L29) - Class
   - `src.infrastructure.adapters.email.worker.discardJobAttachments.attachments.map() callback` (L29-L29) - Function
@@ -317,13 +350,13 @@ The heart of the subsystem: the Mongo resolver/starter pair, the development mai
   - `src.infrastructure.adapters.email.worker.handleEmailJob.then() callback.then() callback` (L64-L64) - Function
   - `src.infrastructure.adapters.email.worker.handleEmailJob.catch() callback` (L65-L72) - Function
 - `src/infrastructure/adapters/logger.ts`
-  - `src.infrastructure.adapters.logger.Logger.debug` (L31-L31) - Method
+  - `src.infrastructure.adapters.logger.Logger.debug` (L32-L32) - Method
 - `src/infrastructure/adapters/mail-spool.ts`
   - `src.infrastructure.adapters.mail-spool.discardSpooled` (L72-L79) - Class
   - `src.infrastructure.adapters.mail-spool.discardSpooled.then() callback` (L77-L77) - Function
 - `src/infrastructure/adapters/mail-transports.ts`
-  - `src.infrastructure.adapters.mail-transports.OutgoingMail` (L29-L41) - Interface
-  - `src.infrastructure.adapters.mail-transports.MailTransportAdapter` (L44-L62) - Interface
+  - `src.infrastructure.adapters.mail-transports.OutgoingMail` (L28-L40) - Interface
+  - `src.infrastructure.adapters.mail-transports.MailTransportAdapter` (L43-L62) - Interface
   - `src.infrastructure.adapters.mail-transports.smtpTransport` (L67-L70) - Class
   - `src.infrastructure.adapters.mail-transports.smtpTransport.delivers` (L68-L68) - Method
   - `src.infrastructure.adapters.mail-transports.smtpTransport.send` (L69-L69) - Method
@@ -356,22 +389,22 @@ The heart of the subsystem: the Mongo resolver/starter pair, the development mai
 - `src/infrastructure/observability/analytics/umami.ts`
   - `src.infrastructure.observability.analytics.umami.umamiAnalyticsProvider.capture` (L87-L150) - Method
 - `src/infrastructure/observability/audit.ts`
-  - `src.infrastructure.observability.audit.AuditEvent` (L83-L130) - Interface
-  - `src.infrastructure.observability.audit.AuditEntry` (L136-L141) - Interface
+  - `src.infrastructure.observability.audit.AuditEvent` (L85-L132) - Interface
+  - `src.infrastructure.observability.audit.AuditEntry` (L138-L143) - Interface
 - `src/infrastructure/observability/metrics-registry.ts`
   - `src.infrastructure.observability.metrics-registry._heapSizeLimitGauge` (L55-L62) - Class
   - `src.infrastructure.observability.metrics-registry._heapSizeLimitGauge.collect` (L59-L61) - Method
 - `src/infrastructure/observability/tracer.ts`
-  - `src.infrastructure.observability.tracer.withSpan` (L37-L83) - Class
-  - `src.infrastructure.observability.tracer.withSpan.tracer.startActiveSpan() callback` (L46-L82) - Function
-  - `src.infrastructure.observability.tracer.withSpan.tracer.startActiveSpan() callback.then() callback` (L66-L80) - Function
+  - `src.infrastructure.observability.tracer.withSpan` (L37-L77) - Class
+  - `src.infrastructure.observability.tracer.withSpan.tracer.startActiveSpan() callback` (L42-L76) - Function
+  - `src.infrastructure.observability.tracer.withSpan.tracer.startActiveSpan() callback.then() callback` (L60-L74) - Function
 
 ### Mutation Testing Pipeline & Contract Bundle Building [[Expand]](./Mutation_Testing_Pipeline_Contract_Bundle_Building.md)
 The mutation-testing execution pipeline (sharding, Stryker runs, GitHub artifact baselines, CI wave/merge) together with contract bundle building and the eslint guard that keeps the unit layer free of persistence imports. It is the CI-side consumer of the test harness.
 
 **Related Classes/Methods**:
 
-- `scripts.mutation.stryker-run.runStryker`:92-188
+- `scripts.mutation.stryker-run.runStryker`:90-186
 
 **Source Files:**
 
@@ -383,8 +416,8 @@ The mutation-testing execution pipeline (sharding, Stryker runs, GitHub artifact
   - `scripts.eslint.no-persistence-imports.noPersistenceImports.create.ImportDeclaration.name` (L129-L131) - Class
   - `scripts.eslint.no-persistence-imports.noPersistenceImports.create.ImportDeclaration.name.find() callback.bindings.some() callback` (L130-L130) - Function
 - `scripts/mutation/baseline.ts`
-  - `scripts.mutation.baseline.formatRegressions.lines` (L280-L283) - Class
-  - `scripts.mutation.baseline.formatRegressions.lines.regressed.map() callback` (L281-L282) - Function
+  - `scripts.mutation.baseline.formatRegressions.lines` (L265-L268) - Class
+  - `scripts.mutation.baseline.formatRegressions.lines.regressed.map() callback` (L266-L267) - Function
 - `scripts/mutation/ci/merge.ts`
   - `scripts.mutation.ci.merge.ReportMutant` (L20-L30) - Interface
   - `scripts.mutation.ci.merge.ReportTest` (L33-L38) - Interface
@@ -401,8 +434,8 @@ The mutation-testing execution pipeline (sharding, Stryker runs, GitHub artifact
   - `scripts.mutation.ci.merge.tally.count` (L295-L296) - Class
   - `scripts.mutation.ci.merge.tally.count.statuses.reduce() callback` (L296-L296) - Function
 - `scripts/mutation/ci/waves.ts`
-  - `scripts.mutation.ci.waves.scheduleWave.named` (L146-L149) - Class
-  - `scripts.mutation.ci.waves.scheduleWave.named.queue.map() callback` (L146-L149) - Function
+  - `scripts.mutation.ci.waves.scheduleWave.named` (L144-L147) - Class
+  - `scripts.mutation.ci.waves.scheduleWave.named.queue.map() callback` (L144-L147) - Function
 - `scripts/mutation/github-artifacts.ts`
   - `scripts.mutation.github-artifacts.GitHubArtifact` (L20-L34) - Interface
   - `scripts.mutation.github-artifacts.newestBaseline` (L44-L53) - Class
@@ -415,26 +448,15 @@ The mutation-testing execution pipeline (sharding, Stryker runs, GitHub artifact
   - `scripts.mutation.pull-baseline.install.then() callback.then() callback` (L51-L56) - Function
   - `scripts.mutation.pull-baseline.then() callback` (L61-L66) - Function
 - `scripts/mutation/run-shards.ts`
-  - `scripts.mutation.run-shards.completed` (L84-L84) - Class
-  - `scripts.mutation.run-shards.completed.filter() callback` (L84-L84) - Function
-  - `scripts.mutation.run-shards.completed.shards.map() callback` (L84-L84) - Function
+  - `scripts.mutation.run-shards.completed` (L83-L83) - Class
+  - `scripts.mutation.run-shards.completed.filter() callback` (L83-L83) - Function
+  - `scripts.mutation.run-shards.completed.shards.map() callback` (L83-L83) - Function
 - `scripts/mutation/stryker-run.ts`
-  - `scripts.mutation.stryker-run.runStryker` (L92-L188) - Class
-  - `scripts.mutation.stryker-run.runStryker.then() callback` (L133-L186) - Function
-  - `scripts.mutation.stryker-run.runStryker.then() callback.<function>` (L134-L186) - Function
-  - `scripts.mutation.stryker-run.runStryker.then() callback.<function>.stryker.stdout.on('data') callback` (L162-L181) - Function
-  - `scripts.mutation.stryker-run.runStryker.then() callback.<function>.stryker.on('exit') callback` (L183-L184) - Function
-- `scripts/ops/demo-remove-authorization.ts`
-  - `scripts.ops.demo-remove-authorization.RemovedAuthorization` (L21-L26) - Interface
-  - `scripts.ops.demo-remove-authorization.FragmentKey` (L29-L32) - Interface
-  - `scripts.ops.demo-remove-authorization.readRemovedAuthorization.keys.removed.map() callback` (L59-L59) - Function
-  - `scripts.ops.demo-remove-authorization.readRemovedAuthorization.subjects.filter() callback` (L61-L61) - Function
-  - `scripts.ops.demo-remove-authorization.readRemovedAuthorization.subjects.removed.map() callback` (L61-L61) - Function
-  - `scripts.ops.demo-remove-authorization.pruneCase.lists.map() callback` (L107-L111) - Function
-  - `scripts.ops.demo-remove-authorization.pruneCase.lists` (L107-L112) - Class
-  - `scripts.ops.demo-remove-authorization.pruneCase.lists.map() callback.map() callback` (L110-L110) - Function
-  - `scripts.ops.demo-remove-authorization.stripConformanceCases.headKept` (L139-L142) - Class
-  - `scripts.ops.demo-remove-authorization.stripConformanceCases.headKept.filter() callback` (L141-L141) - Function
+  - `scripts.mutation.stryker-run.runStryker` (L90-L186) - Class
+  - `scripts.mutation.stryker-run.runStryker.then() callback` (L131-L184) - Function
+  - `scripts.mutation.stryker-run.runStryker.then() callback.<function>` (L132-L184) - Function
+  - `scripts.mutation.stryker-run.runStryker.then() callback.<function>.stryker.stdout.on('data') callback` (L160-L179) - Function
+  - `scripts.mutation.stryker-run.runStryker.then() callback.<function>.stryker.on('exit') callback` (L181-L182) - Function
 - `scripts/scaffold/registry.ts`
   - `scripts.scaffold.registry.insertInRun.offset` (L33-L33) - Class
   - `scripts.scaffold.registry.insertInRun.offset.findIndex() callback` (L33-L33) - Function
@@ -444,126 +466,253 @@ The mutation-testing execution pipeline (sharding, Stryker runs, GitHub artifact
 - `src/infrastructure/adapters/export-store.ts`
   - `src.infrastructure.adapters.export-store.openExport` (L98-L110) - Class
   - `src.infrastructure.adapters.export-store.openExport.then() callback` (L104-L108) - Function
+- `src/kernel/authentication.ts`
+  - `src.kernel.authentication.StreamWatch` (L22-L30) - Interface
 - `src/modules/account/controllers/get-my-abilities.ts`
   - `src.modules.account.controllers.get-my-abilities.modelVersion` (L40-L40) - Class
   - `src.modules.account.controllers.get-my-abilities.modelVersion.PERMISSION_KEYS.map() callback` (L40-L40) - Function
 - `src/modules/account/repository.ts`
-  - `src.modules.account.repository.insert` (L53-L55) - Class
-  - `src.modules.account.repository.insert.then() callback` (L55-L55) - Function
-- `src/modules/account/services/authentication.ts`
-  - `src.modules.account.services.authentication.MissingRefreshTokenError` (L285-L291) - Class
-  - `src.modules.account.services.authentication.MissingRefreshTokenError.constructor` (L287-L290) - Constructor
-  - `src.modules.account.services.authentication.refreshAccessToken` (L304-L346) - Class
-  - `src.modules.account.services.authentication.refreshAccessToken.then() callback` (L312-L318) - Function
-  - `src.modules.account.services.authentication.refreshAccessToken.catch() callback` (L319-L346) - Function
+  - `src.modules.account.repository.insert` (L64-L66) - Class
+  - `src.modules.account.repository.insert.then() callback` (L66-L66) - Function
+- `src/modules/account/services/email-change.ts`
+  - `src.modules.account.services.email-change.EmailChangeOutcome` (L37-L40) - Interface
+  - `src.modules.account.services.email-change.then() callback.then() callback` (L102-L102) - Function
 - `src/modules/account/services/export.ts`
-  - `src.modules.account.services.export.openOwnExport` (L234-L253) - Class
-  - `src.modules.account.services.export.openOwnExport.then() callback` (L239-L253) - Function
-  - `src.modules.account.services.export.openOwnExport.then() callback.then() callback` (L242-L252) - Function
-- `src/modules/account/services/two-factor.ts`
-  - `src.modules.account.services.two-factor.twoFactorStatus.then() callback.enrolledNames` (L456-L456) - Class
-  - `src.modules.account.services.two-factor.twoFactorStatus.then() callback.enrolledNames.enrolled.map() callback` (L456-L456) - Function
-  - `src.modules.account.services.two-factor.confirmTwoFactorMethod.outcome.then() callback.entry` (L614-L614) - Class
-  - `src.modules.account.services.two-factor.confirmTwoFactorMethod.outcome.then() callback.entry.user.twoFactorMethods.find() callback` (L614-L614) - Function
+  - `src.modules.account.services.export.openOwnExport` (L236-L255) - Class
+  - `src.modules.account.services.export.openOwnExport.then() callback` (L241-L255) - Function
+  - `src.modules.account.services.export.openOwnExport.then() callback.then() callback` (L244-L254) - Function
+- `src/modules/account/services/logout.ts`
+  - `src.modules.account.services.logout.SessionRevocation` (L24-L29) - Interface
+  - `src.modules.account.services.logout.isOwnFamily` (L35-L47) - Class
+  - `src.modules.account.services.logout.isOwnFamily.then() callback` (L44-L45) - Function
+  - `src.modules.account.services.logout.sessionRevoke` (L58-L74) - Class
+  - `src.modules.account.services.logout.sessionRevoke.then() callback` (L65-L73) - Function
+  - `src.modules.account.services.logout.sessionRevoke.then() callback.then() callback` (L66-L73) - Function
+- `src/modules/account/services/password.ts`
+  - `src.modules.account.services.password.outcome.then() callback` (L182-L185) - Function
+- `src/modules/account/services/reauth.ts`
+  - `src.modules.account.services.reauth.then() callback` (L108-L108) - Function
+- `src/modules/account/services/refresh.ts`
+  - `src.modules.account.services.refresh.MissingRefreshTokenError` (L17-L23) - Class
+  - `src.modules.account.services.refresh.MissingRefreshTokenError.constructor` (L19-L22) - Constructor
+  - `src.modules.account.services.refresh.refreshAccessToken` (L36-L78) - Class
+  - `src.modules.account.services.refresh.refreshAccessToken.then() callback` (L44-L50) - Function
+  - `src.modules.account.services.refresh.refreshAccessToken.catch() callback` (L51-L78) - Function
+- `src/modules/account/services/sessions.ts`
+  - `src.modules.account.services.sessions.eraseSessionsAndTokens` (L54-L57) - Class
+  - `src.modules.account.services.sessions.eraseSessionsAndTokens.then() callback` (L57-L57) - Function
+- `src/modules/account/services/signup.ts`
+  - `src.modules.account.services.signup.SignupInput` (L38-L62) - Interface
+  - `src.modules.account.services.signup.outcome.then() callback` (L191-L191) - Function
+- `src/modules/account/services/two-factor-challenge.ts`
+  - `src.modules.account.services.two-factor-challenge.buildLoginChallenge.ttlMs.armed.some() callback` (L62-L62) - Function
+  - `src.modules.account.services.two-factor-challenge.buildLoginChallenge.ttlMs` (L62-L64) - Class
+  - `src.modules.account.services.two-factor-challenge.VerifiedChallenge` (L100-L103) - Interface
+- `src/modules/account/services/two-factor-enrollment.ts`
+  - `src.modules.account.services.two-factor-enrollment.entryFor.existing` (L55-L55) - Class
+  - `src.modules.account.services.two-factor-enrollment.entryFor.existing.user.twoFactorMethods.find() callback` (L55-L55) - Function
+  - `src.modules.account.services.two-factor-enrollment.outcome.withVerifiedCode() callback.then() callback` (L353-L353) - Function
+- `src/modules/account/session/activity.ts`
+  - `src.modules.account.session.activity.recordActivity` (L16-L20) - Class
+  - `src.modules.account.session.activity.recordActivity.catch() callback` (L17-L20) - Function
+- `src/modules/account/session/auth-context.ts`
+  - `src.modules.account.session.auth-context.resolveProof` (L36-L70) - Class
+  - `src.modules.account.session.auth-context.resolveProof.then() callback` (L40-L70) - Function
+  - `src.modules.account.session.auth-context.resolveProof.then() callback.then() callback` (L44-L68) - Function
+- `src/modules/account/session/cookie-strategy.ts`
+  - `src.modules.account.session.cookie-strategy.rememberOf` (L49-L50) - Class
+  - `src.modules.account.session.cookie-strategy.rememberOf.find() callback` (L50-L50) - Function
+  - `src.modules.account.session.cookie-strategy.storeSession` (L64-L91) - Class
+  - `src.modules.account.session.cookie-strategy.storeSession.then() callback` (L90-L90) - Function
+  - `src.modules.account.session.cookie-strategy.snapshotOf` (L132-L147) - Class
+  - `src.modules.account.session.cookie-strategy.snapshotOf.then() callback` (L135-L144) - Function
+  - `src.modules.account.session.cookie-strategy.replaceSession` (L153-L170) - Class
+  - `src.modules.account.session.cookie-strategy.replaceSession.then() callback` (L162-L168) - Function
+  - `src.modules.account.session.cookie-strategy.replaceSession.then() callback.then() callback` (L164-L164) - Function
+  - `src.modules.account.session.cookie-strategy.replaceSession.then() callback.catch() callback` (L165-L168) - Function
+  - `src.modules.account.session.cookie-strategy.retirePresentedSession` (L177-L186) - Class
+  - `src.modules.account.session.cookie-strategy.retirePresentedSession.then() callback` (L182-L182) - Function
+  - `src.modules.account.session.cookie-strategy.retirePresentedSession.catch() callback` (L183-L185) - Function
+  - `src.modules.account.session.cookie-strategy.findLiveRow` (L198-L208) - Class
+  - `src.modules.account.session.cookie-strategy.findLiveRow.then() callback` (L203-L207) - Function
+  - `src.modules.account.session.cookie-strategy.resolveSession` (L228-L259) - Class
+  - `src.modules.account.session.cookie-strategy.resolveSession.then() callback` (L232-L259) - Function
+  - `src.modules.account.session.cookie-strategy.resolveSession.then() callback.then() callback` (L237-L257) - Function
+  - `src.modules.account.session.cookie-strategy.resolveSession.then() callback.then() callback.then() callback` (L252-L252) - Function
+  - `src.modules.account.session.cookie-strategy.resolveSession.then() callback.then() callback.catch() callback` (L253-L255) - Function
+  - `src.modules.account.session.cookie-strategy.watchSession` (L265-L286) - Class
+  - `src.modules.account.session.cookie-strategy.watchSession.then() callback` (L266-L286) - Function
+  - `src.modules.account.session.cookie-strategy.watchSession.then() callback.then() callback` (L271-L284) - Function
+  - `src.modules.account.session.cookie-strategy.watchSession.then() callback.then() callback.ok.recheck` (L275-L282) - Method
+  - `src.modules.account.session.cookie-strategy.watchSession.then() callback.then() callback.ok.recheck.resolveInLiveFamily('cookie') callback` (L280-L280) - Function
+  - `src.modules.account.session.cookie-strategy.cookieStrategy` (L289-L344) - Class
+  - `src.modules.account.session.cookie-strategy.cookieStrategy.issue` (L294-L308) - Method
+  - `src.modules.account.session.cookie-strategy.cookieStrategy.issue.then() callback` (L296-L307) - Function
+  - `src.modules.account.session.cookie-strategy.cookieStrategy.issue.then() callback.then() callback` (L302-L305) - Function
+  - `src.modules.account.session.cookie-strategy.cookieStrategy.issue.then() callback.then() callback.then() callback` (L303-L304) - Function
+  - `src.modules.account.session.cookie-strategy.cookieStrategy.reissue` (L312-L318) - Method
+  - `src.modules.account.session.cookie-strategy.cookieStrategy.reissue.then() callback` (L314-L317) - Function
+  - `src.modules.account.session.cookie-strategy.cookieStrategy.reissue.then() callback.then() callback` (L315-L316) - Function
+  - `src.modules.account.session.cookie-strategy.cookieStrategy.remint` (L320-L335) - Method
+  - `src.modules.account.session.cookie-strategy.cookieStrategy.remint.then() callback` (L322-L326) - Function
+  - `src.modules.account.session.cookie-strategy.cookieStrategy.remint.then() callback.then() callback` (L323-L325) - Function
+  - `src.modules.account.session.cookie-strategy.cookieStrategy.remint.catch() callback` (L328-L335) - Function
+  - `src.modules.account.session.cookie-strategy.cookieStrategy.list` (L343-L343) - Method
+- `src/modules/account/session/family-liveness.ts`
+  - `src.modules.account.session.family-liveness.resolveInLiveFamily` (L30-L63) - Class
+  - `src.modules.account.session.family-liveness.resolveInLiveFamily.then() callback` (L42-L61) - Function
+  - `src.modules.account.session.family-liveness.resolveInLiveFamily.then() callback.then() callback` (L49-L49) - Function
+  - `src.modules.account.session.family-liveness.resolveInLiveFamily.then() callback.catch() callback` (L59-L59) - Function
+- `src/modules/account/session/jwt-strategy.ts`
+  - `src.modules.account.session.jwt-strategy.mintSession` (L49-L69) - Class
+  - `src.modules.account.session.jwt-strategy.mintSession.then() callback` (L62-L69) - Function
+  - `src.modules.account.session.jwt-strategy.mintSession.then() callback.then() callback` (L65-L68) - Function
+  - `src.modules.account.session.jwt-strategy.retireRefreshToken` (L91-L99) - Class
+  - `src.modules.account.session.jwt-strategy.retireRefreshToken.then() callback` (L95-L95) - Function
+  - `src.modules.account.session.jwt-strategy.retireRefreshToken.catch() callback` (L96-L98) - Function
+  - `src.modules.account.session.jwt-strategy.retireRestOfFamily` (L105-L115) - Class
+  - `src.modules.account.session.jwt-strategy.retireRestOfFamily.then() callback` (L112-L112) - Function
+  - `src.modules.account.session.jwt-strategy.retireRestOfFamily.catch() callback` (L113-L115) - Function
+  - `src.modules.account.session.jwt-strategy.retirePresentedSession` (L123-L134) - Class
+  - `src.modules.account.session.jwt-strategy.retirePresentedSession.then() callback` (L127-L127) - Function
+  - `src.modules.account.session.jwt-strategy.retirePresentedSession.catch() callback` (L128-L133) - Function
+  - `src.modules.account.session.jwt-strategy.snapshotOf` (L141-L157) - Class
+  - `src.modules.account.session.jwt-strategy.snapshotOf.then() callback` (L143-L155) - Function
+  - `src.modules.account.session.jwt-strategy.snapshotOf.then() callback.then() callback` (L147-L155) - Function
+  - `src.modules.account.session.jwt-strategy.resolveWith` (L164-L177) - Class
+  - `src.modules.account.session.jwt-strategy.resolveWith.<function>` (L166-L177) - Function
+  - `src.modules.account.session.jwt-strategy.resolveWith.<function>.then() callback` (L173-L176) - Function
+  - `src.modules.account.session.jwt-strategy.resolveBearer` (L183-L200) - Class
+  - `src.modules.account.session.jwt-strategy.resolveBearer.then() callback.resolveInLiveFamily('jwt') callback` (L193-L193) - Function
+  - `src.modules.account.session.jwt-strategy.resolveBearer.then() callback` (L196-L199) - Function
+  - `src.modules.account.session.jwt-strategy.watchRefreshCookie` (L207-L234) - Class
+  - `src.modules.account.session.jwt-strategy.watchRefreshCookie.then() callback.then() callback` (L211-L228) - Function
+  - `src.modules.account.session.jwt-strategy.watchRefreshCookie.then() callback.then() callback.ok.recheck` (L214-L226) - Method
+  - `src.modules.account.session.jwt-strategy.watchRefreshCookie.then() callback.then() callback.ok.recheck.resolveInLiveFamily('jwt') callback` (L219-L223) - Function
+  - `src.modules.account.session.jwt-strategy.watchRefreshCookie.then() callback` (L230-L233) - Function
+  - `src.modules.account.session.jwt-strategy.unlessOtherMode` (L240-L243) - Class
+  - `src.modules.account.session.jwt-strategy.unlessOtherMode.<function>` (L242-L243) - Function
+  - `src.modules.account.session.jwt-strategy.jwtStrategy` (L246-L312) - Class
+  - `src.modules.account.session.jwt-strategy.jwtStrategy.issue` (L252-L257) - Method
+  - `src.modules.account.session.jwt-strategy.jwtStrategy.issue.mintSession() callback` (L253-L254) - Function
+  - `src.modules.account.session.jwt-strategy.jwtStrategy.issue.then() callback` (L255-L256) - Function
+  - `src.modules.account.session.jwt-strategy.jwtStrategy.issue.then() callback.then() callback` (L256-L256) - Function
+  - `src.modules.account.session.jwt-strategy.jwtStrategy.reissue` (L261-L282) - Method
+  - `src.modules.account.session.jwt-strategy.jwtStrategy.reissue.ready.then() callback` (L266-L280) - Function
+  - `src.modules.account.session.jwt-strategy.jwtStrategy.reissue.ready.then() callback.then() callback` (L274-L279) - Function
+  - `src.modules.account.session.jwt-strategy.jwtStrategy.reissue.ready.then() callback.then() callback.then() callback` (L279-L279) - Function
+  - `src.modules.account.session.jwt-strategy.jwtStrategy.remint` (L284-L303) - Method
+  - `src.modules.account.session.jwt-strategy.jwtStrategy.remint.then() callback` (L286-L295) - Function
+  - `src.modules.account.session.jwt-strategy.jwtStrategy.remint.then() callback.then() callback` (L290-L293) - Function
+  - `src.modules.account.session.jwt-strategy.jwtStrategy.remint.catch() callback` (L296-L303) - Function
+  - `src.modules.account.session.jwt-strategy.jwtStrategy.list` (L311-L311) - Method
 - `src/modules/account/session/jwt.ts`
-  - `src.modules.account.session.jwt.TokenRejection` (L103-L112) - Class
-  - `src.modules.account.session.jwt.TokenRejection.constructor` (L105-L111) - Constructor
-  - `src.modules.account.session.jwt.verifyAgainstRing` (L135-L171) - Class
-  - `src.modules.account.session.jwt.verifyAgainstRing.<function>` (L140-L171) - Function
-  - `src.modules.account.session.jwt.verifyAgainstRing.<function>.verify() callback` (L160-L170) - Function
-  - `src.modules.account.session.jwt.verifyRefreshToken` (L190-L204) - Class
-  - `src.modules.account.session.jwt.verifyRefreshToken.then() callback` (L191-L203) - Function
-  - `src.modules.account.session.jwt.verifyRefreshToken.then() callback.then() callback` (L192-L203) - Function
-  - `src.modules.account.session.jwt.verifyRefreshToken.then() callback.then() callback.entry` (L199-L199) - Class
-  - `src.modules.account.session.jwt.verifyRefreshToken.then() callback.then() callback.entry.user.tokens.find() callback` (L199-L199) - Function
-  - `src.modules.account.session.jwt.createRefreshToken` (L243-L280) - Class
-  - `src.modules.account.session.jwt.createRefreshToken.then() callback` (L251-L280) - Function
-  - `src.modules.account.session.jwt.recordRefreshTokenUse` (L291-L295) - Class
-  - `src.modules.account.session.jwt.recordRefreshTokenUse.then() callback` (L294-L294) - Function
-  - `src.modules.account.session.jwt.recordRefreshTokenUse.catch() callback` (L295-L295) - Function
-  - `src.modules.account.session.jwt.createAccessToken` (L309-L310) - Class
-  - `src.modules.account.session.jwt.createAccessToken.then() callback` (L310-L310) - Function
-  - `src.modules.account.session.jwt.TokenReuseError` (L318-L324) - Class
-  - `src.modules.account.session.jwt.TokenReuseError.constructor` (L320-L323) - Constructor
-  - `src.modules.account.session.jwt.revokeAllRefreshTokens` (L331-L335) - Class
-  - `src.modules.account.session.jwt.revokeAllRefreshTokens.then() callback` (L335-L335) - Function
-  - `src.modules.account.session.jwt.reissueRotated` (L348-L375) - Class
-  - `src.modules.account.session.jwt.reissueRotated.then() callback` (L349-L375) - Function
-  - `src.modules.account.session.jwt.reissueRotated.then() callback.then() callback.then() callback` (L367-L367) - Function
-  - `src.modules.account.session.jwt.reissueRotated.then() callback.then() callback` (L368-L373) - Function
-  - `src.modules.account.session.jwt.resolveLostRotation` (L389-L423) - Class
-  - `src.modules.account.session.jwt.resolveLostRotation.then() callback` (L394-L423) - Function
-  - `src.modules.account.session.jwt.resolveLostRotation.then() callback.then() callback` (L420-L422) - Function
-  - `src.modules.account.session.jwt.rotateRefreshToken` (L438-L454) - Class
-  - `src.modules.account.session.jwt.rotateRefreshToken.then() callback` (L440-L454) - Function
-  - `src.modules.account.session.jwt.rotateRefreshToken.then() callback.then() callback` (L449-L452) - Function
-  - `src.modules.account.session.jwt.rememberOfRefreshToken` (L468-L477) - Class
-  - `src.modules.account.session.jwt.rememberOfRefreshToken.then() callback` (L474-L474) - Function
-  - `src.modules.account.session.jwt.rememberOfRefreshToken.catch() callback` (L476-L476) - Function
+  - `src.modules.account.session.jwt.TokenRejection` (L141-L150) - Class
+  - `src.modules.account.session.jwt.TokenRejection.constructor` (L143-L149) - Constructor
+  - `src.modules.account.session.jwt.ringKeyLookup` (L200-L207) - Class
+  - `src.modules.account.session.jwt.ringKeyLookup.<function>` (L202-L207) - Function
+  - `src.modules.account.session.jwt.verifyAgainstRing` (L225-L240) - Class
+  - `src.modules.account.session.jwt.verifyAgainstRing.then() callback` (L236-L240) - Function
+  - `src.modules.account.session.jwt.verifyAccessToken` (L248-L253) - Class
+  - `src.modules.account.session.jwt.verifyAccessToken.then() callback` (L249-L253) - Function
+  - `src.modules.account.session.jwt.verifyRefreshWithRow` (L263-L280) - Class
+  - `src.modules.account.session.jwt.verifyRefreshWithRow.then() callback` (L266-L279) - Function
+  - `src.modules.account.session.jwt.verifyRefreshWithRow.then() callback.then() callback` (L267-L279) - Function
+  - `src.modules.account.session.jwt.verifyRefreshWithRow.then() callback.then() callback.then() callback` (L274-L278) - Function
+  - `src.modules.account.session.jwt.verifyRefreshToken` (L288-L289) - Class
+  - `src.modules.account.session.jwt.verifyRefreshToken.then() callback` (L289-L289) - Function
+  - `src.modules.account.session.jwt.mintRefreshToken` (L353-L405) - Class
+  - `src.modules.account.session.jwt.mintRefreshToken.then() callback` (L360-L405) - Function
+  - `src.modules.account.session.jwt.mintRefreshToken.then() callback.then() callback` (L385-L404) - Function
+  - `src.modules.account.session.jwt.mintRefreshToken.then() callback.then() callback.then() callback` (L403-L403) - Function
+  - `src.modules.account.session.jwt.startSession` (L424-L433) - Class
+  - `src.modules.account.session.jwt.startSession.mintRefreshToken() callback` (L430-L433) - Function
+  - `src.modules.account.session.jwt.continueSession` (L445-L453) - Class
+  - `src.modules.account.session.jwt.continueSession.mintRefreshToken() callback` (L453-L453) - Function
+  - `src.modules.account.session.jwt.createAccessToken` (L467-L470) - Class
+  - `src.modules.account.session.jwt.createAccessToken.then() callback` (L468-L469) - Function
+  - `src.modules.account.session.jwt.TokenReuseError` (L478-L484) - Class
+  - `src.modules.account.session.jwt.TokenReuseError.constructor` (L480-L483) - Constructor
+  - `src.modules.account.session.jwt.storeSuccessor` (L496-L524) - Class
+  - `src.modules.account.session.jwt.storeSuccessor.then() callback` (L518-L523) - Function
+  - `src.modules.account.session.jwt.reissueRotated` (L537-L556) - Class
+  - `src.modules.account.session.jwt.reissueRotated.then() callback` (L542-L556) - Function
+  - `src.modules.account.session.jwt.reissueRotated.then() callback.then() callback` (L549-L555) - Function
+  - `src.modules.account.session.jwt.reissueRotated.then() callback.then() callback.then() callback` (L552-L553) - Function
+  - `src.modules.account.session.jwt.resolveLostRotation` (L570-L603) - Class
+  - `src.modules.account.session.jwt.resolveLostRotation.then() callback` (L575-L603) - Function
+  - `src.modules.account.session.jwt.resolveLostRotation.then() callback.then() callback` (L600-L602) - Function
+  - `src.modules.account.session.jwt.rotateRefreshToken` (L618-L633) - Class
+  - `src.modules.account.session.jwt.rotateRefreshToken.then() callback` (L620-L633) - Function
+  - `src.modules.account.session.jwt.rotateRefreshToken.then() callback.then() callback` (L628-L631) - Function
+  - `src.modules.account.session.jwt.rememberOfRefreshToken` (L647-L656) - Class
+  - `src.modules.account.session.jwt.rememberOfRefreshToken.then() callback` (L653-L653) - Function
+  - `src.modules.account.session.jwt.rememberOfRefreshToken.catch() callback` (L655-L655) - Function
 - `src/modules/account/session/key-ring.ts`
   - `src.modules.account.session.key-ring.keyForId` (L30-L31) - Class
   - `src.modules.account.session.key-ring.keyForId.ring.find() callback` (L31-L31) - Function
-- `src/modules/account/session/prune.ts`
-  - `src.modules.account.session.prune.pruneOwnExpiredTokens` (L27-L35) - Class
-  - `src.modules.account.session.prune.pruneOwnExpiredTokens.then() callback` (L30-L30) - Function
-  - `src.modules.account.session.prune.pruneOwnExpiredTokens.catch() callback` (L31-L35) - Function
+- `src/modules/account/session/listing.ts`
+  - `src.modules.account.session.listing.newestPerFamily` (L25-L34) - Class
+  - `src.modules.account.session.listing.newestPerFamily.rows.filter() callback` (L33-L33) - Function
+  - `src.modules.account.session.listing.listSessions` (L61-L85) - Class
+  - `src.modules.account.session.listing.listSessions.then() callback` (L70-L85) - Function
+  - `src.modules.account.session.listing.listSessions.then() callback.map() callback` (L84-L84) - Function
+- `src/modules/account/session/resolver.ts`
+  - `src.modules.account.session.resolver.accountAuthResolver` (L24-L32) - Class
+  - `src.modules.account.session.resolver.accountAuthResolver.fromBearer` (L25-L25) - Method
+  - `src.modules.account.session.resolver.accountAuthResolver.fromCookie` (L26-L26) - Method
+  - `src.modules.account.session.resolver.accountAuthResolver.watchCookie` (L27-L27) - Method
+  - `src.modules.account.session.resolver.accountAuthResolver.cookieAuthenticates` (L28-L28) - Method
+- `src/modules/account/session/strategy.ts`
+  - `src.modules.account.session.strategy.SessionStrategy` (L85-L151) - Interface
+  - `src.modules.account.session.strategy.SessionStrategy.issue` (L97-L102) - Method
+  - `src.modules.account.session.strategy.SessionStrategy.snapshot` (L105-L105) - Method
+  - `src.modules.account.session.strategy.SessionStrategy.reissue` (L108-L113) - Method
+  - `src.modules.account.session.strategy.SessionStrategy.remint` (L121-L126) - Method
+  - `src.modules.account.session.strategy.SessionStrategy.resolveBearer` (L129-L132) - Method
+  - `src.modules.account.session.strategy.SessionStrategy.resolveCookie` (L135-L138) - Method
+  - `src.modules.account.session.strategy.SessionStrategy.watchCookie` (L144-L144) - Method
+  - `src.modules.account.session.strategy.SessionStrategy.credentialOf` (L147-L147) - Method
+  - `src.modules.account.session.strategy.SessionStrategy.list` (L150-L150) - Method
 
 ### Contract Type/Code Generation & Demo-Removal Ops [[Expand]](./Contract_Type_Code_Generation_Demo_Removal_Ops.md)
 Contract-first code generation (AsyncAPI types, error codes, root assembly fragments) plus the ops tooling that strips demo/authorization/test scaffolding and refreshes breached-password corpora. It produces the generated artifacts and the demo-removal transformations that keep the boilerplate reusable.
 
-**Related Classes/Methods**:
-
-- `scripts.ops.demo-remove-authorization.pruneCase`:103-125
-- `scripts.ops.refresh-breached-passwords.downloadCorpus`:73-80
+**Related Classes/Methods**: _None_
 
 **Source Files:**
 
+- `scripts/contracts/cookie-auth.ts`
+  - `scripts.contracts.cookie-auth.SecuredOperation` (L26-L29) - Interface
+- `scripts/contracts/fragments.ts`
+  - `scripts.contracts.fragments.DeclaredTag` (L16-L19) - Interface
 - `scripts/contracts/generate-asyncapi-types.ts`
-  - `scripts.contracts.generate-asyncapi-types.buildOutput.sections` (L548-L577) - Class
-  - `scripts.contracts.generate-asyncapi-types.buildOutput.sections.sseEntries.map() callback` (L571-L571) - Function
+  - `scripts.contracts.generate-asyncapi-types.buildOutput.sections` (L532-L561) - Class
+  - `scripts.contracts.generate-asyncapi-types.buildOutput.sections.sseEntries.map() callback` (L555-L555) - Function
 - `scripts/contracts/generate-error-codes.ts`
-  - `scripts.contracts.generate-error-codes.rows` (L95-L95) - Class
-  - `scripts.contracts.generate-error-codes.rows.codes.map() callback` (L95-L95) - Function
+  - `scripts.contracts.generate-error-codes.rows` (L81-L81) - Class
+  - `scripts.contracts.generate-error-codes.rows.codes.map() callback` (L81-L81) - Function
+- `scripts/contracts/personal-data-assembly.ts`
+  - `scripts.contracts.personal-data-assembly.PersonalDataSection` (L33-L42) - Interface
+- `scripts/contracts/prune-unused.ts`
+  - `scripts.contracts.prune-unused.BundledDocument` (L26-L29) - Interface
 - `scripts/contracts/root-assembly.ts`
-  - `scripts.contracts.root-assembly.ModuleFragment` (L22-L29) - Interface
-  - `scripts.contracts.root-assembly.appendMissingTags.missing.fragments.flatMap() callback` (L98-L98) - Function
-  - `scripts.contracts.root-assembly.appendMissingTags.missing` (L98-L100) - Class
-  - `scripts.contracts.root-assembly.appendMissingTags.missing.filter() callback` (L99-L99) - Function
-  - `scripts.contracts.root-assembly.FragmentOperation` (L131-L133) - Interface
-  - `scripts.contracts.root-assembly.FragmentDocument` (L136-L138) - Interface
-  - `scripts.contracts.root-assembly.present.filter() callback` (L154-L154) - Function
+  - `scripts.contracts.root-assembly.ModuleFragment` (L22-L31) - Interface
+  - `scripts.contracts.root-assembly.appendMissingTags.used` (L108-L108) - Class
+  - `scripts.contracts.root-assembly.appendMissingTags.used.fragments.flatMap() callback` (L108-L108) - Function
+  - `scripts.contracts.root-assembly.appendMissingTags.wanted` (L109-L111) - Class
+  - `scripts.contracts.root-assembly.appendMissingTags.wanted.filter() callback` (L110-L110) - Function
 - `scripts/mutation/baseline.ts`
-  - `scripts.mutation.baseline.missingFromReport` (L245-L251) - Class
-  - `scripts.mutation.baseline.missingFromReport.filter() callback` (L250-L250) - Function
+  - `scripts.mutation.baseline.missingFromReport` (L230-L236) - Class
+  - `scripts.mutation.baseline.missingFromReport.filter() callback` (L235-L235) - Function
+- `scripts/mutation/check-baseline.ts`
+  - `scripts.mutation.check-baseline.printProgress` (L104-L114) - Class
+  - `scripts.mutation.check-baseline.printProgress.comparisons.filter() callback` (L109-L109) - Function
 - `scripts/mutation/pull-baseline.ts`
   - `scripts.mutation.pull-baseline.listArtifacts` (L28-L32) - Class
   - `scripts.mutation.pull-baseline.listArtifacts.then() callback` (L32-L32) - Function
   - `scripts.mutation.pull-baseline.then() callback.then() callback` (L49-L49) - Function
   - `scripts.mutation.pull-baseline.catch() callback` (L67-L70) - Function
-- `scripts/ops/demo-remove-authorization.ts`
-  - `scripts.ops.demo-remove-authorization.stripRoleGrants.out` (L79-L84) - Class
-  - `scripts.ops.demo-remove-authorization.stripRoleGrants.out.lines.map() callback` (L79-L84) - Function
-  - `scripts.ops.demo-remove-authorization.pruneCase` (L103-L125) - Class
-  - `scripts.ops.demo-remove-authorization.pruneCase.chunk.replaceAll() callback` (L118-L124) - Function
-  - `scripts.ops.demo-remove-authorization.stripConformanceCases.casesKept` (L143-L146) - Class
-  - `scripts.ops.demo-remove-authorization.stripConformanceCases.casesKept.map() callback` (L144-L144) - Function
-  - `scripts.ops.demo-remove-authorization.stripConformanceCases.casesKept.filter() callback` (L145-L145) - Function
-- `scripts/ops/demo-remove-tests.ts`
-  - `scripts.ops.demo-remove-tests.requiredModules` (L58-L61) - Class
-  - `scripts.ops.demo-remove-tests.requiredModules.flatMap() callback` (L59-L60) - Function
-  - `scripts.ops.demo-remove-tests.requiredModules.flatMap() callback.map() callback` (L60-L60) - Function
-  - `scripts.ops.demo-remove-tests.specifiersOf` (L67-L68) - Class
-  - `scripts.ops.demo-remove-tests.specifiersOf.SPECIFIER_PATTERNS.flatMap() callback` (L68-L68) - Function
-  - `scripts.ops.demo-remove-tests.specifiersOf.SPECIFIER_PATTERNS.flatMap() callback.map() callback` (L68-L68) - Function
-  - `scripts.ops.demo-remove-tests.isGone` (L93-L99) - Class
-  - `scripts.ops.demo-remove-tests.isGone.gone.some() callback` (L95-L98) - Function
-  - `scripts.ops.demo-remove-tests.removeResidueTests.importsGone` (L124-L127) - Class
-  - `scripts.ops.demo-remove-tests.removeResidueTests.importsGone.some() callback` (L124-L127) - Function
-  - `scripts.ops.demo-remove-tests.removeResidueTests.requiresGone` (L128-L128) - Class
-  - `scripts.ops.demo-remove-tests.removeResidueTests.requiresGone.some() callback` (L128-L128) - Function
-- `scripts/ops/refresh-breached-passwords.ts`
-  - `scripts.ops.refresh-breached-passwords.downloadCorpus` (L73-L80) - Class
-  - `scripts.ops.refresh-breached-passwords.downloadCorpus.map() callback` (L79-L79) - Function
 - `scripts/pairing/spec-identity.ts`
   - `scripts.pairing.spec-identity.sharedFileProblems` (L192-L193) - Class
   - `scripts.pairing.spec-identity.sharedFileProblems.comparisons.filter() callback` (L193-L193) - Function
@@ -572,9 +721,8 @@ Contract-first code generation (AsyncAPI types, error codes, root assembly fragm
   - `scripts.pairing.sync-to-frontend.list` (L156-L157) - Class
   - `scripts.pairing.sync-to-frontend.list.items.map() callback` (L157-L157) - Function
 - `scripts/scaffold/apply.ts`
-  - `scripts.scaffold.apply.FragmentShape` (L22-L24) - Interface
-  - `scripts.scaffold.apply.applyScaffold.edits` (L108-L116) - Class
-  - `scripts.scaffold.apply.applyScaffold.edits.map() callback` (L109-L115) - Function
+  - `scripts.scaffold.apply.applyScaffold.edits` (L99-L107) - Class
+  - `scripts.scaffold.apply.applyScaffold.edits.map() callback` (L100-L106) - Function
 - `scripts/scaffold/central-edits.ts`
   - `scripts.scaffold.central-edits.CentralEdit` (L21-L26) - Interface
   - `scripts.scaffold.central-edits.appendToList` (L36-L51) - Class
@@ -618,9 +766,9 @@ Contract-first code generation (AsyncAPI types, error codes, root assembly fragm
   - `src.infrastructure.runtime.otel-sdk.publicEndpointPropagator.extract` (L106-L106) - Method
   - `src.infrastructure.runtime.otel-sdk.publicEndpointPropagator.fields` (L107-L107) - Method
 - `src/modules/access/service.ts`
-  - `src.modules.access.service.grantableRoles` (L175-L178) - Class
-  - `src.modules.access.service.grantableRoles.PRESET_ROLES.filter() callback` (L177-L177) - Function
-  - `src.modules.access.service.grantableRoles.map() callback` (L178-L178) - Function
+  - `src.modules.access.service.grantableRoles` (L176-L179) - Class
+  - `src.modules.access.service.grantableRoles.PRESET_ROLES.filter() callback` (L178-L178) - Function
+  - `src.modules.access.service.grantableRoles.map() callback` (L179-L179) - Function
 - `src/modules/invoicing/providers/index.ts`
   - `src.modules.invoicing.providers.index.EInvoicingDocument` (L30-L50) - Interface
   - `src.modules.invoicing.providers.index.EInvoicingArtifact` (L53-L56) - Interface
@@ -632,11 +780,15 @@ Contract-first code generation (AsyncAPI types, error codes, root assembly fragm
   - `src.modules.invoicing.providers.pdf.issue.then() callback` (L48-L48) - Function
   - `src.modules.invoicing.providers.pdf.pdfEInvoicingProvider.issue.then() callback` (L49-L49) - Function
 - `src/modules/invoicing/repository.ts`
-  - `src.modules.invoicing.repository.WithId` (L31-L33) - Interface
-  - `src.modules.invoicing.repository.insertInvoice` (L42-L48) - Class
-  - `src.modules.invoicing.repository.insertInvoice.then() callback` (L48-L48) - Function
-  - `src.modules.invoicing.repository.insertCreditNote` (L92-L101) - Class
-  - `src.modules.invoicing.repository.insertCreditNote.then() callback` (L101-L101) - Function
+  - `src.modules.invoicing.repository.WithId` (L86-L88) - Interface
+  - `src.modules.invoicing.repository.insertInvoice` (L97-L103) - Class
+  - `src.modules.invoicing.repository.insertInvoice.then() callback` (L103-L103) - Function
+  - `src.modules.invoicing.repository.insertCreditNote` (L147-L156) - Class
+  - `src.modules.invoicing.repository.insertCreditNote.then() callback` (L156-L156) - Function
+- `src/modules/invoicing/services/credit-breakdown.ts`
+  - `src.modules.invoicing.services.credit-breakdown.creditBreakdownOf.items.lines.map() callback` (L26-L29) - Function
+- `src/modules/invoicing/services/issue-credit-note.ts`
+  - `src.modules.invoicing.services.issue-credit-note.creditableOf.lines.invoice.lines.map() callback` (L42-L46) - Function
 - `src/modules/invoicing/services/render.ts`
   - `src.modules.invoicing.services.render.storedOrRendered` (L60-L91) - Class
   - `src.modules.invoicing.services.render.storedOrRendered.catch() callback` (L64-L72) - Function
@@ -649,19 +801,27 @@ Contract-first code generation (AsyncAPI types, error codes, root assembly fragm
   - `src.modules.invoicing.services.render.renderCreditNotePdf` (L112-L121) - Class
   - `src.modules.invoicing.services.render.renderCreditNotePdf.storedOrRendered(`credit-note-${String(creditNote._id)}.pdf`) callback` (L113-L120) - Function
   - `src.modules.invoicing.services.render.renderCreditNotePdf.storedOrRendered(`credit-note-${String(creditNote._id)}.pdf`) callback.then() callback` (L120-L120) - Function
+- `src/modules/invoicing/services/stats.ts`
+  - `src.modules.invoicing.services.stats.DocumentTotals` (L17-L27) - Interface
+  - `src.modules.invoicing.services.stats.MoneyBucket` (L30-L35) - Interface
+- `src/modules/products/domain/preorder.ts`
+  - `src.modules.products.domain.preorder.PreorderFacts` (L10-L17) - Interface
+- `src/modules/shop/service.ts`
+  - `src.modules.shop.service.ShopIdentity` (L51-L65) - Interface
+  - `src.modules.shop.service.ReturnAddress` (L88-L96) - Interface
 
 ### Mutation Sharding/Baselining & Reaping Ops [[Expand]](./Mutation_Sharding_Baselining_Reaping_Ops.md)
 The mutation baseline comparison and sharding/wave orchestration logic, the contract section-ordering and AsyncAPI type rendering, plus the periodic reaping ops (e.g. invoice PDFs) and frontend sync. It is the baseline/scoring and housekeeping layer around the harness.
 
 **Related Classes/Methods**:
 
-- `scripts.mutation.baseline.compareMerged`:193-212
+- `scripts.mutation.baseline.compareMerged`:193-197
 
 **Source Files:**
 
 - `scripts/contracts/generate-asyncapi-types.ts`
-  - `scripts.contracts.generate-asyncapi-types.renderLiteralArray.lines` (L254-L254) - Class
-  - `scripts.contracts.generate-asyncapi-types.renderLiteralArray.lines.values.map() callback` (L254-L254) - Function
+  - `scripts.contracts.generate-asyncapi-types.renderLiteralArray.lines` (L238-L238) - Class
+  - `scripts.contracts.generate-asyncapi-types.renderLiteralArray.lines.values.map() callback` (L238-L238) - Function
 - `scripts/contracts/section-order.ts`
   - `scripts.contracts.section-order.orderSections.extra` (L23-L23) - Class
   - `scripts.contracts.section-order.orderSections.extra.present.filter() callback` (L23-L23) - Function
@@ -671,25 +831,17 @@ The mutation baseline comparison and sharding/wave orchestration logic, the cont
   - `scripts.mutation.baseline.FileComparison` (L57-L62) - Interface
   - `scripts.mutation.baseline.scoresFromReport.scored` (L82-L82) - Class
   - `scripts.mutation.baseline.scoresFromReport.scored.mutants.filter() callback` (L82-L82) - Function
-  - `scripts.mutation.baseline.compareMerged` (L193-L212) - Class
-  - `scripts.mutation.baseline.compareMerged.map() callback` (L201-L211) - Function
+  - `scripts.mutation.baseline.compareMerged` (L193-L197) - Class
 - `scripts/mutation/ci/waves.ts`
-  - `scripts.mutation.ci.waves.packUnits.slices` (L126-L126) - Class
-  - `scripts.mutation.ci.waves.packUnits.slices.map() callback` (L126-L126) - Function
-  - `scripts.mutation.ci.waves.packUnits.slices.units.filter() callback` (L126-L126) - Function
+  - `scripts.mutation.ci.waves.packUnits.slices` (L124-L124) - Class
+  - `scripts.mutation.ci.waves.packUnits.slices.map() callback` (L124-L124) - Function
+  - `scripts.mutation.ci.waves.packUnits.slices.units.filter() callback` (L124-L124) - Function
 - `scripts/mutation/run-shards.ts`
-  - `scripts.mutation.run-shards.main.recorded` (L201-L201) - Class
-  - `scripts.mutation.run-shards.main.recorded.shards.filter() callback` (L201-L201) - Function
+  - `scripts.mutation.run-shards.main.recorded` (L200-L200) - Class
+  - `scripts.mutation.run-shards.main.recorded.shards.filter() callback` (L200-L200) - Function
 - `scripts/mutation/sharding.ts`
   - `scripts.mutation.sharding.packIntoShards.totalLines` (L46-L46) - Class
   - `scripts.mutation.sharding.packIntoShards.totalLines.files.reduce() callback` (L46-L46) - Function
-- `scripts/ops/demo-remove-registry.ts`
-  - `scripts.ops.demo-remove-registry.removePackageJsonScripts.after` (L144-L153) - Class
-  - `scripts.ops.demo-remove-registry.removePackageJsonScripts.after.before.replaceAll() callback` (L149-L152) - Function
-- `scripts/ops/reap-invoice-pdfs.ts`
-  - `scripts.ops.reap-invoice-pdfs.main` (L35-L40) - Class
-  - `scripts.ops.reap-invoice-pdfs.then() callback` (L37-L38) - Function
-  - `scripts.ops.reap-invoice-pdfs.main.then() callback` (L40-L40) - Function
 - `scripts/pairing/sync-to-frontend.ts`
   - `scripts.pairing.sync-to-frontend.of` (L148-L148) - Class
   - `scripts.pairing.sync-to-frontend.of.outcomes.filter() callback` (L148-L148) - Function
@@ -720,38 +872,44 @@ The mutation baseline comparison and sharding/wave orchestration logic, the cont
   - `src.infrastructure.observability.analytics.umami.umamiAnalyticsProvider.capture.catch() callback` (L143-L149) - Function
   - `src.infrastructure.observability.analytics.umami.umamiAnalyticsProvider.shutdown` (L157-L159) - Method
 - `src/infrastructure/observability/metrics-registry.ts`
-  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge` (L79-L95) - Class
-  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge.collect` (L84-L94) - Method
-  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge.collect.then() callback` (L88-L92) - Function
-  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge.collect.catch() callback` (L93-L93) - Function
+  - `src.infrastructure.observability.metrics-registry.collectJobGauge` (L81-L95) - Class
+  - `src.infrastructure.observability.metrics-registry.collectJobGauge.then() callback` (L88-L93) - Function
+  - `src.infrastructure.observability.metrics-registry.collectJobGauge.catch() callback` (L94-L94) - Function
+  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge` (L105-L113) - Class
+  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge.collect` (L110-L112) - Method
+  - `src.infrastructure.observability.metrics-registry._jobLastSuccessGauge.collect.collectJobGauge() callback` (L111-L111) - Function
+  - `src.infrastructure.observability.metrics-registry._jobLastRunGauge` (L121-L129) - Class
+  - `src.infrastructure.observability.metrics-registry._jobLastRunGauge.collect` (L126-L128) - Method
+  - `src.infrastructure.observability.metrics-registry._jobLastRunGauge.collect.collectJobGauge() callback` (L127-L127) - Function
 - `src/infrastructure/persistence/lease.ts`
-  - `src.infrastructure.persistence.lease.listLeaseSummaries` (L117-L129) - Class
-  - `src.infrastructure.persistence.lease.listLeaseSummaries.then() callback` (L123-L128) - Function
-  - `src.infrastructure.persistence.lease.listLeaseSummaries.then() callback.rows.map() callback` (L124-L128) - Function
+  - `src.infrastructure.persistence.lease.listLeaseSummaries` (L99-L112) - Class
+  - `src.infrastructure.persistence.lease.listLeaseSummaries.then() callback` (L105-L111) - Function
+  - `src.infrastructure.persistence.lease.listLeaseSummaries.then() callback.rows.map() callback` (L106-L111) - Function
 - `src/kernel/middlewares/authorizations.ts`
-  - `src.kernel.middlewares.authorizations.then() callback` (L186-L195) - Function
-  - `src.kernel.middlewares.authorizations.catch() callback` (L196-L198) - Function
-  - `src.kernel.middlewares.authorizations.stillHoldsKeyViaCookie` (L588-L595) - Class
-  - `src.kernel.middlewares.authorizations.stillHoldsKeyViaCookie.then() callback` (L594-L594) - Function
-  - `src.kernel.middlewares.authorizations.stillHoldsKeyViaCookie.catch() callback` (L595-L595) - Function
-  - `src.kernel.middlewares.authorizations.FreshAuthOptions` (L609-L617) - Interface
-  - `src.kernel.middlewares.authorizations.requireFreshAuth.<function>.hasRequiredMethods.every() callback` (L645-L646) - Function
-  - `src.kernel.middlewares.authorizations.requireFreshAuth.<function>.hasRequiredMethods` (L645-L647) - Class
+  - `src.kernel.middlewares.authorizations.stillHoldsKeyViaCookie` (L704-L708) - Class
+  - `src.kernel.middlewares.authorizations.stillHoldsKeyViaCookie.then() callback` (L707-L707) - Function
+  - `src.kernel.middlewares.authorizations.stillHoldsKeyViaCookie.catch() callback` (L708-L708) - Function
+  - `src.kernel.middlewares.authorizations.FreshAuthOptions` (L711-L719) - Interface
+  - `src.kernel.middlewares.authorizations.requireFreshAuth.<function>.hasRequiredMethods.every() callback` (L749-L750) - Function
+  - `src.kernel.middlewares.authorizations.requireFreshAuth.<function>.hasRequiredMethods` (L749-L751) - Class
 - `src/modules/observability/controllers/get-observability-events.ts`
-  - `src.modules.observability.controllers.get-observability-events.getObservabilityEvents` (L29-L37) - Class
-  - `src.modules.observability.controllers.get-observability-events.getObservabilityEvents.streamObservabilityMetrics() callback` (L34-L35) - Function
+  - `src.modules.observability.controllers.get-observability-events.getObservabilityEvents` (L28-L34) - Class
+  - `src.modules.observability.controllers.get-observability-events.getObservabilityEvents.streamObservabilityMetrics() callback` (L31-L32) - Function
 - `src/modules/observability/controllers/get-observability-metrics-overview.ts`
   - `src.modules.observability.controllers.get-observability-metrics-overview.MetricSample` (L21-L24) - Interface
-  - `src.modules.observability.controllers.get-observability-metrics-overview.readCounter` (L40-L45) - Class
-  - `src.modules.observability.controllers.get-observability-metrics-overview.readCounter.then() callback` (L44-L44) - Function
-  - `src.modules.observability.controllers.get-observability-metrics-overview.hasShopMetrics` (L59-L60) - Class
-  - `src.modules.observability.controllers.get-observability-metrics-overview.hasShopMetrics.SHOP_METRIC_NAMES.some() callback` (L60-L60) - Function
-  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels` (L65-L68) - Class
-  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels.values.filter() callback` (L67-L67) - Function
-  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels.values.filter() callback.every() callback` (L67-L67) - Function
-  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels.reduce() callback` (L68-L68) - Function
-  - `src.modules.observability.controllers.get-observability-metrics-overview.getObservabilityMetricsOverview` (L74-L142) - Class
-  - `src.modules.observability.controllers.get-observability-metrics-overview.getObservabilityMetricsOverview.then() callback` (L91-L140) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.readCounter` (L40-L50) - Class
+  - `src.modules.observability.controllers.get-observability-metrics-overview.readCounter.then() callback` (L47-L48) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.hasShopMetrics` (L64-L65) - Class
+  - `src.modules.observability.controllers.get-observability-metrics-overview.hasShopMetrics.SHOP_METRIC_NAMES.some() callback` (L65-L65) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.histogramCounts` (L71-L72) - Class
+  - `src.modules.observability.controllers.get-observability-metrics-overview.histogramCounts.values.filter() callback` (L72-L72) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels` (L77-L80) - Class
+  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels.values.filter() callback` (L79-L79) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels.values.filter() callback.every() callback` (L79-L79) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.sumByLabels.reduce() callback` (L80-L80) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.getObservabilityMetricsOverview` (L86-L155) - Class
+  - `src.modules.observability.controllers.get-observability-metrics-overview.getObservabilityMetricsOverview.then() callback` (L102-L153) - Function
+  - `src.modules.observability.controllers.get-observability-metrics-overview.getObservabilityMetricsOverview.then() callback.data.database.errorsTotal.databaseCommands.filter() callback` (L142-L142) - Function
 - `src/modules/observability/controllers/get-observability-metrics.ts`
   - `src.modules.observability.controllers.get-observability-metrics.getObservabilityMetrics` (L18-L29) - Class
   - `src.modules.observability.controllers.get-observability-metrics.getObservabilityMetrics.then() callback` (L20-L23) - Function
@@ -766,6 +924,9 @@ The mutation baseline comparison and sharding/wave orchestration logic, the cont
   - `src.modules.observability.http-readback.getHttpRequestCounters.then() callback` (L112-L115) - Function
   - `src.modules.observability.http-readback.getLatencyPercentiles` (L126-L135) - Class
   - `src.modules.observability.http-readback.getLatencyPercentiles.then() callback` (L127-L135) - Function
+- `src/modules/observability/metrics.ts`
+  - `src.modules.observability.metrics._dependencyUp` (L21-L31) - Class
+  - `src.modules.observability.metrics._dependencyUp.collect` (L26-L30) - Method
 - `src/modules/observability/services/dependency-health.ts`
   - `src.modules.observability.services.dependency-health.overallStatus` (L52-L55) - Class
   - `src.modules.observability.services.dependency-health.overallStatus.every() callback` (L53-L53) - Function

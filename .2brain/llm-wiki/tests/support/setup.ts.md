@@ -1,7 +1,7 @@
 ---
 source: tests/support/setup.ts
-sha256: 61acf39624be4eaf8105744936adc113b04824e79ca6c204d07a7d00f5068d5d
-generated_at: 2026-09-27T16:01:20.941235+00:00
+sha256: af5eb4833e5e39917112d074ec752eb72ec07c818a412d5701feba1e118abf8c
+generated_at: 2026-10-15T13:02:11.748762+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Global Jest bootstrap (wired via `setupFiles`) that sets required `process.env` variables **before** any test module is imported. Many production modules capture config at import time (rate-limiters build their instances, i18n must have resources loaded before zod schema thunks evaluate), so this file must run first. It also pins environment values that a developer's `.env` or CI would otherwise leave unset, so suites are deterministic and independent of external services (Redis, HIBP API).
+Global Jest bootstrap executed via `setupFiles` — once per worker, **before** any test module is imported. It exists because several infrastructure modules (i18n, Zod validation messages, template registry, Mongoose options) capture their configuration at import time, so wiring must happen earlier than any `beforeAll` hook would allow.
 
 ## Key elements
 
-- **Top-level `process.env` assignments (all `??=`)** — sets defaults for every rate-limiter budget (`NODE_*_RATE_LIMIT_MAX`, `NODE_MFA_SEND_MAX`, `NODE_API_KEY_RATE_LIMIT_MAX`, `NODE_PASSWORD_CHECK_RATE_LIMIT_MAX`, etc.), the shared window (`NODE_RATE_LIMIT_WINDOW_MS`), bank-transfer credentials, shop country/VAT rates, Redis toggle, HIBP toggle, metrics token, JWT/encryption keys, and PII encryption key.
-- **`bootI18n()`** — loads i18n resources so that any subsequent `zod` schema can resolve message thunks.
-- **`registerValidationMessages()`** — registers HTTP-layer validation messages into the i18n catalog.
-- **`MODULES_ROOT`** (imported from `@tests/paths`) — provides the filesystem root used by other test-support utilities.
+- **`import './setup-environment'`** — first import, pure side-effect: writes process env vars that later imports read.
+- **`import '@infrastructure/runtime/mongoose-boot'`** — sets `strictQuery` before any schema is built.
+- **`bootI18n(localesDirs, 'en')`** — loads i18next resources by globbing `MODULES_ROOT/*/locales` from disk (filtered with `existsSync`). Fire-and-forget (`void`).
+- **`registerValidationMessages()`** — hooks i18n thunks into Zod so validation errors carry translated copy.
+- **`registerTemplateDirectories(templatesDirs)`** — collects `MODULES_ROOT/*/templates` on disk so `templateFile()` can resolve names later.
+- **`jest.mock('node:dns/promises', …)`** — stubs `resolve4` (returns a fixed IPv4) and `resolve6` (rejects) so webhook-URL checks never hit a real resolver; rest of the module stays real.
+- **`registerDoubles()`** — registers the fake payment provider, mail log, and outbox in `globalThis`-attached registries.
 
 ## Relationships
 
-- **`src/infrastructure/http/validation-messages.ts`** — exports `registerValidationMessages`, called here to seed HTTP error messages into the i18n catalog before any schema validates a request.
-- **`src/infrastructure/i18n/boot.ts`** — exports `bootI18n`, called here to load all locale resources at bootstrap time.
-- **`src/infrastructure/i18n/index.ts`** — the public i18n entry point whose internal state must be populated before any module imports it and reads a translation.
-- **`tests/support/paths.ts`** — exports `MODULES_ROOT`, consumed here (and by other test helpers) to resolve filesystem paths relative to the source tree.
+- **`tests/support/setup-environment.ts`** — imported first for its side effect; must complete before any subsequent import reads env.
+- **`tests/support/paths.ts`** — supplies `MODULES_ROOT` used by both disk globs.
+- **`src/infrastructure/i18n/boot.ts` / `src/infrastructure/i18n/index.ts`** — provides `bootI18n`; must finish (resources loaded) before any Zod schema evaluates a message thunk.
+- **`src/infrastructure/http/validation-messages.ts`** — `registerValidationMessages()` binds the i18n thunks to Zod.
+- **`src/infrastructure/adapters/template-registry.ts`** — `registerTemplateDirectories()` populates the lookup; the *leaf* module is imported deliberately (not the higher-level mailer barrel) to avoid eagerly evaluating `nodemailer` before a test's mock is hoisted.
+- **`src/infrastructure/runtime/mongoose-boot.ts`** — side-effect import that pins `strictQuery` ahead of schema construction.
+- **`scenarios/support/doubles/register.ts`** — `registerDoubles()` populates global registries; each double lazily loads its dependencies on first call, after test-file mocks are already in place.
 
 ## Notes
 
-- **Ordering is critical.** This runs via `setupFiles` (before module imports), not `beforeAll`. Setting the same variables in a hook would be too late for import-time captures (e.g., `buildRateLimiter()`).
-- **Rate limits are raised, never disabled.** This keeps runaway loops terminable and lets limiter-specific tests still assert a 429 by lowering the value per-test.
-- **`NODE_MFA_CHALLENGE_MAX` is deliberately NOT raised.** `two-factor.test.ts` relies on the tight production default (5) to prove the challenge-kill logic works.
-- **`NODE_RATE_LIMIT_REDIS_ENABLED` is forced to `'0'`.** The limiters count in memory only; a shared Redis would couple suite results to external state, and the compose hostname in `.env` won't resolve from a test runner.
-- **`NODE_PASSWORD_BREACH_HIBP` defaults to `'off'`.** Individual tests that need rung-2 can flip it on with a mocked `fetch`; the global default prevents live third-party calls and latency-induced flakiness.
-- **All assignments use `??=`, not `=`.** This allows a `.env` (loaded by `src/app.ts` via `dotenv/config`) or a per-test override to take precedence, while still providing a safe fallback for CI environments that have no `.env` at all.
+- **No database here.** Mongo is per-suite via `setupTestDb()`; spinning up mongod for a pure-function test is unnecessary cost.
+- **Disk globs, not `enabledModules`.** Importing the module registry would load every module before any test-file `jest.mock` could intercept it, silently breaking mocks in unrelated suites. A `readdirSync` glob is layout knowledge, not application knowledge.
+- **Leaf import for template registry.** `@infrastructure/adapters/mailer` (the barrel) also pulls in `nodemailer`; importing it in `setupFiles` would hand every test file an already-evaluated, un-mockable `nodemailer`.
+- **DNS mock is overridable.** A test file's own `jest.mock('node:dns/promises', …)` is hoisted by Jest and wins over this global registration.
+- **`bootI18n` is async but fire-and-forget.** Under Jest the promise resolves before module-scope `t()` calls execute, so eager Zod messages work; copy that must resolve at *parse* time (validation messages) is wrapped in a thunk for that reason.

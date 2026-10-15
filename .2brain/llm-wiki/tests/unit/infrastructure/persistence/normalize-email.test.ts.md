@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/persistence/normalize-email.test.ts
-sha256: 6fd17dbb0d5b3ffce08700eb21c1bcbf2db018f9c2db1490eecf2dfd165c890f
-generated_at: 2026-09-27T16:09:37.344629+00:00
+sha256: 5237fd1b6af45d38e6b0a1a94e5257a5791859fda6cf07e39cf3148df5f12d7f
+generated_at: 2026-10-15T13:18:29.098845+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,19 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `normalizeEmail` helper, verifying that email addresses are trimmed of surrounding whitespace and lowercased before persistence.
+Unit tests for the two email-normalization utilities in the persistence layer. They pin down the exact contract of light normalization (`normalizeEmail`) versus aggressive mailbox folding (`canonicalMailbox`), including edge cases around Gmail-specific rules and malformed input.
 
 ## Key elements
 
-- **`describe('normalizeEmail')`** — test suite scoped to the `normalizeEmail` function imported from `@infrastructure/persistence/normalize-email`.
-- **"trims surrounding whitespace and lowercases the address"** — asserts `normalizeEmail('  Ada@Example.com  ')` returns `'ada@example.com'`.
-- **"is idempotent on an already-normalized address"** — asserts that passing an already-clean address (`'ada@example.com'`) returns the same value unchanged.
+- **`describe('normalizeEmail')`** — Verifies that `normalizeEmail` trims surrounding whitespace and lowercases the entire string, and that the result is idempotent.
+- **`describe('canonicalMailbox')`** — Table-driven tests (`it.each`) plus targeted cases covering:
+  - Stripping `+tag` local-parts (single and multiple tags).
+  - Dropping dots in the local-part **only** for `gmail.com` / `googlemail.com`; dots are preserved for other domains.
+  - Unifying `googlemail.com` → `gmail.com`.
+  - Keeping genuinely different mailboxes distinct (different local-parts or domains).
+  - Leaving malformed addresses (`+tag@…`, no `@`) unchanged except for lowercasing.
+  - Never altering a `+` that appears in the **domain** portion.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/normalize-email.ts`** — the sole dependency under test; exports the `normalizeEmail` function that this file exercises.
+- **`src/infrastructure/persistence/normalize-email.ts`** — Sole import source; provides `normalizeEmail` and `canonicalMailbox`, the two functions under test.
 
 ## Notes
 
-- The import uses the `@infrastructure` path alias, mirroring the project's aliasing convention for `src/` subdirectories.
-- Tests are intentionally minimal (two cases); there is no coverage for edge cases like empty strings, missing `@`, or multi-space input — only basic trim/lowercase and idempotency are asserted.
+- Gmail-specific dot-stripping and `googlemail.com` unification are called out explicitly in an inline comment; they do **not** apply to any other provider. A dot in `a.da@example.com` is intentionally preserved.
+- A leading `+` (i.e., `+tag@…`) is treated as malformed and passed through untouched (aside from lowercasing); the function defers structural validation to a downstream step.
+- The test for domain-level `+` (`ada@exa+mple.com`) guards against an over-eager split-on-`+` implementation.

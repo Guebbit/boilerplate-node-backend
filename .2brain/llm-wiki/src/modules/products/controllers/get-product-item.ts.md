@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/controllers/get-product-item.ts
-sha256: 050c131f46b0f1079962d4e9e25de4260c61038c5e42b6118b6bc1fc9f6738c3
-generated_at: 2026-09-23T19:26:03.928938+00:00
+sha256: 5d0cb5a53035bff10b98b8d5e77c588ccbf0e3b51ffd72a3f630b6903575aecb
+generated_at: 2026-10-15T11:40:31.370047+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin controller for `GET /products/:id`. It delegates all real work to the shared `createItemController` factory and the product service, wiring together the caller's auth scope so that row visibility (active vs. inactive/deleted) is enforced per role.
+Thin controller for `GET /products/:id`. It wires the shared `createItemController` factory to the product service so that a single product can be fetched by path id, with row visibility scoped to the calling user (or API key).
 
 ## Key elements
 
-- **`getProductItem`** (export) — The route handler produced by `createItemController({ entity: 'product', notFoundKey: 'products.not-found', fetch: … })`. Its `fetch` callback calls `productService.getByIdViewed(id, callerScope, callerContext)` to retrieve one product row with the caller's visibility filter applied.
+- **`getProductItem`** (export) — the route handler returned by `createItemController`. Accepts an `id` and an `HttpRequuest` inside its `fetch` callback, delegates to `productService.getByIdForCaller`, and passes the caller's scope and context.
 
 ## Relationships
 
-- **`src/infrastructure/surfaces/create-item-controller.ts`** — Supplies the `createItemController` factory that shapes this file's export into a standard HTTP handler (status codes, 404 via `notFoundKey`, etc.).
-- **`src/modules/products/service.ts`** — Provides `productService.getByIdViewed()` (the actual data fetch) and `productService.callerScope()` (maps `request.authContext` into a visibility predicate).
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)`, extracted and forwarded to the service as a third argument.
-- **`src/modules/products/routes.ts`** — The route file that mounts `getProductItem` and attaches `getAuth`, which is what populates `request.authContext` before this handler runs.
+- **`src/infrastructure/surfaces/create-item-controller.ts`** — provides the `createItemController` factory that `getProductItem` is built from. The factory supplies the common request-parsing, 404 handling (`notFoundKey`), and response-shaping logic; this file only supplies the `entity`, `notFoundKey`, and `fetch` config.
+- **`src/modules/products/services/index.ts`** — imports `productService`, whose `getByIdForCaller(id, scope, callerContext)` performs the actual lookup and whose `callerScope(request.caller)` derives the row-visibility filter for the caller.
+- **`src/infrastructure/http/request.ts`** — imports `callerContextOf(request)` to extract caller context (e.g. headers, auth metadata) and pass it alongside the id to the service layer.
+- **`src/modules/products/routes.ts`** — the route table that mounts `getProductItem` at the `/products/:id` path.
 
 ## Notes
 
-- The comment explicitly ties correctness to the route-level `getAuth` middleware: without it, `request.authContext` is undefined and role-based scoping (admin sees inactive/deleted rows) will not function. This file contains no fallback.
-- The 404 message key is `products.not-found`; the lookup is by the route's `:id` path parameter, not a query string.
+- Access control for non-active (inactive/deleted) products is enforced inside `productService.getByIdForCaller` via the `callerScope` argument, not in this file. The controller itself contains no permission logic.
+- `notFoundKey: 'products.not-found'` is a translation/i18n key consumed by the factory for the 404 body; ensure that key exists in the locale files.
+- The `entity: 'product'` string is a label passed to the factory (used for logging or response naming); it is not a type parameter.

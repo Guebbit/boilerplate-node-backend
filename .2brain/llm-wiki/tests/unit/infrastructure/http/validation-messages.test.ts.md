@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/http/validation-messages.test.ts
-sha256: 9d0bc249d8c17de3741fd153ee80f9d6d4fdaa24c3e1c7dd99dceb3e23071a30
-generated_at: 2026-09-23T20:23:55.887874+00:00
+sha256: a79144cacd66ce6e654d4bfcf756e96a919d0ec48ad9ac162540e14701e8bed8
+generated_at: 2026-10-15T13:16:14.806101+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies that Zod's global error map — installed once via `registerValidationMessages` — emits the project's English i18n copy for every validation failure it handles. The file drives real schema parses (not the mapper directly) because that is the only path a request takes, and its central concern is catching the silent case where a message falls back to Zod's built-in English and looks like a valid message rather than a bug.
+Verifies that the Zod global error map (installed by `registerValidationMessages`) produces the correct, translated, label-aware message for every error class the application can emit. It drives each assertion through a real `safeParse` call on a Zod schema—because the mapper lives on the Zod singleton, parsing is the only path a request ever takes through it—and asserts the resulting message against the shipped locale dictionary rather than against a retyped literal. The file exists to catch the silent failure mode where a message regresses to Zod's own English ("Invalid input"), which looks like a working message rather than a bug.
 
 ## Key elements
 
-- **`copy`** — the shipped English `validation` sub-dictionary extracted from `readLocaleDictionary('en')`; every expectation references these values instead of retyping sentences.
-- **`messageOf(schema, value)`** — safe-parses, asserts failure, returns the first issue's message.
-- **`messagesOf(schema, value)`** — same but returns all issue messages.
-- **`beforeAll → registerValidationMessages()`** — installs the error map on the Zod singleton before any test runs.
-- **`describe` groups:**
-    - _missing vs. wrong-type field_ — `required` vs. `invalid-type` vs. explicit `null`.
-    - _size constraints_ — string min/max (characters), number min/max (value), array min/max (items), Set min (items).
-    - _formats_ — email, url, uuid, datetime, date, time, plus the generic fallback for an unnamed regex.
-    - _remaining named constraints_ — `multipleOf`, `strictObject` unrecognized-keys listing, enum accepted-values listing.
-    - _nothing falls through to Zod English_ — bare `.refine()`, unmatched union, and a multi-error parse asserting every message starts with a known i18n prefix.
+- **`render(key, values)`** — Renders a translated validation sentence using the same `translator('en', …)` the production map uses, so expectations never drift from the shipped copy.
+- **`messageOf(schema, value)`** / **`messagesOf(schema, value)`** — Helpers that call `safeParse`, assert the parse failed, and return the first (or all) issue messages.
+- **`field(name, schema)`** — Wraps a schema in a one-field object so the field's label is part of the assertion.
+- **`beforeAll → registerValidationMessages()`** — Installs the custom error map on the Zod singleton once per suite.
+- **Describe blocks** covering: required vs. type errors; label resolution (innermost label, unlabelled-segment fallback, neutral fallback, runtime locale switch to Italian); size constraints (string chars, number values, array/set items, exclusive bounds, singular forms); format validators (email, url, uuid, ISO datetime/date/time, bare regex fallback); named constraints (multipleOf, strictObject unrecognized keys, enum values); and fallback guards (refine with no message, union mismatch, multi-error translation).
 
 ## Relationships
 
-- **`src/infrastructure/http/validation-messages.ts`** — the module under test; supplies `registerValidationMessages` which installs the error map on Zod.
-- **`src/infrastructure/i18n/index.ts`** — re-exports `readLocaleDictionary`, used here to load the English dictionary that the assertions compare against.
-- **`src/infrastructure/i18n/catalog.ts`** — source of the dictionary data behind `readLocaleDictionary`; changes to the shipped copy are picked up automatically by these tests.
+- **`src/infrastructure/http/validation-messages.ts`** — The module under test; exports `registerValidationMessages`, which installs the custom error map onto the Zod singleton that every subsequent `safeParse` consults.
+- **`src/infrastructure/i18n/catalog.ts`** — Provides `readLocaleDictionary`, used to load the `en` and `it` dictionaries as the source of truth for expected messages.
+- **`src/infrastructure/i18n/context.ts`** — Provides `runWithLocale`, used in the "answers in the language of the request" test to switch the active locale at runtime.
+- **`src/infrastructure/i18n/index.ts`** — Barrel re-export consumed by this file for `translator` (and indirectly `readLocaleDictionary`, `runWithLocale`).
+- **`tests/unit/scripts/scaffold/demo-remove-validation-labels.test.ts`** — Companion test that exercises the scaffold script which strips validation label entries; shares the same `validation.attributes` dictionary structure that this file asserts against.
 
 ## Notes
 
-- Expectations are derived from the live i18n dictionary, so updating a sentence in the catalog updates the test's expected value with no edit here — but also means a typo in the dictionary will silently pass both production and test.
-- `messageOf`/`messagesOf` assert `result.success === false`; if a test accidentally uses a schema that _passes_, the helper throws a misleading "expected false to be true" error rather than a message mismatch.
-- The final multi-error test builds a `Set` of all dictionary sentence prefixes (split on `{{`) and checks that every issue message starts with one of them — the broadest guard against any Zod-default leaking through.
-- Jest/Vitest globals (`describe`, `it`, `expect`, `beforeAll`) are used without imports, implying the project's test runner injects them.
+- All expectations are rendered through `translator` with the **shipped dictionary** as the variable source—no sentence is retyped as a string literal in the test. If you add a new error branch, add a new dictionary key and a test that calls `render` with it.
+- Pluralisation is treated as a separate sentence (`too-small-items` vs. `too-small-items-one`, etc.); the tests explicitly pin the singular form to prevent accidental pluralisation at count 1.
+- The "nothing falls through to Zod English" block is a regression guard: it asserts that `.refine(() => false)` (no message) and `z.union` mismatches still produce a **translated** sentence, not Zod's default `"Invalid input"`.
+- Label resolution is path-sensitive: the test for `translations: Record<string, …>` asserts the parent key's label is used when the record key itself has no label—this is the "skip an unlabelled segment" rule.

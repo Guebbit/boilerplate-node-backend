@@ -1,29 +1,35 @@
 ---
 source: tests/unit/infrastructure/observability/tracer.test.ts
-sha256: b0845e8fcbab5c0b7fa87c9fada32864c13ba98c83307c56d6ab31d8900d54ce
-generated_at: 2026-09-27T16:09:06.298074+00:00
+sha256: 3547c2dd42630e7387f65d209e564aa46e917fee05acee0b410004a5f46cdd81
+generated_at: 2026-10-15T13:17:46.777243+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # tests/unit/infrastructure/observability/tracer.test.ts
 
 ## Purpose
-Unit tests for the OpenTelemetry tracing utilities exported by `src/infrastructure/observability/tracer.ts`. Verifies that each public helper (`getTracer`, `withSpan`, `getActiveSpanContext`, `recordErrorOnActiveSpan`) behaves correctly on both the happy path and the error path, using an in-memory exporter so no real telemetry backend is needed.
+
+Unit tests for the OpenTelemetry tracing helpers exported from `@infrastructure/observability/tracer`. Validates span creation, error recording, active-context inspection, and environment-dependent behavior (stack-trace / message inclusion in dev vs. production) using an in-memory span exporter so no real backend is required.
 
 ## Key elements
-- **`setupTestProvider` / `teardownTestProvider`** — local helpers that create a `NodeTracerProvider` wired to an `InMemorySpanExporter` (via `SimpleSpanProcessor`) and register/shutdown the global provider. Each `describe` block calls them in `beforeEach`/`afterEach` so tests stay isolated.
-- **`describe('getTracer')`** — asserts the function doesn't throw and that the returned tracer can start and end a span.
-- **`describe('withSpan — success')`** — verifies the callback return value is resolved, the span is exported with the correct name, and the optional third-argument attributes are attached.
-- **`describe('withSpan — error')`** — covers async rejection, synchronous throw, span still being ended, and an `exception` event being recorded with `exception.message`.
-- **`describe('getActiveSpanContext')`** — confirms `traceId`/`spanId` are `undefined` outside a span and match the expected hex formats (`32`/`16` hex chars) inside one.
-- **`describe('recordErrorOnActiveSpan')`** — confirms it is a no-op when no span is active, records an `exception` event when one is, and does not throw when passed a non-`Error` value (e.g. a string).
-- **`describe('context baseline')`** — sanity check that `trace.getActiveSpan()` is `undefined` under `ROOT_CONTEXT`.
-- **`throwing`** — a tiny helper that throws synchronously (used to test the sync-throw path of `withSpan`).
+
+- **`setupTestProvider` / `teardownTestProvider`** — Local helpers that create a `NodeTracerProvider` wired to an `InMemorySpanExporter` via `SimpleSpanProcessor`, then shut it down and disable the global tracer. Each `describe` block calls these in `beforeEach`/`afterEach` for isolation.
+- **`throwing`** — A tiny utility that throws synchronously (before returning a promise), used to exercise the sync-throw path of `withSpan`.
+- **`describe('getTracer')`** — Verifies the factory doesn't throw and that the returned tracer can start and end a span.
+- **`describe('withSpan — success')`** — Confirms the callback's return value is propagated and the finished span is exported with the correct name.
+- **`describe('withSpan — error')`** — Covers: rejection re-throw, span still ends on failure, sync-throw path, exception-event attributes (`exception.message`, `exception.stacktrace`), and production-mode suppression of stack traces and messages.
+- **`describe('getActiveSpanContext')`** — Checks that `traceId`/`spanId` are `undefined` outside a span and match the expected hex formats inside one.
+- **`describe('recordErrorOnActiveSpan')`** — Verifies no-op when no span is active, exception-event recording, production stack-trace suppression, and graceful handling of non-Error values.
+- **`describe('context baseline')`** — Sanity-checks that `trace.getActiveSpan()` returns `undefined` under `ROOT_CONTEXT`.
 
 ## Relationships
-- **`src/infrastructure/observability/tracer.ts`** — the sole module under test; this file imports all four public exports from it and exercises them against a real (in-memory) OpenTelemetry SDK provider.
+
+- **`src/infrastructure/observability/tracer.ts`** — The module under test. Imports `getTracer`, `withSpan`, `getActiveSpanContext`, and `recordErrorOnActiveSpan`.
+- **`tests/support/environment.ts`** — Supplies `setEnvironment`, used to swap `NODE_ENV` between `'development'` and `'production'` in order to assert different exception-attribute sets on recorded spans.
 
 ## Notes
-- Tests rely on `provider.register()` mutating the **global** tracer provider, so order matters: `afterEach` must call `provider.shutdown()` **and** `trace.disable()` to avoid leaking state into the next test file. If tests run in parallel across workers this is fine, but within a single worker a missed teardown will silently affect subsequent suites.
-- The `withSpan` error tests use `.catch(() => {})` to swallow the rejection before inspecting the exporter; this is intentional—assertions are on the exported span data, not on the thrown value (which is asserted separately via `rejects.toThrow`).
-- `recordErrorOnActiveSpan` is deliberately tested with a plain string to lock in the "graceful handling of non-Error inputs" contract.
+
+- The tests deliberately register a **new** `NodeTracerProvider` per `describe` block and call `trace.disable()` on teardown; a stale global provider from a previous suite will silently break assertions.
+- Production-mode tests assert the **exact** shape of `event.attributes` (`toEqual({ 'exception.type': 'TypeError' })`), so adding a new always-present attribute to the tracer implementation will break these tests.
+- `setEnvironment` is called inline (not in `beforeEach`), meaning any test that forgets to reset the environment could leak state into the next test in the same file.
+- The sync-throw test (`throwing`) exists because `withSpan` must handle callbacks that throw before returning a `Promise`; a standard `Promise.reject` callback doesn't exercise that path.

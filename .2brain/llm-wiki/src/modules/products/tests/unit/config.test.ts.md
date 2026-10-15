@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/unit/config.test.ts
-sha256: 93a0ce0efb31a11d00e9732407ddbd88b6c1a9c49b04c3c4ac94dc2bcd90109a
-generated_at: 2026-09-23T19:30:27.384288+00:00
+sha256: 7e2504eab5f3b700db2f46678e826d8eb751ac748c0ef848417eefdb9ff748cb
+generated_at: 2026-10-15T11:49:46.289465+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the products module's VAT-rate boot gate. Verifies that `assertRequiredConfig` rejects missing or malformed `NODE_VAT_RATE_DEFAULT` / `NODE_VAT_RATE_REDUCED` values, accepts valid ones, and that the public readers (`vatRateDefault`, `vatRateReduced`) resolve per-call with correct fallbacks.
+Unit tests for the products module's VAT-rate boot gate. Validates that `assertModuleConfig` correctly rejects invalid or missing `NODE_VAT_RATE_*` values through the module manifest wiring, and that the `vatRateDefault`/`vatRateReduced` readers return the expected numbers. Driven through the public manifest entry point (not the internal check directly) so the slice-check wiring is exercised.
 
 ## Key elements
 
-- **`TOUCHED`** — const tuple listing every env var the suite mutates (`NODE_ENV`, `NODE_URL`, `NODE_VAT_RATE_DEFAULT`, `NODE_VAT_RATE_REDUCED`); passed to `withoutEnvironmentInThisFile` for automatic cleanup.
-- **`configure()`** — helper that sets a fully valid baseline env (development mode, URL, both VAT rates) so each case can break exactly one thing.
-- **`describe('the VAT rate boot gate')`** — drives `assertRequiredConfig([productsModule])` to exercise the manifest's `customCheck`: missing-both-rates, a table of invalid strings (`abc`, `1`, `1.5`, `-0.1`, `.5`, `1e-1`, whitespace), and the valid edge case of `0`.
-- **`describe('reading the rates')`** — calls `vatRateDefault()` / `vatRateReduced()` directly to confirm per-call resolution and the 0.22 / 0.1 fallbacks when the env vars are absent.
+- **`TOUCHED`** – Frozen tuple of every env var this file reads or writes; passed to `withoutEnvironmentInThisFile` for per-file cleanup.
+- **`configure()`** – Helper that sets a fully valid baseline (`NODE_ENV=development`, `NODE_URL`, both VAT rates) so each case can mutate exactly one variable.
+- **`describe('the VAT rate boot gate')`** – Calls `assertModuleConfig([productsModule], [])` and asserts throw/accept:
+  - Neither rate set → throws naming both vars.
+  - `it.each` over `['abc','1','1.5','-0.1','.5','1e-1',' ']` → each rejected for `NODE_VAT_RATE_DEFAULT`.
+  - Rate `'0'` → accepted (zero-VAT shop).
+  - Fully configured baseline → accepted.
+- **`describe('reading the rates')`** – Calls `vatRateDefault()` / `vatRateReduced()` directly:
+  - Override to `'0.05'` → returns `0.05` (read per call, not cached).
+  - Both vars undefined → falls back to `0.22` / `0.1`.
 
 ## Relationships
 
-- **`src/kernel/required-config.ts`** — source of `assertRequiredConfig`, the function under test. The suite passes the module manifest through it to exercise the `customCheck` wiring.
-- **`src/modules/products/config.ts`** — source of `vatRateDefault` and `vatRateReduced`, the reader functions tested in the second `describe` block.
-- **`src/modules/products/module.ts`** — default export (`productsModule`); its manifest is the array element passed to `assertRequiredConfig`, making the test dependent on the manifest actually declaring the `customCheck`.
-- **`tests/support/environment.ts`** — provides `withoutEnvironmentInThisFile`, which snapshots and restores the vars in `TOUCHED` around the file's execution.
+- **`@kernel/module-config`** – Provides `assertModuleConfig`, the function under test; this file is its primary consumer in the test suite.
+- **`../../config`** – Exports `vatRateDefault` and `vatRateReduced`, the readers whose values and fallbacks are asserted here.
+- **`../../module`** – Exports `productsModule`, the manifest object passed into `assertModuleConfig`; its slice-check definition is what triggers the VAT-rate validation.
+- **`@tests/environment`** – Provides `setEnvironment` (per-case mutation) and `withoutEnvironmentInThisFile` (file-scoped teardown) for hermetic env handling.
 
 ## Notes
 
-- The gate **short-circuits when `NODE_ENV === 'test'`**, so `configure()` always sets it to `'development'`. A suite that forgets this step would silently pass without asserting anything.
-- Tests deliberately go through `assertRequiredConfig` rather than calling `invalidVatRateConfig` directly: the manifest wiring (registration of `customCheck`) is part of what is under test.
-- The `.5` / `1e-1` cases target a real parse-grammar divergence: a bare `Number()` coerces both to in-range floats, but `parseEnvironmentDecimal` rejects them, so the gate must reject them to avoid silently charging the fallback rate.
-- `withoutEnvironmentInThisFile` handles both per-test isolation and file-end restoration; individual tests should not also `delete` env vars in `afterEach`.
+- **`NODE_ENV` must not be `'test'`** inside a case. The gate short-circuits under the test environment, so a suite that forgets to override it will pass without asserting anything. `configure()` always sets it to `'development'`.
+- **`.5` and `1e-1` are deliberately included** in the invalid-rate list: a bare `Number()` call would coerce them into in-range values (0.5, 0.1), but the `decimal` field's stricter grammar in `config.ts` would silently fall back to the default — so the gate must reject them to avoid accepting a value that the reader would then discard.
+- **Manifest wiring is intentional.** Testing `assertModuleConfig([productsModule], [])` rather than the internal validator ensures the slice-check is actually registered on the manifest; a test that called the validator directly would still pass if the check were never wired up.

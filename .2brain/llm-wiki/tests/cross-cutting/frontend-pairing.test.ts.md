@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/frontend-pairing.test.ts
-sha256: 8422453cedc91224dd3cff935a00dc725c451b86b4cd9cc6563585cf010e0574
-generated_at: 2026-09-23T19:56:03.422576+00:00
+sha256: 341e595cd62a804d3c209abcf2cd1fcdf8be6e92178dd6d685ba737a414875d8
+generated_at: 2026-10-15T12:37:50.332491+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-repo pairing test that verifies the hand-written mapping between every enabled backend module and its counterpart module(s) in the `boilerplate-vue-frontend` repository. It exists because the name correspondence is asymmetric (routeless modules, one-screen-multiple-endpoints, frontend-only modules), so a simple name-matcher would produce wrong answers. The test guards both directions: local completeness of the map, and—when the sibling checkout is present—that every claimed frontend name actually exists and every frontend module is accounted for.
+Cross-repository pairing guard. Verifies that every backend module either names its frontend counterpart as the same name (or supplies a `why` for the mismatch), and—when a paired Vue frontend is checked out—that the names claimed in this repo's descriptors match the actual module folders on the other side, in both directions.
 
 ## Key elements
 
-- **`Pairing`** (interface) — `counterparts: readonly string[]` (frontend module names covering this domain; empty = no frontend screen) and optional `why?: string` (prose explanation required when names differ or the list is empty).
-- **`FRONTEND_PAIRING`** — `Readonly<Partial<Record<string, Pairing>>>`. The authoritative map from 17 backend module names to their frontend counterparts. Notable asymmetric entries: `access`/`antibot` (empty), `addresses`→`account`, `audit-logs`→`admin`, `observability`→`admin`+`realtime`.
-- **`FRONTEND_ONLY`** — Frontend modules with no backend counterpart (currently just `demo`).
-- **`moduleNames()`** — Derives the enabled backend module names from `enabledModules`.
-- **`siblingRoot` / `siblingModules` / `siblingPresent` / `siblingExpected`** — Resolve the sibling frontend path and gate the cross-repo test block. `siblingExpected` reads `process.env.FRONTEND_PATH`, not `CI`.
-- **`frontendModules()`** — Lists actual directory names under the sibling's `src/modules/`.
-- **`claimedNames()`** — Unions all frontend names referenced in `FRONTEND_PAIRING` counterparts and `FRONTEND_ONLY` keys.
-- **First `describe`** — Local integrity: every enabled module has a map entry; no entry references a disabled module.
-- **Second `describe`** (conditional on `siblingPresent`) — Cross-repo verification: claimed names exist over there; every module over there is claimed. If the sibling is absent, warns loudly and asserts vacuously when `siblingExpected` is false.
+- **`DESCRIPTORS`** — all module descriptors read from `MODULES_ROOT` at load time; the single source of truth for this test's assertions.
+- **`FRONTEND_ONLY`** — record of frontend modules that have no backend counterpart. Currently empty; exists as an explicit escape hatch.
+- **`siblingExpected` / `siblingPresent`** — booleans gating the second half: whether `FRONTEND_PATH` was set and whether `src/modules` actually exists at the resolved path.
+- **`frontendModules()`** — lists top-level directories in the paired frontend's `src/modules/`.
+- **`claimedNames()`** — union of every name produced by `frontendCounterparts` across all descriptors plus the keys of `FRONTEND_ONLY`.
+- **`describe('the two repositories, module by module')`** — first half: checks descriptor count > 0 and that every non-same-name counterpart carries a `frontend.why` field.
+- **`describe('the paired frontend at …')`** — second half (skipped visibly if no checkout): asserts claimed names exist on the frontend, and that every frontend module folder is accounted for here.
 
 ## Relationships
 
-- **`src/modules.ts`** — Imports `enabledModules` to obtain the canonical list of enabled backend modules. The test's local-integrity checks are anchored entirely to this list.
-- **`scripts/pairing/paired-frontend-path.ts`** — Imports `resolveFrontendPath()` to locate the sibling frontend checkout. All cross-repo file-system reads depend on this resolved path.
+- **`scripts/docs/module-descriptor.ts`** — provides `readAllModuleDescriptors` (to build `DESCRIPTORS`) and `frontendCounterparts` (to resolve each module's claimed frontend names).
+- **`scripts/pairing/paired-frontend-path.ts`** — provides `resolveFrontendPath()`, which yields the absolute path to the sibling Vue checkout used by the second half.
+- **`tests/support/paths.ts`** — provides `MODULES_ROOT`, the directory under which this repo's `module.yaml` files are read.
 
 ## Notes
 
-- The cross-repo half is **conditional and self-announcing**: when the sibling is absent it emits a `console.warn` (bypassing eslint) rather than silently passing. This mirrors the convention in `tests/unit/scripts/pairing/spec-identity.test.ts`.
-- `siblingExpected` is keyed on `FRONTEND_PATH` (whether a developer explicitly configured a checkout), **not** on `CI`. The rationale: the pipeline has a dedicated `spec-identity` job for the cross-repo guard; failing here would make a single-repo clone red for an unresolvable condition.
-- The `why` field is free-form prose. No test asserts its shape, length, or grammar.
-- Eleven of the seventeen backend modules map 1-to-1 by identical name; the remaining six require the `why` explanation to disambiguate.
-- `audit-logs`→`admin` is the canonical example the docblock calls "stated, not derived": a name matcher would flag it as unpaired, which is wrong.
+- The second half is **visibly incomplete** (a `console.warn` + empty-assertion) when `FRONTEND_PATH` is unset rather than passing silently. The CI counterpart for the no-frontend case lives in `tests/unit/scripts/pairing/spec-identity.test.ts`.
+- Top-level `if (!siblingPresent) return;` short-circuits the remaining `it` blocks; this is intentional Jest behavior (not a test failure) and relies on `siblingPresent` being computed synchronously at module load.
+- The `console.warn` line carries an `eslint-disable no-console` because no logger is available in this test context.
+- The file's header comment enumerates the known asymmetries (`access`, `antibot`, `addresses`, `invoicing`, `audit-logs`) as architecture, not drift—those names are expected to lack a same-name counterpart.

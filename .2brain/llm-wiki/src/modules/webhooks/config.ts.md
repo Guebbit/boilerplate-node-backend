@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/config.ts
-sha256: e6f176f1110e48e088ef0e50d561188ef7215d95f3ae133d4f73ba7e6266addb
-generated_at: 2026-09-23T19:38:21.362411+00:00
+sha256: 7b25432c47fa04eb4979ba97835960a6bac976411edc4d58ac4b7940869258a0
+generated_at: 2026-10-15T12:17:39.824692+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Env-derived configuration accessors for the webhooks module. Every value is read at call time (not captured at import) so a deployment can change limits or keys without restarting the process. This mirrors the pattern set by `inventory/config.ts`.
+Environment-derived configuration for the webhook delivery subsystem. Values are read per call (not captured at import time) so tests can vary them per case; a deployment changes a value via env + restart. Holds the secret-encryption key ring, the per-tenant subscription cap, the secret-overlap window, and the delivery-retention TTL.
 
 ## Key elements
 
-- **`getWebhookEncryptionKeyRing()`** — Parses `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` via `parseVersionedKeyRing` and returns a `VersionedKey[]` for webhook payload encryption/decryption.
-- **`getWebhookSubscriptionCap()`** — Returns the per-tenant subscription limit (env `NODE_WEBHOOK_SUBSCRIPTION_CAP`, default 20, min 1). Acts as the fan-out guard: one event × N subscriptions = N deliveries, so an unbounded count is an unbounded cost.
-- **`getWebhookDemoAllowedHost()`** — Returns the hostname (or `undefined`) exempt from the SSRF guard's `https:` / public-address requirement. Only active under `NODE_ENV` of `development` or `test` **and** when `NODE_WEBHOOK_DEMO_SINK_URL` is set. Intended for the `webhook-tester` compose service (plain HTTP, private network).
+- **`webhooksConfig`** — `defineConfig` object (`name: 'webhooks'`) exposing four fields: `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` (versioned key ring), `NODE_WEBHOOK_SUBSCRIPTION_CAP` (int, default 20), `NODE_WEBHOOK_SECRET_OVERLAP_HOURS` (int, default 24), `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` (int, default 30).
+- **`getWebhookEncryptionKeyRing(): VersionedKey[]`** — Parses and returns the versioned key ring used to encrypt stored subscription secrets.
+- **`getWebhookSubscriptionCap(): number`** — Per-tenant subscription limit; the fan-out guard checked before every subscription create.
+- **`getWebhookSecretOverlapMs(): number`** — Overlap window (ms) during which a superseded secret still validates signatures (Standard Webhooks bounded overlap).
+- **`getWebhookDeliveryRetentionDays(): number`** — How long a delivery row lives before Mongo TTL purges it.
 
 ## Relationships
 
-- **`src/infrastructure/runtime/environment.ts`** — Supplies `environmentNumber`, the typed env-reader used by `getWebhookSubscriptionCap`.
-- **`src/infrastructure/security/versioned-secret.ts`** — Supplies `parseVersionedKeyRing` and the `VersionedKey` type consumed by `getWebhookEncryptionKeyRing`.
-- **`src/modules/webhooks/services/subscriptions.ts`** — Primary consumer of `getWebhookSubscriptionCap`: checks the cap against a per-tenant count before every create and again by insertion rank after (to close the race at the boundary).
+- **`@infrastructure/config/define`** — Provides `defineConfig`, the factory used to declare the config shape.
+- **`@infrastructure/config/fields`** — Provides `int` and `versionedKeyRing` validators consumed in the shape definition.
+- **`@infrastructure/security/versioned-secret`** — Source of the `VersionedKey` type returned by `getWebhookEncryptionKeyRing`.
+- **`src/modules/webhooks/secrets.ts`** — Consumes the key ring to encrypt/decrypt subscription secrets at rest.
+- **`src/modules/webhooks/services/subscriptions.ts`** — Calls `getWebhookSubscriptionCap` before create and again by insertion rank to close a concurrent-boundary race.
+- **`src/modules/webhooks/services/reencrypt.ts`** — Re-encrypts stored secrets when the key ring is rotated; depends on the key ring shape defined here.
+- **`src/modules/webhooks/model.ts`** — Reads `getWebhookDeliveryRetentionDays` at import time to create the Mongo TTL index (created once at startup, unlike the other per-call getters).
+- **`src/modules/webhooks/module.ts`** — Module entry point that wires the above services together.
 
 ## Notes
 
-- **Per-call reads are intentional.** Do not "optimise" these into module-level constants; the whole point is that a config change takes effect on the next request.
-- **`getWebhookDemoAllowedHost` is a second gate.** `src/kernel/required-config.ts` already refuses to boot in production with `NODE_WEBHOOK_DEMO_SINK_URL` set. The `NODE_ENV` check here is a belt-and-suspenders guard for any `NODE_ENV` value that boot-time validation doesn't cover.
-- **Malformed `NODE_WEBHOOK_DEMO_SINK_URL` silently yields `undefined`** (no SSRF exemption). The `try/catch` around `new URL(...)` is deliberate — a bad URL means "no exemption," not a crash. An eslint-disable suppresses the `no-restricted-syntax` rule because `URL` has no non-throwing constructor.
+- **Per-call vs. import-time:** All getters re-read env on each invocation *except* `getWebhookDeliveryRetentionDays`, which is effectively fixed at startup because the model creates the TTL index once. Changing retention after boot has no effect until restart.
+- **Encryption key is a versioned ring, not a scalar.** The wire format is documented in `parseVersionedKeyRing` (see `versioned-secret.ts`). The shipped placeholder string is a deliberate fail-loud default — deploying with it means every stored secret is recoverable by anyone with repo read access.
+- **Subscription cap double-check:** `subscriptions.ts` performs a count check *and* an insertion-rank check; a single check cannot close the race between two concurrent callers at the boundary.

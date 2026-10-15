@@ -1,7 +1,7 @@
 ---
 source: tests/support/pattern-samples.ts
-sha256: dd63cb1a96340979e66331f9e88b53f7ae3b9f6e60bcdf37b74f534630a2380b
-generated_at: 2026-09-23T20:12:21.256884+00:00
+sha256: 10471e2a897fb5d97f480f4e852962848c397d79d42ade4af5c59356f3c71ee7
+generated_at: 2026-10-15T12:59:28.666429+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides a single lookup table of known-good string values for OpenAPI `pattern` constraints that no generator can synthesize automatically (notably lookahead-based patterns). By keying samples on the regex source exactly as written in the contract, every generator that walks the spec shares one registration point instead of each hard-coding its own fallback.
+Provides a single lookup table of known-good sample strings for OpenAPI `pattern` constraints that value generators cannot synthesize autonomously. Every generator that walks the contract consults this one table, so a tricky regex is registered exactly once; a generator that finds no entry fails loudly instead of emitting a value the contract forbids.
 
 ## Key elements
 
-- **`PATTERN_SAMPLES`** (module-private) — `Record<string, string>` mapping regex source strings to one valid sample value. Currently covers a BCP-47 locale pattern and a password-strength lookahead pattern.
-- **`usesLookaround(source: string): boolean`** — Detects `(?=`, `(?!`, `(?<=`, `(?<!` in a regex source. Lets callers distinguish "generator can't handle this" from a simple pattern match, without relying on `fast-check`'s error message.
-- **`sampleForPattern(source: string): string | undefined`** — Returns the registered sample for a given pattern source, or `undefined` if none is registered (callers are expected to fail loudly).
+- **`PATTERN_SAMPLES`** (module-private) — `Record<string, string>` mapping a regex source (exactly as written in the OpenAPI spec) to a valid sample string. Covers locale tags, ISO country codes, ObjectId-shaped ids, identifier-style slugs, and an https-only URL prefix.
+- **`usesLookaround(source: string): boolean`** (exported) — Detects whether a pattern contains lookahead/lookbehind assertions (`(?=`, `(?!`, `(?<=`, `(?<!`). These are unsupported by `fast-check`'s `stringMatching`, which throws on them. Callers use this to skip pattern-based generation for those cases.
+- **`sampleForPattern(source: string): string | undefined`** (exported) — Returns the registered sample for a pattern source, or `undefined` when no entry exists (the "fail loudly" signal for generators).
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — The source of truth for the regex strings used as keys in `PATTERN_SAMPLES`. Adding a new `pattern` in the contract is what triggers adding an entry here.
-- **`tests/support/spec-walk.ts`** — Walks the contract schema and is the expected caller of `usesLookaround` / `sampleForPattern` when it encounters a `pattern` constraint it cannot generate.
-- **`tests/support/spec-arbitraries.ts`** — Builds `fast-check` arbitraries from the spec; consults `sampleForPattern` for patterns it cannot synthesize and uses `usesLookaround` to detect the lookahead case that `stringMatching` rejects.
-- **`tests/support/contract-data.ts`** — Another contract-walking generator that falls back to `sampleForPattern` for patterns it cannot construct, ensuring a missing entry surfaces as a test failure rather than a silently invalid value.
+- **`shared/contracts/openapi.root.yaml`** — The keys in `PATTERN_SAMPLES` are the `pattern` values as this spec declares them. The file must stay in sync with any new or changed `pattern` constraints in the contract.
+- **`tests/support/contract-data.ts`**, **`tests/support/spec-walk.ts`** — Generators that walk the contract; they call `sampleForPattern` (and `usesLookaround`) to resolve pattern constraints they cannot synthesize on their own.
+- **`tests/support/spec-arbitraries.ts`** — The `fast-check`-based generator. It calls `usesLookaround` to avoid passing lookaround patterns to `stringMatching`, and `sampleForPattern` for patterns it can otherwise handle.
 
 ## Notes
 
-- Keys are the raw regex source **exactly as written in `openapi.yaml`**, which is also what `RegExp.source` yields on the generated zod schema — this dual match is what lets both the YAML-side and zod-side walkers hit the same entry.
-- `usesLookaround` is a regex-over-the-source check, deliberately avoiding a try/catch on `fast-check`'s assertion message, which could change in a library upgrade.
-- A missing entry is **not** an error in this file; the contract is that the calling generator must treat `undefined` from `sampleForPattern` as a hard failure.
-- The table is intentionally small: only patterns that are genuinely un-generable (e.g., lookahead) belong here. Simple character-class patterns should be handled by the generators themselves.
+- Keys are raw regex **source** strings, not `RegExp` objects. The source must match both the OpenAPI YAML text and the `.source` property of the equivalent `RegExp` on the generated zod schema, so both halves of the tooling resolve the same entry.
+- `usesLookaround` inspects the source text rather than catching the `fast-check` error message, because that message is implementation-internal and could change with a library upgrade.
+- The `\w` entry (`'^(?:\\w|-)+$'`) exists separately from `[A-Za-z0-9_]` because the generated zod schema rewrites the character class; both forms must be registered.
+- A missing entry is a hard failure for the consuming generator — there is no fallback or default sample.

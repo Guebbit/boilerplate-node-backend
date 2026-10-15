@@ -1,7 +1,7 @@
 ---
 source: src/modules/products/tests/integration/no-translation-provider.test.ts
-sha256: fcb0380e908de830af0ce6b513f626ebdb2341aabf317e0b7be936ce89fad375
-generated_at: 2026-09-27T15:34:35.250070+00:00
+sha256: 216c570b327f8d8e4913f1bb58ca9bbe629fa03046e6f288a6a73c14a925861a
+generated_at: 2026-10-15T11:48:25.291563+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite that verifies the `products` service degrades gracefully when no translation port is registered (i.e. the `locales` module is absent). It proves that the fallback locale still reads and writes successfully, and that any other locale produces a field-specific 422 rather than the 500 that the missing port used to throw before the kernel-level fallback was added.
+Integration test suite that verifies `productService` degrades gracefully when no translation port is registered — simulating a deployment where the `locales` module is absent. It asserts that the fallback language (`en`) still reads and writes correctly, and that any request for a non-fallback language produces a field-specific 422 instead of a 500 from a missing port.
 
 ## Key elements
 
-- **`FALLBACK`** — Constant (`'en'`) used as the guaranteed-fallback locale across all assertions. Comment points to `.env-example` as the source of truth.
-- **`beforeEach(() => registerTranslationPort(undefined))`** — Explicitly clears the translation port for every test, simulating a deployment where `locales` was never installed.
-- **`describe('productService.writeCreate …')`** — Two tests: fallback-only write succeeds; adding a second language (`it`) rejects with `422` and error field `translations.it`.
-- **`describe('productService.writeUpdate …')`** — PATCH with only a non-fallback language rejects with `422` / `translations.it`.
-- **`describe('productService.getAdmin …')`** — Admin read builds the fallback tab directly from the product's own `title`/`description` columns.
-- **`describe('productService.getById …')`** — Public read via `runWithLocale('it', …)` still returns the fallback title.
+- **`beforeEach(() => registerTranslationPort(undefined))`** — Explicitly clears the translation port before every test so the suite never depends on module-load order or a previously installed port.
+- **`FALLBACK = 'en'`** — Hardcoded fallback locale; the comment references `.env-example` as the source of truth for why `en` is the fallback in every environment.
+- **`writeCreate` block** — Two tests: (1) a payload with only the fallback language succeeds and the title is readable; (2) a payload adding a second language (`it`) returns a 422 with `errors[0].details.field === 'translations.it'`.
+- **`writeUpdate` block** — A PATCH that names only a non-fallback language (`it`) returns the same field-named 422.
+- **`getAdmin` block** — After creating a product via `createProduct`, the admin view's `translations` map contains exactly one entry keyed by `FALLBACK`, sourced from the product's own columns.
+- **`getById` block** — Wraps the read in `runWithLocale('it', …)` to confirm the service still returns the fallback title even when the ambient locale is a non-fallback language.
 
 ## Relationships
 
-- **`src/kernel/translation.ts`** — Provides `registerTranslationPort`, which the suite resets to `undefined`; the kernel fallback logic under test lives here.
-- **`src/modules/products/service.ts`** — Source of `productService`, the system under test.
-- **`src/modules/products/model.ts`** — Supplies the `ProductDocument` type used in the `ResponseSuccess` cast.
-- **`src/modules/products/tests/factories.ts`** — Provides `createProduct` for seeding rows.
-- **`src/infrastructure/http/response.ts`** — Exports `ResponseReject` / `ResponseSuccess` discriminated-union types used in assertions.
-- **`src/infrastructure/i18n/index.ts`** — Exports `runWithLocale`, used to simulate a non-fallback request locale.
-- **`tests/support/callers.ts`** — Provides `testCallerContext` passed as the actor argument to every service call.
-- **`tests/support/setup-test-db.ts`** — Provides `setupTestDb` called once at module scope to provision the test database.
+- **`src/kernel/translation.ts`** — Provides `registerTranslationPort`; the test calls it with `undefined` to simulate an uninstalled port.
+- **`src/modules/products/services/index.ts`** — Exports `productService`, the system under test (all four `writeCreate` / `writeUpdate` / `getAdmin` / `getById` calls).
+- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds a product row for the update and read tests.
+- **`src/infrastructure/i18n/index.ts`** — `runWithLocale` sets the ambient locale context for the `getById` test.
+- **`src/infrastructure/http/response.ts`** — `ResponseReject` / `ResponseSuccess` types used to type-cast results and assert on `status`, `errors`, and `data`.
+- **`src/modules/products/model.ts`** — `ProductDocument` type for the success-path data assertion.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the in-memory/test database before the suite runs.
+- **`tests/support/callers.ts`** — `testCallerContext` supplies the caller identity required by `writeCreate` and `writeUpdate`.
 
 ## Notes
 
-- The port reset is done **per-test** in `beforeEach` rather than relying on Jest module isolation; this is intentional and called out in the file-level doc comment so future readers don't "simplify" it away.
-- `FALLBACK` is hardcoded to `'en'`. If the fallback locale changes in `.env-example`, every assertion in this file must be updated in lockstep.
-- The file references feature-step identifiers (`LOCALES_OPTIONAL_0925 step 3c`, `LOCALES_OPTIONAL step 3a`) in the doc comment as provenance for *why* this behavior is expected.
+- The suite deliberately avoids a `registerModules` call; the only way to guarantee "no provider" is the explicit `registerTranslationPort(undefined)` in `beforeEach`. Do not remove that line or the tests will silently pass against whatever port a prior test left installed.
+- `FALLBACK` is a local constant, not read from environment. If the fallback locale changes in `.env-example`, this file must be updated in lockstep or the tests will assert the wrong key.
+- The 422 assertion checks the *field name* in the error detail (`translations.it`), not just the status code. The service is expected to produce a per-field rejection, not a generic one.

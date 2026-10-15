@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/http/errors.test.ts
-sha256: 0f0fa73da0eb88000bd19cb36203d9ce0971c34ff033ec065cf3056ea8751b33
-generated_at: 2026-09-27T16:06:05.070080+00:00
+sha256: 3fe49acaa1c9d5864dabd437a314810881019394b8d2ca9216fc3ad7e1a6de9e
+generated_at: 2026-10-15T13:11:01.250806+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `databaseErrorInterpreter` and `rejectDatabaseError` in `src/infrastructure/http/errors.ts`. The interpreter maps a driver/Mongoose error onto a `[httpCode, message]` tuple; the tests pin each branch's status code and client-safe message, and verify that no branch leaks driver prose, schema internals, or user data into the response body.
+Unit tests for `databaseErrorInterpreter` and its companions in `src/infrastructure/http/errors.ts`. The interpreter maps driver/Mongoose error objects to a `[httpCode, message]` tuple that determines whether a failure is reported as a client error (4xx) or a server error (500). The tests pin each branch's status code, message, and discrimination strategy, and guard against regressing real production bugs (malformed IDs on public endpoints returning 500, driver prose leaking into response bodies).
 
 ## Key elements
 
-- **`databaseErrorInterpreter`** (SUT) — under test across every `describe` block; returns `[status, message]`.
-- **`rejectDatabaseError`** (SUT) — tested for correct status pass-through and for not throwing on non-Error rejections.
-- **`ConflictError`** — imported from the SUT; tested via a local subclass (`ModuleOwnedConflict`) to confirm `instanceof` matching and empty-message fallback.
-- **`makeCastError`** — fixture: `Error` with own `kind: 'ObjectId'` (the discriminator).
-- **`makeDuplicateKeyError`** — fixture: `Error` with `code: 11000`.
-- **`makeValidationError`** — fixture: `Error` with `name: 'ValidationError'`.
-- **`makeBsonError`** — fixture: `Error` with `name: 'BSONError'`.
-- **Logger mock** — `jest.mock('@infrastructure/adapters/logger')` isolates the SUT from side-effects.
+- **`databaseErrorInterpreter` tests** — the core subject. Verifies the tuple output for every recognized error shape and the 500 catch-all.
+- **`rejectDatabaseEnvelope` / `rejectDatabaseError` tests** — exercise the response-rejection path, asserting the structured envelope (`status`, `errors[].code`) produced for e.g. `PreconditionFailedError`.
+- **`makeCastError` / `makeDuplicateKeyError` / `makeValidationError` / `makeBsonError`** — local fixtures that build plain objects shaped like Mongoose/BSON/Redis driver errors, used as inputs to the interpreter.
+- **`ConflictError` branch tests** — verify `instanceof`-based discrimination (single-copy class) and empty-message fallback.
+- **`PreconditionFailedError` branch tests** — verify 412 status and the `PRECONDITION_FAILED` error code in the envelope.
+- **"rejection that is not Error-shaped" tests** — guard against `null`, `undefined`, and bare-string rejections crashing the `hasOwnProperty` call inside the interpreter.
+- **Mocked `logger`** — `@infrastructure/adapters/logger` is fully mocked so no logging side-effects run during tests.
 
 ## Relationships
 
-- **`src/infrastructure/http/errors.ts`** — the module under test; provides `databaseErrorInterpreter`, `rejectDatabaseError`, `ConflictError`, `isInfrastructureError`, `rejectDatabaseEnvelope`.
-- **`src/infrastructure/adapters/logger.ts`** — mocked entirely so no log calls leak into test output.
-- **`tests/support/express.ts`** — supplies `makeResponseStub()` used to assert on `res.status(...)` / `res.json(...)`.
-- **`tests/support/stub.ts`** — supplies `asStub<T>()` to cast fixture objects into typed shapes without altering runtime values.
+- **`src/infrastructure/http/errors.ts`** — the module under test; all assertions target its exported functions and classes (`databaseErrorInterpreter`, `rejectDatabaseError`, `rejectDatabaseEnvelope`, `isInfrastructureError`, `ConflictError`).
+- **`src/infrastructure/persistence/versioning.ts`** — source of `PreconditionFailedError`, exercised as a branch input.
+- **`src/infrastructure/runtime/busy.ts`** — source of `ServiceBusyError`, imported (available for future branch tests).
+- **`src/infrastructure/adapters/logger.ts`** — mocked via `jest.mock` to isolate logging calls.
+- **`tests/support/express.ts`** — provides `makeResponseStub` for testing `rejectDatabaseError`'s response interaction.
+- **`tests/support/stub.ts`** — provides `asStub<T>()` to satisfy TypeScript's type system when constructing plain objects that mimic driver error shapes.
 
 ## Notes
 
-- **Two matching strategies, deliberately opposite:** `BSONError` and `ValidationError` are identified by the `name` property (because `bson`/`mongoose` can appear as duplicate transitive copies, making `instanceof` unreliable). `ConflictError` is identified by `instanceof` (exactly one copy in the tree, and a same-named non-subclass must *not* match).
-- **`CastError` is matched on an *own* `kind` property** via `hasOwnProperty`; an object that merely inherits `kind` from a parent prototype falls through to the 500 catch-all.
-- **Empty messages use `||`, not `??`:** `new Error('')` must produce the `"Unknown error"` placeholder, not an empty string in the client envelope.
-- **Non-Error rejections** (`null`, `undefined`, a bare string, a number) must be handled without throwing inside the interpreter; `rejectDatabaseError` must answer 500 rather than propagating the throw.
-- **Status is never parsed from the message text.** A CastError whose message happens to start with a digit (`"404 not castable"`) still yields 422, not 404.
+- **Discrimination strategy is deliberate and asymmetric.** `ConflictError` is matched via `instanceof` (exactly one copy in the tree), while `BSONError` and `ValidationError` are matched via their `name` property string because `bson`/`mongoose` can appear as transitive dependencies of multiple packages, making `instanceof` silently false. Tests assert both the positive match and the negative (same-shape-but-not-subclass → 500).
+- **CastError uses `hasOwnProperty('kind')`**, not a plain property read. A test constructs an object that inherits `kind` from its prototype and asserts it is *not* treated as a CastError.
+- **`||` vs `??` for empty messages is intentional.** `new Error('')` must fall through to `'Unknown error'`; a test with an eslint-disable comment pins this.
+- **No driver prose in responses.** Multiple tests assert the client-facing message does *not* contain the driver's `message`, `kind` name, index names, or encoded-id details.
+- **`rejectDatabaseEnvelope` returns a structured object** (`{ status, errors: [{ code }] }`) rather than calling `res.status()` directly; the `PreconditionFailedError` test uses `toMatchObject` to verify the `code` field.

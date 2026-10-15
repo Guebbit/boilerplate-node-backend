@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/routes.ts
-sha256: cbc5ccfef2b12f29918e3239d45e0d37ecbb24e10e7b0a05e2002f398820003f
-generated_at: 2026-09-27T15:38:50.387266+00:00
+sha256: d065556ca20b157db97fe52b50a447b9854977785398a854a86d84d97892b3c4
+generated_at: 2026-10-15T12:09:44.284782+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Express `Router` for the admin-only `/users` API surface (search, list, read, create, update, delete, restore, 2FA removal). It wires each endpoint to the appropriate authorization key, caching policy, rate-limit, upload, and route-flag middleware, then delegates to the per-action controllers.
+Defines the Express `Router` for the admin-only `/users` resource: search, list, create, read-by-id, replace, patch, soft/hard delete, and restore. It wires each route to the correct authorization, caching, rate-limit, and upload middleware, then delegates business logic to the `controllers/` functions.
 
 ## Key elements
 
-- **`router`** (exported `Express.Router`) — the single public export; mounted by `src/modules/users/module.ts`.
-- **Router-level middleware** — `getAuth` → `isAuthOrCredential`: every route requires authentication; API keys (`sk_…`) are explicitly allowed alongside session tokens.
-- **`requirePermission('users.any.*')`** — applied per-route with the specific action key (`read`, `create`, `update`, `delete`); there is no single router-wide gate.
-- **Route table** — `POST /search`, `GET /`, `POST /`, `DELETE /`, `GET /:id`, `PUT /:id`, `PATCH /:id`, `DELETE /:id`, `POST /:id/restore`, `DELETE /:id/hard`, `DELETE /:id/2fa`.
-- **Cache middlewares** — `noStore` on `POST /search`; `privateNoCache` on the two `GET` read routes; all write/DELETE routes are uncached by omission.
-- **Upload + rate-limit** — `uploadLimiter` and `upload.image()` guard the three mutation endpoints that accept an avatar (`POST /`, `PUT /:id`, `PATCH /:id`).
-- **`routeFlag('hardDelete')`** — on `DELETE /:id/hard`, injects the flag so the shared `deleteUsers` controller performs a hard (permanent) delete.
+- **`router`** (exported) – the sole export; an Express `Router` instance with all user endpoints mounted.
+- **Router-level middleware** – `getAuth` + `isAuthOrCredential` applied to every route (accepts both session tokens and `sk_…` API keys).
+- **`POST /search`** – `users.any.read`; deliberately placed before `/:id` so the literal path isn't swallowed by the param route.
+- **`GET /`** – `users.any.read`; `privateNoCache` (browser may cache but must revalidate).
+- **`POST /`** – `users.any.create`; `uploadLimiter` + `upload.image()` before `createUser`.
+- **`DELETE /`** – `users.any.delete`; bulk delete, id in body.
+- **`GET /:id`** – `users.any.read`; `privateNoCache`.
+- **`PUT /:id`** – `users.any.update`; full replace via `replaceUser`; image upload pipeline.
+- **`PATCH /:id`** – `users.any.update`; partial merge via `updateUser`; image upload pipeline.
+- **`DELETE /:id`** – `users.any.delete`; soft delete (or hard if `?hardDelete=true`).
+- **`POST /:id/restore`** – `users.any.delete`; undoes a soft delete.
+- **`DELETE /:id/hard`** – `users.any.delete`; hard delete path, gated by `routeFlag('hardDelete')`.
 
 ## Relationships
 
-- **`src/modules/users/module.ts`** — imports `router` and mounts it under the users path prefix.
-- **Controllers** (`get-users`, `create-user`, `update-user`, `delete-users`, `restore-users`, `get-user-item`, `delete-user-two-factor`) — terminal handlers for each route; `deleteUsers` is reused by both `DELETE /:id` and `DELETE /:id/hard` (differentiated only by `routeFlag`).
-- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuthOrCredential`, `requirePermission`.
-- **`src/infrastructure/http/middlewares/cache.ts`** — provides `noStore`, `privateNoCache`.
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — provides `uploadLimiter`.
-- **`src/infrastructure/http/middlewares/upload.ts`** — provides `upload.image()`.
-- **`src/infrastructure/http/middlewares/route-flag.ts`** — provides `routeFlag`.
-- **`src/modules/users/tests/unit/routes.test.ts`** — unit-tests route registration, middleware ordering, and permission keys.
-- **`tests/support/routed-modules.ts`** — mounts this router in integration test harnesses.
+| Neighbor | Interaction |
+|---|---|
+| `src/kernel/middlewares/authorizations.ts` | Provides `getAuth`, `isAuthOrCredential`, `requirePermission` – every route composes one permission key. |
+| `src/infrastructure/http/middlewares/cache.ts` | Provides `noStore` (all POST responses) and `privateNoCache` (GET list / item) to prevent cross-tenant leakage in shared caches. |
+| `src/infrastructure/http/middlewares/rate-limit.ts` | Provides `uploadLimiter`, applied to the three image-upload routes. |
+| `src/infrastructure/http/middlewares/upload.ts` | Provides `upload.image()`, mounted before the create/replace/patch controllers. |
+| `src/infrastructure/http/middlewares/route-flag.ts` | Provides `routeFlag('hardDelete')`, injected on `DELETE /:id/hard` so the controller can distinguish the path-based hard-delete from the query-param variant. |
+| `src/modules/users/controllers/*` (6 files) | Each controller function is the terminal handler for its route; the router contributes no business logic. |
+| `src/modules/users/module.ts` | Consumes `router` to mount the `/users` prefix in the application. |
+| `src/modules/users/tests/unit/routes.test.ts` | Unit-tests route registration, middleware ordering, and permission keys. |
 
 ## Notes
 
-- **Route order matters:** `POST /search` is registered *before* `GET /:id`; reordering would cause "search" to be captured as `:id`.
-- **Caching policy is deliberate, not incidental:** admin-only responses are excluded from shared (Redis) cache per RFC 9111 §3.5; `privateNoCache` still lets the browser revalidate on each request.
-- **`isAuthOrCredential` vs `isAuth`:** the choice is intentional — partner integrations authenticating with API keys must reach this module. No controller reads `authContext` directly.
-- **`DELETE /:id/hard` is syntactic sugar:** it calls the same `deleteUsers` controller as `DELETE /:id`; the only difference is the `routeFlag('hardDelete')` middleware injecting the flag.
-- **2FA deletion uses `users.any.update`**, not `users.any.delete`, matching the authorization-key catalogue description ("clearing a second factor").
+- **Route order is load-bearing.** `POST /search` must stay above any `/:id` route; adding a new literal sub-path above `/:id` is required, below it is a 404.
+- **Per-route permission keys** (not a single router-wide `requirePermission`) are intentional: `manager`-level reads and `support`-level reads share the same `users.any.read` key, but the file's comment notes a previous bug where a single router-level gate on one key blocked the other role. Keep one key per mount.
+- **`isAuthOrCredential` vs `isAuth`** – this module is the one user-facing surface reachable by `sk_…` API keys (partner account-sync). Switching to `isAuth` would silently break integrations.
+- **Caching discipline** – no GET here is Redis-cached. `noStore` on POSTs and `privateNoCache` on GETs enforce RFC 9111 §3.5 (must not store admin-only data in a shared store). Don't add `maxAge` without a storage-isolation review.
+- **Two hard-delete paths** – `?hardDelete=true` on `DELETE /:id` and the explicit `DELETE /:id/hard` are functionally identical; the latter exists so the flag is visible in the path for audit logging. Both funnel into the same `deleteUsers` controller.

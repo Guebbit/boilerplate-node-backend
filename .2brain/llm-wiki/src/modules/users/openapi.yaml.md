@@ -1,7 +1,7 @@
 ---
 source: src/modules/users/openapi.yaml
-sha256: 5a891abd9d2e145091d7d82541adb5ae4b39e03fa5727ba66cdb9c770a0f44c1
-generated_at: 2026-09-27T15:38:21.669685+00:00
+sha256: 9ac103f795f8f8d5690b12fa1bd3cdada9d49e7bc51b7b37e70592bb0c1c73e9
+generated_at: 2026-10-15T12:08:53.011251+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.0.3 contract (v2.0.0) that defines the full REST surface for the **users** module: list, create, delete, get-by-id, full-replace, and partial-update operations. It serves as the single source of truth for the module's request/response shapes, parameter semantics, and error responses, and is the document other tooling (codegen, client SDKs, docs) consumes.
+OpenAPI 3.1.0 contract for the **users** module. It declares the HTTP surface (list, create, delete, fetch, replace, edit, restore users) along with the schemas and query parameters that implement it, so that client code, docs, and the account-data-export bundler all derive from a single source of truth.
 
 ## Key elements
 
-- **`GET /users`** (`listUsers`) — paginated user listing with filter params (`email`, `username`, `active`, `deleted`). Returns `UsersResponseEnvelope` (local component).
-- **`POST /users`** (`createUser`) — creates a user; accepts `application/json` or `multipart/form-data` (for optional image upload). `password` is optional when `sendSetupEmail` is used. 409 signals an undeclared role or privilege-escalation denial; 429 is emitted by the `uploadLimiter` middleware.
-- **`DELETE /users`** (`deleteUser`) — body-carrying delete. `hardDelete` flag readable from query *or* body; a `true` from any source wins. Soft delete is one-way; undo via `POST /users/{id}/restore`. Carries `x-alias-of: deleteUserById`.
-- **`GET /users/{id}`** (`getUserById`) — equivalent to `GET /users?id={id}`.
-- **`PUT /users/{id}`** (`replaceUserById`) — full replace per RFC 9110 §9.3.4 (omitted optional fields are cleared). `password` is exempt from clearing. Supports multipart for image.
-- **`PATCH /users/{id}`** (`updateUserById`) — merge per RFC 7396 (omitted fields unchanged, `null` clears). Supports multipart for image.
-- **`DELETE /users/{id}`** — path-param variant of `DELETE /users` (truncated in this listing; `x-alias-of` links the two).
-- **Local `components/schemas`** — `UsersResponseEnvelope`, `CreateUserRequest`, `CreateUserRequestMultipart`, `DeleteUserRequest`, `ReplaceUserByIdRequest`, `ReplaceUserByIdRequestMultipart`, `UpdateUserByIdRequest`, `UpdateUserByIdRequestMultipart`.
+- **`tags: [Users]`** — single tag grouping every operation under "Administration of user accounts and their roles."
+- **`x-personal-data`** — extension consumed by the account-export bundler; contributes the `signInMethods` section to `POST /account/export`. Removing this key removes the section.
+- **`/users` (GET / POST / DELETE)** — list (paginated, filterable by email, username, active, deleted, sort), create (JSON or multipart; no caller-supplied password), and bulk/alias delete (`x-alias-of: deleteUserById`). The `hardDelete` flag is readable from query, params, or body; `true` from any source wins.
+- **`/users/{id}` (GET / PUT / PATCH / DELETE)** — per-user CRUD. PUT follows RFC 9110 §9.3.4 (full replace); PATCH follows RFC 7396 (merge-patch). Credentials and image live outside the PUT/PUT representation.
+- **`x-versioned: [get, put, patch, delete]`** on `/users/{id}` — bundler adds `If-Match` parameter, `412` response, and `ETag` header to those operations.
+- **Local `components/schemas`** (referenced but defined elsewhere in the file or a sibling file): `UserSort`, `UsersResponseEnvelope`, `CreateUserRequest(Multipart)`, `DeleteUserRequest`, `ReplaceUserByIdRequest(Multipart)`, `UpdateUserByIdRequest`, `ExportSignInMethods`.
+- **Shared `$ref`s into `openapi.root.yaml`** — `PageParam`, `PageSizeParam`, `TextParam`, `IdParam`, `IdPathParam`, `HardDeleteParam`, `Email`, `UserEnvelope`, and all standard error responses (`401`, `403`, `404`, `409`, `412`, `422`, `429`, `500`), the `Location` header, and the `Success` response.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — every shared parameter (`PageParam`, `PageSizeParam`, `TextParam`, `IdParam`, `IdPathParam`, `HardDeleteParam`), common schema (`Email`, `UserEnvelope`), and standard error/success responses (`Unauthorized`, `Forbidden`, `ValidationError`, `InternalError`, `Success`, `NotFound`, `Conflict`, `TooManyRequests`) are pulled in via `$ref`. This file is the *consumer*; the root contract is the *provider*.
-- **`src/modules/webhooks/module.ts`** — listed as a graph neighbor. No direct `$ref` or import visible in this file; the relationship is at the module-registry level (both live under `src/modules/`).
+- **`shared/contracts/openapi.root.yaml`** — every shared parameter, reusable response object, header, and cross-cutting schema is pulled in via relative `$ref` (`../../../shared/contracts/openapi.root.yaml#/components/…`). This file contributes module-specific schemas back to the root document.
+- **`src/modules/webhooks/module.ts`** — appears in the dependency graph as a consumer/producer of this contract (e.g., webhook payloads or event schemas that mirror the user resource shape defined here).
 
 ## Notes
 
-- **PUT vs PATCH semantics differ intentionally.** PUT is a full replace (RFC 9110); PATCH is a merge (RFC 7396). Don't treat them as interchangeable when writing client code or tests.
-- **`password` is special-cased** on PUT/PATCH: it is never cleared by omission and has its own flow (`sendSetupEmail`). Omitting it leaves it unchanged.
-- **`hardDelete` is "any-true-wins."** A `true` in the query, a `true` in the body, or both — the result is a hard delete. A `false` in one location does *not* cancel a `true` in the other.
-- **`x-alias-of` extension** on `DELETE /users` links it to `deleteUserById`; the two routes share one controller (`surface: 'delete'` reads params, query, and body whichever route it's mounted on).
-- **`uploadLimiter`** is a route-level middleware (referenced in comments, lives in `routes.ts`) that produces the 429 responses on upload-accepting routes. It is not declared in this OpenAPI spec's `security` or `x-` fields.
-- **Multipart variants** exist alongside JSON for every mutation that can carry an image. The `*Multipart` schemas are distinct components; they are not simply the JSON schema with an `image` field added.
+- `DELETE /users` carries `x-alias-of: deleteUserById`; the controller treats both routes identically (`surface: 'delete'` reads params, query, and body regardless of mount point).
+- The `deleted` query param on `GET /users` is permission-gated: callers without visibility into soft-deleted rows receive an empty page for `deleted=true` rather than a 403.
+- `429` responses reference an `uploadLimiter` middleware that sits in front of the create/replace routes (see `routes.ts` for wiring).
+- `409` on create/replace signals an undeclared role or a privilege escalation the caller is not permitted to grant.
+- Sort parameter uses JSON:API grammar (`?sort=-field,field`), not a JSON array.

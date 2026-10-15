@@ -1,7 +1,7 @@
 ---
 source: tests/support/race.ts
-sha256: 281dc76fea914eed72bb0ca0b4f36f17eeaf6aea85cdbcde6314a47e6cfea837
-generated_at: 2026-09-23T20:12:46.686335+00:00
+sha256: 310ad22390a1f7ea0445e5473fbf2fbca1bf28fc32a2ae4f3f21c4b3a77947f5
+generated_at: 2026-10-15T12:59:51.592103+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Concurrency test harness that fires N identical HTTP requests truly in parallel and provides assertion helpers for the outcomes. It exists because "does this operation work?" and "does it still work when ten of them land at once?" are different questions, and mutation testing cannot answer the second.
+Concurrency test harness. While most suites in the repo verify single-operation correctness, the race suites built on this file verify that N simultaneous copies of the same operation produce the correct *distribution* of outcomes (e.g., exactly one wins, the rest get 409). It exists because mutation testing and serial test runners structurally cannot exercise the "what happens when they overlap?" question.
 
 ## Key elements
 
-- **`RACE_SIZE`** — Default participant count (10), overridable via `TEST_RACE_SIZE` env var, floored at 2. Sourced from `countKnob`.
-- **`raceN(count, build)`** — Builds `count` request-thenables up front, then awaits them all via `Promise.allSettled`. Returns `PromiseSettledResult<T>[]`. The build-then-await order is what makes the requests overlap (supertest starts on `.then()`, not on construction).
-- **`statuses(results)`** — Maps settled results to an ascending-sorted array of HTTP status codes. Rejected (transport-level) participants are reported as `0`.
-- **`countStatus(results, status)`** — Number of participants that received exactly the given status.
-- **`expectNoServerErrors(results)`** — Fails the test if any participant saw a 5xx, a 429, or a rejected connection (status 0). Called at the top of every race assertion.
+- **`RACE_SIZE`** — participant count, driven by the `TEST_RACE_SIZE` knob (default 10, floor 2). The floor of 2 ensures at least two contenders.
+- **`raceN<T>(count, build)`** — fires `count` simultaneous requests. Requests are *built* in an array then passed to `Promise.allSettled`; because supertest is a thenable, awaiting inside the loop would serialise them. Returns `PromiseSettledResult<T>[]`.
+- **`statuses(results)`** — maps settled results to an ascending-sorted array of HTTP status codes; rejected participants are reported as `0` so a transport failure is visible in assertions.
+- **`countStatus(results, status)`** — counts how many participants received exactly the given status.
+- **`expectNoServerErrors(results)`** — universal invariant check: asserts zero 5xx codes, zero 429s, and zero rejections (status 0). Called by every race suite before its domain-specific assertions.
 
 ## Relationships
 
-- **`tests/support/knobs.ts`** — Provides `countKnob`, which `RACE_SIZE` uses to read the `TEST_RACE_SIZE` environment variable with a minimum.
-- **`tests/integration/concurrency/auth-races.test.ts`**, **`cart-races.test.ts`**, **`wishlist-races.test.ts`** — The three suites that import `raceN`, `statuses`, `countStatus`, and `expectNoServerErrors` to drive their respective concurrent-request assertions.
+- **`tests/support/knobs.ts`** — provides `countKnob`, used to define `RACE_SIZE`.
+- **`src/modules/account/tests/integration/auth-storage.test.ts`** — race suite for auth/credential storage; imports `raceN`, `statuses`, `countStatus`, `expectNoServerErrors`.
+- **`src/modules/wishlist/tests/integration/wishlist-races.test.ts`** — race suite for wishlist add/remove concurrency; same imports.
+- **`tests/integration/concurrency/auth-races.test.ts`** — race suite for concurrent signups against the same address.
+- **`tests/integration/concurrency/cart-races.test.ts`** — race suite for concurrent cart mutations.
+- **`tests/integration/concurrency/order-status-races.test.ts`** — race suite for simultaneous order-status transitions.
+- **`tests/integration/concurrency/payment-races.test.ts`** — race suite for concurrent payment attempts.
 
 ## Notes
 
-- **`Promise.allSettled`, never `Promise.all`.** In a race, rejection is the _correct_ outcome (e.g. 9 of 10 duplicate signups must 409). `Promise.all` would discard the very results the tests assert on.
-- **Supertest is a thenable, not a promise.** Awaiting inside the `build` callback would serialise the requests. The harness builds all thenables first, then hands the array to `allSettled`.
-- **`--runInBand` serialises test _files_, not in-test concurrency.** It protects the in-memory Mongo from parallel workers; it does not reduce the parallelism inside a single `raceN` call. Removing it would not make tests "more concurrent" and would introduce unrelated flakiness.
-- **Rate limiters are raised (budget = 1000) in `setup.ts`, not disabled.** `expectNoServerErrors` explicitly rejects 429 so a truncated race cannot pass vacuously.
-- **Status `0` means the server never answered** (rejected supertest promise). It is kept distinct from real codes so a transport failure surfaces in assertions instead of vanishing.
+- **`--runInBand` (test:integration)** serialises *test files*, not the `Promise.allSettled` calls within a single test. Removing it would not increase concurrency inside a race; it would only cause parallel workers to share the in-memory Mongo and make tests flaky.
+- **Rate limiters are raised, not disabled** (`setup-environment.ts` sets credential budgets to 1000). If a limiter truncated the race, the test would still pass vacuously ("not two succeeded" is trivially true when requests never reached the handler). `expectNoServerErrors` guards against this by explicitly rejecting 429s.
+- **Supertest thenable semantics:** the request object is a thenable, not a Promise. It only initiates the HTTP call when awaited. The build-then-settle pattern in `raceN` is therefore load-bearing; refactoring to `await` inside a loop silently turns the test serial.
+- **`Promise.allSettled` is intentional.** `Promise.all` rejects on the first failure and discards the remaining results, which are exactly the outcomes the assertions target.
+- Rejected participants map to status `0` (not `undefined` or `-1`) so they sort to the front of the `statuses` array and are trivially filterable.

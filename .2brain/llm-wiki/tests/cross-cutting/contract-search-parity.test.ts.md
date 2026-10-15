@@ -1,7 +1,7 @@
 ---
 source: tests/cross-cutting/contract-search-parity.test.ts
-sha256: 6b412b274ec7b1a0d78c143c89c2971d27a6d44acb02b953a152b2c8b95f7d31
-generated_at: 2026-09-23T19:55:25.538136+00:00
+sha256: 94ebcbbb9d4f85143cac256d6638870eceb70a55ceb0566b9a058f863db83a1f
+generated_at: 2026-10-15T12:37:22.117499+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies that the two spellings of a search endpoint (e.g. `GET /products?text=x` and `POST /products/search {text}`) declare **identical validation constraints** on every shared filter. It exists because the two spellings live in different parts of the OpenAPI document (query parameters vs. request-body schema), so a constraint can be added to one without touching the other — a structural drift the sibling test `contract-aliases.test.ts` (response parity) does not catch.
+Contract test that verifies the two spellings of each resource's search endpoint (`GET /{resource}?…` and `POST /{resource}/search`) declare identical validation constraints in the OpenAPI spec. It exists because query parameters and body properties live in different parts of the document, so a constraint added to one spelling is silently missing from the other — a drift the response-parity test (`contract-aliases.test.ts`) cannot catch.
 
 ## Key elements
 
-- **`spec`** — the parsed `openapi.yaml` bundle (resolved one level up from this file). Serves as the single source of truth for both route spellings.
-- **`resolve(node)`** — follows local `#/…` JSON-pointer references within the inlined bundle; no network or filesystem I/O.
-- **`constraints(schema)`** — projects a schema to the set of fields a generated validator would enforce (`type`, `format`, `enum`, `minimum`, `maximum`, `minLength`, `maxLength`, `pattern`) and serialises them to a JSON string. Returns the literal string `"ABSENT"` for `undefined`, so a missing filter is distinguishable from a present one and prints both sides on failure.
-- **`searchPairs`** (IIFE) — walks `spec.paths`, collects every route ending in `/search` whose `post` carries an `x-alias-of`, and resolves the alias's `operationId` back to its route via a pre-built map. Returns `{ searchRoute, listRoute, post }` tuples. Discovery is structural (no hard-coded list), so a new pair is covered automatically.
-- **`describe` / two `it` blocks** — first asserts the discovered pair set is exactly the four known routes (guards against a broken regex making all cases vacuous); second uses `it.each` to compare the query-parameter map against the body-property map for each pair, reporting per-field divergence strings.
+- **`resolve(node)`** — follows local `#/…` JSON pointers within the inlined OpenAPI bundle; no I/O needed.
+- **`constraints(schema)`** — extracts the validation shape (`type`, `format`, `enum`, `minimum`, `maximum`, `minLength`, `maxLength`, `pattern`) and serializes it to a string so failures print both sides. Returns the literal string `'ABSENT'` when the schema is missing.
+- **`searchPairs`** (IIFE) — discovers every `POST …/search` operation, resolves its `x-alias-of` `operationId` to the sibling `GET` route, and returns `{ searchRoute, listRoute, post }` tuples. Pairs whose alias target is not found are filtered out.
+- **`describe › 'found every search pair'`** — asserts the discovered set matches the expected six modules (`example`, `feedback`, `orders`, `payments`, `products`, `users`) filtered by `isDeployed`. Acts as a tripwire: if the discovery regex stops matching, every subsequent case would be vacuous.
+- **`it.each(searchPairs)`** — for each pair, builds a `Map` of query-parameter schemas (from `GET` `parameters`) and a `Map` of body-property schemas (from `POST` `requestBody`), then asserts the union of keys yields zero divergent constraint strings.
 
 ## Relationships
 
-This file has **no direct imports** from any of the listed graph neighbors. It is self-contained, depending only on `node:fs`, `node:path`, `yaml`, and the OpenAPI spec at `../../openapi.yaml`. Its logical sibling is `tests/cross-cutting/contract-aliases.test.ts` (response parity), referenced in the file's docstring.
+- **`tests/support/paths.ts`** — provides `isDeployed(module)`, used to filter the expected-pair list to modules that are actually deployed in the current environment.
+- **`openapi.yaml`** (project root, resolved relative to the test file) — the sole data source; the entire test reads and cross-references this single bundle. No other test or source file is imported.
 
 ## Notes
 
-- **Scope boundary:** The comparison covers validation shape only. `description` and `default` are deliberately excluded — prose legitimately differs between the two routes, and `normalizePagination` owns defaulting for both.
-- **Missing-filter semantics:** A filter present in one spelling but absent in the other is a **hard failure** (the original `GET /products` bug in `docs/theory/request-input.md`). This is distinct from a constraint mismatch.
-- **Discovery guard:** The first test hard-codes the expected four routes. If `x-alias-of` discovery regresses (e.g. a schema change renames the key), the second test would pass vacuously on an empty set; the guard prevents that.
-- **`$searchRoute` / `$listRoute` in the `it.each` title** — Jest stringifies the object passed to each case; the keys are read directly from the object rather than destructured in the callback signature.
+- The test intentionally excludes `description` and `default` from comparison: prose differs legitimately between spellings, and `normalizePagination` owns defaults for both.
+- A filter present in one spelling but absent in the other is a hard failure (`'ABSENT'` on one side), not just a constraint mismatch.
+- Discovery is annotation-driven (`x-alias-of`); adding a new search pair to the spec is automatically covered without editing this file, but removing the annotation or renaming the route pattern will silently drop the pair from the `it.each` set (caught only by the first "found every search pair" assertion).
+- The spec is parsed once at module-load time via `readFileSync`; the test has no network, broker, or cluster dependencies despite appearing alongside integration suites in the graph.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/tests/integration/subscriptions.test.ts
-sha256: e7cebfa89aaf8cb9f83dad265f50e35fbe3026e453ceaf88203f4bd80a45f922
-generated_at: 2026-09-23T19:44:25.452027+00:00
+sha256: e310e91ccc092a5c4f05b9eee2b335e9fbe289bb7f869aae6f2b683e4bfa9b12
+generated_at: 2026-10-15T12:24:22.071339+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test for `services/subscriptions.ts`'s `create` function, specifically targeting behaviors that only manifest against a **real database**: the subscription-cap race guard (two concurrent writers at cap = 1) and the persistence of `ownerUserId`. It exists because a mocked repository cannot reproduce two inserts landing at the same instant, which is the sole reason the post-insert rank re-check in `create` exists.
+Integration test for the `create` service in `services/subscriptions.ts`. It verifies two behaviours that a unit test with a mocked repository cannot: (1) the race-guard re-check that prevents two truly concurrent writes from both succeeding at the subscription cap, and (2) that `ownerUserId` is persisted on the row but stripped from the API response. A real database (`setupTestDb`) is required because the race scenario depends on two transactions landing at the same instant.
 
 ## Key elements
 
-- **`describe('create — the subscription cap boundary')`** — Sets `NODE_WEBHOOK_SUBSCRIPTION_CAP=1`, fires two `Promise.all` creates, asserts exactly one succeeds (HTTP 200) and one gets `422`, then verifies via `webhookSubscriptionRepository.search` that only one row remains (rollback cleaned up the loser).
-- **`describe('create — captures the owner id')`** — Verifies that `ownerUserId` is persisted in the DB but **absent** from the serialized response (the wire transform strips it). A second case confirms the stored value is whatever string the caller carries (e.g. `'test-user'`) without any resolution/lookup at creation time.
-- **`subscriptionBody(url)`** — Local helper that shapes the `{ url, eventTypes: ['*'] }` payload.
-- **`context`** — Module-level default caller context (`callerAs('manager')`, `analyticsConsent: false`).
-- **Env-var save/restore** — `beforeEach`/`afterEach` snapshot and restore `NODE_WEBHOOK_SUBSCRIPTION_CAP` so the test is self-contained.
+- **`setupTestDb()`** — spins up a real (in-memory) Mongo instance so concurrent inserts exercise actual transaction/rollback semantics.
+- **`subscriptionBody(url)`** — small helper that returns `{ url, eventTypes: ['*'] }`.
+- **`describe('create — the subscription cap boundary')`** — sets `NODE_WEBHOOK_SUBSCRIPTION_CAP=1` in `beforeEach`, fires two `create` calls via `Promise.all`, asserts exactly one succeeds (HTTP 200) and one returns `422` with the "reached its webhook subscription limit" message. Then queries the repository to confirm only one row persisted (the loser was rolled back).
+- **`describe('create — captures the owner id')`** — two cases: (a) a real user created via `createUser` is the caller; asserts `ownerUserId` is stored in the DB but absent from `result.data.subscription.toJSON()`. (b) the default `'test-user'` id from `callerAs('manager')` is stored verbatim without any lookup, proving creation never resolves the id.
 
 ## Relationships
 
-- **`src/modules/webhooks/services/subscriptions.ts`** — The `create` function under test; this suite exercises its count-then-insert + rank re-check logic end-to-end.
-- **`src/modules/webhooks/repository.ts`** — `webhookSubscriptionRepository` is used to read back stored rows and confirm persistence (or deletion) of the loser's record.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` provisions a real database connection; the race test's correctness depends on this being a live store, not a mock.
-- **`tests/support/callers.ts`** — `callerAs` builds caller contexts (manager role, optional user id); `TEST_TENANT_ID` scopes repository queries.
-- **`src/modules/users/tests/factories.ts`** — `createUser` creates a real user document so the owner-id test can assert a genuine ObjectId round-trips into the subscription row.
+- **`tests/support/setup-test-db.ts`** → `setupTestDb()` provides the real database connection for the entire file.
+- **`src/modules/webhooks/services/subscriptions.ts`** → `create` is the unit under test; both `describe` blocks exercise it directly.
+- **`src/modules/webhooks/repository.ts`** → `webhookSubscriptionRepository` is queried post-hoc to assert stored row count and `ownerUserId` field.
+- **`tests/support/callers.ts`** → `callerAs` builds the caller identity; `TEST_TENANT_ID` scopes repository queries to the test tenant.
+- **`src/modules/users/tests/factories.ts`** → `createUser` creates a real user document so the owner-id test has a genuine ObjectId.
+- **`tests/support/environment.ts`** → `setEnvironment` injects `NODE_WEBHOOK_SUBSCRIPTION_CAP` before each cap-boundary test.
 
 ## Notes
 
-- The entire file is **integration-only** by design: the race test is meaningless without a shared, transactional store where two writes can truly interleave. Do not extract or mock the repository for this suite.
-- The `if (!result.success) throw new Error('unreachable')` lines after `expect(result.success).toBe(true)` exist solely to narrow the discriminated union for TypeScript; they are never thrown at runtime.
-- The cap env var (`NODE_WEBHOOK_SUBSCRIPTION_CAP`) is the single knob that makes the race test deterministic; changing it to `≥2` would let both concurrent creates succeed and break the assertions.
+- The file deliberately avoids mocking the repository. The race-guard test is the "reason to exist" of the post-insert re-check in `create`; a mocked repo would always return the same canned count and could not reproduce two writers reading `0` simultaneously.
+- After the `expect(succeeded).toHaveLength(1)` guard, a `throw new Error('unreachable')` follows the `if (rejected[0]?.success)` check to satisfy TypeScript's control-flow narrowing — a convention used throughout this file.
+- The owner-id test relies on the transform in `../../model.ts` (`applyWebhookSubscriptionTransform`) to strip `ownerUserId` from the wire response; the test asserts its absence on the serialised object rather than on the raw DB document.
+- `beforeEach` sets the cap to `1`, so the cap-boundary test runs in isolation from any residual subscriptions in the test DB.

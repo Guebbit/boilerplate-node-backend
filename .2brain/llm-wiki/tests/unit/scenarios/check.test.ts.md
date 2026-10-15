@@ -1,7 +1,7 @@
 ---
 source: tests/unit/scenarios/check.test.ts
-sha256: e874cd19172c65207435a02813522786c577e67560f963a62fb751a5de32ddf9
-generated_at: 2026-09-23T20:29:05.325745+00:00
+sha256: f287c7fb7ec125abffedbc84d936af24299bfc42404bfe8f8e01de3e0e9c1851
+generated_at: 2026-10-15T13:23:42.808046+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the pure-list comparison in `scenarios/check.ts`. They prove that `findUnmetGuarantees` and `assertScenarioGuarantees` correctly detect mismatches between a scenario's declared guarantees and the subjects a built scenario offers — using hand-made subject maps so no scenario build (and therefore no database) is required.
+Unit tests for the scenario-guarantee checker (`scenarios/check.ts`). Verifies that `findUnmetGuarantees` and `assertScenarioGuarantees` correctly detect mismatches between the guarantee names a module declares for a scenario key and the subject map a built scenario actually offers. No database is involved; the tests feed hand-crafted subject maps to prove both directions of the comparison.
 
 ## Key elements
 
-- **`declaredForShop`** — Derived at module scope by flat-mapping `enabledModules` for every `scenario.shop` entry. Serves as the "truth" list of guarantee names without hardcoding them.
-- **`satisfyingSubjects`** — A stand-in subject map (each guarantee name → a fixed fake id) that satisfies every declaration. Used as the "all clear" fixture.
-- **`describe('findUnmetGuarantees')`** — Four cases: empty subjects (all guarantees unmet), exact match (no problems), an undeclared subject name left behind, and a scenario no module declares.
-- **`describe('assertScenarioGuarantees')`** — Two cases: throws an error naming every problem; returns silently when the lists agree.
+- **`declaredForShop`** — Derived constant: `enabledModules.flatMap(m => m.scenario?.shop ?? [])`. Collects every guarantee name the enabled modules declare under the `shop` key.
+- **`satisfyingSubjects`** — A `Record<string, string>` built from `declaredForShop` where each guarantee name maps to an arbitrary id (`'65dc8a99604c307b702b5ccc'`). Serves as the "everything matches" fixture.
+- **`describe('findUnmetGuarantees')`** — Four cases: empty subject map reports all declarations; exact match reports nothing; an extra undeclared subject (`ghost.leftBehind`) is flagged; an unknown scenario key (`'blank'`) with no declarations reports nothing.
+- **`describe('assertScenarioGuarantees')`** — Two cases: throws an error prefixed `[scenario-check]` when problems exist; returns silently on a full match.
 
 ## Relationships
 
-- **`scenarios/check.ts`** — The module under test. The file imports `findUnmetGuarantees` and `assertScenarioGuarantees` and exercises both directly.
-- **`src/modules.ts`** — Source of `enabledModules`, from which `declaredForShop` is derived. This ties the test to real module declarations rather than a fixed literal list.
+- **`scenarios/check.ts`** — The module under test. Exports `findUnmetGuarantees` (returns a string array of problems) and `assertScenarioGuarantees` (throws if problems exist, otherwise no-op). This file exercises both public APIs.
+- **`src/modules.ts`** — Source of `enabledModules`. The test reads each module's `scenario?.shop` array to derive its fixtures, so the assertions stay in lockstep with whatever the codebase currently declares.
 
 ## Notes
 
-- Guarantee names are **never restated** in the test body; they come from `enabledModules`. Adding a new `shop` guarantee to any module automatically extends the assertions here.
-- The "ghost.leftBehind" case is the only one that exercises the _reverse_ direction (a subject present but not declared), guarding against a scenario silently offering extra subjects.
-- The file explicitly does **not** verify that a real, built scenario's `shop` satisfies its own declarations — that concern is delegated to `tests/integration/scenarios/shop.test.ts`.
-- The assertion error message is asserted via a regex (`/[scenario-check] shop guarantees not met/`), so the exact wording after the prefix is free to change.
+- The checker compares **names only**; the id values in the subject map are irrelevant. The dummy id `65dc8a99604c307b702b5ccc` can be any string.
+- `ghost.leftBehind` is deliberately a name no enabled module declares — it tests the reverse direction (subject present but unclaimed).
+- If a new module adds a `shop` guarantee, `declaredForShop` picks it up automatically and the "empty map" test's expected length grows without editing the test.
+- Real end-to-end validation (that the *actual* built scenario satisfies the *actual* declarations) lives in `tests/integration/scenarios/shop.test.ts`, which must construct the scenario to run.

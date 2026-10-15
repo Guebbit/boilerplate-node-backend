@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/http/request.test.ts
-sha256: 9b76aff9ecdff79c563ec71061bafb684a28e90c3d8bb883a6a3adbee75ef830
-generated_at: 2026-09-23T20:23:04.312627+00:00
+sha256: 545ac153b7e07bfab92e09cdf9c08c09ad0a028b176ce8605bb0146a95d25639
+generated_at: 2026-10-15T13:15:30.538528+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `readInput` (and its sibling helpers) in `@infrastructure/http/request`. Every controller funnels through `readInput`, yet integration/contract suites never exercise its edge cases in isolation. This file pins each rule the function encodes—source precedence per surface, ID extraction semantics, multipart-only transport decoding, and the express-5 "body is `undefined`" path—so regressions are caught at the unit level rather than surfacing as a 500 in a real request.
+Unit tests for `readInput` (and the smaller helpers `parseFormBoolean`, `parseFormCsvList`, `callerContextOf`) from the HTTP request-reading layer. Because every controller funnels through `readInput` and the integration/contract suites never probe it directly, this file exists to pin down each rule the declaration encodes—surface precedence, ID resolution, multipart-only type coercion, undefined-key handling, and the express-5 "no body means `undefined`" edge case.
 
 ## Key elements
 
-- **`makeRequest(overrides)`** – builds a minimal express `Request` stub (params, query, body) plus a working `is()` that returns `null` when no content-type is set, mirroring express's behavior for body-less requests.
-- **`makeResponse()`** – builds an express `Response` stub that records `status()` / `json()` calls for assertions on error responses.
-- **`describe('readInput') / describe('precedence')`** – verifies the surface→source precedence chain (`search`→body, `write`/`delete`/`path`→params), fallback when the higher source is absent, key merging, dropping of explicitly-`undefined` values, survival of a body-less request, and that pagination keys are reported absent (not defaulted).
-- **`describe('readInput') / describe('ids')`** – verifies the `ids` option: first-declared-source-wins, empty-string fall-through, first-entry-of-array extraction, and key-absence when no source carries the value.
-- **`describe('readInput') / describe('transport decoding')`** – verifies multipart-only coercion of booleans, numbers, and string arrays; confirms unparseable numbers stay as strings (not `NaN`) and blank strings stay as `''` (not `0`).
-- **`OBJECT_ID`** – a fixed valid 24-hex ObjectId used wherever format validation must pass.
-- Imports under test: `readInput`, `callerContextOf`, `extractAndValidateId`, `isValidObjectId`, `parseFormBoolean` (from `@infrastructure/http/request`); `callerInScope` (from `@kernel/permissions`); `asCustomer` (from `tests/support/callers`); `asStub` (from `@tests/stub`).
+- **`makeRequest(overrides)`** — Builds a minimal `express.Request` stub via `asStub` that carries `params`, `body`, `query`, and a working `is(type)` method. `is` returns the matched content-type string, `false` on mismatch, or `null` when no `contentType` was supplied (mirroring express' "no body" signal).
+- **`describe('readInput') → 'precedence'`** — Verifies the per-surface source order (`search`→body, `write`→params, `delete`→params, `path`→params), fallback when the higher source lacks the key, merging of disjoint keys, exclusion of sources a surface doesn't read, dropping of explicitly-`undefined` values, the no-body path, and that absent pagination stays `undefined` (defaults live in `normalizePagination`).
+- **`describe('readInput') → 'ids'`** — Covers ID-specific resolution: first-source-wins, fallback to body, reading from `params` when `body` is `undefined` (express 5), empty-string fall-through, empty-value retention, repeated-ID-as-array (malformed, not silently picked), and absent-key stays absent.
+- **`describe('readInput') → 'transport decoding'`** — Asserts multipart-only coercion: booleans (`'false'`→`false`), string→array (`'tools'`→`['tools']`), number parsing (`'101.5'`→`101.5`), unparseable-number passthrough, empty-string-not-zero, zero-is-valid, and that JSON bodies are left byte-for-byte untouched so downstream validators see the original type violation.
+- **Constants** — `OBJECT_ID` (valid 24-hex for format-sensitive assertions), `JSON_TYPE`, `FORM_TYPE`.
 
 ## Relationships
 
-- **`src/infrastructure/http/request.ts`** – the module under test; this file imports and exercises every exported function.
-- **`src/kernel/permissions.ts`** – supplies `callerInScope`, used to set up the permission context that `callerContextOf` reads.
-- **`tests/support/callers.ts`** – supplies `asCustomer`, a factory for caller fixtures passed into `callerContextOf` / `callerInScope`.
-- **`tests/support/stub.ts`** – supplies `asStub`, the generic stub helper used to construct the `Request` and `Response` stand-ins.
+- **`src/infrastructure/http/request.ts`** — Module under test; imports `readInput`, `callerContextOf`, `parseFormBoolean`, `parseFormCsvList`.
+- **`tests/support/stub.ts`** — Provides `asStub`, used by `makeRequest` to cast the plain object literal into a typed `Request` stand-in.
+- **`tests/support/callers.ts`** — Provides `asCustomer` (imported, likely for `callerContextOf` / `callerInScope` tests further in the file).
+- **`src/kernel/permissions.ts`** — Provides `callerInScope`, imported for caller-context assertions.
 
 ## Notes
 
-- **Express 5 vs 4 body default:** express 5 leaves `request.body` as `undefined` when no body is sent (express 4 defaulted to `{}`). Tests explicitly cover the body-less path because reading a body key before precedence is applied would throw rather than fall through to `params`.
-- **Transport-conditional decoding:** multipart coercion (booleans, numbers, string arrays) is applied _only_ when the content-type is multipart. JSON bodies already carry native types, so decoding them would be destructive. Tests assert both sides of that boundary.
-- **Empty-string ≠ zero for numbers:** `Number('')` is `0`, but the code deliberately leaves `''` untouched so that a missing form field is not silently turned into a valid (free) price. Unparseable values stay as the original string so downstream validators can reject them with their own contract message.
-- **`is()` returns `null`, not `false`,** when `contentType` is `undefined`, matching express's behavior for requests with no body. Tests rely on this distinction.
-- The file header comment warns that `readInput` is "small enough to look self-evident" and that the integration/contract suites exercise it without asking it its own questions—this file exists to close that gap.
+- The express-5 `request.body === undefined` case is called out in multiple tests; the file header explicitly warns that a body-less `DELETE` would 500 without the guard `readInput` provides.
+- Multipart decoding is **transport-conditional by design**: the same key in a JSON body must *not* be coerced, so the validator's own type error reaches the caller. Tests assert both sides of that rule.
+- `Number('') === 0` in JS is a known footgun; the tests pin that an empty form field must pass through as `''`, not become `0`, because a free product is a legal price.
+- Repeated IDs (e.g. `id: [a, b]`) are deliberately left as arrays so the downstream ID validator returns 422 rather than `readInput` silently selecting an entry.
+- The file header documents *why* this test exists in isolation: `readInput` is "small enough to look self-evident" yet reached by every controller, and the integration/contract suites never ask it a question of their own.

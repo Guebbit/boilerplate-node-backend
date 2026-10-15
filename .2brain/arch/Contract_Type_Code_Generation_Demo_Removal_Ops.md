@@ -27,9 +27,9 @@ The invoicing bounded context — the e-invoicing provider port (a pluggable sea
 
 - `src.modules.invoicing.providers.index.EInvoicingProvider`:59-69
 - `src.modules.invoicing.providers.pdf.pdfEInvoicingProvider`:37-50
-- `src.modules.invoicing.repository.insertInvoice`:42-48
+- `src.modules.invoicing.repository.insertInvoice`:97-103
 - `src.infrastructure.adapters.document-store.readDocument`:49-61
-- `src.modules.access.service.grantableRoles`:175-178
+- `src.modules.access.service.grantableRoles`:176-179
 
 **Source Files:**
 
@@ -37,9 +37,9 @@ The invoicing bounded context — the e-invoicing provider port (a pluggable sea
   - `src.infrastructure.adapters.document-store.readDocument` (L49-L61) - Class
   - `src.infrastructure.adapters.document-store.readDocument.then() callback` (L55-L59) - Function
 - `src/modules/access/service.ts`
-  - `src.modules.access.service.grantableRoles` (L175-L178) - Class
-  - `src.modules.access.service.grantableRoles.PRESET_ROLES.filter() callback` (L177-L177) - Function
-  - `src.modules.access.service.grantableRoles.map() callback` (L178-L178) - Function
+  - `src.modules.access.service.grantableRoles` (L176-L179) - Class
+  - `src.modules.access.service.grantableRoles.PRESET_ROLES.filter() callback` (L178-L178) - Function
+  - `src.modules.access.service.grantableRoles.map() callback` (L179-L179) - Function
 - `src/modules/invoicing/providers/index.ts`
   - `src.modules.invoicing.providers.index.EInvoicingDocument` (L30-L50) - Interface
   - `src.modules.invoicing.providers.index.EInvoicingArtifact` (L53-L56) - Interface
@@ -51,11 +51,15 @@ The invoicing bounded context — the e-invoicing provider port (a pluggable sea
   - `src.modules.invoicing.providers.pdf.issue.then() callback` (L48-L48) - Function
   - `src.modules.invoicing.providers.pdf.pdfEInvoicingProvider.issue.then() callback` (L49-L49) - Function
 - `src/modules/invoicing/repository.ts`
-  - `src.modules.invoicing.repository.WithId` (L31-L33) - Interface
-  - `src.modules.invoicing.repository.insertInvoice` (L42-L48) - Class
-  - `src.modules.invoicing.repository.insertInvoice.then() callback` (L48-L48) - Function
-  - `src.modules.invoicing.repository.insertCreditNote` (L92-L101) - Class
-  - `src.modules.invoicing.repository.insertCreditNote.then() callback` (L101-L101) - Function
+  - `src.modules.invoicing.repository.WithId` (L86-L88) - Interface
+  - `src.modules.invoicing.repository.insertInvoice` (L97-L103) - Class
+  - `src.modules.invoicing.repository.insertInvoice.then() callback` (L103-L103) - Function
+  - `src.modules.invoicing.repository.insertCreditNote` (L147-L156) - Class
+  - `src.modules.invoicing.repository.insertCreditNote.then() callback` (L156-L156) - Function
+- `src/modules/invoicing/services/credit-breakdown.ts`
+  - `src.modules.invoicing.services.credit-breakdown.creditBreakdownOf.items.lines.map() callback` (L26-L29) - Function
+- `src/modules/invoicing/services/issue-credit-note.ts`
+  - `src.modules.invoicing.services.issue-credit-note.creditableOf.lines.invoice.lines.map() callback` (L42-L46) - Function
 - `src/modules/invoicing/services/render.ts`
   - `src.modules.invoicing.services.render.storedOrRendered` (L60-L91) - Class
   - `src.modules.invoicing.services.render.storedOrRendered.catch() callback` (L64-L72) - Function
@@ -68,6 +72,14 @@ The invoicing bounded context — the e-invoicing provider port (a pluggable sea
   - `src.modules.invoicing.services.render.renderCreditNotePdf` (L112-L121) - Class
   - `src.modules.invoicing.services.render.renderCreditNotePdf.storedOrRendered(`credit-note-${String(creditNote._id)}.pdf`) callback` (L113-L120) - Function
   - `src.modules.invoicing.services.render.renderCreditNotePdf.storedOrRendered(`credit-note-${String(creditNote._id)}.pdf`) callback.then() callback` (L120-L120) - Function
+- `src/modules/invoicing/services/stats.ts`
+  - `src.modules.invoicing.services.stats.DocumentTotals` (L17-L27) - Interface
+  - `src.modules.invoicing.services.stats.MoneyBucket` (L30-L35) - Interface
+- `src/modules/products/domain/preorder.ts`
+  - `src.modules.products.domain.preorder.PreorderFacts` (L10-L17) - Interface
+- `src/modules/shop/service.ts`
+  - `src.modules.shop.service.ShopIdentity` (L51-L65) - Interface
+  - `src.modules.shop.service.ReturnAddress` (L88-L96) - Interface
 
 ### Durable Artifact Persistence & Retention Adapters
 The infrastructure adapters that persist regenerable binary artifacts (rendered PDFs, account exports) to disk with atomic writes, name-shape validation, and retention-based reaping, plus the filesystem primitives they build on. This is the write/retention counterpart to the read path in the invoicing module — a regenerable copy store, never the legal record.
@@ -114,58 +126,40 @@ Pure, disk-owning build/ops scripts that (a) generate the contract-derived artif
 **Related Classes/Methods**:
 
 - `scripts.contracts.generate-error-codes.rows`
-- `scripts.ops.demo-remove-authorization.pruneCase`:103-125
-- `scripts.ops.refresh-breached-passwords.downloadCorpus`:73-80
-- `scripts.ops.demo-remove-tests.requiredModules`:58-61
 
 **Source Files:**
 
+- `scripts/contracts/cookie-auth.ts`
+  - `scripts.contracts.cookie-auth.SecuredOperation` (L26-L29) - Interface
+- `scripts/contracts/fragments.ts`
+  - `scripts.contracts.fragments.DeclaredTag` (L16-L19) - Interface
 - `scripts/contracts/generate-asyncapi-types.ts`
-  - `scripts.contracts.generate-asyncapi-types.buildOutput.sections` (L548-L577) - Class
-  - `scripts.contracts.generate-asyncapi-types.buildOutput.sections.sseEntries.map() callback` (L571-L571) - Function
+  - `scripts.contracts.generate-asyncapi-types.buildOutput.sections` (L532-L561) - Class
+  - `scripts.contracts.generate-asyncapi-types.buildOutput.sections.sseEntries.map() callback` (L555-L555) - Function
 - `scripts/contracts/generate-error-codes.ts`
-  - `scripts.contracts.generate-error-codes.rows` (L95-L95) - Class
-  - `scripts.contracts.generate-error-codes.rows.codes.map() callback` (L95-L95) - Function
+  - `scripts.contracts.generate-error-codes.rows` (L81-L81) - Class
+  - `scripts.contracts.generate-error-codes.rows.codes.map() callback` (L81-L81) - Function
+- `scripts/contracts/personal-data-assembly.ts`
+  - `scripts.contracts.personal-data-assembly.PersonalDataSection` (L33-L42) - Interface
+- `scripts/contracts/prune-unused.ts`
+  - `scripts.contracts.prune-unused.BundledDocument` (L26-L29) - Interface
 - `scripts/contracts/root-assembly.ts`
-  - `scripts.contracts.root-assembly.ModuleFragment` (L22-L29) - Interface
-  - `scripts.contracts.root-assembly.appendMissingTags.missing.fragments.flatMap() callback` (L98-L98) - Function
-  - `scripts.contracts.root-assembly.appendMissingTags.missing` (L98-L100) - Class
-  - `scripts.contracts.root-assembly.appendMissingTags.missing.filter() callback` (L99-L99) - Function
-  - `scripts.contracts.root-assembly.FragmentOperation` (L131-L133) - Interface
-  - `scripts.contracts.root-assembly.FragmentDocument` (L136-L138) - Interface
-  - `scripts.contracts.root-assembly.present.filter() callback` (L154-L154) - Function
+  - `scripts.contracts.root-assembly.ModuleFragment` (L22-L31) - Interface
+  - `scripts.contracts.root-assembly.appendMissingTags.used` (L108-L108) - Class
+  - `scripts.contracts.root-assembly.appendMissingTags.used.fragments.flatMap() callback` (L108-L108) - Function
+  - `scripts.contracts.root-assembly.appendMissingTags.wanted` (L109-L111) - Class
+  - `scripts.contracts.root-assembly.appendMissingTags.wanted.filter() callback` (L110-L110) - Function
 - `scripts/mutation/baseline.ts`
-  - `scripts.mutation.baseline.missingFromReport` (L245-L251) - Class
-  - `scripts.mutation.baseline.missingFromReport.filter() callback` (L250-L250) - Function
+  - `scripts.mutation.baseline.missingFromReport` (L230-L236) - Class
+  - `scripts.mutation.baseline.missingFromReport.filter() callback` (L235-L235) - Function
+- `scripts/mutation/check-baseline.ts`
+  - `scripts.mutation.check-baseline.printProgress` (L104-L114) - Class
+  - `scripts.mutation.check-baseline.printProgress.comparisons.filter() callback` (L109-L109) - Function
 - `scripts/mutation/pull-baseline.ts`
   - `scripts.mutation.pull-baseline.listArtifacts` (L28-L32) - Class
   - `scripts.mutation.pull-baseline.listArtifacts.then() callback` (L32-L32) - Function
   - `scripts.mutation.pull-baseline.then() callback.then() callback` (L49-L49) - Function
   - `scripts.mutation.pull-baseline.catch() callback` (L67-L70) - Function
-- `scripts/ops/demo-remove-authorization.ts`
-  - `scripts.ops.demo-remove-authorization.stripRoleGrants.out` (L79-L84) - Class
-  - `scripts.ops.demo-remove-authorization.stripRoleGrants.out.lines.map() callback` (L79-L84) - Function
-  - `scripts.ops.demo-remove-authorization.pruneCase` (L103-L125) - Class
-  - `scripts.ops.demo-remove-authorization.pruneCase.chunk.replaceAll() callback` (L118-L124) - Function
-  - `scripts.ops.demo-remove-authorization.stripConformanceCases.casesKept` (L143-L146) - Class
-  - `scripts.ops.demo-remove-authorization.stripConformanceCases.casesKept.map() callback` (L144-L144) - Function
-  - `scripts.ops.demo-remove-authorization.stripConformanceCases.casesKept.filter() callback` (L145-L145) - Function
-- `scripts/ops/demo-remove-tests.ts`
-  - `scripts.ops.demo-remove-tests.requiredModules` (L58-L61) - Class
-  - `scripts.ops.demo-remove-tests.requiredModules.flatMap() callback` (L59-L60) - Function
-  - `scripts.ops.demo-remove-tests.requiredModules.flatMap() callback.map() callback` (L60-L60) - Function
-  - `scripts.ops.demo-remove-tests.specifiersOf` (L67-L68) - Class
-  - `scripts.ops.demo-remove-tests.specifiersOf.SPECIFIER_PATTERNS.flatMap() callback` (L68-L68) - Function
-  - `scripts.ops.demo-remove-tests.specifiersOf.SPECIFIER_PATTERNS.flatMap() callback.map() callback` (L68-L68) - Function
-  - `scripts.ops.demo-remove-tests.isGone` (L93-L99) - Class
-  - `scripts.ops.demo-remove-tests.isGone.gone.some() callback` (L95-L98) - Function
-  - `scripts.ops.demo-remove-tests.removeResidueTests.importsGone` (L124-L127) - Class
-  - `scripts.ops.demo-remove-tests.removeResidueTests.importsGone.some() callback` (L124-L127) - Function
-  - `scripts.ops.demo-remove-tests.removeResidueTests.requiresGone` (L128-L128) - Class
-  - `scripts.ops.demo-remove-tests.removeResidueTests.requiresGone.some() callback` (L128-L128) - Function
-- `scripts/ops/refresh-breached-passwords.ts`
-  - `scripts.ops.refresh-breached-passwords.downloadCorpus` (L73-L80) - Class
-  - `scripts.ops.refresh-breached-passwords.downloadCorpus.map() callback` (L79-L79) - Function
 - `scripts/pairing/spec-identity.ts`
   - `scripts.pairing.spec-identity.sharedFileProblems` (L192-L193) - Class
   - `scripts.pairing.spec-identity.sharedFileProblems.comparisons.filter() callback` (L193-L193) - Function
@@ -174,9 +168,8 @@ Pure, disk-owning build/ops scripts that (a) generate the contract-derived artif
   - `scripts.pairing.sync-to-frontend.list` (L156-L157) - Class
   - `scripts.pairing.sync-to-frontend.list.items.map() callback` (L157-L157) - Function
 - `scripts/scaffold/apply.ts`
-  - `scripts.scaffold.apply.FragmentShape` (L22-L24) - Interface
-  - `scripts.scaffold.apply.applyScaffold.edits` (L108-L116) - Class
-  - `scripts.scaffold.apply.applyScaffold.edits.map() callback` (L109-L115) - Function
+  - `scripts.scaffold.apply.applyScaffold.edits` (L99-L107) - Class
+  - `scripts.scaffold.apply.applyScaffold.edits.map() callback` (L100-L106) - Function
 - `scripts/scaffold/central-edits.ts`
   - `scripts.scaffold.central-edits.CentralEdit` (L21-L26) - Interface
   - `scripts.scaffold.central-edits.appendToList` (L36-L51) - Class

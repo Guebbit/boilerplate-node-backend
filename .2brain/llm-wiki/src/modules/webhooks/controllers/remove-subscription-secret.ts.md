@@ -1,7 +1,7 @@
 ---
 source: src/modules/webhooks/controllers/remove-subscription-secret.ts
-sha256: 8917dfaff59db121fd2e0929dced80231bdca92034ad37e62cbcd8248c31a317
-generated_at: 2026-09-27T15:41:27.036360+00:00
+sha256: 24668a1802a138d16dc1f37064a4b16121eb111679c9d4c9f04060ec965f5439
+generated_at: 2026-10-15T12:18:10.005357+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller handler for `DELETE /webhooks/subscriptions/:id/secrets/:secretId`. It drops a single secret (ring entry) from a webhook subscription as the second half of a key rotation, once all consumers have switched. It guards against removing the last secret in the ring (422) and unknown ids (404), then returns the updated subscription document.
+Thin HTTP controller for `DELETE /webhooks/subscriptions/:id/secrets/:secretId`. It validates the subscription ID, delegates the actual ring-entry removal to `webhooksService`, and shapes the resulting `WebhookSubscription` into an HTTP response. It exists to isolate the request/response lifecycle (param extraction, tenant context, error mapping) from the domain logic.
 
 ## Key elements
 
-- **`removeWebhookSubscriptionSecret`** (exported) — The Express handler. Validates the `id` path param via `extractAndValidateId`, delegates to `webhooksService.removeSubscriptionSecret`, then either sends a success response with the subscription or short-circuits on a `refused` result. Errors are funneled through `catchAs`.
+- **`removeWebhookSubscriptionSecret(request, response)`** — The sole export. Handler for the DELETE route. Validates `:id` via `requireId`, calls `webhooksService.removeSubscriptionSecret(id, secretId, tenantCtx)`, then either returns `successResponse` with the presented subscription or short-circuits through `refused` (4xx) / `catchAs` (5xx).
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs` (unified error-to-HTTP mapping) and `refused` (detects rejection results and writes the error response).
-- **`src/infrastructure/http/request.ts`** — Supplies `extractAndValidateId` (validates the subscription `id` param) and `tenantCallerContextOf` (derives the tenant-scoped caller context passed to the service).
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse` to build the 200 JSON body.
-- **`src/modules/webhooks/services/index.ts`** — Exposes `webhooksService.removeSubscriptionSecret`, which performs the actual ring-entry removal and returns the updated document or a rejection.
-- **`src/modules/webhooks/routes.ts`** — Registers this handler on the `DELETE /webhooks/subscriptions/:id/secrets/:secretId` route.
-- **`src/types/index.ts`** — Provides the `WebhookSubscription` type used for the success-response payload.
+- **`@infrastructure/http/ids`** — `requireId` extracts and validates the `:id` param; on failure it writes a 404 and the handler returns early.
+- **`@infrastructure/http/request`** — `tenantCallerContextOf` derives the tenant/caller context passed as the third argument to the service.
+- **`@infrastructure/http/response`** — `successResponse` wraps the 200 body.
+- **`@infrastructure/http/controller`** — `refused` maps service-level "not found / validation failed" results to 404/422; `catchAs` turns unhandled exceptions into a 500 with a stable log tag.
+- **`../services`** — `webhooksService.removeSubscriptionSecret` performs the actual ring mutation (404 if secret ID absent, 422 if it would empty the ring).
+- **`../presenters`** — `presentWebhookSubscription` converts the domain `WebhookSubscription` into the wire-format payload.
+- **`@types`** — `WebhookSubscription` type parameterises the response generic.
+- **`routes.ts`** — Registers this handler on the `DELETE /webhooks/subscriptions/:id/secrets/:secretId` route.
 
 ## Notes
 
-- The service returns a Mongoose document; the handler calls `.toJSON()` to apply the model's `_id` → `id` transform, then casts to `WebhookSubscription` because the stored shape and the wire shape differ. The cast is necessary and intentional, not a type error.
-- This endpoint is deliberately the *last* step of a rotation: the caller is expected to have already added the new secret and migrated all consumers before invoking it.
-- A subscription whose ring would become empty is rejected (422) — a subscription with zero secrets cannot sign deliveries.
+- Business rules live in the service, not here: 404 when the `secretId` is not in the ring; 422 when removal would leave zero secrets (a subscription without a secret cannot sign deliveries).
+- Follows the same `requireId → service → refused → successResponse → catchAs` pattern as every other webhooks controller, keeping the file ~30 lines and trivially reviewable.
+- The `catchAs` tag is the literal string `'removeWebhookSubscriptionSecret'` — use it to grep server logs for this endpoint's errors.

@@ -1,7 +1,7 @@
 ---
 source: tests/unit/kernel/permissions.test.ts
-sha256: 07b240a5fe07e93c8b7c8c0f99932913824111d5fb73f683c62c7a4f86fe1106
-generated_at: 2026-09-23T20:27:40.769658+00:00
+sha256: f2f962cb3a80bdc878f55480a1fb15af0bb3b214089d8dc476def2aded03880a
+generated_at: 2026-10-15T13:22:41.765780+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the Zod schemas and derived exports in `@kernel/permissions`. Verifies that the authorization keys/roles documents are validated strictly (not merely cast), that the real shared YAML files loaded successfully at import, that the `admin` preset role is correctly tenant-scoped, and that the `permissionModelVersion` fingerprint changes on key swaps but not on reorders.
+Unit tests for the permission model exported by `@kernel/permissions`. Validates that the Zod schemas for the shared `authorization-keys.yaml` and `authorization-roles.yaml` documents reject malformed input with descriptive errors, that the real loaded YAML data satisfies invariants (admin key coverage, shopper-only key isolation, platform/tenant separation), that `permissionModelVersion` behaves as an order-independent content fingerprint, and that the role-level hierarchy and helper functions (`levelOfRole`, `levelOfRoles`, `isBelowLevel`) work as specified.
 
 ## Key elements
 
-- **`validKeysDocument`** — a minimal, otherwise-valid keys document used as the base fixture that each schema-rejection test mutates in exactly one field.
-- **`describe('keysDocumentSchema')`** — five cases: accepts a well-formed doc; rejects an action outside the declared vocabulary (asserting the error names both `keys` and `action` via `z.prettifyError`); rejects a key missing `scope`; rejects an unknown `stepUp` tier; rejects non-object `conditions`.
-- **`describe('rolesDocumentSchema')`** — two cases: accepts a well-formed roles doc (including `anonymous`); rejects a role entry that omits the `permissions` array.
-- **`describe('the real shared authorization files')`** — three cases: asserts `PERMISSION_KEYS`, `PRESET_ROLES`, and `ANONYMOUS_ROLE` are non-empty (i.e. the import-time schema parse didn't throw); asserts `admin` holds every declared tenant key by name; asserts `admin` holds **no** platform key.
-- **`describe('permissionModelVersion')`** — four cases: version changes when a key is swapped (same count, different identity); version is stable under reorder; version changes on add/remove; result is a non-negative integer.
+- **`validKeysDocument`** — a minimal, valid keys-document object used as the base for mutation tests in the `keysDocumentSchema` suite.
+- **`describe('keysDocumentSchema')`** — asserts `safeParse` accepts a well-formed doc and rejects bad action values, missing `scope`, unknown `stepUp` tiers, and non-object `conditions`.
+- **`describe('rolesDocumentSchema')`** — same pattern for the roles document: accepts valid shape, rejects missing `permissions` array, missing `level`, invalid level values, and an anonymous entry without `level`.
+- **`describe('the real shared authorization files')`** — integration-style assertions against the actually-loaded `PERMISSION_KEYS`, `PRESET_ROLES`, and `ANONYMOUS_ROLE`. Verifies admin holds every non-shopper tenant key by name, shopper-only keys (`cart.self.checkout`, `cart.self.update`) are held only by `customer` and `unverified`, admin is `unrestricted` (via `callerAs`), and admin holds no platform-scoped key.
+- **`describe('permissionModelVersion')`** — pins the fingerprint's properties: changes on key swap/add/remove, invariant under reordering, returns a non-negative integer.
+- **`describe('role levels')`** — asserts the full `name → level` table for all preset roles, null/unknown role defaults to `'user'`, multi-role resolution picks the highest level, and `isBelowLevel` is strictly ordered (user < staff < admin).
 
 ## Relationships
 
-- **`src/kernel/permissions.ts`** (`@kernel/permissions`) — sole production dependency. Imports `ANONYMOUS_ROLE`, `keysDocumentSchema`, `permissionModelVersion`, `PERMISSION_KEYS`, `PRESET_ROLES`, `rolesDocumentSchema`. The schemas are exercised via `.safeParse()`; the constants are asserted on directly.
-- **`zod`** — imported solely for `z.prettifyError` to inspect schema-error messages in one test.
+- **`src/kernel/permissions.ts`** — the module under test. This file imports its Zod schemas (`keysDocumentSchema`, `rolesDocumentSchema`), constants (`PERMISSION_KEYS`, `PRESET_ROLES`, `ANONYMOUS_ROLE`), and functions (`permissionModelVersion`, `levelOfRole`, `levelOfRoles`, `isBelowLevel`, `ANONYMOUS_ROLE`). A schema parse failure at import time would prevent this test file from loading at all.
+- **`tests/support/callers.ts`** — provides the `callerAs` helper, used in the admin/manager `unrestricted` assertion.
 
 ## Notes
 
-- The "real shared authorization files" suite is effectively an **import-time guard**: if `shared/authorization-keys.yaml` or `shared/authorization-roles.yaml` failed its Zod schema, the `import { … } from '@kernel/permissions'` at the top of this file would throw and the entire test module would fail to load. The explicit assertions are the visible confirmation that didn't happen.
-- There is intentionally **no wildcard** in the admin role. Admin is unrestricted within its tenant scope only because it lists every tenant key by name; a newly declared key would be silently missing from admin otherwise, which the "grants admin every declared tenant key" test catches.
-- The `permissionModelVersion` tests (annotated "B14") exist because a plain `.length` check cannot distinguish "same keys" from "different keys of the same count" — a rename or key-for-key swap would leave a length-based version unchanged and let a client's cached rules go stale.
+- The file doubles as a smoke test: if either YAML file failed its Zod schema, the import of `@kernel/permissions` would throw and the entire test file would fail to load. The "real shared authorization files" suite is the visible confirmation that did not happen.
+- The `EXPECTED` level table in the `role levels` suite is written out explicitly (not derived from the data) so that any re-levelling decision is visible in code review as a diff.
+- Tests that assert on error messages use `z.prettifyError(result.error)` and check that the offending field name appears in the string, keeping tests coupled to *which* field is rejected rather than exact wording.
+- The file is truncated in this snapshot; the `isBelowLevel` suite likely continues with the remaining comparison pairs.

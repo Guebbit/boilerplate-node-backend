@@ -1,7 +1,7 @@
 ---
 source: tests/integration/scenarios/shop.test.ts
-sha256: b924e934eb80768d1ed840cd9f118a41cfcfb5850c20d3e6905842f1a0006798
-generated_at: 2026-09-27T15:58:25.734837+00:00
+sha256: 8bc6b2f2e7d60f68443b604117a05697ee328c7cd6e286f5677886cec33aa0fd
+generated_at: 2026-10-15T12:53:27.005553+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,39 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that builds the `shop` scenario end-to-end through the real application (checkout, payment, shipping, refund, admin endpoints) and then verifies four invariants: (1) the subject map exactly matches every module's declared guarantees, (2) each subject id resolves to an existing row, (3) each row carries the property its name claims *as the consumer sees it*, and (4) a produced row, when serialized for the wire, satisfies the API's own response schema. It exists so these behavioural contracts are enforced in `npm test` rather than left to a build step.
+Integration test that builds the full "shop" scenario through the real application (`createApp` + `buildScenario`) and then verifies, against the resulting database rows, that every guarantee each module declares actually holds. It is the only test in the repo that drives the application's own checkout, payment, shipping, refund, and admin endpoints during the build phase, making it the canonical end-to-end proof that the seed is internally consistent.
 
 ## Key elements
 
-- **`beforeAll(connect)` / `afterAll(disconnect)`** — uses raw Mongoose connection instead of `setupTestDb()` because the database *is* the test subject; rebuilding it per-test would be both slow and meaningless.
-- **`BUILD_TIMEOUT_MS = 300_000`** — single build in a second `beforeAll`; covers ~12 bcrypt-12 logins and hundreds of HTTP round-trips.
-- **`wireShape<T>(value)`** — JSON round-trip to convert `Date`/`ObjectId` into the ISO/hex strings a real HTTP response would carry, before schema validation.
-- **`subjects: Readonly<Record<string, string>>`** — the guarantee-name → row-id map returned by `buildScenario('shop', app)`; every subsequent test reads rows through it.
-- **`createApp()` + `buildScenario('shop', app)`** — the same code path used by `npm run demo` and `scenario:apply`; this test exercises it directly.
-- **`assertScenarioGuarantees('shop', subjects)`** — bidirectional check (no missing, no extra) against what all modules collectively declare.
-- **Per-subject `it` / `it.each` blocks** — assert concrete row state: `deletedAt`, `active`, `available` (via `toProduct`), order `status`, reservation `held`, payment `method`/`status`, audit-log timestamp drift, stock-movement ledger reconciliation.
+- **`beforeAll(connect)` / `afterAll(disconnect + emptyFileSandbox)`** — Uses raw `connect`/`disconnect` instead of `setupTestDb` because the database *is* the subject; rebuilding it per-test would be wasteful and pointless.
+- **`beforeAll → buildScenario('shop', app)`** (300 s timeout) — Seeds the entire scenario once; every `it` below reads the rows it left behind.
+- **`subjects`** — `Record<string, string>` mapping guarantee names to row IDs, produced by the build.
+- **`wireShape<T>(value)`** — `JSON.parse(JSON.stringify(value))` to mimic Express's `JSON.stringify` so `Date`/`ObjectId` become wire strings before Zod-schema validation.
+- **`describe("the shop scenario's guarantees")`** — Calls `assertScenarioGuarantees('shop', subjects)` in both directions (every declared subject resolved, no orphans).
+- **`describe('each subject names a row that really has the property')`** — Per-guarantee assertions: product states (`softDeleted`, `inactive`, `offSale`, `outOfStock`, `barebones`, `inStock`, `rich`, `digital`, `lowStock`, `noWithdrawal`, `heavy`), catalogue tax/weight/digital counts, user persona states (unverified, banned, pending-email), staff account readiness, and (in the truncated portion) order/payment/delivery/return/address/audit/inventory guarantees checked via their respective models and Zod response schemas.
 
 ## Relationships
 
-- **`scenarios/index.ts`** → `buildScenario`: the function under test; this file is its primary integration consumer.
-- **`scenarios/check.ts`** → `assertScenarioGuarantees`: validates the subject map is a bijection against declared guarantees.
-- **`scenarios/accounts.ts`** → `SEED_ADMIN_ID`, `SEED_USER_ID`: used to assert which account owns specific orders.
-- **`src/app.ts`** → `createApp`: constructs the full Express app with all modules registered; the scenario drives this app over HTTP.
-- **`src/modules/products/model.ts`** → `productModel`, `toProduct`: row lookups and the consumer-facing mapping used to verify `available`.
-- **`src/modules/orders/model.ts`** → `orderModel`: order row assertions (status, `userId`, `deletedAt`, `paymentMethod`).
-- **`src/modules/orders/index.ts`** → `orderService`: exercised transitively during the scenario build (checkout flow).
-- **`src/modules/payments/model.ts`** → `paymentModel`: verifies payment method, status, and refund state.
-- **`src/modules/users/model.ts`** → `userModel`: user rows created during the scenario.
-- **`src/modules/audit-logs/model.ts`** → `auditLogModel`: confirms audit entries align with order timestamps and target ids.
-- **`src/modules/addresses/model.ts`** → `addressBookModel`: address-book rows checked after PII decryption.
-- **`src/modules/addresses/pii.ts`** → `decryptAddressItem`: applied before serializing address entries against the contract's `Address` schema.
-- **`src/modules/inventory/model.ts`** → `reservationModel`, `stockMovementModel`: verifies stock holds exist and that `onHand` is reconcilable against the movement ledger.
-- **`tests/support/database.ts`** → `connect`, `disconnect`: lifecycle management for this single-build-then-read pattern.
+- **`scenarios/index.ts`** — Source of `buildScenario`, the single entry point that seeds all module data and returns the subject map.
+- **`scenarios/check.ts`** — Provides `assertScenarioGuarantees`, the bidirectional (name→row, row→name) consistency check.
+- **`scenarios/accounts.ts`** — Exports `SEED_ADMIN_ID`, `SEED_USER_ID`, `SEED_TWO_FACTOR_BACKUP_CODES`, `seedCredentials`, etc., used to look up users and verify their state.
+- **`scenarios/users.ts`** — Exports `SEED_CUSTOMER_IDS` for customer-level assertions.
+- **`src/app.ts`** — `createApp` builds the full Express app with all enabled modules so the build runs through the real middleware stack.
+- **`src/modules/products/model.ts` / `presenter.ts`** — `productModel` for direct row reads; `presentProduct` to compute the consumer-facing `available` counter (as opposed to raw `onHand`).
+- **`src/modules/orders/index.ts` / `model.ts`** — `orderService` and `orderModel` for order-level guarantee checks.
+- **`src/modules/payments/model.ts`** — `paymentModel` for payment-row assertions.
+- **`src/modules/delivery/model.ts`** — `fulfillmentOrderModel`, `shipmentModel` for shipping/refund guarantees.
+- **`src/modules/inventory/model.ts`** — `reservationModel`, `stockMovementModel` for stock-level assertions.
+- **`src/modules/addresses/model.ts` / `pii.ts`** — `addressBookModel` for row lookups; `decryptAddressItem` to decrypt PII fields exactly as the production reader does before serializing against the `Address` contract schema.
+- **`src/modules/audit-logs/model.ts`** — `auditLogModel` for audit-entry row checks.
+- **`src/modules/account/two-factor/backup-codes.ts`** — `hashBackupCode` to verify backup-code rows match the expected hash.
 
 ## Notes
 
-- **`available` vs `onHand`**: the test deliberately asserts `toProduct(product).available === 0` (the derived counter the storefront reads) rather than `onHand === 0`; a product with stock entirely in reservations could have `onHand > 0` yet `available === 0`.
-- **Locales are excluded from schema checks**: `scenarios/locales.ts` stores a shape no endpoint serves raw (the locale tier-merge builds the response), so validating a stored row against a response schema would be a false guardrail.
-- **Address books are the exception**: they *are* checked, but only after `decryptAddressItem` — `applySerialization` alone never touches ciphertext, so the test mirrors what `addresses/repository.ts` readers do.
-- **Temporal spread assertion**: orders must span >30 days back (not stacked at boot) but stay within `NODE_AUDIT_RETENTION_DAYS` (90), or the audit-trail screen would contradict the dataset.
-- **The file is truncated in source**: the stock-movement reconciliation `it` block (checking `onHand` against summed `onHandDelta`) is present but cut off; the full file continues that reconciliation and the schema-validation `it` blocks.
+- **Timeout**: `BUILD_TIMEOUT_MS = 300_000` (5 min) — deliberately far above the suite default because the build performs ~12 password-hash logins and several hundred HTTP round-trips. It runs only once.
+- **`wireShape` vs `structuredClone`**: The JSON round-trip is intentional; `structuredClone` would preserve `Date`/`ObjectId` as live instances, defeating the purpose of simulating wire serialization.
+- **`available` vs `onHand`**: Out-of-stock assertions use `presentProduct(product).available === 0`, not `onHand === 0`, because the storefront badge reads the derived counter. A product fully held in reservations would show `onHand > 0` yet be unbuyable.
+- **Locales are excluded** from schema validation by design: `scenarios/locales.ts` publishes a *stored* shape with no serving endpoint; validating it against a response schema would be a false guardrail.
+- **Address book** is the one stored shape that *is* validated: after `decryptAddressItem`, the entry must parse as the contract's `Address` response schema.
+- **File sandbox**: The build uploads a product image through the real route; `emptyFileSandbox` in `afterAll` cleans it up.
