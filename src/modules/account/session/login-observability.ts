@@ -13,6 +13,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { callerContextOf } from '@infrastructure/http/request';
 import { pseudonymise } from '@infrastructure/security/pseudonymise';
+import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { accountAuditActions } from '../audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { authLoginTotal } from '../metrics';
@@ -23,7 +24,7 @@ import { authLoginTotal } from '../metrics';
  * correlate with the hashed address in the stdout lines, without storing the address itself.
  */
 const attemptedIdentity = (email: unknown): string | undefined =>
-    typeof email === 'string' ? pseudonymise('log', email.trim().toLowerCase()) : undefined;
+    typeof email === 'string' ? pseudonymise('log', normalizeEmail(email)) : undefined;
 
 /** Emit login failure observability (metrics + audit). */
 export const recordLoginFailure = (request: Request): void => {

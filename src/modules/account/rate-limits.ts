@@ -11,7 +11,6 @@
  * See: docs/tools/security.md#the-rate-limit-budgets
  */
 
-import { createHash } from 'node:crypto';
 import type { Request, RequestHandler } from 'express';
 import type { RateLimitBudget } from '@types';
 import {
@@ -32,6 +31,7 @@ import { MFA_CHALLENGE_DELIVERED_TTL_MS } from './services/two-factor-challenge'
 import { MAIL_RECIPIENT_BUDGET } from './mail-budget';
 import { readMfaChallengeCookie } from './oauth/mfa-redirect';
 import { holdsDeviceCookie, presentsFailingDeviceCookie } from './session/device-cookie';
+import { pseudonymise } from '@infrastructure/security/pseudonymise';
 
 /**
  * The window of every credential-guess budget: 15 minutes, its own rather than the shared browsing
@@ -334,9 +334,7 @@ const challengeKey = (request: Request): string => {
     // An OAuth continuation never sends the challenge in the body: it rides in a cookie.
     const fromBody = readBodyField(request, 'challenge');
     const challenge = fromBody ? fromBody : readMfaChallengeCookie(request);
-    return challenge
-        ? createHash('sha256').update(challenge).digest('hex')
-        : `block:${addressBlockOf(request)}`;
+    return challenge ? pseudonymise('rate-limit', challenge) : `block:${addressBlockOf(request)}`;
 };
 
 /**
