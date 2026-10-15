@@ -184,6 +184,10 @@ const retirePresentedSession = (request: SessionRequest): Promise<void> => {
         });
 };
 
+/** Whether a row's `lastUsedAt` is older than {@link USE_STAMP_INTERVAL_MS} (or was never stamped). */
+const stampDue = (row: Pick<SessionRow, 'lastUsedAt'>): boolean =>
+    !row.lastUsedAt || Date.now() - row.lastUsedAt.getTime() >= USE_STAMP_INTERVAL_MS;
+
 /**
  * Find the live row a presented session id names.
  *
@@ -220,8 +224,9 @@ const resolveSession = (id: string): Promise<Resolution<AuthContext | undefined>
         const row = found.ok;
 
         return resolveRowProof(row).then((ok) => {
-            // Housekeeping, off the request's path: a lost stamp costs a stale reading only.
-            if (ok)
+            // Housekeeping, off the request's path: a lost stamp costs a stale reading only. The
+            // throttle is checked on the row already in hand, so a busy tab costs no extra query.
+            if (ok && stampDue(row))
                 void sessionRepository
                     .touch(hashToken(id), new Date(), USE_STAMP_INTERVAL_MS)
                     .then((wrote) => (wrote ? recordActivity(String(row.userId)) : undefined))

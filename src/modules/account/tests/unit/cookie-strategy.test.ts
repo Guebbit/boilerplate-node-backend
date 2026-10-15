@@ -206,6 +206,25 @@ describe.each([
         expect(sessions.touch).not.toHaveBeenCalled();
     });
 
+    it('stamps the use only when the row’s last stamp is over a minute old', async () => {
+        proof.mockResolvedValue({ id: USER_ID });
+
+        sessions.findByHash.mockResolvedValue(liveRow({ lastUsedAt: new Date() }));
+        await resolve(SOME_ID);
+        expect(sessions.touch).not.toHaveBeenCalled();
+
+        sessions.findByHash.mockResolvedValue(
+            liveRow({ lastUsedAt: new Date(Date.now() - 61_000) })
+        );
+        await resolve(SOME_ID);
+        expect(sessions.touch).toHaveBeenCalledTimes(1);
+
+        sessions.touch.mockClear();
+        sessions.findByHash.mockResolvedValue(liveRow({ lastUsedAt: undefined }));
+        await resolve(SOME_ID);
+        expect(sessions.touch).toHaveBeenCalledTimes(1);
+    });
+
     it('still answers when the use stamp fails', async () => {
         sessions.findByHash.mockResolvedValue(liveRow());
         proof.mockResolvedValue({ id: USER_ID });
