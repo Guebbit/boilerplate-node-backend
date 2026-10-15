@@ -7,7 +7,9 @@
 /** The audit action strings this module fires, keyed by event. */
 export const invoicingAuditActions = {
     /** Staff downloaded someone else's invoice PDF — financial and personal data leaving. */
-    ADMIN_INVOICE_VIEWED: 'admin.invoice.viewed'
+    ADMIN_INVOICE_VIEWED: 'admin.invoice.viewed',
+    /** Staff downloaded someone else's credit-note PDF — it carries the same buyer address. */
+    ADMIN_CREDIT_NOTE_VIEWED: 'admin.credit_note.viewed'
 } as const;
 
 /** Augments infrastructure's audit action map with this module's own action strings. */

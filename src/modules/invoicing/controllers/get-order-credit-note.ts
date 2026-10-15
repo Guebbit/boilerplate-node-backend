@@ -13,6 +13,8 @@ import { rejectResponse } from '@infrastructure/http/response';
 import { isValidObjectId, requireId } from '@infrastructure/http/ids';
 import { catchAs } from '@infrastructure/http/controller';
 import { ERROR_CODES } from '@api/error-codes';
+import { recordStaffRead } from '@kernel/staff-read';
+import { invoicingAuditActions } from '../audit';
 
 /** The 404 for a credit note the order does not have — one answer for absent and someone else's. */
 const notIssued = (response: Response): void => {
@@ -55,6 +57,15 @@ export const getOrderCreditNote = (
                         notIssued(response);
                         return undefined;
                     }
+
+                    recordStaffRead(request, {
+                        key: 'orders.any.read',
+                        action: invoicingAuditActions.ADMIN_CREDIT_NOTE_VIEWED,
+                        targetType: 'credit_note',
+                        // The row id, not the number: it repeats across the invoice series.
+                        targetId: String(creditNote._id),
+                        ownerId: String(order.userId)
+                    });
 
                     return invoicingService.renderCreditNotePdf(creditNote).then((pdf) => {
                         response

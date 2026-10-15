@@ -189,6 +189,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `inventory`      | `ADMIN_RESERVATIONS_SWEPT`                   | `admin.reservations.swept`                   | `reservation`          |
 | `inventory`      | `ADMIN_STOCK_ADJUSTED`                       | `admin.stock.adjusted`                       | —                      |
 | `inventory`      | `ADMIN_STOCK_RECEIVED`                       | `admin.stock.received`                       | —                      |
+| `invoicing`      | `ADMIN_CREDIT_NOTE_VIEWED`                   | `admin.credit_note.viewed`                   | `credit_note`          |
 | `invoicing`      | `ADMIN_INVOICE_VIEWED`                       | `admin.invoice.viewed`                       | `invoice`              |
 | `locales`        | `ADMIN_LOCALE_CREATED`                       | `admin.locale.created`                       | `locale`               |
 | `locales`        | `ADMIN_LOCALE_DELETED`                       | `admin.locale.deleted`                       | `locale`               |
@@ -206,6 +207,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `orders`         | `ORDER_RESTORED`                             | `order.restored`                             | `order`                |
 | `orders`         | `ORDER_STATUS_OVERRIDDEN`                    | `order.status_overridden`                    | `order`                |
 | `orders`         | `ORDER_UPDATED`                              | `order.updated`                              | `order`                |
+| `payments`       | `ADMIN_ORDER_LOOKED_UP`                      | `admin.order.looked_up`                      | `order`                |
 | `payments`       | `ADMIN_PAYMENT_REFUNDED`                     | `admin.payment.refunded`                     | `order`                |
 | `payments`       | `PAYMENT_AMOUNT_MISMATCH`                    | `payment.amount_mismatch`                    | `payment`              |
 | `payments`       | `PAYMENT_CONFIRMED`                          | `payment.confirmed`                          | —                      |

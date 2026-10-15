@@ -16,6 +16,7 @@ import { ServiceBusyError } from '@infrastructure/runtime/busy';
 import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
 import { auditLogger } from '@infrastructure/adapters/logger';
 import { invoicingRepository } from '../../repository';
+import { issueCreditNote } from '../../services';
 
 /** A second, distinctly-addressed customer — `authenticateAs('user')` always mints the same
  * default address, which collides the second time one test needs two customers. */
@@ -274,5 +275,36 @@ describe('GET /orders/{id}/credit-notes/{creditNoteId}', () => {
 
         expect(response.status).toBe(404);
         expect(response.body.errors[0].code).toBe('ORDER_CREDIT_NOTE_NOT_ISSUED');
+    });
+
+    it("records an admin's download, and not the owner's own", async () => {
+        const owner = await authenticateAs('user');
+        const admin = await authenticateAs('admin');
+        const product = await createProduct();
+        const order = await createOrder(owner.user, [toOrderItem(product, 1)]);
+        const orderId = String(order._id);
+        await markPaid(orderId);
+        await waitUntilInvoiced(orderId, owner.bearer);
+        const creditNote = await issueCreditNote({
+            orderId,
+            refundId: 'refund-1',
+            amount: 1,
+            full: true
+        });
+        const url = `/orders/${orderId}/credit-notes/${String(creditNote?._id)}`;
+        const auditSpy = jest.spyOn(auditLogger, 'log').mockImplementation(() => auditLogger);
+        const viewed = () =>
+            auditSpy.mock.calls
+                .map((call) => call[2] as { action?: string; targetId?: string })
+                .filter((entry) => entry.action === 'admin.credit_note.viewed')
+                .map((entry) => entry.targetId);
+
+        const own = await api().get(url).set('Authorization', owner.bearer);
+        expect(own.status).toBe(200);
+        expect(viewed()).toEqual([]);
+
+        await api().get(url).set('Authorization', admin.bearer);
+        expect(viewed()).toEqual([String(creditNote?._id)]);
+        auditSpy.mockRestore();
     });
 });

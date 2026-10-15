@@ -27,7 +27,12 @@ export const paymentsAuditActions = {
      * frozen on the payment. Deliberately not under `security.`: the incident view takes that whole
      * prefix, and this is a money discrepancy to reconcile rather than an attack signal.
      */
-    PAYMENT_AMOUNT_MISMATCH: 'payment.amount_mismatch'
+    PAYMENT_AMOUNT_MISMATCH: 'payment.amount_mismatch',
+    /**
+     * Staff read a whole order — email, both addresses, phone — by its payment reference. The
+     * order's own `admin.order.viewed` belongs to `orders`, and one string has one owner.
+     */
+    ADMIN_ORDER_LOOKED_UP: 'admin.order.looked_up'
 } as const;
 
 /** Augments infrastructure's audit action map with this module's own action strings. */

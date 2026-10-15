@@ -142,6 +142,10 @@ freeze failed (see above). Never re-rendered from live config: every render read
 byte, run through the same EJS template (`src/modules/invoicing/templates/documents/invoicing.document.ejs`) every
 time.
 
+**Staff downloads are audited.** A staff download of either PDF records `admin.invoice.viewed` /
+`admin.credit_note.viewed`, under the document's row id (the two number series both restart at 1
+each year). The owner's own download records nothing.
+
 ```mermaid
 flowchart TD
     D["GET …/invoice or …/credit-notes/{id}"] --> S{"stored copy?"}
