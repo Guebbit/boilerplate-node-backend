@@ -15,6 +15,7 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { ServiceBusyError } from '@infrastructure/runtime/busy';
 import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
 import { auditLogger } from '@infrastructure/adapters/logger';
+import { emptyFileSandbox } from '@tests/file-sandbox';
 import { invoicingRepository } from '../../repository';
 import { issueCreditNote } from '../../services';
 
@@ -38,6 +39,9 @@ jest.mock('@infrastructure/adapters/pdf', () => ({
 }));
 
 setupTestDb();
+
+// A downloaded invoice is stored on first render; sweep what the case left in the sandbox.
+afterEach(emptyFileSandbox);
 
 /** Waits out the fire-and-forget `ORDER_STATUS_CHANGED` listener that freezes the invoice. */
 const waitUntilInvoiced = async (orderId: string, bearer: string, timeoutMs = 2000) => {

@@ -12,7 +12,6 @@ import { api, bearerForCookie } from '@tests/http';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { createUser, userRepository, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { reauthWindowSeconds } from '@kernel/config';
-import { settleInlineExports } from '../../services/export';
 import { mintSession } from '../factories';
 import { bearerIn, claimedAmr } from './support';
 
@@ -28,8 +27,13 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
         return Promise.resolve();
     })
 }));
+import { emptyFileSandbox } from '@tests/file-sandbox';
+import { settleInlineExports } from '../../services/export';
 
 setupTestDb();
+
+// A requested export is built in the background and written to the sandbox: wait, then sweep.
+afterEach(() => settleInlineExports().then(emptyFileSandbox));
 
 // A mailed code is offered only where mail reaches a person (`mailDelivers`): the suite's default
 // `log` drops it, the `outbox` keeps it. `enqueueEmail` is mocked below, so nothing is sent.

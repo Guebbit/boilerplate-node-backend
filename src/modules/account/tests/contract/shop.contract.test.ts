@@ -19,8 +19,13 @@ import { asAdmin, asCustomer, callerContextAs, testCallerContext } from '@tests/
 import type { ResponseSuccess } from '@infrastructure/http/response';
 import type { Payment } from '@types';
 import { loginWithCookie } from './support';
+import { emptyFileSandbox } from '@tests/file-sandbox';
+import { settleInlineExports } from '../../services/export';
 
 setupTestDb();
+
+// A requested export is built in the background and written to the sandbox: wait, then sweep.
+afterEach(() => settleInlineExports().then(emptyFileSandbox));
 
 /** Polls until a fire-and-forget listener's write has landed (the count reaches 1), or gives up. */
 const waitForCount = async (count: () => Promise<number>, timeoutMs = 3000): Promise<void> => {

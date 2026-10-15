@@ -309,6 +309,8 @@ describe('requestExport', () => {
         setPersonalDataSections(basicSections());
 
         const { result } = await requestFor();
+        // The build writes under this case's store path; let it land before the case ends.
+        await settleInlineExports();
 
         expect(mockAudit).toContainEqual(
             expect.objectContaining({

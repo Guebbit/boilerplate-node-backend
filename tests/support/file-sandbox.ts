@@ -33,7 +33,9 @@ const SANDBOXED_VARIABLES = {
     NODE_PUBLIC_PATH: 'public',
     NODE_QUARANTINE_PATH: 'quarantine',
     NODE_UPLOAD_STAGING_PATH: 'uploads',
-    NODE_MAIL_SPOOL_PATH: 'mail-spool'
+    NODE_MAIL_SPOOL_PATH: 'mail-spool',
+    NODE_DOCUMENT_STORE_PATH: 'documents',
+    NODE_ACCOUNT_EXPORT_STORE_PATH: 'exports'
 } as const;
 
 /**

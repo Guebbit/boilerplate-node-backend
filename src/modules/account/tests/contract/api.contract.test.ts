@@ -38,8 +38,13 @@ import { freezeDate, advanceDate } from '@tests/clock';
 import { reauthWindowSeconds } from '@kernel/config';
 import { plantToken, tokenRowOf } from '../factories';
 import { sessionRepository } from '../../repository';
+import { emptyFileSandbox } from '@tests/file-sandbox';
+import { settleInlineExports } from '../../services/export';
 
 setupTestDb();
+
+// A requested export is built in the background and written to the sandbox: wait, then sweep.
+afterEach(() => settleInlineExports().then(emptyFileSandbox));
 
 /*
  * The mailer is REPLACED, not spied on — same reasoning as the audit/analytics ports elsewhere

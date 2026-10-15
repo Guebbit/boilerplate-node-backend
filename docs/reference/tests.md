@@ -411,21 +411,25 @@ the result: `tests/integration/scenarios/apply.test.ts` is the worked example.
 
 ### A test leaves no files behind
 
-A test run must not write onto the machine it runs on. The application writes files in three
+A test run must not write onto the machine it runs on. The application writes files in several
 places, and each defaults to a real directory:
 
-| Setting                    | Default outside tests             | In tests                                      |
-| -------------------------- | --------------------------------- | --------------------------------------------- |
-| `NODE_PUBLIC_PATH`         | `public/` — uploads, thumbnails   | `tmp/test/files/<pid>/<test file>/public`     |
-| `NODE_QUARANTINE_PATH`     | `tmp/quarantine/`                 | `tmp/test/files/<pid>/<test file>/quarantine` |
-| `NODE_UPLOAD_STAGING_PATH` | `<system temp>/node-api-uploads/` | `tmp/test/files/<pid>/<test file>/uploads`    |
+| Setting                          | Default outside tests               | In tests                                      |
+| -------------------------------- | ----------------------------------- | --------------------------------------------- |
+| `NODE_PUBLIC_PATH`               | `public/` — uploads, thumbnails     | `tmp/test/files/<pid>/<test file>/public`     |
+| `NODE_QUARANTINE_PATH`           | `tmp/quarantine/`                   | `tmp/test/files/<pid>/<test file>/quarantine` |
+| `NODE_UPLOAD_STAGING_PATH`       | `<system temp>/node-api-uploads/`   | `tmp/test/files/<pid>/<test file>/uploads`    |
+| `NODE_MAIL_SPOOL_PATH`           | the mail spool                      | `tmp/test/files/<pid>/<test file>/mail-spool` |
+| `NODE_DOCUMENT_STORE_PATH`       | stored invoice and credit-note PDFs | `tmp/test/files/<pid>/<test file>/documents`  |
+| `NODE_ACCOUNT_EXPORT_STORE_PATH` | built account exports               | `tmp/test/files/<pid>/<test file>/exports`    |
 
 Two rules, both enforced:
 
-- **Redirected.** `tests/support/setup-file-sandbox.ts` assigns all three before a test file loads,
+- **Redirected.** `tests/support/setup-file-sandbox.ts` assigns every one before a test file loads,
   overriding `.env` and the shell. Without `globalSetup` it refuses to run rather than fall back.
 - **Removed.** A test that writes a file for real deletes it — `afterEach(emptyFileSandbox)` is
-  the whole idiom. Teardown lists what is left, deletes the sandbox anyway, then fails the run
+  the whole idiom. Code that builds exports in the background (`settleInlineExports()`) waits for
+  the build first: `afterEach(() => settleInlineExports().then(emptyFileSandbox))`. Teardown lists what is left, deletes the sandbox anyway, then fails the run
   naming each offending test file.
 
 ```mermaid

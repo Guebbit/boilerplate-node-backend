@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/image-signatures.test.ts
-sha256: 1a0237df3b39748313959eea705848bc1bfce269b12ec51c69e30010310b6fed
-generated_at: 2026-09-23T20:17:18.942544+00:00
+sha256: a8456eb2a0335be5e663b479835a160aa78690c651e5dcf8c5f12b3fe41a1369
+generated_at: 2026-10-15T13:05:56.816482+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the magic-byte image identification module. The file verifies that `identifyImage` and `identifyImageFile` recognise real image formats (PNG, JPEG, WebP) by their header bytes while rejecting everything else — including disguised payloads, RIFF-adjacent formats, truncated buffers, and corrupted headers. It also pins the file-I/O contract: only the header is read, and the filename/extension is never consulted.
+Unit tests for the magic-byte image identification functions (`identifyImage`, `identifyImageFile`). The tests exist to pin down the security contract: identification must be based solely on leading bytes, must reject non-image content regardless of filename or declared MIME, and must read only the header from disk.
 
 ## Key elements
 
-- **`mockReadLengths`** — mutable array that records every `length` argument passed to `FileHandle#read`; used to assert header-only reads. The `mock` prefix is mandatory for Jest hoisting.
-- **`jest.mock('node:fs/promises')`** — wraps the real `open` so the returned handle's `read` is intercepted, pushing the requested byte count into `mockReadLengths` before delegating.
-- **`PNG`, `JPEG`, `WEBP`** — minimal magic-byte buffers (12, 10, and 16 bytes respectively) used as positive fixtures throughout.
-- **`describe('identifyImage')`** — buffer-based tests: valid formats, non-image content (HTML, SVG, PHP, shell, text), RIFF/WAV disambiguation, short-buffer safety, corrupted-header rejection, and polyglot (image + appended script) identification.
-- **`describe('identifyImageFile')`** — file-path-based tests using a temp directory: real image on disk, extension ignored for non-image bytes, missing file returns `undefined` (not a throw), empty file, and a 20 MB file that must be read in a single ≤ 64-byte read.
+- **`identifyImage(buffer)` tests** — Positive cases (PNG, JPEG, WebP magic bytes), negative cases (HTML, SVG-with-script, PHP, shell script, plain text, a `WEBP` string at offset 8 without RIFF), RIFF/WAV disambiguation, short-buffer handling (0–7 bytes), a single-byte-corrupted PNG header, and a polyglot (valid image + appended script).
+- **`identifyImageFile(path)` tests** — On-disk positive identification, extension-ignoring (`disguised.png` containing a script), missing-file handling (resolves `undefined` rather than throwing), empty file, and a header-only read assertion.
+- **`mockReadLengths` + `jest.mock('node:fs/promises')`** — Wraps `fs.open` so every `handle.read` call records the requested `length`. Used to assert that only one read of ≤ 64 bytes occurs against a 20 MB file, proving no full-file load.
+- **`PNG`, `JPEG`, `WEBP`** — Minimal byte sequences (magic + a few following bytes) used as fixtures throughout.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/image-signatures.ts`** — the sole production import; provides `identifyImage(buffer: Buffer): string | undefined` and `identifyImageFile(path: string): Promise<string | undefined>`. All test assertions target these two functions.
-- **`node:fs/promises`** — mocked at the module level so `identifyImageFile`'s internal `open`/`read` calls can be instrumented without touching real disk beyond the temp-directory write helpers.
+- **`src/infrastructure/adapters/image-signatures.ts`** — The module under test. This file imports `identifyImage` and `identifyImageFile` from it and asserts their return values and side-effect-free behavior.
 
 ## Notes
 
-- The polyglot test (valid PNG + trailing `<script>`) is an explicit boundary pin: the module identifies _formats_, it is not a content scanner. If the implementation ever starts rejecting trailing data, this test should change intentionally.
-- The header-only read test asserts via `mockReadLengths` byte counts rather than wall-clock timing to avoid flaky CI failures on loaded runners.
-- `mockReadLengths` is reset (`length = 0`) inside the single test that reads it; no other test depends on its contents.
-- The WEBP fixture is 16 bytes because the format marker (`VP8 `) sits at offset 8 inside the RIFF container; a 4-byte-only check would also match WAV/AVI.
+- The `mockReadLengths` array is named with the `mock` prefix specifically because Jest's hoisting rules only allow out-of-scope references inside `jest.mock` factories when the variable starts with `mock`.
+- The header-read test asserts on **byte count observed** rather than wall-clock time, deliberately avoiding flaky timing thresholds on loaded CI runners.
+- The polyglot test (image + `<script>` appended) documents an explicit design boundary: the function identifies the *format*, it does not scan for embedded payloads. A reviewer changing that behavior should update or remove that test case.
+- WebP identification requires matching `RIFF` at offset 0 **and** `WEBPVP8 ` at offset 8; a test specifically guards against a RIFF-only check that would also accept WAV/AVI.
