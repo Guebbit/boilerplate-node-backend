@@ -24,8 +24,8 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { coreAuditActions } from '@infrastructure/observability/audit';
 import { recordSecurityEvent } from '@infrastructure/observability/security-events';
+import { paymentsAuditActions } from '../audit';
 import { resolvePaymentProvider, WebhookRejected, WEBHOOK_SIGNATURE_HEADER } from '../providers';
 import { paymentService } from '../services';
 
@@ -72,7 +72,7 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
                 if (error.signatureFailure)
                     recordSecurityEvent(
                         callerContextOf(request),
-                        coreAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE,
+                        paymentsAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE,
                         { reason: error.message }
                     );
                 rejectResponse(response, 400, [t('payments.webhook-unverified')]);

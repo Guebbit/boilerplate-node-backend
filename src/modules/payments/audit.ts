@@ -11,6 +11,8 @@
  * for an operator, since that one needs a human to see it.
  */
 
+import { registerSecurityEvents } from '@infrastructure/observability/security-events';
+
 /** The audit action strings this module fires, keyed by event. */
 export const paymentsAuditActions = {
     PAYMENT_CONFIRMED: 'payment.confirmed',
@@ -32,8 +34,12 @@ export const paymentsAuditActions = {
      * Staff read a whole order — email, both addresses, phone — by its payment reference. The
      * order's own `admin.order.viewed` belongs to `orders`, and one string has one owner.
      */
-    ADMIN_ORDER_LOOKED_UP: 'admin.order.looked_up'
+    ADMIN_ORDER_LOOKED_UP: 'admin.order.looked_up',
+    /** A provider webhook whose signature did not verify: a forgery, so it is also counted. */
+    SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE: 'security.payment_webhook.invalid_signature'
 } as const;
+
+registerSecurityEvents([paymentsAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE]);
 
 /** Augments infrastructure's audit action map with this module's own action strings. */
 declare module '@infrastructure/observability/audit' {

@@ -9,12 +9,12 @@
 
 import { Counter } from 'prom-client';
 import type { CallerContext } from '@types';
-import { recordAudit, coreAuditActions } from './audit';
+import { recordAudit, coreAuditActions, type AuditAction } from './audit';
 import { metricsRegistry } from './metrics-registry';
 
 /**
  * Attacks on a credential, by event. The label is the audit action string, so a rule and a log
- * query name the same thing; it is bounded by {@link coreAuditActions}, never request data.
+ * query name the same thing; it is bounded by {@link SecurityEventAction}, never request data.
  */
 export const securityEventsTotal = new Counter({
     name: 'security_events_total',
@@ -34,21 +34,27 @@ export const staleCredentialsTotal = new Counter({
     registers: [metricsRegistry]
 });
 
-/** The `security.*` actions {@link recordSecurityEvent} accepts. */
-const SECURITY_EVENT_ACTIONS = [
+/**
+ * Any `security.*` action: the guards' own, plus whatever a module declares and registers.
+ */
+export type SecurityEventAction = Extract<AuditAction, `security.${string}`>;
+
+/**
+ * Pre-set each action's counter series to 0, so an `increase()` alert sees the first event after
+ * a restart. A module that records an attack calls this from its own `audit.ts`.
+ * https://prometheus.io/docs/practices/instrumentation/#avoid-missing-metrics
+ *
+ * @param actions - the `security.*` actions the caller will pass to {@link recordSecurityEvent}
+ */
+export const registerSecurityEvents = (actions: readonly SecurityEventAction[]): void => {
+    for (const event of actions) securityEventsTotal.inc({ event }, 0);
+};
+
+registerSecurityEvents([
     coreAuditActions.SECURITY_TOKEN_INVALID_SIGNATURE,
     coreAuditActions.SECURITY_TOKEN_MALFORMED,
-    coreAuditActions.SECURITY_API_KEY_REVOKED,
-    coreAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE,
-    coreAuditActions.SECURITY_METRICS_TOKEN_INVALID
-] as const;
-
-/** One of {@link SECURITY_EVENT_ACTIONS}. */
-export type SecurityEventAction = (typeof SECURITY_EVENT_ACTIONS)[number];
-
-// Each series exists at 0 from startup, so an `increase()` alert sees the first event after a
-// restart. https://prometheus.io/docs/practices/instrumentation/#avoid-missing-metrics
-for (const event of SECURITY_EVENT_ACTIONS) securityEventsTotal.inc({ event }, 0);
+    coreAuditActions.SECURITY_API_KEY_REVOKED
+]);
 
 /**
  * Audit one attack and count it.

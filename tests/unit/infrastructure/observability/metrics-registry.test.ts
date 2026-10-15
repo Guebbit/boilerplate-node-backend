@@ -118,11 +118,20 @@ describe('labelled alert counters', () => {
         await import('@infrastructure/observability/security-events');
         await import('@modules/account/metrics');
         await import('@modules/payments/metrics');
+        await import('@modules/payments/audit');
+        await import('@modules/observability/audit');
         withReadyState(0);
 
         const metrics = await getPrometheusMetrics();
 
         expect(metrics).toMatch(/^security_events_total\{event="security\.api_key\.revoked"\} 0$/m);
+        // A module's own attack action is registered from its `audit.ts`, not named here.
+        expect(metrics).toMatch(
+            /^security_events_total\{event="security\.payment_webhook\.invalid_signature"\} 0$/m
+        );
+        expect(metrics).toMatch(
+            /^security_events_total\{event="security\.metrics_token\.invalid"\} 0$/m
+        );
         expect(metrics).toMatch(/^auth_one_time_token_rejected_total\{flow="email_change"\} 0$/m);
         expect(metrics).toMatch(/^payment_amount_mismatch_total\{field="amount"\} 0$/m);
         expect(metrics).toMatch(/^account_export_failed_total 0$/m);

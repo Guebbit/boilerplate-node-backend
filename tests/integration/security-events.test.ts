@@ -14,6 +14,8 @@ import { apiKeyRepository } from '@modules/api-keys/repository';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { coreAuditActions } from '@infrastructure/observability/audit';
+import { paymentsAuditActions } from '@modules/payments/audit';
+import { observabilityAuditActions } from '@modules/observability/audit';
 import { staleCredentialsTotal } from '@infrastructure/observability/security-events';
 
 setupTestDb();
@@ -124,7 +126,7 @@ describe('a refused payment webhook', () => {
         expect(response.status).toBe(400);
         expect(audited(auditSpy)).toContainEqual(
             expect.objectContaining({
-                action: coreAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE,
+                action: paymentsAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE,
                 metadata: expect.objectContaining({ reason: 'Signature does not match' })
             })
         );
@@ -135,7 +137,7 @@ describe('a refused payment webhook', () => {
 
         expect(audited(auditSpy)).toContainEqual(
             expect.objectContaining({
-                action: coreAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE
+                action: paymentsAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE
             })
         );
     });
@@ -147,7 +149,7 @@ describe('a refused payment webhook', () => {
 
         expect(response.status).toBe(400);
         expect(audited(auditSpy).map((entry) => entry.action)).not.toContain(
-            coreAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE
+            paymentsAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE
         );
     });
 });
@@ -163,7 +165,9 @@ describe('a wrong metrics token', () => {
         });
 
         expect(audited(auditSpy)).toContainEqual(
-            expect.objectContaining({ action: coreAuditActions.SECURITY_METRICS_TOKEN_INVALID })
+            expect.objectContaining({
+                action: observabilityAuditActions.SECURITY_METRICS_TOKEN_INVALID
+            })
         );
     });
 
@@ -173,7 +177,7 @@ describe('a wrong metrics token', () => {
         });
 
         expect(audited(auditSpy).map((entry) => entry.action)).not.toContain(
-            coreAuditActions.SECURITY_METRICS_TOKEN_INVALID
+            observabilityAuditActions.SECURITY_METRICS_TOKEN_INVALID
         );
     });
 });

@@ -3,4 +3,3 @@ subdomain: generic
 group: foundation
 dependsOn:
     - audit-logs # GET /observability/audit
-noAudit: 'Infrastructure (health, metrics, the audit read, the SSE stream) that records nothing of its own.'

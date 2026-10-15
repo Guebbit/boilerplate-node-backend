@@ -42,11 +42,7 @@ export const coreAuditActions = {
     /** A bearer or cookie value that is not a well-formed token of the expected kind at all. */
     SECURITY_TOKEN_MALFORMED: 'security.token.malformed',
     /** An `sk_` key presented with its CORRECT secret after it was revoked. */
-    SECURITY_API_KEY_REVOKED: 'security.api_key.revoked',
-    /** A payment-provider webhook whose signature did not verify. */
-    SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE: 'security.payment_webhook.invalid_signature',
-    /** A `/observability/metrics` scrape with the wrong bearer token. */
-    SECURITY_METRICS_TOKEN_INVALID: 'security.metrics_token.invalid'
+    SECURITY_API_KEY_REVOKED: 'security.api_key.revoked'
 } as const;
 
 /** The app-level action strings, derived from {@link coreAuditActions}'s values. */
@@ -63,7 +59,7 @@ type CoreAuditAction = (typeof coreAuditActions)[keyof typeof coreAuditActions];
 export interface AuditActionMap {}
 
 /**
- * Every action this build can emit: the app-level three, plus whatever the enabled modules
+ * Every action this build can emit: the app-level actions, plus whatever the enabled modules
  * declare. Delete a module and its actions leave the union with it.
  */
 export type AuditAction = CoreAuditAction | AuditActionMap[keyof AuditActionMap];

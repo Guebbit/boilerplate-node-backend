@@ -103,8 +103,9 @@ The `action` vocabulary is a closed union, not free strings — an alert built o
 
 It is assembled rather than declared in one place. Each module owns its own actions in
 `src/modules/<name>/audit.ts` as an `as const` object and augments core's `IAuditActionMap`, the
-same way modules declare domain events; `infrastructure` keeps only the three `security.*` actions emitted by
-the authorization middleware about requests that never reached a domain. So the union narrows when
+same way modules declare domain events; `infrastructure` keeps only the `security.*` actions the guards emit about requests that never
+reached a domain. A module's own attack action (a forged webhook, a wrong scrape token) lives in
+its `audit.ts` and registers its counter series with `registerSecurityEvents`. So the union narrows when
 you delete a module, and `infrastructure` never names one. `tests/cross-cutting/audit-actions.test.ts` is
 what keeps two modules from claiming the same string, or inventing one that breaks the dotted
 convention log backends filter on.
@@ -177,8 +178,6 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `feedback`       | `ADMIN_FEEDBACK_VIEWED`                      | `admin.feedback.viewed`                      | —                      |
 | `infrastructure` | `SECURITY_API_KEY_REVOKED`                   | `security.api_key.revoked`                   | —                      |
 | `infrastructure` | `SECURITY_FORBIDDEN`                         | `security.forbidden`                         | `user`                 |
-| `infrastructure` | `SECURITY_METRICS_TOKEN_INVALID`             | `security.metrics_token.invalid`             | —                      |
-| `infrastructure` | `SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE` | `security.payment_webhook.invalid_signature` | —                      |
 | `infrastructure` | `SECURITY_RATE_LIMIT_HIT`                    | `security.rate_limit_hit`                    | —                      |
 | `infrastructure` | `SECURITY_REAUTH_REQUIRED`                   | `security.reauth_required`                   | —                      |
 | `infrastructure` | `SECURITY_TOKEN_INVALID_SIGNATURE`           | `security.token.invalid_signature`           | —                      |
@@ -199,6 +198,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `locales`        | `ADMIN_LOCALE_ENTRY_UPDATED`                 | `admin.locale_entry.updated`                 | `locale_entry`         |
 | `locales`        | `ADMIN_LOCALE_UPDATED`                       | `admin.locale.updated`                       | `locale`               |
 | `locales`        | `ADMIN_TRANSLATION_UPDATED`                  | `admin.translation.updated`                  | —                      |
+| `observability`  | `SECURITY_METRICS_TOKEN_INVALID`             | `security.metrics_token.invalid`             | —                      |
 | `orders`         | `ADMIN_ORDER_VIEWED`                         | `admin.order.viewed`                         | `order`                |
 | `orders`         | `ADMIN_ORDERS_EXPORTED`                      | `admin.orders.exported`                      | `order`                |
 | `orders`         | `ORDER_CANCELLED`                            | `order.cancelled`                            | `order`                |
@@ -214,6 +214,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `payments`       | `PAYMENT_FAILED`                             | `payment.failed`                             | —                      |
 | `payments`       | `PAYMENT_RECORDED_OFFLINE`                   | `payment.recorded_offline`                   | `order`                |
 | `payments`       | `PAYMENT_REFUND_OWED_BY_HAND`                | `payment.refund_owed_by_hand`                | `order`                |
+| `payments`       | `SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE` | `security.payment_webhook.invalid_signature` | —                      |
 | `products`       | `ADMIN_PRODUCT_CREATED`                      | `admin.product.created`                      | `product`              |
 | `products`       | `ADMIN_PRODUCT_DELETED`                      | `admin.product.deleted`                      | `product`              |
 | `products`       | `ADMIN_PRODUCT_RESTORED`                     | `admin.product.restored`                     | `product`              |

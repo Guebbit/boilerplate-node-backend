@@ -12,8 +12,8 @@ import { constantTimeEqual } from '@infrastructure/security/constant-time';
 import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { callerContextOf } from '@infrastructure/http/request';
-import { coreAuditActions } from '@infrastructure/observability/audit';
 import { recordSecurityEvent } from '@infrastructure/observability/security-events';
+import { observabilityAuditActions } from './audit';
 import { observabilityConfig } from './config';
 
 /**
@@ -52,7 +52,7 @@ export const isMetricsScraper = (request: Request, response: Response, next: Nex
         if (provided)
             recordSecurityEvent(
                 callerContextOf(request),
-                coreAuditActions.SECURITY_METRICS_TOKEN_INVALID,
+                observabilityAuditActions.SECURITY_METRICS_TOKEN_INVALID,
                 { route: request.path }
             );
         rejectResponse(response, 401, []);
