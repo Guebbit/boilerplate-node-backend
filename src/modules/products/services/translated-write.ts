@@ -6,7 +6,7 @@
 import type { z } from 'zod';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
 import { holds } from '@kernel/ability';
-import { auditForbidden } from '@infrastructure/observability/audit';
+import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { fillOmittedWithNull } from '@infrastructure/object-guards';
 import {
     isTranslationPlan,

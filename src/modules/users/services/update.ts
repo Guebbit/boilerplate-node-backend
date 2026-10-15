@@ -18,7 +18,8 @@ import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { rearmPrecondition } from '@infrastructure/persistence/versioning';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { auditForbidden, recordAudit } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
+import { auditForbidden } from '@infrastructure/observability/forbidden';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import type { CallerContext, UpdateUserByIdRequest, WithServerImage } from '@types';
 import {

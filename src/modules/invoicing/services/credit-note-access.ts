@@ -8,7 +8,7 @@
 
 import { holds } from '@kernel/ability';
 import { callerForSubject } from '@kernel/permissions';
-import { auditForbidden } from '@infrastructure/observability/audit';
+import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { isBuyer, type OrderDocument } from '@modules/orders';
 import type { AuthContext, CallerContext } from '@types';
 

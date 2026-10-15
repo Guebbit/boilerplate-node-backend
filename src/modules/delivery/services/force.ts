@@ -7,7 +7,7 @@
 import { t } from '@infrastructure/i18n';
 import { fieldError, generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { holds } from '@kernel/ability';
-import { auditForbidden } from '@infrastructure/observability/audit';
+import { auditForbidden } from '@infrastructure/observability/forbidden';
 import type { CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 

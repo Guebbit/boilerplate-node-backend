@@ -10,7 +10,7 @@ import type { CallerContext } from '@types';
 import { holds } from '@kernel/ability';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { t } from '@infrastructure/i18n';
-import { auditForbidden } from '@infrastructure/observability/audit';
+import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { ERROR_CODES } from '@api/error-codes';
 import { membershipsOf, rolesOfMany } from './memberships';

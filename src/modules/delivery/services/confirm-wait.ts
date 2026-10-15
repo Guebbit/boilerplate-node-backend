@@ -16,7 +16,8 @@ import {
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
-import { auditForbidden, recordAudit } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
+import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { isBuyer, orderService } from '@modules/orders';
 import { FulfillmentConsent } from '@types';
 import type { AuthContext, CallerContext, FulfillmentOrder } from '@types';

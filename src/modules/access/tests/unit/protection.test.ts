@@ -46,8 +46,8 @@ const recorded: unknown[] = [];
 
 jest.mock('@infrastructure/observability/audit', () => ({
     ...jest.requireActual('@infrastructure/observability/audit'),
-    auditForbidden: (_context: unknown, refusal: unknown) => {
-        recorded.push(refusal);
+    recordAudit: (_context: unknown, fields: unknown) => {
+        recorded.push(fields);
     }
 }));
 
@@ -146,7 +146,7 @@ describe('roleProtectedRefusal', () => {
         expect(recorded).toEqual([]);
     });
 
-    it('answers a 403 ROLE_MANAGEMENT_REQUIRED and audits it as forbidden', async () => {
+    it('answers a 403 ROLE_MANAGEMENT_REQUIRED and records a failed security.forbidden', async () => {
         hold('owner', 'admin');
 
         const refusal = await roleProtectedRefusal(callerContextAs('support', 'caller'), 'owner');
@@ -158,6 +158,8 @@ describe('roleProtectedRefusal', () => {
         });
         expect(recorded).toEqual([
             {
+                action: 'security.forbidden',
+                outcome: 'failure',
                 targetType: 'user',
                 targetId: 'owner',
                 metadata: { reason: 'role_protected' }

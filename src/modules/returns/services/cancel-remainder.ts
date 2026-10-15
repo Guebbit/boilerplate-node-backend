@@ -21,7 +21,7 @@
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { generateReject } from '@infrastructure/http/response';
-import { auditForbidden } from '@infrastructure/observability/audit';
+import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { callerForSubject, systemCallerContext } from '@kernel/permissions';
