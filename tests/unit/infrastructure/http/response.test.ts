@@ -343,6 +343,31 @@ describe('rejectResponse', () => {
         expect(response.status).toHaveBeenCalledWith(400);
     });
 
+    it('sets Retry-After on a 429 whose error names a wait', () => {
+        const response = makeResponseStub();
+        const setHeader = jest.fn();
+        Reflect.set(response, 'setHeader', setHeader);
+
+        rejectResponse(response, 429, [
+            { code: 'RATE_LIMITED', message: 'Slow down', details: { retryAfter: 42 } }
+        ]);
+
+        expect(setHeader).toHaveBeenCalledWith('Retry-After', '42');
+    });
+
+    it('sets no Retry-After on a 429 that names no wait, or on another status', () => {
+        const response = makeResponseStub();
+        const setHeader = jest.fn();
+        Reflect.set(response, 'setHeader', setHeader);
+
+        rejectResponse(response, 429, ['Slow down']);
+        rejectResponse(response, 409, [
+            { code: 'CONFLICT', message: 'No', details: { retryAfter: 5 } }
+        ]);
+
+        expect(setHeader).not.toHaveBeenCalled();
+    });
+
     it('does not throw, so controllers must return it', () => {
         // Documented: forgetting the `return` lets execution continue and trips Express'
         // "headers already sent". Pinned so the contract cannot change silently.

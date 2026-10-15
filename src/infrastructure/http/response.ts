@@ -254,6 +254,16 @@ export const generateReject = (status = 400, errors: (string | ResponseErrorItem
     }) as ResponseReject;
 
 /**
+ * The wait, in seconds, a refusal's first `details.retryAfter` names — `undefined` when none does.
+ *
+ * @param rejection - the envelope about to be sent
+ */
+const retryAfterOf = (rejection: ResponseReject): number | undefined =>
+    rejection.errors
+        .map((item) => item.details?.retryAfter)
+        .find((value): value is number => typeof value === 'number');
+
+/**
  * Send a normalized error payload instead of leaking framework-specific response shapes.
  *
  * The single exit point for failures. Notably it does *not* throw, so controllers must
@@ -264,7 +274,14 @@ export const rejectResponse = (
     response: Response,
     status = 400,
     errors: (string | ResponseErrorItem)[] = []
-) => response.status(status).json(generateReject(status, errors)) as Response<ResponseReject>;
+) => {
+    const rejection = generateReject(status, errors);
+    const retryAfter = retryAfterOf(rejection);
+    // `Retry-After` is the header form of what `details.retryAfter` already says (RFC 9110 §10.2.3).
+    if (status === 429 && retryAfter !== undefined)
+        response.setHeader('Retry-After', String(retryAfter));
+    return response.status(status).json(rejection) as Response<ResponseReject>;
+};
 
 /**
  * The error item for a refusal about one request field: `details.field` names it.

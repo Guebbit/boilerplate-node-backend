@@ -144,6 +144,7 @@ export const resendCooldownRemaining = (
  * @param user - the account asking
  * @param type - which kind of link is being re-sent, and so which cooldown applies
  * @param recipient - the address the mail goes to
+ * @param context - who asked; a budget refusal is counted against them
  * @param send - the send itself, run only when neither refuses
  * @returns the refusal, or what `send` answers
  */
@@ -151,6 +152,7 @@ const pacedSend = (
     user: UserDocument,
     type: VerifyLinkType,
     recipient: string,
+    context: CallerContext,
     send: () => Promise<ResponseSuccess<EmailVerificationRequested>>
 ): Promise<ResponseSuccess<EmailVerificationRequested> | ResponseReject> =>
     resendCooldownRemaining(user, type).then((wait) =>
@@ -160,7 +162,7 @@ const pacedSend = (
                   t('account.verify.resend-too-soon'),
                   wait
               )
-            : mailRecipientRefusal(recipient).then<
+            : mailRecipientRefusal(recipient, context).then<
                   ResponseSuccess<EmailVerificationRequested> | ResponseReject
               >((refusal) => refusal ?? send())
     );
@@ -186,7 +188,7 @@ export const requestEmailVerificationFor = (
         if (user.verifiedAt) return generateReject(409, [t('account.verify.already-verified')]);
 
         // The recipient is the account's own stored address, so no body names it.
-        return pacedSend(user, EMAIL_VERIFY_TOKEN_TYPE, user.email, () =>
+        return pacedSend(user, EMAIL_VERIFY_TOKEN_TYPE, user.email, context, () =>
             requestEmailVerification(user, context).then(() =>
                 generateSuccess<EmailVerificationRequested>(
                     { resendAfter: VERIFY_RESEND_SECONDS },
@@ -224,7 +226,7 @@ export const resendPendingEmailVerificationFor = (
             );
 
         // The recipient is the stored pending address.
-        return pacedSend(user, EMAIL_CHANGE_TOKEN_TYPE, pendingEmail, () =>
+        return pacedSend(user, EMAIL_CHANGE_TOKEN_TYPE, pendingEmail, context, () =>
             sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE).then(() => {
                 recordAudit(context, {
                     action: accountAuditActions.AUTH_EMAIL_CHANGE_RESENT,

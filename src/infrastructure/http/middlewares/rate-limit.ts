@@ -28,7 +28,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { refuseAntibot } from '@infrastructure/http/middlewares/antibot-log';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { pseudonymise } from '@infrastructure/security/pseudonymise';
-import type { RateLimitBudget } from '@types';
+import type { CallerContext, RateLimitBudget } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
@@ -57,6 +57,28 @@ export const DEFAULT_UPLOAD_RATE_LIMIT_MAX = 20;
 export const DEFAULT_API_KEY_RATE_LIMIT_MAX = 120;
 
 /**
+ * Count a refused budget, and audit it when the budget is `audited` — the one record every refusal
+ * leaves, whether a limiter at the route door or a service asking the budget itself made it.
+ *
+ * @param budget - the budget that was spent
+ * @param context - who asked
+ * @param metadata - what to record beside the action (the route, for a limiter)
+ */
+export const recordBudgetRefusal = (
+    budget: Pick<RateLimitBudget, 'namespace' | 'audited'>,
+    context: CallerContext,
+    metadata: Record<string, string> = {}
+): void => {
+    rateLimitRefusalsTotal.inc({ budget: budget.namespace });
+    if (budget.audited)
+        recordAudit(context, {
+            action: coreAuditActions.SECURITY_RATE_LIMIT_HIT,
+            outcome: 'failure',
+            metadata
+        });
+};
+
+/**
  * What a caller sees when a budget is spent: the shared error envelope, never express-rate-limit's
  * own plain-text body.
  *
@@ -67,13 +89,10 @@ export const DEFAULT_API_KEY_RATE_LIMIT_MAX = 120;
 export const refuseRateLimited =
     (budget: Pick<RateLimitBudget, 'namespace' | 'audited'>) =>
     (request: Request, response: Response): Response => {
-        rateLimitRefusalsTotal.inc({ budget: budget.namespace });
-        if (budget.audited)
-            recordAudit(callerContextOf(request), {
-                action: coreAuditActions.SECURITY_RATE_LIMIT_HIT,
-                outcome: 'failure',
-                metadata: { route: request.path, method: request.method }
-            });
+        recordBudgetRefusal(budget, callerContextOf(request), {
+            route: request.path,
+            method: request.method
+        });
 
         /*
          * Every refusal, audited or not — `installSecurity` mounts these limiters before

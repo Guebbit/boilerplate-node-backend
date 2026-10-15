@@ -561,6 +561,8 @@ email change and both resends can each be pointed at a stranger's address, and `
   email change to a new address). Both count in one store, so one budget has one tally.
 - **A refused charge sends nothing and saves nothing:** `429`, with `Retry-After`; an email change
   leaves `pendingEmail` as it was.
+  Either door counts the refusal in `rate_limit_refusals_total` and audits it
+  (`security.rate_limit_hit`), whoever asked.
 
 ## Why the metrics endpoint has its own credential
 

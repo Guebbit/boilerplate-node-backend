@@ -150,15 +150,20 @@ interface ExportRowChoice {
  *
  * @param userId - the account asking
  * @param email - the mailbox the finished export's link goes to, charged for a new build
+ * @param context - who asked; a refusal is counted against them
  * @returns the row and whether it is new, or the budget's refusal
  */
-const rowOrRefusal = (userId: string, email: string): Promise<ExportRowChoice | ResponseReject> =>
+const rowOrRefusal = (
+    userId: string,
+    email: string,
+    context: CallerContext
+): Promise<ExportRowChoice | ResponseReject> =>
     accountExportRepository.findByUserId(userId).then((existing) => {
         if (existing?.status === 'building' && !isStale(existing)) {
             return { row: existing, created: false };
         }
 
-        return mailRecipientRefusal(email).then(
+        return mailRecipientRefusal(email, context).then(
             (refusal) =>
                 refusal ??
                 (existing ? removeRow(existing) : Promise.resolve()).then(() => insertRow(userId))
@@ -189,7 +194,7 @@ export const requestExport = (
     withOwnAccount(
         userId,
         (user) =>
-            rowOrRefusal(userId, user.email).then((outcome) => {
+            rowOrRefusal(userId, user.email, context).then((outcome) => {
                 if (!isRow(outcome)) return outcome;
                 const { row, created } = outcome;
 

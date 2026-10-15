@@ -15,10 +15,20 @@ import { testCallerContext } from '@tests/callers';
 import { asReject } from '@tests/response';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 import { accountService, updateProfile } from '@modules/account/services';
+import { rateLimitRefusalsTotal } from '@infrastructure/observability/metrics-rate-limit';
 
 setupTestDb();
 
 afterEach(() => jest.resetModules());
+
+/** Reads `rate_limit_refusals_total` for the mailbox budget. */
+const refusals = () =>
+    rateLimitRefusalsTotal
+        .get()
+        .then(
+            (metric) =>
+                metric.values.find((value) => value.labels.budget === 'mail-recipient')?.value ?? 0
+        );
 
 /** Run `body` with a mailbox budget of `limit` a day. */
 const withBudget = (limit: number, body: () => Promise<void>) =>
@@ -127,6 +137,18 @@ describe('the service doors — the recipient is chosen by the server', () => {
             expect(sent.success).toBe(true);
             expect(asReject(refused).status).toBe(429);
             expect(asReject(refused).errors[0].code).toBe('RATE_LIMITED');
+        }));
+
+    it('counts a refusal the service answers, as a limiter would', () =>
+        withBudget(1, async () => {
+            const first = await createUser({ email: 'count+a@example.com' });
+            const second = await createUser({ email: 'count+b@example.com' });
+            await accountService.requestEmailVerificationFor(first.id, testCallerContext);
+            const before = await refusals();
+
+            await accountService.requestEmailVerificationFor(second.id, testCallerContext);
+
+            expect(await refusals()).toBe(before + 1);
         }));
 
     it('charges the pending-email resend to the pending mailbox', () =>

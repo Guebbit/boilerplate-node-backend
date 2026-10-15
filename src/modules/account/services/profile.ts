@@ -87,7 +87,7 @@ const saveProfile = (
     // budget BEFORE anything is saved, so a refused change leaves `pendingEmail` as it was.
     const budget =
         emailOutcome.requested && user.pendingEmail
-            ? mailRecipientRefusal(user.pendingEmail)
+            ? mailRecipientRefusal(user.pendingEmail, context)
             : Promise.resolve(undefined);
 
     return budget.then((refusal) => {

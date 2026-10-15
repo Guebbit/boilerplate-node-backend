@@ -15,9 +15,10 @@
  */
 
 import type { Request, RequestHandler } from 'express';
-import type { RateLimitBudget } from '@types';
+import type { CallerContext, RateLimitBudget } from '@types';
 import {
     chargeBudget,
+    recordBudgetRefusal,
     readBodyField,
     refuseRateLimited,
     type BudgetCharge
@@ -65,20 +66,25 @@ export const chargeMailRecipient = (address: string): Promise<BudgetCharge> =>
  * itself, such as the stored address of a resend or a requested new address, so no body names it.
  *
  * @param address - the mailbox about to be mailed
+ * @param context - who asked; a refusal is counted and audited against them
  * @returns the refusal to hand back, or `undefined` when the mail may be sent
  */
-export const mailRecipientRefusal = (address: string): Promise<ResponseReject | undefined> =>
-    chargeMailRecipient(address).then(({ allowed, retryAfterSeconds }) =>
-        allowed
-            ? undefined
-            : generateReject(429, [
-                  {
-                      code: ERROR_CODES.RATE_LIMITED,
-                      message: t('generic.error-rate-limited'),
-                      details: { retryAfter: retryAfterSeconds }
-                  }
-              ])
-    );
+export const mailRecipientRefusal = (
+    address: string,
+    context: CallerContext
+): Promise<ResponseReject | undefined> =>
+    chargeMailRecipient(address).then(({ allowed, retryAfterSeconds }) => {
+        if (allowed) return undefined;
+
+        recordBudgetRefusal(MAIL_RECIPIENT_BUDGET, context);
+        return generateReject(429, [
+            {
+                code: ERROR_CODES.RATE_LIMITED,
+                message: t('generic.error-rate-limited'),
+                details: { retryAfter: retryAfterSeconds }
+            }
+        ]);
+    });
 
 /**
  * The route-side door: charge the address the BODY names, answering 429 once the mailbox's budget
