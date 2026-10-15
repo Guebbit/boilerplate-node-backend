@@ -15,7 +15,6 @@ describe('the minted notice', () => {
         expect(mail.data).toMatchObject({
             locale: 'en',
             pageMetaTitle: 'API key created',
-            pageMetaLinks: [],
             greeting: 'Hello!',
             body: 'An API key named "partner" (abc123) was created on your account. It stops working on 1 January 2031.',
             advice: 'If this was not you, revoke it from your API keys and change your password now.'
@@ -41,7 +40,6 @@ describe('the revoked notice', () => {
         expect(mail.data).toMatchObject({
             locale: 'en',
             pageMetaTitle: 'API keys revoked',
-            pageMetaLinks: [],
             greeting: 'Hello!',
             body,
             list: 'a (1), b (2)',

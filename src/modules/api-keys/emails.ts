@@ -32,7 +32,6 @@ export const apiKeyMintedEmail = (
         data: {
             locale,
             pageMetaTitle: t('api-keys.email-minted.meta-title'),
-            pageMetaLinks: [],
             greeting: t('api-keys.email-minted.greeting'),
             body: t('api-keys.email-minted.body', { name: keyName, credential, expires }),
             advice: t('api-keys.email-minted.advice'),
@@ -61,7 +60,6 @@ export const apiKeysRevokedEmail = (
         data: {
             locale,
             pageMetaTitle: t('api-keys.email-revoked.meta-title'),
-            pageMetaLinks: [],
             greeting: t('api-keys.email-revoked.greeting'),
             body: t(`api-keys.email-revoked.body-${reason}`),
             list: credentials.join(', '),

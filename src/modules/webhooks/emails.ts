@@ -27,7 +27,6 @@ export const subscriptionDisabledEmail = (locale: string, url: string): EmailCon
         data: {
             locale,
             pageMetaTitle: t('webhooks.email-disabled.meta-title'),
-            pageMetaLinks: [],
             greeting: t('webhooks.email-disabled.greeting'),
             body: t('webhooks.email-disabled.body'),
             url,

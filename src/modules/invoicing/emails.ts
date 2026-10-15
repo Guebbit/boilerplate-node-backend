@@ -263,7 +263,6 @@ export const buildDocumentView = (
                 : 'invoicing.document.meta-title',
             { number: document.number }
         ),
-        pageMetaLinks: [],
         title: t(
             isCreditNote ? 'invoicing.document.credit-note-title' : 'invoicing.document.title'
         ),

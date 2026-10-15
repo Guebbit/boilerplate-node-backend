@@ -42,7 +42,6 @@ export const paymentReceivedEmail = (
         data: {
             locale,
             pageMetaTitle: t('payments.email-received.meta-title'),
-            pageMetaLinks: [],
             greeting: t('payments.email-received.greeting', { name }),
             body: t('payments.email-received.body'),
             lines: order.items.map((item) =>
@@ -94,7 +93,6 @@ export const refundIssuedEmail = (
         data: {
             locale,
             pageMetaTitle: t('payments.email-refunded.meta-title'),
-            pageMetaLinks: [],
             greeting: t('payments.email-refunded.greeting', { name }),
             body: t('payments.email-refunded.body', {
                 order: orderRef,

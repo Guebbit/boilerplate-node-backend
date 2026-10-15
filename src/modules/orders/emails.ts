@@ -227,7 +227,6 @@ export const orderConfirmEmail = (
         data: {
             locale,
             pageMetaTitle: t('orders.email-confirm.meta-title'),
-            pageMetaLinks: [],
             greeting: t('orders.email-confirm.greeting', { name }),
             body: t('orders.email-confirm.body'),
             lines: order.items.map((item) =>
@@ -274,7 +273,6 @@ export const bankTransferInstructionsEmail = (
         data: {
             locale,
             pageMetaTitle: t('orders.email-transfer.meta-title'),
-            pageMetaLinks: [],
             greeting: t('orders.email-transfer.greeting', { name }),
             body: t('orders.email-transfer.body'),
             beneficiary: instructions.beneficiary,
@@ -318,7 +316,6 @@ export const bankTransferExpiredEmail = (locale: string, order: OrderLines): Ema
         data: {
             locale,
             pageMetaTitle: t('orders.email-transfer-expired.meta-title'),
-            pageMetaLinks: [],
             greeting: t('orders.email-transfer-expired.greeting'),
             body: t('orders.email-transfer-expired.body'),
             total: t('orders.email-confirm.total', { total: totalOf(order) }),
@@ -340,7 +337,6 @@ export const cardHoldExpiredEmail = (locale: string, order: OrderLines): EmailCo
         data: {
             locale,
             pageMetaTitle: t('orders.email-card-expired.meta-title'),
-            pageMetaLinks: [],
             greeting: t('orders.email-card-expired.greeting'),
             body: t('orders.email-card-expired.body'),
             total: t('orders.email-confirm.total', { total: totalOf(order) }),
@@ -396,7 +392,6 @@ export const orderCancelledEmail = (
         data: {
             locale,
             pageMetaTitle: t('orders.email-cancelled.meta-title'),
-            pageMetaLinks: [],
             greeting: t('orders.email-cancelled.greeting', { name }),
             body: t('orders.email-cancelled.body', { order: orderRef }),
             refundNote: t(`orders.email-cancelled.${cancelledRefundKey(!!order.paidAt, refund)}`, {

@@ -88,7 +88,6 @@ export const shipmentShippedEmail = (
         data: {
             locale,
             pageMetaTitle: t('delivery.email-shipped.meta-title'),
-            pageMetaLinks: [],
             greeting: t('delivery.email-shipped.greeting', { name }),
             body: t('delivery.email-shipped.body'),
             lines: lineTexts(t, input.lines),
@@ -124,7 +123,6 @@ export const shipmentDeliveredEmail = (
         data: {
             locale,
             pageMetaTitle: t('delivery.email-delivered.meta-title'),
-            pageMetaLinks: [],
             greeting: t('delivery.email-delivered.greeting', { name }),
             body: t('delivery.email-delivered.body'),
             lines: lineTexts(t, input.lines),
@@ -167,7 +165,6 @@ export const preorderDelayedEmail = (
         data: {
             locale,
             pageMetaTitle: t('delivery.email-preorder-delayed.meta-title'),
-            pageMetaLinks: [],
             greeting: t('delivery.email-preorder-delayed.greeting', { name }),
             body: t(`delivery.email-preorder-delayed.${variant}.body`, {
                 agreed: longDate(locale, input.agreedAt),

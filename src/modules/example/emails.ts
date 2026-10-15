@@ -28,7 +28,6 @@ export const examplePublishedEmail = (
         data: {
             locale,
             pageMetaTitle: t('example.email-published.subject', { title }),
-            pageMetaLinks: [],
             greeting: t('example.email-published.greeting', { name }),
             body: t('example.email-published.body', { title }),
             footer: t('email.footer')

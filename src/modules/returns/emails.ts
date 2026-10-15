@@ -97,7 +97,6 @@ export const returnNoticeEmail = (
         data: {
             locale,
             pageMetaTitle: t(`returns.email.${kind}.subject`),
-            pageMetaLinks: [],
             greeting: t('returns.email.greeting', { name }),
             body: t(`returns.email.${kind}.body`, parameters),
             postage,

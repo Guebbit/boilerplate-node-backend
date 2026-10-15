@@ -31,7 +31,6 @@ export const contactRequestEmail = (locale: string, feedback: ContactRequest): E
         data: {
             locale,
             pageMetaTitle: t('feedback.email-contact.meta-title'),
-            pageMetaLinks: [],
             title: t('feedback.email-contact.title'),
             labelName: t('feedback.email-contact.label-name'),
             labelEmail: t('feedback.email-contact.label-email'),

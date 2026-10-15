@@ -70,7 +70,6 @@ describe('shipmentShippedEmail', () => {
             expect(value).not.toBe('');
             expect(value).not.toMatch(/^delivery\./);
         }
-        expect(data.pageMetaLinks).toEqual([]);
     });
 
     it('carries the locale through and translates by it', () => {

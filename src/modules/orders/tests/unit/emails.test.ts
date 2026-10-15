@@ -107,7 +107,6 @@ describe('orderConfirmEmail', () => {
             expect(value).not.toBe('');
             expect(value).not.toMatch(/^orders\./);
         }
-        expect(data.pageMetaLinks).toEqual([]);
     });
 
     /*

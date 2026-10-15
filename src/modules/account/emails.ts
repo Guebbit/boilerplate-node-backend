@@ -64,7 +64,6 @@ export const verifyRequestEmail = (
         data: {
             locale,
             pageMetaTitle: t('account.email.verify-request.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.verify-request.greeting', name),
             intro: t('account.email.verify-request.intro'),
             linkLabel: t('account.email.verify-request.link-label'),
@@ -97,7 +96,6 @@ export const emailChangeNoticeEmail = (
         data: {
             locale,
             pageMetaTitle: t('account.email.email-change-notice.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.email-change-notice.greeting', name),
             body: t('account.email.email-change-notice.body', { newEmail }),
             linkLabel: t('account.email.email-change-notice.link-label'),
@@ -116,7 +114,6 @@ export const resetRequestEmail = (locale: string, name: string, token: string): 
         data: {
             locale,
             pageMetaTitle: t('account.email.reset-request.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.reset-request.greeting', name),
             intro: t('account.email.reset-request.intro'),
             linkLabel: t('account.email.reset-request.link-label'),
@@ -141,7 +138,6 @@ export const setupRequestEmail = (locale: string, name: string, token: string): 
         data: {
             locale,
             pageMetaTitle: t('account.email.setup-request.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.setup-request.greeting', name),
             intro: t('account.email.setup-request.intro'),
             linkLabel: t('account.email.setup-request.link-label'),
@@ -177,7 +173,6 @@ export const twoFactorCodeEmail = (
         data: {
             locale,
             pageMetaTitle: t('account.email.two-factor-code.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.two-factor-code.greeting', name),
             intro: t('account.email.two-factor-code.intro'),
             code,
@@ -209,7 +204,6 @@ export const reauthCodeEmail = (
         data: {
             locale,
             pageMetaTitle: t('account.email.reauth-code.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.reauth-code.greeting', name),
             intro: t('account.email.reauth-code.intro'),
             code,
@@ -244,7 +238,6 @@ export const twoFactorChangedEmail = (
         data: {
             locale,
             pageMetaTitle: t('account.email.two-factor-changed.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.two-factor-changed.greeting', name),
             body: t(`account.email.two-factor-changed.body-${change}`, { method }),
             advice: t('account.email.two-factor-changed.advice'),
@@ -272,7 +265,6 @@ export const twoFactorLockedEmail = (
         data: {
             locale,
             pageMetaTitle: t('account.email.two-factor-locked.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.two-factor-locked.greeting', name),
             body: t('account.email.two-factor-locked.body', { minutes }),
             advice: t('account.email.two-factor-locked.advice'),
@@ -300,7 +292,6 @@ export const resetConfirmEmail = (
         data: {
             locale,
             pageMetaTitle: t('account.email.reset-confirm.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.reset-confirm.greeting', name),
             body: t('account.email.reset-confirm.body'),
             // Always a sentence: "none connected" is as useful to the owner as the list.
@@ -328,7 +319,6 @@ export const deleteRequestEmail = (locale: string, name: string, token: string):
         data: {
             locale,
             pageMetaTitle: t('account.email.delete-request.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.delete-request.greeting', name),
             intro: t('account.email.delete-request.intro'),
             linkLabel: t('account.email.delete-request.link-label'),
@@ -348,7 +338,6 @@ export const deleteConfirmEmail = (locale: string, name: string): EmailContent =
         data: {
             locale,
             pageMetaTitle: t('account.email.delete-confirm.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.delete-confirm.greeting', name),
             body: t('account.email.delete-confirm.body'),
             farewell: t('account.email.delete-confirm.farewell'),
@@ -373,7 +362,6 @@ export const inactivityWarningEmail = (
         data: {
             locale,
             pageMetaTitle: t('account.email.inactivity-warning.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.inactivity-warning.greeting', name),
             body: t('account.email.inactivity-warning.body', { days: graceDays }),
             footer: t('email.footer')
@@ -396,7 +384,6 @@ export const exportFailedEmail = (locale: string, name: string): EmailContent =>
         data: {
             locale,
             pageMetaTitle: t('account.email.export-failed.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.export-failed.greeting', name),
             body: t('account.email.export-failed.body'),
             ignore: t('account.email.export-failed.ignore'),
@@ -427,7 +414,6 @@ export const exportReadyEmail = (
         data: {
             locale,
             pageMetaTitle: t('account.email.export-ready.meta-title'),
-            pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.export-ready.greeting', name),
             intro: t('account.email.export-ready.intro'),
             linkLabel: t('account.email.export-ready.link-label'),

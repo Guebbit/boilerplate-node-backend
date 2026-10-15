@@ -47,7 +47,7 @@ const CONFIRM_EMAILS = [
 /** Every string slot in a built email, with the locale and the empty meta-links excluded. */
 const copySlots = (content: { subject: string; data: Record<string, unknown> }) =>
     Object.entries({ subject: content.subject, ...content.data })
-        .filter(([key]) => key !== 'locale' && key !== 'pageMetaLinks' && key !== 'linkUrl')
+        .filter(([key]) => key !== 'locale' && key !== 'linkUrl')
         .map(([key, value]) => [key, value] as const);
 
 describe('account emails — the template each one names', () => {
@@ -147,15 +147,6 @@ describe('account emails — the copy', () => {
         expect(english.data.locale).toBe('en');
         expect(italian.data.locale).toBe('it');
         expect(italian.subject).not.toBe(english.subject);
-    });
-
-    it('gives every email an empty meta-links list, not a missing one', () => {
-        // The renderer iterates it. `undefined` there is a template crash rather than an empty
-        // `<head>`, so the empty array is load-bearing despite looking like filler.
-        for (const [, build] of CONFIRM_EMAILS)
-            expect(build('en', NAME).data.pageMetaLinks).toEqual([]);
-        for (const [, build] of LINK_EMAILS)
-            expect(build('en', NAME, TOKEN).data.pageMetaLinks).toEqual([]);
     });
 
     it('shares one footer across every account email', () => {
