@@ -107,11 +107,11 @@ flowchart LR
     class V,G,SU,CH done;
 ```
 
-**A signup writes the account and its starting role in one transaction.** Self-service signup grants
-`unverified` and an OAuth signup `customer` (the provider vouches for the address). The row and the
-membership commit together or not at all, so a failed grant leaves no row holding the email, and
-there is no compensating delete that could itself fail. Same shape as an admin create, see
-[`users`](./users.md#creating-and-updating-with-a-role).
+**A signup writes the account and nothing else.** It grants no role: a self-service account has no
+`verifiedAt`, so it is an `unverified` audience, and an OAuth signup sets `verifiedAt` (the provider
+vouches for the address), so it is a `customer` from its first request. Verifying an address later
+is one field written on the account, with no role to promote. An admin create is the one signup that
+may also grant a staff role, see [`users`](./users.md#creating-and-updating-with-a-role).
 
 ::: tip Both entries owe the second factor
 The OAuth callback checks `twoFactorEnabledAt` like the password login does and issues the same

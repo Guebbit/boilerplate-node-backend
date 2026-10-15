@@ -192,8 +192,9 @@ export const seedCredentials = {
  * `root` is the shop's owner AND the installation's operator — two memberships, because they are
  * two jobs. A request acts as one or the other depending on the key it is asking about, which is
  * exactly the behaviour the platform/tenant split exists to produce, demonstrated by the account
- * everybody logs in as. The two staff accounts each hold exactly one of the newer tenant roles,
- * so each can be logged into and tried on its own — the whole point of adding them to experiment.
+ * everybody logs in as. The staff accounts each hold exactly one tenant role, so each can be
+ * logged into and tried on its own — the whole point of adding them to experiment. Every other
+ * seeded account holds none: a customer is computed from `verifiedAt`, never granted.
  */
 export const seedAccessModel = (): Promise<void> =>
     bootstrapAccessModel('The Demo Shop')
@@ -201,16 +202,8 @@ export const seedAccessModel = (): Promise<void> =>
             Promise.all([
                 assignRole(SEED_ADMIN_ID, String(tenant._id), 'tenant', 'admin'),
                 assignRole(SEED_ADMIN_ID, null, 'platform', 'operator'),
-                assignRole(SEED_USER_ID, String(tenant._id), 'tenant', 'customer'),
                 assignRole(SEED_EDITOR_ID, String(tenant._id), 'tenant', 'editor'),
                 assignRole(SEED_MODERATOR_ID, String(tenant._id), 'tenant', 'moderator'),
-                ...[
-                    SEED_UNVERIFIED_ID,
-                    SEED_TWO_FACTOR_ID,
-                    SEED_PENDING_EMAIL_ID,
-                    SEED_BANNED_ID,
-                    SEED_SECOND_SHOPPER_ID
-                ].map((id) => assignRole(id, String(tenant._id), 'tenant', 'customer')),
                 assignRole(SEED_MANAGER_ID, String(tenant._id), 'tenant', 'manager'),
                 assignRole(SEED_WAREHOUSE_ID, String(tenant._id), 'tenant', 'warehouse'),
                 assignRole(SEED_SUPPORT_ID, String(tenant._id), 'tenant', 'support'),

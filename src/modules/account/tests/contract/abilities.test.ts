@@ -170,8 +170,9 @@ describe('GET /account/abilities', () => {
             .expect(200);
 
         expect(response.body.data.grantableRoles).toEqual(
-            expect.arrayContaining(['customer', 'manager', 'moderator', 'admin'])
+            expect.arrayContaining(['manager', 'moderator', 'admin'])
         );
         expect(response.body.data.grantableRoles).not.toContain('operator');
+        expect(response.body.data.grantableRoles).not.toContain('customer');
     });
 });

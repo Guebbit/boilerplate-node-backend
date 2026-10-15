@@ -12,8 +12,8 @@ import { TEST_TENANT_ID } from '@tests/callers';
 import type { TenantCallerContext } from '@types';
 import { userRepository } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
-import { assignRole } from '@modules/access';
-import { permissionsOfRole } from '@kernel/permissions';
+import { assignRole, revokeRole } from '@modules/access';
+import { keysInScope } from '@kernel/permissions';
 import { resolveCredential } from '@kernel/authentication';
 import { credentialOf } from '@tests/credentials';
 import apiKeysModule from '@modules/api-keys/module';
@@ -101,7 +101,7 @@ describe('mint — the subset boundary', () => {
     it('refuses a permission with a step-up tier, even when the caller holds it', async () => {
         const user = await createRealUser('mint-step-up');
         // `users.any.delete` is `stepUp: critical`: a key can never re-authenticate to use it.
-        const context = contextFor(String(user._id), permissionsOfRole('admin'));
+        const context = contextFor(String(user._id), keysInScope('admin', 'tenant', 'customer'));
 
         const result = await mint(
             { name: 'dead key', permissions: ['users.any.delete'], expiresAt: IN_A_WEEK },
@@ -134,7 +134,7 @@ describe('mint — the subset boundary', () => {
 
     it('lets a wildcard-holder mint a key naming one specific key beneath it', async () => {
         const user = await createRealUser('mint-wildcard');
-        const context = contextFor(String(user._id), permissionsOfRole('admin'));
+        const context = contextFor(String(user._id), keysInScope('admin', 'tenant', 'customer'));
 
         const result = await mint(
             { name: 'from owner', permissions: ['orders.self.read'], expiresAt: IN_A_WEEK },
@@ -150,7 +150,7 @@ describe('a self key is not an any key', () => {
     // apart, the literal keys can.
     it('refuses to mint orders.any.read for a minter who holds only orders.self.read', async () => {
         const user = await createRealUser('self-minter');
-        const context = contextFor(String(user._id), permissionsOfRole('customer'));
+        const context = contextFor(String(user._id), keysInScope(null, 'tenant', 'customer'));
 
         const result = await mint(
             { name: 'wide read', permissions: ['orders.any.read'], expiresAt: IN_A_WEEK },
@@ -160,17 +160,17 @@ describe('a self key is not an any key', () => {
         expect(result.success).toBe(false);
     });
 
-    it('shrinks a minted orders.any.read to nothing once its minter is a customer', async () => {
+    it('shrinks a minted orders.any.read to nothing once its minter holds no staff role', async () => {
         const user = await createRealUser('wide-then-narrow');
         const userId = String(user._id);
         await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
         const minted = await mint(
             { name: 'wide read', permissions: ['orders.any.read'], expiresAt: IN_A_WEEK },
-            contextFor(userId, permissionsOfRole('admin'))
+            contextFor(userId, keysInScope('admin', 'tenant', 'customer'))
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
 
-        await assignRole(userId, TEST_TENANT_ID, 'tenant', 'customer');
+        await revokeRole(userId, TEST_TENANT_ID, 'tenant');
 
         const resolved = await credentialOf(minted.data.secret);
         expect(resolved?.caller.permissions).not.toContain('orders.any.read');
@@ -183,7 +183,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         const userId = String(user._id);
         await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
 
-        const mintContext = contextFor(userId, permissionsOfRole('admin'));
+        const mintContext = contextFor(userId, keysInScope('admin', 'tenant', 'customer'));
         const minted = await mint(
             {
                 name: 'about to be demoted',
@@ -200,7 +200,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         expect(beforeDemotion?.caller.level).toBe('admin');
 
         // `customer` holds none of the api-keys keys — the demotion this test is about.
-        await assignRole(userId, TEST_TENANT_ID, 'tenant', 'customer');
+        await revokeRole(userId, TEST_TENANT_ID, 'tenant');
 
         const afterDemotion = await credentialOf(minted.data.secret);
         // Still a real, resolvable credential (not revoked, not expired) — just holding nothing
@@ -223,7 +223,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
                 permissions: ['apikeys.any.read'],
                 expiresAt: IN_A_WEEK
             },
-            contextFor(userId, permissionsOfRole('admin'))
+            contextFor(userId, keysInScope('admin', 'tenant', 'customer'))
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
         const before = await credentialOf(minted.data.secret);
@@ -293,7 +293,7 @@ describe('revoke across administrators', () => {
         await assignRole(minterId, TEST_TENANT_ID, 'tenant', 'admin');
         const minted = await mint(
             { name: 'leaked', permissions: ['apikeys.any.read'], expiresAt: IN_A_WEEK },
-            contextFor(minterId, permissionsOfRole('admin'))
+            contextFor(minterId, keysInScope('admin', 'tenant', 'customer'))
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
         const other = await createRealUser('admin-revoker');
@@ -302,7 +302,7 @@ describe('revoke across administrators', () => {
 
         const result = await revoke(
             minted.data.id,
-            contextFor(otherId, permissionsOfRole('admin'))
+            contextFor(otherId, keysInScope('admin', 'tenant', 'customer'))
         );
 
         expect(result.success).toBe(true);

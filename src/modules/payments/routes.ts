@@ -69,34 +69,15 @@ router.get('/methods', getPaymentMethods);
 // Every route from here down requires authentication — money is somebody's.
 router.use(getAuth, isAuth);
 
-// The three card steps below ask `cart.self.update` BEFORE `cart.self.checkout`. The checkout key's
-// refusal says "confirm your email" (`deniedCode`), which would mislead a staff caller; the shopper
-// key first gives them an honest plain 403.
-
 // The staff Payments page. Static segments, and none of them collides with `/:id/...` below (those
 // are all POSTs on a longer path). Never shared-cached: the answer is the whole shop's money, and
 // `noStore` is the POST rule — RFC 9111 §3.5.
-router.get(
-    '/',
-    requirePermission('payments.any.read', { exact: true }),
-    privateNoCache,
-    getPayments
-);
-router.post(
-    '/search',
-    requirePermission('payments.any.read', { exact: true }),
-    noStore,
-    getPayments
-);
-router.get(
-    '/refunds',
-    requirePermission('payments.any.read', { exact: true }),
-    privateNoCache,
-    getRefunds
-);
+router.get('/', requirePermission('payments.any.read'), privateNoCache, getPayments);
+router.post('/search', requirePermission('payments.any.read'), noStore, getPayments);
+router.get('/refunds', requirePermission('payments.any.read'), privateNoCache, getRefunds);
 router.get(
     '/attention',
-    requirePermission('payments.any.read', { exact: true }),
+    requirePermission('payments.any.read'),
     privateNoCache,
     getPaymentAttention
 );
@@ -107,7 +88,6 @@ router.get(
 router.post(
     '/intent',
     requireFreshAuth('critical'),
-    requirePermission('cart.self.update'),
     requirePermission('cart.self.checkout'),
     paymentIntentLimiter,
     postPaymentIntent
@@ -150,7 +130,6 @@ router.post(
 router.post(
     '/:id/confirm',
     requireFreshAuth('critical'),
-    requirePermission('cart.self.update'),
     requirePermission('cart.self.checkout'),
     paymentConfirmAttemptLimiter,
     paymentConfirmDeclineLimiter,
@@ -167,7 +146,6 @@ router.post(
 router.post(
     '/:id/sync',
     requireFreshAuth('critical'),
-    requirePermission('cart.self.update'),
     requirePermission('cart.self.checkout'),
     paymentIntentLimiter,
     postPaymentSync

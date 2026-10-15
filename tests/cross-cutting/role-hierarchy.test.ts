@@ -43,9 +43,9 @@ const RANK: Record<RoleLevel, number> = { user: 0, staff: 1, admin: 2 };
 /** The tenant roles a person can actually log in as. */
 const TENANT_ROLES = PRESET_ROLES.filter((role) => role.scope === 'tenant');
 
-/** One role of each level to own the thing: the first the YAML lists. */
+/** One persona of each level to own the thing: a plain customer holds no stored role at all. */
 const OWNER_ROLE: Record<RoleLevel, string> = {
-    user: TENANT_ROLES.find((role) => role.level === 'user')!.name,
+    user: 'customer',
     staff: TENANT_ROLES.find((role) => role.level === 'staff')!.name,
     admin: 'admin'
 };

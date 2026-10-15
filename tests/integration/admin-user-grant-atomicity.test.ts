@@ -78,7 +78,7 @@ describe('userService.create', () => {
 
         await expect(
             userService.create(
-                { email: 'half-made@example.com', username: 'halfmade' },
+                { email: 'half-made@example.com', username: 'halfmade', role: 'support' },
                 callerContextAs('admin')
             )
         ).rejects.toThrow();

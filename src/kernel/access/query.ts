@@ -39,6 +39,19 @@ import { anonymousCaller, callerForSubject } from '@kernel/permissions';
  */
 const UNSTORED_FIELDS = new Set(['tenantId']);
 
+/** An owner no document has, so a caller whose id is not an ObjectId matches no row of their own. */
+const NO_OWNER = new Types.ObjectId('000000000000000000000000');
+
+/**
+ * The owner as the collection stores it. An id that is not an ObjectId (the system actor's literal
+ * `system`, a hand-built caller) owns nothing, so its rule matches nothing: fail closed, never a
+ * thrown cast and never a widened filter.
+ *
+ * @param value - the caller's id
+ */
+const ownerObjectId = (value: string): Types.ObjectId =>
+    /^[0-9a-f]{24}$/i.test(value) ? new Types.ObjectId(value) : NO_OWNER;
+
 /** Fields whose VALUE has to be coerced on the way into a query. */
 const coerce: Record<string, (value: unknown) => unknown> = {
     /*
@@ -46,7 +59,7 @@ const coerce: Record<string, (value: unknown) => unknown> = {
      * filter silently matches nothing, which is the same failure as a missing restriction wearing
      * the opposite disguise — everything hidden rather than everything shown.
      */
-    userId: (value) => (typeof value === 'string' ? new Types.ObjectId(value) : value)
+    userId: (value) => (typeof value === 'string' ? ownerObjectId(value) : value)
 };
 
 /**

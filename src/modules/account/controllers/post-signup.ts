@@ -14,7 +14,6 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { issueSession } from '../session/session';
 import { sendVerificationEmail } from '../services';
 import { userService } from '@modules/users';
-import { SIGNUP_DEFAULT_ROLE } from '@modules/access';
 import { logAntibotRefusal } from '@infrastructure/http/middlewares/antibot-log';
 import { AMR } from '../domain/session-proof';
 
@@ -86,14 +85,9 @@ export const postSignup = (
                 // this answers exactly like a real signup, minus the verification email.
                 logAntibotRefusal('email-policy', request.method, request.path, 201);
                 authSignupTotal.inc({ status: 'refused' });
-                // SIGNUP_DEFAULT_ROLE, not read off a membership that was never written (this
-                // document is never saved) — exactly what a genuine signup's response shows,
-                // which is the whole point of this branch being indistinguishable.
-                createdResponse<User>(
-                    response,
-                    userService.toUser(data, SIGNUP_DEFAULT_ROLE),
-                    SIGNUP_LOCATION
-                );
+                // No role, exactly what a genuine signup's response shows, which is the whole
+                // point of this branch being indistinguishable.
+                createdResponse<User>(response, userService.toUser(data, null), SIGNUP_LOCATION);
                 return;
             }
 
@@ -107,7 +101,7 @@ export const postSignup = (
             void sendVerificationEmail(data, callerContextOf(request));
 
             /*
-             * Signed in from here, as `unverified`: the role model already lets an unproven
+             * Signed in from here, as an `unverified` audience: the role model already lets an unproven
              * address browse freely and stops it only at `cart.self.checkout`, so a second login
              * before reaching that state would be friction with no security benefit.
              *
@@ -119,14 +113,8 @@ export const postSignup = (
              * address in use already leaks existence.
              */
             return issueSession(request, response, data.id, proof).then(() => {
-                // SIGNUP_DEFAULT_ROLE, not a lookup: self-service signup's `assignDefaultRole` can only
-                // ever grant this one role, so it's what the membership just written holds, by
-                // construction — see `signup.ts#signup`.
-                createdResponse<User>(
-                    response,
-                    userService.toUser(data, SIGNUP_DEFAULT_ROLE),
-                    SIGNUP_LOCATION
-                );
+                // Self-service signup grants no role, so there is none to look up.
+                createdResponse<User>(response, userService.toUser(data, null), SIGNUP_LOCATION);
             });
         })
         .catch((error: unknown) => {

@@ -107,13 +107,6 @@ export interface PermissionKey {
      * a plain `string` here breaks that ordering cycle.
      */
     deniedCode?: string;
-    /**
-     * Held by the shopper roles only, so it does not count towards "holds every declared key".
-     * `admin` is unrestricted because it lists every tenant key by name; staff and administrators
-     * do not shop, and without this flag the two basket keys they lack would make `admin` a
-     * restricted role and switch off the conditions-free rules unrestricted callers get.
-     */
-    shopperOnly?: boolean;
 }
 
 /** Runtime shape for one entry of `shared/authorization-keys.yaml`'s `keys` list. */
@@ -126,8 +119,7 @@ const permissionKeySchema = z.object({
     description: z.string(),
     stepUp: stepUpTierSchema.optional(),
     conditions: z.record(z.string(), z.unknown()).optional(),
-    deniedCode: z.string().optional(),
-    shopperOnly: z.boolean().optional()
+    deniedCode: z.string().optional()
 }) satisfies z.ZodType<PermissionKey>;
 
 /** A role the seeders create, and the keys it holds. Roles are data; the keys they name are not. */
@@ -142,17 +134,6 @@ export interface PresetRole {
      * cannot be added without deciding it. A person holding two roles counts at the higher.
      */
     level: RoleLevel;
-    /**
-     * Whether self-service signup (or an OAuth signup a provider already vouches for) may assign
-     * this role automatically. Exactly one declared role may carry it — see
-     * {@link SIGNUP_DEFAULT_ROLE_NAME}.
-     */
-    signupDefault?: boolean;
-    /**
-     * What {@link signupDefault}'s role promotes to once the account is verified (address proven,
-     * or an OAuth provider that already vouches for it) — see {@link VERIFIED_CUSTOMER_ROLE_NAME}.
-     */
-    promotesTo?: string;
 }
 
 /** The three levels a role may carry, as a runtime array to validate the shared YAML against {@link RoleLevel}. */
@@ -165,10 +146,33 @@ const presetRoleSchema = z.object({
     title: z.string(),
     description: z.string(),
     permissions: z.array(z.string()),
-    level: z.enum(ROLE_LEVELS),
-    signupDefault: z.boolean().optional(),
-    promotesTo: z.string().optional()
+    level: z.enum(ROLE_LEVELS)
 }) satisfies z.ZodType<PresetRole>;
+
+/**
+ * The three audience roles, in the order a request can grow out of them.
+ *
+ * Never stored and never granted: {@link audienceOf} picks one per request from the session and
+ * the account's `verifiedAt`.
+ */
+export const AUDIENCE_NAMES = ['guest', 'unverified', 'customer'] as const;
+
+/** One of {@link AUDIENCE_NAMES}. */
+export type AudienceName = (typeof AUDIENCE_NAMES)[number];
+
+/** An audience role as `shared/authorization-roles.yaml` declares it: a name for a bundle of keys. */
+export interface AudienceRole {
+    title: string;
+    description: string;
+    permissions: readonly string[];
+}
+
+/** Runtime shape for one entry of `shared/authorization-roles.yaml`'s `audience` block. */
+const audienceRoleSchema = z.object({
+    title: z.string(),
+    description: z.string(),
+    permissions: z.array(z.string())
+}) satisfies z.ZodType<AudienceRole>;
 
 /**
  * The full shape of `shared/authorization-keys.yaml`. `version`, `actions` and `scopes` are
@@ -187,11 +191,10 @@ export const keysDocumentSchema = z.object({
 export const rolesDocumentSchema = z.object({
     version: z.number(),
     roles: z.array(presetRoleSchema),
-    anonymous: z.object({
-        name: z.string(),
-        scope: z.enum(AUTHORIZATION_SCOPES),
-        level: z.enum(ROLE_LEVELS),
-        permissions: z.array(z.string())
+    audience: z.object({
+        guest: audienceRoleSchema,
+        unverified: audienceRoleSchema,
+        customer: audienceRoleSchema
     })
 });
 
@@ -263,60 +266,44 @@ export const PERMISSION_SUBJECTS: readonly string[] = [
 /** Every preset role, read once at import — fixed data, not a runtime-editable set; see this module's own docblock. */
 export const PRESET_ROLES: readonly PresetRole[] = rolesDocument.roles;
 
-/** What an unauthenticated request resolves to — a value in the model, not a null to handle. */
-export const ANONYMOUS_ROLE = rolesDocument.anonymous;
+/**
+ * The audience roles, read once at import. The keys every request holds before a staff role is
+ * added: a stranger's, a signed-in account's with an unproven address, and one with a proven one.
+ */
+export const AUDIENCE_ROLES: Readonly<Record<AudienceName, AudienceRole>> = rolesDocument.audience;
 
 /**
- * The one role `PRESET_ROLES` marks `signupDefault: true` — read here instead of hand-typed at
- * every call site, so a deployment renaming its signup role only ever edits the YAML.
- * @throws Error unless exactly one declared role carries the flag
+ * Is `name` one of the computed audience roles rather than a stored staff role? A staff role is
+ * what a membership holds; an audience is never granted, so this is how a grant or a test persona
+ * tells the two apart.
+ *
+ * @param name - a role or audience name
  */
-const signupDefaultRole = ((): PresetRole => {
-    const matches = PRESET_ROLES.filter((role) => role.signupDefault);
-
-    if (matches.length !== 1) {
-        throw new Error(
-            `[permissions] shared/authorization-roles.yaml must mark exactly one role ` +
-                `"signupDefault: true", found ${String(matches.length)}.`
-        );
-    }
-
-    return matches[0];
-})();
-
-/** `access/service.ts`'s `SIGNUP_DEFAULT_ROLE` — the name self-service signup may assign automatically. */
-export const SIGNUP_DEFAULT_ROLE_NAME = signupDefaultRole.name;
+export const isAudienceName = (name: string): name is AudienceName =>
+    (AUDIENCE_NAMES as readonly string[]).includes(name);
 
 /**
- * `access/service.ts`'s `VERIFIED_CUSTOMER_ROLE` — what {@link SIGNUP_DEFAULT_ROLE_NAME} promotes
- * to, read off that same role's `promotesTo`.
- * @throws Error if the signup-default role declares no `promotesTo`
+ * Which audience a request belongs to.
+ *
+ * Computed, never stored: no session is a `guest`, a session whose account has no `verifiedAt` is
+ * `unverified`, and one that has it is a `customer` — staff included.
+ *
+ * @param context - the resolved session, or `undefined` for a request with none
  */
-export const VERIFIED_CUSTOMER_ROLE_NAME = ((): string => {
-    if (!signupDefaultRole.promotesTo) {
-        throw new Error(
-            `[permissions] shared/authorization-roles.yaml's signup-default role ` +
-                `"${signupDefaultRole.name}" must declare "promotesTo".`
-        );
-    }
+export const audienceOf = (context: Pick<AuthContext, 'verified'> | undefined): AudienceName => {
+    if (!context) return 'guest';
 
-    return signupDefaultRole.promotesTo;
-})();
+    return context.verified ? 'customer' : 'unverified';
+};
 
 /** Every declared key, indexed by its own name for {@link findKey}'s O(1) lookup. */
 const byKey = new Map(PERMISSION_KEYS.map((entry) => [entry.key, entry]));
 
-/**
- * What every caller of {@link findRole} actually reads off its result — `anonymous` in
- * `shared/authorization-roles.yaml` carries no `title`/`description`, so this is the true shared
- * shape rather than a cast pretending it does.
- */
+/** What every caller of {@link findRole} actually reads off its result. */
 export type RoleLookup = Pick<PresetRole, 'name' | 'scope' | 'permissions' | 'level'>;
 
-/** Every preset role plus `anonymous`, indexed by name for {@link findRole}'s O(1) lookup. */
-const byRoleName = new Map<string, RoleLookup>(
-    [...PRESET_ROLES, ANONYMOUS_ROLE].map((role) => [role.name, role])
-);
+/** Every preset role, indexed by name for {@link findRole}'s O(1) lookup. */
+const byRoleName = new Map<string, RoleLookup>(PRESET_ROLES.map((role) => [role.name, role]));
 
 /**
  * A preset role by name, or `undefined` — a plain lookup, not an assertion.
@@ -389,33 +376,21 @@ export const permissionsOfRole = (name: string): readonly string[] => {
 /**
  * The caller a request with no session is evaluated as.
  *
- * A value in the model rather than a null branch: `guest` is a role like any other, seeded from
- * `shared/authorization-roles.yaml`, so "what may a stranger do" is answered in the same file and
- * by the same evaluator as every other role. Tenant scope, because an unauthenticated request
- * never acts over the installation — a stranger still browses the one shop, `DEPLOYMENT_TENANT_ID`.
- *
- * @throws Error if `shared/authorization-roles.yaml` ever moves `anonymous` out of tenant scope —
- *   the discriminated `Caller` union needs the literal, and this is what keeps it honest against
- *   the file rather than merely asserting it in a comment.
+ * A value in the model rather than a null branch: `guest` is an audience role like any other,
+ * declared in `shared/authorization-roles.yaml`, so "what may a stranger do" is answered in the
+ * same file and by the same evaluator as every other role. Tenant scope, because an
+ * unauthenticated request never acts over the installation — a stranger still browses the one
+ * shop, `DEPLOYMENT_TENANT_ID`.
  */
-export const anonymousCaller = (): Caller => {
-    if (ANONYMOUS_ROLE.scope !== 'tenant') {
-        throw new Error(
-            '[permissions] the anonymous role must stay tenant-scoped — a stranger has no ' +
-                'installation to operate, only a shop to browse.'
-        );
-    }
-
-    return {
-        id: null,
-        tenantId: DEPLOYMENT_TENANT_ID,
-        scope: 'tenant',
-        permissions: ANONYMOUS_ROLE.permissions,
-        unrestricted: holdsEveryDeclaredKey('tenant', ANONYMOUS_ROLE.permissions),
-        system: false,
-        level: ANONYMOUS_ROLE.level
-    };
-};
+export const anonymousCaller = (): Caller => ({
+    id: null,
+    tenantId: DEPLOYMENT_TENANT_ID,
+    scope: 'tenant',
+    permissions: AUDIENCE_ROLES.guest.permissions,
+    unrestricted: false,
+    system: false,
+    level: 'user'
+});
 
 /** A declared key by name, or `undefined`. Wildcards are not declared keys and never resolve. */
 export const findKey = (key: string): PermissionKey | undefined => byKey.get(key);
@@ -448,8 +423,8 @@ export const assertDeclared = (key: string): void => {
  * role, a `platform.` key from the platform one. That is why this takes the key: answering from
  * the wrong role is precisely the privilege confusion the two-role split exists to prevent.
  *
- * A caller with no role in the key's scope gets the anonymous role's permissions rather than an
- * empty list, so the denial comes from the model rather than from an accident of assembly.
+ * A caller with no staff role in the key's scope still gets their audience's permissions rather
+ * than an empty list, so the denial comes from the model rather than from an accident of assembly.
  *
  * @param context - the resolved session
  * @param key - the permission key about to be checked, e.g. `orders.self.read` or `platform.tenants.any.read`
@@ -459,33 +434,36 @@ export const callerFor = (context: AuthContext, key: string): Caller =>
     callerInScope(context, scopeOfKey(key));
 
 /**
- * Every key a caller holds in a scope: their role's, never fewer than the anonymous baseline.
+ * Every key a caller holds in a scope: their audience's, plus their staff role's.
  *
- * No role:  the anonymous role's keys, so a denial comes from the model rather than from an
- *           accident of assembly.
- * A role:   that role's keys UNIONED with the baseline — signing in may only ever widen what a
- *           person can see. Without the union a role is free to hold nothing a visitor holds, and
- *           `accessibleBy` then compiles an empty-result filter for a collection the same person
- *           could read while logged out: the shop's catalogue disappearing on login, reported as
- *           an empty shop rather than as a refusal.
- * Scope:    the baseline is the anonymous role's own, and applies only there. Folding bare tenant
- *           keys into a PLATFORM caller is the privilege confusion the two-scope split exists to
- *           prevent — an operator administers the installation and reads no shop's rows.
+ * Tenant:   the audience role's keys UNIONED with the staff role's — signing in may only ever
+ *           widen what a person can see. Without the union a role is free to hold nothing a visitor
+ *           holds, and `accessibleBy` then compiles an empty-result filter for a collection the
+ *           same person could read while logged out: the shop's catalogue disappearing on login,
+ *           reported as an empty shop rather than as a refusal.
+ * Platform: the platform role's keys alone. Folding bare tenant keys into a PLATFORM caller is the
+ *           privilege confusion the two-scope split exists to prevent — an operator administers
+ *           the installation and reads no shop's rows.
  *
- * Exported for `@modules/api-keys/module.ts`'s own floor check — re-deriving a minter's CURRENT
- * permissions is the same "never trust a cached list" shape this file's own callers already need.
+ * Exported for `@modules/api-keys`' own floor check — re-deriving a minter's CURRENT permissions is
+ * the same "never trust a cached list" shape this file's own callers already need.
+ *
+ * @param roleName - the staff role held in this scope, or `null` for none
+ * @param scope - which world the keys are for
+ * @param audience - the request's audience; `guest` when none is given, which is what an API key gets
  */
 export const keysInScope = (
     roleName: string | null,
-    scope: AuthorizationScope
+    scope: AuthorizationScope,
+    audience: AudienceName = 'guest'
 ): readonly string[] => {
     const held = roleName ? permissionsOfRole(roleName) : [];
 
-    if (scope !== ANONYMOUS_ROLE.scope) {
-        return roleName ? held : [];
+    if (scope !== 'tenant') {
+        return held;
     }
 
-    return [...new Set([...held, ...ANONYMOUS_ROLE.permissions])];
+    return [...new Set([...AUDIENCE_ROLES[audience].permissions, ...held])];
 };
 
 /**
@@ -546,7 +524,8 @@ export function callerInScope(context: AuthContext, scope: AuthorizationScope): 
     const tenantId = scope === 'platform' ? null : context.tenantId;
     const permissions = keysInScope(
         scope === 'platform' ? context.roles.platform : context.roles.tenant,
-        scope
+        scope,
+        audienceOf(context)
     );
     return assembleCaller(context.id, tenantId, scope, permissions, levelOfRoles(context.roles));
 }
@@ -566,16 +545,19 @@ export const callerForSubject = (context: AuthContext, subject: string): Caller 
     callerInScope(context, scopeOfSubject(subject));
 
 /**
- * Every key declared in one scope bar the `shopperOnly` ones — the set a caller must hold entirely
- * to count as unrestricted, now that no single wildcard token stands in for it. Computed once:
- * `PERMISSION_KEYS` is fixed for the process's lifetime.
+ * Every key declared in one scope that a role has to hold itself — the set a caller must hold
+ * entirely to count as unrestricted, now that no single wildcard token stands in for it. The
+ * `customer` audience's keys are left out: every signed-in account gets them from its audience, so
+ * a role listing them would say nothing, and an `admin` whose address is unproven must not stop
+ * being unrestricted. Computed once: `PERMISSION_KEYS` is fixed for the process's lifetime.
  */
 const declaredKeysOfScope = new Map<AuthorizationScope, readonly string[]>(
     AUTHORIZATION_SCOPES.map((scope) => [
         scope,
-        PERMISSION_KEYS.filter((entry) => entry.scope === scope && !entry.shopperOnly).map(
-            (entry) => entry.key
-        )
+        PERMISSION_KEYS.filter(
+            (entry) =>
+                entry.scope === scope && !AUDIENCE_ROLES.customer.permissions.includes(entry.key)
+        ).map((entry) => entry.key)
     ])
 );
 
@@ -636,6 +618,7 @@ export const SYSTEM_ACTOR: AuthContext = {
     authTime: 0,
     amr: [],
     twoFactorArmed: false,
+    verified: true,
     analyticsConsent: false
 };
 

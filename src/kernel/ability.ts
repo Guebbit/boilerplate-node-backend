@@ -19,7 +19,7 @@
 
 import { AbilityBuilder, createMongoAbility, type MongoAbility } from '@casl/ability';
 import type { Caller } from '@types';
-import { findKey, isUnrestricted, type PermissionKey } from '@kernel/permissions';
+import { findKey, type PermissionKey } from '@kernel/permissions';
 
 /** A caller's rules, in the form every authorization question is asked of. */
 export type Ability = MongoAbility;
@@ -87,20 +87,20 @@ const effectiveKeys = (caller: Caller): PermissionKey[] => {
  * impossible to express by accident rather than merely discouraged — no key can forget it,
  * because no key states it.
  *
- * An UNRESTRICTED caller's rules carry no conditions at all, computed once per caller rather than
- * per key. This is load-bearing, not an optimisation: `SYSTEM_ACTOR`'s id is the literal string
- * `'system'`, not a real user's, and a `self` key's condition resolved against it would bake that
- * string into a Mongo filter as if it were an ObjectId — see `access/query.ts`'s `userId`
- * coercion. Unrestricted already means "every declared key, unconditionally"; this is what makes
- * that true in practice for a caller with no real row of their own to scope by.
+ * The SYSTEM actor's rules carry no conditions at all. This is load-bearing, not an optimisation:
+ * its id is the literal string `'system'`, not a real user's, and a `self` key's condition resolved
+ * against it would bake that string into a Mongo filter as if it were an ObjectId — see
+ * `access/query.ts`'s `userId` coercion. An administrator is NOT exempt: every signed-in account
+ * holds the `self` keys of its audience, and a `self` key with no condition would read everyone's
+ * rows.
  */
 export const buildAbility = (caller: Caller): Ability => {
     const { can, build } = new AbilityBuilder(createMongoAbility);
     const tenancy = caller.scope === 'tenant' ? { tenantId: caller.tenantId } : {};
-    const unrestricted = isUnrestricted(caller);
+    const unconditional = caller.system;
 
     for (const key of effectiveKeys(caller)) {
-        const conditions = unrestricted ? {} : resolveConditions(key.conditions ?? {}, caller);
+        const conditions = unconditional ? {} : resolveConditions(key.conditions ?? {}, caller);
 
         if (!conditions) {
             continue;
@@ -122,31 +122,17 @@ export const buildAbility = (caller: Caller): Ability => {
 /**
  * Does this caller hold `key`?
  *
- * The question a route guard asks, and it is not simply `ability.can(...)`: asked about the action
- * and subject rather than about a row, because a route guard runs before anything is fetched.
- * Which rows survive is the read's business — see `access/query.ts`. That also means this
- * collapses two keys that share an action and a subject but differ in breadth
- * (`orders.self.read` and `orders.any.read` both answer `can('read', 'Order')`) — never a problem
- * for a guard that means the action, but wrong
- * for a wide read (`requirePermission(key, { exact: true })` exists for that) and for anything
- * ENUMERATING which keys a caller holds. Use {@link heldKeys} for
- * that.
+ * The question a route guard asks. It reads the literal keys the ability was built from, never
+ * CASL's collapsed `can(action, subject)`: two declared keys can share both (`orders.self.read`
+ * and `orders.any.read` are both `read` on `Order`), and every signed-in account holds the `self`
+ * one, so collapsing them would let anybody through a staff door. Which rows survive is the read's
+ * business — see `access/query.ts`.
  */
-export const holdsKey = (caller: Caller, key: string): boolean => {
-    const declared = findKey(key);
-
-    if (!declared) {
-        return false;
-    }
-
-    return buildAbility(caller).can(declared.action, declared.subject);
-};
+export const holdsKey = (caller: Caller, key: string): boolean => heldKeys(caller).has(key);
 
 /**
- * The literal keys a caller holds — never collapsed to an action and a subject the way
- * {@link holdsKey} is. Two declared keys can share both (`orders.self.read` and `orders.any.read`
- * are both `read` on `Order`), so this is what tells a caller holding one from a caller holding
- * the other — the role-matrix docs generator is why it exists.
+ * The literal keys a caller holds — what tells a caller holding `orders.self.read` from one
+ * holding `orders.any.read`, and what the role-matrix docs generator reads.
  */
 export const heldKeys = (caller: Caller): ReadonlySet<string> =>
     new Set(effectiveKeys(caller).map((key) => key.key));

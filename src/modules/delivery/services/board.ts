@@ -5,9 +5,9 @@
  * consent state and the hold, so it is the one that can answer; the buyer and `paidAt` come from
  * `orders`, one batched read a page.
  *
- * Who may read: the audience of the orders themselves (`orders.any.read`, decided A5.2). That key
- * also answers yes for a buyer, whose `self` key collapses onto it in a route guard, so the scope is
- * in the query: staff reading every order see every row, anyone else only their own orders'.
+ * Who may read: the audience of the orders themselves. The route asks `orders.self.read`, which every
+ * signed-in account holds, so the scope is in the query: staff holding `orders.any.read` see every
+ * row, anyone else only their own orders'.
  *
  * See: docs/modules/delivery.md#the-preorder-board
  */

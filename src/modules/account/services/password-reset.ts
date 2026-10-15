@@ -28,10 +28,10 @@ import { PASSWORD_RESET_TOKEN_TYPE } from '../token-types';
  * 2FA wrong-code counter and lock clear. Someone who can read the mailbox has the account's own
  * recovery path, so the lock holds nothing back from them.
  */
-const markResetCompleted = (user: UserDocument): Promise<void> => {
+const markResetCompleted = (user: UserDocument): void => {
     user.mfaFailures = 0;
     user.mfaLockedUntil = undefined;
-    return markVerified(user);
+    markVerified(user);
 };
 
 /**
@@ -50,9 +50,7 @@ const afterReset = (
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (!result.success) return Promise.resolve(result);
 
-    // Read fresh, after `markVerified` may have just promoted it — the document carries
-    // no role of its own to read synchronously. Same fire-and-forget shape as the
-    // mail below: the password change already succeeded, so a lookup hiccup here must not
+    // Same fire-and-forget shape as the mail below: the password change already succeeded, so a lookup hiccup here must not
     // turn a successful reset into an error — worst case, this one audit row is missing.
     void recordAccountAudit(context, String(user._id), {
         action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,

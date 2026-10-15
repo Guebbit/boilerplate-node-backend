@@ -1037,13 +1037,14 @@ describe('what a completed reset leaves behind', () => {
      * verification mail never arrived resets from that same inbox and is still held at
      * `unverified` — unable to check out, with a re-send of the failed mail as their only remedy.
      */
-    it('proves the address, promoting an unverified account to customer', async () => {
+    it('proves the address, which is all it takes for an unverified account to become a customer', async () => {
         const user = await createUser({ password: PASSPHRASE_PASSWORD }, 'unverified');
 
         asSuccess(await resetWithLink(user));
 
+        // The audience is computed from `verifiedAt`: nothing is granted, so no role appears.
         const roles = await rolesOf(user.id, DEPLOYMENT_TENANT_ID);
-        expect(roles.tenant).toBe('customer');
+        expect(roles.tenant).toBeNull();
         const reloaded = await userRepository.findById(user.id);
         expect(reloaded?.verifiedAt).toBeInstanceOf(Date);
     });

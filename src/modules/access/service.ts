@@ -12,14 +12,7 @@
 
 import type { ClientSession } from 'mongoose';
 import type { AuthorizationScope, CallerContext, RoleLevel } from '@types';
-import {
-    findRole,
-    isBelowLevel,
-    levelOfRoles,
-    PRESET_ROLES,
-    SIGNUP_DEFAULT_ROLE_NAME,
-    VERIFIED_CUSTOMER_ROLE_NAME
-} from '@kernel/permissions';
+import { findRole, isBelowLevel, levelOfRoles, PRESET_ROLES } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { t } from '@infrastructure/i18n';
 import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
@@ -42,24 +35,6 @@ export const OWN_REASON = 'own';
  * platform operator's incident view leaves out.
  */
 export const SHOP_REFUSAL_REASONS: readonly string[] = [OUTRANKED_REASON, OWN_REASON];
-
-/** The one role self-service signup (or an OAuth signup a provider already vouches for) may ever
- * grant — never a caller-supplied name. Read off `shared/authorization-roles.yaml`'s
- * `signupDefault` flag, not hand-typed. See {@link assignDefaultRole}. */
-export const SIGNUP_DEFAULT_ROLE = SIGNUP_DEFAULT_ROLE_NAME;
-
-/** What `SIGNUP_DEFAULT_ROLE` promotes to once the address is proven, read off that role's
- * `promotesTo` flag. See {@link promoteVerifiedCustomer}. */
-export const VERIFIED_CUSTOMER_ROLE = VERIFIED_CUSTOMER_ROLE_NAME;
-
-/**
- * The one tenant key {@link validateGrant} exempts `VERIFIED_CUSTOMER_ROLE` from needing, held by
- * a granter creating accounts outright. A caller who may create accounts at all must be able to
- * hand out the role every account starts with, even short of `customer`'s own keys
- * (`orders.self.read`, `payments.self.read`) — those are power over the GRANTEE's own data, never
- * over the granter's shop, so they were never the escalation the check exists to catch.
- */
-const CREATE_USER_KEY = 'users.any.create';
 
 /**
  * Raised when a write would assign a role nothing declares, or grant more than the granter holds.
@@ -135,12 +110,7 @@ const checkGrant = (
         };
     }
 
-    const exempt =
-        scope === 'tenant' &&
-        lowered === VERIFIED_CUSTOMER_ROLE &&
-        Boolean(granter?.includes(CREATE_USER_KEY));
-
-    if (granter && !exempt) {
+    if (granter) {
         const held = new Set(granter);
         const escalated = permissions.filter((key) => !held.has(key));
 
@@ -269,6 +239,33 @@ export const auditRoleAssigned = (
 };
 
 /**
+ * Record a role revoke that has COMMITTED — the revoke twin of {@link auditRoleAssigned}.
+ *
+ * @param context - the caller to attribute the revoke to
+ * @param userId - the account that no longer holds the role
+ * @param roleName - the role that was taken away
+ * @param tenantId - the place the role was held in, `null` for platform scope
+ * @param scope - the scope the role was held in
+ */
+export const auditRoleRevoked = (
+    context: CallerContext,
+    userId: string,
+    roleName: string,
+    tenantId: string | null,
+    scope: AuthorizationScope
+): void => {
+    auditRoleChange(
+        context,
+        accessAuditActions.ROLE_REVOKED,
+        'success',
+        userId,
+        roleName,
+        tenantId,
+        scope
+    );
+};
+
+/**
  * One audit row for a role grant or revoke, success or failure — a single shared block instead of
  * {@link assignRole}/{@link revokeRole} each emitting their own near-identical `emitAuditEvent`/
  * `buildAuditEvent` call. Four separate, near-identical blocks are exactly the shape that lets one
@@ -303,10 +300,9 @@ const auditRoleChange = (
  * @param granter - the keys the person MAKING the grant holds, or `undefined` for a seeder, a
  *   migration or an operator on the console — the three callers with nobody to escalate from
  * @param context - the caller context to audit this grant (or its refusal) against. `undefined`
- *   for a self-service/system caller with no request to attribute it to — see
- *   {@link assignDefaultRole} and `users/services/create.ts`'s `USER_SETUP_REQUESTED` handler for the same
- *   reasoning. An escalation attempt is audited as a FAILURE, not skipped: it is the single most
- *   useful entry this vocabulary can produce.
+ *   for a seeder or system caller with no request to attribute it to. An
+ *   escalation attempt is audited as a FAILURE, not skipped: it is the single most useful entry
+ *   this vocabulary can produce.
  * @param session - the caller's transaction, when the grant must commit or roll back with other
  *   writes. Given one, only failures are audited here; the caller records the success with
  *   {@link auditRoleAssigned} once it has committed.
@@ -354,39 +350,6 @@ export const assignRole = (
 };
 
 /**
- * The only role self-service signup (or an OAuth signup a provider already vouches for) may ever
- * grant. Deliberately NOT `assignRole` with a caller-supplied name: a signup endpoint that could
- * assign any role would be a privilege-escalation door, so this function's whole job is to make
- * that request impossible to express — there is no `roleName` parameter to pass one through.
- *
- * @param session - the signup's transaction, so the account and its role commit together
- */
-export const assignDefaultRole = (
-    userId: string,
-    tenantId: string,
-    scope: AuthorizationScope = 'tenant',
-    session?: ClientSession
-): Promise<MembershipDocument> =>
-    assignRole(userId, tenantId, scope, SIGNUP_DEFAULT_ROLE, undefined, undefined, session);
-
-/**
- * Promote an `unverified` membership to `customer` once the address is proven — through the
- * access store, not by assigning a field. A no-op when the membership already holds any OTHER
- * role: verification proves an address, it never overwrites a role an operator already assigned,
- * and it never downgrades one either.
- *
- * @returns whether a promotion actually happened
- */
-export const promoteVerifiedCustomer = (userId: string, tenantId: string): Promise<boolean> =>
-    membershipIn(userId, tenantId, 'tenant').then((membership) => {
-        if (membership?.role !== SIGNUP_DEFAULT_ROLE) {
-            return false;
-        }
-
-        return assignRole(userId, tenantId, 'tenant', VERIFIED_CUSTOMER_ROLE).then(() => true);
-    });
-
-/**
  * Take somebody's role in a place away.
  *
  * Allowed even when it removes a place's last administrator, on purpose: an operator who does that
@@ -395,12 +358,16 @@ export const promoteVerifiedCustomer = (userId: string, tenantId: string): Promi
  * @param context - the caller to audit this revoke against, or `undefined` for a system caller
  *   with no request to attribute it to (e.g. the account-deletion cascade in `users/services/remove.ts`'s
  *   `remove`, which has no `CallerContext` to pass — see {@link assignRole}'s own docblock).
+ * @param session - the caller's transaction, when the revoke must commit or roll back with other
+ *   writes. Given one, only failures are audited here; the caller records the success with
+ *   {@link auditRoleRevoked} once it has committed.
  */
 export const revokeRole = (
     userId: string,
     tenantId: string | null,
     scope: AuthorizationScope,
-    context?: CallerContext
+    context?: CallerContext,
+    session?: ClientSession
 ): Promise<void> => {
     // Set once a membership is found, read by BOTH branches below — the failure branch needs it
     // too, so `role` is never missing from its audit row the way it is from the other three (see
@@ -413,7 +380,7 @@ export const revokeRole = (
         }
         revokedRole = membership.role;
 
-        return membershipRepository.deleteById(membership._id).then(() => membership.role);
+        return membershipRepository.deleteById(membership._id, session).then(() => membership.role);
     });
 
     if (!context) return attempt.then(() => undefined);
@@ -422,16 +389,8 @@ export const revokeRole = (
         (role) => {
             // `role` is `undefined` when there was nothing to revoke — no membership existed, so
             // there is nothing to record.
-            if (role) {
-                auditRoleChange(
-                    context,
-                    accessAuditActions.ROLE_REVOKED,
-                    'success',
-                    userId,
-                    role,
-                    tenantId,
-                    scope
-                );
+            if (role && !session) {
+                auditRoleRevoked(context, userId, role, tenantId, scope);
             }
         },
         (error: unknown) => {

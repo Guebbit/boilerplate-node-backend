@@ -84,8 +84,7 @@ type PasswordCause = Extract<RevocationCause, 'password-change' | 'password-rese
  * @param beforeSave - a caller's own mutation to ride along in the same write, run only once
  *   every refusal is behind us. A parameter rather than a mutation the caller makes first: a
  *   refused password must not leave a half-applied change on the document, and the only place
- *   that can be guaranteed is here, next to the `save`. May return a `Promise` — `markVerified`'s
- *   role promotion is a membership write, not a field mutation, so it cannot be purely synchronous.
+ *   that can be guaranteed is here, next to the `save`.
  * @param cause - which password event this is; a cause that announces also writes
  *   `account.sessions-revoked` through the outbox, in the write's own transaction
  */
@@ -93,7 +92,7 @@ export const passwordChange = (
     user: UserDocument,
     password = '',
     passwordConfirm = '',
-    beforeSave?: (user: UserDocument) => void | Promise<void>,
+    beforeSave?: (user: UserDocument) => void,
     cause: PasswordCause = 'password-change'
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const errors = validatePasswordChange(password, passwordConfirm);
@@ -142,11 +141,12 @@ const passwordAndEpochWrite =
 export const writePassword = (
     user: UserDocument,
     password: string,
-    beforeSave?: (user: UserDocument) => void | Promise<void>,
+    beforeSave?: (user: UserDocument) => void,
     cause: PasswordCause = 'password-change'
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    Promise.resolve(beforeSave?.(user))
+    Promise.resolve()
         .then(() => {
+            beforeSave?.(user);
             const write = passwordAndEpochWrite(user, password);
             return announces(cause)
                 ? announceInTransaction(write, (saved) =>

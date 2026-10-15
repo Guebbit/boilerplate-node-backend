@@ -679,9 +679,8 @@ describe('callerContextOf', () => {
             // The CALLER, not the session: an audit row and an analytics event are about which
             // keys were held, and identity beyond the id is nobody's business downstream.
             caller: callerInScope(asCustomer('user-1'), 'tenant'),
-            // The NAME behind that caller, for the audit trail alone — see `actorRoleName`'s
-            // docblock on `CallerContext`.
-            actorRoleName: 'customer',
+            // A customer holds no STAFF role, so there is no name behind that caller — see
+            // `actorRoleName`'s docblock on `CallerContext`.
             ip: '10.0.0.1',
             userAgent: 'Mozilla/5.0',
             host: 'shop.example.com',
@@ -748,11 +747,12 @@ describe('callerContextOf', () => {
                     id: 'user-1',
                     email: 'a@b.c',
                     username: 'a',
-                    roles: { tenant: 'customer', platform: null },
+                    roles: { tenant: null, platform: null },
                     tenantId: 'tenant-1',
                     authTime: 0,
                     amr: [],
                     twoFactorArmed: false,
+                    verified: true,
                     analyticsConsent: true
                 }
             })
@@ -769,11 +769,12 @@ describe('callerContextOf', () => {
                     id: 'user-1',
                     email: 'a@b.c',
                     username: 'a',
-                    roles: { tenant: 'customer', platform: null },
+                    roles: { tenant: null, platform: null },
                     tenantId: 'tenant-1',
                     authTime: 0,
                     amr: [],
                     twoFactorArmed: false,
+                    verified: true,
                     analyticsConsent: false
                 }
             })
@@ -790,11 +791,12 @@ describe('callerContextOf', () => {
                     id: 'user-1',
                     email: 'a@b.c',
                     username: 'a',
-                    roles: { tenant: 'customer', platform: null },
+                    roles: { tenant: null, platform: null },
                     tenantId: 'tenant-1',
                     authTime: 0,
                     amr: [],
-                    twoFactorArmed: false
+                    twoFactorArmed: false,
+                    verified: true
                 }
             })
         );

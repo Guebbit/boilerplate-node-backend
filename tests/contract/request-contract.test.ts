@@ -108,11 +108,11 @@ const withMatchingPasswordConfirm = (payload: Record<string, unknown>) => ({
 // `role` is `type: string` in the contract — no enum, because roles are DATA a deployment may
 // add to (`shared/authorization-roles.yaml`'s own header) — so a randomly generated string is
 // contract-legal but names no declared role, same class of gap as `userId`/`productId` above:
-// the schema cannot say "must reference something real". Patched to a role that actually exists
+// the schema cannot say "must reference something real". Patched to a staff role that actually exists
 // for the same reason those are patched with real ids.
 const withRealRole = (payload: Record<string, unknown>) => ({
     ...payload,
-    role: 'customer'
+    role: 'editor'
 });
 
 describe('POST /users (contract-derived)', () => {

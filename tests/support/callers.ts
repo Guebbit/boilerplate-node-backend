@@ -13,7 +13,7 @@
  */
 
 import type { AuthContext, Caller, CallerContext, TenantCaller, TenantCallerContext } from '@types';
-import { anonymousCaller, callerInScope } from '@kernel/permissions';
+import { anonymousCaller, callerInScope, isAudienceName } from '@kernel/permissions';
 
 /** The single shop every fixture belongs to. Multi-tenant behaviour is the conformance suite's. */
 export const TEST_TENANT_ID = 'shop';
@@ -30,15 +30,17 @@ const identity = (id: string) => ({
 });
 
 /**
- * Someone acting in the shop, in the named role.
+ * Someone acting in the shop, as the named persona.
  *
- * @param role - a preset tenant role: `customer`, `manager`, `warehouse`, `support`, `editor`,
- * `moderator` or `admin`
+ * @param role - a staff role (`manager`, `warehouse`, `support`, `editor`, `moderator`, `admin`)
+ * or an audience (`customer`, `unverified`), which holds no stored role at all. Every persona but
+ * `unverified` has a proven address, so a staff member is also a customer.
  */
 export const asRole = (role: string, id = 'test-user'): AuthContext => ({
     ...identity(id),
-    roles: { tenant: role, platform: null },
-    tenantId: TEST_TENANT_ID
+    roles: { tenant: isAudienceName(role) ? null : role, platform: null },
+    tenantId: TEST_TENANT_ID,
+    verified: role !== 'unverified'
 });
 
 /** A shopper. Reads the catalogue and their own orders, and nothing else. */
@@ -71,8 +73,9 @@ export const asModerator = (id = 'test-moderator'): AuthContext => asRole('moder
  */
 export const asOperator = (id = 'test-operator'): AuthContext => ({
     ...identity(id),
-    roles: { tenant: 'guest', platform: 'operator' },
-    tenantId: TEST_TENANT_ID
+    roles: { tenant: null, platform: 'operator' },
+    tenantId: TEST_TENANT_ID,
+    verified: true
 });
 
 /**

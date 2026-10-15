@@ -49,21 +49,21 @@ router.get('/methods', getShippingMethods);
 // GET /delivery/order/:orderId — the fulfillment orders and shipments behind one of the caller's orders
 router.get('/order/:orderId', getAuth, isAuth, getOrderFulfillment);
 
-// GET /delivery/fulfillment-orders and /summary — the preorder board's reads. `orders.any.read`, the
-// key of the orders they are about (decided A5.2); it collapses onto a buyer's own `self` key in a
-// guard, so the service narrows the rows to the caller's own orders unless they read every order.
+// GET /delivery/fulfillment-orders and /summary — the preorder board's reads. `orders.self.read`, the
+// key of the orders they are about, which every signed-in account holds: the service narrows the
+// rows to the caller's own orders unless they hold `orders.any.read` and read every order.
 router.get(
     '/fulfillment-orders',
     getAuth,
     isAuth,
-    requirePermission('orders.any.read'),
+    requirePermission('orders.self.read'),
     getPreorderFulfillmentOrders
 );
 router.get(
     '/fulfillment-orders/summary',
     getAuth,
     isAuth,
-    requirePermission('orders.any.read'),
+    requirePermission('orders.self.read'),
     getPreorderSummary
 );
 

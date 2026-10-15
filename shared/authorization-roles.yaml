@@ -12,15 +12,17 @@
 # Nobody is handed an empty permission matrix. A deployment gets these on day one and may edit
 # them afterwards — they are a starting point, not a schema.
 #
-# EVERY ROLE CARRIES A `level` — admin, staff or user — and it is a second question asked after the
-# keys, never instead of them. A route still needs its key; then, for a write on something a person
-# owns, the owner's level must be strictly below the caller's (`docs/theory/authorization.md`,
-# "Acting on someone else's things"). `operator` sits at admin level so no shop role can touch the
-# installation's own account. A person holding two roles counts at the higher one.
+# A STAFF ROLE IS ONLY A BUNDLE OF KEYS, plus a `level` that protects people (admin, staff or user —
+# `docs/theory/authorization.md`, "Acting on someone else's things"). A person holds at most one
+# stored role per scope. `operator` sits at admin level so no shop role can touch the
+# installation's own account.
 #
-# STAFF AND ADMINISTRATORS DO NOT SHOP. `cart.self.update` and `cart.self.checkout` are held by the
-# shopper roles only, so a staff account owns no basket, order, payment or return, and nobody
-# approves or refunds their own transaction. A person who also buys uses a second, customer account.
+# EVERY SIGNED-IN ACCOUNT IS A CUSTOMER TOO. The `audience` block below is not stored and never
+# granted: it is computed per request — no session is `guest`, a session without `verifiedAt` is
+# `unverified`, one with it is `customer` — and unioned with the staff role the account holds. So
+# a staff member reads, pays for and returns their own orders, and fills a basket, exactly like
+# anyone else; a staff role only ADDS the `any` keys. An API key gets the `guest` keys and what it
+# was minted with, never the audience of its minter.
 #
 # Every tenant role below is a demo persona, run against every screen — see `docs/demo-ecommerce/`
 # — except `admin`, the shop's one superuser account rather than a job. Reusing the others means
@@ -30,69 +32,13 @@
 # breadth is a segment on the key itself (`<family>.self.read` vs `<family>.any.read`), so a role
 # that reads widely says `any` and a role that reads only its own says `self`, and nothing has to
 # be inferred from which wildcard a role happens to hold. `admin` lists every declared tenant key
-# by name for the same reason every other role does: a key nothing lists grants nothing, and that
-# is now true of `admin` too — see `authorization-keys.yaml`'s closing note.
+# that the `customer` audience does not already give, by name, for the same reason every other
+# role does: a key nothing lists grants nothing — see `authorization-keys.yaml`'s closing note.
 
 version: 1
 
 roles:
     # -- tenant scope --------------------------------------------------------------------------
-    # `unverified` is what `customer` starts as, before the address is proven — one key thinner,
-    # nothing else different. Browsing, the wishlist, the address book and the account follow from
-    # being signed in and need no key either way, which is the "fails in the right direction"
-    # property the whole model was chosen for. The basket needs `cart.self.update`, which only the
-    # two shopper roles hold. See `cart.self.checkout`'s own description in
-    # `shared/authorization-keys.yaml` and docs/theory/authorization.md.
-    - name: unverified
-      scope: tenant
-      title: A signed-up account, address unproven
-      level: user
-      description: >-
-          What `customer` is minus the ability to spend. Assigned automatically at signup; the
-          verify flow promotes the account to `customer` once the address is proven, and an
-          operator may promote it to anything else at any time — granting a role is the vouching.
-      # `access/service.ts`'s SIGNUP_DEFAULT_ROLE and VERIFIED_CUSTOMER_ROLE read these two flags
-      # rather than hand-typing the role names. Exactly one role in this file may carry
-      # `signupDefault: true`; `kernel/permissions.ts` throws at boot otherwise.
-      signupDefault: true
-      promotesTo: customer
-      permissions:
-          - products.self.read
-          - locales.self.read
-          - orders.self.read
-          - payments.self.read
-          - cart.self.update
-          # The example module: one's own examples. Held by every role that is a signed-in account.
-          - examples.self.read
-          - examples.self.create
-          - examples.self.update
-          - examples.self.delete
-          - notifications.self.read
-          - notifications.self.delete
-
-    - name: customer
-      scope: tenant
-      title: The customer
-      level: user
-      description: >-
-          Someone buying things. Everything they may do to their own wishlist, addresses and
-          account follows from being signed in and needs no key at all — what is listed here is
-          what they may read of the SHOP, the two keys that let them use a basket and spend it,
-          and the `examples.self.*` keys of the module written to be copied.
-      permissions:
-          - products.self.read
-          - locales.self.read
-          - orders.self.read
-          - payments.self.read
-          - cart.self.update
-          - cart.self.checkout
-          - examples.self.read
-          - examples.self.create
-          - examples.self.update
-          - examples.self.delete
-          - notifications.self.read
-          - notifications.self.delete
-
     - name: manager
       scope: tenant
       title: The shop manager
@@ -141,8 +87,6 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
-          - notifications.self.read
-          - notifications.self.delete
 
     - name: warehouse
       scope: tenant
@@ -171,8 +115,6 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
-          - notifications.self.read
-          - notifications.self.delete
 
     - name: support
       scope: tenant
@@ -200,8 +142,6 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
-          - notifications.self.read
-          - notifications.self.delete
 
     - name: editor
       scope: tenant
@@ -231,8 +171,6 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
-          - notifications.self.read
-          - notifications.self.delete
 
     - name: moderator
       scope: tenant
@@ -264,8 +202,6 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
-          - notifications.self.read
-          - notifications.self.delete
 
     - name: admin
       scope: tenant
@@ -274,23 +210,20 @@ roles:
       description: >-
           Unrestricted within this shop, and only within it — and note that it says nothing
           about the platform. One role cannot reach both scopes, which is the point. Every tenant
-          key below is held by name, bar the two `shopperOnly` basket keys (an administrator does
-          not shop); the conformance suite refuses any other declared tenant key this list omits,
-          so adding a key here can never again be optional.
+          key the `customer` audience does not already give is held below by name; the conformance
+          suite refuses any other declared tenant key this list omits, so adding a key here can
+          never again be optional.
       permissions: &admin_permissions
-          - products.self.read
           - products.any.read
           - products.any.create
           - products.any.update
           - products.any.delete
-          - orders.self.read
           - orders.any.read
           - orders.any.create
           - orders.any.update
           - orders.any.delete
           - orders.any.override
           - orders.any.export
-          - payments.self.read
           - payments.any.read
           - payments.any.create
           - payments.any.update
@@ -306,7 +239,6 @@ roles:
           - feedback.any.read
           - feedback.any.update
           - feedback.any.delete
-          - locales.self.read
           - locales.any.read
           - locales.any.create
           - locales.any.update
@@ -330,8 +262,6 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
-          - notifications.self.read
-          - notifications.self.delete
           - examples.any.read
           - examples.any.update
           - examples.any.delete
@@ -371,13 +301,55 @@ roles:
       permissions:
           - platform.observability.any.read
 
-# The role every unauthenticated request resolves to. Named so that "guest" is a value in the
-# model rather than a null somebody forgot to handle, and it holds exactly the keys a stranger
-# needs — reading published products and the dictionary the shop is rendered in.
-anonymous:
-    name: guest
-    scope: tenant
-    level: user
-    permissions:
-        - products.self.read
-        - locales.self.read
+# The audience roles: what a request IS before any staff role is added. Never stored, never
+# granted, never a row in a membership — `kernel/permissions.ts#audienceOf` picks one per request
+# from the session and `User.verifiedAt`. The effective keys of a caller are the audience's plus the
+# staff role's, so a key belongs here when EVERY account of that audience holds it.
+#
+# Written out in full, not as "customer = unverified + checkout": the PHP twin reads these bytes
+# and must not have to know an inheritance rule that only one side implements.
+audience:
+    # No session. Named so that "guest" is a value in the model rather than a null somebody forgot
+    # to handle: exactly what a stranger needs, reading published products and the dictionary the
+    # shop is rendered in.
+    guest:
+        title: A stranger
+        description: >-
+            Nobody is signed in. Holds only what the storefront needs to render.
+        permissions:
+            - products.self.read
+            - locales.self.read
+
+    # A session whose address is not proven yet. Everything `customer` is, minus the ability to
+    # spend: browsing, the wishlist, the address book and the account follow from being signed in.
+    unverified:
+        title: A signed-up account, address unproven
+        description: >-
+            What `customer` is minus the ability to spend. The account becomes `customer` the moment
+            `verifiedAt` is set, with nothing to grant or promote.
+        permissions:
+            - products.self.read
+            - locales.self.read
+            - orders.self.read
+            - payments.self.read
+            - cart.self.update
+            - notifications.self.read
+            - notifications.self.delete
+
+    # A session whose address is proven.
+    customer:
+        title: The customer
+        description: >-
+            Someone buying things, and every signed-in account whose address is proven, staff
+            included. Their own wishlist, addresses and account follow from being signed in and need
+            no key; what is listed is what they may read of the SHOP and the two keys that let them
+            use a basket and spend it.
+        permissions:
+            - products.self.read
+            - locales.self.read
+            - orders.self.read
+            - payments.self.read
+            - cart.self.update
+            - cart.self.checkout
+            - notifications.self.read
+            - notifications.self.delete

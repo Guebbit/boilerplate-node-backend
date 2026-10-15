@@ -80,6 +80,17 @@ jest.mock('@infrastructure/observability/audit', () => {
  */
 const ADMIN_ONLY_KEY = 'apikeys.any.delete';
 
+/**
+ * Runs the staff payments guard for one caller.
+ * @param authContext - who is asking
+ */
+const runPaymentsStaffGuard = (authContext: AuthContext) => {
+    const next = jest.fn();
+    const response = makeResponseStub();
+    requirePermission('payments.any.read')(makeRequest({ authContext }), response, next);
+    return { next, response };
+};
+
 const fromAccessToken = jest.fn<Promise<unknown>, [string]>();
 const fromRefreshToken = jest.fn<Promise<unknown>, [string]>();
 /** What a stream's family recheck answers, standing in for the strategy's live-family check. */
@@ -741,29 +752,15 @@ describe('requirePermission', () => {
         expect(response.status).toHaveBeenCalledWith(403);
     });
 
-    it('with `exact`, refuses a caller holding only the narrow key of the same action and subject', () => {
-        // `payments.self.read` and `payments.any.read` are both `read` on `Payment`: without
-        // `exact` the guard cannot tell them apart and a customer reads the staff list.
-        const run = (guard: ReturnType<typeof requirePermission>, authContext: AuthContext) => {
-            const next = jest.fn();
-            const response = makeResponseStub();
-            guard(makeRequest({ authContext }), response, next);
-            return { next, response };
-        };
+    it('refuses a caller holding only the narrow key of the same action and subject', () => {
+        // `payments.self.read` and `payments.any.read` are both `read` on `Payment`, and every
+        // signed-in account holds the first: the guard asks for the literal key, or a customer
+        // reads the staff list.
+        const customer = runPaymentsStaffGuard(asCustomer('user-1'));
+        const staff = runPaymentsStaffGuard(asAdmin('user-2'));
 
-        const loose = run(requirePermission('payments.any.read'), asCustomer('user-1'));
-        const exact = run(
-            requirePermission('payments.any.read', { exact: true }),
-            asCustomer('user-1')
-        );
-        const staff = run(
-            requirePermission('payments.any.read', { exact: true }),
-            asAdmin('user-2')
-        );
-
-        expect(loose.next).toHaveBeenCalledTimes(1);
-        expect(exact.next).not.toHaveBeenCalled();
-        expect(exact.response.status).toHaveBeenCalledWith(403);
+        expect(customer.next).not.toHaveBeenCalled();
+        expect(customer.response.status).toHaveBeenCalledWith(403);
         expect(staff.next).toHaveBeenCalledTimes(1);
     });
 

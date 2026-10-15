@@ -3,7 +3,6 @@
  * Account creation for `account`'s flows: self-service, OAuth, the decoy, and the undo.
  */
 
-import type { ClientSession } from 'mongoose';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 
@@ -50,14 +49,11 @@ export type SelfServiceSignupFields = Pick<
 /**
  * A self-service signup, from the request's own fields — `account`'s OWN orchestration
  * (anti-automation checks, the duplicate-email pre-check, the verification email) runs around
- * this, never `create()`'s admin-panel one (role assignment, admin audit/analytics). Writes no
- * role of its own: the document holds none, and the caller grants `unverified` separately through
- * `assignDefaultRole` — never this function, which never sees a role name to misuse.
- *
- * @param session - the signup's transaction: the row and its starting role commit together
+ * this, never `create()`'s admin-panel one (role assignment, admin audit/analytics). Grants no
+ * role: the account is an `unverified` audience until `verifiedAt` is set, and that is computed,
+ * not stored.
  */
-export const registerSelfService = (data: SelfServiceSignupFields, session?: ClientSession) =>
-    userRepository.create(data, session);
+export const registerSelfService = (data: SelfServiceSignupFields) => userRepository.create(data);
 
 /** The fields an OAuth-vouched signup may set — see {@link registerFromOAuth}. */
 export type OAuthSignupFields = Pick<
@@ -75,19 +71,13 @@ export type OAuthSignupFields = Pick<
 >;
 
 /**
- * An account minted from a federated identity — the provider vouches for it, so its caller grants
- * `customer` directly (through `assignRole`, not `assignDefaultRole`) rather than `unverified`,
- * the same way an operator-created account does. Same "writes no role itself" split as
- * {@link registerSelfService} — `verifiedAt` is set at the call site, the membership grant happens
- * there too, never inside this function. Kept as a separate function from
- * {@link registerSelfService} rather than merged despite the identical one-line body: the two
- * field sets below are what actually matters, and a caller passing the wrong one is exactly the
- * mistake narrowing each exists to catch at compile time.
- *
- * @param session - the signup's transaction: the row and its starting role commit together
+ * An account minted from a federated identity — the provider vouches for it, so `verifiedAt` is
+ * set at the call site and the account is a `customer` from its first request, the same way an
+ * operator-created one is. Kept as a separate function from {@link registerSelfService} rather than
+ * merged despite the identical one-line body: the two field sets are what actually matters, and a
+ * caller passing the wrong one is exactly the mistake narrowing each exists to catch at compile time.
  */
-export const registerFromOAuth = (data: OAuthSignupFields, session?: ClientSession) =>
-    userRepository.create(data, session);
+export const registerFromOAuth = (data: OAuthSignupFields) => userRepository.create(data);
 
 /**
  * Detach one provider from an account.

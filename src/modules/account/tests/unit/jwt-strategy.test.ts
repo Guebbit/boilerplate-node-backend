@@ -65,7 +65,7 @@ import { cookieSet, recordingResponse, requestWith } from '../strategy-doubles';
 const USER_ID = '507f1f77bcf86cd799439011';
 
 /** The caller its proof resolves to: a shopper, whom no idle timeout touches. */
-const SHOPPER = { id: USER_ID, roles: { tenant: 'customer', platform: null } };
+const SHOPPER = { id: USER_ID, roles: { tenant: null, platform: null } };
 
 /** The session family the access token names. */
 const FAMILY_ID = '507f1f77bcf86cd799439022';

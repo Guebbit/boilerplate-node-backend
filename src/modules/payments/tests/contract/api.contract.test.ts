@@ -369,22 +369,21 @@ const preparedPayment = async () => {
 };
 
 /**
- * The card steps are a shopper's: staff and administrators do not shop, and are told so with a plain
- * 403. `cart.self.checkout` alone would have said "confirm your email" (`deniedCode`), which is
- * the wrong answer for a caller whose problem is their role, so the shopper key is asked first.
+ * The card steps spend a basket, so they ask `cart.self.checkout`: an account whose address is not
+ * proven is told to confirm it (`deniedCode`), not that it lacks permission in the abstract.
  */
 describe('the card steps — who may pay', () => {
     it.each([
         ['POST /payments/intent', '/payments/intent'],
         ['POST /payments/{id}/confirm', `/payments/${MISSING_ID}/confirm`],
         ['POST /payments/{id}/sync', `/payments/${MISSING_ID}/sync`]
-    ])('%s refuses an administrator with a plain FORBIDDEN', async (_step, url) => {
-        const { bearer } = await authenticateAsRole('admin');
+    ])('%s refuses an unverified account with EMAIL_NOT_VERIFIED', async (_step, url) => {
+        const { bearer } = await authenticateAsRole('unverified');
 
         const response = await api().post(url).set('Authorization', bearer).send({});
 
         expect(response.status).toBe(403);
-        expect(response.body.errors[0].code).toBe('FORBIDDEN');
+        expect(response.body.errors[0].code).toBe('EMAIL_NOT_VERIFIED');
     });
 });
 

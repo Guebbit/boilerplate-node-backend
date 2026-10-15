@@ -50,7 +50,7 @@ export const getForOrder = (
  *
  * @param payment - the payment being served
  * @param authContext - the caller, or `undefined` for no request behind this read
- * @returns `false` for staff, for another customer, and for a payment whose account was erased
+ * @returns `false` for an unproven address, for another customer, and for a payment whose account was erased
  */
 const isPayerWithCheckout = (payment: PaymentDocument, authContext?: AuthContext): boolean =>
     authContext !== undefined &&

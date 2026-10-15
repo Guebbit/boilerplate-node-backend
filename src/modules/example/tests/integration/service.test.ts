@@ -62,7 +62,7 @@ afterEach(() => {
 /** A signed-in customer with a real account row, so the owner's name can be read back. */
 const aCustomer = async (username = 'ada') => {
     const user = await createUser({ username, email: `${username}@example.com` });
-    return { user, context: callerContextAs('customer', user.id) };
+    return { user, context: callerContextAs('editor', user.id) };
 };
 
 /** An administrator, who holds every `examples.*` key. */

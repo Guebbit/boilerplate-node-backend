@@ -45,10 +45,10 @@ export const resolveProof = (
                 id: user.id,
                 email: user.email,
                 username: user.username,
-                // `rolesOf`'s membership lookup, with no fallback: a role lives in exactly one
-                // place. `null` in either scope means genuinely no role there, which
-                // `keysInScope` (`kernel/permissions.ts`) turns into the anonymous baseline
-                // (tenant) or an empty set (platform), never a guess.
+                // `rolesOf`'s membership lookup, with no fallback: a staff role lives in exactly one
+                // place. `null` in either scope means genuinely no role there, which `keysInScope`
+                // (`kernel/permissions.ts`) turns into the audience's keys alone (tenant) or an
+                // empty set (platform), never a guess.
                 roles,
                 // The one shop this deployment is — a fixed constant, never anything the request
                 // could name.
@@ -59,6 +59,9 @@ export const resolveProof = (
                 // Read fresh, like `analyticsConsent`: arming or removing a factor applies to the
                 // very next request, whatever the session carries.
                 twoFactorArmed: user.twoFactorEnabledAt !== undefined,
+                // Read fresh like the factor above: verifying the address makes the account a
+                // customer on its very next request, with no role to promote.
+                verified: Boolean(user.verifiedAt),
                 // A consent WITHDRAWAL has to apply to the very next event, not wait for the
                 // caller to log in again. Left out until the account has answered, so a banner
                 // choice made before sign-in still counts, but never over a stored answer.

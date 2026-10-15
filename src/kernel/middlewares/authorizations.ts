@@ -28,7 +28,7 @@ import {
     type Resolution,
     type ResolveMissReason
 } from '@kernel/authentication';
-import { heldKeys, holdsKey } from '@kernel/ability';
+import { holdsKey } from '@kernel/ability';
 import { bearerOf, readSessionCookie } from '@kernel/cookies';
 import {
     assertDeclared,
@@ -169,6 +169,7 @@ const applySession = (
         authTime: user.authTime,
         amr: user.amr,
         twoFactorArmed: user.twoFactorArmed,
+        verified: user.verified,
         analyticsConsent: user.analyticsConsent
     };
     request.sessionVia = via;
@@ -476,13 +477,12 @@ const challengeForFreshAuth = (
  * by a key no module owns would otherwise answer 403 to everyone and look like a permissions
  * problem for as long as nobody tried it.
  *
- * @param key - the permission key this route requires, e.g. `products.any.update`
- * @param options - `exact`: require this very key, not merely its action and subject. Only a wide
- *   read needs it: `payments.self.read` and `payments.any.read` are both `read` on `Payment`, so
- *   the plain guard would let every customer into a staff list.
+ * @param key - the permission key this route requires, e.g. `products.any.update`. The very key,
+ *   never its action and subject: every signed-in account holds `payments.self.read`, and that must
+ *   not open `payments.any.read`'s staff list.
  * @throws Error at mount time when no module declares the key
  */
-export const requirePermission = (key: string, options: { exact?: boolean } = {}) => {
+export const requirePermission = (key: string) => {
     assertDeclared(key);
     const declared = findKey(key);
     // The one place this guard's own scope is known — everything it audits below states it
@@ -554,7 +554,7 @@ export const requirePermission = (key: string, options: { exact?: boolean } = {}
          * across the two earlier `if`s and their side-effecting calls.
          */
         const caller = request.authContext ? callerFor(request.authContext, key) : request.caller!;
-        const allowed = holdsKey(caller, key) && (!options.exact || heldKeys(caller).has(key));
+        const allowed = holdsKey(caller, key);
 
         /*
          * Step-up is asked AFTER the key check, and the order is the argument: telling somebody
@@ -588,10 +588,7 @@ export const requirePermission = (key: string, options: { exact?: boolean } = {}
     // The key this guard closes over, otherwise invisible once mounted — `tests/support/routes.ts`
     // reads it back so the contract sweep can ask, per route, WHICH roles a 403 is correct for,
     // rather than only whether a guard is present at all.
-    return Object.assign(requirePermissionGuard, {
-        permissionKey: key,
-        exactPermission: options.exact === true
-    });
+    return Object.assign(requirePermissionGuard, { permissionKey: key });
 };
 
 /**

@@ -74,17 +74,17 @@ an administrator, rather than matching against a hardcoded list here. One fact, 
 side of that line.
 :::
 
-`assignRole` and `assignDefaultRole` take an optional `session`, so an account write and its
+`assignRole` and `revokeRole` take an optional `session`, so an account write and its
 membership can share one transaction (see [`users`](./users.md#creating-and-updating-with-a-role)).
-Given a session, `assignRole` audits only its failures; the success is recorded with
-`auditRoleAssigned` once the caller has committed, and a grant refused before the account even
+Given a session, `assignRole` and `revokeRole` audit only their failures; the success is recorded
+with `auditRoleAssigned` / `auditRoleRevoked` once the caller has committed, and a grant refused before the account even
 exists is audited by `assertCanGrantAudited`.
 
 Every invariant here is a refusal, not a comment: a granter cannot hand over a role they do not
-themselves hold, and self-service signup can only ever assign the one default role (`assignDefaultRole`) — never a caller-supplied name, which
-is what would turn signup into a privilege-escalation door. The same exemption covers an admin
-holding `users.any.create`: granting the default role there isn't escalation either, since every
-key on that role is `.self.` — power over the new account's own data, not the shop's.
+themselves hold, and `customer`, `unverified` and `guest` are not roles at all — an audience is
+computed from the session and `verifiedAt` (see
+[the audience roles](../theory/authorization.md#everyone-is-a-customer-first)), so there is nothing
+to grant and a signup has no role to assign.
 
 ::: info The last administrator CAN be removed
 Revoking, demoting or deleting a shop's last administrator is allowed, and leaves the shop with

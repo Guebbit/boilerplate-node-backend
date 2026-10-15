@@ -123,7 +123,7 @@ describe('setCover', () => {
                     thumbnailUrl: '/images/a-t.webp',
                     pendingImageKey: undefined
                 },
-                callerContextAs('customer', owner.id)
+                callerContextAs('editor', owner.id)
             )
         );
 
@@ -139,7 +139,7 @@ describe('setCover', () => {
     it('deletes the cover it replaced, once the new one is saved', async () => {
         const owner = await createUser();
         const mine = await createExample({ userId: owner.id });
-        const context = callerContextAs('customer', owner.id);
+        const context = callerContextAs('editor', owner.id);
         await setCover(String(mine._id), image('old'), context);
         await setCover(String(mine._id), image('new'), context);
 
@@ -157,7 +157,7 @@ describe('setCover', () => {
             await setCover(
                 String(mine._id),
                 { ...image('slow'), pendingImageKey: 'missing' },
-                callerContextAs('customer', owner.id)
+                callerContextAs('editor', owner.id)
             )
         );
 
@@ -177,7 +177,7 @@ describe('setCover', () => {
             await setCover(
                 String(theirs._id),
                 { imageUrl: '/images/x.jpg', thumbnailUrl: undefined, pendingImageKey: undefined },
-                callerContextAs('customer', stranger.id)
+                callerContextAs('editor', stranger.id)
             )
         );
 

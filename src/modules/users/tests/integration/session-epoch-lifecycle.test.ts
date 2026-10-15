@@ -44,7 +44,7 @@ describe('deactivating an account', () => {
         // The epoch and the token's `auth_time` compare in whole seconds.
         await nextSecond();
 
-        const ban = { username: target.username, role: 'customer', active: false };
+        const ban = { username: target.username, role: null, active: false };
         await api().put(`/users/${target.id}`).set('Authorization', admin).send(ban);
         await api()
             .put(`/users/${target.id}`)
@@ -57,7 +57,7 @@ describe('deactivating an account', () => {
     it('lets the owner sign in again after the reactivation', async () => {
         const { bearer: admin } = await authenticateAs('admin');
         const target = await createUser({ verifiedAt: new Date() }, 'customer');
-        const ban = { username: target.username, role: 'customer', active: false };
+        const ban = { username: target.username, role: null, active: false };
         await api().put(`/users/${target.id}`).set('Authorization', admin).send(ban);
         await api()
             .put(`/users/${target.id}`)
@@ -77,7 +77,7 @@ describe('deactivating an account', () => {
         await api()
             .put(`/users/${target.id}`)
             .set('Authorization', admin)
-            .send({ username: 'renamed', role: 'customer', active: true });
+            .send({ username: 'renamed', role: null, active: true });
 
         expect(await statusWith(held)).toBe(200);
     });

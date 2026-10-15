@@ -21,7 +21,6 @@ import {
     assertCanGrantAudited,
     assignRole,
     auditRoleAssigned,
-    assignDefaultRole,
     bootstrapAccessModel,
     DEPLOYMENT_TENANT_SLUG,
     ensureTenant,
@@ -102,7 +101,7 @@ describe('membership across tenants', () => {
     it('holds one role per person per place, so a reassignment replaces rather than adds', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
 
-        await assignRole('person-1', String(shop._id), 'tenant', 'customer');
+        await assignRole('person-1', String(shop._id), 'tenant', 'support');
         await assignRole('person-1', String(shop._id), 'tenant', 'manager');
 
         const held = await membershipsOf('person-1');
@@ -219,16 +218,17 @@ describe('a role lives in exactly one place, the membership row', () => {
         expect(roles.platform).toBeNull();
     });
 
-    it('assignDefaultRole can only ever grant unverified — there is no name to pass it', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
+    it.each(['customer', 'unverified', 'guest'])(
+        'assignRole refuses %s: an audience is computed, never granted',
+        async (audience) => {
+            const shop = await ensureTenant('shop', 'The Shop');
 
-        await assignDefaultRole('fresh-signup', String(shop._id));
-
-        const membership = await membershipIn('fresh-signup', String(shop._id), 'tenant');
-        expect(membership?.role).toBe('unverified');
-        // The type itself is the guard: `assignDefaultRole` takes no role-name parameter at all,
-        // so a caller cannot express "grant admin" through it even by mistake — see `../../service.ts`.
-    });
+            await expect(
+                assignRole('person-1', String(shop._id), 'tenant', audience)
+            ).rejects.toThrow(AccessInvariantError);
+            expect(await membershipIn('person-1', String(shop._id), 'tenant')).toBeNull();
+        }
+    );
 
     it('assignRole refuses a name the shared presets do not declare', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
@@ -409,7 +409,7 @@ describe('eraseMemberships', () => {
         const shop = await ensureTenant('shop', 'The Shop');
         await assignRole('erased', String(shop._id), 'tenant', 'admin');
         await assignRole('erased', null, 'platform', 'operator');
-        await assignRole('bystander', String(shop._id), 'tenant', 'customer');
+        await assignRole('bystander', String(shop._id), 'tenant', 'editor');
 
         await withTransaction((session) => eraseMemberships('erased', session));
 
@@ -447,47 +447,16 @@ describe('assertCanGrant', () => {
     });
 });
 
-describe('granting the default grantable role', () => {
-    it('lets a caller holding users.any.create grant customer despite lacking its own keys', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        // `moderator` holds none of `customer`'s keys (`orders.self.read`, `payments.self.read`,
-        // `products.self.read`, `locales.self.read`, `delivery.any.read`) — only `users.any.create`
-        // is what makes this grant not an escalation.
-        const moderatorKeys = permissionsOfRole('moderator');
-
-        await expect(
-            assignRole('new-user', String(shop._id), 'tenant', 'customer', moderatorKeys)
-        ).resolves.toBeDefined();
-    });
-
-    it('still refuses the same grant without users.any.create', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-
-        await expect(
-            assignRole('new-user', String(shop._id), 'tenant', 'customer', ['orders.any.read'])
-        ).rejects.toThrow(/privilege-escalation/);
-    });
-
-    it('does not extend the exemption to any other role', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        const moderatorKeys = permissionsOfRole('moderator');
-
-        await expect(
-            assignRole('new-user', String(shop._id), 'tenant', 'unverified', moderatorKeys)
-        ).rejects.toThrow(/privilege-escalation/);
-    });
-});
-
 describe('rolesOfMany', () => {
     it('batch-resolves the tenant role for a set of people in one query', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
         await assignRole('person-1', String(shop._id), 'tenant', 'manager');
-        await assignRole('person-2', String(shop._id), 'tenant', 'customer');
+        await assignRole('person-2', String(shop._id), 'tenant', 'editor');
 
         const roles = await rolesOfMany(['person-1', 'person-2', 'nobody'], String(shop._id));
 
         expect(roles.get('person-1')).toBe('manager');
-        expect(roles.get('person-2')).toBe('customer');
+        expect(roles.get('person-2')).toBe('editor');
         expect(roles.has('nobody')).toBe(false);
     });
 

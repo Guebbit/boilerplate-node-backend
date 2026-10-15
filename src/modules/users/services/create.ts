@@ -13,12 +13,7 @@ import { announceInTransaction } from '@kernel/outbox';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext, CreateUserRequest, WithServerImage } from '@types';
-import {
-    assertCanGrantAudited,
-    assignRole,
-    auditRoleAssigned,
-    VERIFIED_CUSTOMER_ROLE
-} from '@modules/access';
+import { assertCanGrantAudited, assignRole, auditRoleAssigned } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
@@ -31,16 +26,17 @@ import { enqueueIfPending } from './image';
  * Create a new user document — no email confirmation step; that self-service path is
  * `accountService.signup`.
  *
- * - `verifiedAt`: hardcoded `now` — an operator typing the address in IS the vouching
- *   (`shared/authorization-roles.yaml`'s role grants are the same act).
+ * - `verifiedAt`: hardcoded `now` — an operator typing the address in IS the vouching.
  * - Password: never supplied. A credential is its owner's alone, so the account starts with a
  *   random value nobody is told, and `USER_SETUP_REQUESTED` (on the outbox, in the same
  *   transaction as the account) mails the owner a link to choose
  *   their own (`POST /account/reset-confirm`).
  * - Typed off `CreateUserRequest`, not a hand-picked `Pick`: a hand-copied list is what silently
  *   dropped `active` from `update()` below.
- * - The account and its role grant are ONE transaction, the grant checked (and a refusal audited)
- *   before any write. See docs/modules/users.md#creating-and-updating-with-a-role.
+ * - No `role` means a plain customer: the account holds no staff role and is a `customer` because
+ *   `verifiedAt` is set, which nothing has to grant.
+ * - The account and its role grant (when there is one) are ONE transaction, the grant checked (and
+ *   a refusal audited) before any write. See docs/modules/users.md#creating-and-updating-with-a-role.
  * - Returns a result envelope, same protocol `update` follows.
  */
 export const create = (
@@ -51,15 +47,15 @@ export const create = (
     // never surfaced anywhere, so "unusable until the owner sets one" is enforced by nobody
     // knowing it.
     const password = randomBytes(32).toString('hex');
-    // An operator typing the address in is the vouching, same reasoning as `verifiedAt` above.
-    const role = data.role ?? VERIFIED_CUSTOMER_ROLE;
+    const { role } = data;
 
     return Promise.resolve()
-        .then(() =>
+        .then(() => {
             // Checked, and a refusal audited, BEFORE anything is written: an escalation attempt
             // must leave its row without ever having made a user.
-            assertCanGrantAudited('tenant', role, context.caller.permissions, context)
-        )
+            if (role !== undefined)
+                assertCanGrantAudited('tenant', role, context.caller.permissions, context);
+        })
         .then(() =>
             // The account, its membership and the setup-mail event commit together or not at
             // all: a failure between them leaves nothing behind to undo, so no compensating
@@ -80,15 +76,17 @@ export const create = (
                         )
                         // The membership is the ONLY grant — there is no column beside it.
                         .then((user) =>
-                            assignRole(
-                                String(user._id),
-                                DEPLOYMENT_TENANT_ID,
-                                'tenant',
-                                role,
-                                context.caller.permissions,
-                                context,
-                                session
-                            ).then(() => user)
+                            role === undefined
+                                ? user
+                                : assignRole(
+                                      String(user._id),
+                                      DEPLOYMENT_TENANT_ID,
+                                      'tenant',
+                                      role,
+                                      context.caller.permissions,
+                                      context,
+                                      session
+                                  ).then(() => user)
                         ),
                 (user) => ({
                     name: USER_SETUP_REQUESTED,
@@ -99,7 +97,8 @@ export const create = (
         )
         .then((user) => {
             // Only now that the transaction has committed is the grant true to audit.
-            auditRoleAssigned(context, String(user._id), role, DEPLOYMENT_TENANT_ID, 'tenant');
+            if (role !== undefined)
+                auditRoleAssigned(context, String(user._id), role, DEPLOYMENT_TENANT_ID, 'tenant');
             return user;
         })
         .then((user) => {

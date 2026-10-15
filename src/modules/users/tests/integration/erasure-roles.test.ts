@@ -30,7 +30,7 @@ const failingEraser: PersonalDataEraser = (): Promise<void> =>
 describe('hard-deleting an account', () => {
     it('removes the role it holds, with the account', async () => {
         const { bearer } = await authenticateAs('admin');
-        const target = await createUser({}, 'customer');
+        const target = await createUser({}, 'support');
 
         const response = await api()
             .delete(`/users/${target.id}?hardDelete=true`)
@@ -43,7 +43,7 @@ describe('hard-deleting an account', () => {
 
     it('keeps its roles when a later step of the erasure fails and the account stays', async () => {
         const { bearer } = await authenticateAs('admin');
-        const target = await createUser({}, 'customer');
+        const target = await createUser({}, 'support');
         setPersonalDataErasers([...bootErasers, failingEraser]);
 
         const response = await api()

@@ -158,27 +158,20 @@ describe('POST /cart', () => {
 });
 
 /**
- * Staff and administrators do not shop: `cart.self.update` is held by the shopper roles only, so
- * the basket answers 403 to a role that is not one — and a shopper, verified or not, still uses it.
+ * Everyone signed in shops: `cart.self.update` comes with the audience, so a staff member fills a
+ * basket like any customer, verified or not.
  */
 describe('POST /cart — who may shop', () => {
-    it.each(['manager', 'warehouse', 'support', 'editor', 'moderator', 'admin'])(
-        'refuses a %s with a 403',
-        async (role) => {
-            const { bearer } = await authenticateAsRole(role);
-            const product = await createProduct();
-
-            const response = await api()
-                .post('/cart')
-                .set('Authorization', bearer)
-                .send({ productId: String(product._id), quantity: 1 });
-
-            expect(response.status).toBe(403);
-            expect(response.body.errors[0].code).toBe('FORBIDDEN');
-        }
-    );
-
-    it.each(['customer', 'unverified'])('lets a %s add to the basket', async (role) => {
+    it.each([
+        'customer',
+        'unverified',
+        'manager',
+        'warehouse',
+        'support',
+        'editor',
+        'moderator',
+        'admin'
+    ])('lets a %s add to the basket', async (role) => {
         const { bearer } = await authenticateAsRole(role);
         const product = await createProduct();
 
@@ -378,7 +371,7 @@ describe('POST /cart/merge', () => {
         expect(response.status).toBe(401);
     });
 
-    it.each(['manager', 'admin'])('refuses a %s, who owns no basket, with a 403', async (role) => {
+    it.each(['manager', 'admin'])('merges a guest basket into a %s’s own', async (role) => {
         const { bearer } = await authenticateAsRole(role);
         const product = await createProduct();
 
@@ -387,7 +380,7 @@ describe('POST /cart/merge', () => {
             .set('Authorization', bearer)
             .send({ lines: [{ productId: String(product._id), quantity: 1 }] });
 
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(200);
     });
 });
 

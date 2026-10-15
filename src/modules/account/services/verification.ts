@@ -33,8 +33,6 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { emailChangeNext, emailChangeStateOf, undoRestoresPreviousEmail } from '../domain';
-import { promoteVerifiedCustomer } from '@modules/access';
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { recordAccountAudit, withOwnAccount } from './caller';
 
 /**
@@ -242,31 +240,26 @@ export const resendPendingEmailVerificationFor = (
     });
 
 /**
- * Marks the account's address proven, promoting `unverified` to `customer` in the same step —
- * the verify flow's own vouching. Leaves any OTHER role untouched: an operator who staffed an
- * unproven address
- * (`shared/authorization-roles.yaml`'s "no unverified manager" rule) made that decision already.
+ * Marks the account's address proven. That is the whole of the vouching: the account is a
+ * `customer` from its next request on, because the audience role is computed from `verifiedAt`
+ * and there is no role to promote.
  *
- * Mutates `verifiedAt` on the document, unpersisted — the caller's own `save` covers it — but the
- * role promotion is a MEMBERSHIP write, with no document field to ride along on, so this cannot
- * be purely synchronous. `password-reset.ts#completePasswordReset` is the one caller, passing this as
- * `passwordChange`'s `beforeSave`, awaited there, so a verification can still land in the same
- * request `userService.setPassword` handles — a spent reset token proves the same mailbox a
- * verify token does. `completeEmailVerification`/`completeEmailChange` below do NOT call this:
- * they call the equivalent `userService` operation directly, doing their own
- * mutating-and-persisting-and-promoting in one step.
+ * Mutates `verifiedAt` on the document, unpersisted — the caller's own `save` covers it.
+ * `password-reset.ts#completePasswordReset` is the one caller, passing this as `passwordChange`'s
+ * `beforeSave`, so a verification lands in the same write as the new password — a spent reset
+ * token proves the same mailbox a verify token does. `completeEmailVerification`/
+ * `completeEmailChange` below do NOT call this: they call the equivalent `userService` operation
+ * directly, which mutates and persists in one step.
  *
  * @param user - the account whose address was just proven
  */
-export const markVerified = (user: UserDocument): Promise<void> => {
+export const markVerified = (user: UserDocument): void => {
     user.verifiedAt = new Date();
-    return promoteVerifiedCustomer(String(user._id), DEPLOYMENT_TENANT_ID).then(() => undefined);
 };
 
 /**
  * Records that `user`'s address has been proven — signup verification or an email change, whoever
- * calls this. Reads roles fresh rather than trusting a value computed before this request's own
- * promotion, so `actorRole` reflects what just happened, not the stale role it replaced.
+ * calls this.
  * @param user - the account whose address was just proven
  * @param context - the caller context, for the audit record
  * @param action - which flow this proof completes
@@ -291,12 +284,6 @@ export const completeEmailVerification = (
 ): Promise<UserDocument> =>
     userService
         .markEmailVerified(user)
-        .then((saved) =>
-            // The one promotion self-service verification may make on its own — before the audit
-            // below, so the entry reflects the promotion that just happened, not the stale
-            // `unverified` it replaces.
-            promoteVerifiedCustomer(saved.id, DEPLOYMENT_TENANT_ID).then(() => saved)
-        )
         .then((saved) =>
             auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED)
         );
@@ -327,12 +314,6 @@ export const completeEmailChange = (
 
     return userService
         .applyEmailChange(user, newEmail)
-        .then((saved) =>
-            // Same `unverified` → `customer` promotion as `completeEmailVerification`, since an
-            // email change can be the first proof an `unverified` signup ever completes — before
-            // the audit below, for the same reason.
-            promoteVerifiedCustomer(saved.id, DEPLOYMENT_TENANT_ID).then(() => saved)
-        )
         .then((saved) => revokeFor('email-change-confirm', saved.id).then(() => saved))
         .then((saved) =>
             auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED)

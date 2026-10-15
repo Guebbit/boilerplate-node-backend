@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
-import { api, authenticateAs } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { setupTestDb } from '@tests/setup-test-db';
 import { localeRepository } from '@modules/locales/repository';
@@ -175,7 +175,7 @@ describe('POST /users', () => {
 
 describe('PUT /examples/:id/cover', () => {
     it('keeps the upload of a cover that was stored', async () => {
-        const { user, bearer } = await authenticateAs('user');
+        const { user, bearer } = await authenticateAsRole('editor');
         const mine = await createExample({ userId: user.id });
 
         const response = await api()
@@ -189,7 +189,7 @@ describe('PUT /examples/:id/cover', () => {
     });
 
     it('deletes the upload for an example that is not the caller’s', async () => {
-        const { bearer } = await authenticateAs('user');
+        const { bearer } = await authenticateAsRole('editor');
         const other = await createUser({ email: 'other@example.com' });
         const theirs = await createExample({ userId: other.id });
 

@@ -71,9 +71,16 @@ export const membershipRepository = {
             // created — so this can never resolve `null` the way a plain `findOneAndUpdate` can.
             .exec(),
 
-    /** Remove one row by its own id. */
-    deleteById: (id: MembershipDocument['_id']): Promise<{ deletedCount?: number }> =>
-        membershipModel.deleteOne({ _id: id }).exec(),
+    /**
+     * Remove one row by its own id.
+     *
+     * @param session - joins the delete to the caller's transaction (an account update)
+     */
+    deleteById: (
+        id: MembershipDocument['_id'],
+        session?: ClientSession
+    ): Promise<{ deletedCount?: number }> =>
+        membershipModel.deleteOne({ _id: id }, { session }).exec(),
 
     /**
      * Every row a person holds, in every place.

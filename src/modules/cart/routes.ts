@@ -3,7 +3,7 @@
  * The cart route table.
  *
  * A cart is somebody's, so the whole router is authenticated and needs `cart.self.update`, which
- * only the shopper roles hold. `POST /checkout` is the one route that also invalidates the
+ * every signed-in account holds. `POST /checkout` is the one route that also invalidates the
  * `orders` and `products` response caches — the endpoints those caches serve read differently once
  * a checkout has spent stock and created an order — and requires a FRESH session holding
  * `cart.self.checkout` on top of `isAuth` (`requireFreshAuth`,
@@ -38,9 +38,8 @@ import { checkoutLimiter, mergeLimiter } from './rate-limits';
 /** Express router for cart operations (add, update, remove items; checkout). */
 export const router = Router();
 
-// All cart routes require authentication, and a role that shops. `cart.self.update` is held by
-// customers and unverified accounts only: staff and administrators own no basket, so nothing
-// behind it (the basket, a reorder, a checkout) is theirs to reach.
+// All cart routes require authentication. `cart.self.update` comes with every signed-in account,
+// staff included, so a basket is always the caller's own.
 router.use(getAuth, isAuth, requirePermission('cart.self.update'));
 
 // GET /cart/summary

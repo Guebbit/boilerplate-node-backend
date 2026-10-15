@@ -26,7 +26,9 @@ import {
     assertCanGrantAudited,
     assignRole,
     auditRoleAssigned,
+    auditRoleRevoked,
     outrankedRefusal,
+    revokeRole,
     rolesOf
 } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -62,8 +64,8 @@ export const update = (
      * any role, including their own promotion to `admin`.
      */
     context: CallerContext,
-    /** {@link changedRole}'s answer: the role to grant, or `undefined` for none. */
-    role?: string
+    /** {@link changedRole}'s answer: the role to grant, `null` to take it away, `undefined` for no change. */
+    role?: RoleChange
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (data.username !== undefined) user.username = data.username;
     // `role` is not written here — there is no column, only the membership,
@@ -99,23 +101,60 @@ export const update = (
 };
 
 /**
- * The role an update actually changes to, or `undefined` when it changes nothing.
+ * What an update does to the staff role: grant one, take the held one away, or (`undefined`) leave
+ * it alone. The revoke names the role it takes, for the audit row.
+ */
+type RoleChange = { grant: string } | { revoke: string } | undefined;
+
+/**
+ * The role change an update actually makes, or `undefined` when it changes nothing.
  *
  * A PUT carries `role` every time (RFC 9110 §9.3.4), so "present" is not "changed". Re-granting
  * the role already held would refuse a caller allowed to edit this user but never to grant that
- * role — support editing a customer — and would audit a role change that never happened.
+ * role — support editing a customer — and would audit a role change that never happened. `null`
+ * means "no staff role", so it changes nothing for an account that holds none.
  *
  * @param user - the loaded document, before its membership is touched
  * @param requested - `data.role` as the request sent it
- * @returns the role to grant, or `undefined` for none
+ * @returns the change to make, or `undefined` for none
  */
-const changedRole = (user: UserDocument, requested?: string): Promise<string | undefined> =>
+const changedRole = (user: UserDocument, requested?: string | null): Promise<RoleChange> =>
     requested === undefined
         ? Promise.resolve(undefined)
-        : rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then(({ tenant }) =>
+        : rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then(({ tenant }) => {
               // Stored lower-cased and trimmed — the membership schema's own normalisation.
-              tenant === requested.trim().toLowerCase() ? undefined : requested
-          );
+              if (tenant === (requested?.trim().toLowerCase() ?? null)) return undefined;
+
+              return requested === null ? { revoke: tenant ?? '' } : { grant: requested };
+          });
+
+/**
+ * The membership half of {@link saveAndGrant}: grant the role, take it away, or do nothing.
+ *
+ * @param id - the account
+ * @param role - {@link changedRole}'s answer
+ * @param context - the caller, whose keys bound the role they may grant
+ * @param session - the transaction the write joins
+ */
+const writeRole = (
+    id: string,
+    role: RoleChange,
+    context: CallerContext,
+    session: ClientSession
+): Promise<unknown> => {
+    if (role === undefined) return Promise.resolve();
+    if ('revoke' in role) return revokeRole(id, DEPLOYMENT_TENANT_ID, 'tenant', context, session);
+
+    return assignRole(
+        id,
+        DEPLOYMENT_TENANT_ID,
+        'tenant',
+        role.grant,
+        context.caller.permissions,
+        context,
+        session
+    );
+};
 
 /**
  * The write half of an update, inside the caller's transaction: the document's save and, for a
@@ -128,7 +167,7 @@ const changedRole = (user: UserDocument, requested?: string): Promise<string | u
  */
 const saveAndGrant = (
     user: UserDocument,
-    role: string | undefined,
+    role: RoleChange,
     context: CallerContext,
     session: ClientSession
 ): Promise<UserDocument> => {
@@ -144,19 +183,7 @@ const saveAndGrant = (
 
     return userRepository
         .save(user, session)
-        .then((saved) =>
-            role === undefined
-                ? saved
-                : assignRole(
-                      String(saved._id),
-                      DEPLOYMENT_TENANT_ID,
-                      'tenant',
-                      role,
-                      context.caller.permissions,
-                      context,
-                      session
-                  ).then(() => saved)
-        );
+        .then((saved) => writeRole(String(saved._id), role, context, session).then(() => saved));
 };
 
 /**
@@ -170,7 +197,7 @@ const saveAndGrant = (
  */
 const finishUpdate = (
     savedUser: UserDocument,
-    data: Pick<UpdateUserByIdRequest, 'active' | 'role'>,
+    data: Pick<UpdateUserByIdRequest, 'active'> & { role: RoleChange },
     context: CallerContext,
     oldImageUrl?: string
 ): Promise<ResponseSuccess<UserDocument>> => {
@@ -179,12 +206,20 @@ const finishUpdate = (
         ? imageStore.remove(oldImageUrl).then(() => undefined)
         : Promise.resolve();
 
-    // The grant is true only now: it committed with the document.
-    if (data.role !== undefined)
+    // The change is true only now: it committed with the document.
+    if (data.role && 'grant' in data.role)
         auditRoleAssigned(
             context,
             String(savedUser._id),
-            data.role,
+            data.role.grant,
+            DEPLOYMENT_TENANT_ID,
+            'tenant'
+        );
+    else if (data.role)
+        auditRoleRevoked(
+            context,
+            String(savedUser._id),
+            data.role.revoke,
             DEPLOYMENT_TENANT_ID,
             'tenant'
         );
@@ -200,7 +235,7 @@ const finishUpdate = (
  */
 const saveWithRole = (
     user: UserDocument,
-    data: Pick<UpdateUserByIdRequest, 'active' | 'role'>,
+    data: Pick<UpdateUserByIdRequest, 'active'> & { role: RoleChange },
     context: CallerContext,
     oldImageUrl?: string
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
@@ -210,10 +245,10 @@ const saveWithRole = (
             // must not leave the rest of the update — a deactivation included — committed
             // underneath a request that, as a whole, failed. The escalation rule needs no
             // database read, so asking first costs one more in-memory pass.
-            if (data.role !== undefined)
+            if (data.role && 'grant' in data.role)
                 assertCanGrantAudited(
                     'tenant',
-                    data.role,
+                    data.role.grant,
                     context.caller.permissions,
                     context,
                     String(user._id)
@@ -295,9 +330,9 @@ const ownRoleRefusal = (id: string, context: CallerContext): ResponseReject => {
  */
 const refusalFor = (
     user: UserDocument,
-    data: Pick<UpdateUserByIdRequest, 'active' | 'role'>,
+    data: Pick<UpdateUserByIdRequest, 'active'>,
     context: CallerContext,
-    role: string | undefined
+    role: RoleChange
 ): Promise<ResponseReject | undefined> => {
     const id = String(user._id);
     const held = heldKeys(context.caller);
@@ -346,7 +381,7 @@ const applyUpdate = (
     data: UpdateByIdData,
     context: CallerContext,
     wasActive: boolean | undefined,
-    role: string | undefined
+    role: RoleChange
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     update(user, data, context, role).then((result) => {
         if (result.success) {

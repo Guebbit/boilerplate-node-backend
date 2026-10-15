@@ -232,9 +232,8 @@ describe('userService.getById', () => {
 
 describe('userService.create', () => {
     it('creates a user and returns the Mongoose document', async () => {
-        // `callerContextAs('admin')`, not `testCallerContext`: `create` always grants a
-        // membership now (the implicit `customer` default included), and an anonymous granter
-        // cannot grant anything — same invariant a real route guard would already have enforced.
+        // `callerContextAs('admin')`, not `testCallerContext`: a real route guard would already
+        // have enforced `users.any.create`, which an anonymous caller does not hold.
         const user = await expectCreated(
             {
                 email: 'created@example.com',
@@ -295,9 +294,9 @@ describe('userService.create', () => {
         expect(roles.tenant).toBe('admin');
     });
 
-    it('lets a moderator create a user in the default role, despite lacking its own self keys', async () => {
-        // `moderator` holds none of `customer`'s keys — `users.any.create` is the one thing that
-        // makes handing out the account's OWN starting role not an escalation.
+    it('lets a moderator create a plain customer, who holds no role at all', async () => {
+        // A customer is computed from `verifiedAt` (set on every admin create), never granted, so
+        // naming no role writes no membership and needs no key beyond `users.any.create`.
         const user = await expectCreated(
             {
                 email: 'moderator-made@example.com',
@@ -307,7 +306,8 @@ describe('userService.create', () => {
         );
 
         const roles = await rolesOf(String(user._id), DEPLOYMENT_TENANT_ID);
-        expect(roles.tenant).toBe('customer');
+        expect(roles.tenant).toBeNull();
+        expect(user.verifiedAt).toBeInstanceOf(Date);
     });
 
     it('creates no row when the requested role is an escalation the caller cannot grant', async () => {
@@ -620,9 +620,9 @@ describe('userService.updateById', () => {
     });
 
     /*
-     * A PUT carries `role` and `active` on every save. Resending what the user already has must
-     * not be a grant (support may edit a customer but could never GRANT `customer`), and must not
-     * count a second deactivation.
+     * A PUT carries `role` and `active` on every save. Resending what the user already has (no
+     * staff role, spelled `null`) must not be a role change: support may edit a customer but could
+     * never GRANT or REVOKE a role, and the save must not count a second deactivation.
      */
     it('treats the role already held as no change: no grant check, no role audit', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
@@ -631,7 +631,7 @@ describe('userService.updateById', () => {
 
         const result = await userService.updateById(
             id,
-            { role: 'Customer', active: true },
+            { role: null, active: true },
             callerContextAs('support')
         );
 
@@ -863,7 +863,7 @@ describe('userService.removeById', () => {
             await assignRole('another-operator', null, 'platform', 'operator');
             // A tenant seat AND a platform seat — the erasure gap a single tenant-scoped revoke leaves
             // behind if the platform row is not swept too, surviving the user it points at.
-            await assignRole(id, DEPLOYMENT_TENANT_ID, 'tenant', 'customer');
+            await assignRole(id, DEPLOYMENT_TENANT_ID, 'tenant', 'support');
             await assignRole(id, null, 'platform', 'operator');
             // This suite builds no app, so the erase hooks a deployment registers are not there:
             // install `access`'s own, the one under test.

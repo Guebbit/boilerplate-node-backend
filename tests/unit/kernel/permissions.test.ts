@@ -7,8 +7,13 @@
 
 import { z } from 'zod';
 import {
-    ANONYMOUS_ROLE,
     anonymousCaller,
+    AUDIENCE_NAMES,
+    AUDIENCE_ROLES,
+    audienceOf,
+    isAudienceName,
+    keysInScope,
+    callerInScope,
     isBelowLevel,
     keysDocumentSchema,
     levelOfRole,
@@ -18,7 +23,7 @@ import {
     PRESET_ROLES,
     rolesDocumentSchema
 } from '@kernel/permissions';
-import { callerAs } from '@tests/callers';
+import { asRole, callerAs } from '@tests/callers';
 
 /** A minimal, otherwise-valid keys document — each test below breaks exactly one field of it. */
 const validKeysDocument = {
@@ -83,6 +88,14 @@ describe('keysDocumentSchema', () => {
     });
 });
 
+/** A minimal, otherwise-valid `audience` block. */
+const validAudience = Object.fromEntries(
+    AUDIENCE_NAMES.map((name) => [
+        name,
+        { title: `The ${name}`, description: 'd', permissions: ['products.self.read'] }
+    ])
+);
+
 describe('rolesDocumentSchema', () => {
     it('accepts a well-formed document', () => {
         expect(
@@ -98,12 +111,7 @@ describe('rolesDocumentSchema', () => {
                         permissions: ['users.any.read']
                     }
                 ],
-                anonymous: {
-                    name: 'guest',
-                    scope: 'tenant',
-                    level: 'user',
-                    permissions: ['products.self.read']
-                }
+                audience: validAudience
             }).success
         ).toBe(true);
     });
@@ -114,7 +122,7 @@ describe('rolesDocumentSchema', () => {
             roles: [
                 { name: 'moderator', scope: 'tenant', title: 't', description: 'd', level: 'staff' }
             ],
-            anonymous: { name: 'guest', scope: 'tenant', level: 'user', permissions: [] }
+            audience: validAudience
         });
 
         expect(result.success).toBe(false);
@@ -134,7 +142,7 @@ describe('rolesDocumentSchema', () => {
                     permissions: []
                 }
             ],
-            anonymous: { name: 'guest', scope: 'tenant', level: 'user', permissions: [] }
+            audience: validAudience
         });
 
         expect(result.success).toBe(false);
@@ -155,17 +163,18 @@ describe('rolesDocumentSchema', () => {
                     permissions: []
                 }
             ],
-            anonymous: { name: 'guest', scope: 'tenant', level: 'user', permissions: [] }
+            audience: validAudience
         });
 
         expect(result.success).toBe(false);
     });
 
-    it('refuses an anonymous role with no level', () => {
+    it('refuses an audience block missing one of the three computed roles', () => {
+        const { customer: _customer, ...withoutCustomer } = validAudience;
         const result = rolesDocumentSchema.safeParse({
             version: 1,
             roles: [],
-            anonymous: { name: 'guest', scope: 'tenant', permissions: [] }
+            audience: withoutCustomer
         });
 
         expect(result.success).toBe(false);
@@ -179,19 +188,20 @@ describe('the real shared authorization files', () => {
         // the visible proof that didn't happen.
         expect(PERMISSION_KEYS.length).toBeGreaterThan(0);
         expect(PRESET_ROLES.length).toBeGreaterThan(0);
-        expect(ANONYMOUS_ROLE.name).toBeTruthy();
+        expect(AUDIENCE_ROLES.guest.permissions.length).toBeGreaterThan(0);
     });
 
     // There is no wildcard: `admin` is unrestricted only because it lists every tenant key by
-    // name — bar the `shopperOnly` basket keys, since an administrator does not shop. This is what
-    // stops a newly declared key from being silently forgotten off it, the same guarantee a scope
-    // wildcard would give for free.
-    it('grants admin every declared tenant key by name, bar the shopper-only ones', () => {
+    // name — bar the ones the `customer` audience already gives every signed-in account. This is
+    // what stops a newly declared key from being silently forgotten off it, the same guarantee a
+    // scope wildcard would give for free.
+    it('grants admin every declared tenant key by name, bar the customer audience’s', () => {
         const admin = PRESET_ROLES.find((role) => role.name === 'admin');
         expect(admin).toBeDefined();
 
+        const audienceKeys = new Set(AUDIENCE_ROLES.customer.permissions);
         const tenantKeys = PERMISSION_KEYS.filter(
-            (key) => key.scope === 'tenant' && !key.shopperOnly
+            (key) => key.scope === 'tenant' && !audienceKeys.has(key.key)
         ).map((key) => key.key);
         const held = new Set(admin!.permissions);
         const missing = tenantKeys.filter((key) => !held.has(key));
@@ -199,21 +209,27 @@ describe('the real shared authorization files', () => {
         expect(missing).toEqual([]);
     });
 
-    // Staff and administrators do not shop: the two basket keys sit on the shopper roles only, and
-    // the canary on the list says which keys they are, so a third one is a visible decision.
-    it('holds the shopper-only keys on customer and unverified, and on no other role', () => {
-        const shopperOnly = PERMISSION_KEYS.filter((key) => key.shopperOnly).map((key) => key.key);
-        const holders = PRESET_ROLES.filter((role) =>
-            shopperOnly.some((key) => role.permissions.includes(key))
-        ).map((role) => role.name);
+    // Every account shops, staff included: a staff role lists none of the audience's keys, since
+    // the audience is unioned in. A key on both would say one thing twice and drift.
+    it('lists no audience key on a staff role', () => {
+        const audienceKeys = new Set(
+            AUDIENCE_NAMES.flatMap((name) => AUDIENCE_ROLES[name].permissions)
+        );
+        const doubled = PRESET_ROLES.flatMap((role) =>
+            role.permissions
+                .filter((key) => audienceKeys.has(key))
+                .map((key) => `${role.name}:${key}`)
+        );
 
-        expect(shopperOnly.toSorted()).toEqual(['cart.self.checkout', 'cart.self.update']);
-        expect(holders.toSorted()).toEqual(['customer', 'unverified']);
+        expect(doubled).toEqual([]);
     });
 
-    it('keeps admin unrestricted without the basket keys', () => {
+    it('keeps admin unrestricted whether or not its address is proven', () => {
         expect(callerAs('admin').unrestricted).toBe(true);
         expect(callerAs('manager').unrestricted).toBe(false);
+        expect(callerInScope({ ...asRole('admin'), verified: false }, 'tenant').unrestricted).toBe(
+            true
+        );
     });
 
     // The mirror case: admin is tenant-scoped only, so it must never pick up a platform key —
@@ -273,8 +289,6 @@ describe('permissionModelVersion', () => {
  */
 describe('role levels', () => {
     const EXPECTED: Record<string, string> = {
-        unverified: 'user',
-        customer: 'user',
         manager: 'staff',
         warehouse: 'staff',
         support: 'staff',
@@ -289,7 +303,6 @@ describe('role levels', () => {
         expect(Object.fromEntries(PRESET_ROLES.map((role) => [role.name, role.level]))).toEqual(
             EXPECTED
         );
-        expect(ANONYMOUS_ROLE.level).toBe('user');
     });
 
     it('reads a person with no membership, or a role nothing declares, as user', () => {
@@ -299,7 +312,7 @@ describe('role levels', () => {
     });
 
     it('counts a person holding two roles at the higher one', () => {
-        expect(levelOfRoles({ tenant: 'customer', platform: null })).toBe('user');
+        expect(levelOfRoles({ tenant: null, platform: null })).toBe('user');
         expect(levelOfRoles({ tenant: 'support', platform: null })).toBe('staff');
         expect(levelOfRoles({ tenant: 'support', platform: 'operator' })).toBe('admin');
         expect(levelOfRoles({ tenant: 'admin', platform: 'operator' })).toBe('admin');
@@ -323,5 +336,41 @@ describe('role levels', () => {
         expect(callerAs('moderator').level).toBe('staff');
         expect(callerAs('admin').level).toBe('admin');
         expect(callerAs('customer').level).toBe('user');
+    });
+});
+
+/*
+ * The audience is computed per request, never stored: the same staff role is a customer's keys plus
+ * its own, and `verifiedAt` alone moves an account between `unverified` and `customer`.
+ */
+describe('audience roles', () => {
+    it('names the audience from the session and its proven address, and nothing else', () => {
+        expect(audienceOf(undefined)).toBe('guest');
+        expect(audienceOf({ verified: false })).toBe('unverified');
+        expect(audienceOf({ verified: true })).toBe('customer');
+    });
+
+    it('tells an audience from a stored staff role', () => {
+        expect(AUDIENCE_NAMES.every((name) => isAudienceName(name))).toBe(true);
+        expect(PRESET_ROLES.some((role) => isAudienceName(role.name))).toBe(false);
+    });
+
+    it('lets only a proven address spend a basket', () => {
+        expect(callerAs('customer').permissions).toContain('cart.self.checkout');
+        expect(callerAs('unverified').permissions).not.toContain('cart.self.checkout');
+        expect(callerAs('unverified').permissions).toContain('cart.self.update');
+    });
+
+    it('gives a staff member the customer keys on top of the role’s own', () => {
+        const manager = callerAs('manager').permissions;
+
+        expect(manager).toEqual(expect.arrayContaining(AUDIENCE_ROLES.customer.permissions));
+        expect(manager).toContain('orders.any.read');
+    });
+
+    it('gives a platform caller no shop key from its audience', () => {
+        expect(keysInScope('operator', 'platform', 'customer')).toEqual([
+            'platform.observability.any.read'
+        ]);
     });
 });

@@ -377,7 +377,7 @@ describe('a user edited only through its role', () => {
             .patch(path)
             .set('Authorization', bearer)
             .set('If-Match', before)
-            .send({ role: 'customer' });
+            .send({ role: null });
 
         expect(first.status).toBe(200);
         expect(etagOf(first)).not.toBe(before);
@@ -393,7 +393,7 @@ describe('two admins changing only a role, both holding one tag', () => {
         const tag = etagOf(await api().get(path).set('Authorization', bearer));
 
         const responses = await Promise.all(
-            ['support', 'customer'].map((role) =>
+            ['support', 'manager'].map((role) =>
                 api().patch(path).set('Authorization', bearer).set('If-Match', tag).send({ role })
             )
         );

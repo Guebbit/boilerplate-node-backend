@@ -77,6 +77,12 @@ export interface AuthContext {
      */
     twoFactorArmed: boolean;
     /**
+     * Whether the account's address is proven (`User.verifiedAt` is set), read fresh on every
+     * request. It is what makes the account a `customer` rather than `unverified` — the audience
+     * role is computed from this, never stored (`audienceOf` in `kernel/permissions.ts`).
+     */
+    verified: boolean;
+    /**
      * The account's analytics consent choice, read fresh from the document on every request.
      * Absent until the account has answered once: only then may the visitor's banner header speak
      * for it. Carried through to `CallerContext` for `emitAnalyticsEvent`'s own gate.

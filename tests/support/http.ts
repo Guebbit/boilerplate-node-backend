@@ -66,7 +66,8 @@ export const authenticateAsRole = async (role: string): Promise<AuthenticatedTes
         {
             email: `${role}@example.com`,
             username: role,
-            verifiedAt: new Date()
+            // `unverified` is the one persona whose address is not proven.
+            verifiedAt: role === 'unverified' ? undefined : new Date()
         },
         role
     );

@@ -102,16 +102,16 @@ first place.
 **There is no wildcard of any kind.** No per-family `manage`, no scope-wide `all.manage`. Breadth
 on the key itself says "read everyone's, change nothing" directly: the support desk reads an order
 that was never its own with `orders.any.read`, and that key grants no delete. `admin` holds every
-declared tenant key **by name** (bar the two `shopperOnly` basket keys), spelled out in
-`shared/authorization-roles.yaml` like every other role, so a key a new route needs is a line added
-to that file — the conformance suite refuses a declared key the list omits. See the file's own
-header note for why.
+declared tenant key **by name** (bar the ones every signed-in account already gets from its
+[audience](#everyone-is-a-customer-first)), spelled out in `shared/authorization-roles.yaml` like
+every other role, so a key a new route needs is a line added to that file — the conformance suite
+refuses a declared key the list omits. See the file's own header note for why.
 
 **A family needs a concrete key for every action a route asks about.** Every action a route can
 gate on is its own declared key, so a read-only role can never satisfy a guard meant for a minter.
-One collapse remains, on purpose: `holdsKey` (`kernel/ability.ts`) answers `can(action, subject)`,
-so `orders.self.read` and `orders.any.read` are the same question to a guard. Use `heldKeys` to
-enumerate what a caller holds.
+`holdsKey` (`kernel/ability.ts`) asks for the literal key and nothing collapses: every signed-in
+account holds `orders.self.read`, so a guard that accepted it for `orders.any.read` would let every
+customer into the staff list. `heldKeys` enumerates what a caller holds.
 
 **Tenant keys are bare; platform keys are always prefixed.** That asymmetry is the whole safety
 property:
@@ -210,15 +210,38 @@ mails a setup link, and there is no admin reset of a second factor. Switching an
 its own key (`users.any.ban`), because a role that edits a customer's phone should not by that
 alone lock them out.
 
-**Staff do not shop.** `cart.self.update` and `cart.self.checkout` are held by shoppers only,
-and are flagged `shopperOnly` so that an administrator still counts as holding every _other_ key.
-An order a staff member could place would be one only an administrator may handle, so the demo
-shop's history has none.
+### Everyone is a customer first
 
-Every door into a basket asks the shopper key: the cart routes, a reorder, a wishlist's move into
-the cart (`cart.self.update`), and the three card steps, which ask it _before_ `cart.self.checkout`
-so a staff caller gets a plain `403 FORBIDDEN` rather than the checkout key's "confirm your email".
-An order's `actions.pay` is offered only to a caller who holds the checkout key.
+**Every signed-in account is a customer, staff included.** A request's _audience_ is computed, never
+stored or granted, and unioned with the one staff role the account may hold:
+
+| Audience     | When                                       | Holds                                              |
+| ------------ | ------------------------------------------ | -------------------------------------------------- |
+| `guest`      | no session                                 | the storefront: published products, the dictionary |
+| `unverified` | a session, the account has no `verifiedAt` | the above, plus its own orders, payments, basket   |
+| `customer`   | a session, the account has `verifiedAt`    | the above, plus `cart.self.checkout`               |
+
+```mermaid
+flowchart LR
+    accTitle: Effective keys are the audience's plus the staff role's
+    accDescr: The session and the account's verifiedAt pick one audience, a membership may add one staff role, and the caller holds the union. An API key gets only the guest keys and what it was minted with.
+    S["session + verifiedAt"] --> A["audience<br/>guest · unverified · customer"]
+    M["membership<br/>0 or 1 staff role"] --> R["staff role keys"]
+    A --> U["effective keys"]
+    R --> U
+    K["API key"] -. "guest keys only" .-> U
+```
+
+So a staff role lists only the `any` keys it adds, and the audience roles in
+`shared/authorization-roles.yaml` hold every `self` key of the shop. A key an account holds twice
+would say one thing in two places, so `tests/unit/kernel/permissions.test.ts` refuses a staff role
+that lists an audience key. Verifying an address is one write (`verifiedAt`), with nothing to
+promote; an operator who types an address in sets it the same way.
+
+Every door into a basket asks the key: the cart routes, a reorder and a wishlist's move into the
+cart ask `cart.self.update`; placing an order and the card steps ask `cart.self.checkout`, which
+answers an unproven address with `EMAIL_NOT_VERIFIED` ("confirm your email") instead of a bare
+permissions error. An order's `actions.pay` is offered only to a caller who holds the checkout key.
 
 ## Nobody handles their own money
 

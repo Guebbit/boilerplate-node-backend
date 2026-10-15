@@ -12,6 +12,7 @@
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { assignRole } from '@modules/access';
+import { isAudienceName } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { makeUser } from '../factories';
 import type { UserOverrides } from '../factories';
@@ -47,16 +48,19 @@ export const WEAK_PASSWORD = 'weak';
 /**
  * Insert a user into the test database and return the Mongoose document.
  *
- * @param role - grants a TENANT membership through `assignRole` once the document exists — the
- *   document holds no role of its own, only a membership does. Omit for a caller that
- *   genuinely wants no membership row at all (the "no role" case `keysInScope` floors to the
- *   anonymous baseline for).
+ * @param role - a STAFF role grants a TENANT membership through `assignRole` once the document
+ *   exists — the document holds no role of its own, only a membership does. `customer` and
+ *   `unverified` are audiences, never granted: they write no membership and differ only in
+ *   `verifiedAt` (`customer` gets one now unless `overrides` names it). Omit it for an account
+ *   with no staff role whose address is left as `overrides` has it.
  */
 export const createUser = (overrides: UserOverrides = {}, role?: string): Promise<UserDocument> =>
     userRepository
-        .create(makeUser(overrides))
+        .create(
+            makeUser(role === 'customer' ? { verifiedAt: new Date(), ...overrides } : overrides)
+        )
         .then((user) =>
-            role === undefined
+            role === undefined || isAudienceName(role)
                 ? user
                 : assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', role).then(() => user)
         );

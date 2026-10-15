@@ -195,15 +195,16 @@ describe('what an order offers each caller — what a client renders', () => {
         expect(actions.recordPayment).toBe(false);
     });
 
-    // `pay` is a shopper's step: a buyer who is staff or an administrator holds no checkout key.
+    // `pay` is every buyer's step: a staff member or an administrator is a customer too, so the
+    // checkout key comes with the audience.
     it.each(['moderator', 'admin'])(
-        'offers a buyer who is %s no payment step on their own pending order',
+        'offers a buyer who is %s the card payment on their own pending order',
         async (role) => {
             const order = await orderOf(role);
 
             const actions = await actionsFor(String(order._id), role, String(order.userId));
 
-            expect(actions.pay).toBe(false);
+            expect(actions.pay).toBe(true);
         }
     );
 

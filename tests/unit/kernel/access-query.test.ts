@@ -43,7 +43,14 @@ describe('accessibleFilter', () => {
     it('matches nothing for a caller with no rule for the subject', () => {
         // CASL's own `EMPTY_RESULT_QUERY`. Fails closed by construction — the point of compiling
         // the rules rather than assembling a fragment, where "no rule" produced no filter at all.
-        expect(accessibleFilter(asOperator(), 'Order')).toEqual({ $expr: { $eq: [0, 1] } });
+        expect(accessibleFilter(asOperator(), 'Shipment')).toEqual({ $expr: { $eq: [0, 1] } });
+    });
+
+    it('narrows the platform operator to their own orders: a customer like any other, never the shop’s', () => {
+        expect(accessibleFilter(asOperator('507f1f77bcf86cd799439011'), 'Order')).toEqual({
+            userId: new Types.ObjectId('507f1f77bcf86cd799439011'),
+            deletedAt: null
+        });
     });
 
     it('matches nothing for an anonymous caller reading somebody’s orders', () => {

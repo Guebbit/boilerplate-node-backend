@@ -46,8 +46,6 @@ import userImages from './users-images.generated.json';
 import { makeUser } from '@modules/users/factories';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { userRepository } from '@modules/users/repository';
-import { assignRole } from '@modules/access';
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
  * Deterministic id for seed customer `index` — never `new Types.ObjectId()`, whose default is
@@ -270,21 +268,13 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
 export const userFixtures = [...namedUsers, ...customerUsers];
 
 /**
- * Seed this collection, plus the ten filler customers' `customer` membership — the four named
- * accounts get theirs from `@scenarios/accounts`'s `seedAccessModel`, which `./index`'s `seedShop`
- * always runs first, but these ten are this file's own and nobody else assigns them a role. The
- * document write and the membership grant both go through `insertIfAbsent`/`assignRole`'s own
- * upserts, so re-running this against an already-seeded database changes nothing.
+ * Seed this collection. The filler customers hold no role at all — a customer is computed from
+ * `verifiedAt`, never granted — so only the documents are written, through `insertIfAbsent`'s
+ * own upsert: re-running this against an already-seeded database changes nothing.
  * Declared in `./index`'s `shopModules`; walked by `seedShop`.
  */
 export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
-    Promise.all(userFixtures.map((user) => insertIfAbsent(userRepository, user))).then((outcomes) =>
-        Promise.all(
-            customerUsers.map((user) =>
-                assignRole(String(user._id), DEPLOYMENT_TENANT_ID, 'tenant', 'customer')
-            )
-        ).then(() => outcomes)
-    );
+    Promise.all(userFixtures.map((user) => insertIfAbsent(userRepository, user)));
 
 /**
  * Seed only the four named accounts — `blank`'s contribution to `users`. Called by

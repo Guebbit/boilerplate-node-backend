@@ -33,7 +33,7 @@ jest.mock('@modules/access', () => {
     return {
         ...actual,
         __esModule: true,
-        rolesOf: jest.fn(() => Promise.resolve({ tenant: 'customer', platform: null }))
+        rolesOf: jest.fn(() => Promise.resolve({ tenant: null, platform: null }))
     };
 });
 
@@ -67,7 +67,7 @@ const { findAuthenticatableById } = asStub<{ findAuthenticatableById: jest.Mock 
 
 beforeEach(() => {
     jest.resetAllMocks();
-    jest.mocked(rolesOf).mockResolvedValue({ tenant: 'customer', platform: null });
+    jest.mocked(rolesOf).mockResolvedValue({ tenant: null, platform: null });
     findAuthenticatableById.mockResolvedValue({ id: USER_ID });
 });
 
@@ -183,7 +183,7 @@ describe('listSessions and the staff idle timeout', () => {
         jest.mocked(rolesOf).mockResolvedValue({ tenant: 'editor', platform: null });
         await expect(listSessions('jwt', USER_ID, undefined)).resolves.toEqual([]);
 
-        jest.mocked(rolesOf).mockResolvedValue({ tenant: 'customer', platform: null });
+        jest.mocked(rolesOf).mockResolvedValue({ tenant: null, platform: null });
         await expect(listSessions('jwt', USER_ID, undefined)).resolves.toHaveLength(1);
     });
 });

@@ -11,7 +11,8 @@
  */
 
 import {
-    ANONYMOUS_ROLE,
+    AUDIENCE_NAMES,
+    AUDIENCE_ROLES,
     assertDeclared,
     isUnrestrictedRole,
     PERMISSION_KEYS,
@@ -22,7 +23,13 @@ import {
 import { ERROR_CODES } from '@api/error-codes';
 
 const declared = new Set(PERMISSION_KEYS.map((key) => key.key));
-const roles: RoleLookup[] = [...PRESET_ROLES, ANONYMOUS_ROLE];
+const audiences: RoleLookup[] = AUDIENCE_NAMES.map((name) => ({
+    name,
+    scope: 'tenant',
+    permissions: AUDIENCE_ROLES[name].permissions,
+    level: 'user'
+}));
+const roles: RoleLookup[] = [...PRESET_ROLES, ...audiences];
 
 describe('the declared keys', () => {
     it('spell their scope the way the resolver reads it', () => {

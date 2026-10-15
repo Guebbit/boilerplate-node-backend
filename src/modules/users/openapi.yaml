@@ -504,8 +504,9 @@ components:
                     type: string
                     minLength: 3
                     maxLength: 50
+                # A staff role by name; `null` takes it away, leaving a plain customer.
                 role:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 64
                     minLength: 1
                 active:
@@ -573,8 +574,9 @@ components:
                     type: string
                     minLength: 3
                     maxLength: 50
+                # A staff role by name; `null` is a plain customer.
                 role:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 64
                     minLength: 1
                 active:

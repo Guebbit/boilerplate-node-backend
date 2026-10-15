@@ -123,13 +123,11 @@ describe('payment routes', () => {
             'idempotencyKey'
         ]);
         // And that shared prefix is not trivially empty — the fresh-session closure and the
-        // two shopper-key checks (basket, then checkout) are all in there, and the pooled
-        // intent/sync budget closes it.
+        // checkout-key check are all in there, and the pooled intent/sync budget closes it.
         expect(withoutHandler('POST /:id/sync')).toEqual([
             'getAuth',
             'isAuth',
             '(anonymous)',
-            'requirePermissionGuard',
             'requirePermissionGuard',
             INTENT_BUDGET
         ]);

@@ -36,7 +36,10 @@ const store = asStub<{
 }>(sessionRepository);
 
 /** The callers a proof can name. */
-const SHOPPER = { id: 'u1', roles: { tenant: 'customer', platform: null } };
+const SHOPPER: { id: string; roles: { tenant: string | null; platform: null } } = {
+    id: 'u1',
+    roles: { tenant: null, platform: null }
+};
 const STAFF = { id: 'u1', roles: { tenant: 'editor', platform: null } };
 
 /** How long ago, in seconds, a family last saw a request. */

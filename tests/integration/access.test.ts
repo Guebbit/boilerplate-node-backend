@@ -56,9 +56,10 @@ describe('the seeded model', () => {
             membershipIn(SEED_MODERATOR_ID, DEPLOYMENT_TENANT_ID, 'tenant')
         ]);
 
-        // Each of these two holds exactly one tenant role, unlike root's two jobs above — the
-        // whole point of adding them is a staff account that can be logged into on its own.
-        expect(customer?.role).toBe('customer');
+        // The shopper holds no role at all (a customer is computed from `verifiedAt`); each staff
+        // account holds exactly one tenant role, unlike root's two jobs above — the whole point of
+        // adding them is a staff account that can be logged into on its own.
+        expect(customer).toBeNull();
         expect(editor?.role).toBe('editor');
         expect(moderator?.role).toBe('moderator');
     });

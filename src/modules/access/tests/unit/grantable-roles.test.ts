@@ -21,13 +21,12 @@ const everyTenantRole = PRESET_ROLES.filter((role) => role.scope === 'tenant').m
 
 describe('grantableRoles', () => {
     // The rule is "hold every key the role holds", so a caller may always hand out their own role
-    // and any role whose keys they all hold. `unverified` is out of an administrator's reach: it
-    // holds `cart.self.update`, a shopper-only key that staff and administrators do not.
+    // and any role whose keys they all hold. `customer` and `unverified` are not roles at all: an
+    // audience is computed, so there is nothing to grant.
     it.each([
-        ['admin', everyTenantRole.filter((role) => role !== 'unverified')],
-        ['moderator', ['customer', 'moderator']],
-        ['support', ['support']],
-        ['customer', ['unverified', 'customer']]
+        ['admin', everyTenantRole],
+        ['moderator', ['moderator']],
+        ['support', ['support']]
     ])('gives a %s caller %j', (granterRole, expected) => {
         expect(grantableRoles('tenant', permissionsOfRole(granterRole))).toEqual(expected);
     });

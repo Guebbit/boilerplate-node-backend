@@ -24,7 +24,7 @@ router.use(getAuth, isAuth);
 router.get('/', getWishlist);
 
 // POST /wishlist/:productId/move-to-cart — must come before the bare /:productId routes.
-// `cart.self.update`: the move writes a basket, and staff and administrators do not shop.
+// `cart.self.update`: the move writes the caller's own basket.
 router.post('/:productId/move-to-cart', requirePermission('cart.self.update'), postMoveToCart);
 
 // PUT /wishlist/:productId — save a product. The URI is the whole statement; repeating it is a no-op.

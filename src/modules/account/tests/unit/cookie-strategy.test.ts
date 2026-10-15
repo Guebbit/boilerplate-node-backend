@@ -55,7 +55,7 @@ jest.mock('@modules/access', () => {
     return {
         ...actual,
         __esModule: true,
-        rolesOf: jest.fn(() => Promise.resolve({ tenant: 'customer', platform: null }))
+        rolesOf: jest.fn(() => Promise.resolve({ tenant: null, platform: null }))
     };
 });
 
@@ -73,7 +73,7 @@ import { RefreshTokenExpiryTime } from '@modules/account/session/config';
 const USER_ID = '507f1f77bcf86cd799439011';
 
 /** The caller its proof resolves to: a shopper, whom no idle timeout touches. */
-const SHOPPER = { id: USER_ID, roles: { tenant: 'customer', platform: null } };
+const SHOPPER = { id: USER_ID, roles: { tenant: null, platform: null } };
 
 /** A well-formed id nobody minted — shape only. */
 const SOME_ID = `ses_${'a'.repeat(43)}`;
@@ -122,7 +122,7 @@ const liveRow = (overrides: Record<string, unknown> = {}) => ({
 beforeEach(() => {
     // `reset`, not `clear`: each case sets its own resolutions, and a leftover one fails the next.
     jest.resetAllMocks();
-    jest.mocked(rolesOf).mockResolvedValue({ tenant: 'customer', platform: null });
+    jest.mocked(rolesOf).mockResolvedValue({ tenant: null, platform: null });
     setEnvironment({ NODE_SESSION_TIME_SHORT: '3600', NODE_SESSION_TIME_LONG: '2592000' });
     sessions.insert.mockResolvedValue(undefined);
     sessions.removeByHash.mockResolvedValue(1);

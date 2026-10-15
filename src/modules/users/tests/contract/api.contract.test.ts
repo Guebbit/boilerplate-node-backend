@@ -224,7 +224,7 @@ describe('PUT /users/{id}', () => {
             .set('Authorization', bearer)
             .send({
                 username: 'replacedfull',
-                role: 'customer',
+                role: null,
                 active: true
             });
 
@@ -245,7 +245,7 @@ describe('PUT /users/{id}', () => {
         const response = await api()
             .put(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
-            .send({ role: 'customer' });
+            .send({ role: null });
 
         expect(response.status).toBe(422);
     });
@@ -262,7 +262,7 @@ describe('PUT /users/{id}', () => {
             .set('Authorization', bearer)
             .send({
                 username: 'editednocredential',
-                role: 'customer',
+                role: null,
                 active: true
             });
 
@@ -286,7 +286,7 @@ describe('PUT /users/{id}', () => {
         const response = await api()
             .put(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
-            .send({ username: 'putcredential', role: 'customer', active: true, ...extra });
+            .send({ username: 'putcredential', role: null, active: true, ...extra });
 
         expect(response.status).toBe(422);
         const after = await userRepository.findByIdWithCredentials(String(target._id));

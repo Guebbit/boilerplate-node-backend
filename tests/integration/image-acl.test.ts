@@ -86,7 +86,7 @@ const doors: Door[] = [
         method: 'put',
         route: ({ userId }) => `/users/${userId}`,
         as: 'admin',
-        body: { email: 'put@example.com', username: 'putuser', role: 'customer', active: true }
+        body: { email: 'put@example.com', username: 'putuser', role: 'editor', active: true }
     }
 ];
 

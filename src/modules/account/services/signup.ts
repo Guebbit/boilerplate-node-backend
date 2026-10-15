@@ -6,7 +6,6 @@
 
 import { z } from 'zod';
 import { getCurrentLocale, t } from '@infrastructure/i18n';
-import { withTransaction } from '@infrastructure/runtime/database';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import {
@@ -27,8 +26,6 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import { analyticsAnswer, termsAcceptance } from '../consent-record';
-import { assignDefaultRole } from '@modules/access';
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
  * Everything `POST /account/signup` collects. One object rather than a positional list because
@@ -105,40 +102,23 @@ const createAccountIfEmailFree = (
         .emailTaken(input.email)
         .then<ResponseSuccess<UserDocument> | ResponseReject>((taken) => {
             if (taken) return generateReject(409, [t('account.signup.email-already-used')]);
-            // The account and its starting role commit together or not at all, so a refused or
-            // failed grant leaves no row to hold the email hostage — and no compensating delete
-            // that could itself fail. `assignDefaultRole` never accepts a name, which is what
-            // makes self-service signup structurally unable to grant anything but `unverified`.
-            // https://www.mongodb.com/docs/manual/core/transactions/
-            return withTransaction((session) =>
-                userService
-                    .registerSelfService(
-                        {
-                            username: input.username,
-                            email: input.email,
-                            password: input.password,
-                            ...analyticsAnswer(input.analyticsConsent),
-                            ...termsAcceptance(),
-                            // The language they signed up in, kept for work that happens later without a
-                            // request to read `Accept-Language` from — a queued email, a nightly job.
-                            // Editable afterwards from the user endpoints.
-                            locale: getCurrentLocale()
-                        },
-                        session
-                    )
-                    .then((createdUser) =>
-                        assignDefaultRole(
-                            String(createdUser._id),
-                            DEPLOYMENT_TENANT_ID,
-                            'tenant',
-                            session
-                        ).then(() => createdUser)
-                    )
-            ).then((createdUser) =>
-                userService
-                    .enqueueIfPending(createdUser)
-                    .then((user) => generateSuccess<UserDocument>(user))
-            );
+            return userService
+                .registerSelfService({
+                    username: input.username,
+                    email: input.email,
+                    password: input.password,
+                    ...analyticsAnswer(input.analyticsConsent),
+                    ...termsAcceptance(),
+                    // The language they signed up in, kept for work that happens later without a
+                    // request to read `Accept-Language` from — a queued email, a nightly job.
+                    // Editable afterwards from the user endpoints.
+                    locale: getCurrentLocale()
+                })
+                .then((createdUser) =>
+                    userService
+                        .enqueueIfPending(createdUser)
+                        .then((user) => generateSuccess<UserDocument>(user))
+                );
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 

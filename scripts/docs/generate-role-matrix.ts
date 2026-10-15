@@ -9,9 +9,9 @@
  * and a generated copy of its key lists said less than the descriptions it ignored.
  *
  * What it answers cannot be written by hand, which is why this survives: `admin` alone holds most
- * of the declared tenant keys, spelled out by name, and every tenant caller is floored at the
- * anonymous baseline (see `keysInScope` in `kernel/permissions.ts`). That is many cells nobody can
- * derive reliably by eye.
+ * of the declared tenant keys, spelled out by name, and every signed-in caller is a customer first
+ * (see `keysInScope` in `kernel/permissions.ts`). That is many cells nobody can derive reliably by
+ * eye.
  *
  * Asked through `heldKeys` rather than by re-expanding the keys here: a second expander is a
  * second answer to "what may this role do", and the one in the docs would be the one nobody runs.
@@ -22,12 +22,13 @@
 
 import path from 'node:path';
 import {
-    ANONYMOUS_ROLE,
+    AUDIENCE_NAMES,
     PERMISSION_KEYS,
     PRESET_ROLES,
-    permissionsOfRole,
-    isUnrestricted,
-    levelOfRole
+    assembleCaller,
+    keysInScope,
+    levelOfRole,
+    type AudienceName
 } from '@kernel/permissions';
 import { heldKeys } from '@kernel/ability';
 import { applyMarkerBlocks } from './marker-block';
@@ -43,48 +44,62 @@ const PAGE = path.join(ROOT, 'docs/demo-ecommerce/index.md');
 const START = '<!-- role-matrix:start -->';
 const END = '<!-- role-matrix:end -->';
 
+/** One row of the table: a stored staff role (or none) and the audience the request is in. */
+interface Persona {
+    name: string;
+    scope: AuthorizationScope;
+    role: string | null;
+    audience: AudienceName;
+}
+
 /**
- * `guest` first, then the presets in the order the file declares them.
+ * The audience roles first, then the staff presets in the order the file declares them, each as a
+ * verified account — a staff member is a customer too.
  *
- * `guest` is included though nobody logs in as it: it is the baseline every other row is now
- * measured against, and a reader comparing a role to "logged out" needs the comparison in the
- * same table.
+ * `guest` and `unverified` are included though nobody holds them as a role: they are the baseline
+ * every other row is measured against, and a reader comparing a role to "logged out" needs the
+ * comparison in the same table. `system` is excluded: it is `admin`'s own permission list under an
+ * alias (see `authorization-roles.yaml`), so its row would repeat `admin`'s exactly, and this page
+ * documents roles an OPERATOR assigns — `system` is never one of them.
  */
-// `system` is excluded: it is `admin`'s own permission list under an alias (see
-// `authorization-roles.yaml`), so its row would repeat `admin`'s exactly, and this page documents
-// roles an OPERATOR assigns — `system` is never one of them.
-const roles = [ANONYMOUS_ROLE, ...PRESET_ROLES.filter((role) => role.name !== 'system')];
+const personas: Persona[] = [
+    ...AUDIENCE_NAMES.map(
+        (name): Persona => ({ name, scope: 'tenant', role: null, audience: name })
+    ),
+    ...PRESET_ROLES.filter((role) => role.name !== 'system').map(
+        (role): Persona => ({
+            name: role.name,
+            scope: role.scope,
+            role: role.name,
+            audience: 'customer'
+        })
+    )
+];
 
 /** Every module that declares a key, in declaration order — the table's columns. */
 const modules = [...new Set(PERMISSION_KEYS.map((key) => key.module))];
 
 /**
- * The caller a role resolves to, as the evaluator sees it.
+ * The caller a persona resolves to, as the evaluator sees it.
  *
  * Built here rather than through `callerInScope`, which needs an `AuthContext` this script has no
  * request to build one from. The two agree on the part that matters — `permissions` — because both
- * read `permissionsOfRole`; the baseline union is applied below for the same reason the kernel
- * applies it.
+ * read `keysInScope`.
  *
- * @param name - the role name
- * @param scope - the scope that role belongs to
+ * @param persona - the row to resolve
  */
-const callerFor = (name: string, scope: AuthorizationScope): Caller => {
-    const id = name === ANONYMOUS_ROLE.name ? null : 'generated';
-    const permissions =
-        scope === ANONYMOUS_ROLE.scope
-            ? [...new Set([...permissionsOfRole(name), ...ANONYMOUS_ROLE.permissions])]
-            : permissionsOfRole(name);
-
-    const unrestricted = isUnrestricted({ scope, permissions });
+const callerFor = (persona: Persona): Caller => {
+    const permissions = keysInScope(persona.role, persona.scope, persona.audience);
 
     // Never `system` — this generates the DOCUMENTED role matrix, and `system` is not a role a
     // deployment assigns or a reader looks up by name.
-    const level = levelOfRole(name);
-
-    return scope === 'platform'
-        ? { id, tenantId: null, scope, permissions, unrestricted, system: false, level }
-        : { id, tenantId: 'generated', scope, permissions, unrestricted, system: false, level };
+    return assembleCaller(
+        persona.audience === 'guest' ? null : 'generated',
+        persona.scope === 'platform' ? null : 'generated',
+        persona.scope,
+        permissions,
+        levelOfRole(persona.role)
+    );
 };
 
 /** One-letter action codes, so a ten-column table still fits a page. */
@@ -132,10 +147,10 @@ const effectiveTable = (): string =>
     [
         `| Role | ${modules.join(' | ')} |`,
         `| --- |${' --- |'.repeat(modules.length)}`,
-        ...roles.map((role) => {
-            const caller = callerFor(role.name, role.scope);
+        ...personas.map((persona) => {
+            const caller = callerFor(persona);
 
-            return `| \`${role.name}\` | ${modules
+            return `| \`${persona.name}\` | ${modules
                 .map((module) => cell(caller, module))
                 .join(' | ')} |`;
         })
@@ -144,8 +159,8 @@ const effectiveTable = (): string =>
 /** The table and its legend, as the block that replaces whatever sits between the markers. */
 const body = (): string =>
     [
-        'The roles above after the evaluator has had them, the `guest` baseline folded in. This is',
-        'what a route guard and a listing actually answer.',
+        'The roles above after the evaluator has had them, the `customer` audience folded into every',
+        'signed-in row. This is what a route guard and a listing actually answer.',
         '',
         effectiveTable(),
         '',

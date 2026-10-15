@@ -268,7 +268,7 @@ describe('nobody changes their own role', () => {
 
         const result = await userService.updateById(
             self.id,
-            { role: 'customer' },
+            { role: null },
             callerContextAs(role, self.id)
         );
 

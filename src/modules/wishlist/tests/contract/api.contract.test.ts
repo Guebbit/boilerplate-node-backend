@@ -116,10 +116,10 @@ describe('DELETE /wishlist/{productId}', () => {
         expect(response.body.data.items).toHaveLength(0);
     });
 
-    // The move writes a basket, and only shoppers hold one: staff and administrators may still keep
-    // a wishlist, but cannot fill a basket through it.
+    // The move writes a basket, and every signed-in account holds one: a staff member keeps a
+    // wishlist and fills a basket through it like any customer.
     it.each(['manager', 'moderator', 'admin'])(
-        'refuses a %s, who does not shop, with a 403 and leaves the line saved',
+        'moves a saved line into the basket of a %s',
         async (role) => {
             const { bearer } = await authenticateAsRole(role);
             const product = await createProduct();
@@ -132,9 +132,8 @@ describe('DELETE /wishlist/{productId}', () => {
                 .set('Authorization', bearer);
             const wishlist = await api().get('/wishlist').set('Authorization', bearer);
 
-            expect(response.status).toBe(403);
-            expect(response.body.errors[0].code).toBe('FORBIDDEN');
-            expect(wishlist.body.data.items).toHaveLength(1);
+            expect(response.status).toBe(200);
+            expect(wishlist.body.data.items).toHaveLength(0);
         }
     );
 
