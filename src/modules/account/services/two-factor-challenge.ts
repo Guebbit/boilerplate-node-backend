@@ -20,9 +20,8 @@ import type { MfaChallenge, TwoFactorDelivery } from '@types';
 import { accountAuditActions } from '../audit';
 import { issueToken, findLiveTokenEntry, findLiveToken, spendLiveToken } from './tokens';
 import { MFA_CHALLENGE_TOKEN_TYPE } from '../token-types';
-import { deliveryCooldownRemaining } from '../two-factor';
-import { audited, summarize, tooSoon } from './two-factor-outcomes';
-import { armedEntries, verifyArmedFactor, settleVerdict } from './two-factor-lockout';
+import { armedEntries, audited, deliverArmedCode, summarize } from './two-factor-outcomes';
+import { verifyArmedFactor, settleVerdict } from './two-factor-lockout';
 
 /** How long an MFA login challenge lives when every armed factor is read off a device — long enough to type six digits, no more. */
 const MFA_CHALLENGE_TTL_MS = 300_000;
@@ -90,21 +89,7 @@ export const sendLoginCode = (
         .then<ResponseSuccess<TwoFactorDelivery> | ResponseReject>((user) => {
             if (!user) return generateReject(401, [t('account.two-factor.challenge-invalid')]);
 
-            const armed = armedEntries(user).find(({ handler }) => handler.name === method);
-            // An unarmed method and an unknown one answer alike: a caller holding only a
-            // challenge must not be able to enumerate what an account has enrolled
-            // beyond what the challenge itself already told them.
-            if (!armed?.handler.send)
-                return generateReject(422, [t('account.two-factor.not-delivered')]);
-
-            const wait = deliveryCooldownRemaining(armed.entry);
-            if (wait > 0) return tooSoon(wait);
-
-            return armed.handler
-                .send(user, armed.entry, context)
-                .then((delivery) =>
-                    userService.persistTwoFactorMethods(user).then(() => generateSuccess(delivery))
-                );
+            return deliverArmedCode(user, method, context);
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 

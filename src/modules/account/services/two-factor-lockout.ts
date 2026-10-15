@@ -19,15 +19,10 @@ import {
     MFA_LOCK_MS,
     MFA_MAX_FAILURES,
     hashBackupCode,
-    orderedEntries,
     type TwoFactorMethodHandler
 } from '../two-factor';
-import { rejectWrongCode, rejectLocked, notifyLocked } from './two-factor-outcomes';
+import { armedEntries, rejectWrongCode, rejectLocked, notifyLocked } from './two-factor-outcomes';
 import { withOwnAccount } from './caller';
-
-/** The account's armed factors, in the registry's own order rather than enrollment order. */
-export const armedEntries = (user: UserDocument) =>
-    orderedEntries(user.twoFactorMethods).filter(({ entry }) => entry.enrolledAt);
 
 /**
  * Spend a backup code, if the digits are one. Backup codes recover the ACCOUNT, so they are

@@ -9,13 +9,14 @@ import { logger } from '@infrastructure/adapters/logger';
 import { userService, type UserDocument } from '@modules/users';
 import {
     generateReject,
+    generateSuccess,
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
 import { isLostRace } from '@infrastructure/persistence/versioning';
 import type { CallerContext } from '@types';
 import { recordAudit, type AuditAction } from '@infrastructure/observability/audit';
-import type { TwoFactorMethodSummary } from '@types';
+import type { TwoFactorDelivery, TwoFactorMethodSummary } from '@types';
 import {
     twoFactorChangedEmail,
     twoFactorLockedEmail,
@@ -29,6 +30,8 @@ import { ERROR_CODES } from '@api/error-codes';
 import {
     DELIVERED_CODE_RESEND_SECONDS,
     MFA_LOCK_MS,
+    deliveryCooldownRemaining,
+    orderedEntries,
     type TwoFactorMethodHandler
 } from '../two-factor';
 
@@ -156,3 +159,39 @@ export const summarize = (
 /** This flow's code and copy bound onto the shared builder, so both call sites stay one argument. */
 export const tooSoon = (seconds: number): ResponseReject =>
     resendTooSoon(RESEND_TOO_SOON_CODE, t('account.two-factor.resend-too-soon'), seconds);
+
+/** The account's armed factors, in the registry's own order rather than enrollment order. */
+export const armedEntries = (user: UserDocument) =>
+    orderedEntries(user.twoFactorMethods).filter(({ entry }) => entry.enrolledAt);
+
+/**
+ * Deliver a code for one ARMED, delivered method of `user` — the send both the login challenge's
+ * and a signed-in caller's endpoint make, so their refusals and their cooldown cannot drift. The
+ * caller finds the account (and answers its own 401); this does the rest.
+ *
+ * An unarmed method and an unknown one answer alike (422): a caller holding only a challenge must
+ * not be able to enumerate what an account has enrolled. The cooldown is enforced here, not only
+ * by the route's limiter, since these doors send mail on a caller's say-so.
+ *
+ * @param user - the account, loaded with its factors
+ * @param method - the wire name of the method to deliver through
+ * @param context - the caller; the mail needs its locale
+ */
+export const deliverArmedCode = (
+    user: UserDocument,
+    method: string,
+    context: CallerContext
+): Promise<ResponseSuccess<TwoFactorDelivery> | ResponseReject> => {
+    const armed = armedEntries(user).find(({ handler }) => handler.name === method);
+    if (!armed?.handler.send)
+        return Promise.resolve(generateReject(422, [t('account.two-factor.not-delivered')]));
+
+    const wait = deliveryCooldownRemaining(armed.entry);
+    if (wait > 0) return Promise.resolve(tooSoon(wait));
+
+    return armed.handler
+        .send(user, armed.entry, context)
+        .then((delivery) =>
+            userService.persistTwoFactorMethods(user).then(() => generateSuccess(delivery))
+        );
+};

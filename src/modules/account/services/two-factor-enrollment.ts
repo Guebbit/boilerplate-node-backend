@@ -34,13 +34,16 @@ import {
     twoFactorMethod,
     type TwoFactorMethodHandler
 } from '../two-factor';
-import { audited, notifyChange, rejectWrongCode, summarize, tooSoon } from './two-factor-outcomes';
 import {
     armedEntries,
-    verifyArmedFactor,
-    settleVerdict,
-    withVerifiedCode
-} from './two-factor-lockout';
+    audited,
+    deliverArmedCode,
+    notifyChange,
+    tooSoon,
+    rejectWrongCode,
+    summarize
+} from './two-factor-outcomes';
+import { verifyArmedFactor, settleVerdict, withVerifiedCode } from './two-factor-lockout';
 import { withOwnAccount } from './caller';
 
 /** This account's entry for one method, created empty if it has never had one. */
@@ -168,18 +171,7 @@ export const sendMethodCode = (
         return Promise.resolve(generateReject(404, [t('account.two-factor.unknown-method')]));
 
     const outcome = withOwnAccount(userId, (user) => {
-        const armed = armedEntries(user).find(({ handler }) => handler.name === method);
-        if (!armed?.handler.send)
-            return generateReject(422, [t('account.two-factor.not-delivered')]);
-
-        const wait = deliveryCooldownRemaining(armed.entry);
-        if (wait > 0) return tooSoon(wait);
-
-        return armed.handler
-            .send(user, armed.entry, context)
-            .then((delivery) =>
-                userService.persistTwoFactorMethods(user).then(() => generateSuccess(delivery))
-            );
+        return deliverArmedCode(user, method, context);
     }).catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     return audited(outcome, context, accountAuditActions.AUTH_2FA_CODE_SENT, method);
