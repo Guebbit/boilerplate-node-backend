@@ -13,6 +13,7 @@
  * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
  */
 
+import type { Response } from 'express';
 import type { AuthContext, Caller, Resolution } from '@types';
 
 export type { Resolution, ResolveMissReason } from '@types';
@@ -45,6 +46,11 @@ export interface AuthResolver {
      * send a header. Answered per call: it follows the deployment's session mode.
      */
     cookieAuthenticates: () => boolean;
+    /**
+     * Clear a session cookie the resolver refused, so the browser stops sending a credential that
+     * can never work again. The flags a clear must match live with the module that set the cookie.
+     */
+    clearDeadCookie: (response: Response) => void;
 }
 
 /** The currently registered resolver, or `undefined` before `account` boots and installs one. */
@@ -126,6 +132,11 @@ export const watchCookie = (token: string): Promise<Resolution<StreamWatch>> =>
 /** Resolve the session cookie's value. */
 export const resolveCookie = (token: string): Promise<Resolution<AuthContext | undefined>> =>
     Promise.resolve().then(() => requireResolver().fromCookie(token));
+
+/** Clear a session cookie the resolver refused; a build with no `account` has none to clear. */
+export const clearDeadSessionCookie = (response: Response): void => {
+    resolver?.clearDeadCookie(response);
+};
 
 /**
  * Whether the session cookie authenticates ordinary routes. `false` when no resolver is

@@ -21,6 +21,7 @@ import {
     resolveBearer,
     resolveCookie,
     watchCookie,
+    clearDeadSessionCookie,
     resolveCredential,
     cookieAuthenticatesRequests,
     API_KEY_TOKEN_PREFIX,
@@ -183,16 +184,21 @@ const applySession = (
  * @param next - called once, with the error only for an infrastructure failure
  * @param resolution - the resolver's promise for the presented credential
  * @param via - which credential carried it
+ * @param onMiss - runs when the credential was refused, after the miss is counted
  */
 const continueWithSession = (
     request: Request,
     next: NextFunction,
     resolution: ReturnType<typeof resolveBearer>,
-    via: 'bearer' | 'cookie'
+    via: 'bearer' | 'cookie',
+    onMiss?: () => void
 ): void => {
     resolution
         .then((resolved) => {
-            if ('miss' in resolved) noteMiss(request, 'session', resolved.miss);
+            if ('miss' in resolved) {
+                noteMiss(request, 'session', resolved.miss);
+                onMiss?.();
+            }
             const user = 'ok' in resolved ? resolved.ok : undefined;
             if (user) applySession(request, user, via);
             next();
@@ -223,7 +229,11 @@ const continueWithCookie = (request: Request, response: Response, next: NextFunc
     }
 
     const resolveFromCookie = (): void => {
-        continueWithSession(request, next, resolveCookie(cookieToken), 'cookie');
+        // A cookie the resolver refuses can never work again (another mode's, revoked from
+        // another device, expired): clearing it saves the lookup on every request after this one.
+        continueWithSession(request, next, resolveCookie(cookieToken), 'cookie', () => {
+            clearDeadSessionCookie(response);
+        });
     };
 
     if (SAFE_METHODS.has(request.method)) resolveFromCookie();

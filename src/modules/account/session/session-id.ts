@@ -21,3 +21,11 @@ export const newSessionId = (): string =>
  */
 export const looksLikeSessionId = (token: string): boolean =>
     token.startsWith(SESSION_TOKEN_PREFIX);
+
+/**
+ * Whether a presented credential is shaped like a JWT: three base64url segments, the first the
+ * `eyJ` of an encoded `{"`. Only the shape — whether it verifies is `jwt` mode's question.
+ *
+ * @param token - the Bearer or cookie value
+ */
+export const looksLikeJwt = (token: string): boolean => /^eyJ[\w-]*\.[\w-]+\.[\w-]*$/.test(token);

@@ -30,7 +30,7 @@ import { RefreshTokenExpiryTime, getExpiryTimeMilliseconds } from './config';
 import { describeDevice } from './device-label';
 import { listSessions } from './listing';
 import { assertProofCurrent, assertSecondFactor } from './mint-guard';
-import { looksLikeSessionId, newSessionId } from './session-id';
+import { looksLikeJwt, looksLikeSessionId, newSessionId } from './session-id';
 import type {
     IssuedSession,
     IssueOptions,
@@ -195,7 +195,9 @@ const stampDue = (row: Pick<SessionRow, 'lastUsedAt'>): boolean =>
  * @returns a miss for an unknown, other-mode or expired id; the row otherwise
  */
 const findLiveRow = (id: string): Promise<Resolution<SessionRow>> => {
-    if (!looksLikeSessionId(id)) return Promise.resolve({ miss: 'malformed' });
+    if (!looksLikeSessionId(id))
+        // A JWT is the other mode's credential, left in the browser by a switch: stale, not forged.
+        return Promise.resolve({ miss: looksLikeJwt(id) ? 'revoked' : 'malformed' });
 
     return sessionRepository.findByHash(hashToken(id)).then((row): Resolution<SessionRow> => {
         if (row?.mode !== 'cookie') return { miss: 'revoked' };

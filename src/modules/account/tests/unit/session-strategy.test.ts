@@ -50,10 +50,11 @@ describe('accountAuthResolver', () => {
     it('turns a cookie-mode bearer that is not a session id away without a lookup', async () => {
         setEnvironment({ NODE_SESSION_MODE: 'cookie' });
 
-        const jwtShaped = 'eyJhbGciOiJIUzI1NiJ9.e30.x';
+        const jwtShaped = 'eyJhbGciOiJIUzI1NiJ9.e30.eA';
 
+        // A JWT is stale, not forged: the other mode's credential, left by a switch.
         await expect(accountAuthResolver.fromBearer(jwtShaped)).resolves.toEqual({
-            miss: 'malformed'
+            miss: 'revoked'
         });
         await expect(accountAuthResolver.fromCookie('not-a-session')).resolves.toEqual({
             miss: 'malformed'

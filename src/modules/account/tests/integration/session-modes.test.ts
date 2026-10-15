@@ -681,6 +681,19 @@ describe('cookie mode only', () => {
         expect(await statusOfBearer(third)).toBe(200);
     });
 
+    it('clears a refused cookie, so a browser left on the other mode stops sending it', async () => {
+        await createUser({ email: 'switched@example.com', verifiedAt: new Date() });
+        setEnvironment({ NODE_SESSION_MODE: 'jwt' });
+        const asJwt = await signIn('switched@example.com', 'jwt');
+        setEnvironment({ NODE_SESSION_MODE: 'cookie' });
+
+        const response = await api().get('/account').set('Cookie', asJwt.cookie);
+
+        expect(response.status).toBe(401);
+        expect(clears(setCookie(response, '__Host-session'))).toBe(true);
+        expect(clears(setCookie(response, 'isAuth'))).toBe(true);
+    });
+
     it('names the device from the User-Agent at sign-in, and keeps it through a re-proof', async () => {
         const user = await createUser({ email: 'device@example.com', verifiedAt: new Date() });
         const login = await logIn(user.email).set(

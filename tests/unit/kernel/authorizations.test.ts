@@ -84,6 +84,8 @@ const fromAccessToken = jest.fn<Promise<unknown>, [string]>();
 const fromRefreshToken = jest.fn<Promise<unknown>, [string]>();
 /** What a stream's family recheck answers, standing in for the strategy's live-family check. */
 const recheckFamily = jest.fn<Promise<unknown>, []>();
+/** What the resolver is told to do with a cookie it refused. */
+const clearDeadCookie = jest.fn();
 /** Whether the session cookie authenticates ordinary routes — `cookie` mode's switch. */
 let cookieAuthenticates = false;
 registerAuthResolver({
@@ -100,7 +102,8 @@ registerAuthResolver({
                       }
                   } as never)
         ),
-    cookieAuthenticates: () => cookieAuthenticates
+    cookieAuthenticates: () => cookieAuthenticates,
+    clearDeadCookie
 });
 
 /** Fakes `@modules/api-keys`' own resolver, for `getAuth`'s `sk_...` branch. */
@@ -541,14 +544,37 @@ describe('getAuth in cookie mode', () => {
         expect(request.sessionVia).toBe('bearer');
     });
 
-    it('goes anonymous for a refused cookie', async () => {
+    it('goes anonymous for a refused cookie, and clears it so it is never sent again', async () => {
         fromRefreshToken.mockResolvedValue({ miss: 'revoked' });
+        clearDeadCookie.mockClear();
 
         const request = makeCookieModeRequest();
-        await runUntilNext(getAuth, request, makeResponseStub());
+        const response = makeResponseStub();
+        await runUntilNext(getAuth, request, response);
 
         expect(request.authContext).toBeUndefined();
         expect(request.sessionVia).toBeUndefined();
+        expect(clearDeadCookie).toHaveBeenCalledWith(response);
+    });
+
+    it('leaves a cookie alone when it resolved, even to nobody', async () => {
+        clearDeadCookie.mockClear();
+
+        fromRefreshToken.mockResolvedValue({ ok: asCustomer('user-1') });
+        await runUntilNext(getAuth, makeCookieModeRequest(), makeResponseStub());
+        fromRefreshToken.mockResolvedValue({ ok: undefined });
+        await runUntilNext(getAuth, makeCookieModeRequest(), makeResponseStub());
+
+        expect(clearDeadCookie).not.toHaveBeenCalled();
+    });
+
+    it('does not clear a cookie when the resolver is down: nothing says it is dead', async () => {
+        clearDeadCookie.mockClear();
+        fromRefreshToken.mockRejectedValue(new Error('mongo is down'));
+
+        await runUntilNext(getAuth, makeCookieModeRequest(), makeResponseStub());
+
+        expect(clearDeadCookie).not.toHaveBeenCalled();
     });
 
     it('lets isAuth accept a cookie-authenticated session', async () => {

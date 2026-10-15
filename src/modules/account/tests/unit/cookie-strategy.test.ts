@@ -145,7 +145,14 @@ describe.each([
     ['resolveCookie', cookieStrategy.resolveCookie]
 ])('%s', (_name, resolve) => {
     it('refuses anything not shaped like a session id without a lookup', async () => {
-        await expect(resolve('eyJhbGciOiJIUzI1NiJ9.e30.x')).resolves.toEqual({ miss: 'malformed' });
+        await expect(resolve('not-a-session')).resolves.toEqual({ miss: 'malformed' });
+        expect(sessions.findByHash).not.toHaveBeenCalled();
+    });
+
+    it('reads a JWT as revoked, not forged: it is the other mode’s credential, left by a switch', async () => {
+        const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl';
+
+        await expect(resolve(jwt)).resolves.toEqual({ miss: 'revoked' });
         expect(sessions.findByHash).not.toHaveBeenCalled();
     });
 

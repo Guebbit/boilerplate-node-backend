@@ -31,6 +31,7 @@ import { createSessionCookie, createLoggedCookie } from './cookies';
 import { getCookieMaxAgeMilliseconds, type RefreshTokenExpiryTime } from './config';
 import { resolveProof } from './auth-context';
 import { listSessions } from './listing';
+import { looksLikeSessionId } from './session-id';
 import type { IssuedSession, SessionRequest, SessionSnapshot, SessionStrategy } from './strategy';
 
 /**
@@ -225,6 +226,15 @@ const watchRefreshCookie = (token: string): Promise<Resolution<StreamWatch>> =>
         }
     );
 
+/**
+ * A `ses_…` id is the other mode's credential, left in the browser by a switch: stale, not forged,
+ * so it is `revoked` (a stale-credential count) rather than a signature failure (a security event).
+ */
+const unlessOtherMode =
+    <T>(resolve: (token: string) => Promise<Resolution<T>>) =>
+    (token: string): Promise<Resolution<T>> =>
+        looksLikeSessionId(token) ? Promise.resolve({ miss: 'revoked' }) : resolve(token);
+
 /** The `jwt` adapter. */
 export const jwtStrategy: SessionStrategy = {
     mode: 'jwt',
@@ -286,9 +296,9 @@ export const jwtStrategy: SessionStrategy = {
                 return {};
             }),
 
-    resolveBearer,
-    resolveCookie: resolveWith(verifyRefreshToken),
-    watchCookie: watchRefreshCookie,
+    resolveBearer: unlessOtherMode(resolveBearer),
+    resolveCookie: unlessOtherMode(resolveWith(verifyRefreshToken)),
+    watchCookie: unlessOtherMode(watchRefreshCookie),
 
     credentialOf: readSessionCookie,
 

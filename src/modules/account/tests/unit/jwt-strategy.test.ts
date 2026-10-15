@@ -331,6 +331,20 @@ describe('resolveBearer and the session it names', () => {
     });
 });
 
+describe('a `ses_` id, which is the other mode’s credential', () => {
+    it.each(['resolveBearer', 'resolveCookie', 'watchCookie'] as const)(
+        '%s reads it as revoked, not forged, and verifies nothing',
+        async (method) => {
+            await expect(jwtStrategy[method](`ses_${'a'.repeat(43)}`)).resolves.toEqual({
+                miss: 'revoked'
+            });
+            expect(tokens.verifyAccessToken).not.toHaveBeenCalled();
+            expect(tokens.verifyRefreshToken).not.toHaveBeenCalled();
+            expect(tokens.verifyRefreshWithRow).not.toHaveBeenCalled();
+        }
+    );
+});
+
 describe('watchCookie, the recheck of an open stream', () => {
     const claims = { sub: USER_ID, auth_time: 1_700_000_000, amr: ['pwd'] };
 
