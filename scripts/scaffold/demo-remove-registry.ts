@@ -14,6 +14,7 @@
 
 import { readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { entryKey, importKey, memberKey } from './registry';
 
 /** A line this script deleted, and why — printed in `demo-remove.ts`'s final report. */
 export interface RemovalNote {
@@ -29,32 +30,23 @@ export const removeModuleFolders = (repoRoot: string, names: readonly string[]):
     });
 
 /**
- * Drop every line in `content` that is either an import of `./modules/<name>/module` for one of
- * `names`, or a bare-identifier entry naming one of `names` inside a literal (an `enabledModules`
- * array element or a `ModuleName` union member) — every shop
- * module name is a single word, so its array/union/map spelling is always the bare name itself,
- * never a camelCase alias.
+ * Drop every line of `src/modules.ts` that registers one of `names`: its import, its array entry
+ * and its `ModuleName` union member. The line matchers are the scaffolder's own
+ * (`./registry`), so the file's shape is described once, by the tool that writes it.
  * @param content - the file's current text
  * @param names - module names to strip
- * @param importPattern - how this file spells the module's own import specifier, `name` filled in
  */
-const stripModuleLines = (
-    content: string,
-    names: readonly string[],
-    importPattern: (name: string) => RegExp
-): string => {
-    // A union member (`    | 'cart';`), an array element (`    cart,`) and a map entry
-    // (`    cart: cartRouter,`) all reduce to the same shape once the optional `| ` and quotes are
-    // peeled off: the bare name, then either end of line or a `:`/`;`/`,` and whatever follows.
-    const entryPattern = new RegExp(
-        String.raw`^\s*\|?\s*'?(?:${names.join('|')})'?\s*(?:[:;,].*)?$`
-    );
-    return content
+const stripModuleLines = (content: string, names: readonly string[]): string =>
+    content
         .split('\n')
-        .filter((line) => names.every((name) => !importPattern(name).test(line)))
-        .filter((line) => !entryPattern.test(line))
+        .filter(
+            (line) =>
+                !names.includes(importKey(line)) &&
+                !names.includes(entryKey(line)) &&
+                // A union member leads with `|`; a quoted word elsewhere is not one.
+                !(line.trimStart().startsWith('|') && names.includes(memberKey(line)))
+        )
         .join('\n');
-};
 
 /**
  * Edit `src/modules.ts`: remove each shop module's import, its `enabledModules` array entry and
@@ -63,11 +55,7 @@ const stripModuleLines = (
 export const stripModuleRegistry = (repoRoot: string, names: readonly string[]): RemovalNote => {
     const file = path.join(repoRoot, 'src', 'modules.ts');
     const before = readFileSync(file, 'utf8');
-    const after = stripModuleLines(
-        before,
-        names,
-        (name) => new RegExp(`from './modules/${name}/module'`)
-    );
+    const after = stripModuleLines(before, names);
     writeFileSync(file, after);
     return { file: 'src/modules.ts', detail: `removed ${names.join(', ')}` };
 };

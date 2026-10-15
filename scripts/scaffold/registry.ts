@@ -36,13 +36,14 @@ const insertInRun = (
 };
 
 /** The trailing name of an `import x from './modules/<name>/module';` line. */
-const importKey = (line: string): string => /\.\/modules\/([^/]+)\/module/.exec(line)?.[1] ?? '';
+export const importKey = (line: string): string =>
+    /\.\/modules\/([^/]+)\/module/.exec(line)?.[1] ?? '';
 
 /** The name inside a `| 'name'` (or `type ModuleName =\n | 'name'`) member line. */
-const memberKey = (line: string): string => /'([^']+)'/.exec(line)?.[1] ?? '';
+export const memberKey = (line: string): string => /'([^']+)'/.exec(line)?.[1] ?? '';
 
 /** The identifier on an array-entry line such as `    fieldNotes,`. */
-const entryKey = (line: string): string => line.replaceAll(/[\s,]/g, '');
+export const entryKey = (line: string): string => line.replaceAll(/[\s,]/g, '');
 
 /**
  * Whether `source` already registers `kebab`.
