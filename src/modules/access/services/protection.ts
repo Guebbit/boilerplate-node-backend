@@ -54,20 +54,19 @@ export const staffHoldersAmong = (userIds: readonly string[]): Promise<Set<strin
  *
  * Answers yes, without a lookup, for:
  *
- *   - no context at all — self-erasure and the other self-service paths have no caller to protect from;
  *   - the system actor — a sweep or the reaper acts for nobody;
  *   - the caller's OWN account;
  *   - a holder of `assign:Role`.
  *
- * @param context - the caller, or `undefined` for a self-service path with no request behind it
+ * The caller is required, not optional: a missing one would have to answer yes or no, and a "yes"
+ * by convention is a protection that fails open. A path with no request behind it (self-erasure)
+ * does not ask this at all.
+ *
+ * @param context - the caller
  * @param accountId - the account about to be changed
  */
-export const canChangeAccount = (
-    context: CallerContext | undefined,
-    accountId: string
-): Promise<boolean> => {
+export const canChangeAccount = (context: CallerContext, accountId: string): Promise<boolean> => {
     if (
-        !context ||
         context.caller.system ||
         context.caller.id === accountId ||
         holds(context.caller, 'assign', 'Role')
@@ -83,15 +82,15 @@ export const canChangeAccount = (
  * `403 ROLE_MANAGEMENT_REQUIRED` envelope — recorded as a failed `security.forbidden` first, so an
  * attempt on a staff account leaves a row naming who tried what to whom.
  *
- * @param context - the caller, or `undefined` for a self-service path
+ * @param context - the caller
  * @param accountId - the account about to be changed
  */
 export const roleProtectedRefusal = (
-    context: CallerContext | undefined,
+    context: CallerContext,
     accountId: string
 ): Promise<ResponseReject | undefined> =>
     canChangeAccount(context, accountId).then((allowed) => {
-        if (allowed || !context) return undefined;
+        if (allowed) return undefined;
 
         auditForbidden(context, {
             targetType: 'user',

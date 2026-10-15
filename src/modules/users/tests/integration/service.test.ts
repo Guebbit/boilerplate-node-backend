@@ -749,7 +749,7 @@ describe('userService.removeById', () => {
         const user = await createUser();
         const id = user._id.toString();
 
-        const result = await userService.removeById(id);
+        const result = await userService.removeById(id, false, callerContextAs('admin'));
 
         expect(result.success).toBe(true);
         const updated = await userRepository.findById(id);
@@ -762,7 +762,7 @@ describe('userService.removeById', () => {
         const user = await createUser({ deletedAt });
         const id = user._id.toString();
 
-        await userService.removeById(id);
+        await userService.removeById(id, false, callerContextAs('admin'));
 
         expect((await userRepository.findById(id))!.deletedAt).toEqual(deletedAt);
     });
@@ -771,7 +771,7 @@ describe('userService.removeById', () => {
         const user = await createUser({ deletedAt: new Date() });
         const id = user._id.toString();
 
-        const result = await userService.restoreById(id);
+        const result = await userService.restoreById(id, callerContextAs('admin'));
 
         expect(result.success).toBe(true);
         expect((await userRepository.findById(id))!.deletedAt).toBeUndefined();
@@ -780,7 +780,7 @@ describe('userService.removeById', () => {
     it('answers 409 when restoring a user who is not deleted', async () => {
         const user = await createUser();
 
-        const result = await userService.restoreById(user._id.toString());
+        const result = await userService.restoreById(user._id.toString(), callerContextAs('admin'));
 
         expect((result as ResponseReject).status).toBe(409);
     });
@@ -843,7 +843,7 @@ describe('userService.removeById', () => {
         const user = await createUser();
         const id = user._id.toString();
 
-        await userService.removeById(id, true);
+        await userService.removeById(id, true, callerContextAs('admin'));
 
         expect(await userRepository.findById(id)).toBeNull();
     });
@@ -869,14 +869,18 @@ describe('userService.removeById', () => {
             // install `access`'s own, the one under test.
             setPersonalDataErasers([eraseMemberships]);
 
-            await userService.removeById(id, true);
+            await userService.removeById(id, true, callerContextAs('admin'));
 
             expect(await membershipsOf(id)).toEqual([]);
         });
     });
 
     it('returns a 404 rejection when the user does not exist', async () => {
-        const result = await userService.removeById('000000000000000000000000');
+        const result = await userService.removeById(
+            '000000000000000000000000',
+            false,
+            callerContextAs('admin')
+        );
 
         expect(result.success).toBe(false);
         expect((result as ResponseReject).status).toBe(404);
@@ -887,7 +891,7 @@ describe('userService.removeById', () => {
         const user = await createUser({ imageUrl: '/images/doomed-avatar.jpg' });
         const id = user._id.toString();
 
-        await userService.removeById(id, true);
+        await userService.removeById(id, true, callerContextAs('admin'));
 
         expect(imageStore.remove).toHaveBeenCalledWith('/images/doomed-avatar.jpg');
     });
@@ -900,7 +904,7 @@ describe('userService.removeById', () => {
         const user = await createUser({ imageUrl: '/images/survives-avatar.jpg' });
         const id = user._id.toString();
 
-        await userService.removeById(id, false);
+        await userService.removeById(id, false, callerContextAs('admin'));
 
         expect(imageStore.remove).not.toHaveBeenCalled();
     });

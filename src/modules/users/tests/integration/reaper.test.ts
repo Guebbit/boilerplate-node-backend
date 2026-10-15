@@ -184,7 +184,7 @@ describe('who soft-deleted the account', () => {
         const user = await createUser({ email: 'restored@reaper.test', username: 'restored' });
         await userService.remove(user, false, systemCallerContext('User'));
 
-        await userService.restoreById(user.id);
+        await userService.restoreById(user.id, callerContextAs('admin'));
 
         expect(await markerOf(user.id)).toBeUndefined();
     });

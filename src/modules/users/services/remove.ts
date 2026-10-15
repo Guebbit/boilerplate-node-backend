@@ -130,14 +130,13 @@ export const remove = (
  * Undo a soft delete. The account's sessions stay revoked: the owner logs in again.
  *
  * @param id - the user to restore
- * @param context - records `ADMIN_USER_RESTORED`, and judges the caller against the account; omit
- *   for a caller with no request behind it
+ * @param context - the caller: records `ADMIN_USER_RESTORED`, and is judged against the account
  * @returns the restored user; 404 when there is none, 403 `ROLE_MANAGEMENT_REQUIRED` when the
  *   account holds a staff role the caller may not manage, 409 when it is not soft-deleted
  */
 export const restoreById = (
     id: string,
-    context?: CallerContext
+    context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     userRepository.findById(id).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
@@ -162,12 +161,12 @@ export const restoreById = (
 /**
  * Remove a user by ID (soft or hard delete). Fetches the document, refuses a staff account the
  * caller may not manage, then delegates to remove().
- * @param context - forwarded to {@link remove} for the audit row, and the caller {@link roleProtectedRefusal} judges
+ * @param context - the caller: forwarded to {@link remove} for the audit row, and judged by {@link roleProtectedRefusal}
  */
 export const removeById = (
     id: string,
     hardDelete = false,
-    context?: CallerContext
+    context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> =>
     userRepository.findById(id).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);

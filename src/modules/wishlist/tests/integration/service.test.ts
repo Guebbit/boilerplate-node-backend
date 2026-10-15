@@ -8,7 +8,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
-import { testCallerContext } from '@tests/callers';
+import { testCallerContext, callerContextAs } from '@tests/callers';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -399,7 +399,7 @@ describe('the module subscriptions', () => {
         const product = await createProduct();
         await wishlistService.wishlistAdd(user.id, String(product._id), testCallerContext);
 
-        await userService.removeById(user.id, true);
+        await userService.removeById(user.id, true, callerContextAs('admin'));
 
         expect(await wishlistRepository.findByUserId(user.id)).toBeNull();
     });

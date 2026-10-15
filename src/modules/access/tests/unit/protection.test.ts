@@ -124,10 +124,9 @@ describe('canChangeAccount', () => {
         expect(await canChangeAccount(callerContextAs('support', 'me'), 'me')).toBe(true);
     });
 
-    it('skips the check for a missing context and the system actor', async () => {
+    it('skips the check for the system actor', async () => {
         hold('owner', 'admin');
 
-        expect(await canChangeAccount(undefined, 'owner')).toBe(true);
         expect(await canChangeAccount(systemCallerContext('User'), 'owner')).toBe(true);
     });
 

@@ -8,7 +8,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { TEST_TENANT_ID } from '@tests/callers';
+import { TEST_TENANT_ID, callerContextAs } from '@tests/callers';
 import type { TenantCallerContext } from '@types';
 import { userRepository } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
@@ -421,7 +421,7 @@ describe('a hard-deleted user takes their credentials with them', () => {
         );
         if (!first.data || !second.data) throw new Error('setup failed: mint was refused');
 
-        await userService.removeById(String(user._id), true);
+        await userService.removeById(String(user._id), true, callerContextAs('admin'));
 
         expect(await credentialOf(first.data.secret)).toBeUndefined();
         expect(await credentialOf(second.data.secret)).toBeUndefined();
@@ -448,7 +448,7 @@ describe('a hard-deleted user takes their credentials with them', () => {
         );
         if (!survivor.data) throw new Error('setup failed: mint was refused');
 
-        await userService.removeById(String(doomed._id), true);
+        await userService.removeById(String(doomed._id), true, callerContextAs('admin'));
 
         expect(await apiKeyRepository.findById(survivor.data.id)).not.toBeNull();
     });

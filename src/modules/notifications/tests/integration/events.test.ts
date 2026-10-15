@@ -6,7 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/callers';
+import { testCallerContext, callerContextAs } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
@@ -209,7 +209,7 @@ describe('the module subscriptions', () => {
         await settleOutboxNudges();
         await expect(inboxOf(user.id)).resolves.toHaveLength(1);
 
-        await userService.removeById(user.id, true);
+        await userService.removeById(user.id, true, callerContextAs('admin'));
 
         await expect(inboxOf(user.id)).resolves.toEqual([]);
     });
