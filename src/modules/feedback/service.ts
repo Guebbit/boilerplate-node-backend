@@ -38,7 +38,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { feedbackAuditActions } from './audit';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
-import { toFeedbackStatus, initialFeedbackStatus, shouldStampRespondedAt } from './domain';
+import { initialFeedbackStatus, shouldStampRespondedAt } from './domain';
 import { feedbackConfig } from './config';
 import { mailConfig } from '@infrastructure/adapters/config';
 
@@ -176,7 +176,7 @@ export const updateStatus = (
     feedback: FeedbackRequestDocument,
     payload: UpdateFeedbackRequestStatusRequest
 ): Promise<ResponseSuccess<FeedbackRequestDocument>> => {
-    const nextStatus = toFeedbackStatus(payload.status);
+    const nextStatus = payload.status;
     if (nextStatus !== undefined) feedback.status = nextStatus;
     // `null` clears the notes — $unset on save, via `clearedOrValue`.
     if (payload.adminNotes !== undefined) feedback.adminNotes = clearedOrValue(payload.adminNotes);

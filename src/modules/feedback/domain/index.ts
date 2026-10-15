@@ -7,4 +7,4 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-export { toFeedbackStatus, initialFeedbackStatus, shouldStampRespondedAt } from './lifecycle';
+export { initialFeedbackStatus, shouldStampRespondedAt } from './lifecycle';

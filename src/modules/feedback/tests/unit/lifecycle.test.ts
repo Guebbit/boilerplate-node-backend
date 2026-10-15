@@ -5,27 +5,10 @@
  */
 
 import { FeedbackRequestStatus } from '@types';
-import {
-    initialFeedbackStatus,
-    shouldStampRespondedAt,
-    toFeedbackStatus
-} from '../../domain/lifecycle';
+import { initialFeedbackStatus, shouldStampRespondedAt } from '../../domain/lifecycle';
 
 /** Every status in the contract enum, so a new one is covered without touching this file. */
 const EVERY_STATUS = Object.values(FeedbackRequestStatus);
-
-describe('toFeedbackStatus — a status string narrows onto the closed set', () => {
-    it.each(EVERY_STATUS)('round-trips %s', (status) => {
-        expect(toFeedbackStatus(status)).toBe(status);
-    });
-
-    it.each([undefined, '', 'archived', 'NEW', 'Resolved', 'constructor', '__proto__'])(
-        'maps %p to undefined',
-        (value) => {
-            expect(toFeedbackStatus(value)).toBeUndefined();
-        }
-    );
-});
 
 describe('shouldStampRespondedAt — the first resolution only', () => {
     it.each([

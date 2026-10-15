@@ -1,8 +1,7 @@
 /**
  * @module
- * Integration tests for the feedback request service. Pins three behaviours: create normalises
- * (lowercased email, trimmed fields, blank `name` → `undefined`); a write's `status` narrows onto
- * `FeedbackRequestStatus` via `toFeedbackStatus`; and `respondedAt` stamps once, so re-resolving an
+ * Integration tests for the feedback request service. Pins two behaviours: create normalises
+ * (lowercased email, trimmed fields, blank `name` → `undefined`); and `respondedAt` stamps once, so re-resolving an
  * already-resolved item never moves it. Also covers the honeypot disposition and `remove`.
  */
 
