@@ -13,7 +13,7 @@
  */
 
 import { createProviderRegistry, requireProvider } from '@infrastructure/runtime/provider-registry';
-import { defineConfig, probe } from '@infrastructure/config/define';
+import { defineProbe } from '@infrastructure/config/define';
 import { invoicingConfig } from '../config';
 import { pdfEInvoicingProvider } from './pdf';
 import type { InvoiceLine, InvoiceParty, InvoiceSeller } from '../model';
@@ -99,8 +99,4 @@ export const resolveEInvoicingProvider = (): EInvoicingProvider => {
  * shape-less slice, because the resolver imports the config and the config therefore cannot
  * import the resolver.
  */
-export const invoicingProviderProbe = defineConfig({
-    name: 'invoicing-provider',
-    shape: {},
-    check: () => probe(resolveEInvoicingProvider)
-});
+export const invoicingProviderProbe = defineProbe('invoicing-provider', resolveEInvoicingProvider);

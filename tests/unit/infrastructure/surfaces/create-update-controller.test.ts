@@ -16,7 +16,6 @@ import { etagOf, fencedSave } from '@infrastructure/persistence/versioning';
 import {
     clearableFields,
     createUpdateController,
-    fillOmittedWithNull,
     type UpdateControllerSpec,
     type UpdateIdSource
 } from '@infrastructure/surfaces/create-update-controller';
@@ -245,28 +244,6 @@ describe('clearableFields', () => {
     it('lists exactly the fields that accept null', () => {
         // `title` is required, `featured` optional but never null — neither is a PUT's to clear.
         expect(clearableFields(replaceSchema)).toEqual(['note']);
-    });
-});
-
-describe('fillOmittedWithNull', () => {
-    it('leaves a present field alone', () => {
-        expect(fillOmittedWithNull({ a: 1 }, ['a', 'b'])).toEqual({ a: 1, b: null });
-    });
-
-    it('fills every declared field that is absent, and only those', () => {
-        expect(fillOmittedWithNull({}, ['a', 'b', 'c'])).toEqual({ a: null, b: null, c: null });
-    });
-
-    it('does not touch a field the schema never declared', () => {
-        // A change-set is built from a VALIDATED body, so an undeclared key should not exist —
-        // this pins that this helper does not itself introduce one.
-        expect(fillOmittedWithNull({ extra: 'x' }, ['a'])).toEqual({ extra: 'x', a: null });
-    });
-
-    it('never mutates the body it was given', () => {
-        const body = { a: 1 };
-        fillOmittedWithNull(body, ['a', 'b']);
-        expect(body).toEqual({ a: 1 });
     });
 });
 

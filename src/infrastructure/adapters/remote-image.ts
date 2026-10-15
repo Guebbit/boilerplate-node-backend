@@ -12,7 +12,6 @@
 
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import type { IncomingMessage } from 'node:http';
 import path from 'node:path';
 import { deleteFile } from '@infrastructure/adapters/filesystem';
 import {
@@ -23,33 +22,13 @@ import { imageStore } from '@infrastructure/adapters/image-store';
 import { logger } from '@infrastructure/adapters/logger';
 import { pinnedHttpsRequest } from '@infrastructure/adapters/pinned-https';
 import { uploadStagingPath } from '@infrastructure/http/middlewares/upload';
+import { readCappedBytes } from '@infrastructure/http/read-capped-body';
 
 /** Total budget for resolving, connecting and downloading — one signal covers all of it. */
 const DOWNLOAD_TIMEOUT_MS = 5000;
 
 /** Hard cap on the downloaded bytes, the same as an upload's own default. */
 const MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024;
-
-/**
- * Collect a response body, refusing anything over {@link MAX_DOWNLOAD_BYTES}.
- *
- * @param response - the response to read; destroyed the moment the cap is crossed
- */
-const readCapped = (response: IncomingMessage): Promise<Buffer> =>
-    new Promise((resolve, reject) => {
-        const chunks: Buffer[] = [];
-        let received = 0;
-        response.on('data', (chunk: Buffer) => {
-            received += chunk.length;
-            if (received > MAX_DOWNLOAD_BYTES) {
-                response.destroy(new Error('Remote image exceeds the size cap.'));
-                return;
-            }
-            chunks.push(chunk);
-        });
-        response.on('end', () => resolve(Buffer.concat(chunks)));
-        response.on('error', reject);
-    });
 
 /**
  * GET a url through {@link pinnedHttpsRequest}: https only, DNS pinned to the validated address,
@@ -67,7 +46,7 @@ const download = (rawUrl: string): Promise<Buffer> =>
             response.resume();
             throw new Error(`Remote image answered ${response.statusCode}.`);
         }
-        return readCapped(response);
+        return readCappedBytes(response, MAX_DOWNLOAD_BYTES);
     });
 
 /**

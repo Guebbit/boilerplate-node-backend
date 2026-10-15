@@ -8,7 +8,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
-import { versionOf } from '@infrastructure/security/versioned-secret';
+import { keyVersionOf } from '@infrastructure/security/versioned-secret';
 import addressesModule from '../../module';
 import { addressBookModel } from '../../model';
 import { addressAdd, addressesGet } from '../../service';
@@ -37,12 +37,12 @@ describe('addresses reencrypt', () => {
             expect(dry.rewritten).toBe(0);
             expect(dry.found['addressbooks.items.city']).toEqual({ v1: 1 });
             const before = await stored();
-            expect(versionOf(before?.items[0].city as string)).toBe('v1');
+            expect(keyVersionOf(before?.items[0].city as string)).toBe('v1');
 
             const first = await addressesModule.reencrypt(false);
             expect(first.rewritten).toBe(5);
             const moved = await stored();
-            expect(versionOf(moved?.items[0].city as string)).toBe('v2');
+            expect(keyVersionOf(moved?.items[0].city as string)).toBe('v2');
 
             const second = await addressesModule.reencrypt(false);
             expect(second.rewritten).toBe(0);

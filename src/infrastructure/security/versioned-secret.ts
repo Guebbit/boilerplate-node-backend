@@ -94,7 +94,7 @@ export const encryptVersionedSecret = (
  *
  * @param stored - a value written by {@link encryptVersionedSecret}
  */
-export const versionOf = (stored: string): string => stored.split(':', 1)[0];
+export const keyVersionOf = (stored: string): string => stored.split(':', 1)[0];
 
 /**
  * Decrypt a stored secret, against whichever ring entry wrote it.
@@ -151,7 +151,7 @@ export const rewrapVersionedSecret = (
     binding: SecretBinding,
     label: string
 ): string =>
-    versionOf(stored) === ring[0].version
+    keyVersionOf(stored) === ring[0].version
         ? stored
         : encryptVersionedSecret(
               decryptVersionedSecret(stored, ring, binding, label),

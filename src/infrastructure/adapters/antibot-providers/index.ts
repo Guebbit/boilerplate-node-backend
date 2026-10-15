@@ -7,7 +7,7 @@
  */
 
 import { createProviderRegistry, requireProvider } from '@infrastructure/runtime/provider-registry';
-import { defineConfig, probe } from '@infrastructure/config/define';
+import { defineProbe } from '@infrastructure/config/define';
 import { antibotConfig } from '@infrastructure/adapters/config';
 import { noneProvider } from './none';
 import { turnstileProvider } from './turnstile';
@@ -132,8 +132,7 @@ export const isHumanChallengeEnabled = (): boolean =>
  * unnoticed loss of protection. A shape-less slice, because the resolver imports the config and
  * the config therefore cannot import the resolver.
  */
-export const humanChallengeProviderProbe = defineConfig({
-    name: 'antibot-provider',
-    shape: {},
-    check: () => probe(resolveHumanChallengeProvider)
-});
+export const humanChallengeProviderProbe = defineProbe(
+    'antibot-provider',
+    resolveHumanChallengeProvider
+);

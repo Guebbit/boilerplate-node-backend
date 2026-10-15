@@ -9,7 +9,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { callerAs } from '@tests/callers';
 import { withEnvironment } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
-import { versionOf } from '@infrastructure/security/versioned-secret';
+import { keyVersionOf } from '@infrastructure/security/versioned-secret';
 import webhooksModule from '../../module';
 import { webhookSubscriptionModel } from '../../model';
 import { create as createSubscription } from '../../services/subscriptions';
@@ -37,7 +37,7 @@ describe('webhooks reencrypt', () => {
                 expect(report.rewritten).toBe(1);
                 const raw = await webhookSubscriptionModel.collection.findOne({});
                 const entry = raw?.secrets[0] as { id: string; ciphertext: string };
-                expect(versionOf(entry.ciphertext)).toBe('v2');
+                expect(keyVersionOf(entry.ciphertext)).toBe('v2');
                 expect(decryptRingSecret(entry.ciphertext, entry.id)).toMatch(/^whsec_/);
             }
         );

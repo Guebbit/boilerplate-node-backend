@@ -7,7 +7,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerContextAs } from '@tests/callers';
 import { withEnvironment } from '@tests/environment';
-import { versionOf } from '@infrastructure/security/versioned-secret';
+import { keyVersionOf } from '@infrastructure/security/versioned-secret';
 import usersModule from '../../module';
 import { userModel } from '../../model';
 import { userService } from '../../services';
@@ -28,7 +28,7 @@ describe('users reencrypt', () => {
 
             expect(report.rewritten).toBe(1);
             const raw = await userModel.collection.findOne({ _id: user._id });
-            expect(versionOf(raw?.phone as string)).toBe('v2');
+            expect(keyVersionOf(raw?.phone as string)).toBe('v2');
         });
     });
 });

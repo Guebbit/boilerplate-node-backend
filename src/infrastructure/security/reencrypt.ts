@@ -19,7 +19,7 @@ import type { Document, Model, QueryFilter, mongo } from 'mongoose';
 import { Types } from 'mongoose';
 import {
     rewrapVersionedSecret,
-    versionOf,
+    keyVersionOf,
     type SecretBinding,
     type VersionedKey
 } from './versioned-secret';
@@ -96,7 +96,7 @@ export const mergeReports = (first: ReencryptReport, second: ReencryptReport): R
 /** Adds one field to the tally of what was found. */
 const tally = (report: ReencryptReport, field: EncryptedField): void => {
     const byVersion = (report.found[field.label] ??= {});
-    const version = versionOf(field.stored);
+    const version = keyVersionOf(field.stored);
     byVersion[version] = (byVersion[version] ?? 0) + 1;
 };
 

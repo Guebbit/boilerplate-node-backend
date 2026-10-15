@@ -120,6 +120,15 @@ const budgetLimit = (budget: RateLimitBudget): number => {
 };
 
 /**
+ * The window a budget counts in: its own milliseconds, or the shared `NODE_RATE_LIMIT_WINDOW_MS`
+ * for a budget that says `'shared'`.
+ *
+ * @param budget - the budget to read
+ */
+const budgetWindowMs = (budget: RateLimitBudget): number =>
+    budget.windowMs === 'shared' ? rateLimitConfig().NODE_RATE_LIMIT_WINDOW_MS : budget.windowMs;
+
+/**
  * A {@link RateLimitBudget}'s data, turned into the actual Express middleware — the single place
  * every module-owned and infrastructure-owned limiter alike is built from.
  */
@@ -130,10 +139,7 @@ export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
             budget.onStoreError ?? 'memory',
             budget.escalation && { limit: budgetLimit(budget), ...budget.escalation }
         ),
-        windowMs:
-            budget.windowMs === 'shared'
-                ? rateLimitConfig().NODE_RATE_LIMIT_WINDOW_MS
-                : budget.windowMs,
+        windowMs: budgetWindowMs(budget),
         // draft-7 rate-limit headers (RateLimit-*), not the deprecated X-RateLimit-* set.
         standardHeaders: 'draft-7',
         legacyHeaders: false,
@@ -174,12 +180,9 @@ const chargedStoreOf = (budget: RateLimitBudget): Store => {
 
     const store = rateLimitStore(budget.namespace, budget.onStoreError ?? 'memory');
     // The one option a store reads, replayed here because no `rateLimit()` instance calls `init`.
-    void store.init?.({
-        windowMs:
-            budget.windowMs === 'shared'
-                ? rateLimitConfig().NODE_RATE_LIMIT_WINDOW_MS
-                : budget.windowMs
-    } as Parameters<NonNullable<Store['init']>>[0]);
+    void store.init?.({ windowMs: budgetWindowMs(budget) } as Parameters<
+        NonNullable<Store['init']>
+    >[0]);
     chargedStores.set(budget.namespace, store);
     return store;
 };
@@ -201,8 +204,9 @@ export interface BudgetCharge {
  * @param key - what is being counted, already pseudonymised if it names a person
  */
 export const chargeBudget = async (budget: RateLimitBudget, key: string): Promise<BudgetCharge> => {
-    // `await` rather than a chain: a rejection (a `pass` budget's store down) belongs to the caller,
-    // who knows what refusing means for its own door.
+    // `async`, so `chargedStoreOf` throwing synchronously still reaches the caller as a rejection;
+    // that rejection (and a `pass` budget's store being down) is the caller's to handle, who knows
+    // what refusing means for its own door.
     const { totalHits, resetTime } = await chargedStoreOf(budget).increment(key);
 
     return {

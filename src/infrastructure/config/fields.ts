@@ -15,9 +15,39 @@
  */
 
 import { z } from 'zod';
-import { FALSY_WORDS, TRUTHY_WORDS } from '../runtime/environment';
 import { parseVersionedKeyRing, type VersionedKey } from '../security/versioned-secret';
 import type { Environment } from './store';
+
+/** The words a caller may write for "on", either case. */
+export const TRUTHY_WORDS: readonly string[] = ['1', 'true', 'yes', 'on'];
+
+/** The words a caller may write for "off", either case. */
+export const FALSY_WORDS: readonly string[] = ['0', 'false', 'no', 'off'];
+
+/** {@link TRUTHY_WORDS} as a set — a lookup with no prototype chain to fall into. */
+const TRUTHY = new Set(TRUTHY_WORDS);
+
+/** {@link FALSY_WORDS} as a set. */
+const FALSY = new Set(FALSY_WORDS);
+
+/**
+ * Decode one word as a boolean, case-insensitively — the vocabulary an env var, a query string
+ * and a form field all use — or say it isn't one.
+ *
+ * A `Set` lookup rather than a property lookup on a plain object: `'constructor' in {}` is true
+ * (every object inherits from `Object.prototype`), so keying a lookup on caller-controlled text
+ * through `in` or bracket access can resolve to an inherited method instead of "not found".
+ * `Set.has` carries no prototype chain to fall into.
+ *
+ * @param word - the raw text to decode
+ * @returns `true`/`false` for a recognised word, `undefined` for anything else (including blank)
+ */
+export const parseBooleanWord = (word: string): boolean | undefined => {
+    const normalized = word.trim().toLowerCase();
+    if (TRUTHY.has(normalized)) return true;
+    if (FALSY.has(normalized)) return false;
+    return undefined;
+};
 
 /**
  * A rule about a value being THERE, checked at boot outside `NODE_ENV=test`. Unlike a shape rule

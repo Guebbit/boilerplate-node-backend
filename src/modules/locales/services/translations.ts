@@ -14,7 +14,7 @@ import type {
 } from '@types';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
 import type { TranslatableTarget } from '@kernel/registry';
-import { clearOmittedFields } from '@kernel/translation';
+import { fillOmittedWithNull } from '@infrastructure/object-guards';
 import type { TranslationWritePlan, TranslationWriteSlot } from '@kernel/translation';
 import {
     fieldError,
@@ -377,7 +377,7 @@ const clearOmittedInPayload = (
             locale,
             entry === null || Object.keys(entry.fields).length === 0
                 ? entry
-                : { ...entry, fields: clearOmittedFields(declared, entry.fields) }
+                : { ...entry, fields: fillOmittedWithNull(entry.fields, declared) }
         ])
     );
 

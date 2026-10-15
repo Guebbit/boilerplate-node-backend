@@ -21,7 +21,7 @@ import {
     createSharedProviderRegistry,
     requireProvider
 } from '@infrastructure/runtime/provider-registry';
-import { defineConfig, probe } from '@infrastructure/config/define';
+import { defineProbe } from '@infrastructure/config/define';
 import { mailConfig, type MailConfig } from './config';
 
 /** One message on its way out: what a transport is handed. */
@@ -113,8 +113,4 @@ export const mailDelivers = (mail: MailConfig | undefined): boolean =>
  * middle of a request. A shape-less slice, because the resolver imports the config and the config
  * therefore cannot import the resolver.
  */
-export const mailTransportProbe = defineConfig({
-    name: 'mail-transport',
-    shape: {},
-    check: () => probe(resolveMailTransport)
-});
+export const mailTransportProbe = defineProbe('mail-transport', resolveMailTransport);

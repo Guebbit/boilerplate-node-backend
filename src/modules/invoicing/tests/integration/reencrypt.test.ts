@@ -19,7 +19,7 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { invoiceModel } from '../../model';
 import { decryptInvoiceParty } from '../../pii';
 import { withEnvironment } from '@tests/environment';
-import { versionOf } from '@infrastructure/security/versioned-secret';
+import { keyVersionOf } from '@infrastructure/security/versioned-secret';
 import { invoicingRepository } from '../../repository';
 
 setupTestDb();
@@ -65,7 +65,7 @@ describe('invoicing reencrypt', () => {
             expect(second.rewritten).toBe(0);
 
             const raw = await invoiceModel.findById(invoice._id).exec();
-            expect(versionOf(raw!.billingAddress!.city)).toBe('v2');
+            expect(keyVersionOf(raw!.billingAddress!.city)).toBe('v2');
             expect(decryptInvoiceParty(raw!.billingAddress!, 'invoice', raw!._id).city).toBe(
                 'London'
             );

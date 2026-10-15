@@ -9,7 +9,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { versionOf } from '@infrastructure/security/versioned-secret';
+import { keyVersionOf } from '@infrastructure/security/versioned-secret';
 import ordersModule from '../../module';
 import { orderModel } from '../../model';
 import { createOrder, toOrderItem } from '../factories';
@@ -39,7 +39,7 @@ describe('orders reencrypt', () => {
 
             expect(report.rewritten).toBe(6);
             const raw = await orderModel.collection.findOne({ _id: order._id });
-            expect(versionOf(raw?.notes as string)).toBe('v2');
+            expect(keyVersionOf(raw?.notes as string)).toBe('v2');
             const reloaded = await orderModel.findById(order._id).exec();
             expect(reloaded?.toJSON().shippingAddress?.city).toBe('London');
         });

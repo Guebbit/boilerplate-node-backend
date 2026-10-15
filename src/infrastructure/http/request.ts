@@ -12,7 +12,7 @@
 import type { Request } from 'express';
 import type { Caller, CallerContext, TenantCallerContext } from '@types';
 import { coerceStringArray, getJson } from '@guebbit/js-toolkit';
-import { parseBooleanWord } from '@infrastructure/runtime/environment';
+import { parseBooleanWord } from '@infrastructure/config/fields';
 import { isPlainObject, stripUndefined } from '@infrastructure/object-guards';
 
 /**

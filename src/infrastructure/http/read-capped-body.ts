@@ -14,6 +14,33 @@
 export const DEFAULT_BODY_CAP_BYTES = 1_048_576;
 
 /**
+ * Collect a byte stream, refusing one longer than `maxBytes`. A fetch body and an `IncomingMessage`
+ * are both async-iterable, so both read through here; leaving the loop early (the throw below)
+ * cancels or destroys the stream.
+ *
+ * @param stream - the bytes, as they arrive
+ * @param maxBytes - the most bytes to accept
+ * @returns everything the stream carried
+ * @throws {Error} when the stream is longer than `maxBytes`, or yields something that is not bytes
+ */
+export const readCappedBytes = async (
+    stream: AsyncIterable<unknown>,
+    maxBytes: number
+): Promise<Buffer> => {
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    // https://developer.mozilla.org/docs/Web/API/ReadableStream#async_iteration
+    for await (const chunk of stream) {
+        // A byte stream only ever yields bytes; anything else is a broken stream, refused.
+        if (!(chunk instanceof Uint8Array)) throw new TypeError('The body is not bytes.');
+        size += chunk.byteLength;
+        if (size > maxBytes) throw new Error(`The body is longer than ${String(maxBytes)} bytes.`);
+        chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+};
+
+/**
  * Read a response body as text, refusing one longer than `maxBytes`.
  *
  * @param response - the answer to read
@@ -21,24 +48,13 @@ export const DEFAULT_BODY_CAP_BYTES = 1_048_576;
  * @returns the body as UTF-8 text
  * @throws {Error} when the body is longer than `maxBytes`
  */
-export const readCappedText = async (response: Response, maxBytes: number): Promise<string> => {
+export const readCappedText = (response: Response, maxBytes: number): Promise<string> =>
     // A bodiless answer (204, HEAD) reads as empty rather than throwing on a null stream.
-    if (!response.body) return '';
-
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    // WHATWG streams: a fetch body is an async-iterable of byte chunks, read as they arrive.
-    // https://developer.mozilla.org/docs/Web/API/ReadableStream#async_iteration
-    for await (const chunk of response.body as AsyncIterable<unknown>) {
-        // A fetch body only ever yields bytes; anything else is a broken stream, refused.
-        if (!(chunk instanceof Uint8Array)) throw new TypeError('The response body is not bytes.');
-        size += chunk.byteLength;
-        if (size > maxBytes)
-            throw new Error(`The response body is longer than ${String(maxBytes)} bytes.`);
-        chunks.push(chunk);
-    }
-    return Buffer.concat(chunks).toString('utf8');
-};
+    response.body
+        ? readCappedBytes(response.body as AsyncIterable<unknown>, maxBytes).then((bytes) =>
+              bytes.toString('utf8')
+          )
+        : Promise.resolve('');
 
 /**
  * Read a response body as JSON, refusing one longer than `maxBytes`. The result is `unknown`:

@@ -22,12 +22,14 @@ flowchart LR
     access["access<br/><i>this module</i>"]
     account["account"]
     api_keys["api-keys"]
+    audit_logs["audit-logs"]
     example["example"]
     orders["orders"]
     users["users"]
 
     account --> access
     api_keys --> access
+    audit_logs --> access
     example --> access
     orders --> access
     users --> access
@@ -37,7 +39,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
-    class account,api_keys,example,users generic;
+    class account,api_keys,audit_logs,example,users generic;
     class access centre;
 ```
 

@@ -673,10 +673,8 @@ export const resolvePersonalDataSections = (
 export const resolvePersonalDataErasers = (
     appModules: readonly AppModule[]
 ): readonly PersonalDataEraser[] =>
-    appModules.flatMap((appModule) =>
-        appModule.personalData === 'none'
-            ? []
-            : appModule.personalData.flatMap((section) => (section.erase ? [section.erase] : []))
+    resolvePersonalDataSections(appModules).flatMap((section) =>
+        section.erase ? [section.erase] : []
     );
 
 /**
@@ -689,12 +687,8 @@ export const resolvePersonalDataErasers = (
 export const resolvePersonalDataMinimisers = (
     appModules: readonly AppModule[]
 ): readonly PersonalDataMinimiser[] =>
-    appModules.flatMap((appModule) =>
-        appModule.personalData === 'none'
-            ? []
-            : appModule.personalData.flatMap((section) =>
-                  section.minimise ? [section.minimise] : []
-              )
+    resolvePersonalDataSections(appModules).flatMap((section) =>
+        section.minimise ? [section.minimise] : []
     );
 
 /**

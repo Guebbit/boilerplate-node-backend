@@ -12,6 +12,8 @@
  * See: docs/tools/winston.md#field-names-in-the-log-line
  */
 
+import { isPlainObject } from '../object-guards';
+
 /** One structured log record, before or after the rename. */
 type LogRecord = Record<string, unknown>;
 
@@ -49,13 +51,6 @@ export const SEMANTIC_LOG_NAMES: Readonly<Record<string, string>> = {
 };
 
 /**
- * Whether a value is a serialised error: what `redactFormat` leaves under `error` for an `Error`.
- * @param value - whatever the call site put under `error`
- */
-const isSerialisedError = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
-
-/**
  * `error` -> the `exception.*` attributes (https://opentelemetry.io/docs/specs/semconv/exceptions/).
  * A bare string or number becomes `exception.message`.
  *
@@ -63,7 +58,7 @@ const isSerialisedError = (value: unknown): value is Record<string, unknown> =>
  * @returns the attributes to merge into the record
  */
 const exceptionAttributes = (error: unknown): LogRecord => {
-    if (!isSerialisedError(error)) return { 'exception.message': String(error) };
+    if (!isPlainObject(error)) return { 'exception.message': String(error) };
     const { name, message, stack, cause, ...rest } = error;
     return {
         ...(name !== undefined && { 'exception.type': name }),

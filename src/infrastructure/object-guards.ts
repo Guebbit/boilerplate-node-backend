@@ -30,3 +30,21 @@ export const stripUndefined = <T extends Record<string, unknown>>(source: T): T 
     // `Object.fromEntries` returns `{ [k: string]: unknown }`; the cast restores `T`, whose keys
     // are the subset that survived the filter.
     Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined)) as T;
+
+/**
+ * Fill every named field the caller's body omitted with `null` — "the body IS the new resource"
+ * (RFC 9110 §9.3.4) stated as the change-set a PATCH could have sent, since the write side only
+ * understands an explicit `null` as "clear". Used by a PUT body and by a PUT translation entry.
+ *
+ * @param body - what the caller stated
+ * @param fields - every field the resource lets a caller clear
+ * @returns `body`, with every one of `fields` present — `null` where it was absent
+ */
+export const fillOmittedWithNull = <TValue>(
+    body: Readonly<Record<string, TValue>>,
+    fields: readonly string[]
+): Record<string, TValue | null> => {
+    const filled: Record<string, TValue | null> = { ...body };
+    for (const field of fields) if (!(field in filled)) filled[field] = null;
+    return filled;
+};

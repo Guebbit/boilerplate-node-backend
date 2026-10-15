@@ -22,8 +22,13 @@ import { ERROR_CODES } from '@api/error-codes';
 /** The deepest nesting a request body may have. A real payload is a handful of levels deep. */
 export const MAX_JSON_DEPTH = 32;
 
-/** The media types `express.json` parses, in `app/security.ts` — this guard reads those only. */
-const JSON_TYPES = ['application/json', 'application/merge-patch+json'];
+/**
+ * The media types `express.json` parses (`app/security.ts` mounts the parser with this same list)
+ * — this guard reads those only. RFC 7396's own type is there because a PATCH may send
+ * `application/merge-patch+json`, the same JSON with the merge meaning the contract already gives
+ * every PATCH.
+ */
+export const JSON_BODY_TYPES = ['application/json', 'application/merge-patch+json'];
 
 /**
  * Whether `root` nests objects or arrays deeper than `limit`. The root container is depth 1.
@@ -56,7 +61,7 @@ export const exceedsDepth = (root: unknown, limit: number): boolean => {
  */
 export const limitJsonDepth = (request: Request, response: Response, next: NextFunction) => {
     // `request.is`: false when there is no body or it is another media type. Nothing to walk then.
-    if (request.is(JSON_TYPES) && exceedsDepth(request.body, MAX_JSON_DEPTH))
+    if (request.is(JSON_BODY_TYPES) && exceedsDepth(request.body, MAX_JSON_DEPTH))
         return rejectResponse(response, 400, [
             {
                 code: ERROR_CODES.BAD_REQUEST,

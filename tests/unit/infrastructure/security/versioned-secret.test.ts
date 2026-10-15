@@ -10,7 +10,7 @@ import {
     decryptVersionedSecret,
     parseVersionedKeyRing,
     rewrapVersionedSecret,
-    versionOf,
+    keyVersionOf,
     type SecretBinding,
     type VersionedKey
 } from '@infrastructure/security/versioned-secret';
@@ -134,11 +134,11 @@ describe('parseVersionedKeyRing', () => {
     });
 });
 
-describe('versionOf / rewrapVersionedSecret', () => {
+describe('keyVersionOf / rewrapVersionedSecret', () => {
     const rotated: VersionedKey[] = [{ version: 'v2', key: 'rotated-key-material' }, KEY];
 
     it('reads the stamped version', () => {
-        expect(versionOf(encryptVersionedSecret('x', RING, BIND))).toBe('v1');
+        expect(keyVersionOf(encryptVersionedSecret('x', RING, BIND))).toBe('v1');
     });
 
     it('moves a value onto the newest key, same plaintext, same binding', () => {
@@ -146,7 +146,7 @@ describe('versionOf / rewrapVersionedSecret', () => {
 
         const moved = rewrapVersionedSecret(old, rotated, BIND, 'test');
 
-        expect(versionOf(moved)).toBe('v2');
+        expect(keyVersionOf(moved)).toBe('v2');
         expect(decryptVersionedSecret(moved, rotated, BIND, 'test')).toBe('keep-me');
     });
 

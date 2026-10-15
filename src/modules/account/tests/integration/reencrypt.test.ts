@@ -9,7 +9,7 @@ import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { createUser, userRepository } from '@modules/users/tests/factories';
-import { versionOf } from '@infrastructure/security/versioned-secret';
+import { keyVersionOf } from '@infrastructure/security/versioned-secret';
 import accountModule from '../../module';
 import { encryptTotpSecret, decryptTotpSecret } from '../../two-factor/totp';
 
@@ -38,7 +38,7 @@ describe('account reencrypt', () => {
             expect(report.rewritten).toBe(1);
             const stored = await userRepository.findByIdWithCredentials(user.id);
             const secret = stored?.twoFactorMethods?.[0]?.secret ?? '';
-            expect(versionOf(secret)).toBe('v2');
+            expect(keyVersionOf(secret)).toBe('v2');
             expect(decryptTotpSecret(secret, String(methodId))).toBe('JBSWY3DPEHPK3PXP');
         });
     });

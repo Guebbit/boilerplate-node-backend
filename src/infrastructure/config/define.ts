@@ -341,7 +341,7 @@ export const assertConfig = (slices: readonly ConfigSlice[]): void =>
  * @param resolve - the resolver to probe
  * @returns one message when `resolve` throws, `[]` when it does not
  */
-export const probe = (resolve: () => unknown): string[] => {
+const probe = (resolve: () => unknown): string[] => {
     // eslint-disable-next-line no-restricted-syntax -- the resolver's throw IS the signal this probes for; there is no safe wrapper for "does this synchronous call throw"
     try {
         resolve();
@@ -352,3 +352,14 @@ export const probe = (resolve: () => unknown): string[] => {
         return [error instanceof Error && error.message ? error.message : 'Unknown selector'];
     }
 };
+
+/**
+ * The boot gate for a provider selector: a shape-less slice (the resolver imports the config, so
+ * the config cannot import the resolver) whose check calls the resolver once. A typo in the
+ * selector is refused at boot, never on the first request that needs the provider.
+ *
+ * @param name - the slice's name, as the boot report shows it
+ * @param resolve - the resolver; it throws on an unknown selector
+ */
+export const defineProbe = (name: string, resolve: () => unknown) =>
+    defineConfig({ name, shape: {}, check: () => probe(resolve) });

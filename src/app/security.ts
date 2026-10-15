@@ -18,7 +18,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { rateLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { requireDeclaredContentType } from '@infrastructure/http/middlewares/content-type';
-import { limitJsonDepth } from '@infrastructure/http/middlewares/json-depth';
+import { limitJsonDepth, JSON_BODY_TYPES } from '@infrastructure/http/middlewares/json-depth';
 import { REQUEST_CONTENT_TYPES } from '@api/request-content-types';
 import { isAllowedOrigin } from '@infrastructure/http/origins';
 import { appConfig } from './config';
@@ -213,9 +213,7 @@ export const installRequestParsing = (app: Express): void => {
     app.use(
         express.json({
             limit: jsonBodyLimit(),
-            // RFC 7396's own media type: a PATCH may send `application/merge-patch+json`, which is
-            // the same JSON with the merge meaning the contract already gives every PATCH.
-            type: ['application/json', 'application/merge-patch+json'],
+            type: JSON_BODY_TYPES,
             verify: (request, _response, buffer) => {
                 // One cast, with a reason: `express.json` types its `verify` hook against the bare
                 // `http.IncomingMessage` the parser sees. It is the same object express has

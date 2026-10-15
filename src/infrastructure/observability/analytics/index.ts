@@ -10,7 +10,7 @@
 
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
 import { createProviderRegistry, requireProvider } from '@infrastructure/runtime/provider-registry';
-import { defineConfig, probe } from '@infrastructure/config/define';
+import { defineProbe } from '@infrastructure/config/define';
 import { analyticsConfig } from '@infrastructure/observability/config';
 import type { CallerContext } from '@types';
 import { umamiAnalyticsProvider } from './umami';
@@ -226,8 +226,4 @@ export const shutdownAnalytics = (): Promise<void> => {
  * shape-less slice, because the resolver imports the config and the config therefore cannot
  * import the resolver.
  */
-export const analyticsProviderProbe = defineConfig({
-    name: 'analytics-provider',
-    shape: {},
-    check: () => probe(resolveAnalyticsProvider)
-});
+export const analyticsProviderProbe = defineProbe('analytics-provider', resolveAnalyticsProvider);

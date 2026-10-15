@@ -5,8 +5,8 @@
 
 import type { z } from 'zod';
 import { getFallbackLocale } from '@infrastructure/i18n';
+import { fillOmittedWithNull } from '@infrastructure/object-guards';
 import {
-    clearOmittedFields,
     isTranslationPlan,
     planTranslations,
     readAllTranslations,
@@ -206,7 +206,7 @@ export const clearOmittedLocales = (
         const translations = Object.fromEntries(
             Object.entries(changes.translations ?? {}).map(([locale, entry]) => [
                 locale,
-                entry === null ? null : clearOmittedFields(TRANSLATED_FIELDS, entry)
+                entry === null ? null : fillOmittedWithNull(entry, TRANSLATED_FIELDS)
             ])
         );
         for (const locale of stored.keys())

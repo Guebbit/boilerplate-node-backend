@@ -200,9 +200,9 @@ is not obvious from the path; `ls tests/unit/<path>` is the complete list.
 
 ### `tests/unit/infrastructure/runtime/` and `persistence/`
 
-| File                                                    | What it guarantees                                                                                                          | Read next                      |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `tests/unit/infrastructure/runtime/environment.test.ts` | The fail-fast boot check, tested exhaustively because it is small and because it decides whether the process starts at all. | [Runtime](../tools/runtime.md) |
+| File                                                     | What it guarantees                                                                   | Read next                      |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------ |
+| `tests/unit/infrastructure/config/boolean-words.test.ts` | The words an environment variable, a query string and a form field use for a switch. | [Runtime](../tools/runtime.md) |
 
 ### `tests/unit/infrastructure/adapters/`
 

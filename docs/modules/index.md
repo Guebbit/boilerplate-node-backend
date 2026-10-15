@@ -71,6 +71,7 @@ flowchart TD
     api_keys --> access
     api_keys --> account
     api_keys --> users
+    audit_logs --> access
     cart --> addresses
     cart --> delivery
     cart --> inventory
@@ -133,20 +134,20 @@ flowchart TD
 | `delivery`      | inventory, orders, products, shop                                       | cart, notifications, returns                                |
 | `shop`          | —                                                                       | cart, delivery, invoicing, orders, products, returns, stats |
 | `users`         | access                                                                  | account, api-keys, cart, example, orders, webhooks          |
+| `access`        | —                                                                       | account, api-keys, audit-logs, example, orders, users       |
 | `inventory`     | products                                                                | cart, delivery, orders, payments, returns                   |
 | `payments`      | inventory, orders                                                       | cart, invoicing, returns, stats                             |
 | `products`      | shop                                                                    | cart, delivery, inventory, orders, wishlist                 |
 | `returns`       | delivery, inventory, orders, payments, shop                             | stats                                                       |
-| `access`        | —                                                                       | account, api-keys, example, orders, users                   |
 | `stats`         | invoicing, orders, payments, returns, shop                              | —                                                           |
 | `invoicing`     | orders, payments, shop                                                  | stats                                                       |
 | `account`       | access, users                                                           | api-keys                                                    |
 | `api-keys`      | access, account, users                                                  | —                                                           |
 | `notifications` | cart, delivery, wishlist                                                | —                                                           |
 | `wishlist`      | cart, products                                                          | notifications                                               |
+| `audit-logs`    | access                                                                  | observability                                               |
 | `example`       | access, users                                                           | —                                                           |
 | `addresses`     | —                                                                       | cart                                                        |
-| `audit-logs`    | —                                                                       | observability                                               |
 | `observability` | audit-logs                                                              | —                                                           |
 | `webhooks`      | users                                                                   | —                                                           |
 | `analytics`     | —                                                                       | —                                                           |

@@ -12,7 +12,7 @@
  */
 
 import { requireProvider } from '@infrastructure/runtime/provider-registry';
-import { defineConfig, probe } from '@infrastructure/config/define';
+import { defineProbe } from '@infrastructure/config/define';
 import { paymentsConfig } from '../config';
 import { paymentProviderRegistry } from './registry';
 
@@ -236,8 +236,4 @@ export const providerNamed = (name: string): PaymentProvider => {
  * A shape-less slice, because the resolver imports the config and the config therefore cannot
  * import the resolver.
  */
-export const paymentProviderProbe = defineConfig({
-    name: 'payments-provider',
-    shape: {},
-    check: () => probe(resolvePaymentProvider)
-});
+export const paymentProviderProbe = defineProbe('payments-provider', resolvePaymentProvider);

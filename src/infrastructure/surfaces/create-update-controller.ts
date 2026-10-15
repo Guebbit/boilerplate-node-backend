@@ -27,6 +27,7 @@ import {
     refused,
     type ServiceResult
 } from '@infrastructure/http/controller';
+import { fillOmittedWithNull } from '@infrastructure/object-guards';
 
 /**
  * Where an update's row id comes from: exactly one of the two.
@@ -111,23 +112,6 @@ export const clearableFields = (schema: ZodObject): string[] =>
     Object.entries<ZodType>(schema.shape)
         .filter(([, field]) => field.safeParse(null).success)
         .map(([name]) => name);
-
-/**
- * Fill every clearable field the caller's PUT body omitted with `null` — "the body IS the new
- * resource" (RFC 9110 §9.3.4) stated as a change-set a PATCH could have sent.
- *
- * @param body - the already-validated PUT body
- * @param fields - {@link clearableFields} of the PUT schema
- * @returns `body`, with every one of `fields` present — `null` where it was absent
- */
-export const fillOmittedWithNull = (
-    body: Record<string, unknown>,
-    fields: readonly string[]
-): Record<string, unknown> => {
-    const filled = { ...body };
-    for (const field of fields) if (!(field in filled)) filled[field] = null;
-    return filled;
-};
 
 /**
  * The row id this update acts on, or `undefined` once the refusal has been sent.
