@@ -19,26 +19,30 @@ import { stockLevelRepository, stockMovementRepository } from '../repository';
  * `available`, so a stock write that left them cached would keep showing the old count. Every stock
  * write — receipt, adjustment, hold, release, both sweeps, a return's restock — ends here.
  *
- * Never fails the caller: the transition it follows already committed, and the next transition on
- * this product corrects the cache regardless.
+ * Never rejects, the read included: the transition it follows already committed, and the next
+ * transition on this product corrects the cache regardless. A failure here must not skip what the
+ * caller still owes (a hold given back, a refund).
  *
  * @param productId - the product whose cached counters are being refreshed
  */
-export const syncStockCache = async (productId: string): Promise<void> => {
-    const level = await stockLevelRepository.findByProductId(productId);
-    if (level)
-        await productService
-            .syncStockCache(productId, { onHand: level.onHand, reserved: level.reserved })
-            .then(() => invalidateCacheTagsLogged(['products']))
-            .catch((error: unknown) => {
-                // Stryker disable all
-                logger.error({
-                    message: `Inventory: could not sync the catalogue's stock cache for product ${productId}`,
-                    error
-                });
-                // Stryker restore all
+export const refreshStockCache = (productId: string): Promise<void> =>
+    stockLevelRepository
+        .findByProductId(productId)
+        .then((level) =>
+            level
+                ? productService
+                      .syncStockCache(productId, { onHand: level.onHand, reserved: level.reserved })
+                      .then(() => invalidateCacheTagsLogged(['products']))
+                : undefined
+        )
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Inventory: could not refresh the catalogue's stock cache for product ${productId}`,
+                error
             });
-};
+            // Stryker restore all
+        });
 
 /**
  * Bring the catalogue's stock cache into step for these products — what a caller of
@@ -49,7 +53,7 @@ export const syncStockCache = async (productId: string): Promise<void> => {
 export const refreshStockCacheForProducts = async (
     productIds: readonly string[]
 ): Promise<void> => {
-    for (const productId of new Set(productIds)) await syncStockCache(productId);
+    for (const productId of new Set(productIds)) await refreshStockCache(productId);
 };
 
 /**
@@ -129,7 +133,7 @@ export const applyTransition = async (
         session
     );
 
-    if (!session) await syncStockCache(productId);
+    if (!session) await refreshStockCache(productId);
 
     return true;
 };

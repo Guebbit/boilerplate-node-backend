@@ -307,6 +307,9 @@ export const releaseCommittedForOrder = async (
  * its transaction has committed. The cache write leaves this module and cannot roll back, so it
  * waits for the commit instead of running inside it.
  *
+ * Never rejects: every caller runs it after its commit, and a failed read here must not skip what
+ * the caller still owes.
+ *
  * @param orderId - the order whose hold just moved
  */
 export const refreshStockCacheForOrder = (orderId: string): Promise<void> =>
@@ -316,7 +319,15 @@ export const refreshStockCacheForOrder = (orderId: string): Promise<void> =>
             refreshStockCacheForProducts(
                 (hold?.items ?? []).map(({ productId }) => String(productId))
             )
-        );
+        )
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Inventory: could not read the hold of order ${orderId} to refresh its stock cache`,
+                error
+            });
+            // Stryker restore all
+        });
 
 /**
  * Extend a still-open hold to `hours` from now — a card payment gone `processing` (a SEPA debit,

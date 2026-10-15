@@ -158,6 +158,11 @@ export const finishCreate = (
     return productRepository
         .findById(id)
         .then((reread) => reread ?? product)
+        .catch((error: unknown) => {
+            // The create committed: a failed re-read must not answer 500, or a retry makes a second product.
+            logger.error({ message: 'Product write: post-commit step failed: re-read.', error });
+            return product;
+        })
         .then((created) =>
             afterCommitStep('audit', () =>
                 recordAudit(context, {

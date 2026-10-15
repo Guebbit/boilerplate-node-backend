@@ -18,7 +18,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { ERROR_CODES } from '@api/error-codes';
 import { stockLevelRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
-import { applyTransition, syncStockCache } from './transition';
+import { applyTransition, refreshStockCache } from './transition';
 import { allocateWithin } from './allocate';
 
 /**
@@ -70,7 +70,7 @@ const receiveAndAllocate = (
     ).then((moved) => {
         if (!moved) return false;
         nudgeOutbox();
-        return syncStockCache(productId).then(() => true);
+        return refreshStockCache(productId).then(() => true);
     });
 
 /**

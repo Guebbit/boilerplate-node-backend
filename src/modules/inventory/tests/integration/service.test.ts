@@ -234,6 +234,45 @@ describe('reserveForOrder', () => {
         spy.mockRestore();
     });
 
+    // The stock write has committed by the time the catalogue's cache is refreshed: a failed read of
+    // the level there must not throw, or the units stay reserved against a hold nobody gave back.
+    it('still holds the units when the cache refresh cannot read the level afterwards', async () => {
+        const realFind = stockLevelRepository.findByProductId;
+        // Count the level reads one reserve makes; the LAST of them is the cache refresh's.
+        const probe = await createProduct({ onHand: 10 });
+        let reads = 0;
+        const counting = jest
+            .spyOn(stockLevelRepository, 'findByProductId')
+            .mockImplementation((productId) => {
+                reads += 1;
+                return realFind(productId);
+            });
+        await reserveForOrder(anOrderId(), [{ productId: String(probe._id), quantity: 1 }]);
+        const lastRead = reads;
+        counting.mockRestore();
+
+        const product = await createProduct({ onHand: 10 });
+        let call = 0;
+        jest.spyOn(stockLevelRepository, 'findByProductId').mockImplementation((productId) => {
+            call += 1;
+            return call === lastRead
+                ? Promise.reject(new Error('read failed'))
+                : realFind(productId);
+        });
+        const orderId = anOrderId();
+        const outcome = await reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 3 }
+        ]);
+        jest.restoreAllMocks();
+
+        expect(outcome.held).toBe(true);
+        // The ledger's own level is the source of truth; the catalogue's copy catches up on the
+        // product's next stock change.
+        const level = await stockLevelRepository.findByProductId(String(product._id));
+        expect([level?.onHand, level?.reserved]).toEqual([10, 3]);
+        expect(await reservationRepository.findByOrderId(orderId)).not.toBeNull();
+    });
+
     /*
      * A throw mid-loop (not a refusal) must not leave the hold naming a line whose counters
      * never moved: a later release would read that line's quantity off the hold and subtract it
@@ -324,6 +363,24 @@ describe('commitForOrder', () => {
             reserved: 3,
             available: 7
         });
+    });
+
+    it('still answers true when the hold cannot be read for the cache refresh afterwards', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+        const realFind = reservationRepository.findByOrderId;
+        let reads = 0;
+        const spy = jest.spyOn(reservationRepository, 'findByOrderId').mockImplementation((id) => {
+            reads += 1;
+            // The commit's own claim reads the hold; the refresh that follows is the read that fails.
+            return reads === 1 ? realFind(id) : Promise.reject(new Error('read failed'));
+        });
+
+        const committed = await commitForOrder(orderId);
+        spy.mockRestore();
+
+        expect(committed).toBe(true);
     });
 
     it('writes no ledger row — nothing moved, and the date lives on the hold', async () => {

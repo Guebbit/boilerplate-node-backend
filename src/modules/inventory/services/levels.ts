@@ -20,7 +20,7 @@ import { lowStockThreshold } from '../config';
 import { stockLevelRepository, stockMovementRepository } from '../repository';
 import type { PaginationInput } from '@infrastructure/persistence/search';
 import type { LevelFilters, MovementFilters } from './types';
-import { applyTransition, syncStockCache } from './transition';
+import { applyTransition, refreshStockCache } from './transition';
 
 /**
  * A new product's opening stock — `module.ts`'s `PRODUCT_CREATED` listener's own job, and safe
@@ -49,7 +49,7 @@ export const openLevel = (productId: string, onHand: number): Promise<void> =>
                       )
                     : false
             )
-    ).then((booked) => (booked ? syncStockCache(productId) : undefined));
+    ).then((booked) => (booked ? refreshStockCache(productId) : undefined));
 
 /**
  * Erase a product's level row — `module.ts`'s `PRODUCT_DELETED` listener's own job, and ONLY for

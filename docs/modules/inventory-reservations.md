@@ -79,7 +79,7 @@ rows and claims nothing, because the hold is `shipped` for good.
 Both take an optional Mongo `session`. `orders`' cancel passes one so the status move, the release
 commits together or not at all; given a session, the catalogue's stock cache is
 not synced inside the transaction (that write cannot roll back), and the caller runs
-`refreshStockCacheForOrder` after the commit.
+`refreshStockCacheForOrder` after the commit (which never rejects: a failed read there only leaves the catalogue copy stale until the next stock change).
 
 Two more `reason` values exist and belong to no reservation at all: `receive`
 (`POST /inventory/receipts`) and `adjust` (`POST /inventory/adjustments`), which move `onHand`
