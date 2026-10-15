@@ -672,9 +672,7 @@ export const requirePermissionViaCookie = (key: string) => {
                     key
                 );
                 if (!user || 'miss' in watch) {
-                    rejectResponse(response, 403, [
-                        { code: 'FORBIDDEN', message: t('generic.error-forbidden') }
-                    ]);
+                    rejectResponse(response, 403, [t('generic.error-forbidden')]);
                     return;
                 }
 

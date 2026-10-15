@@ -26,7 +26,7 @@ import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { paymentsAnalyticsEvents } from '../analytics';
 import { paymentsAuditActions } from '../audit';
 import { paymentAmountMismatchTotal } from '../metrics';
-import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
+import { SYSTEM_ACTOR, systemCallerContext } from '@kernel/permissions';
 import { providerNamed, type ProviderPaymentState, type ProviderWebhookEvent } from '../providers';
 import { paymentRepository } from '../repository';
 import {
@@ -114,12 +114,6 @@ const refundLostPayment = async (orderId: string): Promise<PaymentDocument | nul
     return refunded;
 };
 
-/** The caller context a settlement acts under when no request is behind it. */
-const systemContext = (subject: 'Order' | 'Payment'): CallerContext => ({
-    caller: callerForSubject(SYSTEM_ACTOR, subject),
-    analyticsConsent: false
-});
-
 /**
  * Cancel the order of a payment whose amount, currency or payment id did not match. The cancel's
  * own refund announcement returns the money (`performRefund` needs only a `succeeded` payment).
@@ -131,7 +125,7 @@ const systemContext = (subject: 'Order' | 'Payment'): CallerContext => ({
  */
 const cancelMismatchedOrder = (orderId: string): Promise<void> =>
     orderService
-        .cancelById(orderId, SYSTEM_ACTOR, {}, systemContext('Order'))
+        .cancelById(orderId, SYSTEM_ACTOR, {}, systemCallerContext('Order'))
         .then((cancelled) => {
             if (cancelled.success) return undefined;
             return refundLostPayment(orderId).then(() => undefined);
@@ -188,7 +182,7 @@ const settleMismatch = (
                 }
             });
             // Stryker restore all
-            recordAudit(systemContext('Payment'), {
+            recordAudit(systemCallerContext('Payment'), {
                 action: paymentsAuditActions.PAYMENT_AMOUNT_MISMATCH,
                 outcome: 'failure',
                 targetType: 'payment',

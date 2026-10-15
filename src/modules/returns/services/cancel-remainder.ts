@@ -32,7 +32,6 @@ import type { OrderDocument } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import { FulfillmentCancelReason } from '@types';
 import type { AuthContext, CallerContext } from '@types';
-import { ERROR_CODES } from '@api/error-codes';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
@@ -65,11 +64,7 @@ interface Cancelled {
  * consequences, so it needs the key that returns money (`payments.any.update`, `stepUp: critical`).
  */
 const forbidden = (): CreateReturnOutcome =>
-    refused(
-        generateReject(403, [
-            { code: ERROR_CODES.FORBIDDEN, message: t('generic.error-forbidden') }
-        ])
-    );
+    refused(generateReject(403, [t('generic.error-forbidden')]));
 
 /**
  * The Return row of a remainder cancel, closed when made.

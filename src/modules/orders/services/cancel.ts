@@ -8,7 +8,7 @@
  * not enough.
  */
 
-import { callerForSubject, SYSTEM_ACTOR } from '@kernel/permissions';
+import { systemCallerContext } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -139,10 +139,7 @@ const afterCancel = async (
     // see the docblock above. Only the reservation sweep's own timeout is reported under the
     // expiry analytics name, so a timeout is never counted as a customer's choice to cancel and
     // an erasure's cancel is never counted as a timeout.
-    const emitContext = context ?? {
-        caller: callerForSubject(SYSTEM_ACTOR, 'Order'),
-        analyticsConsent: false
-    };
+    const emitContext = context ?? systemCallerContext('Order');
 
     /*
      * The customer's answer to "what happened to my order" — the reservation sweep's own expiry,

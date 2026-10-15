@@ -35,7 +35,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import type { DomainEventMap } from '@kernel/events';
 import { announceInTransaction } from '@kernel/outbox';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
+import { systemCallerContext } from '@kernel/permissions';
 import {
     fitsCurrency,
     toMinorUnits,
@@ -125,15 +125,12 @@ const leaveForOperator = (orderId: string, payment: PaymentDocument): Promise<Pa
     // Stryker restore all
     // No `actorRole`/`actorUserId` override needed: `buildAuditEvent`'s defaults already read
     // them off `SYSTEM_ACTOR`'s own caller.
-    recordAudit(
-        { caller: callerForSubject(SYSTEM_ACTOR, 'Payment'), analyticsConsent: false },
-        {
-            action: paymentsAuditActions.PAYMENT_REFUND_OWED_BY_HAND,
-            outcome: 'success',
-            targetType: 'order',
-            targetId: orderId
-        }
-    );
+    recordAudit(systemCallerContext('Payment'), {
+        action: paymentsAuditActions.PAYMENT_REFUND_OWED_BY_HAND,
+        outcome: 'success',
+        targetType: 'order',
+        targetId: orderId
+    });
     return Promise.resolve(payment);
 };
 

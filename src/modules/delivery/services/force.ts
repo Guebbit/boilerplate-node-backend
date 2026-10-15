@@ -25,9 +25,7 @@ export const refuseUnearnedForce = (
 ): ResponseReject | undefined => {
     if (!forced) return undefined;
     if (!holdsKey(context.caller, 'orders.any.override'))
-        return generateReject(403, [
-            { code: ERROR_CODES.FORBIDDEN, message: t('generic.error-forbidden') }
-        ]);
+        return generateReject(403, [t('generic.error-forbidden')]);
     if (!reason)
         return generateReject(422, [
             fieldError(

@@ -9,7 +9,7 @@ import { StockMovementReason } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { nudgeOutbox } from '@kernel/outbox';
-import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
+import { systemCallerContext } from '@kernel/permissions';
 import type { ReservationStatus } from '../model';
 import { reservationRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
@@ -76,16 +76,13 @@ const raiseOrphanAlarm = (
         `Inventory: ${stage}ForOrder found no hold for order ${orderId} (reservation: ${reservationStatus}) — the order is past payment but no units were set aside for it`
     );
     // Stryker restore all
-    recordAudit(
-        { caller: callerForSubject(SYSTEM_ACTOR, 'Order'), analyticsConsent: false },
-        {
-            action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
-            outcome: 'failure',
-            targetType: 'order',
-            targetId: orderId,
-            metadata: { reservationStatus, stage }
-        }
-    );
+    recordAudit(systemCallerContext('Order'), {
+        action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
+        outcome: 'failure',
+        targetType: 'order',
+        targetId: orderId,
+        metadata: { reservationStatus, stage }
+    });
 };
 
 /**

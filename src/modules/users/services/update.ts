@@ -263,9 +263,7 @@ const missingKeyRefusal = (key: string, id: string, context: CallerContext): Res
         metadata: { reason: 'missing_permission', permission: key }
     });
 
-    return generateReject(403, [
-        { code: ERROR_CODES.FORBIDDEN, message: t('generic.error-forbidden') }
-    ]);
+    return generateReject(403, [t('generic.error-forbidden')]);
 };
 
 /**
