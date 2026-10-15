@@ -25,7 +25,7 @@ import type { AuthContext, ResolveOptions } from '@types';
 import { sessionRepository, type SessionRow } from '../repository';
 import { recordActivity } from './activity';
 import { resolveProof } from './auth-context';
-import { createSessionCookie, createLoggedCookie } from './cookies';
+import { createSessionCookie } from './cookies';
 import { RefreshTokenExpiryTime, getExpiryTimeMilliseconds } from './config';
 import { describeDevice } from './device-label';
 import { listSessions } from './listing';
@@ -112,7 +112,6 @@ const deliver = (
         ? Math.max(started.expiresAt.getTime() - Date.now(), 1000)
         : undefined;
     createSessionCookie(response, started.id, maxAgeMs);
-    createLoggedCookie(response, maxAgeMs);
     return {};
 };
 

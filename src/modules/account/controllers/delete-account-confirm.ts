@@ -7,7 +7,7 @@
 import type { Request, Response } from 'express';
 import { ConfirmAccountDeleteBody } from '@api/schemas.zod';
 import { accountService } from '../services';
-import { destroySessionCookie, destroyLoggedCookie } from '../session/cookies';
+import { destroySessionCookie } from '../session/cookies';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { AccountDeleteConfirmRequest } from '@types';
@@ -31,7 +31,6 @@ export const deleteAccountConfirm = (
             if (refused(response, result)) return;
 
             destroySessionCookie(response);
-            destroyLoggedCookie(response);
             successResponse<undefined>(response, undefined, result.status, result.message);
         })
         .catch((error: unknown) => {

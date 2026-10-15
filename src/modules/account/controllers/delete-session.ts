@@ -11,7 +11,7 @@ import { accountService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
-import { destroyLoggedCookie, destroySessionCookie } from '../session/cookies';
+import { destroySessionCookie } from '../session/cookies';
 import { sessionCredentialOf } from '../session/session';
 
 /**
@@ -41,7 +41,6 @@ export const deleteSession = (request: Request<{ sessionId: string }>, response:
 
             if (current) {
                 destroySessionCookie(response);
-                destroyLoggedCookie(response);
             }
 
             successResponse<undefined>(response, undefined, 200, t('account.sessions.revoked'));

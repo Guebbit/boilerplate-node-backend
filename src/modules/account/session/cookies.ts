@@ -51,14 +51,18 @@ export const createSessionCookie = (response: Response, credential: string, maxA
         // https://expressjs.com/en/api.html#res.cookie
         maxAge: maxAgeMs
     });
+    // Always set beside the credential, with the same lifetime: a hint without it, or the other
+    // way round, is a client that cannot tell whether to try restoring a session.
+    createLoggedCookie(response, maxAgeMs);
 };
 
 /**
- * Destroy the session cookie. Must match the flags `createSessionCookie` set — a browser matches a
+ * Destroy the session cookie and its hint. Must match the flags `createSessionCookie` set — a browser matches a
  * clear by path/domain/attributes, not by name alone.
  */
 export const destroySessionCookie = (response: Response) => {
     response.clearCookie(SESSION_COOKIE, hostCookieOptions());
+    destroyLoggedCookie(response);
 };
 
 /**
@@ -67,7 +71,7 @@ export const destroySessionCookie = (response: Response) => {
  * @param maxAgeMs - milliseconds, or `undefined` for a browser-session cookie — see
  *   `createSessionCookie`, which this is always set alongside with the same value.
  */
-export const createLoggedCookie = (response: Response, maxAgeMs?: number) => {
+const createLoggedCookie = (response: Response, maxAgeMs?: number) => {
     response.cookie('isAuth', 'true', {
         // No `httpOnly`/`secure`: this cookie holds no credential, only a hint the client may read.
         maxAge: maxAgeMs,
@@ -79,7 +83,7 @@ export const createLoggedCookie = (response: Response, maxAgeMs?: number) => {
 /**
  * Destroy the logged-in indicator cookie.
  */
-export const destroyLoggedCookie = (response: Response) => {
+const destroyLoggedCookie = (response: Response) => {
     response.clearCookie('isAuth', {
         path: '/'
     });

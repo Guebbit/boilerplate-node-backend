@@ -6,7 +6,7 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { destroyLoggedCookie, destroySessionCookie } from '../session/cookies';
+import { destroySessionCookie } from '../session/cookies';
 import { accountService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -29,7 +29,6 @@ export const postLogoutEverywhere = (request: Request, response: Response) => {
             }
 
             destroySessionCookie(response);
-            destroyLoggedCookie(response);
 
             successResponse(response, undefined, 200, t('account.logout.all-success'));
         })

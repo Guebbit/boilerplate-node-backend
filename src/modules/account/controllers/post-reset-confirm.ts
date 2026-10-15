@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { ConfirmPasswordResetBody } from '@api/schemas.zod';
 import { accountService } from '../services';
-import { destroySessionCookie, destroyLoggedCookie } from '../session/cookies';
+import { destroySessionCookie } from '../session/cookies';
 import { successResponse } from '@infrastructure/http/response';
 import type { PasswordResetConfirmRequest } from '@types';
 import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
@@ -41,7 +41,6 @@ export const postResetConfirm = (
 
             authPasswordResetConfirmTotal.inc({ status: 'success' });
             destroySessionCookie(response);
-            destroyLoggedCookie(response);
             successResponse(response, undefined, 200, t('account.reset.success'));
         })
         .catch((error: unknown) => {

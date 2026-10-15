@@ -6,7 +6,7 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { successResponse } from '@infrastructure/http/response';
-import { destroyLoggedCookie, destroySessionCookie } from '../session/cookies';
+import { destroySessionCookie } from '../session/cookies';
 import { accountService } from '../services';
 import { sessionCredentialOf } from '../session/session';
 import { catchAs } from '@infrastructure/http/controller';
@@ -25,7 +25,6 @@ export const postLogout = (request: Request, response: Response) => {
         .logoutCurrentSession(credential, callerContextOf(request))
         .then(() => {
             destroySessionCookie(response);
-            destroyLoggedCookie(response);
 
             successResponse(response, undefined, 200, t('account.logout.success'));
         })

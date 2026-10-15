@@ -9,7 +9,7 @@
  */
 
 import type { AuthResolver } from '@kernel/authentication';
-import { destroyLoggedCookie, destroySessionCookie } from './cookies';
+import { destroySessionCookie } from './cookies';
 import { activeStrategy } from './strategy';
 
 /**
@@ -28,6 +28,5 @@ export const accountAuthResolver: AuthResolver = {
     cookieAuthenticates: () => activeStrategy().cookieAuthenticates,
     clearDeadCookie: (response) => {
         destroySessionCookie(response);
-        destroyLoggedCookie(response);
     }
 };

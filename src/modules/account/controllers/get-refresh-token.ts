@@ -8,7 +8,7 @@ import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { isInfrastructureError, rejectServiceUnavailable } from '@infrastructure/http/errors';
 import type { RefreshTokenResponse } from '@types';
 import { accountService } from '../services';
-import { createSessionCookie, createLoggedCookie } from '../session/cookies';
+import { createSessionCookie } from '../session/cookies';
 import { getSessionMode } from '../session/config';
 import { authRefreshTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -39,7 +39,6 @@ export const getRefreshToken = (request: Request, response: Response) => {
                 // without this the client keeps presenting the now-superseded token, which
                 // its next refresh has to survive via the grace window rather than needing to.
                 createSessionCookie(response, rotated, refreshMaxAgeMs);
-                createLoggedCookie(response, refreshMaxAgeMs);
                 authRefreshTotal.inc({ status: 'success' });
                 successResponse<RefreshTokenResponse>(response, { token: accessToken });
             })

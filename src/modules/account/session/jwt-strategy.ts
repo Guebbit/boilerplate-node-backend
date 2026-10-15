@@ -27,7 +27,7 @@ import {
     TokenRejection,
     type TokenData
 } from './jwt';
-import { createSessionCookie, createLoggedCookie } from './cookies';
+import { createSessionCookie } from './cookies';
 import { getCookieMaxAgeMilliseconds, type RefreshTokenExpiryTime } from './config';
 import { resolveProof } from './auth-context';
 import { listSessions } from './listing';
@@ -62,7 +62,6 @@ const mintSession = (
     mint(userId, amr, remember, continued).then((refreshToken) => {
         const maxAgeMs = cookieMaxAgeOf(remember, continued);
         createSessionCookie(response, refreshToken, maxAgeMs);
-        createLoggedCookie(response, maxAgeMs);
         return createAccessToken(refreshToken).then((token) => ({
             issued: { token },
             refreshToken
@@ -290,7 +289,6 @@ export const jwtStrategy: SessionStrategy = {
                 return continueSession(userId, amr, remember, snapshot).then(
                     (refreshToken): IssuedSession => {
                         createSessionCookie(response, refreshToken, maxAgeMs);
-                        createLoggedCookie(response, maxAgeMs);
                         return {};
                     }
                 );

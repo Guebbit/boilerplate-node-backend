@@ -9,12 +9,7 @@
 
 import { asStub } from '@tests/stub';
 import type { Response } from 'express';
-import {
-    createSessionCookie,
-    destroySessionCookie,
-    createLoggedCookie,
-    destroyLoggedCookie
-} from '@modules/account/session/cookies';
+import { createSessionCookie, destroySessionCookie } from '@modules/account/session/cookies';
 import { setEnvironment } from '@tests/environment';
 
 /** Captures the (name, value, options) triples the module hands to Express. */
@@ -127,13 +122,13 @@ describe('destroySessionCookie', () => {
     });
 });
 
-describe('createLoggedCookie', () => {
-    it('sets a readable isAuth hint rather than a credential', () => {
+describe('the isAuth hint set with the session cookie', () => {
+    it('is a readable hint rather than a credential', () => {
         const response = makeResponse();
 
-        createLoggedCookie(response, 3_600_000);
+        createSessionCookie(response, 'token', 3_600_000);
 
-        const [name, value, options] = response.cookie.mock.calls[0];
+        const [name, value, options] = response.cookie.mock.calls[1];
         expect(name).toBe('isAuth');
         expect(value).toBe('true');
         // Deliberately NOT httpOnly: the frontend has to read it. Asserted explicitly so the
@@ -146,29 +141,27 @@ describe('createLoggedCookie', () => {
     it('expires in step with the refresh cookie it describes', () => {
         const response = makeResponse();
 
-        createLoggedCookie(response, 3_600_000);
+        createSessionCookie(response, 'token', 3_600_000);
 
         // If the hint outlived the credential the UI would show a logged-in state for a session
         // the API has already stopped honouring.
-        expect(response.cookie.mock.calls[0][2].maxAge).toBe(3_600_000);
+        expect(response.cookie.mock.calls[1][2].maxAge).toBe(3_600_000);
+    });
+
+    it('is a browser-session cookie too when the session cookie is', () => {
+        const response = makeResponse();
+
+        createSessionCookie(response, 'token');
+
+        expect(response.cookie.mock.calls[1][2].maxAge).toBeUndefined();
     });
 });
 
-describe('createLoggedCookie without a maxAge', () => {
-    it('is a browser-session cookie, in step with the refresh cookie', () => {
+describe('the isAuth hint cleared with the session cookie', () => {
+    it('is cleared on the same path it was set', () => {
         const response = makeResponse();
 
-        createLoggedCookie(response);
-
-        expect(response.cookie.mock.calls[0][2].maxAge).toBeUndefined();
-    });
-});
-
-describe('destroyLoggedCookie', () => {
-    it('clears isAuth on the same path it was set', () => {
-        const response = makeResponse();
-
-        destroyLoggedCookie(response);
+        destroySessionCookie(response);
 
         expect(response.clearCookie).toHaveBeenCalledWith('isAuth', { path: '/' });
     });
