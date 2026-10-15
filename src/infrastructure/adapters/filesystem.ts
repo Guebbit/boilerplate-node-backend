@@ -184,7 +184,9 @@ export const pruneUnreferenced = (
                     const filePath = path.join(root, entry.name);
                     return stat(filePath).then(
                         (info) =>
-                            Date.now() - info.mtimeMs < minAgeMs
+                            // `minAgeMs > 0`: with no grace period a file stamped in the same
+                            // millisecond (mtime is fractional, `Date.now()` is not) is not "young".
+                            minAgeMs > 0 && Date.now() - info.mtimeMs < minAgeMs
                                 ? false
                                 : unlinkIfPresent(filePath, 'Could not delete an orphaned file.', {
                                       file: entry.name
