@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/openapi.yaml
-sha256: 0dbfd92fe645e115134fe9f500da9b6a622c1b0abc0110408e909e6f1bd3f399
-generated_at: 2026-09-27T14:39:00.933271+00:00
+sha256: cb10188cdf985cdde31e4a23acde47ccfeed882370b039a2018d802ade39d897
+generated_at: 2026-10-15T10:18:18.636758+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.0.3 contract for the **addresses** module. It specifies the REST surface for managing a per-user address book (list, add, replace, patch, remove) and encodes the module's core invariant: a non-empty book always has exactly one entry flagged `default`, which is the slot checkout ships to when no explicit `addressId` is supplied.
+OpenAPI 3.1.0 contract for the addresses module. It defines the full CRUD surface for a per-user address book (list, add, replace, update, remove, set-default) under `/account/addresses`, plus the schemas and error vocabulary other parts of the API contract reference when they embed or return an address.
 
 ## Key elements
 
-- **`/account/addresses`**
-  - `GET` (`getAddresses`) — returns the full address book (`AddressesEnvelope`).
-  - `POST` (`addAddress`) — appends an entry via `AddressInput`; first entry auto-defaults, later ones claim the slot only with `default: true`.
-- **`/account/addresses/{addressId}`**
-  - `PUT` (`replaceAddress`) — full replacement per RFC 9110 §9.3.4; body is `ReplaceAddressRequest`.
-  - `PATCH` (`updateAddress`) — partial merge per RFC 7396; body is `UpdateAddressRequest` (all fields optional, `null` clears optional fields).
-  - `DELETE` (`removeAddress`) — removes the entry; if it was the default, the oldest remaining entry is promoted.
-- **Schemas (local to this spec):** `Address`, `AddressInput`, `UpdateAddressRequest`, `ReplaceAddressRequest` — all use `additionalProperties: false` and reference shared types for `id` and `country`.
-- **Default-slot semantics** are documented inline on every operation: `true` claims, `false`/absent leaves the assignment unchanged (prevents accidentally demoting without a successor).
+- **`x-error-codes`** — Module-scoped error registry; currently only `ADDRESS_BOOK_FULL` (409, book at `NODE_ADDRESS_BOOK_MAX` = 20 entries).
+- **`x-personal-data`** — Declares the `addresses` array section that the bundler injects into `AccountExportResponse` (`POST /account/export`). Removing the module removes this section automatically.
+- **`GET /account/addresses`** (`listAddresses`) — Returns the caller's full book; exactly one entry has `default: true` when non-empty.
+- **`POST /account/addresses`** (`addAddress`) — Creates an entry; first entry auto-defaults, later entries opt in via `default: true` in the body (demoting the previous holder). Returns 201 + `Location` header.
+- **`PUT /account/addresses/{addressId}`** (`replaceAddress`) — Full replacement per RFC 9110 §9.3.4 (omitted optional field → cleared). `default` is **not** accepted here.
+- **`PATCH /account/addresses/{addressId}`** (`updateAddress`) — RFC 7396 merge-patch; accepts both `application/json` and `application/merge-patch+json`. `default` is **not** accepted here.
+- **`DELETE /account/addresses/{addressId}`** (`removeAddress`) — Removes the entry; if it was the default, the oldest remaining entry is promoted.
+- **`PUT /account/addresses/{addressId}/default`** (`setDefaultAddress`) — Body-less, idempotent pointer move; demotes the previous default in the same write. Modeled on Shopify's equivalent endpoint.
+- **`components/schemas/Address`** — The book entry: `OrderAddress` fields + `label` + `default`. `additionalProperties: false`.
+- **`components/schemas/AddressInput`** — Create-body schema (no `id`, no `default` required).
+- Additional schemas (truncated in source): `AddressEnvelope`, `AddressesEnvelope`, `ReplaceAddressRequest`, `UpdateAddressRequest`.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — every error response (`401`, `404`, `422`, `500`), the `Id` schema, and the `CountryCode` schema are `$ref`-imported from this file. This spec never redefines them.
-- **`src/modules/cart/module.ts`** — the cart/checkout flow is the primary consumer of the default-address contract defined here: the `GET` description explicitly names the checkout use-case ("the one checkout ships to when no `addressId` is named"), tying the `default` flag on `Address` to cart behavior.
+- **`shared/contracts/openapi.root.yaml`** — Every shared response (`Unauthorized`, `InternalError`, `Conflict`, `ValidationError`, `NotFound`), the `Location` header, and the base `Id` / `CountryCode` schemas are pulled in via `$ref` paths of the form `../../../shared/contracts/openapi.root.yaml#/...`. This file never redefines those; it only composes them.
+- **`src/modules/cart/module.ts`** — Semantic consumer: the default address defined here is "the one checkout ships to when no `addressId` is named." The cart module's checkout flow resolves shipping from this module's `default` flag rather than carrying its own address copy.
 
 ## Notes
 
-- **PUT ≠ PATCH.** `ReplaceAddressRequest` requires all writable identity fields (omitting one clears it, per RFC 9110); `UpdateAddressRequest` leaves omitted fields untouched (RFC 7396). Do not interchange the two request bodies.
-- **Nullable vs. optional in PATCH.** Only `label` and `phone` are `nullable: true`. The required fields (`fullName`, `street`, `city`, `zip`, `country`) are deliberately *not* nullable — sending `null` for them is a `422`, not a clear.
-- **Cross-tenant 404, not 403.** A well-formed `addressId` that belongs to another user returns the same `404` as a fabricated id; there is no distinct "forbidden" path.
-- **`default` is API-managed.** Clients never set the flag to `false` to "demote"; the invariant is enforced server-side on create, replace, update, and delete.
+- **Default is a book-level pointer, not a per-address field.** `PUT` and `PATCH` on the address explicitly reject `default` in the body. The only way to change it is the dedicated `PUT /{addressId}/default` endpoint. This mirrors Shopify's design.
+- **404 is opaque to ownership.** An id that belongs to a different user returns the same 404 as a non-existent id — no 403.
+- **Idempotency:** `PUT /{addressId}/default` is idempotent by construction (RFC 9110 §9.3.4); repeating it is a no-op.
+- **Bundler coupling:** The `x-personal-data` block is consumed by an export bundler that assembles `AccountExportResponse`. The addresses module does not implement the export endpoint itself; it only contributes its schema slice.
+- **Cap enforcement:** `ADDRESS_BOOK_FULL` (409 on `POST`) is the only module-specific error code; all other errors reuse shared contracts.

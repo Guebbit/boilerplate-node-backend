@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/session-jwt.test.ts
-sha256: 6e9723401b5aae854978d3c7ca5617647bed9e61be9ad83054e5b6c60bedaf70
-generated_at: 2026-10-14T14:45:41.313785+00:00
+sha256: d3992e5dd211f5ba0494a911ac6f44d04615e3488680661a51df570e35a23e0e
+generated_at: 2026-10-15T10:15:52.038858+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test suite for the token layer in `session/jwt.ts`. Asserts the safety invariants of access/refresh token verification: that the two secrets never cross-verify, that a refresh token is only valid while its row is still stored, that `jti` prevents same-second logins from revoking each other, and that the signing ring rotates without mass logout. The session store and user service are replaced with mocks; the correctness of the underlying queries is deferred to `../integration/auth-storage.test.ts`.
+Unit tests for the JWT token layer (`account/session/jwt.ts`). Asserts the safety invariants of the signing/verification pipeline: access and refresh secrets never cross-verify, a refresh token is only valid while its row is still stored, `jti` (randomUUID) prevents two same-second logins from mutually revoking, and key-ring rotation does not cause mass logout. The session store and `userService` are **stubbed** (not driven); query correctness against a real store lives in `../integration/auth-storage.test.ts`.
 
 ## Key elements
 
-- **`jest.mock('@modules/users', …)`** — spreads the real module and overwrites `userService.findAuthenticatableById` and `touchLastActive` with `jest.fn()`.
-- **`jest.mock('@modules/account/repository', …)`** — spreads the real module and overwrites `sessionRepository.findByHash` and `insert` with `jest.fn()`.
-- **`signAs(secret, payload, opts?)`** — signs a JWT the same way `jwt.ts` does: stamps `kid: keyId(secret)`, sets `typ` per RFC 9068 (`at+jwt` / `rt+jwt`), and includes `auth_time` + `amr` defaults. Accepts `expiresIn` and `typ` overrides for negative cases.
-- **`holdingLive()`** — wires `findByHash` to return a live `jwt` row and `findAuthenticatableById` to return an eligible user; simulates the "token still stored" branch of `verifyRefreshToken`.
-- **`mintable()`** — wires the same two user-service mocks plus `sessionRepository.insert` so `startSession` can complete.
-- **`describe('verifyAccessToken')`** — covers: valid access token, missing `sid`, cross-secret (refresh signed as access), forged signature, expired, reason classification (`expired` / `invalid_signature` / `malformed`), missing `exp`, missing claims, `alg:none` with and without a real `kid`.
-- **`describe('verifyRefreshToken')`** — covers: valid + stored, valid but no longer stored (revocation). *(Truncated in source; additional cases likely follow.)*
-- **`describe('createAccessToken')` / `describe('startSession')`** — imported and exercised (content beyond truncation).
+- **`signAs(secret, payload, opts)`** — Signs a fixture JWT the same way `jwt.ts` does: stamps `kid: keyId(secret)`, RFC 9068 `typ` (`at+jwt` / `rt+jwt`), `auth_time`, `amr`, and `client_id` (access only). `null` omits a claim; `undefined` stamps the environment default.
+- **`holdingLive()`** — Configures `sessionRepository.findByHash` and `userService.findAuthenticatableById` so a presented refresh token resolves to a live, unexpired session row.
+- **`mintable()`** — Configures the same two services plus `sessionRepository.insert` so `startSession` can find the user and persist its row.
+- **`signedInUser()`** — Minimal user shape (`id`, `tokensValidAfter`, `twoFactorEnabledAt`) returned by `findAuthenticatableById`.
+- **`mockedUsers` / `mockedSessions`** — `asStub`-wrapped handles over the jest-mocked `userService` and `sessionRepository` for per-test assertion.
+- **`describe('verifyAccessToken', …)`** — Covers: valid verification, missing `sid`, cross-secret rejection, forged signature, expired / retired-key / non-JWT classification, missing `exp`, missing `auth_time`+`amr`, and `alg: none` forgery (with and without a real `kid`).
+- **`beforeEach`** — `jest.resetAllMocks()` (not `clearAllMocks`) plus `setEnvironment` for the four token/session TTL variables.
 
 ## Relationships
 
-- **`src/modules/account/session/jwt.ts`** — the module under test; all four exported functions are imported and asserted.
-- **`src/modules/account/session/key-ring.ts`** — provides `keyId()` used by `signAs` and the `alg:none` fixtures to stamp a valid `kid` header.
-- **`src/infrastructure/security/hash-token.ts`** — provides `hashToken()` used to assert that `findByHash` is called with the token's digest, not a raw value.
-- **`src/modules/account/repository.ts`** — its `sessionRepository` is the mock target for storage-level assertions.
-- **`src/modules/users/index.ts`** — mocked at module boundary so `userService` members can be individually stubbed while other members pass through.
-- **`src/modules/users/services/index.ts`** — the concrete implementation behind the `userService` mock (mocked, not directly called).
-- **`tests/support/environment.ts`** — provides `setEnvironment()` to inject `NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`, and session-duration vars in `beforeEach`.
-- **`tests/support/stub.ts`** — provides `asStub()` for type-safe access to the `jest.fn()` members of the mocked objects.
+- **`@modules/account/session/jwt`** — Module under test; imports `verifyAccessToken`, `verifyRefreshToken`, `createAccessToken`, `startSession`, `FIRST_PARTY_CLIENT_ID`.
+- **`@modules/account/session/key-ring`** — `keyId(secret)` is used in every fixture to stamp the `kid` header that `jwt.ts` uses to resolve the ring member.
+- **`@modules/account/session/config`** — `getAccessTokenAudience`, `getRefreshTokenAudience`, `getTokenIssuer` supply the registered-claim defaults so fixtures match what `jwt.ts` stamps.
+- **`@infrastructure/security/hash-token`** — `hashToken` imported (used by `verifyRefreshToken` / `startSession` to digest the presented token before the store lookup).
+- **`@modules/users`** — Mocked; `userService.findAuthenticatableById` and `touchLastActive` are replaced with `jest.fn()`, all other members pass through via `...actual.userService`.
+- **`@modules/account/repository`** — Mocked; `sessionRepository.findByHash` and `insert` are replaced, the rest pass through.
+- **`@tests/stub`** — `asStub` narrows the mocked objects to the specific methods the test asserts on.
+- **`@tests/environment`** — `setEnvironment` injects the four TTL / secret variables before each test.
 
 ## Notes
 
-- `jest.resetAllMocks()` (not `clearAllMocks`) is used in `beforeEach` so that per-test mock implementations (resolved/rejected) do not leak into the next case.
-- Every fixture must carry `kid: keyId(secret)`; a token without a `kid` will fail ring-member lookup and never reach signature verification.
-- `alg:none` tokens are hand-constructed with `Buffer.from(…).toString('base64url')` because no signing library emits that header.
-- The `typ` header follows RFC 9068: access tokens carry `at+jwt`, refresh tokens carry `rt+jwt`. Negative tests override `typ` to exercise mismatch cases.
-- Refresh-token validity is **two-gated**: signature must verify *and* `sessionRepository.findByHash(hashToken(token))` must return a row. This is the revocation path.
-- This suite is deliberately a **unit** test. Query correctness (what `findByHash` actually does against a real store) is covered in `../integration/auth-storage.test.ts`.
+- **`kid` is mandatory on fixtures.** A token signed without `kid: keyId(secret)` will never match a ring member, because `kid` is the sole lookup key.
+- **`jest.resetAllMocks()` vs `clearAllMocks()`.** The file deliberately uses `reset` so that a `mockRejectedValue` set in one test does not leak into the next; `clear` would wipe only the call log and preserve the implementation.
+- **`null` vs `undefined` in `signAs` options.** `null` omits the claim entirely (e.g. no `iss`); `undefined` stamps the environment-derived default. Confusing the two silently changes which code path under test is exercised.
+- **`alg: none` tests.** The second forgery (naming a real `kid`) is the case that actually exercises the `algorithms: ['HS256']` pin in `jose`'s `verify`, because `verifyAgainstRing` resolves the secret from `kid` *before* the algorithm check. The first (no `kid`) fails earlier at the kid lookup.
+- **`FIRST_PARTY_CLIENT_ID`** is stamped on access tokens only; refresh fixtures omit `client_id` by design.

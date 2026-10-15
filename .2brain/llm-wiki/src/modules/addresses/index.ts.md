@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/index.ts
-sha256: f5e34f047e6ffb0f2986aac095d3f0d9810120a3e510c27753e223fef553fc94
-generated_at: 2026-09-23T18:20:02.822297+00:00
+sha256: d2648330b70b1a33e863b1bc968229db0bf211ef0da475eca0b3bdefcdbb835e
+generated_at: 2026-10-15T10:17:48.235428+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Public barrel (module facade) for the **Addresses** module. It is the _only_ import surface a sibling module is allowed to use, enforcing the strategic-DDD boundary described in `docs/theory/strategic-ddd.md` §5. It re-exports the service's values and the model's types so consumers never reach into sub-paths directly.
+Public barrel for the Addresses module. It is the **only** entry point a sibling module may import from, enforcing the module-boundary rule described in `docs/theory/strategic-ddd.md` §5. It re-exports the module's public surface without adding any logic of its own.
 
 ## Key elements
 
-- **`export * from './service'`** — Re-exports all value-level exports (classes, functions, constants) from `./service.ts` as the module's runtime API.
-- **`export type * from './model'`** — Re-exports only the _type-level_ exports (interfaces, type aliases, enums used as types) from `./model.ts`. Values defined in `model.ts` are intentionally hidden.
+- `export * from './service'` — re-exports **all values** (functions, classes, constants) from the service layer.
+- `export type * from './model'` — re-exports **types only** (interfaces, type aliases, enums-as-types) from the domain model.
+- `export type * from './presenter'` — re-exports **types only** from the presenter/view-model layer.
+
+The distinction between `export *` and `export type *` keeps value-level imports limited to the service, preventing callers from reaching into the model or presenter at runtime.
 
 ## Relationships
 
-- **`src/modules/addresses/model.ts`** — Source of the type-only re-exports. Consumers get its types without importing the file directly.
-- **`src/modules/addresses/service.ts`** — Source of the value re-exports; carries the module's runtime behavior.
-- **`src/modules/cart/services/checkout.ts`** — Downstream consumer; imports from this barrel rather than from `./service` or `./model` directly, respecting the single-entry-point rule.
+- **`./service`, `./model`, `./presenter`** — source files that this barrel re-exports. External consumers never import these directly.
+- **`src/modules/cart/services/checkout.ts`** — sibling module that imports the addresses public surface through this barrel (e.g. to read an address for a checkout flow).
+- **`src/modules/cart/tests/integration/service.test.ts`** and **`src/modules/users/tests/integration/minimise.test.ts`** — integration tests that also resolve addresses types/values via this barrel rather than deep paths.
 
 ## Notes
 
-- The `type` keyword on the model re-export is deliberate: it strips any value-level exports from `model.ts` (e.g., const enums, singleton objects), so consumers can only see types. If you need a value from `model.ts`, it must instead be surfaced through `service.ts`.
-- Adding a new public export requires editing this file; there is no `export * from './utils'` catch-all. Keep the surface minimal.
+- The file contains **no** executable code, no side effects, and no filtering. It is a pure re-export list. Adding or removing a name here changes the module's public API without touching any implementation file.
+- Because the barrel is the sole import target, a rename or removal inside `service.ts`, `model.ts`, or `presenter.ts` will surface as a broken barrel export at build time—check this file when the build graph points at `addresses/index`.
+- For the intended usage rules and examples, see `docs/modules/addresses.md` (referenced in the file header).

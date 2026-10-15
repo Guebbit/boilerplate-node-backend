@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/cookies.test.ts
-sha256: d4d059c34799b6fd70920780db2a9955b2b07c713341d6ae20a3da99c0c43578
-generated_at: 2026-10-14T09:19:39.197214+00:00
+sha256: 670a416a0643297276aa42d0d573bab6a4fb9aedecb10737cde109a99cf6f1b3
+generated_at: 2026-10-15T10:14:26.548207+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the four cookie helpers in `session/cookies.ts`. Each test asserts the exact flag set a browser sees (`httpOnly`, `secure`, `sameSite`, `path`, `domain`, `maxAge`) so that a regression silently weakening an auth cookie or mismatching a `clearCookie` call is caught.
+Unit tests for the session-cookie module that pin down the security contract of `createSessionCookie` and `destroySessionCookie`: the credential cookie (`__Host-session`) must be `httpOnly`, `secure`, `sameSite: 'lax'`, `path: '/'`, and `domain`-less; the companion `isAuth` hint must be deliberately **not** `httpOnly`; and clearing must repeat the same flags so the browser actually drops the cookie. Each rule is asserted in isolation so a regression in any single flag fails on its own.
 
 ## Key elements
 
-- **`makeResponse()`** — builds a stubbed Express `Response` whose `cookie` and `clearCookie` are `jest.fn()`s, captured via `asStub`. All assertions read from `mock.calls[0]`.
-- **`beforeEach`** — sets `NODE_SESSION_TIME_SHORT` and `NODE_TOKEN_ACCESS_TIME` to real values so maxAge assertions exercise the actual config wiring rather than a permissive mock.
-- **`describe('createSessionCookie')`** — verifies `__Host-session` is set with `httpOnly: true`, `sameSite: 'lax'`, `path: '/'`, no `domain`, `secure: true` (in prod, dev, and unset `NODE_ENV`), and correct `maxAge` / browser-session fallback.
-- **`describe('destroySessionCookie')`** — asserts `clearCookie` is called with matching `httpOnly`, `sameSite`, and `path` flags so the browser actually drops the cookie.
-- **`describe('createLoggedCookie')`** — asserts `isAuth` carries value `'true'`, is **not** `httpOnly` (frontend-readable), uses `sameSite: 'lax'` / `path: '/'`, and mirrors the session cookie's `maxAge`.
-- **`describe('destroyLoggedCookie')`** — asserts `clearCookie('isAuth', { path: '/' })`.
+- **`makeResponse()`** – factory returning a stubbed Express `Response` whose `cookie` and `clearCookie` are `jest.fn()`s, so tests can inspect the exact `(name, value, options)` triples passed to Express.
+- **`beforeEach`** – sets real `NODE_SESSION_TIME_SHORT` (`'3600'`) and `NODE_TOKEN_ACCESS_TIME` (`'900'`) via `setEnvironment`, ensuring `maxAge` assertions exercise actual token-config wiring rather than a permissive mock.
+- **`describe('createSessionCookie')`** – six tests covering: the full flag set on first call, `secure: true` under `production` / unset / `development` `NODE_ENV`, explicit `maxAge` passthrough, and browser-session behaviour when `maxAge` is omitted (both `maxAge` and `expires` must be `undefined`).
+- **`describe('destroySessionCookie')`** – two tests verifying `clearCookie` is called with `__Host-session` and a flag subset (`httpOnly`, `sameSite`, `path`) that matches the set-cookie flags, plus `secure: true` in production.
+- **`describe('the isAuth hint set with the session cookie')`** – three tests on the second `cookie` call: name/value, explicitly **not** `httpOnly`, `sameSite: 'lax'`, `path: '/'`, and `maxAge` mirroring the session cookie (or `undefined` for browser-session).
+- **`describe('the isAuth hint cleared with the session cookie')`** – one test confirming `clearCookie('isAuth', { path: '/' })`.
 
 ## Relationships
 
-- **`src/modules/account/session/cookies.ts`** — the module under test; provides `createSessionCookie`, `destroySessionCookie`, `createLoggedCookie`, `destroyLoggedCookie`.
-- **`tests/support/environment.ts`** — `setEnvironment` is used in `beforeEach` and individual tests to toggle `NODE_ENV` and token-time variables.
-- **`tests/support/stub.ts`** — `asStub` supplies the typed cast for the mock Response object.
+- **`src/modules/account/session/cookies.ts`** – the module under test; this file imports `createSessionCookie` and `destroySessionCookie` and asserts their observable side-effects on a mock `Response`.
+- **`tests/support/environment.ts`** – provides `setEnvironment` used to toggle `NODE_ENV` and session-time values per-test.
+- **`tests/support/stub.ts`** – provides `asStub`, a typed cast helper used to build the mock `Response` object.
 
 ## Notes
 
-- `secure` is asserted `true` in **every** environment (production, development, unset) because the `__Host-` prefix mandates it; the tests document this as a browser-level constraint, not an env choice.
-- The `httpOnly` asymmetry (`true` on session, `undefined` on `isAuth`) is asserted explicitly in both directions to prevent a future "hardening" PR from accidentally making the two cookies indistinguishable.
-- `beforeEach` intentionally uses **real** numeric values for token times so that a broken config mapping would fail the maxAge assertions instead of being masked by a mock.
+- `secure` is asserted `true` for **every** `NODE_ENV` value (including `development`) because the `__Host-` prefix requires it at the browser level; the test documents that browsers accept it on `localhost`.
+- The `isAuth` cookie is asserted `httpOnly: undefined` (not `false`) to make the "deliberately readable" intent explicit and guard against someone flipping it to `true` during a blanket hardening pass.
+- The `destroySessionCookie` tests use `expect.objectContaining` rather than strict equality, acknowledging that the clear-call may carry additional flags (e.g. `secure`) without breaking the contract.

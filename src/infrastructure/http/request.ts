@@ -355,14 +355,13 @@ export const callerContextOf = (request: {
         // default belongs at the point of use, where `getDefaultLocale()` is the last term of a
         // precedence chain whose first term is the recipient's own stored preference.
         locale: request.locale,
-        // The stored account preference wins over the header — but only when the account has
-        // granted it. A logged-in caller who hasn't granted it falls through to the header too,
-        // so a banner choice made before logging in still counts until `PUT /account` records it.
-        // The header is read with `parseFormBoolean` — never `Boolean(value)`,
-        // which would make the string `'false'` truthy. Unrecognised (absent included) is `false`,
-        // matching the stored field's own default.
+        // A stored answer, yes or no, always wins: withdrawing consent (GDPR Art. 7(3)) must not
+        // be undone by a header. Only a caller with no stored answer (a guest, or an account never
+        // asked) takes the banner choice the frontend forwards, so it counts until `PUT /account`
+        // records it. The header is read with `parseFormBoolean` — never `Boolean(value)`, which
+        // would make the string `'false'` truthy. Unrecognised (absent included) is `false`.
         analyticsConsent:
-            request.authContext?.analyticsConsent === true ||
+            request.authContext?.analyticsConsent ??
             (consentHeader !== undefined && parseFormBoolean(consentHeader) === true)
     };
 };

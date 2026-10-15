@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/revocation-table.test.ts
-sha256: 5d64cecdd7c0e130d049678de85bf125e02998d9bf02ec173c0fad864dbd56f9
-generated_at: 2026-10-14T09:22:38.314487+00:00
+sha256: 600cedba4161f441582972d144401ff1e958c342d1d332537468b1aa33dacc95
+generated_at: 2026-10-15T10:15:21.420860+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting invariant tests for the `REVOCATION` table. Where individual cause tests verify one row, this file asserts table-wide structural rules (which rows announce, which are epoch-locked, which are mode-specific) that only hold when the table is viewed as a whole.
+Cross-cutting invariant tests for the `REVOCATION` table. It verifies global constraints across all revocation causes that no single per-cause test would catch (e.g., "every cause that keeps the caller's session must ride the epoch in its own write").
 
 ## Key elements
 
-- **`CAUSES`** – `Object.keys(REVOCATION) as RevocationCause[]`; the full set of table entries, used to drive `it.each` loops.
-- **"announces exactly the causes…"** – Filters `CAUSES` through the `announces` predicate and asserts the resulting set is exactly `['email-change-undo', 'logout-all', 'password-reset']`.
-- **"a caller that keeps its session rode the epoch in its own write"** – For every cause where `callerKeeps` is true, asserts `epoch` must be `'with-write'`.
-- **"a caller that keeps its session is never told it was compromised"** – For every cause where `callerKeeps` is true, asserts `announce` is `false`.
-- **"limits one cause to a single session mode"** – Asserts that `'refresh-reuse'` is the only cause whose `modes` field is the literal string `'jwt'`.
+- **`CAUSES`** — derived array (`Object.keys(REVOCATION)`) typed as `RevocationCause[]`; the canonical list of every cause, used to drive `it.each` loops and whole-table assertions.
+- **`announces` filter test** — asserts that exactly `email-change-undo`, `logout-all`, and `password-reset` are flagged as compromise announcements.
+- **`pending` filter test** — asserts that exactly `email-change-undo`, `password-change`, and `password-reset` purge pending one-time links/challenges.
+- **`it.each(CAUSES)` — caller-keeps ⇒ epoch** — for any cause where `callerKeeps` is truthy, `epoch` must be `'with-write'`.
+- **`it.each(CAUSES)` — caller-keeps ⇒ no announce** — for any cause where `callerKeeps` is truthy, `announce` must be `false`.
+- **`modes` exclusivity test** — asserts that `refresh-reuse` is the *only* cause whose `modes` is `'jwt'` (refresh-token reuse is the sole session-mode-specific trigger).
 
 ## Relationships
 
-- **`src/modules/account/domain/revocation.ts`** – The sole dependency. Imports the `REVOCATION` table (the data under test), the `announces` helper (used as a filter predicate), and the `RevocationCause` type.
+- **`src/modules/account/domain/revocation.ts`** — sole import source. Pulls in the `REVOCATION` constant (the table under test), the `announces` predicate (used as a `Array.filter` callback), and the `RevocationCause` type for `CAUSES` annotation.
 
 ## Notes
 
-- The file deliberately hard-codes expected cause names (`'email-change-undo'`, `'logout-all'`, `'password-reset'`, `'refresh-reuse'`) rather than re-deriving them from domain logic. Adding or renaming a cause in `revocation.ts` will break these tests *and* require updating the literal strings here.
-- Tests 2 and 3 are vacuous for causes where `callerKeeps` is falsy (the `if` guard skips the assertion), so they only constrain the "caller keeps" subset of the table.
-- The JSDoc header positions this as a complement to per-cause tests, not a replacement; it exists to catch invariant violations that no single-row test would surface.
+- The module docblock is explicit: these tests exist for invariants that *no individual cause's test* would detect. Don't duplicate per-cause assertions here; add new cross-cause rules instead.
+- `it.each(CAUSES)` cases are *conditional* — they only assert when `callerKeeps` is truthy, so adding a new cause with `callerKeeps: false` will pass vacuously.
+- The `announces` import is a function, not a data flag; the test uses it as a filter predicate rather than reading `REVOCATION[cause].announce` directly in the first assertion.

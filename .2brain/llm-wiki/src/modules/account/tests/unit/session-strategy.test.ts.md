@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/session-strategy.test.ts
-sha256: c2f7b66a061ded3829af07f93abccf59a40c15f8e062c305e8e8acd32701585a
-generated_at: 2026-10-14T14:46:28.675902+00:00
+sha256: e0ba30759df3c281ecd82bf72c9cfd5c8e02e6dcf9653167b26b9b01776e43f9
+generated_at: 2026-10-15T10:16:18.016419+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the session-mode seam: they verify that `activeStrategy` dynamically selects the correct adapter from `NODE_SESSION_MODE` on every call (rather than caching the first one), that the resolver's cookie-authentication gate flips correctly per mode, and that the mint guard enforces second-factor proof only for armed accounts.
+Unit tests for the session-strategy seam: verifying that the active adapter is selected per-call from `NODE_SESSION_MODE`, that the resolver delegates (rather than caching) to whichever adapter is active, and that the shared mint guard enforces second-factor requirements before a session is issued.
 
 ## Key elements
 
-- **`describe('activeStrategy')`** — asserts the default is `jwtStrategy`; that `NODE_SESSION_MODE='cookie'` / `'jwt'` selects the matching adapter; and that a mid-test env change is picked up on the next call (no frozen import-time value).
-- **`describe('accountAuthResolver')`** — checks `cookieAuthenticates()` returns `true` in cookie mode and `false` in jwt mode; also verifies `fromBearer` / `fromCookie` reject malformed tokens with a `{ miss: 'malformed' }` result without performing a lookup.
-- **`describe('assertSecondFactor')`** — confirms the guard throws `SecondFactorRequiredError` (carrying `userId`) when an armed account's proof lacks a second factor, passes when the factor is present, and is a no-op for unarmed accounts.
-- **`setEnvironment`** (from `@tests/environment`) — the sole mechanism for mutating `NODE_SESSION_MODE` between assertions.
+- **`describe('activeStrategy')`** — Asserts the default (no env var → `jwtStrategy`), the per-mode mapping (`jwt`/`cookie`), and that a later change to `NODE_SESSION_MODE` is observed on the next call (no frozen snapshot).
+- **`describe('accountAuthResolver')`** — Verifies `cookieAuthenticates()` reflects the current mode, and that `fromBearer` / `fromCookie` return structured miss codes (`'revoked'` for a foreign-mode credential, `'malformed'` for an unparseable value) without performing a lookup.
+- **`describe('assertSecondFactor')`** — Confirms the guard throws `SecondFactorRequiredError` (carrying `userId`) when an armed account's proof list lacks the factor, passes when the factor is present, and is a no-op for un-armed accounts.
 
 ## Relationships
 
-- **`strategy.ts`** — source of `activeStrategy`, the function under test.
-- **`resolver.ts`** — source of `accountAuthResolver` (`cookieAuthenticates`, `fromBearer`, `fromCookie`).
-- **`cookie-strategy.ts`** / **`jwt-strategy.ts`** — the two adapters that `activeStrategy` must return; identity-checked with `.toBe` and `.mode` inspected.
-- **`mint-guard.ts`** — source of `assertSecondFactor` and `SecondFactorRequiredError`.
-- **`tests/support/environment.ts`** — provides `setEnvironment` to drive the `NODE_SESSION_MODE` env var in-process.
+- **`strategy.ts`** — Under test. `activeStrategy()` is the function exercised in the first block.
+- **`resolver.ts`** — Under test. `accountAuthResolver.cookieAuthenticates()` and `.fromBearer()` / `.fromCookie()` are exercised in the second block.
+- **`cookie-strategy.ts` / `jwt-strategy.ts`** — Referenced as identity-check targets (`toBe(jwtStrategy)`, `toBe(cookieStrategy)`) to confirm the resolver reaches the correct adapter.
+- **`mint-guard.ts`** — Under test. `assertSecondFactor` and `SecondFactorRequiredError` are exercised in the third block.
+- **`tests/support/environment.ts`** — Provides `setEnvironment`, used to mutate `NODE_SESSION_MODE` between assertions.
 
 ## Notes
 
-- The "follows a mode changed after import" test is the critical regression guard: it locks in the per-call read contract. Any refactor that hoists the adapter selection to module scope will break it.
-- Identity checks use `.toBe` (reference equality) for adapter selection, not deep equality — the tests care that the *same object* is returned, not just an equivalent one.
-- All path imports use project aliases (`@modules/…`, `@tests/…`); no relative paths.
+- The "mode changed after import" test exists to guard against a regression where `activeStrategy` captures the adapter once at module load. If that ever regresses, the first call still returns `cookieStrategy` while the second returns `jwtStrategy`, and the test catches it.
+- Cross-mode credentials are modelled as *stale*, not *forged*: a JWT-shaped string presented in cookie mode yields `miss: 'revoked'`, not an error. This is an intentional design choice being pinned by the test.
+- `setEnvironment` is the only env-mutation helper used; tests do not call `process.env` directly.

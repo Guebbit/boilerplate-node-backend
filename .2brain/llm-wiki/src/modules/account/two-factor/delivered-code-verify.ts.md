@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/two-factor/delivered-code-verify.ts
-sha256: 94e7b74286ecfcc23ee8619ed6b35f47b218b89732ef35fcbdc720eeab1052b6
-generated_at: 2026-10-14T14:48:07.234143+00:00
+sha256: b2c7a29015a931bcbdcece34ee3cde28d57f69bdd889eecfe1375cb9f63d7c63
+generated_at: 2026-10-15T10:16:41.084885+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single-purpose module that verifies a caller-supplied code against the account's in-flight delivered code and performs the resulting conditional write (spend on match, attempt-count on miss) atomically behind the users service "door," eliminating a read-modify-write race. The same code path serves both the second-factor delivered code and the step-up (reauth) code.
+Verifies a delivered (e.g. emailed) code against an account using a pure comparison followed by conditional writes. It avoids a read-modify-write cycle: the comparison itself (`checkDeliveredCode`) is stateless, and the side-effects (spending the code on a match, incrementing the miss counter on a failure) are issued as separate conditional writes through the users service. The same function serves both a second-factor code and a step-up (reauth) code.
 
 ## Key elements
 
-- **`verifyDeliveredCode(user, slot, state, code, now?)`** *(exported)* — The only export. Runs the pure `checkDeliveredCode` comparison, then dispatches:
-  - **match** → `userService.spendDeliveredCode(…, hash, MAX_ATTEMPTS, now)`; the resolved boolean is *true* only if this call won the spend (a concurrent duplicate loses).
-  - **miss** → `userService.recordDeliveredMiss(…, hash, MAX_ATTEMPTS)`; always resolves `false`.
-  - **no state / no hash** → short-circuits to `Promise.resolve(false)`.
-- **`now: Date = new Date()`** — injectable clock for deterministic tests.
+- **`verifyDeliveredCode(user, slot, state, code)`** *(exported)* — The sole export. Returns `Promise<boolean>` indicating whether *this* call spent the code.
+  - Resolves `false` immediately if `state` or `state.codeHash` is absent.
+  - On a **match** verdict: delegates to `userService.spendDeliveredCode` with the hash as the CAS guard.
+  - On a **miss** verdict: delegates to `userService.recordDeliveredMiss`, then resolves `false`.
+  - Any other verdict (e.g. expired) resolves `false` with no write.
 
 ## Relationships
 
-- **`./delivered-codes`** — imports `checkDeliveredCode` (the pure hash-comparison + expiry check) and `DELIVERED_CODE_MAX_ATTEMPTS` (the attempt budget passed to the users service).
-- **`@modules/users` (index)** — imports `userService` (provides `spendDeliveredCode`, `recordDeliveredMiss`) and the types `UserDocument`, `DeliveredCodeSlot`, `DeliveredCodeState`.
-- **`@modules/users/services`** — concrete implementations of the two write methods invoked above.
-- **`@modules/users/model`** — source of the `DeliveredCodeState` / `DeliveredCodeSlot` / `UserDocument` type shapes used in the signature.
-- **`two-factor/methods/email.ts`** — caller on the second-factor path (delivered-code email flow).
-- **`account/services/reauth.ts`** — caller on the step-up path (module doc: "the same path serves … the step-up code").
-- **`two-factor/index.ts`** — barrel that re-exports this module's public surface.
+- **`./delivered-codes`** — Imports the pure comparator `checkDeliveredCode` and the constant `DELIVERED_CODE_MAX_ATTEMPTS`.
+- **`@modules/users`** (index, model, services) — Imports the `userService` instance and the `UserDocument`, `DeliveredCodeSlot`, and `DeliveredCodeState` types. All writes (`spendDeliveredCode`, `recordDeliveredMiss`) go through `userService`, keeping the "users door" as the sole mutation boundary.
+- **`./index.ts`** — Barrel file that re-exports this module for consumers within the two-factor module.
+- **`./methods/email.ts`** — The email second-factor method that calls `verifyDeliveredCode` when a user submits their emailed digits.
+- **`../services/reauth.ts`** — The step-up/reauth flow that reuses this same verification path for the step-up code.
 
 ## Notes
 
-- The function is **idempotent-unfriendly by design**: two parallel requests with the same code both pass the pure check, but only one wins the `spendDeliveredCode` conditional write. The loser's call resolves `false`, so callers should treat `false` as "not spent *by this call*," not necessarily "wrong code."
-- `DELIVERED_CODE_MAX_ATTEMPTS` is passed to both the spend and miss calls so the users service can enforce the attempt ceiling in the same write; this file does not do its own attempt arithmetic.
-- The module is side-effect-free on the happy path *before* the service call — all branching logic is synchronous; only the service calls are async.
+- **Idempotent-spend guarantee:** The `hash` parameter acts as a compare-and-set guard on the write. A parallel request holding the same code will fail the spend, so a code can only be consumed once regardless of concurrency.
+- **No direct collection writes:** This module never touches a datastore itself; all mutations are conditional writes mediated by `userService`.
+- **Single code path for two contexts:** Both 2FA second-factor verification and step-up (reauth) verification funnel through this one function — there is no separate "reauth verify" implementation.

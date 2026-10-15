@@ -78,10 +78,10 @@ export interface AuthContext {
     twoFactorArmed: boolean;
     /**
      * The account's analytics consent choice, read fresh from the document on every request.
-     * Carried through to `CallerContext` for `emitAnalyticsEvent`'s own gate; nothing else should
-     * need to read it.
+     * Absent until the account has answered once: only then may the visitor's banner header speak
+     * for it. Carried through to `CallerContext` for `emitAnalyticsEvent`'s own gate.
      */
-    analyticsConsent: boolean;
+    analyticsConsent?: boolean;
 }
 
 /**

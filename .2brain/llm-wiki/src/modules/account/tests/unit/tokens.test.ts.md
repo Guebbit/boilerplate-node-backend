@@ -1,34 +1,31 @@
 ---
 source: src/modules/account/tests/unit/tokens.test.ts
-sha256: 9cf329613da4244171fc2a658986b1d91f89d28005005173283aea84bc7c3a14
-generated_at: 2026-10-14T14:46:52.101264+00:00
+sha256: 93e8972037bd5f1f67cfc9eb909880d7597c47648e32095527e0a461159b6e03
+generated_at: 2026-10-15T10:16:29.697376+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/tests/unit/tokens.test.ts
 
 ## Purpose
-
-Unit tests for the token/session configuration module (`session/config.ts`). Every value under test controls a JWT lifetime, signing secret, or cookie max-age — misreads produce silently too-long (security) or too-short (support) sessions with no runtime error. The tests pin the documented contract: per-tier env-var routing, fallback defaults, ring parsing, mode selection, and the boot-gate rules.
+Unit tests for the token/session configuration module (`session/config.ts`). They verify that every env-var read produces the correct parsed value (seconds, milliseconds, ring array, session mode) and that the boot-gate checks (`assertConfigIn`) enforce the documented contract—especially the invariant that `NODE_TOKEN_REUSE_WINDOW_MS` must exceed `NODE_TOKEN_ROTATION_GRACE_MS` and that signing-ring placeholders are rejected in `jwt` mode but optional in `cookie` mode.
 
 ## Key elements
-
-- **`TOKEN_ENV_KEYS`** — const array of every env var the module reads; passed to `withoutEnvironmentInThisFile` so each test starts with a clean slate.
-- **`setEnvironment`** / **`withoutEnvironmentInThisFile`** — test helpers (from `tests/support/environment`) that set or clear process env vars per test.
-- **`windowProblems(grace?, reuse?)`** — local helper that calls `sessionConfig.slice.inspect` with a production-shaped object to exercise the grace-vs-reuse boot check and return the list of problem messages.
-- **`placeholders`** (inside the boot-gate `describe`) — a production-shaped config object with deliberately placeholder secrets, used to assert that `assertConfigIn` rejects them in `jwt` mode but accepts their absence in `cookie` mode.
-- **`describe` blocks** — one per exported function/behaviour: `getExpiryTime`, `getExpiryTimeMilliseconds`, signing rings, access-token TTL, `getCookieMaxAgeMilliseconds`, `toRememberTier`, the token-windows check, `getSessionMode`, and the boot gate for signing rings.
+- **`TOKEN_ENV_KEYS`** — the full list of env vars the module reads; cleared before every test via `withoutEnvironmentInThisFile` to prevent ambient leakage.
+- **`getExpiryTime` / `getExpiryTimeMilliseconds` tests** — tier routing (SHORT/MEDIUM/LONG), default fallback, empty-string → default (not NaN), base-10 parsing, and the ×1000 scaling.
+- **Token signing rings tests** — single-secret ring, comma-separated multi-ring (newest first), and the `[]` (never `undefined`) contract when unset.
+- **Access-token TTL tests** — `NODE_TOKEN_ACCESS_TIME` parsing, 600 s default, isolation from refresh-tier variables.
+- **`getCookieMaxAgeMilliseconds` / `toRememberTier` tests** — tier → ms mapping and the `undefined` sentinel for browser-session cookies.
+- **`windowProblems` helper** — invokes `sessionConfig.slice.inspect` to exercise the grace/reuse boot check in production shape.
+- **Boot-gate tests** — `assertConfigIn` against placeholder secrets in `jwt` vs `cookie` mode, trimmed/case-insensitive mode selector, and the exemption of the reuse-window check under `cookie` mode.
 
 ## Relationships
-
-- **`src/modules/account/session/config.ts`** — the module under test. All SUT imports (`getExpiryTime`, `getAccessTokenRing`, `sessionConfig`, etc.) come from here.
-- **`src/infrastructure/config/define.ts`** — supplies `assertConfigIn`, used in the boot-gate tests to verify that `sessionConfig.slice` rejects placeholder secrets or missing required keys.
-- **`tests/support/environment.ts`** — supplies `setEnvironment` and `withoutEnvironmentInThisFile`, the env-var isolation utilities every test in this file depends on.
+- **`src/modules/account/session/config.ts`** — the module under test; every `describe` block exercises one or more of its exported functions (`getExpiryTime`, `getAccessExpiryTime`, `getAccessTokenRing`, `getSessionMode`, `sessionConfig`, etc.).
+- **`src/infrastructure/config/define.ts`** — provides `assertConfigIn`, which the boot-gate tests call to confirm that the slice's field-level validation (placeholder rejection, mode-conditional requirements) fires correctly.
+- **`tests/support/environment.ts`** — supplies `setEnvironment` (inject a single var for a test) and `withoutEnvironmentInThisFile` (delete a set of vars before each test), making every assertion hermetic.
 
 ## Notes
-
-- Every test sets **distinct** numeric values per tier so that a swapped mapping (e.g. SHORT and MEDIUM both reading the same var) cannot be masked by identical assertions.
-- Empty-string and unset env vars are tested separately; both must resolve to the tier default, never `NaN` (a `NaN` max-age would be silently dropped by Express, producing an unintended session cookie).
-- The boot-gate tests set `NODE_ENV: 'production'` explicitly to exercise the production enforcement path (the gate skips enforcement in test mode).
-- `cookie` mode exempts the signing-ring requirement and the reuse-window check entirely — a non-obvious coupling between `NODE_SESSION_MODE` and which keys are mandatory.
-- The `getSessionMode` test uses `it.each` with a whitespace-padded value (`'  Cookie '`) to lock in the trim-and-lowercase behaviour.
+- `withoutEnvironmentInThisFile(TOKEN_ENV_KEYS)` is called at module top-level (outside any `describe`), so the clear runs once before the suite; individual tests then call `setEnvironment` to re-inject specific values.
+- The file intentionally sets *distinct* values per tier in the "distinct env var per tier" test to catch a swapped-map wiring bug that identical values would mask.
+- The `windowProblems` helper hard-codes `NODE_ENV: 'production'` so the boot check runs in its strictest form; the "documented defaults" case (`10 s` grace, `24 h` reuse) is the one combination that passes with no vars set.
+- Boot-gate placeholder strings (`your-access-token-secret-here`, `your-refresh-token-secret-here`) are the exact sentinel values the production `.env.example` ships; the tests assert the gate rejects *those specific strings*, not just any short value.

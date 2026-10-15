@@ -60,9 +60,11 @@ export const resolveProof = (
                 // very next request, whatever the session carries.
                 twoFactorArmed: user.twoFactorEnabledAt !== undefined,
                 // A consent WITHDRAWAL has to apply to the very next event, not wait for the
-                // caller to log in again. `?? false`: the schema defaults it, the contract-derived
-                // type does not know that.
-                analyticsConsent: user.analyticsConsent ?? false
+                // caller to log in again. Left out until the account has answered, so a banner
+                // choice made before sign-in still counts, but never over a stored answer.
+                ...(user.analyticsConsentAt === undefined
+                    ? {}
+                    : { analyticsConsent: user.analyticsConsent === true })
             })
         );
     });

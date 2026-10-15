@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/epoch.test.ts
-sha256: 3601ec1ab96af20afae7b85c50783efb93b0d701b8991c91b7718a2e7ea05eb9
-generated_at: 2026-10-14T09:20:54.452390+00:00
+sha256: 51b5e901f0627659e382c7f19999898f00871367cb413231be6920e2390276fe
+generated_at: 2026-10-15T10:14:45.199447+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `predatesSessionEpoch`, the single comparison shared by the account resolver and the session-refresh path. The suite pins down the boundary semantics so that either call site can rely on the same "is this token older than the epoch" decision without re-deriving the rule.
+Unit tests for the two epoch-predation predicates in `session/epoch`: `predatesSessionEpoch` (token-side, shared by the resolver and refresh path) and `proofPredatesEpoch` (login-proof side at the mint). The file pins down the boundary behavior of each so that a refactor or timezone change cannot silently alter which tokens/proofs are rejected.
 
 ## Key elements
 
-- **`describe('predatesSessionEpoch')`** — the sole top-level block; imports `predatesSessionEpoch` from `../../session/epoch` and exercises it with four focused cases.
-- **`epoch` / `epochSecond`** (local constants) — a fixed `Date` (`2026-10-06T12:00:00.900Z`) and its millisecond value truncated to whole seconds, used as the reference point for every assertion.
-- **Test: "never refuses when no event ever moved the epoch"** — asserts `predatesSessionEpoch(0, undefined)` returns `false`, locking in the no-epoch guard.
-- **Test: "refuses a token stamped in an earlier second"** — asserts a token one second before the epoch is refused (`true`).
-- **Test: "keeps a token stamped in the very second of the bump"** — asserts a token in the *same* second as the epoch is **not** refused (`false`); this is the critical boundary.
-- **Test: "keeps a token stamped later"** — asserts a token five seconds after the epoch is not refused.
+- **`describe('predatesSessionEpoch')`** — four cases around a fixed epoch (`2026-10-06T12:00:00.900Z`):
+  - `undefined` epoch → always `false`.
+  - Token second **before** epoch second → `true` (refused).
+  - Token second **equal to** epoch second → `false` (kept; "survives its own bump").
+  - Token second **after** epoch second → `false`.
+- **`describe('proofPredatesEpoch')`** — three cases with the same epoch:
+  - `undefined` epoch → always `false`.
+  - Proof timestamp **1 ms before** epoch (same second) → `true` (refused).
+  - Proof timestamp **equal to or after** epoch ms → `false`.
 
 ## Relationships
 
-- **`src/modules/account/session/epoch.ts`** — the module under test. The test file imports `predatesSessionEpoch` directly and exercises its contract; no other imports or side effects connect the two.
+- Imports and exercises `predatesSessionEpoch` and `proofPredatesEpoch` from `src/modules/account/session/epoch.ts`. No other module is touched.
 
 ## Notes
 
-- The boundary test ("very second of the bump") documents that the comparison is `tokenSecond < epochSecond` (strictly-less-than), not `<=`. A token issued in the same second as the epoch bump is intentionally allowed to survive. If the implementation ever changes to `<=`, that test is the one that will catch the regression.
-- The function signature accepts `epoch` as `Date | undefined`; passing `undefined` is a first-class case (meaning "no epoch event occurred"), not an error.
-- `epochSecond` is derived via `Math.floor(epoch.getTime() / 1000)`, so sub-second precision (`.900`) is discarded before comparison — the function operates at whole-second granularity.
+- The two functions operate at **different time granularities**: `predatesSessionEpoch` compares integer seconds (`Math.floor(epoch.getTime()/1000)`), while `proofPredatesEpoch` compares raw millisecond timestamps. This is intentional—tokens carry second-resolution stamps, proofs carry millisecond-resolution ones.
+- The boundary convention is **inclusive on the epoch side** for both functions: a value stamped *at* the epoch instant is kept, not refused. The test names call this out explicitly ("keeps a token stamped in the very second of the bump").
+- The fixed date is a future date (2026) chosen to be safely outside any realistic "current time" window, making the tests deterministic without mocks.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/audit.ts
-sha256: 441e0415a43199beaa957a9159bd006714df4d939b3c710522da069b4a62799c
-generated_at: 2026-09-23T18:23:25.478510+00:00
+sha256: 0729239a5a13fe46d665962322db37a3a0b91d869b922ad29259cc5805e4274b
+generated_at: 2026-10-15T10:20:11.908826+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,18 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the audit-action vocabulary for the API-keys module (mint and revoke) and registers it into the app-wide `AuditActionMap` type via TypeScript module augmentation. The file contains no runtime logic — it exists so that the two credential-lifecycle events carry a strongly-typed, discoverable action identifier wherever the audit logger is invoked.
+Declares the audit-action vocabulary for API-key credential events (mint, revoke, bulk-revoke-on-compromise) and registers it into the app-wide `AuditActionMap` type via module augmentation. This file contains no runtime logic beyond the constant declaration; its job is to give the API-key domain a typed, centrally-registered set of action identifiers that the observability layer and downstream consumers (dashboards, incident tooling) can reference.
 
 ## Key elements
 
-- **`apiKeysAuditActions`** (exported const) — The two action strings this module owns: `admin.api_key.minted` and `admin.api_key.revoked`. The `as const` assertion gives each property a literal type, which feeds into the map below.
-- **`declare module '@infrastructure/observability/audit'`** (module augmentation) — Adds an `apiKeys` key to the global `AuditActionMap` interface, typing its value as the union of all `apiKeysAuditActions` values. This makes the actions available to any file that imports from the audit infrastructure without needing to import this file directly.
+- **`apiKeysAuditActions`** (exported const, `as const`) — Three string-literal actions:
+  - `ADMIN_API_KEY_MINTED` (`admin.api_key.minted`) — a credential was created.
+  - `ADMIN_API_KEY_REVOKED` (`admin.api_key.revoked`) — a credential was revoked.
+  - `SYSTEM_API_KEYS_REVOKED_ON_COMPROMISE` (`system.api_keys.revoked_on_compromise`) — all credentials belonging to a user were revoked as part of a compromise response.
+- **Module augmentation** (`declare module '@infrastructure/observability/audit'`) — adds an `apiKeys` key to the shared `AuditActionMap` interface, typed to the union of the three values above. This makes the actions a first-class member of the app-wide audit type system at compile time.
 
 ## Relationships
 
-- **`src/modules/api-keys/services/api-keys.ts`** — The service that performs the actual mint/revoke operations. It is the expected consumer of `apiKeysAuditActions` when emitting audit log entries for those write events. This file defines the vocabulary; the service file uses it.
+- **`src/modules/api-keys/services/api-keys.ts`** — The service layer that performs mint/revoke operations would emit these audit actions (the ones declared here) when those mutations succeed. This file defines *what* is emitted; the service defines *when*.
+- **`src/modules/api-keys/tests/integration/outcomes.test.ts`** — Integration tests that assert the correct audit actions appear in the event log for mint, revoke, and compromise-revoke scenarios.
 
 ## Notes
 
-- The module augmentation pattern is intentional and mirrors `modules/account/audit.ts` (referenced in the file's doc comment). New audit actions for this domain should be added here, not ad-hoc at the call site.
-- Because this file has no imports and no side effects, it is safe to import purely for its type contribution. The `declare module` block is the only coupling to external code (the `@infrastructure/observability/audit` module).
+- The file is a pure type/constant module: no imports, no functions, no side effects at runtime.
+- The augmentation pattern (rather than a standalone union type) is intentional — the header comment points to `modules/account/audit.ts` as the precedent. This keeps every domain's actions in a single `AuditActionMap` so downstream consumers can iterate over all known actions without per-module imports.
+- The `system.` prefix on `SYSTEM_API_KEYS_REVOKED_ON_COMPROMISE` distinguishes automated, account-wide revocations from individual `admin.` actions; tooling or alerting rules may branch on that prefix.

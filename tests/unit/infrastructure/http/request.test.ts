@@ -760,4 +760,45 @@ describe('callerContextOf', () => {
 
         expect(context.analyticsConsent).toBe(true);
     });
+
+    it('keeps a stored "no" against a header that says yes', () => {
+        const context = callerContextOf(
+            makeCallerRequest({
+                headers: { 'x-analytics-consent': 'true' },
+                authContext: {
+                    id: 'user-1',
+                    email: 'a@b.c',
+                    username: 'a',
+                    roles: { tenant: 'customer', platform: null },
+                    tenantId: 'tenant-1',
+                    authTime: 0,
+                    amr: [],
+                    twoFactorArmed: false,
+                    analyticsConsent: false
+                }
+            })
+        );
+
+        expect(context.analyticsConsent).toBe(false);
+    });
+
+    it('lets the header speak for an account that has never answered', () => {
+        const context = callerContextOf(
+            makeCallerRequest({
+                headers: { 'x-analytics-consent': 'true' },
+                authContext: {
+                    id: 'user-1',
+                    email: 'a@b.c',
+                    username: 'a',
+                    roles: { tenant: 'customer', platform: null },
+                    tenantId: 'tenant-1',
+                    authTime: 0,
+                    amr: [],
+                    twoFactorArmed: false
+                }
+            })
+        );
+
+        expect(context.analyticsConsent).toBe(true);
+    });
 });

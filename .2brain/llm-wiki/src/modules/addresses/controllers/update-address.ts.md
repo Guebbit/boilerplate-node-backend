@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/controllers/update-address.ts
-sha256: ec56413bf28e88b964b4117d8ae539746255937dafa3e66bd7b113409b525cfc
-generated_at: 2026-09-27T14:38:36.241287+00:00
+sha256: fdbadca73990aa3f4cf8956cf7a6d5f1b373cce7a154361e1006b44f34f289be
+generated_at: 2026-10-15T10:17:38.856774+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the two HTTP handlers for `/account/addresses/:addressId` — a full **PUT** (replace) and a partial **PATCH** (merge) — by calling the shared `createUpdateController` factory once and destructuring the two resulting handlers.
+Thin controller layer for the two address-mutation endpoints (`PUT` for full replace, `PATCH` for partial merge) at `/account/addresses/:addressId`. It delegates all business logic to the `addressUpdate` service and relies on the shared `createUpdateController` factory to wire up validation, error mapping, and response shaping.
 
 ## Key elements
 
-- **`replaceAddress`** – The PUT handler. Validates the body against `ReplaceAddressBody` (Zod) and delegates to `addressUpdate` for a full overwrite of the entry.
-- **`updateAddress`** – The PATCH handler. Validates the body against `UpdateAddressBody` (Zod) and delegates to `addressUpdate` for a partial merge.
-- **`idFrom`** – Inline extractor that reads `request.params.addressId` (not the factory's default `:id`) and wraps it in `String()` to satisfy Express's `string | string[]` param typing.
-- **`present`** – Identity function; the service's return value is forwarded to the response unchanged.
+- **`replaceAddress`** – Exported `PUT` handler; accepts a `ReplaceAddressBody` and fully replaces the target address.
+- **`updateAddress`** – Exported `PATCH` handler; accepts an `UpdateAddressBody` and merges the provided fields into the existing address.
+- Both are produced by a single `createUpdateController({ … })` call. Notable options:
+  - `versioned: false` – no version header negotiation.
+  - `idParam: 'addressId'` – overrides the factory's default `:id` to match the route's `:addressId` param.
+  - `notFoundKey: 'addresses.not-found'` – i18n key used for the 404 response.
+  - `present` is the identity function, so the service's return value is passed straight to the client.
+  - `update` calls `addressUpdate(request.authContext!.id, id, changes)`, threading the authenticated user id for ownership checks.
 
 ## Relationships
 
-- **`create-update-controller.ts`** – Supplies the `createUpdateController` factory that assembles the PUT/PATCH pair (schema validation, param extraction, error shaping) from the options passed here.
-- **`routes.ts`** – Consumes the exported `replaceAddress` and `updateAddress` and wires them to the `PUT` and `PATCH` methods on the address route.
-- **`service.ts`** – Provides `addressUpdate`, the domain logic that performs the actual upsert. The controller passes the caller's id (`request.authContext!.id`), the entry id, and the (validated) changes object.
+- **`create-update-controller.ts`** – Provides the `createUpdateController` factory that this file destructures into `replace`/`update` handlers. All routing, validation, and error-mapping mechanics live there; this file only supplies the entity name, schemas, `idParam`, and the two callbacks (`update`, `present`).
+- **`service.ts`** – Source of `addressUpdate`, the sole business-logic call. The service performs ownership verification and the actual write; the controller never touches persistence directly.
+- **`routes.ts`** – Consumes the `replaceAddress` and `updateAddress` exports to register the `PUT` and `PATCH` routes under the `/account/addresses/:addressId` path.
 
 ## Notes
 
-- **Ownership is invisible to the client.** A non-owned entry returns the same 404 as a non-existent one; the check lives in `addressUpdate`, and leaking a distinct "exists but not yours" status would confirm the id belongs to someone.
-- **No ObjectId validation.** `updateEntry` matches by plain string comparison, so a malformed id simply misses every entry and yields the standard 404.
-- **`request.authContext!`** relies on upstream middleware to guarantee auth is populated; the non-null assertion is a contract, not a runtime guard.
+- Ownership is enforced in the **service**, not here. A foreign `addressId` and a genuinely missing one both yield the same 404 (`addresses.not-found`), intentionally so the endpoint doesn't leak whether an id belongs to another user.
+- The `authContext` is non-null-asserted (`request.authContext!.id`); the auth middleware is expected to have already run upstream of this controller.
+- Because `present` is identity, the response body is whatever shape `addressUpdate` returns—no mapping or projection happens at the controller level.

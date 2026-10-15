@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/jwt.test.ts
-sha256: bec0b1385422dc92d49c90e715fdc7d4a211bedc195b5280d3c896c37778f444
-generated_at: 2026-10-14T14:40:32.565100+00:00
+sha256: a6ee55df5a170d80f3303306147756bc2c25ae5f0ab3cfb6117689db80d2d990
+generated_at: 2026-10-15T10:12:08.701864+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for the JWT session layer (`session/jwt.ts`). It exercises token creation, verification, type enforcement, rotation, and revocation against a real test database, verifying the security-critical invariant that access tokens are stateless while refresh tokens are stateful (tied to a session row that logout can delete).
+Integration test suite for the JWT session layer (`session/jwt.ts`). It exercises the full create → verify → rotate → revoke lifecycle against a real database, with particular focus on the security boundary between stateless access tokens and stateful refresh tokens, RFC 9068 `typ` enforcement, and multi-device session isolation.
 
 ## Key elements
 
-- **`signAs(secret, payload, opts)`** — Local helper that signs a fixture token the same way `jwt.ts` does: stamps `kid: keyId(secret)`, sets `auth_time`/`amr` defaults, and assigns `typ` per RFC 9068 (`at+jwt` / `rt+jwt`) unless overridden.
-- **`describe('verifyAccessToken')`** — Verifies payload resolution, cross-secret rejection, expiry, malformed input, and payload-tamper rejection.
-- **`describe('token types (`typ` header)')`** — Confirms the two token types are not interchangeable even when both rings share a secret, rejects tokens with no `typ`, and asserts the correct RFC 9068 type is stamped on issued tokens.
-- **`describe('verifyRefreshToken after a rotation')`** — Validates that a rotated-away token is rejected *without* triggering reuse detection (sibling sessions survive) and that re-rotation within the grace window still succeeds.
-- **`describe('verifyRefreshToken')`** — Covers the stateful path: signature + stored-row requirement, revocation via `sessionRepository.removeAll`, wrong-secret rejection, and short-circuit on expiry.
-- **`describe('startSession')`** — Round-trips a freshly issued refresh token through the verifier, inspects the persisted session row (digest storage, `mode: 'jwt'`, `expiresAt`/`purgeAt`/`startedAt`), and rejects unknown user IDs.
+- **`signAs(secret, payload, opts)`** – Local helper that mints a fixture token the same way production `jwt.ts` does: stamps `kid` via `keyId(secret)`, sets `auth_time`/`amr`, and applies the correct `typ` (`at+jwt` / `rt+jwt`). Accepts `expiresIn` and `typ` overrides for edge-case tests.
+- **`beforeEach`** – Sets `NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`, and timing env vars explicitly (bypassing `.env`, which test runners don't load).
+- **`describe('token types (typ header)')`** – Verifies cross-type rejection (refresh-as-access, access-as-refresh, missing `typ`) even when both rings share the same secret, and confirms the module stamps RFC 9068 types.
+- **`describe('verifyRefreshToken after a rotation')`** – Confirms a rotated-away token is refused *without* revoking the family, and that a second rotation within the grace window still succeeds.
+- **`describe('verifyRefreshToken')`** – Core acceptance/rejection matrix: signed + stored → ok; signed but orphaned → rejected (revocation check); row removed → `reason: 'revoked'`; wrong secret → rejected; expired → rejected without a DB hit.
+- **`describe('startSession')`** – Verifies round-trip verifiability, session-row shape (digest, `expiresAt`, `purgeAt`, `startedAt`), rejection of unknown/deactivated/soft-deleted users, and add-per-login semantics (multi-device).
 
 ## Relationships
 
-- **`session/jwt.ts`** — Module under test; all `describe` blocks call its exports (`verifyAccessToken`, `verifyRefreshToken`, `createAccessToken`, `rotateRefreshToken`, `startSession`, `TokenReuseError`).
-- **`session/key-ring.ts`** — Provides `keyId()` to compute the `kid` stamped on every fixture token, mirroring production behavior.
-- **`session/config.ts`** — Supplies `RefreshTokenExpiryTime`, `getExpiryTime`, `getExpiryTimeMilliseconds` for tier-based expiry assertions.
-- **`account/repository.ts`** — `sessionRepository.removeAll()` is the mechanism by which revocation tests delete the session row.
-- **`account/tests/factories.ts`** — `plantSession`, `sessionRowFor`, `sessionRowsOf`, `reapDueSessions` create and inspect session rows directly.
-- **`users/tests/factories.ts`** — `createUser()` provisions the user identity every test needs.
-- **`tests/support/setup-test-db.ts`** — Boots a real test database so stateful assertions (stored rows, digests, expiry columns) are meaningful.
-- **`tests/support/environment.ts`** — `setEnvironment` / `withEnvironmentOverrides` inject token secrets and time windows without dotenv.
-- **`tests/support/clock.ts`** — `freezeDate` / `advanceDate` control wall-clock for expiry and grace-window scenarios.
+| Neighbor | Interaction |
+|---|---|
+| `session/jwt.ts` | System under test — imports `verifyAccessToken`, `verifyRefreshToken`, `createAccessToken`, `rotateRefreshToken`, `startSession`, `TokenReuseError`, `FIRST_PARTY_CLIENT_ID`. |
+| `session/config.ts` | Imports config getters (`getTokenIssuer`, `getExpiryTime`, audience helpers, `RefreshTokenExpiryTime`) used in fixture signing and assertions. |
+| `session/key-ring.ts` | Imports `keyId` to stamp the correct `kid` in every test fixture, matching production behavior. |
+| `account/repository.ts` | Imports `sessionRepository` to perform revocation (`removeAll`) and inspect stored rows. |
+| `account/tests/factories.ts` | Imports `plantSession`, `sessionRowFor`, `sessionRowsOf`, `reapDueSessions` for direct DB seeding and assertions. |
+| `users/tests/factories.ts` | Imports `createUser` and `userRepository` to create fixture user identities. |
+| `tests/support/environment.ts` | `setEnvironment` / `withEnvironmentOverrides` for per-test secret injection. |
+| `tests/support/clock.ts` | `freezeDate` / `advanceDate` for time-sensitive expiry assertions. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` called at module scope to provision the integration database. |
 
 ## Notes
 
-- Secrets are set explicitly via `setEnvironment` in `beforeEach` rather than inherited from `.env`, because the test runner does not load dotenv.
-- The `typ` header is load-bearing: the suite deliberately tests that a token is rejected with `"Wrong token type"` even when the signing secret is valid for the *other* ring, so a shared secret cannot mask a type confusion.
-- The rotation grace-window test (two `startSession` calls for the same user) encodes a specific product behavior: re-using a rotated token within the window is *not* reuse detection — only a third use (or use after the window) is.
-- `signAs` defaults `auth_time` and `amr` because `TokenData` in `jwt.ts` requires both; test payloads only override when the case is specifically about one of those claims.
+- **No dotenv.** All secrets are set programmatically in `beforeEach`; the file intentionally does not rely on `.env` or process-level env, so it runs identically in CI and locally.
+- **Fixture fidelity.** `signAs` replicates the exact header shape (`alg`, `typ`, `kid`) and claim set (`auth_time`, `amr`, `client_id`, `jti`) that `jwt.ts` produces. If the production signer changes its contract, fixtures here will break first.
+- **`typ` default logic.** The helper derives `typ` from which secret is used (access vs. refresh) unless the caller explicitly overrides it — this mirrors the RFC 9068 split and is the mechanism the "wrong type" tests depend on.
+- **Real DB, real crypto.** This is an integration suite (Mongo-backed via `setupTestDb`), not a unit test; no JWT functions are mocked. Timing assertions use `clock.ts` helpers rather than `jest.useFakeTimers`.
+- **Multi-device invariant.** The `startSession` tests explicitly assert that a second login *adds* a row rather than replacing the first, guarding against a regression that would silently sign out other devices.

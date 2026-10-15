@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/two-factor/methods/email.ts
-sha256: 535e7c8f2fb01213812de67c2396e0f808392e83440e789ec7679b1a8ea9e9b9
-generated_at: 2026-10-14T14:49:37.078868+00:00
+sha256: 4de90463414329e564dde0e896adfda5e75dc19163ea91e70a1fbfb9c0bfa211
+generated_at: 2026-10-15T10:17:23.496395+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the **email** two-factor method as a *delivered* code channel: setup and login both reduce to "generate a code, mail it, store its digest on the entry." All shared lifetime/cooldown/attempt logic lives in `../delivered-codes.ts`; this file only wires the email-specific send, eligibility, and verification steps into the `TwoFactorMethodHandler` interface.
+Implements the email delivery method for two-factor authentication and step-up re-authentication. It mints a time-limited code, mails it to the account's verified address, and arms the code's digest on the user record. All channel-agnostic concerns (TTL, cooldown, attempt limits) are delegated to the shared delivered-code module, so every future delivery channel inherits the same constraints.
 
 ## Key elements
 
-- **`maskEmail(email)`** – Exported utility. Redacts the local part to `first***last` (or all-asterisks if ≤ 2 chars) so UIs show a recognisable-but-private address. Done server-side so every client masks identically.
-- **`deliver(user, entry, context)`** – Internal. Generates a code via `generateDeliveredCode`, arms it on `entry` (mutates in place; caller persists), builds the i18n'd mail through `twoFactorCodeEmail`, sends it with `sendAccountMail`, and returns a `TwoFactorDelivery` (masked recipient, resend cooldown, `expiresAt`).
-- **`emailMethod`** – Exported `TwoFactorMethodHandler` object:
-  - `available` – gates on `mailDelivers(mailConfig())`; a deployment with no readable transport must not offer the method.
-  - `eligibility` – requires `user.verifiedAt`; unverified addresses are rejected with an i18n reason.
-  - `target` – returns `maskEmail(user.email)`.
-  - `setup` / `send` – both delegate to `deliver`; setup additionally tags the result with `delivers: true` so the client can distinguish the setup half of the union.
-  - `verify` – delegates to `verifyDeliveredCode` with a `{ kind: 'method', method }` scope discriminator.
+- **`maskEmail(email)`** – Redacts a local-part (e.g. `a***e@example.com`) server-side so every client sees identical output. Exported for use in `target`, `setup`, and `send` results.
+- **`deliverEmailCode(user, slot, context, buildMail)`** – Core delivery primitive: generates a code, arms it on `slot` (mutating it), resolves the recipient's locale, builds the mail body via the supplied `buildMail` function, and sends through `sendAccountMail` at high priority. Returns a `TwoFactorDelivery` with masked recipient, resend cooldown, and expiry. Shared by both the 2FA email method and the re-auth flow.
+- **`emailMethod`** – The `TwoFactorMethodHandler` object registered in the two-factor registry. Exposes `available`, `eligibility`, `target`, `setup`, `send`, and `verify`. Setup and send both funnel through `deliverEmailCode`; verify delegates to `verifyDeliveredCode`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `../delivered-codes.ts` | Source of `generateDeliveredCode`, `armDeliveredCode`, `DELIVERED_CODE_TTL_MS`, `DELIVERED_CODE_RESEND_SECONDS` — all shared delivered-code mechanics. |
-| `../delivered-code-verify.ts` | `verifyDeliveredCode` handles the actual code check; this file passes the user, scope, entry, and raw code. |
-| `../registry.ts` | Provides the `TwoFactorMethodHandler` type that `emailMethod` satisfies. |
-| `../../emails.ts` | Supplies `twoFactorCodeEmail` (mail body builder), `recipientLocale`, and `greetableName`. |
-| `../../services/mail.ts` | `sendAccountMail` is the transport call that actually dispatches the message. |
-| `@infrastructure/adapters/config.ts` | `mailConfig()` feeds the `available()` check. |
-| `@infrastructure/adapters/mail-transports.ts` | `mailDelivers()` determines whether the configured transport can reach a real inbox. |
-| `@infrastructure/i18n/index.ts` | `t()` resolves the "email not verified" eligibility reason string. |
-| `@modules/users/index.ts` | Type imports: `UserDocument`, `TwoFactorMethodRecord`. |
-| `@types/index.ts` | Type imports: `CallerContext`, `TwoFactorDelivery`. |
+- **`../delivered-codes.ts`** – Source of `generateDeliveredCode`, `armDeliveredCode`, `DELIVERED_CODE_TTL_MS`, `DELIVERED_CODE_RESEND_SECONDS`. This file owns no code-lifetime logic of its own.
+- **`../delivered-code-verify.ts`** – Provides `verifyDeliveredCode`, called by `emailMethod.verify`.
+- **`../registry.ts`** – Defines the `TwoFactorMethodHandler` interface that `emailMethod` satisfies.
+- **`../../emails.ts`** – Supplies `twoFactorCodeEmail` (mail body builder), `recipientLocale`, and `greetableName`.
+- **`../../services/mail.ts`** – Provides `sendAccountMail`, the transport-agnostic send wrapper.
+- **`@infrastructure/adapters/config.ts`** – `mailConfig` is read inside `available` to determine whether a usable transport is configured.
+- **`@infrastructure/adapters/mail-transports.ts`** – `mailDelivers` is the predicate that gates method visibility.
+- **`@infrastructure/i18n`** – `t` localizes the "unverified address" eligibility message.
+- **`@modules/users`** – `UserDocument` and `DeliveredCodeState` types shape the function signatures.
+- **`@types`** – `CallerContext` (locale/caller identity) and `TwoFactorDelivery` (return shape).
+- **`../../services/reauth.ts`** – Shares `deliverEmailCode` as its delivery path (noted in the JSDoc; keeps cooldown/lifetime/masking in sync between 2FA and step-up).
 
 ## Notes
 
-- **`setup` ≡ `send`.** Enrollment and login perform the identical send; the only difference is the `delivers: true` flag the client uses to pick the populated half of the `TwoFactorSetup` union.
-- **`deliver` mutates `entry`.** The calling service (enrollment flow or login flow) is responsible for persisting the entry after the promise resolves.
-- **Recipient is read live, not frozen.** The destination address comes from the current `UserDocument` each time; changing the email is itself a re-authenticated action, so no second copy needs syncing.
-- **`available()` is deployment-level, not per-user.** It checks transport configuration, while `eligibility` checks per-user state (`verifiedAt`). Both must pass before the method appears to a user.
+- `deliverEmailCode` **mutates** the `slot` parameter in place; the calling service is responsible for persisting the updated `DeliveredCodeState`.
+- Mail body (including locale and greeting) is fully resolved **before** the job is enqueued, so the worker never needs locale or user data.
+- `available` checks **deployment config** (is a deliverable transport configured?), while `eligibility` checks **user state** (is the address verified?). A deployment with no working mail transport hides the method entirely.
+- The destination email is read from the live user record at send time, not frozen at enrollment, because changing the address is itself a verified action.

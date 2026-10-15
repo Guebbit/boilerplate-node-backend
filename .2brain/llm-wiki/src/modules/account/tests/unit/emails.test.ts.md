@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/emails.test.ts
-sha256: 7505aba8f5bfbdabc55edb64112e093513e83c90505b4779bae3a77f9372bf7f
-generated_at: 2026-10-14T09:20:42.420716+00:00
+sha256: d69a513c1c79aef44451e0171369917eb39a70749c002409a9e04a1acd30e102
+generated_at: 2026-10-15T10:14:37.861003+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the account email builders in `@modules/account/emails`. Because these builders produce data (not throw on errors), a wrong template, swapped token, or broken interpolation silently sends the wrong email to a real user. The suite therefore asserts the *built content*—template name, link URL, copy resolution, locale propagation, and structural invariants—across every email variant and both shipped locales (`en`, `it`).
+Unit tests for the nine account email-builder functions in `emails.ts`. They verify that each builder returns the correct template name, delegates to the right link helper with the correct `kind`/locale/token, resolves every i18n slot to real copy (not a raw key or empty string), interpolates the recipient's name, and that no two emails accidentally share a template or a link destination.
 
 ## Key elements
 
-- **`LINK_EMAILS`** – A `const` array pairing each link-bearing builder (`verifyRequestEmail`, `resetRequestEmail`, `setupRequestEmail`, `deleteRequestEmail`) with its expected template key and `accountFrontendLink` kind.
-- **`CONFIRM_EMAILS`** – Same shape for the three link-less confirmations (`resetConfirmEmail`, `deleteConfirmEmail`, `exportFailedEmail`).
-- **`copySlots(content)`** – Helper that flattens `subject` + `data` into entries, filtering out `locale`, `pageMetaLinks`, and `linkUrl` so the remaining slots can be individually asserted for non-empty, non-key-echoed strings.
-- **`describe('account emails — the template each one names')`** – Verifies each builder names the correct i18n template and that all seven templates are pairwise distinct.
-- **`describe('account emails — the action links')`** – Asserts each builder delegates to `accountFrontendLink` with the correct kind, that three different kinds produce three different URLs, and that the recipient's locale appears in the link path.
-- **`describe('account emails — the copy')`** – Checks every copy slot resolves to real text (not an i18next key), that `{name}` interpolation lands, locale reaches the template, `pageMetaLinks` is `[]` (not `undefined`), and all emails share one footer.
-- **`describe('account emails — the data export link')`** – Tests `exportReadyEmail`: template, `accountExportLink` delegation, expiry days, greeting fallback when name is empty, and per-locale copy.
-- **`describe('account emails — the two-factor lock notice')`** – Tests `twoFactorLockedEmail`: template, copy in both locales, minutes value, name interpolation.
-- **`describe('account emails — the two-factor change notice')`** – Tests `twoFactorChangedEmail`: template, all three `change` values produce distinct bodies, factor name appears, copy is real in both locales.
-- **`describe('account emails — the name in a greeting')`** – Verifies every builder passes the recipient's name into the greeting (or falls back to a plain greeting).
+- **`LINK_EMAILS`** – const array of `[name, builder, template, kind]` tuples for the four link-carrying emails (verify, reset, setup, delete request). Drives `it.each` loops for template, link, and copy assertions.
+- **`CONFIRM_EMAILS`** – const array of `[name, builder, template]` tuples for the three no-link confirmation emails (reset-confirm, delete-confirm, export-failed).
+- **`copySlots(content)`** – helper that flattens `content.subject` and `content.data` into `[key, value]` pairs, excluding `locale` and `linkUrl`. Used to assert every remaining slot is a non-empty string that doesn't match `/^account\.email\./`.
+- **`greetableName`** – imported from `emails.ts`; the test file imports it but the visible tests exercise name interpolation via each builder's `data.greeting` directly.
+- **Describes:** "the template each one names," "the action links," "the copy," "the data export link," "the two-factor lock notice," "the two-factor change notice," "the name in a greeting."
 
 ## Relationships
 
-- **`src/modules/account/emails.ts`** – The module under test. All `describe` blocks call its exported builders (`verifyRequestEmail`, `resetRequestEmail`, `setupRequestEmail`, `resetConfirmEmail`, `deleteRequestEmail`, `deleteConfirmEmail`, `twoFactorChangedEmail`, `twoFactorLockedEmail`, `exportFailedEmail`, `exportReadyEmail`, `greetableName`) and assert on the returned `{ template, subject, data }` shape.
-- **`src/modules/account/config.ts`** – Provides `accountFrontendLink` and `accountExportLink`, which the tests use as the *expected* value in link-URL assertions. The tests confirm the builders delegate to these helpers rather than constructing URLs themselves.
+- **`src/modules/account/emails.ts`** – The system under test. All nine builder functions (`verifyRequestEmail`, `resetRequestEmail`, `setupRequestEmail`, `deleteRequestEmail`, `resetConfirmEmail`, `deleteConfirmEmail`, `exportReadyEmail`, `exportFailedEmail`, `twoFactorChangedEmail`, `twoFactorLockedEmail`) plus `greetableName` are imported and called with `'en'`/`'it'`, a name, a token, and (where applicable) an export ID or minutes count.
+- **`src/modules/account/config.ts`** – Provides `accountFrontendLink` and `accountExportLink`, the expected link-URL helpers. Tests assert that each builder's `data.linkUrl` equals the corresponding config-helper call with the same `kind`, `locale`, and `token`/`exportId`, confirming the builder delegates rather than hard-coding URLs.
 
 ## Notes
 
-- `setupRequestEmail` intentionally shares the `'reset'` kind with `resetRequestEmail` (both spend a `password`-type token at `POST /account/reset-confirm`), so it is excluded from the "each token to its own kind" uniqueness check.
-- The `pageMetaLinks` must be `[]`, not `undefined`—the renderer iterates it, and `undefined` would crash the template rather than render an empty `<head>`.
-- The distinct-template test exists because individual per-builder assertions would still pass if two builders accidentally pointed at the same template.
-- Copy-slot checks guard against i18next returning the key string (e.g. `account.email.verify-request.intro`) when a translation is missing—a silent failure that renders garbage in the inbox.
-- Tests cover exactly two locales (`en`, `it`), described in-file as "both shipped languages."
+- `setupRequestEmail` intentionally shares the `'reset'` kind with `resetRequestEmail`; the "each token to its own kind" test excludes it and tests only verify/reset/delete.
+- The "distinct template" test guards against a copy-paste bug where two builders point at the same i18n template while each individual assertion still passes.
+- The shared-footer test (`new Set(footers).size === 1`) enforces that all nine emails use one `email.footer` key, preventing drift when the company address changes.
+- Copy assertions reject values matching `/^account\.email\./` — the signature of i18next returning the key itself when a translation is missing — and reject `{{` to catch uninterpolated variables.
+- `exportReadyEmail` and `twoFactorChangedEmail`/`twoFactorLockedEmail` are tested outside the `LINK_EMAILS`/`CONFIRM_EMAILS` arrays because they have extra positional args (export ID + days, change type + factor) that don't fit the uniform tuple shape.

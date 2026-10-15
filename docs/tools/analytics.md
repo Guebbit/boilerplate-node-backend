@@ -110,10 +110,10 @@ The relay applies the same gate: `POST /analytics/events` builds the caller cont
 and emits through `emitAnalyticsEvent`, so without consent it answers `204` and records nothing.
 
 Consent travels through `CallerContext` the same way `ip`/`userAgent` do. For a logged-in caller
-it is the stored `users.analyticsConsent` (boolean, `false` covering both "denied" and "never
-asked" — read fresh from the account on every request, via `AuthContext`), settable through
-`PUT /account`. Anonymous
-traffic has no account to read, so the frontend forwards the visitor's own banner choice on the
+it is the stored `users.analyticsConsent`, once the account has answered (`analyticsConsentAt` records
+when) — read fresh on every request, via `AuthContext`, settable through `PUT /account`. A stored
+answer, yes or no, always wins: a header never overrides a withdrawal. Anonymous traffic has no
+account to read, so the frontend forwards the visitor's own banner choice on the
 `X-Analytics-Consent` request header — which also applies to a logged-in caller whose account was
 never asked, so a choice made before login counts until `PUT /account` records it. A header-borne
 grant is a client assertion with no server-side record behind it; the stored field is what you can
