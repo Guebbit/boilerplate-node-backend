@@ -28,7 +28,7 @@ import {
     type ResolveMissReason
 } from '@kernel/authentication';
 import { heldKeys, holdsKey } from '@kernel/ability';
-import { readSessionCookie } from '@kernel/cookies';
+import { bearerOf, readSessionCookie } from '@kernel/cookies';
 import {
     assertDeclared,
     callerFor,
@@ -139,19 +139,12 @@ const continueOrFailInfra = (next: NextFunction, error: unknown): void => {
 };
 
 /**
- * `Authorization: Bearer <token>`, scheme word first. RFC 9110 §11.1 makes the scheme
- * case-insensitive; RFC 6750 §2.1 names it `Bearer`.
- */
-const BEARER_HEADER = /^bearer +(\S+)$/i;
-
-/**
  * Pull the bearer token out of the `Authorization` header, if any.
  *
  * @param request - the incoming request
  * @returns the token, or `undefined` when the header is absent or does not use the `Bearer` scheme
  */
-export const getTokenBearer = (request: Request) =>
-    BEARER_HEADER.exec(request.header('Authorization') ?? '')?.[1];
+export const getTokenBearer = (request: Request) => bearerOf(request.header('Authorization'));
 
 /**
  * Put a resolved caller on the request, and say how it was authenticated.

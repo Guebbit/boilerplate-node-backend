@@ -16,7 +16,7 @@
 
 import type { Response } from 'express';
 import { Types } from 'mongoose';
-import { readSessionCookie } from '@kernel/cookies';
+import { bearerOf, readSessionCookie } from '@kernel/cookies';
 import type { Resolution, StreamWatch } from '@kernel/authentication';
 import { logger } from '@infrastructure/adapters/logger';
 import { hashToken } from '@infrastructure/security/hash-token';
@@ -116,7 +116,7 @@ const deliver = (
 
 /** The credential a request presents: a `ses_…` bearer when it authenticated that way, else the cookie. */
 const credentialOf = (request: SessionRequest): string | undefined => {
-    const match = /^bearer +(\S+)$/i.exec(request.headers.authorization ?? '')?.[1];
+    const match = bearerOf(request.headers.authorization);
     return match && looksLikeSessionId(match) ? match : readSessionCookie(request);
 };
 

@@ -16,6 +16,22 @@ import { cookieOf } from '@infrastructure/http/cookies';
  */
 export const SESSION_COOKIE = '__Host-session';
 
+/**
+ * `Authorization: Bearer <token>`, scheme word first. RFC 9110 §11.1 makes the scheme
+ * case-insensitive; RFC 6750 §2.1 names it `Bearer`.
+ */
+const BEARER_HEADER = /^bearer +(\S+)$/i;
+
+/**
+ * The token an `Authorization` header carries under the `Bearer` scheme. The one parser: the guard
+ * that authenticates a request and the logout that retires its credential must read the same one.
+ *
+ * @param authorization - the header's value, if the request had one
+ * @returns the token, or `undefined` when the header is absent or uses another scheme
+ */
+export const bearerOf = (authorization: string | undefined): string | undefined =>
+    BEARER_HEADER.exec(authorization ?? '')?.[1];
+
 /** The session cookie on an incoming request — see {@link SESSION_COOKIE}. */
 export const readSessionCookie = (request: Pick<Request, 'cookies'>): string | undefined =>
     cookieOf(request, SESSION_COOKIE);
