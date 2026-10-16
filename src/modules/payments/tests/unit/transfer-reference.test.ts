@@ -1,5 +1,5 @@
 /**
- * `orders/domain/transfer-reference.ts` — the RF reference `buildReference` mints and
+ * `payments/domain/transfer-reference.ts` — the RF reference `buildReference` mints and
  * `parseReference` reads back, and the guarantees that matter for matching money to the right
  * order: a round trip survives, and a mistyped character is rejected rather than silently
  * resolving.

@@ -9,8 +9,6 @@
  * `src/modules/invoicing/tests/unit/emails.test.ts`.
  */
 import {
-    bankTransferExpiredEmail,
-    bankTransferInstructionsEmail,
     cardHoldExpiredEmail,
     orderConfirmEmail,
     orderCancelledEmail,
@@ -160,9 +158,9 @@ describe('orderConfirmEmail', () => {
     });
 
     /*
-     * SH2 = C: every order this builder mails is still `pending` — the payment either hasn't been
-     * asked for yet (`card`) or a `bank_transfer` order gets `bankTransferInstructionsEmail`
-     * instead. Nothing here may claim the money already moved.
+     * SH2 = C: every order this builder mails is still `pending` — the payment hasn't been made
+     * yet, by card or by transfer (whose instructions are `payments`' own mail). Nothing here may
+     * claim the money already moved.
      */
     it('says the order is received and awaiting payment, never that it is confirmed', () => {
         const { subject, data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
@@ -228,19 +226,8 @@ describe('every order mail prints money in the order"s own currency', () => {
         items: [{ quantity: 1, product: { title: 'Dog Bed', price: 1990 } }],
         currency: 'JPY'
     };
-    const TRANSFER = {
-        beneficiary: 'Shop',
-        iban: 'DE89 3704 0044 0532 0130 00',
-        reference: 'RF18'
-    };
-
     it.each([
         ['the confirmation', () => orderConfirmEmail('en', NAME, YEN, ORDER_ID)],
-        [
-            'the transfer instructions',
-            () => bankTransferInstructionsEmail('en', NAME, YEN, TRANSFER, new Date(0), ORDER_ID)
-        ],
-        ['the transfer expiry', () => bankTransferExpiredEmail('en', YEN)],
         ['the card-hold expiry', () => cardHoldExpiredEmail('en', YEN)]
     ])('%s', (_label, build) => {
         expect(build().data.total).toContain('¥1,990');

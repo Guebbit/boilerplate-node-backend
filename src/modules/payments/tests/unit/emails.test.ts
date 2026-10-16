@@ -1,10 +1,15 @@
 /**
  * @module
- * The two payments mails. Money is what they print, so a formatting slip reads as a billing
+ * The payments mails. Money is what they print, so a formatting slip reads as a billing
  * error to the person least able to check it.
  */
 import { orderTotal, orderFrontendLink } from '@modules/orders';
-import { paymentReceivedEmail, refundIssuedEmail } from '@modules/payments/emails';
+import {
+    paymentReceivedEmail,
+    refundIssuedEmail,
+    transferExpiredEmail,
+    transferInstructionsEmail
+} from '@modules/payments/emails';
 
 const NAME = 'Ada Lovelace';
 const ORDER_ID = 'order-1';
@@ -80,5 +85,84 @@ describe('refundIssuedEmail', () => {
         expect(refundIssuedEmail('it', NAME, ORDER_ID, refund, true).subject).not.toBe(
             refundIssuedEmail('en', NAME, ORDER_ID, refund, true).subject
         );
+    });
+});
+
+describe('the bank transfer mails', () => {
+    const INSTRUCTIONS = {
+        beneficiary: 'Guebbit Shop',
+        iban: 'DE89 3704 0044 0532 0130 00',
+        reference: 'RF18'
+    };
+    const PAY_BY = new Date('2026-10-05T10:30:00.000Z');
+    // 1990 yen: no decimals, so a builder that formatted as euros would print `€1,990.00`.
+    const YEN = {
+        items: [{ quantity: 1, product: { title: 'Dog Bed', price: 1990 } }],
+        currency: 'JPY'
+    };
+
+    it('names the instructions template, and carries each part of the instructions', () => {
+        const mail = transferInstructionsEmail('en', NAME, ORDER, INSTRUCTIONS, PAY_BY, ORDER_ID);
+
+        expect(mail.template).toBe('payments.transfer-instructions');
+        expect(mail.data).toMatchObject({
+            beneficiary: 'Guebbit Shop',
+            iban: 'DE89 3704 0044 0532 0130 00',
+            reference: 'RF18',
+            linkUrl: orderFrontendLink({ locale: 'en', id: ORDER_ID })
+        });
+        expect(mail.data.bic).toBeUndefined();
+        expect(String(mail.data.deadline)).toContain('October');
+    });
+
+    it('carries the BIC when one is configured', () => {
+        const mail = transferInstructionsEmail(
+            'en',
+            NAME,
+            ORDER,
+            { ...INSTRUCTIONS, bic: 'COBADEFFXXX' },
+            PAY_BY,
+            ORDER_ID
+        );
+
+        expect(mail.data.bic).toBe('COBADEFFXXX');
+    });
+
+    it('speaks the recipient language and echoes no key', () => {
+        const english = transferInstructionsEmail(
+            'en',
+            NAME,
+            ORDER,
+            INSTRUCTIONS,
+            PAY_BY,
+            ORDER_ID
+        );
+        const italian = transferInstructionsEmail(
+            'it',
+            NAME,
+            ORDER,
+            INSTRUCTIONS,
+            PAY_BY,
+            ORDER_ID
+        );
+
+        expect(italian.subject).not.toBe(english.subject);
+        for (const mail of [english, italian])
+            for (const value of [mail.subject, mail.data.body, mail.data.deadline])
+                expect(value).not.toMatch(/^payments\./);
+    });
+
+    it.each([
+        [
+            'the instructions',
+            () => transferInstructionsEmail('en', NAME, YEN, INSTRUCTIONS, PAY_BY, ORDER_ID)
+        ],
+        ['the expiry notice', () => transferExpiredEmail('en', YEN)]
+    ])('%s print money in the order"s own currency', (_label, build) => {
+        expect(build().data.total).toContain('¥1,990');
+    });
+
+    it('names the expiry template', () => {
+        expect(transferExpiredEmail('en', ORDER).template).toBe('payments.transfer-expired');
     });
 });

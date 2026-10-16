@@ -26,14 +26,6 @@
             "total": "Total: {{total}}",
             "link-label": "View your order and receipt"
         },
-        "email-transfer": {
-            "subject": "Complete your order by bank transfer",
-            "meta-title": "Bank transfer instructions",
-            "greeting": "Hello, {{name}}!",
-            "body": "Your order is reserved. Send the transfer below to complete it — include the reference so we can match your payment.",
-            "deadline": "We'll hold your order until {{payBy}}.",
-            "link-label": "View your order and receipt"
-        },
         "email-withdrawal": {
             "heading": "Right of withdrawal",
             "right": "You have the right to withdraw from this contract within {{days}} days without giving any reason.",
@@ -62,12 +54,6 @@
             "form-signature": "Signature of consumer(s) (only if this form is notified on paper),",
             "form-date": "Date",
             "form-delete": "(*) Delete as appropriate."
-        },
-        "email-transfer-expired": {
-            "subject": "Your order was cancelled — no transfer received",
-            "meta-title": "Order cancelled",
-            "greeting": "Hello!",
-            "body": "We didn't receive your bank transfer in time, so this order has been cancelled and its items released."
         },
         "email-card-expired": {
             "subject": "Your order was cancelled — payment not completed",

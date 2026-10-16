@@ -21,7 +21,7 @@ import { orderRepository } from '../../repository';
 import { orderModel } from '../../model';
 import { OrderStatus } from '@types';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
-import { settleOutboxNudges } from '@kernel/outbox';
+import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { userService } from '@modules/users';
 import * as auditPort from '@infrastructure/observability/audit';
@@ -209,7 +209,9 @@ describe('cancelOnRequestById — who gets their money back', () => {
 
         await settleOutboxNudges();
 
-        expect(cancellations).toEqual([{ orderId: String(order._id), refund: true }]);
+        expect(cancellations).toEqual([
+            { orderId: String(order._id), refund: true, expired: false }
+        ]);
     });
 
     it('lets an operator cancel without returning the money', async () => {
@@ -220,7 +222,9 @@ describe('cancelOnRequestById — who gets their money back', () => {
 
         await settleOutboxNudges();
 
-        expect(cancellations).toEqual([{ orderId: String(order._id), refund: false }]);
+        expect(cancellations).toEqual([
+            { orderId: String(order._id), refund: false, expired: false }
+        ]);
     });
 
     it('refunds by default when an operator says nothing', async () => {
@@ -231,7 +235,9 @@ describe('cancelOnRequestById — who gets their money back', () => {
 
         await settleOutboxNudges();
 
-        expect(cancellations).toEqual([{ orderId: String(order._id), refund: true }]);
+        expect(cancellations).toEqual([
+            { orderId: String(order._id), refund: true, expired: false }
+        ]);
     });
 
     it('lets a moderator cancel without returning the money too', async () => {
@@ -245,7 +251,9 @@ describe('cancelOnRequestById — who gets their money back', () => {
 
         await settleOutboxNudges();
 
-        expect(cancellations).toEqual([{ orderId: String(order._id), refund: false }]);
+        expect(cancellations).toEqual([
+            { orderId: String(order._id), refund: false, expired: false }
+        ]);
     });
 
     it('announces the cancellation either way', async () => {
@@ -327,7 +335,9 @@ describe('cancelOnRequestById — audit and analytics', () => {
 });
 
 describe('cancelOnRequestById — the payment-window-expired email', () => {
-    it('sends the transfer-expired email when a bank_transfer order times out with no context', async () => {
+    // A bank transfer nobody sent is answered by `payments`, which owns the transfer's deadline: the
+    // order's own cancel stays quiet, and says the hold ran out on the event it announces.
+    it('sends no expiry email of its own when a bank_transfer order times out', async () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
         const product = await createProduct();
@@ -339,10 +349,9 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
         // and the flag only that handler sets.
         await orderService.expireReservationById(String(order._id));
 
-        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
-        const [envelope, template] = mockEnqueueEmail.mock.calls[0];
-        expect(envelope.to).toBe(user.email);
-        expect(template).toBe('orders.order-transfer-expired');
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+        const [row] = await outboxEventModel.find({ name: ORDER_CANCELLED }).lean();
+        expect(row.payload).toEqual({ orderId: String(order._id), refund: true, expired: true });
     });
 
     /*
@@ -387,9 +396,7 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
         const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 1)], {
-            paymentMethod: 'bank_transfer'
-        });
+        const order = await createOrder(user, [toOrderItem(product, 1)], { paymentMethod: 'card' });
         jest.spyOn(userService, 'getById').mockRejectedValueOnce(new Error('lookup unavailable'));
 
         // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext, and the
@@ -403,7 +410,7 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(order.email);
-        expect(template).toBe('orders.order-transfer-expired');
+        expect(template).toBe('orders.order-card-expired');
     });
 
     it('does not send the expiry email for a system cancel that is not the reservation sweep', async () => {

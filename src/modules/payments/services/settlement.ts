@@ -15,7 +15,8 @@ import {
 } from '@infrastructure/http/response';
 import type { PaymentStatus, AuthContext } from '@types';
 import { toMinorUnits } from '@shared-kernel/money';
-import { orderService, bankTransferHoldHours, isPayable, paymentSettled } from '@modules/orders';
+import { orderService, isPayable, paymentSettled } from '@modules/orders';
+import { bankTransferHoldHours } from '../config';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -631,6 +632,9 @@ export const syncPayment = (
         // act on, and asking would spend a call to be told so.
         if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status))
             return generateSuccess(payment, 200);
+        // A hand-recorded payment (a bank transfer still waiting for its money) has no provider to
+        // re-read: only an operator recording the money moves it.
+        if (isHandRecorded(payment)) return generateSuccess(payment, 200);
 
         return settleFound(
             payment,

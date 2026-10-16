@@ -4,7 +4,9 @@
  * `@modules/account/emails`: the language is an argument, the output is finished text, and the
  * template queued behind it only interpolates. See that file for why.
  *
- * Two mails: "payment received" when a payment settles, "refund issued" when a refund does.
+ * Four mails: "payment received" when a payment settles, "refund issued" when a refund does, and
+ * the bank transfer's two — its instructions when the transfer payment opens, and "no transfer
+ * received" when the deadline passes.
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
@@ -93,6 +95,94 @@ export const refundIssuedEmail = (
                 amount: money(locale, refund.amount, refund.currency)
             }),
             detail: t(`payments.email-refunded.${full ? 'detail-full' : 'detail-partial'}`),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/** What the buyer needs to send a bank transfer. */
+export interface TransferInstructions {
+    beneficiary: string;
+    /** Grouped into blocks of four, the way a bank's own form shows one. */
+    iban: string;
+    bic?: string;
+    /** The RF creditor reference the transfer must carry so the payment can be matched. */
+    reference: string;
+}
+
+/**
+ * The instructions and deadline for a `bank_transfer` order, sent when its transfer payment opens.
+ * The order-placed mail confirms the order; this one says what is still to do. `payBy` is
+ * formatted with `Intl.DateTimeFormat` in the recipient's own language, the same `node:`
+ * standard-library-first rule that keeps this repo away from a date-formatting dependency.
+ *
+ * @param locale - the recipient's language
+ * @param name - the greeting's name
+ * @param order - the order's lines, shipping and currency
+ * @param instructions - where to send the money, and under which reference
+ * @param payBy - when the hold ends and the order is cancelled with no money received
+ * @param orderId - the order's id, for the link to its page
+ */
+export const transferInstructionsEmail = (
+    locale: string,
+    name: string,
+    order: OrderLines,
+    instructions: TransferInstructions,
+    payBy: Date,
+    orderId: string
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'payments.transfer-instructions',
+        subject: t('payments.email-transfer.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('payments.email-transfer.meta-title'),
+            greeting: t('payments.email-transfer.greeting', { name }),
+            body: t('payments.email-transfer.body'),
+            beneficiary: instructions.beneficiary,
+            iban: instructions.iban,
+            // Not a conditional spread: `undefined` here still reads as "unset" to the
+            // template's `typeof bic !== "undefined"` guard, and a bare key keeps this object a
+            // plain literal `tests/cross-cutting/mail-copy.test.ts` can read statically.
+            bic: instructions.bic,
+            reference: instructions.reference,
+            deadline: t('payments.email-transfer.deadline', {
+                payBy: new Intl.DateTimeFormat(locale, {
+                    dateStyle: 'long',
+                    timeStyle: 'short'
+                }).format(payBy)
+            }),
+            total: t('payments.email-transfer.total', {
+                total: money(locale, orderTotal(order), order.currency)
+            }),
+            linkLabel: t('payments.email-transfer.link-label'),
+            linkUrl: orderFrontendLink({ locale, id: orderId }),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
+ * The sweep cancelled a `bank_transfer` order whose deadline passed with no money — the
+ * customer's answer to "what happened to my order".
+ *
+ * @param locale - the recipient's language
+ * @param order - the order's lines, shipping and currency
+ */
+export const transferExpiredEmail = (locale: string, order: OrderLines): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'payments.transfer-expired',
+        subject: t('payments.email-transfer-expired.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('payments.email-transfer-expired.meta-title'),
+            greeting: t('payments.email-transfer-expired.greeting'),
+            body: t('payments.email-transfer-expired.body'),
+            total: t('payments.email-transfer-expired.total', {
+                total: money(locale, orderTotal(order), order.currency)
+            }),
             footer: t('email.footer')
         }
     };

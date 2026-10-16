@@ -1,7 +1,8 @@
 /**
  * @module
- * The two mails this module sends, each from a listener on its own event: `payment.succeeded`
- * and `payment.refunded`. A listener covers every path that settles money — the webhook, the
+ * The mails this module sends. Two are listeners on its own events — `payment.succeeded` and
+ * `payment.refunded` — and two belong to the bank transfer: its instructions, when the transfer
+ * payment opens, and "no transfer received", when its order is cancelled for lack of one. A listener covers every path that settles money — the webhook, the
  * browser confirm, an offline record and the crash-recovery sweep — where an inline send would
  * miss the ones that only announce. A mail that fails never undoes money that landed: both
  * listeners log and swallow.
@@ -13,7 +14,13 @@ import type { DomainEventMap } from '@kernel/events';
 import { RefundStatus } from '@types';
 import { toMinorUnits } from '@shared-kernel/money';
 import { orderService } from '@modules/orders';
-import { paymentReceivedEmail, refundIssuedEmail } from '../emails';
+import {
+    paymentReceivedEmail,
+    refundIssuedEmail,
+    transferExpiredEmail,
+    transferInstructionsEmail
+} from '../emails';
+import { bankTransferBeneficiary, bankTransferBic, bankTransferIbanFriendly } from '../config';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument, RefundRecord } from '../model';
 
@@ -113,6 +120,76 @@ export const mailRefundIssued = ({
             // Stryker disable all
             logger.error({
                 message: `Payments: could not mail the refund notice for order ${orderId}`,
+                error
+            });
+            // Stryker restore all
+        });
+
+/**
+ * Tell the buyer where to send the money and by when. Sent by the call that opened the transfer
+ * payment, so a redelivered `order.created` mails once. A mail that fails is logged and swallowed:
+ * the payment exists, and the buyer can read the same instructions on the order page.
+ *
+ * @param order - the order the transfer pays for
+ * @param payment - the transfer payment just opened
+ */
+export const mailTransferInstructions = (
+    order: NonNullable<Awaited<ReturnType<typeof orderService.getById>>>,
+    payment: PaymentDocument
+): Promise<void> => {
+    const beneficiary = bankTransferBeneficiary();
+    const iban = bankTransferIbanFriendly();
+    const { transferReference, payBy } = payment;
+    if (!beneficiary || !iban || !transferReference || !payBy) return Promise.resolve();
+
+    return orderService
+        .mailBuyer(order, (locale, name) => {
+            const bic = bankTransferBic();
+            const mail = transferInstructionsEmail(
+                locale,
+                name,
+                order,
+                { beneficiary, iban, ...(bic ? { bic } : {}), reference: transferReference },
+                payBy,
+                String(order._id)
+            );
+            void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
+        })
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not mail the transfer instructions for order ${String(order._id)}`,
+                error
+            });
+            // Stryker restore all
+        });
+};
+
+/**
+ * Tell the buyer their transfer did not arrive in time and the order is cancelled. Sent by the
+ * call that moved the transfer payment to `cancelled`, so one cancel mails once.
+ *
+ * @param orderId - the order that was cancelled
+ */
+export const mailTransferExpired = (orderId: string): Promise<void> =>
+    orderService
+        .getById(orderId)
+        .then((order) =>
+            order
+                ? orderService.mailBuyer(order, (locale) => {
+                      const mail = transferExpiredEmail(locale, order);
+                      void enqueueEmail(
+                          { to: order.email, subject: mail.subject },
+                          mail.template,
+                          mail.data
+                      );
+                  })
+                : undefined
+        )
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not mail the transfer-expired notice for order ${orderId}`,
                 error
             });
             // Stryker restore all

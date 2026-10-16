@@ -1296,7 +1296,9 @@ describe('orderConfirm — paymentMethod', () => {
         10_000
     );
 
-    it('serves transferInstructions on the still-pending order, with its own RF reference', () =>
+    // The instructions are the payment's: `order.created` opens it (`payments`), and the order
+    // carries neither a reference nor a block of them.
+    it('stamps no reference and serves no instructions on the order itself', () =>
         withBankTransferConfigured(async () => {
             const user = await createUser();
             await giveUserAnAddress(user.id);
@@ -1307,27 +1309,12 @@ describe('orderConfirm — paymentMethod', () => {
             await orderConfirm(user.id, testCallerContext, { paymentMethod: 'bank_transfer' });
 
             const stored = await findOrder({ userId: user._id });
-            // `toJSON()`'s static type mirrors the stored document, not the transform this
-            // module's model wires in — the same `unknown`-typed handoff
-            // `postCheckout`'s own `toOrderResponse` uses for this boundary.
-            const raw: unknown = stored!.toJSON();
-            const serialized = raw as {
-                transferInstructions?: { beneficiary: string; iban: string; reference: string };
-            };
-            // The exact code is `buildReference`'s own concern, pinned in
-            // `transfer-reference.test.ts`;
-            // what this pins is that checkout minted one and stamped it on the order BEFORE
-            // quoting it back here, rather than the raw id the field replaced.
-            expect(stored!.transferReference).toMatch(/^RF\d{2}[\dA-Z]{19}$/);
-            expect(serialized.transferInstructions).toEqual({
-                beneficiary: 'Guebbit Shop',
-                // Grouped into 4s for display — see `bankTransferIbanFriendly`.
-                iban: 'DE89 3704 0044 0532 0130 00',
-                reference: stored!.transferReference
-            });
+            const serialized = stored!.toJSON() as Record<string, unknown>;
+            expect(serialized).not.toHaveProperty('transferInstructions');
+            expect(serialized).not.toHaveProperty('transferReference');
         }));
 
-    it('sends the transfer instructions email instead of the confirmation', () =>
+    it('sends the order confirmation for a bank transfer too; its instructions are the payment’s mail', () =>
         withBankTransferConfigured(async () => {
             mockEnqueueEmail.mockClear();
             const user = await createUser();
@@ -1342,7 +1329,7 @@ describe('orderConfirm — paymentMethod', () => {
             expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
             const [envelope, template] = mockEnqueueEmail.mock.calls[0];
             expect(envelope.to).toBe(user.email);
-            expect(template).toBe('orders.order-transfer-instructions');
+            expect(template).toBe('orders.order-confirm');
         }));
 
     it('refuses a third open order past the cap, naming the open ones', () =>

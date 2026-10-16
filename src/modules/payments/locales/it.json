@@ -29,6 +29,22 @@
             "provider_unavailable": "Il provider non è raggiungibile.",
             "unknown": "Il provider non ha indicato un motivo utilizzabile."
         },
+        "email-transfer": {
+            "subject": "Completa il tuo ordine con un bonifico",
+            "meta-title": "Istruzioni per il bonifico",
+            "greeting": "Ciao, {{name}}!",
+            "body": "Il tuo ordine è riservato. Invia il bonifico qui sotto per completarlo — includi il riferimento per farci abbinare il tuo pagamento.",
+            "deadline": "Terremo il tuo ordine in attesa fino al {{payBy}}.",
+            "total": "Totale: {{total}}",
+            "link-label": "Visualizza il tuo ordine e la ricevuta"
+        },
+        "email-transfer-expired": {
+            "subject": "Il tuo ordine è stato annullato — bonifico non ricevuto",
+            "meta-title": "Ordine annullato",
+            "greeting": "Ciao!",
+            "body": "Non abbiamo ricevuto il tuo bonifico in tempo, quindi questo ordine è stato annullato e i suoi articoli sono stati rilasciati.",
+            "total": "Totale: {{total}}"
+        },
         "email-received": {
             "subject": "Pagamento ricevuto",
             "meta-title": "Pagamento ricevuto",

@@ -11,7 +11,9 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { orderService, parseReference, type OrderDocument } from '@modules/orders';
+import { orderService, type OrderDocument } from '@modules/orders';
+import { parseReference } from '../domain';
+import { paymentRepository } from '../repository';
 import { orderNotFound } from './errors';
 
 /**
@@ -29,7 +31,13 @@ export const getOrderByReference = (
     const parsed = parseReference(ref);
     if (!parsed) return Promise.resolve(orderNotFound());
 
-    return orderService
-        .getByTransferReference(parsed)
-        .then((order) => (order ? generateSuccess(order) : orderNotFound()));
+    return paymentRepository
+        .findByTransferReference(parsed)
+        .then((payment) =>
+            payment
+                ? orderService
+                      .getById(String(payment.orderId))
+                      .then((order) => (order ? generateSuccess(order) : orderNotFound()))
+                : orderNotFound()
+        );
 };

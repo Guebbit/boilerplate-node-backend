@@ -2,7 +2,11 @@
 <html lang="<%= locale %>">
 <%- include("/shared/templates/layouts/email-template-head.ejs"); %>
 <body>
-<%- include("./partials/orders.payment-expired.ejs"); %>
+<main class="centered">
+    <h1><%= greeting %></h1>
+    <p><%= body %></p>
+    <p><%= total %></p>
+</main>
 <%- include("/shared/templates/layouts/default-footer.ejs"); %>
 </body>
 </html>

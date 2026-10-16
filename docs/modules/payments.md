@@ -33,6 +33,7 @@ flowchart LR
     payments --> inventory
     payments --> orders
     orders -. "order.cancelled" .-> payments
+    orders -. "order.created" .-> payments
     payments -. "payment.refunded" .-> invoicing
     payments -. "payment.refunded" .-> returns
 
@@ -97,10 +98,10 @@ rather than the heavy one, and it is why the request schema refuses a value shap
 Two statuses sit between submitted and settled, and a lifecycle without them loses every European
 card payment the bank decides to challenge:
 
-| Status            | What it means                                                                |
-| ----------------- | ---------------------------------------------------------------------------- |
-| `requires_action` | The bank wants a 3-D Secure challenge answered in the browser.               |
-| `processing`      | The provider has the payment but has not settled it. Some methods take days. |
+| Status            | What it means                                                                                                                                                   |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `requires_action` | The buyer has something to do: the bank wants a 3-D Secure challenge answered in the browser, or a bank transfer is waiting to be sent (`nextAction` says how). |
+| `processing`      | The provider has the payment but has not settled it. Some methods take days.                                                                                    |
 
 Both answer **200**, not an error: the browser has a next step, and a 4xx would tell it to stop.
 `POST /payments/{id}/sync` re-reads the provider and settles, which is what makes the happy path
@@ -419,23 +420,39 @@ only two states it ever reports.
 
 At checkout the customer may choose `bank_transfer` instead of `card` — `GET /payments/methods`
 says whether this deployment offers it at all, which is only once `NODE_BANK_TRANSFER_BENEFICIARY`
-and `_IBAN` are both set.
+and `_IBAN` are both set. This module owns the method outright: its settings, its reference, its
+instructions and the two mails around them.
+
+A transfer order is owed money from the moment it is placed, so it gets its **payment** then. The
+payment carries everything the buyer and the operator need, and the order carries none of it.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> pending: checkout, paymentMethod = bank_transfer<br/>hold until payBy
-    pending --> paid: admin records the transfer<br/>POST /payments/order/:orderId/offline
-    pending --> paid: customer pays by card instead
-    pending --> cancelled: customer cancels
-    pending --> cancelled: sweep — payBy passed, no money
-    paid --> [*]
-    cancelled --> [*]
+    [*] --> requires_action: order.created, paymentMethod = bank_transfer<br/>RF reference + payBy, hand-recorded
+    requires_action --> succeeded: admin records the transfer<br/>POST /payments/order/:orderId/offline
+    requires_action --> requires_confirmation: the buyer pays by card instead<br/>(same row, reference kept)
+    requires_action --> cancelled: order cancelled, or payBy passed with no money
+    cancelled --> succeeded: a late transfer is recorded<br/>(the order is gone: the refund record stays open)
+    succeeded --> [*]
+    cancelled --> [*]: deleted a year after the last touch
 ```
 
+- **`order.created` opens it.** A listener (`services/transfer.ts`) inserts the row if absent: a
+  `requires_action` payment, `provider: manual` (no provider is behind it), for the order's total,
+  with the RF reference and `payBy` copied from the order. A redelivered event finds the row and
+  does nothing, and the instructions mail goes out only from the call that inserted it. A payment
+  that already exists (a card paid first, an operator recorded the money) is left exactly as it is.
+- **The instructions ride on the payment as `nextAction`**, a union keyed by `type` so a later
+  redirect is one more member: `{ type: 'bank_transfer', beneficiary, iban, bic?, reference, payBy }`,
+  present while the payment is `requires_action`. Beneficiary, IBAN and BIC are read live from
+  the deployment's config, never frozen — a corrected typo shows on every transfer still open. The
+  reference and `payBy` are the payment's own. A deployment that has stopped offering transfers
+  shows no instructions.
 - **The order carries the chosen method as a preference, not a lock.** The card form stays offered
-  regardless, and a card payment settles through the ordinary pipeline above. When a card pays a
-  transfer order the order's `paymentMethod` becomes `card`, so the order page agrees with its
-  payment; money recorded by hand leaves it alone.
+  regardless: `createIntent` takes the same row over (`requires_confirmation`, method `card`,
+  reference kept, instructions gone), and a card payment settles through the ordinary pipeline above.
+  When a card pays a transfer order the order's `paymentMethod` becomes `card`, so the order page
+  agrees with its payment; money recorded by hand leaves it alone.
 - **The hold is longer, and the sweep needs no change to know it.** `cart`'s checkout hands
   `inventoryService.reserveForOrder` an explicit window — `NODE_BANK_TRANSFER_HOLD_HOURS` (default
   168, a week) instead of `NODE_RESERVATION_TTL_MINUTES` — and the same reservation sweep that
@@ -445,54 +462,51 @@ stateDiagram-v2
   `cart` owns the cap: `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` (default 2) counts that account's own unpaid (`pending`)
   orders, a `processing` card included; a third checkout is refused with `CART_OPEN_ORDER_LIMIT`,
   naming the open orders, before anything is written.
-- **`transferInstructions` is computed at read time, never frozen onto the order — except its own
-  `reference`.** The beneficiary/IBAN/BIC are deployment config, not order-specific data, so every
-  response recomputes them from the current environment — a later correction to a typo'd IBAN
-  shows up on every still-`pending` transfer order, not just new ones. `reference` is the one
-  exception: the RF code checkout minted for THIS order, stored once on `transferReference` and
-  never recomputed. Present only while `paymentMethod` is `bank_transfer` and `status` is
-  `pending`. See [Matching a transfer back to its order](#matching-a-transfer-back-to-its-order).
-- **`orders` owns the bank-transfer business rules outright**, `transferInstructions` and the
-  reference minting — that config lives in `orders/config.ts`, since `orders` is the entity both
-  rules constrain. `payments` and `cart` read it through `orders`' own barrel; `payments`
-  keeps the `ibantools` validation, the one thing that stays genuinely its own. See
-  [Libraries a module owns](../theory/modules.md#libraries-a-module-owns).
-- **Two emails, and a card timeout gets neither.** Checkout sends the instructions and the deadline
-  instead of the ordinary confirmation — there is nothing to confirm yet. The sweep's own expiry
-  sends a second one, but only when `paymentMethod` is `bank_transfer`: a card hold is fifteen
-  minutes, over before anyone could have opened a confirmation email, so a card timeout stays
-  silent exactly as it does today.
+- **Nothing asks a provider about it.** The reconcile sweep skips hand-recorded rows, and the
+  browser's `POST /payments/{id}/sync` answers the payment as it stands: only an operator recording
+  the money moves it.
+- **Three mails, one of them not this module's.** The order-placed confirmation is `orders`', with
+  the withdrawal notice, for every method. This module sends the **instructions** when it opens the
+  payment, and **"no transfer received"** when the order was cancelled because the hold ran out — by
+  the call whose write moved the payment to `cancelled`, so one cancel mails once. The buyer's own
+  cancel is answered by `orders`' cancel mail alone. A card hold's expiry stays `orders`'.
+- **A cancelled transfer payment is kept a year**, not the thirty days of every other abandoned
+  attempt (`TRANSFER_PAYMENT_RETENTION_DAYS`), so the reference still finds the order when a late
+  transfer shows up. See [Matching a transfer back to its order](#matching-a-transfer-back-to-its-order).
 
 ## Matching a transfer back to its order
 
 The bank never tells this app anything — there is no statement feed, no webhook, no polling.
-Instead checkout gives the customer a clean code to write into the transfer, and an admin reads it
-back off the bank's own website:
+Instead the transfer payment gives the customer a clean code to write into the transfer, and an
+admin reads it back off the bank's own website:
 
 ```mermaid
 flowchart LR
     C["Customer pays, writes the code<br/>RF18 5390 0754 in the transfer"] --> B["Bank website<br/>shows the incoming transfer"]
     B --> A["Admin reads the code,<br/>pastes it into the app"]
-    A --> L["GET /payments/order-by-reference<br/>finds the order"]
+    A --> L["GET /payments/order-by-reference<br/>finds the payment, answers its order"]
     L --> P["POST .../offline<br/>marks it paid — settlePayment, as usual"]
 ```
 
 - **The reference is an ISO 11649 "RF" creditor reference** — the standard SEPA reference field,
   e.g. `RF13 2EY8 H44V JAVZ KX80 JRL`. Its mod-97 check digits (ISO 7064 MOD 97-10, the same scheme
   IBAN itself uses) mean a mistyped code is REJECTED rather than silently matching the wrong order.
-  `orders/domain/transfer-reference.ts`'s `buildReference` mints it as part of writing the order,
-  from the order's own id encoded as base-36 — lossless over every bit of the id, so two different
-  orders can never mint the same code the way a hash could, which is what makes
-  `transferReference`'s unique index a true invariant rather than a rarely-firing safety net.
-  `payments`' lookup endpoint imports `parseReference` from the same file.
-- **Minted once, in the same write that creates the order, never recomputed.** `orders`' `placeOrder`
-  mints it atomically as part of the write — see `OrderDocument.transferReference`'s own comment.
-  Absent on a `card` order — such an order is simply not reachable through this lookup; an admin
-  finds it by id through the normal order search instead. No raw-id fallback: a raw order id is
-  not a reference and answers 404, like any other malformed one.
+  `domain/transfer-reference.ts`'s `buildReference` mints it from the order's own id encoded as
+  base-36 — lossless over every bit of the id, so two different orders can never mint the same code
+  the way a hash could, which is what makes the `transferReference` unique index a true invariant
+  rather than a rarely-firing safety net. `parseReference` reads one back.
+- **Minted once, when the payment opens, never recomputed.** It is deterministic in the order id,
+  so a redelivered `order.created` could not mint a different one anyway. A `card` order never has
+  one and is not reachable through this lookup; an admin finds it by id through the normal order
+  search instead. No raw-id fallback: a raw order id is not a reference and answers 404.
 - **No new settlement code.** The admin screen calls the lookup, then the existing `POST
 /payments/order/{orderId}/offline` — the same `pending → paid` move, stock commit, and events any
   other offline record already goes through.
+- **A transfer that arrives after its order was cancelled is recorded, not refused.** The lookup
+  still finds the order (its cancelled payment is kept), and `POST .../offline` takes the money onto
+  that payment. The order cannot be paid any more, so the settlement owes the money straight back:
+  the payment reads `succeeded`, its refund record stays open (a hand-paid refund is returned by
+  the operator, off-system, and marked done), and the order stays cancelled with no stock touched.
 - **A malformed and an unmatched reference answer the same 404.** Distinguishing them would tell a
   guesser which half of a code they got right.
 
@@ -548,12 +562,12 @@ flowchart LR
 Four reads behind one admin page, all `display:Payment` (support, manager, admin) and never
 shared-cached. A payer reads their own payment through `GET /payments/order/{orderId}` only.
 
-| Read                                     | Answers                                                                                                                                                         |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /payments`, `POST /payments/search` | one page of payments, newest first; each row carries its order's `orderNumber` and `email`, composed from `orders` in one batch (`findManyByIds`)               |
-| `GET /payments/refunds`                  | one row per refund across every payment (`$unwind`); refunds stay embedded, because opening one is a single conditional write that also raises `amountRefunded` |
-| `GET /payments/attention`                | problems still recorded on a document, oldest first; a fixed problem clears its marker and disappears                                                           |
-| Awaiting transfer                        | not here: `GET /orders?paymentMethod=bank_transfer&status=pending&sort=payBy`, since no payment exists until the money is recorded                              |
+| Read                                     | Answers                                                                                                                                                                    |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /payments`, `POST /payments/search` | one page of payments, newest first; each row carries its order's `orderNumber` and `email`, composed from `orders` in one batch (`findManyByIds`)                          |
+| `GET /payments/refunds`                  | one row per refund across every payment (`$unwind`); refunds stay embedded, because opening one is a single conditional write that also raises `amountRefunded`            |
+| `GET /payments/attention`                | problems still recorded on a document, oldest first; a fixed problem clears its marker and disappears                                                                      |
+| Awaiting transfer                        | `GET /orders?paymentMethod=bank_transfer&status=pending&sort=payBy` (the order's own deadline and hold); the transfers' payments are in the lists above, `requires_action` |
 
 ```mermaid
 flowchart LR
@@ -609,8 +623,8 @@ recovery sweep.
 
 The refund mail reads the refund record, not the event, and says "that is everything" from the
 refunds settled up to that one rather than the payment's current status. A mail that fails is
-logged and never undoes money that landed. The transfer-instructions and transfer-expired mails
-stay in [`orders`](./orders.md#cancel-and-refund-mails): they announce placing or cancelling an order.
+logged and never undoes money that landed. The bank transfer's two mails are this module's too —
+see [Bank transfer](#bank-transfer).
 
 ## The order timeline
 

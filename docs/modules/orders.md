@@ -44,6 +44,7 @@ flowchart LR
     orders -. "order.status_overridden" .-> delivery
     orders -. "order.status_changed" .-> invoicing
     orders -. "order.cancelled" .-> payments
+    orders -. "order.created" .-> payments
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -206,9 +207,8 @@ a bank transfer).
 
 Every order, whoever makes it, is written through exactly one function — `placeOrder`
 (`services/place.ts`): freeze the lines against the catalogue, hold the stock, allocate the order
-number, mint a `bank_transfer` reference when that's the payment method (minted from the same id
-the write is about to land on, so a retried place cannot mint a second one for the same order),
-write the row. **The hold comes before the write, deliberately**: a refused hold then writes
+number, write the row. A `bank_transfer` order's reference, instructions and payment are
+[`payments`'](./payments.md#bank-transfer): its `order.created` listener opens them. **The hold comes before the write, deliberately**: a refused hold then writes
 nothing at all — no order to roll back and no order number burned on a sale that never happened.
 Everything caller-specific — payment-method validation, the open-order cap (owned by `cart`), resolving a shipping
 address or method, cart pre-flight and clearing — stays with the caller; `placeOrder` only takes
@@ -585,14 +585,14 @@ flowchart LR
 
 Every cancel and every refund leaves one written trace, and each has exactly one mail:
 
-| What happened                                      | The mail                                                                      | Template                                                     |
-| -------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| The customer, or staff, cancelled                  | what the cancel did to their money: going back, no refund, or nothing charged | `orders.order-cancelled`                                     |
-| The reservation sweep cancelled (a hold timed out) | the expiry notice for the payment method                                      | `orders.order-transfer-expired`, `orders.order-card-expired` |
-| The customer withdrew before dispatch              | `returns`' withdrawal acknowledgement                                         | `returns.notice`                                             |
-| The account was erased                             | none: the address belongs to an account that no longer exists                 |                                                              |
-| Money went back outside a return                   | the amount, and whether it was everything                                     | `payments.refund-issued` (sent by `payments`)                |
-| Money went back for a return                       | `returns`' closing notice                                                     | `returns.notice`                                             |
+| What happened                                      | The mail                                                                          | Template                                                 |
+| -------------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| The customer, or staff, cancelled                  | what the cancel did to their money: going back, no refund, or nothing charged     | `orders.order-cancelled`                                 |
+| The reservation sweep cancelled (a hold timed out) | a card hold's expiry notice; a transfer's is `payments`' (`expired` on the event) | `orders.order-card-expired`, `payments.transfer-expired` |
+| The customer withdrew before dispatch              | `returns`' withdrawal acknowledgement                                             | `returns.notice`                                         |
+| The account was erased                             | none: the address belongs to an account that no longer exists                     |                                                          |
+| Money went back outside a return                   | the amount, and whether it was everything                                         | `payments.refund-issued` (sent by `payments`)            |
+| Money went back for a return                       | `returns`' closing notice                                                         | `returns.notice`                                         |
 
 The analytics event follows the same split: only a hold that timed out reports
 `order_reservation_expired`. An erasure's cancel, which also has no request behind it, reports

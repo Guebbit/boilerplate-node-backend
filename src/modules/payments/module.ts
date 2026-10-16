@@ -12,9 +12,10 @@
 import path from 'node:path';
 import type { AppModule, PublicEventTarget } from '@kernel/registry';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
-import { ORDER_CANCELLED } from '@modules/orders';
+import { ORDER_CANCELLED, ORDER_CREATED } from '@modules/orders';
 import { router } from './routes';
 import {
+    openTransferPayment,
     refundForOrder,
     cancelOpenIntentForOrder,
     detachUserId,
@@ -95,11 +96,14 @@ export default {
         // nobody finished, still open at the provider (closed best-effort, never rethrown), and —
         // when `refund` says so — the money already taken. The refund is the durable half: its
         // event is an outbox row, and a rejection here makes the relay deliver it again.
-        onDomainEvent(ORDER_CANCELLED, ({ orderId, refund }) =>
-            cancelOpenIntentForOrder(orderId).then(() =>
+        onDomainEvent(ORDER_CANCELLED, ({ orderId, refund, expired }) =>
+            cancelOpenIntentForOrder(orderId, expired).then(() =>
                 refund ? refundForOrder(orderId) : undefined
             )
         );
+        // A bank-transfer order is owed money from the moment it is placed: its payment, with the
+        // reference and the instructions, opens with it.
+        onDomainEvent(ORDER_CREATED, ({ orderId }) => openTransferPayment(orderId));
         // This module's own two mails, from its own facts — see `./services/notify.ts`.
         onDomainEvent(PAYMENT_SUCCEEDED, mailPaymentReceived);
         onDomainEvent(PAYMENT_REFUNDED, mailRefundIssued);

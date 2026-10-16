@@ -301,7 +301,9 @@ paths:
                 less than recording that the money arrived. A malformed or unmatched reference both answer 404,
                 indistinguishably: nothing here confirms that an almost-right code was close. An
                 raw order id is not a reference, so it answers 404 too — find an order by id
-                through the normal order search instead. Requires a
+                through the normal order search instead. The reference lives on the bank-transfer
+                payment, which is kept for a year after its order is cancelled, so a transfer that
+                arrives late still finds its order. Requires a
                 session that has re-proved itself within the last few minutes — a valid-but-stale
                 token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the caller
                 re-authenticates and retries the same request.
@@ -403,8 +405,15 @@ paths:
                 does: the order moves `pending → paid`, stock commits, and `ORDER_STATUS_CHANGED`
                 and `PAYMENT_SUCCEEDED` fire as usual. The amount is always the order's own total —
                 there is no partial or over-payment here, those are handled by hand, off-system.
-                Answers 201 when the payment row is new, and 200 when it converted the row of a
-                card intent nobody paid.
+                Answers 201 when the payment row is new, and 200 when it converted a row that
+                already existed: a card intent nobody paid, or the open payment of a `bank_transfer`
+                order (the very payment being recorded).
+
+                A transfer that arrives after its order was cancelled is recorded too, onto the
+                payment the cancel closed: the money is real, the order cannot be paid any more, so
+                it answers 200 with the payment `succeeded` and a refund record left open (a hand-paid
+                refund is returned by the operator, off-system, and then marked done).
+
                 Requires a session that has re-proved itself within the last few minutes — a
                 valid-but-stale token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the
                 caller re-authenticates and retries the same request.
@@ -607,6 +616,48 @@ components:
         # Owned by src/modules/payments. The Payment is the provider-facing record of an
         # order's money; the order's own status stays the customer-facing lifecycle.
 
+        # What the buyer has to do for a waiting payment to move, keyed by `type` so a later kind of
+        # wait (a redirect to a provider's page, say) is one more member and not a new field.
+        PaymentNextAction:
+            oneOf:
+                - $ref: '#/components/schemas/PaymentBankTransferAction'
+            discriminator:
+                propertyName: type
+                mapping:
+                    bank_transfer: '#/components/schemas/PaymentBankTransferAction'
+
+        # The instructions of a `bank_transfer` payment, shown while it is `requires_action`: the
+        # beneficiary, IBAN and BIC are deployment config, read at the moment of the request and
+        # never frozen on the payment; `reference` and `payBy` belong to this payment. The amount to
+        # send is the payment's own `amount` and `currency`.
+        PaymentBankTransferAction:
+            type: object
+            additionalProperties: false
+            required: [type, beneficiary, iban, reference, payBy]
+            properties:
+                type:
+                    type: string
+                    enum: [bank_transfer]
+                beneficiary:
+                    type: string
+                iban:
+                    type: string
+                    description: Grouped into blocks of four, the way a bank's own transfer form shows one.
+                bic:
+                    type: string
+                    description: Absent when the deployment has not configured one.
+                reference:
+                    type: string
+                    description: >-
+                        The ISO 11649 "RF" creditor reference of this payment — what the buyer writes
+                        into the transfer's description, so an operator can match the incoming money
+                        back via `GET /payments/order-by-reference`. A malformed or unmatched reference
+                        answers 404; a raw order id is not a reference.
+                payBy:
+                    type: string
+                    format: date-time
+                    description: When the order's stock hold ends. Past it, with no money received, the order is cancelled.
+
         Payment:
             type: object
             additionalProperties: false
@@ -652,8 +703,9 @@ components:
                         `succeeded`: `displayStatus` and `amountRefunded` say how much went back.
                         `cancelled` means the order was cancelled and the provider confirmed the
                         intent closed; money that still arrives on it is settled and returned.
-                        `requires_action` means the bank wants a
-                        challenge answered in the browser (3-D Secure) and `processing` that the
+                        `requires_action` means the buyer has something to do: the bank wants a
+                        challenge answered in the browser (3-D Secure), or a bank transfer is waiting to be
+                        sent (`nextAction` says how) — and `processing` that the
                         provider has taken the payment but not settled it — both are in flight, and
                         `POST /payments/{id}/sync` is what resolves them without waiting for the
                         webhook. `declined` is retryable: the confirm endpoint accepts the same
@@ -661,6 +713,10 @@ components:
                         table: docs/modules/payments.md#status-transitions
                 displayStatus:
                     $ref: '#/components/schemas/PaymentDisplayStatus'
+                # Present only while the payment is waiting on the buyer, and only for a kind of
+                # wait this deployment can still serve.
+                nextAction:
+                    $ref: '#/components/schemas/PaymentNextAction'
                 # Staff only (`display:Payment`): the handle that finds the payment at the provider.
                 providerRef:
                     type: string

@@ -34,7 +34,7 @@ import { ordersAuditActions } from '../audit';
 import { ORDER_CANCELLED } from '../events';
 import { orderRepository } from '../repository';
 import { ORDER_EVENTS, statusesLeadingTo, type OrderActor } from '../domain';
-import { bankTransferExpiredEmail, cardHoldExpiredEmail, orderCancelledEmail } from '../emails';
+import { cardHoldExpiredEmail, orderCancelledEmail } from '../emails';
 import { getById } from './read';
 import { withTimeline } from './timeline';
 import { mailBuyer } from './notify';
@@ -64,7 +64,7 @@ const giveBackStock = async (orderId: string, session: ClientSession): Promise<v
  * @param from - the statuses the caller may cancel from
  * @param scope - the caller's ownership scope, riding in the same filter as the write
  * @param refund - whether the cancel owes the customer their money, carried on the announcement
- * @param by - who cancelled, for the timeline row: the lifecycle's own actor kind
+ * @param cause - why it was cancelled: names who did it on the timeline, and whether the hold ran out
  * @param actorId - the account that cancelled, when a person did
  * @returns the cancelled order, or `null` when the conditional move matched nothing
  */
@@ -73,7 +73,7 @@ const moveToCancelled = (
     from: readonly string[],
     scope: Record<string, unknown> | undefined,
     refund: boolean,
-    by: OrderActor,
+    cause: CancelCause,
     actorId: string | undefined
 ): Promise<OrderDocument | null> =>
     announceInTransaction(
@@ -87,12 +87,16 @@ const moveToCancelled = (
                         scope,
                         active
                     ),
-                () => [{ type: 'cancelled', actor: actorId, data: { by } }]
+                () => [{ type: 'cancelled', actor: actorId, data: { by: CANCEL_CAUSES[cause].by } }]
             )(session);
             if (order) await giveBackStock(id, session);
             return order;
         },
-        () => ({ name: ORDER_CANCELLED, payload: { orderId: id, refund }, aggregateId: id })
+        () => ({
+            name: ORDER_CANCELLED,
+            payload: { orderId: id, refund, expired: cause === 'reservation_expired' },
+            aggregateId: id
+        })
     ).then((order) =>
         order ? inventoryService.refreshStockCacheForOrder(id).then(() => order) : order
     );
@@ -199,20 +203,16 @@ const afterCancel = async (
     const emitContext = context ?? systemCallerContext('Order');
 
     /*
-     * The customer's answer to "what happened to my order". The sweep's own expiry: both payment
-     * methods get one — a `card` hold is thirty minutes, short but no shorter than the time it
-     * takes to abandon a checkout tab and wonder later where the order went.
+     * The customer's answer to "what happened to my order" when the sweep lets a `card` hold go —
+     * thirty minutes, short but no shorter than the time it takes to abandon a checkout tab and
+     * wonder later where the order went. A bank transfer nobody sent is answered by `payments`,
+     * which owns the transfer's deadline; it hears the same cancel (`expired`).
      */
-    if (rules.mail === 'reservation-expiry') {
-        const build =
-            order.paymentMethod === 'bank_transfer'
-                ? bankTransferExpiredEmail
-                : cardHoldExpiredEmail;
+    if (rules.mail === 'reservation-expiry' && order.paymentMethod !== 'bank_transfer')
         await mailBuyer(order, (locale) => {
-            const mail = build(locale, order);
+            const mail = cardHoldExpiredEmail(locale, order);
             void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
         });
-    }
 
     /*
      * A cancel that says what became of the money: a paid order's refund is the one thing the
@@ -286,7 +286,7 @@ const cancel = (
         // matches. Goods that left cannot be cancelled whole.
         { ...scope, 'fulfillment.shipped': { $ne: true } },
         refund,
-        rules.by,
+        cause,
         // A system cancel has no account behind it.
         rules.by === 'system' ? undefined : authContext.id
     ).then((order) =>
@@ -401,7 +401,7 @@ export const cancelUnanswered = (orderId: string): Promise<boolean> =>
         ORDER_EVENTS.cancelUnanswered.from,
         { 'fulfillment.shipped': { $ne: true } },
         true,
-        CANCEL_CAUSES.wait_unanswered.by,
+        'wait_unanswered',
         undefined
     ).then((order) =>
         order ? afterCancel(order, true, 'wait_unanswered').then(() => true) : false

@@ -10,7 +10,7 @@ import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 import { orderFrontendLink, withdrawalPeriodDays } from './config';
 import { isExcludedFromWithdrawal, isShippedItem, orderTotal } from './domain';
-import type { OrderTransferInstructions, ShopAddress } from '@types';
+import type { ShopAddress } from '@types';
 import { returnAddress, returnPostagePayer, shopIdentity } from '@modules/shop';
 
 /**
@@ -245,87 +245,8 @@ export const orderConfirmEmail = (
 };
 
 /**
- * The instructions and deadline for a `bank_transfer` checkout, sent instead of
- * {@link orderConfirmEmail} — there is nothing to confirm yet, only what the customer still has
- * to do. `payBy` is formatted with `Intl.DateTimeFormat` in the recipient's own language rather
- * than a hand-rolled date string, the same `node:` standard-library-first rule that keeps this
- * repo away from a date-formatting dependency.
- */
-export const bankTransferInstructionsEmail = (
-    locale: string,
-    name: string,
-    order: OrderLines,
-    instructions: OrderTransferInstructions,
-    payBy: Date,
-    orderId: string
-): EmailContent => {
-    const t = translator(locale);
-    const withdrawal = withdrawalNotice(locale, order, orderId);
-    return {
-        template: 'orders.order-transfer-instructions',
-        subject: t('orders.email-transfer.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('orders.email-transfer.meta-title'),
-            greeting: t('orders.email-transfer.greeting', { name }),
-            body: t('orders.email-transfer.body'),
-            beneficiary: instructions.beneficiary,
-            iban: instructions.iban,
-            // Not a conditional spread: `undefined` here still reads as "unset" to the
-            // template's `typeof bic !== "undefined"` guard, and a bare key keeps this object a
-            // plain literal `tests/cross-cutting/mail-copy.test.ts` can read statically.
-            bic: instructions.bic,
-            reference: instructions.reference,
-            deadline: t('orders.email-transfer.deadline', {
-                payBy: new Intl.DateTimeFormat(locale, {
-                    dateStyle: 'long',
-                    timeStyle: 'short'
-                }).format(payBy)
-            }),
-            total: t('orders.email-confirm.total', {
-                total: money(locale, orderTotal(order), order.currency)
-            }),
-            // Order-number allocation doesn't wait on payment (see `order-numbering.ts`), so the
-            // same link, rendering the same receipt on demand, applies here as on the paid path.
-            linkLabel: t('orders.email-transfer.link-label'),
-            linkUrl: orderFrontendLink({ locale, id: orderId }),
-            withdrawalHeading: withdrawal.heading,
-            withdrawalTerms: withdrawal.terms,
-            withdrawalEffectsHeading: withdrawal.effectsHeading,
-            withdrawalEffects: withdrawal.effects,
-            withdrawalFormHeading: withdrawal.formHeading,
-            withdrawalForm: withdrawal.form,
-            footer: t('email.footer')
-        }
-    };
-};
-
-/**
- * The sweep cancelling a `bank_transfer` order whose deadline passed with no money — the
- * customer's answer to "what happened to my order".
- */
-export const bankTransferExpiredEmail = (locale: string, order: OrderLines): EmailContent => {
-    const t = translator(locale);
-    return {
-        template: 'orders.order-transfer-expired',
-        subject: t('orders.email-transfer-expired.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('orders.email-transfer-expired.meta-title'),
-            greeting: t('orders.email-transfer-expired.greeting'),
-            body: t('orders.email-transfer-expired.body'),
-            total: t('orders.email-confirm.total', {
-                total: money(locale, orderTotal(order), order.currency)
-            }),
-            footer: t('email.footer')
-        }
-    };
-};
-
-/**
- * {@link bankTransferExpiredEmail}'s twin for a `card` hold — a customer who never finished
- * checkout gets the same explanation once the thirty-minute reservation lapses, its own template
- * since the wording differs (a hold, not a deadline sent up front).
+ * A `card` hold that lapsed — a customer who never finished checkout gets the explanation once the
+ * thirty-minute reservation lapses. (A bank transfer nobody sent is answered by `payments`.)
  */
 export const cardHoldExpiredEmail = (locale: string, order: OrderLines): EmailContent => {
     const t = translator(locale);

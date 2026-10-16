@@ -951,32 +951,6 @@ components:
                 phone:
                     type: string
 
-        # What a pending `bank_transfer` order's owner (and staff) sees to complete it. Never
-        # frozen onto the order — the beneficiary/IBAN/BIC are deployment config, not
-        # order-specific data, so this is computed at read time from whatever the deployment
-        # currently has configured. `reference` IS order-specific: it is what the customer types
-        # into the transfer's own description field, so the money can be matched back.
-        OrderTransferInstructions:
-            type: object
-            additionalProperties: false
-            required: [beneficiary, iban, reference]
-            properties:
-                beneficiary:
-                    type: string
-                iban:
-                    type: string
-                bic:
-                    type: string
-                    description: Absent when the deployment has not configured one.
-                reference:
-                    type: string
-                    description: >-
-                        The ISO 11649 "RF" creditor reference minted for this order at checkout —
-                        what the customer writes into the transfer's description, so an admin can
-                        match the incoming payment back to it via `GET
-                        /payments/order-by-reference`. A malformed or unmatched reference answers
-                        404; a raw order id is not a reference.
-
         # `Product`, without `onHand`/`reserved`/`available`, and without an image — see
         # `OrderLineCurrent`. An order line is a purchase-time SNAPSHOT — the price and title a
         # customer actually bought — and those two fields are the opposite of that: they describe
@@ -1428,11 +1402,6 @@ components:
                     type: string
                     readOnly: true
                     example: '2026-000041'
-                # Present only while `paymentMethod` is `bank_transfer` and `status` is `pending`
-                # — the window in which the customer still needs to act. Scoped to the order's
-                # owner and to staff; never served to another customer.
-                transferInstructions:
-                    $ref: '#/components/schemas/OrderTransferInstructions'
                 status:
                     $ref: '#/components/schemas/OrderStatus'
                 # Three read-only projections beside `status`, so a client never infers "was this

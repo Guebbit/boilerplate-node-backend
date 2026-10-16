@@ -8,10 +8,8 @@
  * Verdict:   `PlaceOrderOutcome` is a plain verdict, not an HTTP envelope — `create` and checkout
  *            map it to their own wire shapes (`ORDER_INSUFFICIENT_STOCK` vs
  *            `CART_INSUFFICIENT_STOCK`), the same way `checkOrderLines` never opines either.
- * Scope:     payment-method validation, the open-transfer cap, resolving a shipping
+ * Scope:     payment-method validation, the open-order cap, resolving a shipping
  *            address/method, cart pre-flight and clearing all stay with the caller.
- * Reference: the bank-transfer reference is minted here, not fetched from `payments` — it names a
- *            row on THIS collection, so a retried place can't mint a second one for the order.
  */
 
 import { Types, type ClientSession } from 'mongoose';
@@ -21,7 +19,6 @@ import { inventoryService, type StockShortfall } from '@modules/inventory';
 import { announceInTransaction } from '@kernel/outbox';
 import type { OrderDocument, OrderDocumentItem } from '../model';
 import { checkOrderLines } from '../domain/rules';
-import { buildReference } from '../domain/transfer-reference';
 import { freezeOrderLines } from './snapshot';
 import { allocateOrderNumber } from './order-numbering';
 import { orderRepository } from '../repository';
@@ -123,13 +120,10 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
     );
 
     /*
-     * Pre-generated so `reserveForOrder` and a `bank_transfer` order's reference can both use the
-     * SAME id the write below will eventually create — reserving needs no row to exist yet, and
-     * the reference must name the row it will end up on, not a second id nobody else ever sees.
+     * Pre-generated so `reserveForOrder` can use the SAME id the write below will eventually
+     * create — reserving needs no row to exist yet.
      */
     const orderId = new Types.ObjectId();
-    const transferReference =
-        input.paymentMethod === 'bank_transfer' ? buildReference(orderId.toHexString()) : undefined;
 
     /*
      * The units are not SOLD here. They stay on the shelf until the payment lands or the hold
@@ -170,7 +164,6 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
             payBy,
             ...(input.notes ? { notes: input.notes } : {}),
             ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
-            ...(transferReference ? { transferReference } : {}),
             ...(input.shipping?.address ? { shippingAddress: input.shipping.address } : {}),
             ...(input.billingAddress ? { billingAddress: input.billingAddress } : {}),
             // Priced off THESE frozen lines' total — the free-above rule prices the basket being

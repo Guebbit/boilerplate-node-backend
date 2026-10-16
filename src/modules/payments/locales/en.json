@@ -29,6 +29,22 @@
             "provider_unavailable": "The provider could not be reached.",
             "unknown": "The provider gave no usable reason."
         },
+        "email-transfer": {
+            "subject": "Complete your order by bank transfer",
+            "meta-title": "Bank transfer instructions",
+            "greeting": "Hello, {{name}}!",
+            "body": "Your order is reserved. Send the transfer below to complete it — include the reference so we can match your payment.",
+            "deadline": "We'll hold your order until {{payBy}}.",
+            "total": "Total: {{total}}",
+            "link-label": "View your order and receipt"
+        },
+        "email-transfer-expired": {
+            "subject": "Your order was cancelled — no transfer received",
+            "meta-title": "Order cancelled",
+            "greeting": "Hello!",
+            "body": "We didn't receive your bank transfer in time, so this order has been cancelled and its items released.",
+            "total": "Total: {{total}}"
+        },
         "email-received": {
             "subject": "Payment received",
             "meta-title": "Payment received",

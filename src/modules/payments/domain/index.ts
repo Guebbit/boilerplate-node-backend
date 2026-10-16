@@ -16,8 +16,12 @@ export {
     REFUNDABLE_PAYMENT_STATUS,
     MANUAL_PROVIDER,
     isHandRecorded,
+    isOpenTransfer,
     OPEN_REFUND_STATUSES
 } from './lifecycle';
+
+/** The RF creditor reference a bank-transfer payment carries, and its admin-side parse. */
+export { buildReference, parseReference } from './transfer-reference';
 
 /** The label a payment shows, and the query behind each label. */
 export { displayStatusOf, displayStatusFilter } from './display-status';

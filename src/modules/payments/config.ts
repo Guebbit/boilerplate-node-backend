@@ -3,25 +3,65 @@
  * The values a deployment tunes about money, read in one place — same arrangement as
  * `@modules/inventory`'s `config.ts`: read per call so a test can vary it, and so a second reader doesn't transcribe its own copy of the fallback.
  *
- * The bank-transfer VALUES themselves (`bankTransferBeneficiary`/`Iban`/`Bic`) and `shopCurrency`
- * are `@modules/orders`' own config — `orders` renders `transferInstructions` and enforces the
- * open-transfer cap, so it owns the bank-transfer business rule, and it already owns the shop's
- * one currency for the invoice this module's payments settle; this module already depends on
- * `orders` for `markPaid`. This file owns what IS this module's alone: validating the configured
- * bank-transfer values with `ibantools` at boot, listing the methods `GET /payments/methods`
- * answers, the payment-effect sweep's own grace window, and the Stripe test-key boot gate.
+ * The bank-transfer method is this module's: its beneficiary, IBAN, BIC and hold window are
+ * declared here, validated with `ibantools` at boot, and shown to the buyer on the payment itself
+ * (`nextAction`). This file also lists the methods `GET /payments/methods` answers and holds the
+ * payment-effect sweep's own grace window.
  */
 
 import { electronicFormatIBAN, isValidBIC, isValidIBAN } from 'ibantools';
 import { defineConfig } from '@infrastructure/config/define';
 import { int, secret, text } from '@infrastructure/config/fields';
-import {
-    bankTransferBeneficiary,
-    bankTransferBic,
-    bankTransferEnabled,
-    bankTransferHoldHours,
-    bankTransferIban
-} from '@modules/orders';
+
+/**
+ * The account name a transfer should be made out to. Unset means transfer is not offered at all.
+ * @returns the configured beneficiary, or `undefined`
+ */
+export const bankTransferBeneficiary = (): string | undefined =>
+    paymentsConfig().NODE_BANK_TRANSFER_BENEFICIARY;
+
+/**
+ * The account IBAN, exactly as configured — whatever shape it was typed in, spaces included.
+ * The boot check runs it through `ibantools`' own `electronicFormatIBAN` before validating, so this
+ * getter does no normalising of its own.
+ * @returns the configured IBAN, or `undefined`
+ */
+export const bankTransferIban = (): string | undefined => paymentsConfig().NODE_BANK_TRANSFER_IBAN;
+
+/**
+ * The IBAN grouped into 4-character blocks, the way a bank's own transfer form shows one — what
+ * the customer actually copies.
+ * @returns the grouped IBAN, or `undefined` when none is configured
+ */
+export const bankTransferIbanFriendly = (): string | undefined => {
+    const iban = bankTransferIban();
+    return iban
+        ?.replaceAll(/\s+/g, '')
+        .replaceAll(/(.{4})/g, '$1 ')
+        .trim();
+};
+
+/**
+ * The account's BIC/SWIFT code — optional even once transfer is offered, since a domestic IBAN
+ * is often enough on its own.
+ * @returns the configured BIC, or `undefined`
+ */
+export const bankTransferBic = (): string | undefined => paymentsConfig().NODE_BANK_TRANSFER_BIC;
+
+/**
+ * How long checkout holds stock for a `bank_transfer` order before the reservation sweep
+ * releases it — a week by default, since a transfer is not a same-day action the way a card is.
+ * @returns the hold window, in hours
+ */
+export const bankTransferHoldHours = (): number => paymentsConfig().NODE_BANK_TRANSFER_HOLD_HOURS;
+
+/**
+ * Whether this deployment offers `bank_transfer` at all — both the beneficiary and the IBAN must
+ * be set. `GET /payments/methods` reads this; checkout refuses the method when it is `false`.
+ * @returns `true` once both are configured
+ */
+export const bankTransferEnabled = (): boolean =>
+    Boolean(bankTransferBeneficiary() && bankTransferIban());
 
 /**
  * One payment method `GET /payments/methods` and checkout may offer.
@@ -98,6 +138,10 @@ const webhookSecretRing = (value: string): string[] =>
 export const paymentsConfig = defineConfig({
     name: 'payments',
     shape: {
+        NODE_BANK_TRANSFER_BENEFICIARY: text(),
+        NODE_BANK_TRANSFER_IBAN: text(),
+        NODE_BANK_TRANSFER_BIC: text(),
+        NODE_BANK_TRANSFER_HOLD_HOURS: int({ default: 168, min: 1 }),
         NODE_PAYMENT_PROVIDER: text({ case: 'lower' }),
         NODE_PAYMENT_WEBHOOK_SECRET: secret({
             // `0`: may stay unset (no provider, nothing to sign). Never the `.env-example`
@@ -166,3 +210,11 @@ export const paymentWebhookSecrets = (): string[] => {
     const value = paymentsConfig().NODE_PAYMENT_WEBHOOK_SECRET;
     return value === undefined ? [] : webhookSecretRing(value);
 };
+
+/**
+ * Days a bank-transfer payment is kept once it was cancelled, so a late transfer can still be
+ * found by its reference and recorded. A year: banks and buyers are slow, and a reference that
+ * stops matching would leave money with no order. Every other abandoned attempt goes after
+ * {@link abandonedPaymentRetentionDays}.
+ */
+export const TRANSFER_PAYMENT_RETENTION_DAYS = 365;

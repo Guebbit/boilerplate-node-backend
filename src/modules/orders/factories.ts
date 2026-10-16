@@ -53,26 +53,20 @@ export type OrderLineInput = Omit<
 };
 
 /**
- * What a caller may pin, derived from the generated `Order`. The three totals and
- * `transferInstructions` are dropped: all four are present on the wire but never stored — the
- * totals are derived at serialization, `transferInstructions` is computed from deployment config
- * — so stating one would invent a column the API never produced. `status` stays — it IS stored
+ * What a caller may pin, derived from the generated `Order`. The three totals are dropped: they
+ * are present on the wire but never stored — derived at serialization — so stating one would
+ * invent a column the API never produced. `status` stays — it IS stored
  * (`OrderDocument.status`, default `OrderStatus.pending`) — so a fixture that needs a history
  * order past `pending` can say so. `items` is replaced because a line here takes a snapshot as
  * DATA; see `OrderLineInput`.
  */
 export type OrderOverrides = Omit<
     OverridesFor<Order>,
-    'items' | 'totalItems' | 'totalQuantity' | 'totalPrice' | 'transferInstructions'
+    'items' | 'totalItems' | 'totalQuantity' | 'totalPrice'
 > & {
     /** 24-char hex of the person who placed it. */
     userId?: Id;
     items?: OrderLineInput[];
-    /**
-     * The RF reference a `bank_transfer` fixture minted — not part of `Order`, so it needs its
-     * own key here rather than riding along on `OverridesFor<Order>` the way `paymentMethod` does.
-     */
-    transferReference?: string;
 };
 
 /** An order ready for `orderRepository.create`. */
@@ -137,8 +131,7 @@ export const makeOrder = ({
     currency,
     notes,
     deletedAt,
-    orderNumber,
-    transferReference
+    orderNumber
 }: OrderOverrides = {}): OrderFixture => ({
     ...identityOf({ id, createdAt, updatedAt }),
     userId: new Types.ObjectId(userId),
@@ -173,7 +166,6 @@ export const makeOrder = ({
         payBy: toDate(payBy),
         paidAt: toDate(paidAt),
         notes,
-        deletedAt: toDate(deletedAt),
-        transferReference
+        deletedAt: toDate(deletedAt)
     })
 });

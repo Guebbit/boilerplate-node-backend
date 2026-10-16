@@ -2,8 +2,8 @@
  * @module
  * The admin's RF-reference lookup (`services/lookup.ts`) and the offline endpoint
  * (`services/offline.ts`, covered on its own terms in `service.test.ts`) it feeds. What this pins
- * is the one thing unique to this path: the reference a real `bank_transfer` checkout would have
- * minted resolves back to its own order, a mistyped or unmatched one does not, and neither case
+ * is the one thing unique to this path: the reference a bank-transfer payment carries resolves back
+ * to its own order, a mistyped or unmatched one does not, and neither case
  * leaks which is true past a plain 404 — and the order the lookup found is the same one the
  * existing offline endpoint then settles, with no new settlement code in between.
  */
@@ -14,30 +14,13 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { getOrderByReference, recordOfflinePayment } from '@modules/payments/services';
-import { buildReference } from '@modules/orders';
+import { buildReference } from '../../domain';
+import { transferOrder } from '../factories';
 import { asReject } from '@tests/response';
 
 setupTestDb();
 
 const orderIdOf = (result: unknown) => String((result as { data?: { _id: unknown } }).data?._id);
-
-/**
- * A pending `bank_transfer` order carrying the reference its own checkout would have minted —
- * the id is pinned first, exactly as `cart`'s checkout pins one, so the reference names the row
- * it is about to be written onto rather than a second id nobody else ever sees.
- */
-const transferOrder = async () => {
-    const user = await createUser();
-    const product = await createProduct({ price: 20 });
-    const id = new Types.ObjectId();
-    const reference = buildReference(id.toHexString());
-    const order = await createOrder(user, [toOrderItem(product, 1)], {
-        id: id.toHexString(),
-        paymentMethod: 'bank_transfer',
-        transferReference: reference
-    });
-    return { order, reference };
-};
 
 describe('getOrderByReference', () => {
     it('finds the order behind its own RF reference', async () => {

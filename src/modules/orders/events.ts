@@ -21,8 +21,11 @@ declare module '@kernel/events' {
          * customer cancelling is owed their money, an operator cancelling may not be. It is also
          * the only durable promise of that money: `payments` opens its refund record from this
          * event, and the relay retries the event until the record exists.
+         *
+         * `expired` says the hold ran out unpaid, which is the one cancel the buyer is told about by
+         * the payment: a transfer nobody sent is answered by `payments`, a card hold by `orders`.
          */
-        'order.cancelled': { orderId: string; refund: boolean };
+        'order.cancelled': { orderId: string; refund: boolean; expired: boolean };
 
         /**
          * An order's status moved, whoever moved it — a status-only admin override

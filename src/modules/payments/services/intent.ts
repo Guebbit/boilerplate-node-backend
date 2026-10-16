@@ -24,6 +24,7 @@ import type { PaymentDocument } from '../model';
 import { presentPayment } from '../presenter';
 import { paymentRepository } from '../repository';
 import { cardNotAvailable, notPayable, orderNotFound } from './errors';
+import { mailTransferExpired } from './notify';
 import { isHandRecorded, SETTLEABLE_PAYMENT_STATUSES } from '../domain';
 import { settleFromProvider } from './settlement';
 import { buyerOrderScope } from './scope';
@@ -173,9 +174,13 @@ export const cancelOpenIntent = (payment: PaymentDocument, reason: string): Prom
  * `cancelled` is written only once the provider confirmed the close, and only from a still-open
  * status, so a success racing this call wins.
  *
+ * A bank transfer's row (no provider behind it) is closed the same way, and when the cancel was
+ * the hold running out, the buyer is told no transfer arrived — by the call whose write moved it.
+ *
  * @param orderId - the order that was cancelled
+ * @param expired - whether the cancel was the stock hold running out unpaid
  */
-export const cancelOpenIntentForOrder = (orderId: string): Promise<void> =>
+export const cancelOpenIntentForOrder = (orderId: string, expired = false): Promise<void> =>
     paymentRepository.findByOrderId(orderId).then((payment) => {
         if (!payment || !SETTLEABLE_PAYMENT_STATUSES.includes(payment.status)) return undefined;
 
@@ -187,7 +192,9 @@ export const cancelOpenIntentForOrder = (orderId: string): Promise<void> =>
                     'cancelled'
                 )
             )
-            .then(() => undefined)
+            .then((moved) =>
+                moved?.transferReference && expired ? mailTransferExpired(orderId) : undefined
+            )
             .catch((error: unknown) => {
                 if (!(error instanceof PaymentInFlightError)) throw error;
                 // The provider refused to close the intent: the customer's money landed (or is on

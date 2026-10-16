@@ -199,7 +199,7 @@ describe('the retention reaper', () => {
         });
         const future = new Date(Date.now() + 60_000);
 
-        const deleted = await paymentRepository.deleteAbandonedBefore(future);
+        const deleted = await paymentRepository.deleteAbandonedBefore(future, future);
 
         expect(deleted).toBe(1);
         expect(await paymentRepository.findByOrderId(orderId)).toBeNull();

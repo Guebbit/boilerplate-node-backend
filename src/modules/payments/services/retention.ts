@@ -11,7 +11,7 @@ import type { Lean } from '@infrastructure/persistence/create-repository';
 import type { ExportPayment, Refund } from '@types';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
-import { abandonedPaymentRetentionDays } from '../config';
+import { abandonedPaymentRetentionDays, TRANSFER_PAYMENT_RETENTION_DAYS } from '../config';
 import { DAY_MS } from '@infrastructure/runtime/time';
 
 /**
@@ -93,7 +93,8 @@ export const findOwnPaymentsForExport = (userId: string): Promise<ExportPayment[
  * `reap:payments`'s sweep. Deletes payment attempts that never reached `succeeded` and have not been touched in `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30) —
  * an open checkout the customer walked away from (a declined card nobody retried, a challenge
  * nobody answered), not a financial record. A settled payment is never a candidate here or on
- * any other timer; see `docs/modules/payments.md`'s retention section.
+ * any other timer; see `docs/modules/payments.md`'s retention section. A bank transfer's row is kept
+ * longer ({@link TRANSFER_PAYMENT_RETENTION_DAYS}) so a late transfer can still be matched.
  *
  * @returns how many abandoned payment attempts were deleted
  */
@@ -101,7 +102,9 @@ export const reapAbandonedPayments = (): Promise<number> => {
     const retentionDays = abandonedPaymentRetentionDays();
     const cutoff = new Date(Date.now() - retentionDays * DAY_MS);
 
-    return paymentRepository.deleteAbandonedBefore(cutoff).then((deleted) => {
+    const transferCutoff = new Date(Date.now() - TRANSFER_PAYMENT_RETENTION_DAYS * DAY_MS);
+
+    return paymentRepository.deleteAbandonedBefore(cutoff, transferCutoff).then((deleted) => {
         if (deleted > 0) {
             // Stryker disable next-line all
             logger.info({ message: 'Deleted abandoned payment attempts.', deleted });

@@ -130,6 +130,19 @@ const aggregateRefundRows = (pipeline: PipelineStage[]): Promise<RefundRow[]> =>
         return rows;
     });
 
+/**
+ * The row of a bank transfer nobody has paid yet: hand-recorded (`manual`, no provider behind it)
+ * and still waiting. A buyer who switches to a card, or an operator who records the money, takes
+ * this row over rather than colliding with it.
+ */
+const OPEN_TRANSFER_ROW = { status: 'requires_action', provider: MANUAL_PROVIDER };
+
+/**
+ * The row of a bank transfer whose order was cancelled before the money came. Only an operator
+ * recording a late transfer takes it over; a card never does.
+ */
+const CANCELLED_TRANSFER_ROW = { status: 'cancelled', transferReference: { $exists: true } };
+
 /** What an upsert answers: the row, and whether this call inserted it rather than refreshing one. */
 export interface UpsertedPayment {
     payment: PaymentDocument;
@@ -147,17 +160,19 @@ export interface UpsertedPayment {
  *   or offline record against an order whose account is already erased pays for real, with no
  *   payer to record
  * @param changes - this caller's own fields: a value is `$set`, `undefined` is `$unset`
+ * @param alsoTakes - more row shapes this caller may take over, beside the unpaid card ones
  */
 const upsertConfirmable = (
     orderId: string,
     userId: string | undefined,
-    changes: Record<string, unknown>
+    changes: Record<string, unknown>,
+    alsoTakes: Record<string, unknown>[] = []
 ): Promise<UpsertedPayment | null> =>
     paymentModel
         .findOneAndUpdate(
             {
                 orderId: toObjectId(orderId),
-                status: { $in: [...CONFIRMABLE_PAYMENT_STATUSES] }
+                $or: [{ status: { $in: [...CONFIRMABLE_PAYMENT_STATUSES] } }, ...alsoTakes]
             },
             {
                 ...setAndUnset(changes),
@@ -216,8 +231,19 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             receivedAt: Date;
         }
     ) => Promise<UpsertedPayment | null>;
+    openTransfer: (
+        orderId: string,
+        userId: string | undefined,
+        data: {
+            amount: number;
+            currency: string;
+            transferReference: string;
+            payBy: Date;
+        }
+    ) => Promise<UpsertedPayment | null>;
+    findByTransferReference: (transferReference: string) => Promise<PaymentDocument | null>;
     detachUserId: (userId: string, session?: ClientSession) => Promise<number>;
-    deleteAbandonedBefore: (cutoff: Date) => Promise<number>;
+    deleteAbandonedBefore: (cutoff: Date, transferCutoff: Date) => Promise<number>;
     updateStatusIfIn: (
         orderId: string,
         from: readonly PaymentStatus[],
@@ -333,11 +359,18 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * moved", surfaced as `null` rather than an exception.
      */
     upsertIntent: (orderId, userId, data) =>
-        upsertConfirmable(orderId, userId, {
-            ...data,
-            method: PaymentMethod.card,
-            status: 'requires_confirmation'
-        }),
+        upsertConfirmable(
+            orderId,
+            userId,
+            {
+                ...data,
+                method: PaymentMethod.card,
+                status: 'requires_confirmation'
+            },
+            // A buyer who placed a transfer order may still pay by card: the same row switches over,
+            // keeping its reference so a transfer sent meanwhile can still be matched.
+            [OPEN_TRANSFER_ROW]
+        ),
 
     /**
      * Create or refresh the payment record for an order paid by hand — same filter as
@@ -347,14 +380,66 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * order to `paid`, so this record never invents its own copy of that move.
      */
     upsertOffline: (orderId, userId, data) =>
-        upsertConfirmable(orderId, userId, {
-            ...data,
-            provider: MANUAL_PROVIDER,
-            status: 'requires_confirmation',
-            // A card attempt's leftovers: this row is now the hand-paid one.
-            providerRef: undefined,
-            cardLast4: undefined
-        }),
+        upsertConfirmable(
+            orderId,
+            userId,
+            {
+                ...data,
+                provider: MANUAL_PROVIDER,
+                status: 'requires_confirmation',
+                // A card attempt's leftovers: this row is now the hand-paid one.
+                providerRef: undefined,
+                cardLast4: undefined
+            },
+            // The open transfer row is the very payment being recorded; a cancelled one is a
+            // transfer that arrived after its order was cancelled (the settlement owes it back).
+            [OPEN_TRANSFER_ROW, CANCELLED_TRANSFER_ROW]
+        ),
+
+    /**
+     * Open the payment of a `bank_transfer` order: a `requires_action` row, hand-recorded
+     * (`manual`) because no provider is behind it, carrying the RF reference and the deadline the
+     * instructions quote. An INSERT only — a row that already exists (a card paid first, an
+     * operator recorded the money, a redelivered `order.created` got here before) is left exactly
+     * as it is, and `created` says so.
+     */
+    openTransfer: (orderId, userId, data) =>
+        paymentModel
+            .findOneAndUpdate(
+                { orderId: toObjectId(orderId) },
+                {
+                    $setOnInsert: {
+                        ...data,
+                        method: PaymentMethod.bank_transfer,
+                        provider: MANUAL_PROVIDER,
+                        status: 'requires_action',
+                        ...(userId === undefined ? {} : { userId: toObjectId(userId) })
+                    }
+                },
+                { upsert: true, returnDocument: 'after', includeResultMetadata: true }
+            )
+            .exec()
+            .then((result) =>
+                result.value
+                    ? {
+                          payment: result.value,
+                          created: result.lastErrorObject?.updatedExisting === false
+                      }
+                    : null
+            )
+            .catch((error: unknown) => {
+                if (isDuplicateKey(error)) return null;
+                throw error;
+            }),
+
+    /**
+     * The payment a bank-transfer reference names — the admin's lookup before recording a transfer.
+     * Unscoped, like the webhook's read: it is reached only behind `create:Payment`.
+     *
+     * @param transferReference - the RF reference, already parsed to its canonical form
+     */
+    findByTransferReference: (transferReference: string) =>
+        paymentModel.findOne({ transferReference }).exec(),
 
     /**
      * The status-machine primitive, same shape as the order repository's: the `$in` rides in
@@ -397,13 +482,19 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * See `docs/modules/payments.md`'s retention section for the reasoning.
      *
      * @param cutoff - payments last touched at or before this instant are due
+     * @param transferCutoff - the same for a bank transfer's row, which is kept longer
      * @returns how many were deleted
      */
-    deleteAbandonedBefore: (cutoff: Date) =>
+    deleteAbandonedBefore: (cutoff: Date, transferCutoff: Date) =>
         paymentModel
             .deleteMany({
                 status: { $in: [...REAPABLE_PAYMENT_STATUSES] },
-                updatedAt: { $lte: cutoff }
+                // A bank transfer's row outlives the rest: its reference still has to find the
+                // order when a late transfer shows up.
+                $or: [
+                    { transferReference: { $exists: false }, updatedAt: { $lte: cutoff } },
+                    { transferReference: { $exists: true }, updatedAt: { $lte: transferCutoff } }
+                ]
             })
             .exec()
             .then(({ deletedCount }) => deletedCount),

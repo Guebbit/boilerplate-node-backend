@@ -181,7 +181,11 @@ describe('cancelling an order', () => {
 
         const rows = await rowsNamed(ORDER_CANCELLED);
         expect(rows).toHaveLength(1);
-        expect(rows[0].payload).toEqual({ orderId: String(order._id), refund: true });
+        expect(rows[0].payload).toEqual({
+            orderId: String(order._id),
+            refund: true,
+            expired: false
+        });
     });
 
     it('does not cancel when its event cannot be written', async () => {

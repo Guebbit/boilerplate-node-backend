@@ -56,6 +56,7 @@ import { listPaymentMethods } from '../config';
  * `refundByOrder`/`refundForOrder`/`refundForReturn` are the doors.
  */
 export { createIntent, cancelOpenIntentForOrder } from './intent';
+export { openTransferPayment } from './transfer';
 export {
     confirmPayment,
     syncPayment,

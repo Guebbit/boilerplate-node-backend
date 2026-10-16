@@ -8,12 +8,7 @@ import path from 'node:path';
 import ejs from 'ejs';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { REPO_ROOT, MODULES_ROOT } from '@tests/paths';
-import {
-    bankTransferInstructionsEmail,
-    orderConfirmEmail,
-    withdrawalNotice,
-    type OrderLines
-} from '../../emails';
+import { orderConfirmEmail, withdrawalNotice, type OrderLines } from '../../emails';
 import { orderFrontendLink } from '../../config';
 
 const ORDER_ID = 'order-1';
@@ -211,30 +206,15 @@ describe('withdrawalNotice: every placeholder is filled', () => {
     });
 });
 
-describe('both placed-order emails carry the notice', () => {
+describe('the placed-order email carries the notice', () => {
     const notice = withdrawalNotice('en', GOODS, ORDER_ID);
 
-    it('the confirmation', () => {
+    it('for every payment method, a bank transfer included', () => {
         const { data } = orderConfirmEmail('en', 'Ada', GOODS, ORDER_ID);
 
         expect(data.withdrawalHeading).toBe(notice.heading);
         expect(data.withdrawalTerms).toEqual(notice.terms);
         expect(data.withdrawalEffects).toEqual(notice.effects);
-        expect(data.withdrawalForm).toEqual(notice.form);
-    });
-
-    it('the bank-transfer instructions, which replace it', () => {
-        const { data } = bankTransferInstructionsEmail(
-            'en',
-            'Ada',
-            GOODS,
-            { beneficiary: 'Shop', iban: 'DE89 3704 0044 0532 0130 00', reference: 'RF18' },
-            new Date('2026-10-05T00:00:00.000Z'),
-            ORDER_ID
-        );
-
-        expect(data.withdrawalHeading).toBe(notice.heading);
-        expect(data.withdrawalTerms).toEqual(notice.terms);
         expect(data.withdrawalForm).toEqual(notice.form);
     });
 });

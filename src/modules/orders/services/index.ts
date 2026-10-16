@@ -8,14 +8,7 @@
  * `retention.ts` answers an erased account, `scope.ts` decides who may see what,
  */
 
-import {
-    search,
-    getById,
-    getForCaller,
-    openUnpaidOrderIds,
-    getByTransferReference,
-    findManyByIds
-} from './read';
+import { search, getById, getForCaller, openUnpaidOrderIds, findManyByIds } from './read';
 import { create, recordCreated, update, updateById } from './crud';
 import { remove, removeById, restoreById } from './remove';
 import { placeOrder } from './place';
@@ -78,7 +71,6 @@ export {
     getForCaller,
     billingAddressOf,
     openUnpaidOrderIds,
-    getByTransferReference,
     findManyByIds,
     ownOrderIds,
     findOwnOrders,
@@ -139,16 +131,7 @@ export type {
 } from './stats';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
 // barrel may only publish services/domain/events/emails/model — see `local/barrel-allowed-sources`.
-export {
-    bankTransferBeneficiary,
-    bankTransferBic,
-    bankTransferEnabled,
-    bankTransferHoldHours,
-    bankTransferIban,
-    bankTransferIbanFriendly,
-    orderFrontendLink,
-    withdrawalPeriodDays
-} from '../config';
+export { orderFrontendLink, withdrawalPeriodDays } from '../config';
 
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const orderService = {
@@ -163,7 +146,6 @@ export const orderService = {
     sendOrderPlacedEmail,
     mailBuyer,
     openUnpaidOrderIds,
-    getByTransferReference,
     findManyByIds,
     paidBuckets,
     productTotals,

@@ -19,6 +19,7 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { MISSING_ID } from '@tests/ids';
 import { t } from '@infrastructure/i18n';
+import { settleOutboxNudges } from '@kernel/outbox';
 
 setupTestDb();
 
@@ -934,7 +935,9 @@ describe('POST /cart/checkout', () => {
         )
     );
 
-    it('matches the contract for a bank_transfer checkout, transferInstructions included', () =>
+    // The instructions are the payment's: the order is placed first, `order.created` opens the
+    // transfer payment, and the buyer reads the instructions off it.
+    it('matches the contract for a bank_transfer checkout, whose payment then carries the instructions', () =>
         withEnvironment('NODE_BANK_TRANSFER_BENEFICIARY', 'Guebbit Shop', () =>
             withEnvironment('NODE_BANK_TRANSFER_IBAN', 'DE89370400440532013000', async () => {
                 const { bearer } = await authenticateWithCart();
@@ -944,18 +947,25 @@ describe('POST /cart/checkout', () => {
                     .set('Authorization', bearer)
                     .send({ shippingMethodId: 'pickup' });
                 const response = await checkoutAs(bearer, { paymentMethod: 'bank_transfer' });
+                await settleOutboxNudges();
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.paymentMethod).toBe('bank_transfer');
                 expect(response.body.data.payBy).toEqual(expect.any(String));
-                expect(response.body.data.transferInstructions).toEqual({
+                expect(response.body.data).not.toHaveProperty('transferInstructions');
+                const payment = await api()
+                    .get(`/payments/order/${String(response.body.data.id)}`)
+                    .set('Authorization', bearer);
+                expect(payment.status).toBe(200);
+                expect(payment.body.data.nextAction).toEqual({
+                    type: 'bank_transfer',
                     beneficiary: 'Guebbit Shop',
                     // Grouped into 4s for display — see `bankTransferIbanFriendly`.
                     iban: 'DE89 3704 0044 0532 0130 00',
                     // The exact RF code is `buildReference`'s own concern
-                    // (`orders/tests/unit/transfer-reference.test.ts`) — this pins its shape, no
-                    // longer the order's own id.
-                    reference: expect.stringMatching(/^RF\d{2}[\dA-Z]{19}$/)
+                    // (`payments/tests/unit/transfer-reference.test.ts`) — this pins its shape.
+                    reference: expect.stringMatching(/^RF\d{2}[\dA-Z]{19}$/),
+                    payBy: response.body.data.payBy
                 });
             })
         ));

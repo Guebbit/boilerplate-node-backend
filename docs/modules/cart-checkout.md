@@ -83,7 +83,7 @@ digital lines included, by the one function (`shippingPriceFor`) the cart's quot
 charge both call. **Step 9 is not checkout's write —
 it's checkout handing everything it resolved to [`orders`'](./orders.md) `placeOrder`**, the one
 function every order (this checkout, the admin's own `POST /orders`) is written through. Checkout
-never freezes a line, allocates an invoice number, or mints a `bank_transfer` reference itself; it
+never freezes a line or allocates an invoice number itself; it
 only decides whether the attempt should happen, then reads the verdict `placeOrder` hands back.
 Steps 10–11 are checkout's own again: clearing the cart is what makes the race in the next section
 possible, and only checkout knows which basket it was clearing.

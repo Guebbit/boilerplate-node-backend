@@ -8,7 +8,6 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { Types } from 'mongoose';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole, staleBearerFor } from '@tests/http';
@@ -16,7 +15,6 @@ import { createUser, createAdminUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
-import { buildReference } from '@modules/orders';
 import { paymentRepository } from '@modules/payments/repository';
 import { inventoryService } from '@modules/inventory';
 import { setFakeOutcome } from '@scenarios/support/doubles/payments/fake';
@@ -25,6 +23,7 @@ import { settleOutboxNudges } from '@kernel/outbox';
 import { ORDER_STATUS_CHANGED } from '@modules/orders';
 import { MISSING_ID } from '@tests/ids';
 import { setEnvironment } from '@tests/environment';
+import { transferOrder as openTransferOrder } from '../factories';
 
 setupTestDb();
 
@@ -60,20 +59,12 @@ const authenticateWithIntent = async () => {
 };
 
 /**
- * A pending `bank_transfer` order carrying the reference its own checkout would have minted, and
- * the customer who placed it — the id is pinned first, exactly as checkout pins one, so the code
- * names the row it is written onto rather than a second id nobody else ever sees.
+ * A pending `bank_transfer` order with its transfer payment opened, and the customer who placed
+ * it — the payment carries the RF reference, as `order.created`'s listener leaves it.
  */
-const transferOrder = async () => {
+const transferOrderOf = async () => {
     const { user, bearer } = await authenticateAs('user');
-    const product = await createProduct({ price: 20 });
-    const id = new Types.ObjectId();
-    const reference = buildReference(id.toHexString());
-    const order = await createOrder(user, [toOrderItem(product, 1)], {
-        id: id.toHexString(),
-        paymentMethod: 'bank_transfer',
-        transferReference: reference
-    });
+    const { order, reference } = await openTransferOrder({ user });
     return { order, reference, customerBearer: bearer };
 };
 
@@ -522,6 +513,24 @@ describe('GET /payments/order/{orderId}', () => {
         expect(response.body.data.orderId).toBe(String(order._id));
     });
 
+    // The instructions of a bank transfer are the payment's own, served to its buyer while it waits.
+    it('serves a waiting bank transfer its instructions as nextAction', async () => {
+        const { order, reference, customerBearer } = await transferOrderOf();
+
+        const response = await api()
+            .get(`/payments/order/${String(order._id)}`)
+            .set('Authorization', customerBearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({
+            status: 'requires_action',
+            method: 'bank_transfer',
+            nextAction: { type: 'bank_transfer', reference }
+        });
+        expect(response.body.data).not.toHaveProperty('transferReference');
+        expect(response.body.data).not.toHaveProperty('payBy');
+    });
+
     it('matches the error contract when no intent exists yet', async () => {
         const { bearer, order } = await authenticateWithOrder();
 
@@ -775,7 +784,7 @@ describe('POST /payments/order/{orderId}/offline', () => {
 describe('GET /payments/order-by-reference', () => {
     it('matches the contract for the order a reference names', async () => {
         const { bearer } = await authenticateAs('admin');
-        const { order, reference } = await transferOrder();
+        const { order, reference } = await transferOrderOf();
 
         const response = await api()
             .get('/payments/order-by-reference')
@@ -788,7 +797,7 @@ describe('GET /payments/order-by-reference', () => {
 
     it('matches the error contract for a reference that fails its check digits', async () => {
         const { bearer } = await authenticateAs('admin');
-        const { reference } = await transferOrder();
+        const { reference } = await transferOrderOf();
         const lastChar = reference.at(-1)!;
         const typo = `${reference.slice(0, -1)}${lastChar === '0' ? '1' : '0'}`;
 
@@ -801,7 +810,7 @@ describe('GET /payments/order-by-reference', () => {
     });
 
     it('refuses the order`s own owner — matching a transfer is staff-only', async () => {
-        const { customerBearer, reference } = await transferOrder();
+        const { customerBearer, reference } = await transferOrderOf();
 
         const response = await api()
             .get('/payments/order-by-reference')

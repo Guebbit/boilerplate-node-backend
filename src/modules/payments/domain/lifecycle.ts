@@ -74,6 +74,20 @@ export const MANUAL_PROVIDER = 'manual';
 export const isHandRecorded = (payment: { provider: string }): boolean =>
     payment.provider === MANUAL_PROVIDER;
 
+/**
+ * Whether a payment is a bank transfer still waiting for its money: hand-recorded, `requires_action`
+ * and carrying its reference. A buyer may still take it over with a card, so it counts as payable.
+ * @param payment - anything carrying the payment's `provider`, `status` and `transferReference`
+ */
+export const isOpenTransfer = (payment: {
+    provider: string;
+    status: PaymentStatus;
+    transferReference?: string;
+}): boolean =>
+    isHandRecorded(payment) &&
+    payment.status === 'requires_action' &&
+    payment.transferReference !== undefined;
+
 /** The only status money can come back from: it has to have arrived first. */
 export const REFUNDABLE_PAYMENT_STATUS: PaymentStatus = 'succeeded';
 

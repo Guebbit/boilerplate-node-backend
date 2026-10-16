@@ -123,6 +123,15 @@ export interface PaymentDocument extends Document {
     /** When the money actually arrived, as the admin reported it — set only by recording by hand. */
     receivedAt?: Date;
     /**
+     * The RF creditor reference the buyer writes into a bank transfer, minted when the transfer
+     * payment opens (`order.created` for a `bank_transfer` order). Kept for as long as the row is,
+     * even once the buyer switches to a card or the payment is cancelled: a late transfer is
+     * matched back to its order by it. Never published on its own — it rides in `nextAction`.
+     */
+    transferReference?: string;
+    /** The end of the stock hold the transfer instructions quote — a copy of the order's `payBy`. */
+    payBy?: Date;
+    /**
      * `true` once a refunded `manual` payment has had its money returned to the customer outside
      * this application — there is no provider to ask, so this is the operator's own record that it
      * was done by hand.
@@ -227,6 +236,16 @@ export const paymentSchema = new Schema<PaymentDocument>(
         receivedAt: {
             type: Date
         },
+        // Bank-transfer payments only. Sparse unique: a reference names exactly one payment, and a
+        // card payment has none.
+        transferReference: {
+            type: String,
+            unique: true,
+            sparse: true
+        },
+        payBy: {
+            type: Date
+        },
         // Offline-only, and only once refunded — see `refunds.ts`'s dispatch on `provider`.
         refundedByHand: {
             type: Boolean
@@ -296,7 +315,7 @@ const wireRefund = (refund: Record<string, unknown>): Record<string, unknown> =>
  * as publish it.
  */
 export const applyPaymentTransform = applySerialization(paymentSchema, {
-    omit: ['providerRef'],
+    omit: ['providerRef', 'transferReference', 'payBy'],
     after: (serialized) => {
         // The embedded refunds get the same treatment a top-level document does, by hand: the lean
         // path never runs the subschema's own transform, and the `toJSON` path runs it on

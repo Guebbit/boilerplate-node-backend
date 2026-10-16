@@ -63,11 +63,18 @@ export const recordOfflinePayment = async (
 
     const order = await orderService.getById(orderId);
     if (!order) return orderNotFound();
+    const existing = await paymentRepository.findByOrderId(orderId);
+    // A transfer that lands after its order was cancelled: the cancel closed the transfer payment
+    // (`cancelled`, reference kept), the money is real, and the order can no longer take it. It is
+    // recorded onto that payment and owed straight back, instead of refused and left unrecorded.
+    const lateTransfer =
+        existing?.status === 'cancelled' &&
+        existing.transferReference !== undefined &&
+        !isPayable(order.status);
     // Asked of the order lifecycle rather than compared against a literal here, so this
     // module cannot drift from the owner of the rule.
-    if (!isPayable(order.status)) return notPayable();
+    if (!isPayable(order.status) && !lateTransfer) return notPayable();
 
-    const existing = await paymentRepository.findByOrderId(orderId);
     // A card intent still open at the provider: tell IT the customer is paying another way now,
     // rather than overwriting this row out from under it — an intent nobody closes can
     // still resolve there days later, with no local row left to catch the charge it makes.
@@ -108,8 +115,9 @@ export const recordOfflinePayment = async (
         context.caller.id
     );
     // Same refusal `confirmPayment`/`syncPayment` answer with when their own settlement loses
-    // the order: the money moved but there was no order left to keep it for.
-    if (settlement.orderLost) return settlementResponse(settlement);
+    // the order: the money moved but there was no order left to keep it for. Not for a late
+    // transfer, where that is the known, recorded outcome: the answer is the payment itself.
+    if (settlement.orderLost && !lateTransfer) return settlementResponse(settlement);
     const { payment: settled } = settlement;
 
     recordAudit(context, {

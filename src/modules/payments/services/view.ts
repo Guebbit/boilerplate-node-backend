@@ -16,7 +16,7 @@ import { orderService, isPayable } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
-import { CONFIRMABLE_PAYMENT_STATUSES, REFUNDABLE_PAYMENT_STATUS } from '../domain';
+import { CONFIRMABLE_PAYMENT_STATUSES, REFUNDABLE_PAYMENT_STATUS, isOpenTransfer } from '../domain';
 import { presentPayment } from '../presenter';
 import { remainingOf } from './refunds';
 import { callerScope, readsAllPayments } from './scope';
@@ -75,7 +75,7 @@ export const withActions = (
         // is the payer's own step, and only a proven address holds `checkout`. Staff
         // reading the payment are never offered a card form they could not submit.
         pay:
-            CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status) &&
+            (CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status) || isOpenTransfer(payment)) &&
             Boolean(order) &&
             isPayable(order!.status) &&
             isPayerWithCheckout(payment, authContext),

@@ -23,14 +23,8 @@ import type { ProductSnapshot } from '@modules/products';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
-import {
-    bankTransferBeneficiary,
-    bankTransferIbanFriendly,
-    transferInstructionsFor
-} from './config';
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { orderTaxBreakdown, type TaxableLineItem } from './domain/tax';
-import { isPayable } from './domain/lifecycle';
 import { decryptSerializedOrder } from './pii';
 import { fulfillmentStatusOf, type FulfillmentSummary } from './domain/fulfillment';
 import {
@@ -103,10 +97,9 @@ export interface OrderReference {
 /**
  * Order Document interface: overrides the generated `Order`'s `userId`/`items`/`status`, and
  * redeclares `deletedAt`/`payBy`/`paidAt` as `Date` (the contract types both as ISO strings).
- * `totalItems`, `totalQuantity`, `totalPrice` and `transferInstructions` are omitted rather than
- * inherited — required or present on the wire but never persisted, so declaring them here would
- * claim a stored field that doesn't exist; `applyOrderTransform` derives all four at
- * serialization time.
+ * `totalItems`, `totalQuantity` and `totalPrice` are omitted rather than inherited — required on
+ * the wire but never persisted, so declaring them here would claim a stored field that doesn't
+ * exist; `applyOrderTransform` derives all three at serialization time.
  */
 export interface OrderDocument
     extends
@@ -124,7 +117,6 @@ export interface OrderDocument
             | 'deletedAt'
             | 'payBy'
             | 'paidAt'
-            | 'transferInstructions'
             | 'paymentStatus'
             | 'fulfillmentStatus'
             | 'returnStatus'
@@ -203,20 +195,6 @@ export interface OrderDocument
      * `fulfillmentStatus` and `actions` are derived from it.
      */
     fulfillment?: FulfillmentSummary;
-    /**
-     * The RF creditor reference this order's `bank_transfer` checkout minted
-     * (`src/modules/orders/domain/transfer-reference.ts`'s `buildReference`), from the SAME id
-     * this write creates — never recomputed afterwards.
-     *
-     * Absent:  on a `card` order — `applyTransferInstructions` then shows no
-     *          `transferInstructions` block at all rather than a fabricated reference, and
-     *          `GET /payments/order-by-reference` cannot reach that order (its admin finds it by
-     *          id through the normal order search instead).
-     * On wire: not part of the `Order` contract — `applyOrderTransform` omits it, the same
-     *          treatment as `anonymizeAfter` below, and it is surfaced only
-     *          through `transferInstructions.reference`.
-     */
-    transferReference?: string;
     deletedAt?: Date;
 }
 
@@ -468,13 +446,6 @@ export const orderSchema = new Schema<OrderDocument>(
         },
         anonymizeAfter: {
             type: Date
-        },
-        /*
-         * The RF reference `placeOrder` mints for a `bank_transfer` order, from the same id this
-         * write creates. Absent on a `card` order — no `required`, matching that.
-         */
-        transferReference: {
-            type: String
         }
     },
     {
@@ -521,16 +492,6 @@ orderSchema.index({ status: 1, payBy: 1 }, { name: 'orders_status_payBy' });
 orderSchema.index({ createdAt: 1 }, { name: 'orders_createdAt' });
 orderSchema.index({ status: 1, createdAt: -1 }, { name: 'orders_status_createdAt' });
 orderSchema.index({ paidAt: 1 }, { name: 'orders_paidAt', sparse: true });
-/*
- * `GET /payments/order-by-reference`'s lookup. Unique — two orders minting the same reference
- * would make the code ambiguous about which one a transfer paid — and sparse for the same reason
- * as the two sweeps above: most orders (every `card` one) never carry this field at all.
- */
-orderSchema.index(
-    { transferReference: 1 },
-    { name: 'orders_transferReference', unique: true, sparse: true }
-);
-
 /**
  * Recursively normalizes each line's embedded product snapshot — `_id` → `id`, `__v` dropped.
  */
@@ -587,37 +548,6 @@ const applyOrderTax = (serialized: Record<string, unknown>, currency: string) =>
 };
 
 /**
- * `transferInstructions`, present only while a `bank_transfer` order is still `pending` AND has a
- * reference to show — once paid or cancelled there is nothing left to act on, and an order placed
- * before `transferReference` existed has no reference to show at all, rather than a fabricated
- * one. Read live from whatever the deployment currently has configured rather than frozen at
- * checkout time: the beneficiary/IBAN/BIC are deployment config, not order-specific data, so a
- * later change should show up on every still-pending order instead of staying locked to what was
- * true when it was placed. `reference` IS order-specific — the RF code `buildReference` minted at
- * checkout.
- */
-const applyTransferInstructions = (serialized: Record<string, unknown>) => {
-    // Read before it is stripped, on every path below — never part of the wire, and `omit` above
-    // runs before this callback, too early to strip a field this function still needs to read.
-    const reference = serialized.transferReference as string | undefined;
-    delete serialized.transferReference;
-
-    if (
-        serialized.paymentMethod !== 'bank_transfer' ||
-        // Still payable, not literally `pending`: the same question `isPayable` answers
-        // everywhere else a caller asks "can this order still be paid" — a status literal here
-        // would drift from the lifecycle table the moment a new pre-paid status ever exists.
-        !isPayable(serialized.status as OrderStatus) ||
-        !reference
-    )
-        return;
-
-    if (!bankTransferBeneficiary() || !bankTransferIbanFriendly()) return;
-
-    serialized.transferInstructions = transferInstructionsFor(reference);
-};
-
-/**
  * The three statuses beside `status`, resolved from what is stored — and `fulfillment` stripped,
  * since this is its last reader. It is not in `omit` for that reason: `omit` runs before `after`.
  * `paidAt` stays on the wire: the `paid`/`unpaid` half of `paymentStatus` is derived from it, and it
@@ -643,15 +573,12 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
 
 /**
  * Normalizes a serialized order: the shared `_id` → `id` and `__v` removal, plus this
- * collection's own jobs — cleaning up the embedded items, deriving the totals, and computing
- * `transferInstructions`. Exported so aggregate results (which bypass `toJSON`) can be mapped
+ * collection's own jobs — cleaning up the embedded items and deriving the totals. Exported so aggregate results (which bypass `toJSON`) can be mapped
  * through the same logic — see `normalize` in @infrastructure/persistence/create-repository.
  */
 export const applyOrderTransform = applySerialization(orderSchema, {
     // `anonymizeAfter` is the reaper's own bookkeeping, not part of the `Order` contract — same
-    // reasoning as `users`' `pendingImageKey`/`inactivityWarnedAt`. `transferReference` is NOT
-    // listed here: `omit` runs before `after` below, and `applyTransferInstructions` still needs
-    // to read it — it strips the raw field itself, once it no longer does.
+    // reasoning as `users`' `pendingImageKey`/`inactivityWarnedAt`.
     omit: ['anonymizeAfter', 'withdrawUntil'],
     after: (serialized) => {
         applyOrderItems(serialized);
@@ -660,7 +587,6 @@ export const applyOrderTransform = applySerialization(orderSchema, {
         const currency = serialized.currency as string;
         applyOrderTotals(serialized, currency);
         applyOrderTax(serialized, currency);
-        applyTransferInstructions(serialized);
         applyOrderProjections(serialized);
         // Last: nothing above reads the addresses or the notes, so they stay ciphertext until here.
         decryptSerializedOrder(serialized);

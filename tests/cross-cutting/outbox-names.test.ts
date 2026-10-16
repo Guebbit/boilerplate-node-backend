@@ -153,7 +153,7 @@ it('publishes the set the pair agreed on', () => {
      * story: the PHP twin has no webhook module yet. `returns.notice` is the same story: the PHP twin has no returns module yet. So are
      * `payments.payment-received` (a payment settling to `succeeded` mails the buyer) and
      * `orders.order-card-expired` (a `card` hold's own expiry notice, the twin of
-     * `orders.order-transfer-expired` for the other payment method) — both new here. So is
+     * `payments.transfer-expired` for the other payment method) — both new here. So is
      * `account.two-factor-changed`, the notice that a second factor was added, replaced or removed. So is
      * `account.two-factor-locked`, the notice that wrong codes locked the checks. So are
      * `api-keys.minted` and `api-keys.revoked`, the notices that a credential was created or revoked
@@ -191,10 +191,10 @@ it('publishes the set the pair agreed on', () => {
         'orders.order-cancelled',
         'orders.order-card-expired',
         'orders.order-confirm',
-        'orders.order-transfer-expired',
-        'orders.order-transfer-instructions',
         'payments.payment-received',
         'payments.refund-issued',
+        'payments.transfer-expired',
+        'payments.transfer-instructions',
         'returns.notice',
         'webhooks.subscription-disabled'
     ];

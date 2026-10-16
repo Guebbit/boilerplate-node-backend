@@ -36,12 +36,15 @@ import { contactRequestEmail } from '@modules/feedback/emails';
 import { examplePublishedEmail } from '@modules/example';
 import {
     orderConfirmEmail,
-    bankTransferInstructionsEmail,
-    bankTransferExpiredEmail,
     cardHoldExpiredEmail,
     orderCancelledEmail
 } from '@modules/orders/emails';
-import { paymentReceivedEmail, refundIssuedEmail } from '@modules/payments/emails';
+import {
+    paymentReceivedEmail,
+    refundIssuedEmail,
+    transferExpiredEmail,
+    transferInstructionsEmail
+} from '@modules/payments/emails';
 import { buildDocumentView } from '@modules/invoicing/emails';
 import {
     preorderDelayedEmail,
@@ -122,7 +125,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         },
         'an-order-id'
     ),
-    'orders.order-transfer-instructions': bankTransferInstructionsEmail(
+    'payments.transfer-instructions': transferInstructionsEmail(
         locale,
         'Ada',
         {
@@ -142,7 +145,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         },
         'an-order-id'
     ),
-    'orders.order-transfer-expired': bankTransferExpiredEmail(locale, {
+    'payments.transfer-expired': transferExpiredEmail(locale, {
         items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
         currency: 'EUR'
     }),

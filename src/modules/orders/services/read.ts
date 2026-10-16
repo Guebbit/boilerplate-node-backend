@@ -200,14 +200,3 @@ export const openUnpaidOrderIds = (userId: string): Promise<string[]> =>
  */
 export const findManyByIds = (ids: readonly string[]): Promise<OrderReference[]> =>
     ids.length === 0 ? Promise.resolve([]) : orderRepository.findManyReferences(ids);
-
-/**
- * The order a `bank_transfer` checkout stamped with this RF reference — `payments`' admin lookup,
- * which reads it back off a bank statement. Exact match only: normalizing what an admin pasted is
- * `orders/domain/transfer-reference.ts`'s job, before it gets here.
- *
- * @param reference - an already-normalized RF reference
- * @returns the order, or `null` when no order carries it
- */
-export const getByTransferReference = (reference: string): Promise<OrderDocument | null> =>
-    orderRepository.findOne({ transferReference: reference });

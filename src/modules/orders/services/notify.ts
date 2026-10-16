@@ -1,8 +1,7 @@
 /**
  * @module
- * The placed-order email — confirmation or transfer instructions, picked from the order's own
- * `paymentMethod` rather than by the caller, so `create` and `@modules/cart`'s checkout can never
- * pick the wrong one for what {@link import('./place').placeOrder} actually wrote. Carries no
+ * The placed-order email, shared by `create` and `@modules/cart`'s checkout so neither can send a
+ * different one for what {@link import('./place').placeOrder} actually wrote. Carries no
  * invoice: an order is not invoiced until it is paid (`invoicing`'s own `ORDER_STATUS_CHANGED`
  * listener), and this mail is sent at CREATION time, before that transition can have happened.
  */
@@ -11,22 +10,15 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { userService } from '@modules/users';
-import {
-    bankTransferBeneficiary,
-    bankTransferIbanFriendly,
-    transferInstructionsFor
-} from '../config';
 import { ANONYMIZED_EMAIL } from '../domain/anonymization';
 import { buyerIdOf } from '../domain';
-import { orderConfirmEmail, bankTransferInstructionsEmail } from '../emails';
+import { orderConfirmEmail } from '../emails';
 import type { OrderDocument } from '../model';
 
 /**
- * Sends the placed-order email for an order `placeOrder` already wrote. A `bank_transfer` order
- * gets the instructions and deadline instead of a confirmation — there is nothing to confirm yet —
- * provided the deployment still has a beneficiary/IBAN configured; an order minted while transfer
- * was offered but read back after it was turned off falls back to the plain confirmation rather
- * than an email with no way to pay.
+ * Sends the placed-order email for an order `placeOrder` already wrote — the confirmation, with
+ * the withdrawal notice, whatever the payment method. A `bank_transfer` order also gets its
+ * instructions, in a second mail: that one is `payments`', sent when the transfer payment opens.
  *
  * @param order - the order {@link import('./place').placeOrder} returned
  * @param locale - the buyer's own stored language, decided once so the order and the email never
@@ -44,21 +36,7 @@ export const sendOrderPlacedEmail = (
 ): void => {
     const orderId = String(order._id);
 
-    const mail =
-        order.paymentMethod === 'bank_transfer' &&
-        bankTransferBeneficiary() &&
-        bankTransferIbanFriendly() &&
-        order.payBy &&
-        order.transferReference
-            ? bankTransferInstructionsEmail(
-                  locale,
-                  name,
-                  order,
-                  transferInstructionsFor(order.transferReference),
-                  order.payBy,
-                  orderId
-              )
-            : orderConfirmEmail(locale, name, order, orderId);
+    const mail = orderConfirmEmail(locale, name, order, orderId);
 
     void enqueueEmail({ to: recipientEmail, subject: mail.subject }, mail.template, mail.data);
 };
