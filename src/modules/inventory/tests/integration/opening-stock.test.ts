@@ -1,7 +1,7 @@
 /**
  * @module
- * The opening-stock listener under the outbox's at-least-once delivery: a redelivered
- * `product.created` must book the opening count once, and a product created at zero books none.
+ * The stock-level listener under the outbox's at-least-once delivery: a redelivered
+ * `product.created` finds the level and changes nothing, and it never books a unit.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -10,7 +10,7 @@ import { PRODUCT_CREATED } from '@modules/products';
 import { emitDomainEvent, resetDomainEvents } from '@kernel/events';
 import inventoryModule from '../../module';
 import { stockLevelRepository } from '../../repository';
-import { listMovements } from '../../services';
+import { listMovements, receive } from '../../services';
 
 setupTestDb();
 
@@ -28,7 +28,7 @@ const productWithoutLevel = async (): Promise<string> => {
     return String(product._id);
 };
 
-/** The stored opening count, `undefined` when the product has no row. */
+/** The stored count, `undefined` when the product has no row. */
 const onHandOf = (productId: string): Promise<number | undefined> =>
     stockLevelRepository.findByProductId(productId).then((level) => level?.onHand);
 
@@ -37,22 +37,23 @@ const movementCount = (productId: string): Promise<number> =>
     listMovements({ productId }).then(({ items }) => items.length);
 
 describe('PRODUCT_CREATED listener', () => {
-    it('books the opening stock once when the same event is delivered twice', async () => {
+    it('opens the level at zero and books no movement', async () => {
         const productId = await productWithoutLevel();
 
-        await emitDomainEvent(PRODUCT_CREATED, { productId, onHand: 7 });
-        await emitDomainEvent(PRODUCT_CREATED, { productId, onHand: 7 });
-
-        expect(await onHandOf(productId)).toBe(7);
-        expect(await movementCount(productId)).toBe(1);
-    });
-
-    it('creates the row but books no movement for a product created with zero', async () => {
-        const productId = await productWithoutLevel();
-
-        await emitDomainEvent(PRODUCT_CREATED, { productId, onHand: 0 });
+        await emitDomainEvent(PRODUCT_CREATED, { productId });
 
         expect(await onHandOf(productId)).toBe(0);
         expect(await movementCount(productId)).toBe(0);
+    });
+
+    it('opens it once when the same event is delivered twice, and leaves what a receipt booked', async () => {
+        const productId = await productWithoutLevel();
+        await emitDomainEvent(PRODUCT_CREATED, { productId });
+        await receive(productId, 7);
+
+        await emitDomainEvent(PRODUCT_CREATED, { productId });
+
+        expect(await onHandOf(productId)).toBe(7);
+        expect(await movementCount(productId)).toBe(1);
     });
 });

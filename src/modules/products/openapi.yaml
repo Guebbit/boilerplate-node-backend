@@ -101,10 +101,10 @@ paths:
                 Creates a new product with optional image upload. Words live in `translations`,
                 one entry per locale — the fallback locale (`NODE_FALLBACK_LOCALE`) MUST be
                 present and non-null, since a product with nothing to fall back to cannot exist.
-                See `PATCH /products/{id}` for the three-way table a locale entry follows. A body naming
-                an opening count (`onHand` above zero) books a stock movement, so it also needs
-                `create:StockMovement`: a caller who edits the catalogue without it is refused `403`
-                and nothing is written.
+                See `PATCH /products/{id}` for the three-way table a locale entry follows. A new
+                product starts with no stock: units enter only through `POST /inventory/receipts`, the
+                one transition that creates them, which needs `create:StockMovement` and leaves a ledger
+                row. A client that wants an opening count creates the product, then receives it.
             operationId: createProduct
             security:
                 - bearerAuth: []
@@ -793,21 +793,6 @@ components:
                     $ref: '#/components/schemas/RateType'
                 sku:
                     $ref: '#/components/schemas/Sku'
-                # The opening count — the one place an ABSOLUTE stock number is honest, because
-                # a product being created has no prior value to race with and no history to
-                # contradict. Every later change is a signed `/inventory` transition.
-                #
-                # `readOnly: true` on `Product.onHand` is why this is spelled out here rather
-                # than inherited: the response field is read-only, the opening count is not.
-                #
-                # The default is declared for the same reason `active`'s is (see below): an
-                # undeclared default is one the paired frontend's mock has to guess at. `0`,
-                # not a phantom stock level — Shopify and WooCommerce both start a new product
-                # unstocked.
-                onHand:
-                    type: integer
-                    minimum: 0
-                    default: 0
                 # ---------- On `active`, and why it is declared here but not on the updates ----------
                 #
                 # `active` and `deletedAt` are INDEPENDENT. A record can be active or not regardless
@@ -887,21 +872,6 @@ components:
                     $ref: '#/components/schemas/RateType'
                 sku:
                     $ref: '#/components/schemas/Sku'
-                # The opening count — the one place an ABSOLUTE stock number is honest, because
-                # a product being created has no prior value to race with and no history to
-                # contradict. Every later change is a signed `/inventory` transition.
-                #
-                # `readOnly: true` on `Product.onHand` is why this is spelled out here rather
-                # than inherited: the response field is read-only, the opening count is not.
-                #
-                # The default is declared for the same reason `active`'s is (see below): an
-                # undeclared default is one the paired frontend's mock has to guess at. `0`,
-                # not a phantom stock level — Shopify and WooCommerce both start a new product
-                # unstocked.
-                onHand:
-                    type: integer
-                    minimum: 0
-                    default: 0
                 # Same default, same reasoning as `CreateProductRequest.active` above.
                 active:
                     type: boolean
@@ -1323,9 +1293,8 @@ components:
                 # thirty-eight spoken for") rather than merely assert it.
                 #
                 # Every field here is read-only. No request body anywhere in this contract accepts
-                # a counter except `CreateProductRequest.onHand`, which is a new product's opening
-                # count. Everything after that moves through the `/inventory` transitions, which
-                # are signed, conditional, and leave a ledger row.
+                # a counter: stock moves only through the `/inventory` transitions, which are
+                # signed, conditional, and leave a ledger row.
                 inStock:
                     type: boolean
                     readOnly: true

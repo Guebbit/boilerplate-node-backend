@@ -69,7 +69,6 @@ describe('productService.writeCreate is one transaction', () => {
         const result = (await productService.writeCreate(
             productService.zodProductCreateSchema.parse({
                 price: 12,
-                onHand: 4,
                 translations: { [FALLBACK]: { title: 'Standing Desk' } }
             }),
             callerContextAs('admin')
@@ -83,7 +82,7 @@ describe('productService.writeCreate is one transaction', () => {
         expect(rows).toHaveLength(1);
         expect(rows[0]).toMatchObject({
             aggregateId: String(result.data._id),
-            payload: { productId: String(result.data._id), onHand: 4 }
+            payload: { productId: String(result.data._id) }
         });
     });
 });

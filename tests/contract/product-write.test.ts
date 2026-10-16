@@ -90,12 +90,48 @@ describe('POST /products', () => {
     });
 
     /*
-     * `products` never writes `onHand` itself — see `products/services/crud.ts`'s `create()` — so this
-     * is the one test proving the opening count still reaches the document, through a real
-     * `receive()` movement rather than a direct field write. `owner`, not `editor`: reading the
-     * ledger back needs `read:StockLevel`, which the editor role does not hold.
+     * `products` never writes `onHand`, and the create body carries none: a new product starts at
+     * zero, and units enter only through a receipt, which leaves the ledger row. `admin`, not
+     * `editor`: reading the ledger back needs `read:StockLevel`.
      */
-    it('gives the product its opening stock through a real receive movement', async () => {
+    it('creates the product with no stock, and a receipt then gives it its opening count', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({
+                price: 12,
+                translations: { en: { title: 'Cedar Chew Toy', description: 'Durable' } }
+            });
+        const id = String(response.body.data.id);
+        await settleOutboxNudges();
+
+        expect(response.status).toBe(201);
+        const empty = await api().get(`/products/${id}`).set('Authorization', bearer);
+        expect(empty.body.data.onHand).toBe(0);
+
+        const received = await api()
+            .post('/inventory/receipts')
+            .set('Authorization', bearer)
+            .set('Idempotency-Key', 'opening-count-1')
+            .send({ productId: id, quantity: 7 });
+        const read = await api().get(`/products/${id}`).set('Authorization', bearer);
+        const movements = await api()
+            .get(`/inventory/movements?productId=${id}`)
+            .set('Authorization', bearer);
+
+        expect(received.status).toBe(200);
+        expect(read.body.data.onHand).toBe(7);
+        expect(movements.body.data.items).toHaveLength(1);
+        expect(movements.body.data.items[0]).toMatchObject({
+            reason: 'receive',
+            onHandDelta: 7,
+            reservedDelta: 0
+        });
+    });
+
+    it('refuses an opening count in the create body: stock is not a product field', async () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
@@ -107,23 +143,7 @@ describe('POST /products', () => {
                 translations: { en: { title: 'Cedar Chew Toy', description: 'Durable' } }
             });
 
-        expect(response.status).toBe(201);
-        // The opening stock arrives through the outbox, so it is read once the relay has run.
-        await settleOutboxNudges();
-        const read = await api()
-            .get(`/products/${String(response.body.data.id)}`)
-            .set('Authorization', bearer);
-        expect(read.body.data.onHand).toBe(7);
-
-        const movements = await api()
-            .get(`/inventory/movements?productId=${String(response.body.data.id)}`)
-            .set('Authorization', bearer);
-        expect(movements.body.data.items).toHaveLength(1);
-        expect(movements.body.data.items[0]).toMatchObject({
-            reason: 'receive',
-            onHandDelta: 7,
-            reservedDelta: 0
-        });
+        expect(response.status).toBe(422);
     });
 });
 
@@ -582,8 +602,8 @@ describe('GET /products/{id}/admin', () => {
     });
 });
 
-/** A create body with an opening count, titled in the fallback language. */
-const bodyTitled = (title: string) => ({ price: 10, onHand: 7, translations: { en: { title } } });
+/** A create body titled in the fallback language. */
+const bodyTitled = (title: string) => ({ price: 10, translations: { en: { title } } });
 
 describe('the stock counters on the product writes follow read:StockLevel', () => {
     /** The three counters only a stock reader sees. */
@@ -593,7 +613,6 @@ describe('the stock counters on the product writes follow read:StockLevel', () =
         const editor = await authenticateAsRole('editor');
         const admin = await authenticateAsRole('admin');
 
-        // An editor books no opening count (no `create:StockMovement`), so the count is the admin's.
         const byEditor = await api()
             .post('/products')
             .set('Authorization', editor.bearer)
@@ -607,7 +626,7 @@ describe('the stock counters on the product writes follow read:StockLevel', () =
         expect(COUNTERS.filter((field) => field in byEditor.body.data)).toEqual([]);
         expect(byAdmin.status).toBe(201);
 
-        // The opening stock arrives through the outbox, so both are read once the relay has run.
+        // The stock level opens through the outbox, so both are read once the relay has run.
         await settleOutboxNudges();
         const editorRead = await api()
             .get(`/products/${String(byEditor.body.data.id)}`)
@@ -616,26 +635,8 @@ describe('the stock counters on the product writes follow read:StockLevel', () =
             .get(`/products/${String(byAdmin.body.data.id)}`)
             .set('Authorization', admin.bearer);
         expect(editorRead.body.data.inStock).toBe(false);
-        expect(adminRead.body.data).toMatchObject({ onHand: 7, available: 7 });
+        expect(adminRead.body.data).toMatchObject({ onHand: 0, available: 0 });
     });
-
-    // Opening stock is a stock movement: a role that edits the catalogue but holds no stock key may
-    // not book it, and nothing is written.
-    it.each(['editor', 'manager'])(
-        'refuses a %s an opening count, and creates no product',
-        async (role) => {
-            const caller = await authenticateAsRole(role);
-
-            const response = await api()
-                .post('/products')
-                .set('Authorization', caller.bearer)
-                .send(bodyTitled('Counted by an editor'));
-
-            expect(response.status).toBe(403);
-            expect(response.body.errors[0].code).toBe('FORBIDDEN');
-            expect(await productRepository.count({})).toBe(0);
-        }
-    );
 
     it('hides them on the editor’s all-languages read, and shows them to a stock reader', async () => {
         const product = await createProduct({ onHand: 9 });

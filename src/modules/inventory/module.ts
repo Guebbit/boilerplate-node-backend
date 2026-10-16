@@ -35,14 +35,14 @@ export default {
     config: [inventoryConfig.slice],
     /*
      * `products` cannot call this module back (it already imports `products`, and the graph must
-     * stay acyclic — see `.dependency-cruiser.cjs`), so this is how a new product gets its opening
-     * stock. `openLevel` creates the row REGARDLESS of the opening quantity — a zero-stock product
-     * must still be visible to the stock board and the low-stock gauge — and books the units only
-     * when it inserted the row, so the outbox's redelivery cannot double them. No audit context:
-     * an admin already sees `ADMIN_PRODUCT_CREATED` for this row.
+     * stay acyclic — see `.dependency-cruiser.cjs`), so this is how a new product gets its stock
+     * level. `openLevel` creates the row at zero — a zero-stock product must still be visible to the
+     * stock board and the low-stock gauge — and the outbox's redelivery finds it. No unit is booked:
+     * stock enters only through `receive`. No audit context: an admin already sees
+     * `ADMIN_PRODUCT_CREATED` for this row.
      */
     subscribe: () => {
-        onDomainEvent(PRODUCT_CREATED, ({ productId, onHand }) => openLevel(productId, onHand));
+        onDomainEvent(PRODUCT_CREATED, ({ productId }) => openLevel(productId));
         // Only the HARD half — a soft delete (or its restore) must leave the counters exactly
         // where a restore has to come back to them. See `removeLevel`'s own docblock.
         onDomainEvent(PRODUCT_DELETED, ({ productId, hardDelete }) =>

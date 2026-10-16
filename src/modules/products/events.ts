@@ -37,18 +37,15 @@ declare module '@kernel/events' {
         };
 
         /**
-         * A product was created, with the opening stock count the request asked for. The document
-         * itself is written with `onHand: 0` — `inventory` (which already imports this module, so
-         * an import back here would cycle) is the one and only listener, and moves the counter to
-         * `onHand` through its own `receive()`. That is still ONE call moving the counter and
-         * writing the ledger row together; the event is only how `products` triggers it without
-         * importing `inventory`. Never repeat this for an UPDATE: a past `product.stock_moved`
+         * A product was created. The document is written with `onHand: 0`, and `inventory` (which
+         * already imports this module, so an import back here would cycle) is the one and only
+         * listener: it opens the product's stock level at zero. Stock never rides this event: units
+         * enter only through `POST /inventory/receipts`, which moves the counter and writes the
+         * ledger row together. Never repeat this for an UPDATE: a past `product.stock_moved`
          * event reacted to a counter a separate write had already changed, so a listener failure
-         * left a moved counter with no ledger row explaining it. Here there is nothing to leave
-         * inconsistent — a failed listener leaves `onHand` at the honest `0` it started at,
-         * recoverable later through `POST /inventory/receipts`, never a silent lie.
+         * left a moved counter with no ledger row explaining it.
          */
-        'product.created': { productId: string; onHand: number };
+        'product.created': { productId: string };
 
         /**
          * A product's `releaseDate` moved, was set or was cleared. Goes through the outbox in the

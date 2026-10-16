@@ -34,6 +34,7 @@ type ProductCreateData = Omit<
     | 'inStock'
     | 'lowStock'
     | 'preorder'
+    | 'onHand'
     | 'releaseDate'
     | 'createdAt'
     | 'updatedAt'
@@ -95,12 +96,10 @@ const withoutReleaseDate = ({
 /**
  * Writes a product row and announces it — inside the caller's transaction.
  *
- * Written with `onHand: 0` regardless of what `data.onHand` asks for — this module never moves
- * that counter (see `./model`'s own docblock). `PRODUCT_CREATED` is how the opening count still
- * happens: `inventory` (which already imports this module, so this cannot import back) is the one
- * subscriber, and moves the counter to `onHand` through its own `receive()`. The event goes
- * through the outbox, so it exists exactly when the row does — the response may show `onHand: 0`
- * until the relay has delivered it.
+ * Written with `onHand: 0` — this module never moves that counter (see `./model`'s own
+ * docblock). `PRODUCT_CREATED` is how the product gets its stock level: `inventory` (which already
+ * imports this module, so this cannot import back) is the one subscriber, and opens the level at
+ * zero. The event goes through the outbox, so it exists exactly when the row does.
  *
  * @param data - the product's fields
  * @param session - the transaction every write of this product joins
@@ -128,7 +127,7 @@ export const insertProduct = (
         .then((product) =>
             enqueueOutboxEvent(
                 PRODUCT_CREATED,
-                { productId: String(product._id), onHand: data.onHand ?? 0 },
+                { productId: String(product._id) },
                 String(product._id),
                 session
             ).then(() => product)

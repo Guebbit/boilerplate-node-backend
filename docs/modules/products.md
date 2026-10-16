@@ -74,10 +74,11 @@ included, gets `inStock` (is anything available) and `lowStock` (available at or
 representation, so a client never has to guess from an absent number. A cached public list is
 keyed by the caller's reach, so one reader's counters are never served to another.
 
-**An opening count is a stock movement.** `POST /products` with `onHand` above zero books a `receive`
-movement, so it needs `create:StockMovement` on top of `create:Product`: an editor or a manager
-who may write the catalogue but holds no stock key is refused `403 FORBIDDEN` (audited like any
-missing key, `translated-write.ts#openingStockRefusal`) and nothing is written.
+**A new product has no stock.** `POST /products` takes no `onHand` (a body naming one is refused
+`422`): stock is not a product field, and units enter only through `POST /inventory/receipts`, which
+leaves a ledger row and needs `create:StockMovement`. The product form of a caller who holds that key
+creates the product and then receives the opening count with an `Idempotency-Key`; if the second
+call fails the product stays at zero, a valid state, and the page says to add stock from Inventory.
 
 **A money edit says what it changed.** `admin.product.updated` carries `metadata.changes` with
 `{ from, to }` for each of `price`, `taxClass` and `rateType` that an update (PUT or PATCH) actually
@@ -241,11 +242,11 @@ automatic cancel is an unpaid order timing out (the reservation expiry, in
 
 ## Configuration
 
-| Variable                   | Default | Meaning                                                                                                                                                                                                          |
-| -------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_VAT_RATE_DEFAULT`    | `0.22`  | The rate charged on a product with no `taxClass` — every product's fallback. Range-checked at boot: outside `[0, 1)` refuses to start                                                                            |
-| `NODE_VAT_RATE_REDUCED`    | `0.1`   | The rate charged on a product whose `taxClass` is `reduced`. Same boot-time range check as the default                                                                                                           |
-| `NODE_LOW_STOCK_THRESHOLD` | `5`     | Availability at or under which `lowStock` is true. The same variable `inventory` reads for its stock board (one `stockConfig` slice in `src/infrastructure/runtime/config.ts`), so the badge and the board agree |
+| Variable                   | Default  | Meaning                                                                                                                                                                                                          |
+| -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_VAT_RATE_DEFAULT`    | required | The rate charged on a product with no `taxClass` — every product's fallback. Required at boot and range-checked: unset, or outside `[0, 1)`, refuses to start. `0.22` is only the `NODE_ENV=test` default        |
+| `NODE_VAT_RATE_REDUCED`    | required | The rate charged on a product whose `taxClass` is `reduced`. Required and range-checked at boot like the default; `0.1` is only the `NODE_ENV=test` default                                                      |
+| `NODE_LOW_STOCK_THRESHOLD` | `5`      | Availability at or under which `lowStock` is true. The same variable `inventory` reads for its stock board (one `stockConfig` slice in `src/infrastructure/runtime/config.ts`), so the badge and the board agree |
 
 Both are read per call from one slice (`config.ts`), which parses a set value through a
 whole-string-decimal grammar and refuses anything outside `[0, 1)` — at boot, and by the slice itself
@@ -288,11 +289,12 @@ always goes through the resolver above.
 
 `POST /products`, `PUT /products/{id}` and `PATCH /products/{id}` all take a `translations` map
 keyed by locale instead of a flat `title`/`description`. The fallback locale's entry is required
-and non-null on `POST` — a new product needs something to fall back to. On `PUT` and `PATCH` it is
-optional (an absent key leaves that locale untouched: a translations table is keyed sub-resources,
-not a field a whole-body replace can null out) but never `null` — deleting the one locale every
-other read falls back to would leave the product with nothing. Every other locale is always
-optional, and `null` on an existing one (never the fallback) deletes its row.
+and non-null on `POST` — a new product needs something to fall back to. A `PUT` states the whole
+map, like every other field: a locale it omits is deleted, and the fallback locale is required, so
+the product always keeps something to fall back to. On `PATCH` the fallback entry is optional (an
+absent key leaves that locale untouched) but never `null` — deleting the one locale every other read
+falls back to would leave the product with nothing. Every other locale is optional, and `null` on an
+existing one (never the fallback) deletes its row.
 `src/modules/products/services/translated-write.ts`'s `writeCreate`/`writeUpdate` validate the whole batch
 (`planTranslations`, the `@kernel/translation` port) before writing anything, then write the
 product and its rows in the same operation; `getAdmin` backs `GET /products/{id}/admin`, the one

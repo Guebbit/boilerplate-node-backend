@@ -4,13 +4,7 @@
  */
 
 import { productService } from '@modules/products';
-import { withTransaction } from '@infrastructure/runtime/database';
-import {
-    StockMovementReason,
-    type InventoryLevel,
-    type PreorderLevel,
-    type StockMovement
-} from '@types';
+import type { InventoryLevel, PreorderLevel, StockMovement } from '@types';
 import {
     normalizePagination,
     buildPaginatedMeta,
@@ -20,36 +14,19 @@ import { lowStockThreshold } from '../config';
 import { stockLevelRepository, stockMovementRepository } from '../repository';
 import type { PaginationInput } from '@infrastructure/persistence/search';
 import type { LevelFilters, MovementFilters } from './types';
-import { applyTransition, refreshStockCache } from './transition';
 
 /**
- * A new product's opening stock — `module.ts`'s `PRODUCT_CREATED` listener's own job, and safe
- * under the outbox's at-least-once delivery (Idempotent Consumer).
+ * A new product's stock level, at zero — `module.ts`'s `PRODUCT_CREATED` listener's own job, and
+ * safe under the outbox's at-least-once delivery (Idempotent Consumer: a redelivery finds the row).
  *
- * The row is created at zero REGARDLESS of the opening quantity: a zero-stock product must still
- * be visible to the stock board and the low-stock gauge, both of which start from this
- * collection. The opening units are booked only when THIS call inserted the row, in the same
- * transaction as their ledger movement — a redelivery finds the row and books nothing.
+ * The row exists so a zero-stock product is still visible to the stock board and the low-stock
+ * gauge, both of which start from this collection. No unit is booked here: units enter only
+ * through `receive`, which leaves a ledger row and needs `create:StockMovement`.
  *
  * @param productId - the product just created
- * @param onHand - the opening quantity; zero books no movement
  */
-export const openLevel = (productId: string, onHand: number): Promise<void> =>
-    withTransaction((session) =>
-        stockLevelRepository
-            .insertIfAbsent(productId, session)
-            .then((inserted) =>
-                inserted && onHand > 0
-                    ? applyTransition(
-                          StockMovementReason.receive,
-                          productId,
-                          onHand,
-                          { note: 'Opening stock' },
-                          session
-                      )
-                    : false
-            )
-    ).then((booked) => (booked ? refreshStockCache(productId) : undefined));
+export const openLevel = (productId: string): Promise<void> =>
+    stockLevelRepository.insertIfAbsent(productId).then(() => undefined);
 
 /**
  * Erase a product's level row — `module.ts`'s `PRODUCT_DELETED` listener's own job, and ONLY for

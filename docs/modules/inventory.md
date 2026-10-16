@@ -56,9 +56,11 @@ synced copy of `onHand`/`reserved` on its own document purely so a catalogue rea
 join; that copy is never the source of truth and this module never reads it back. **Every change
 to a stock count is a transition here.**
 
-A new product's opening stock arrives as `product.created` through the outbox, which delivers at
-least once. `openLevel` inserts the row and books the opening units in one transaction, and books
-them only when that call inserted the row, so a redelivery finds it and books nothing.
+A new product's stock level arrives as `product.created` through the outbox, which delivers at
+least once. `openLevel` inserts the row at zero and books nothing, so a redelivery finds it and
+changes nothing. A product has no stock until a receipt gives it some: `POST /inventory/receipts` is
+the only transition that creates units, so every unit has a ledger row and a caller holding
+`create:StockMovement`.
 
 | Transition                  | Fired by                                                                     | What it does                                                                                                                               |
 | --------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |

@@ -4,9 +4,7 @@
  */
 
 import type { z } from 'zod';
-import { getFallbackLocale, t } from '@infrastructure/i18n';
-import { holds } from '@kernel/ability';
-import { auditForbidden } from '@infrastructure/observability/forbidden';
+import { getFallbackLocale } from '@infrastructure/i18n';
 import { fillOmittedWithNull } from '@infrastructure/object-guards';
 import {
     isTranslationPlan,
@@ -22,7 +20,6 @@ import type {
     ServerImageFields
 } from '@types';
 import {
-    generateReject,
     generateSuccess,
     type ResponseReject,
     type ResponseSuccess
@@ -76,35 +73,10 @@ const prefixTranslationErrors = (rejection: ResponseReject): ResponseReject => (
 });
 
 /**
- * `403 FORBIDDEN` for an opening count the caller may not book. `onHand` on `POST /products` writes
- * a `receive` stock movement, and a role that edits the catalogue (`create:Product`) is not
- * thereby one that moves stock — otherwise sellable units appear that nobody with a stock key
- * counted. Audited like the route guard's own refusal.
- *
- * @param onHand - the opening count the body asked for
- * @param context - the caller
- * @returns the refusal, or `undefined` when there is no count or the caller may book it
- */
-const openingStockRefusal = (
-    onHand: number | undefined,
-    context: CallerContext
-): ResponseReject | undefined => {
-    if (!onHand || holds(context.caller, 'create', 'StockMovement')) return undefined;
-
-    auditForbidden(context, {
-        targetType: 'product',
-        metadata: { reason: 'missing_permission', permission: 'create:StockMovement' }
-    });
-
-    return generateReject(403, [t('generic.error-forbidden')]);
-};
-
-/**
  * Create a product and its translation rows in ONE transaction — the create door of the
  * multilingual product write surface.
  *
- * Before:  an opening count the caller may not book is refused (`create:StockMovement`); then the
- *          translations batch's locales and field names — `planTranslations`; nothing written
+ * Before:  the translations batch's locales and field names — `planTranslations`; nothing written
  *          yet (a bad batch costs no transaction). `data` arrives already validated by
  *          `zodProductCreateSchema` at the controller, which also refuses a missing or `null`
  *          fallback locale.
@@ -120,9 +92,6 @@ export const writeCreate = async (
     context: CallerContext,
     imageExtras: ServerImageFields = {}
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> => {
-    const unearned = openingStockRefusal(data.onHand, context);
-    if (unearned) return unearned;
-
     const plan = await planTranslations('product', toUpsertTranslationsRequest(data.translations));
     if (!isTranslationPlan(plan)) return prefixTranslationErrors(plan);
 

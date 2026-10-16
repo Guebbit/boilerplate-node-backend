@@ -41,7 +41,7 @@ has lapsed. There is no endpoint for it: a manual run is `npm run reap:previous-
 
 Standard CRUD for the product catalogue. Read endpoints are public and Redis-cached. Write endpoints need `create:Product`, `update:Product` or `delete:Product` respectively, and invalidate the cache on change. Both single-item and bulk operations are supported.
 
-Stock is read-only on this surface. `onHand`, `reserved` and `available` are serialized on every product, but the only body that accepts a counter is `POST /products` — a new product's opening `onHand`. The update bodies carry none: an absolute stock write on an edit form overwrites whatever sold while the form was open, so changing an existing product's stock is `POST /inventory/receipts` or `POST /inventory/adjustments`, both signed and both audited.
+Stock is read-only on this surface. `onHand`, `reserved` and `available` are serialized on every product, and no product body accepts a counter: an absolute stock write on a form overwrites whatever sold while it was open, so a product's stock, an opening count included, is `POST /inventory/receipts` or `POST /inventory/adjustments`, both signed and both audited.
 
 ## Cart
 
@@ -81,20 +81,21 @@ Shipping rates as pure domain rules (flat rates, free-above thresholds), priced 
 
 The only writer of stock in the application. A product's stock level carries two counters — `onHand` (units that exist) and `reserved` (units an open order has claimed) — and what a customer may buy is the difference, published as the derived `available`. Both counters live in this module's own `stocklevels` collection, the only place they are written; `products` keeps a read-only mirror of both on its own document so a catalogue read needs no join.
 
-Six transitions move them, each a conditional write paired with the ledger row that explains it, so the ledger cannot have gaps:
+Seven transitions move them, each a conditional write paired with the ledger row that explains it, so the ledger cannot have gaps:
 
 | Transition | When                         | `onHand` | `reserved` |
 | ---------- | ---------------------------- | -------- | ---------- |
 | `reserve`  | checkout, staff order create | —        | `+q`       |
-| `commit`   | payment confirmed            | `−q`     | `−q`       |
+| `commit`   | payment confirmed            | —        | —          |
+| `ship`     | the units leave in a parcel  | `−q`     | `−q`       |
 | `release`  | order cancelled              | —        | `−q`       |
 | `expire`   | hold timed out (the sweep)   | —        | `−q`       |
 | `receive`  | supplier delivery            | `+q`     | —          |
 | `adjust`   | stocktake correction         | `±q`     | —          |
 
-A checkout is **all-or-nothing** — the shop never silently ships fewer units than were ordered, because an order is what the customer agreed to buy. What it does do is say exactly what blocked it: a refusal carries `errors[0].details.lines`, one entry per short line with `productId`, `title`, `requested` and `available`, so a basket is fixed in one pass rather than one refusal per line. That holds on both refusal paths — the pre-flight, and the conditional reserve that decides a race, where the reported figure is read back at the moment the write refused.
+A checkout is **all-or-nothing** — the shop never silently ships fewer units than were ordered, because an order is what the customer agreed to buy. What it does do is say exactly what blocked it: a refusal carries `errors[0].details.lines`, one entry per short line with `productId`, `title`, `requested` and `availability` (sold out, short, off sale), never the number left, so a basket is fixed in one pass rather than one refusal per line. A staff order's refusal adds `available` for a caller who reads stock. That holds on both refusal paths — the pre-flight, and the conditional reserve that decides a race, where the reported figure is read back at the moment the write refused.
 
-Units therefore leave the shop only when they are paid for; an unpaid order costs availability for the length of its window (`NODE_RESERVATION_TTL_MINUTES`, default 15) and nothing more. The application ships no scheduler, so the sweep is driven from outside — a cron entry, the platform's scheduled job, or an operator. Run it at least as often as the window, or holds outlive their deadline by the gap.
+Paying moves no counter: the units stay on the shelf and spoken for until they ship, and leave the shop at dispatch. An unpaid order costs availability for the length of its window (`NODE_RESERVATION_TTL_MINUTES`, default 15) and nothing more. The application ships no scheduler, so the sweep is driven from outside — a cron entry, the platform's scheduled job, or an operator. Run it at least as often as the window, or holds outlive their deadline by the gap.
 
 Both reads page and report `meta.totalItems`, and neither is bounded in the service. The ledger is the record an audit works through, so a read answering only the newest rows would misreport history as complete; the board sorts on availability, which is derived, so mongod projects it in an aggregation rather than the service loading every product to sort in memory. The low-stock threshold (`NODE_LOW_STOCK_THRESHOLD`) is shared by the board's `lowOnly` filter and the `products_low_stock_total` gauge, but the two count different populations on purpose: the board spans the whole catalogue, because somebody restocking needs to see an inactive product's units, while the gauge counts only publicly visible products, because an alert about stock nobody can buy is noise. Both measure AVAILABILITY rather than units on hand.
 
