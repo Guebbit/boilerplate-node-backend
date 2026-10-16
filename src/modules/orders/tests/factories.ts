@@ -135,10 +135,6 @@ export const findOrder = (where: Record<string, unknown>): Promise<OrderDocument
 export const countOrders = (where: Record<string, unknown> = {}): Promise<number> =>
     orderRepository.count(where);
 
-/** Persist a document a sibling's fixture already built and mutated in memory. */
-export const saveOrder = (document: OrderDocument): Promise<OrderDocument> =>
-    orderRepository.save(document);
-
 /**
  * Force an order straight to `status`, bypassing every lifecycle rule — the one door a test may
  * use to reach a state the real API could never produce, to prove some OTHER caller handles it
