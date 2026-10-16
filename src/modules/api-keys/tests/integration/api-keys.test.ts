@@ -12,7 +12,7 @@ import { TEST_TENANT_ID, callerContextAs } from '@tests/callers';
 import type { TenantCallerContext } from '@types';
 import { userRepository } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
-import { assignRole, revokeRole } from '@modules/access';
+import { accessService } from '@modules/access';
 import { keysInScope } from '@kernel/permissions';
 import { resolveCredential } from '@kernel/authentication';
 import { credentialOf } from '@tests/credentials';
@@ -178,14 +178,14 @@ describe('an own-rows rule is not a staff rule', () => {
     it('shrinks a minted display:Order to nothing once its minter holds no staff role', async () => {
         const user = await createRealUser('wide-then-narrow');
         const userId = String(user._id);
-        await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
+        await accessService.assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
         const minted = await mint(
             { name: 'wide read', permissions: ['display:Order'], expiresAt: IN_A_WEEK },
             contextFor(userId, keysInScope('admin', 'tenant', 'customer'))
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
 
-        await revokeRole(userId, TEST_TENANT_ID, 'tenant');
+        await accessService.revokeRole(userId, TEST_TENANT_ID, 'tenant');
 
         const resolved = await credentialOf(minted.data.secret);
         expect(resolved?.caller.permissions).not.toContain('display:Order');
@@ -196,7 +196,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
     it("shrinks a key's reach the moment its minter is demoted, with the document never touched", async () => {
         const user = await createRealUser('demoted-minter');
         const userId = String(user._id);
-        await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
+        await accessService.assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
 
         const mintContext = contextFor(userId, keysInScope('admin', 'tenant', 'customer'));
         const minted = await mint(
@@ -213,7 +213,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         expect(beforeDemotion?.caller.permissions).toContain('read:WebhookSubscription');
 
         // `customer` holds none of the api-keys keys — the demotion this test is about.
-        await revokeRole(userId, TEST_TENANT_ID, 'tenant');
+        await accessService.revokeRole(userId, TEST_TENANT_ID, 'tenant');
 
         const afterDemotion = await credentialOf(minted.data.secret);
         // Still a real, resolvable credential (not revoked, not expired) — just holding nothing
@@ -227,7 +227,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
     it('holds nothing for a key whose minter was deactivated, and the key itself is untouched', async () => {
         const user = await createRealUser('banned-minter');
         const userId = String(user._id);
-        await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
+        await accessService.assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
         const minted = await mint(
             {
                 name: 'about to lose its minter',
@@ -309,7 +309,7 @@ describe('revoke across administrators', () => {
     it('lets an administrator revoke another administrator’s key — revoking only takes access away', async () => {
         const minter = await createRealUser('admin-minter');
         const minterId = String(minter._id);
-        await assignRole(minterId, TEST_TENANT_ID, 'tenant', 'admin');
+        await accessService.assignRole(minterId, TEST_TENANT_ID, 'tenant', 'admin');
         const minted = await mint(
             { name: 'leaked', permissions: ['read:WebhookSubscription'], expiresAt: IN_A_WEEK },
             contextFor(minterId, keysInScope('admin', 'tenant', 'customer'))
@@ -317,7 +317,7 @@ describe('revoke across administrators', () => {
         if (!minted.data) throw new Error('setup failed: mint was refused');
         const other = await createRealUser('admin-revoker');
         const otherId = String(other._id);
-        await assignRole(otherId, TEST_TENANT_ID, 'tenant', 'admin');
+        await accessService.assignRole(otherId, TEST_TENANT_ID, 'tenant', 'admin');
 
         const result = await revoke(
             minted.data.id,
@@ -486,7 +486,7 @@ describe('touchLastUsed', () => {
         // Resolve re-floors against what the minter holds NOW (`currentCallerOf`), not the mint
         // context's own claimed permissions — needs a real membership row, same as the
         // demoted-minter case above.
-        await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
+        await accessService.assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
         const context = contextFor(userId, ['read:WebhookSubscription']);
         const minted = await mint(
             {

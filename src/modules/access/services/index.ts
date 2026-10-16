@@ -1,22 +1,18 @@
 /**
  * @module
  * The access service: three files behind one door — who may hand out which role (`grants`), who
- * holds which role where (`memberships`), and the protection of staff accounts (`protection`). What
- * a sibling may call is exactly what is named here; `role-audit` and the grant internals are not.
+ * holds which role where (`memberships`), and the protection of staff accounts (`protection`).
+ * Everything that reads or writes the database rides `accessService`; constants, the error class
+ * and the pure grant and ownership checks are named exports. `role-audit`'s `auditRoleChange` and
+ * the grant internals are not published.
  *
  * See: docs/theory/authorization.md
  */
 
-export {
-    AccessInvariantError,
-    assertCanGrant,
-    assertCanGrantAudited,
-    grantableRoles
-} from './grants';
-export {
+import { assertCanGrantAudited } from './grants';
+import {
     assignRole,
-    bootstrapAccessModel,
-    DEPLOYMENT_TENANT_SLUG,
+    bootstrapAccess,
     ensureTenant,
     eraseMemberships,
     membershipIn,
@@ -26,14 +22,40 @@ export {
     rolesOf,
     rolesOfMany
 } from './memberships';
-export {
+import {
     canChangeAccount,
     holdsStaffRole,
+    roleProtectedRefusal,
+    staffHoldersAmong
+} from './protection';
+import { auditRoleAssigned, auditRoleRevoked } from './role-audit';
+
+export { AccessInvariantError, assertCanGrant, grantableRoles } from './grants';
+export { DEPLOYMENT_TENANT_SLUG } from './memberships';
+export {
     isOwnThing,
     ownOrderFlag,
     ROLE_PROTECTED_REASON,
-    roleProtectedRefusal,
-    SHOP_REFUSAL_REASONS,
-    staffHoldersAmong
+    SHOP_REFUSAL_REASONS
 } from './protection';
-export { auditRoleAssigned, auditRoleRevoked } from './role-audit';
+
+/** The service's public surface — every operation of this module that reads or writes the database. */
+export const accessService = {
+    assertCanGrantAudited,
+    assignRole,
+    bootstrapAccess,
+    ensureTenant,
+    eraseMemberships,
+    membershipIn,
+    membershipsOf,
+    revokeAllOf,
+    revokeRole,
+    rolesOf,
+    rolesOfMany,
+    canChangeAccount,
+    holdsStaffRole,
+    roleProtectedRefusal,
+    staffHoldersAmong,
+    auditRoleAssigned,
+    auditRoleRevoked
+};

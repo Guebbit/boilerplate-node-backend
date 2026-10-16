@@ -12,7 +12,7 @@ import { systemCallerContext } from '@kernel/permissions';
 import type { ClientSession } from 'mongoose';
 import { personalDataErasers, setPersonalDataErasers } from '../../erasure-registry';
 import { createUser } from '@modules/users/tests/factories';
-import * as userService from '@modules/users/services';
+import { userService } from '@modules/users/services';
 import { USER_SETUP_REQUESTED } from '../../events';
 import { userRepository } from '../../repository';
 import { usersAuditActions } from '@modules/users/audit';
@@ -21,7 +21,7 @@ import * as analyticsPort from '@infrastructure/observability/analytics';
 import { usersAnalyticsEvents } from '../../analytics';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbox';
-import { assignRole, eraseMemberships, membershipsOf, rolesOf } from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import { presentUser } from '../../presenter';
@@ -272,7 +272,7 @@ describe('userService.create', () => {
         );
 
         // The membership, not a document field — `create` grants it through `assignRole`.
-        const roles = await rolesOf(String(user._id), DEPLOYMENT_TENANT_ID);
+        const roles = await accessService.rolesOf(String(user._id), DEPLOYMENT_TENANT_ID);
         expect(roles.tenant).toBe('admin');
     });
 
@@ -287,7 +287,7 @@ describe('userService.create', () => {
             callerContextAs('moderator')
         );
 
-        const roles = await rolesOf(String(user._id), DEPLOYMENT_TENANT_ID);
+        const roles = await accessService.rolesOf(String(user._id), DEPLOYMENT_TENANT_ID);
         expect(roles.tenant).toBeNull();
         expect(user.verifiedAt).toBeInstanceOf(Date);
     });
@@ -414,7 +414,7 @@ describe('userService.updateById', () => {
         expect(result.success).toBe(true);
         const updated = (result as { data: UserDocument }).data;
         expect(updated.username).toBe('new-name');
-        const roles = await rolesOf(String(updated._id), DEPLOYMENT_TENANT_ID);
+        const roles = await accessService.rolesOf(String(updated._id), DEPLOYMENT_TENANT_ID);
         expect(roles.tenant).toBe('admin');
     });
 
@@ -842,18 +842,18 @@ describe('userService.removeById', () => {
             const id = user._id.toString();
             // A second platform operator, so the platform row below is not itself the last one
             // administering the installation — this test is about the erasure gap, not that invariant.
-            await assignRole('another-operator', null, 'platform', 'operator');
+            await accessService.assignRole('another-operator', null, 'platform', 'operator');
             // A tenant seat AND a platform seat — the erasure gap a single tenant-scoped revoke leaves
             // behind if the platform row is not swept too, surviving the user it points at.
-            await assignRole(id, DEPLOYMENT_TENANT_ID, 'tenant', 'support');
-            await assignRole(id, null, 'platform', 'operator');
+            await accessService.assignRole(id, DEPLOYMENT_TENANT_ID, 'tenant', 'support');
+            await accessService.assignRole(id, null, 'platform', 'operator');
             // This suite builds no app, so the erase hooks a deployment registers are not there:
             // install `access`'s own, the one under test.
-            setPersonalDataErasers([eraseMemberships]);
+            setPersonalDataErasers([accessService.eraseMemberships]);
 
             await userService.removeById(id, true, callerContextAs('admin'));
 
-            expect(await membershipsOf(id)).toEqual([]);
+            expect(await accessService.membershipsOf(id)).toEqual([]);
         });
     });
 

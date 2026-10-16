@@ -7,7 +7,7 @@
 import type { Session } from '@types';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { userService } from '@modules/users';
-import { rolesOf } from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { sessionRepository, type SessionRow } from '../repository';
 import { predatesSessionEpoch } from './epoch';
@@ -66,7 +66,7 @@ export const listSessions = (
     Promise.all([
         sessionRepository.listLive(userId, mode, new Date()),
         userService.findAuthenticatableById(userId),
-        rolesOf(userId, DEPLOYMENT_TENANT_ID)
+        accessService.rolesOf(userId, DEPLOYMENT_TENANT_ID)
     ]).then(([allRows, user, roles]) => {
         // A ban moves the account's epoch and deletes no row, and a staff session past its idle
         // limit is only ended when someone next presents it: neither signs anyone in, so neither

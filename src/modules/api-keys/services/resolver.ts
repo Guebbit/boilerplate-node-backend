@@ -12,7 +12,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import type { Resolution, ResolvedCredential } from '@kernel/authentication';
 import { keysInScope, assembleCaller } from '@kernel/permissions';
 import { heldRules } from '@kernel/ability';
-import { rolesOf } from '@modules/access';
+import { accessService } from '@modules/access';
 import { userService } from '@modules/users';
 import type { Caller } from '@types';
 import { apiKeyRepository } from '../repository';
@@ -38,7 +38,7 @@ const currentCallerOf = (apiKey: ApiKeyDocument): Promise<Caller | undefined> =>
     userService.findAuthenticatableById(apiKey.createdByUserId).then((user) => {
         if (!user) return undefined;
 
-        return rolesOf(apiKey.createdByUserId, apiKey.tenant).then((roles) => {
+        return accessService.rolesOf(apiKey.createdByUserId, apiKey.tenant).then((roles) => {
             const permissions = keysInScope(roles.tenant, 'tenant');
 
             return assembleCaller(apiKey.createdByUserId, apiKey.tenant, 'tenant', permissions);

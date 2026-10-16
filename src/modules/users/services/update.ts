@@ -22,15 +22,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { auditForbidden } from '@infrastructure/observability/forbidden';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import type { CallerContext, UpdateUserByIdRequest, WithServerImage } from '@types';
-import {
-    assertCanGrantAudited,
-    assignRole,
-    auditRoleAssigned,
-    auditRoleRevoked,
-    revokeRole,
-    roleProtectedRefusal,
-    rolesOf
-} from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { phoneAad, type UserDocument } from '../model';
 import { userRepository } from '../repository';
@@ -121,7 +113,7 @@ type RoleChange = { grant: string } | { revoke: string } | undefined;
 const changedRole = (user: UserDocument, requested?: string | null): Promise<RoleChange> =>
     requested === undefined
         ? Promise.resolve(undefined)
-        : rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then(({ tenant }) => {
+        : accessService.rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then(({ tenant }) => {
               // Stored lower-cased and trimmed — the membership schema's own normalisation.
               if (tenant === (requested?.trim().toLowerCase() ?? null)) return undefined;
 
@@ -143,9 +135,10 @@ const writeRole = (
     session: ClientSession
 ): Promise<unknown> => {
     if (role === undefined) return Promise.resolve();
-    if ('revoke' in role) return revokeRole(id, DEPLOYMENT_TENANT_ID, 'tenant', context, session);
+    if ('revoke' in role)
+        return accessService.revokeRole(id, DEPLOYMENT_TENANT_ID, 'tenant', context, session);
 
-    return assignRole(
+    return accessService.assignRole(
         id,
         DEPLOYMENT_TENANT_ID,
         'tenant',
@@ -208,7 +201,7 @@ const finishUpdate = (
 
     // The change is true only now: it committed with the document.
     if (data.role && 'grant' in data.role)
-        auditRoleAssigned(
+        accessService.auditRoleAssigned(
             context,
             String(savedUser._id),
             data.role.grant,
@@ -216,7 +209,7 @@ const finishUpdate = (
             'tenant'
         );
     else if (data.role)
-        auditRoleRevoked(
+        accessService.auditRoleRevoked(
             context,
             String(savedUser._id),
             data.role.revoke,
@@ -246,7 +239,7 @@ const saveWithRole = (
             // underneath a request that, as a whole, failed. The escalation rule needs no
             // database read, so asking first costs one more in-memory pass.
             if (data.role && 'grant' in data.role)
-                assertCanGrantAudited(
+                accessService.assertCanGrantAudited(
                     'tenant',
                     data.role.grant,
                     context.caller.permissions,
@@ -315,7 +308,7 @@ const refusalFor = (
 
     if (missing) return Promise.resolve(missingKeyRefusal(missing, id, context));
 
-    return roleProtectedRefusal(context, id);
+    return accessService.roleProtectedRefusal(context, id);
 };
 
 /**

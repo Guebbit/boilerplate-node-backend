@@ -24,7 +24,7 @@ import {
 } from '@tests/callers';
 import { asReject } from '@tests/response';
 import { registerAuditSink, type AuditEntry } from '@infrastructure/observability/audit';
-import { assignRole } from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
@@ -517,7 +517,7 @@ describe('staff cancelling what has not shipped', () => {
 
     it('is allowed on an administrator’s order too: nothing ranks, the refund key is the whole rule', async () => {
         const fixture = await partlyShipped();
-        await assignRole(fixture.user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
+        await accessService.assignRole(fixture.user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
 
         const cancellation = created(await staffCancels(fixture, 'moderator'));
 

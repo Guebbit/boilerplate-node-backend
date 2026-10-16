@@ -8,7 +8,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment, setEnvironment } from '@tests/environment';
-import { assignRole } from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -612,7 +612,7 @@ describe('deciding a request', () => {
     // anyone's, and the refund step that follows is the one the audit row flags.
     it('lets a promoted buyer approve their own return', async () => {
         const { user, returnId } = await requestedReturn();
-        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
+        await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
 
         const approval = await approveReturn(returnId, callerContextAs('manager', user.id));
 
@@ -621,7 +621,7 @@ describe('deciding a request', () => {
 
     it('lets a promoted buyer decline their own return', async () => {
         const { user, returnId } = await requestedReturn();
-        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
+        await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
 
         const declined = await declineReturn(
             returnId,
@@ -708,7 +708,7 @@ describe('who sees which return', () => {
     // permission decides, and the money step is recorded rather than refused.
     it('offers a staff buyer the same decisions on their own return as any other staff member', async () => {
         const { user, returnId } = await requestedReturn();
-        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
+        await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
         const stored = await returnRepository.findById(returnId);
 
         expect(actionsOf(stored!, asRole('manager', user.id))).toEqual({

@@ -9,13 +9,7 @@
 import { callerContextAs, testCallerContext } from '@tests/callers';
 import { systemCallerContext } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import {
-    canChangeAccount,
-    holdsStaffRole,
-    ownOrderFlag,
-    roleProtectedRefusal,
-    staffHoldersAmong
-} from '../../services';
+import { accessService, ownOrderFlag } from '../../services';
 
 /** One membership row, as the repository returns it. */
 interface Row {
@@ -74,18 +68,18 @@ describe('holdsStaffRole', () => {
         async (role) => {
             hold('owner', role);
 
-            expect(await holdsStaffRole('owner')).toBe(true);
+            expect(await accessService.holdsStaffRole('owner')).toBe(true);
         }
     );
 
     it('reads the platform operator, holding no shop role at all, as holding one', async () => {
         hold('owner', null, 'operator');
 
-        expect(await holdsStaffRole('owner')).toBe(true);
+        expect(await accessService.holdsStaffRole('owner')).toBe(true);
     });
 
     it('reads a person with no membership as a plain customer', async () => {
-        expect(await holdsStaffRole('nobody')).toBe(false);
+        expect(await accessService.holdsStaffRole('nobody')).toBe(false);
     });
 });
 
@@ -94,7 +88,7 @@ describe('staffHoldersAmong', () => {
         hold('staff', 'support');
         hold('operator', null, 'operator');
 
-        expect(await staffHoldersAmong(['staff', 'operator', 'customer'])).toEqual(
+        expect(await accessService.staffHoldersAmong(['staff', 'operator', 'customer'])).toEqual(
             new Set(['staff', 'operator'])
         );
     });
@@ -113,42 +107,49 @@ describe('canChangeAccount', () => {
         if (ownerRole === 'operator') hold('owner', null, 'operator');
         else hold('owner', ownerRole);
 
-        expect(await canChangeAccount(callerContextAs(callerRole, 'caller'), 'owner')).toBe(
-            expected
-        );
+        expect(
+            await accessService.canChangeAccount(callerContextAs(callerRole, 'caller'), 'owner')
+        ).toBe(expected);
     });
 
     it('lets the caller change their own account, whatever they hold', async () => {
         hold('me', 'support');
 
-        expect(await canChangeAccount(callerContextAs('support', 'me'), 'me')).toBe(true);
+        expect(await accessService.canChangeAccount(callerContextAs('support', 'me'), 'me')).toBe(
+            true
+        );
     });
 
     it('skips the check for the system actor', async () => {
         hold('owner', 'admin');
 
-        expect(await canChangeAccount(systemCallerContext('User'), 'owner')).toBe(true);
+        expect(await accessService.canChangeAccount(systemCallerContext('User'), 'owner')).toBe(
+            true
+        );
     });
 
     it('treats a stranger as protecting nobody from staff accounts', async () => {
         hold('owner', 'support');
 
-        expect(await canChangeAccount(testCallerContext, 'owner')).toBe(false);
+        expect(await accessService.canChangeAccount(testCallerContext, 'owner')).toBe(false);
     });
 });
 
 describe('roleProtectedRefusal', () => {
     it('answers nothing when the account is a customer', async () => {
-        expect(await roleProtectedRefusal(callerContextAs('support', 'caller'), 'owner')).toBe(
-            undefined
-        );
+        expect(
+            await accessService.roleProtectedRefusal(callerContextAs('support', 'caller'), 'owner')
+        ).toBe(undefined);
         expect(recorded).toEqual([]);
     });
 
     it('answers a 403 ROLE_MANAGEMENT_REQUIRED and records a failed security.forbidden', async () => {
         hold('owner', 'admin');
 
-        const refusal = await roleProtectedRefusal(callerContextAs('support', 'caller'), 'owner');
+        const refusal = await accessService.roleProtectedRefusal(
+            callerContextAs('support', 'caller'),
+            'owner'
+        );
 
         expect(refusal).toMatchObject({
             success: false,

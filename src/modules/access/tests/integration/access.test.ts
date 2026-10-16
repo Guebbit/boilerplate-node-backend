@@ -16,21 +16,10 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import {
+    accessService,
     AccessInvariantError,
     assertCanGrant,
-    assertCanGrantAudited,
-    assignRole,
-    auditRoleAssigned,
-    bootstrapAccessModel,
-    DEPLOYMENT_TENANT_SLUG,
-    ensureTenant,
-    eraseMemberships,
-    membershipIn,
-    membershipsOf,
-    revokeAllOf,
-    revokeRole,
-    rolesOf,
-    rolesOfMany
+    DEPLOYMENT_TENANT_SLUG
 } from '../../services';
 import { membershipRepository } from '../../repository';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -62,13 +51,13 @@ describe('the preset roles', () => {
 describe('membership across tenants', () => {
     it('lets one person hold a different role in each of two shops', async () => {
         // The requirement the boolean could not express, and the reason this collection exists.
-        const north = await ensureTenant('north', 'North Shop');
-        const south = await ensureTenant('south', 'South Shop');
+        const north = await accessService.ensureTenant('north', 'North Shop');
+        const south = await accessService.ensureTenant('south', 'South Shop');
 
-        await assignRole('person-1', String(north._id), 'tenant', 'admin');
-        await assignRole('person-1', String(south._id), 'tenant', 'warehouse');
+        await accessService.assignRole('person-1', String(north._id), 'tenant', 'admin');
+        await accessService.assignRole('person-1', String(south._id), 'tenant', 'warehouse');
 
-        const held = await membershipsOf('person-1');
+        const held = await accessService.membershipsOf('person-1');
 
         expect(
             held
@@ -81,12 +70,12 @@ describe('membership across tenants', () => {
     });
 
     it('holds one role per person per place, so a reassignment replaces rather than adds', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
 
-        await assignRole('person-1', String(shop._id), 'tenant', 'support');
-        await assignRole('person-1', String(shop._id), 'tenant', 'manager');
+        await accessService.assignRole('person-1', String(shop._id), 'tenant', 'support');
+        await accessService.assignRole('person-1', String(shop._id), 'tenant', 'manager');
 
-        const held = await membershipsOf('person-1');
+        const held = await accessService.membershipsOf('person-1');
 
         // Two rows would not be a wider grant; they would be two answers to "what may they do
         // here", and the resolver would have to pick one.
@@ -95,12 +84,12 @@ describe('membership across tenants', () => {
     });
 
     it('separates the two scopes, so one person can run a shop and operate the installation', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
 
-        await assignRole('person-1', String(shop._id), 'tenant', 'admin');
-        await assignRole('person-1', null, 'platform', 'operator');
+        await accessService.assignRole('person-1', String(shop._id), 'tenant', 'admin');
+        await accessService.assignRole('person-1', null, 'platform', 'operator');
 
-        const held = await membershipsOf('person-1');
+        const held = await accessService.membershipsOf('person-1');
 
         expect(held.map((one) => one.scope).toSorted()).toEqual(['platform', 'tenant']);
     });
@@ -108,59 +97,61 @@ describe('membership across tenants', () => {
 
 describe('the invariants', () => {
     it('refuses a role nothing declares', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
 
         // A member with a role nothing defines can do nothing and looks like a member who can.
         await expect(
-            assignRole('person-1', String(shop._id), 'tenant', 'archivist')
+            accessService.assignRole('person-1', String(shop._id), 'tenant', 'archivist')
         ).rejects.toThrow(AccessInvariantError);
     });
 
     it('refuses to grant what the granter does not hold', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
 
         // The single most common way these systems fail: a role editor that lets a support agent
         // hand somebody the keys they do not have themselves.
         await expect(
-            assignRole('person-1', String(shop._id), 'tenant', 'admin', ['read:Feedback'])
+            accessService.assignRole('person-1', String(shop._id), 'tenant', 'admin', [
+                'read:Feedback'
+            ])
         ).rejects.toThrow(/privilege-escalation/);
     });
 
     it('allows a granter to hand over exactly what they hold', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
         // A role's keys are a pure YAML lookup now — no membership or tenant involved in reading
         // what `admin` holds, only in who holds it.
         const granter = permissionsOfRole('admin');
 
         await expect(
-            assignRole('person-1', String(shop._id), 'tenant', 'manager', granter)
+            accessService.assignRole('person-1', String(shop._id), 'tenant', 'manager', granter)
         ).resolves.toBeDefined();
     });
 
     it('removes even the last member who can administer a shop, leaving it with none', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('only-owner', String(shop._id), 'tenant', 'admin');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
+        await accessService.assignRole('only-owner', String(shop._id), 'tenant', 'admin');
 
-        await revokeRole('only-owner', String(shop._id), 'tenant');
+        await accessService.revokeRole('only-owner', String(shop._id), 'tenant');
 
-        expect(await rolesOf('only-owner', String(shop._id))).toEqual({
+        expect(await accessService.rolesOf('only-owner', String(shop._id))).toEqual({
             tenant: null,
             platform: null
         });
     });
 
     it('surfaces a rejecting delete instead of losing it silently', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('owner-a', String(shop._id), 'tenant', 'admin');
-        await assignRole('owner-b', String(shop._id), 'tenant', 'admin');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
+        await accessService.assignRole('owner-a', String(shop._id), 'tenant', 'admin');
+        await accessService.assignRole('owner-b', String(shop._id), 'tenant', 'admin');
         const failure = new Error('mongo is down');
         const spy = jest.spyOn(membershipRepository, 'deleteById').mockRejectedValue(failure);
 
         // Before this fix the delete was fired with `void` and never awaited — a rejection here
         // vanished as an unhandled rejection instead of reaching the caller.
-        await expect(revokeRole('owner-a', String(shop._id), 'tenant')).rejects.toThrow(
-            'mongo is down'
-        );
+        await expect(
+            accessService.revokeRole('owner-a', String(shop._id), 'tenant')
+        ).rejects.toThrow('mongo is down');
 
         spy.mockRestore();
     });
@@ -170,19 +161,19 @@ describe('the invariants', () => {
     // deletes a preset at runtime.
 });
 
-describe('bootstrapAccessModel', () => {
+describe('bootstrapAccess', () => {
     it('creates the shop, with no accounts — the presets need no seeding step', async () => {
-        const tenant = await bootstrapAccessModel('Shop');
+        const tenant = await accessService.bootstrapAccess('Shop');
 
         expect(tenant.slug).toBe(DEPLOYMENT_TENANT_SLUG);
         // Any id will do: bootstrapping the shop alone grants nobody a role, seeded or not — the
         // demo's own accounts are `tests/integration/access.test.ts`'s concern, not this module's.
-        expect(await membershipsOf('nobody-yet')).toEqual([]);
+        expect(await accessService.membershipsOf('nobody-yet')).toEqual([]);
     });
 
     it('is idempotent, and keeps the id a first insert set', async () => {
-        const first = await bootstrapAccessModel('Shop');
-        const second = await bootstrapAccessModel('A different name');
+        const first = await accessService.bootstrapAccess('Shop');
+        const second = await accessService.bootstrapAccess('A different name');
 
         expect(String(second._id)).toBe(String(first._id));
         expect(second.name).toBe('Shop');
@@ -192,9 +183,9 @@ describe('bootstrapAccessModel', () => {
 describe('a role lives in exactly one place, the membership row', () => {
     it('an account with no membership resolves to no role, not a guess', async () => {
         // `ensureTenant` alone, no `assignRole` — nobody has ever been placed here.
-        const shop = await ensureTenant('nomembers', 'No Members Shop');
+        const shop = await accessService.ensureTenant('nomembers', 'No Members Shop');
 
-        const roles = await rolesOf('never-granted', String(shop._id));
+        const roles = await accessService.rolesOf('never-granted', String(shop._id));
 
         expect(roles.tenant).toBeNull();
         expect(roles.platform).toBeNull();
@@ -203,31 +194,40 @@ describe('a role lives in exactly one place, the membership row', () => {
     it.each(['customer', 'unverified', 'guest'])(
         'assignRole refuses %s: an audience is computed, never granted',
         async (audience) => {
-            const shop = await ensureTenant('shop', 'The Shop');
+            const shop = await accessService.ensureTenant('shop', 'The Shop');
 
             await expect(
-                assignRole('person-1', String(shop._id), 'tenant', audience)
+                accessService.assignRole('person-1', String(shop._id), 'tenant', audience)
             ).rejects.toThrow(AccessInvariantError);
-            expect(await membershipIn('person-1', String(shop._id), 'tenant')).toBeNull();
+            expect(
+                await accessService.membershipIn('person-1', String(shop._id), 'tenant')
+            ).toBeNull();
         }
     );
 
     it('assignRole refuses a name the shared presets do not declare', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
 
         await expect(
-            assignRole('person-1', String(shop._id), 'tenant', 'not-a-real-role')
+            accessService.assignRole('person-1', String(shop._id), 'tenant', 'not-a-real-role')
         ).rejects.toThrow(AccessInvariantError);
     });
 });
 
 describe('auditing a role change', () => {
     it('records a successful grant, naming the actor, the target and the role', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
         const admin = callerContextAs('admin', 'admin-1');
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        await assignRole('target-user', String(shop._id), 'tenant', 'manager', undefined, admin);
+        await accessService.assignRole(
+            'target-user',
+            String(shop._id),
+            'tenant',
+            'manager',
+            undefined,
+            admin
+        );
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -242,11 +242,11 @@ describe('auditing a role change', () => {
     });
 
     it('records a refused escalation as a failure, not silence', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
         await expect(
-            assignRole(
+            accessService.assignRole(
                 'target-user',
                 String(shop._id),
                 'tenant',
@@ -266,12 +266,12 @@ describe('auditing a role change', () => {
     });
 
     it('records a revoke', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('owner-a', String(shop._id), 'tenant', 'admin');
-        await assignRole('owner-b', String(shop._id), 'tenant', 'admin');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
+        await accessService.assignRole('owner-a', String(shop._id), 'tenant', 'admin');
+        await accessService.assignRole('owner-b', String(shop._id), 'tenant', 'admin');
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        await revokeRole('owner-a', String(shop._id), 'tenant', testCallerContext);
+        await accessService.revokeRole('owner-a', String(shop._id), 'tenant', testCallerContext);
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -284,10 +284,10 @@ describe('auditing a role change', () => {
     });
 
     it('audits nothing when no caller context is given — a self-service or system caller', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        await assignRole('target-user', String(shop._id), 'tenant', 'manager');
+        await accessService.assignRole('target-user', String(shop._id), 'tenant', 'manager');
 
         expect(auditSpy).not.toHaveBeenCalled();
     });
@@ -295,16 +295,24 @@ describe('auditing a role change', () => {
 
 describe('assignRole inside a caller transaction', () => {
     it('audits no success of its own, leaving that to the caller once it has committed', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const context = callerContextAs('admin');
 
         await withTransaction((session) =>
-            assignRole('in-tx', String(shop._id), 'tenant', 'manager', undefined, context, session)
+            accessService.assignRole(
+                'in-tx',
+                String(shop._id),
+                'tenant',
+                'manager',
+                undefined,
+                context,
+                session
+            )
         );
         expect(auditSpy).not.toHaveBeenCalled();
 
-        auditRoleAssigned(context, 'in-tx', 'Manager', String(shop._id), 'tenant');
+        accessService.auditRoleAssigned(context, 'in-tx', 'Manager', String(shop._id), 'tenant');
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accessAuditActions.ROLE_ASSIGNED,
@@ -316,25 +324,27 @@ describe('assignRole inside a caller transaction', () => {
     });
 
     it('rolls its membership back with the transaction', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
 
         await expect(
             withTransaction((session) =>
-                assignRole(
-                    'rolled-back',
-                    String(shop._id),
-                    'tenant',
-                    'manager',
-                    undefined,
-                    undefined,
-                    session
-                ).then(() => {
-                    throw new Error('a later write failed');
-                })
+                accessService
+                    .assignRole(
+                        'rolled-back',
+                        String(shop._id),
+                        'tenant',
+                        'manager',
+                        undefined,
+                        undefined,
+                        session
+                    )
+                    .then(() => {
+                        throw new Error('a later write failed');
+                    })
             )
         ).rejects.toThrow('a later write failed');
 
-        expect(await membershipsOf('rolled-back')).toEqual([]);
+        expect(await accessService.membershipsOf('rolled-back')).toEqual([]);
     });
 });
 
@@ -343,7 +353,7 @@ describe('assertCanGrantAudited', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
         expect(() =>
-            assertCanGrantAudited(
+            accessService.assertCanGrantAudited(
                 'tenant',
                 'admin',
                 ['read:Feedback'],
@@ -363,7 +373,7 @@ describe('assertCanGrantAudited', () => {
     it('audits nothing for a grant that would be accepted', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        assertCanGrantAudited(
+        accessService.assertCanGrantAudited(
             'tenant',
             'manager',
             permissionsOfRole('admin'),
@@ -376,42 +386,42 @@ describe('assertCanGrantAudited', () => {
 
 describe('revokeAllOf', () => {
     it('clears every membership a person holds, tenant and platform alike', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('person-1', String(shop._id), 'tenant', 'admin');
-        await assignRole('person-1', null, 'platform', 'operator');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
+        await accessService.assignRole('person-1', String(shop._id), 'tenant', 'admin');
+        await accessService.assignRole('person-1', null, 'platform', 'operator');
 
-        await revokeAllOf('person-1');
+        await accessService.revokeAllOf('person-1');
 
-        expect(await membershipsOf('person-1')).toEqual([]);
+        expect(await accessService.membershipsOf('person-1')).toEqual([]);
     });
 });
 
 describe('eraseMemberships', () => {
     it('removes every membership one person holds, and nobody else’s', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('erased', String(shop._id), 'tenant', 'admin');
-        await assignRole('erased', null, 'platform', 'operator');
-        await assignRole('bystander', String(shop._id), 'tenant', 'editor');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
+        await accessService.assignRole('erased', String(shop._id), 'tenant', 'admin');
+        await accessService.assignRole('erased', null, 'platform', 'operator');
+        await accessService.assignRole('bystander', String(shop._id), 'tenant', 'editor');
 
-        await withTransaction((session) => eraseMemberships('erased', session));
+        await withTransaction((session) => accessService.eraseMemberships('erased', session));
 
-        expect(await membershipsOf('erased')).toEqual([]);
-        expect(await membershipsOf('bystander')).toHaveLength(1);
+        expect(await accessService.membershipsOf('erased')).toEqual([]);
+        expect(await accessService.membershipsOf('bystander')).toHaveLength(1);
     });
 
     it('is undone with the transaction it joined', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('kept', String(shop._id), 'tenant', 'admin');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
+        await accessService.assignRole('kept', String(shop._id), 'tenant', 'admin');
 
         await expect(
             withTransaction((session) =>
-                eraseMemberships('kept', session).then(() => {
+                accessService.eraseMemberships('kept', session).then(() => {
                     throw new Error('a later step failed');
                 })
             )
         ).rejects.toThrow('a later step failed');
 
-        expect(await membershipsOf('kept')).toHaveLength(1);
+        expect(await accessService.membershipsOf('kept')).toHaveLength(1);
     });
 });
 
@@ -431,11 +441,14 @@ describe('assertCanGrant', () => {
 
 describe('rolesOfMany', () => {
     it('batch-resolves the tenant role for a set of people in one query', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('person-1', String(shop._id), 'tenant', 'manager');
-        await assignRole('person-2', String(shop._id), 'tenant', 'editor');
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
+        await accessService.assignRole('person-1', String(shop._id), 'tenant', 'manager');
+        await accessService.assignRole('person-2', String(shop._id), 'tenant', 'editor');
 
-        const roles = await rolesOfMany(['person-1', 'person-2', 'nobody'], String(shop._id));
+        const roles = await accessService.rolesOfMany(
+            ['person-1', 'person-2', 'nobody'],
+            String(shop._id)
+        );
 
         expect(roles.get('person-1')).toBe('manager');
         expect(roles.get('person-2')).toBe('editor');
@@ -443,6 +456,6 @@ describe('rolesOfMany', () => {
     });
 
     it('answers an empty map for an empty page, with no query at all', async () => {
-        expect(await rolesOfMany([], DEPLOYMENT_TENANT_ID)).toEqual(new Map());
+        expect(await accessService.rolesOfMany([], DEPLOYMENT_TENANT_ID)).toEqual(new Map());
     });
 });

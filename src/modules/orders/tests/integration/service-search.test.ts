@@ -9,7 +9,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, saveProduct, deleteProduct } from '@modules/products/tests/factories';
 import { createOrder, orderRepository, toOrderItem } from '@modules/orders/tests/factories';
-import * as orderService from '@modules/orders/services';
+import { orderService } from '@modules/orders/services';
 
 setupTestDb();
 

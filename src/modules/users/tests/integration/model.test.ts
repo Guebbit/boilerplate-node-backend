@@ -9,7 +9,7 @@ import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { userRepository } from '../../repository';
-import * as userService from '@modules/users/services';
+import { userService } from '@modules/users/services';
 import { userService as userServiceObject } from '../../services';
 
 setupTestDb();

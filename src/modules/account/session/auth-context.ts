@@ -6,7 +6,7 @@
  * passed it, the roles it holds right now) is decided here, once.
  */
 
-import { rolesOf } from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { userService } from '@modules/users';
 import type { AuthContext } from '@types';
@@ -40,7 +40,7 @@ export const resolveProof = (
     userService.findAuthenticatableById(userId).then((user) => {
         if (!user || predatesSessionEpoch(proof.authTime, user.tokensValidAfter)) return undefined;
 
-        return rolesOf(user.id, DEPLOYMENT_TENANT_ID).then(
+        return accessService.rolesOf(user.id, DEPLOYMENT_TENANT_ID).then(
             (roles): AuthContext => ({
                 id: user.id,
                 email: user.email,

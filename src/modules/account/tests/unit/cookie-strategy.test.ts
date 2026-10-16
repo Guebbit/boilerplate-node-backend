@@ -55,7 +55,10 @@ jest.mock('@modules/access', () => {
     return {
         ...actual,
         __esModule: true,
-        rolesOf: jest.fn(() => Promise.resolve({ tenant: null, platform: null }))
+        accessService: {
+            ...actual.accessService,
+            rolesOf: jest.fn(() => Promise.resolve({ tenant: null, platform: null }))
+        }
     };
 });
 
@@ -64,7 +67,7 @@ import { SecondFactorRequiredError, StaleProofError } from '@modules/account/ses
 import { resolveProof } from '@modules/account/session/auth-context';
 import { sessionRepository, type NewSessionRow } from '@modules/account/repository';
 import { userService } from '@modules/users';
-import { rolesOf } from '@modules/access';
+import { accessService } from '@modules/access';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { cookieSet, recordingResponse, requestWith } from '../strategy-doubles';
 import { RefreshTokenExpiryTime } from '@modules/account/session/config';
@@ -122,7 +125,7 @@ const liveRow = (overrides: Record<string, unknown> = {}) => ({
 beforeEach(() => {
     // `reset`, not `clear`: each case sets its own resolutions, and a leftover one fails the next.
     jest.resetAllMocks();
-    jest.mocked(rolesOf).mockResolvedValue({ tenant: null, platform: null });
+    jest.mocked(accessService.rolesOf).mockResolvedValue({ tenant: null, platform: null });
     setEnvironment({ NODE_SESSION_TIME_SHORT: '3600', NODE_SESSION_TIME_LONG: '2592000' });
     sessions.insert.mockResolvedValue(undefined);
     sessions.removeByHash.mockResolvedValue(1);

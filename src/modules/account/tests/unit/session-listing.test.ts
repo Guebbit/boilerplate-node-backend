@@ -33,14 +33,17 @@ jest.mock('@modules/access', () => {
     return {
         ...actual,
         __esModule: true,
-        rolesOf: jest.fn(() => Promise.resolve({ tenant: null, platform: null }))
+        accessService: {
+            ...actual.accessService,
+            rolesOf: jest.fn(() => Promise.resolve({ tenant: null, platform: null }))
+        }
     };
 });
 
 import { listSessions, newestPerFamily } from '@modules/account/session/listing';
 import { sessionRepository, type SessionRow } from '@modules/account/repository';
 import { userService } from '@modules/users';
-import { rolesOf } from '@modules/access';
+import { accessService } from '@modules/access';
 import { hashToken } from '@infrastructure/security/hash-token';
 
 /** The account every case lists. */
@@ -67,7 +70,7 @@ const { findAuthenticatableById } = asStub<{ findAuthenticatableById: jest.Mock 
 
 beforeEach(() => {
     jest.resetAllMocks();
-    jest.mocked(rolesOf).mockResolvedValue({ tenant: null, platform: null });
+    jest.mocked(accessService.rolesOf).mockResolvedValue({ tenant: null, platform: null });
     findAuthenticatableById.mockResolvedValue({ id: USER_ID });
 });
 
@@ -180,10 +183,10 @@ describe('listSessions and the staff idle timeout', () => {
         const stale = new Date(Date.now() - 24 * 3_600_000);
         listLive.mockResolvedValue([row(new Types.ObjectId(), { lastUsedAt: stale })]);
 
-        jest.mocked(rolesOf).mockResolvedValue({ tenant: 'editor', platform: null });
+        jest.mocked(accessService.rolesOf).mockResolvedValue({ tenant: 'editor', platform: null });
         await expect(listSessions('jwt', USER_ID, undefined)).resolves.toEqual([]);
 
-        jest.mocked(rolesOf).mockResolvedValue({ tenant: null, platform: null });
+        jest.mocked(accessService.rolesOf).mockResolvedValue({ tenant: null, platform: null });
         await expect(listSessions('jwt', USER_ID, undefined)).resolves.toHaveLength(1);
     });
 });

@@ -13,7 +13,7 @@ import { announceInTransaction } from '@kernel/outbox';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext, CreateUserRequest, WithServerImage } from '@types';
-import { assertCanGrantAudited, assignRole, auditRoleAssigned } from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
@@ -54,7 +54,12 @@ export const create = (
             // Checked, and a refusal audited, BEFORE anything is written: an escalation attempt
             // must leave its row without ever having made a user.
             if (role !== undefined)
-                assertCanGrantAudited('tenant', role, context.caller.permissions, context);
+                accessService.assertCanGrantAudited(
+                    'tenant',
+                    role,
+                    context.caller.permissions,
+                    context
+                );
         })
         .then(() =>
             // The account, its membership and the setup-mail event commit together or not at
@@ -78,15 +83,17 @@ export const create = (
                         .then((user) =>
                             role === undefined
                                 ? user
-                                : assignRole(
-                                      String(user._id),
-                                      DEPLOYMENT_TENANT_ID,
-                                      'tenant',
-                                      role,
-                                      context.caller.permissions,
-                                      context,
-                                      session
-                                  ).then(() => user)
+                                : accessService
+                                      .assignRole(
+                                          String(user._id),
+                                          DEPLOYMENT_TENANT_ID,
+                                          'tenant',
+                                          role,
+                                          context.caller.permissions,
+                                          context,
+                                          session
+                                      )
+                                      .then(() => user)
                         ),
                 (user) => ({
                     name: USER_SETUP_REQUESTED,
@@ -98,7 +105,13 @@ export const create = (
         .then((user) => {
             // Only now that the transaction has committed is the grant true to audit.
             if (role !== undefined)
-                auditRoleAssigned(context, String(user._id), role, DEPLOYMENT_TENANT_ID, 'tenant');
+                accessService.auditRoleAssigned(
+                    context,
+                    String(user._id),
+                    role,
+                    DEPLOYMENT_TENANT_ID,
+                    'tenant'
+                );
             return user;
         })
         .then((user) => {

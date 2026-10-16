@@ -10,7 +10,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { membershipIn, membershipsOf } from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import {
     SEED_ADMIN_ID,
@@ -36,7 +36,7 @@ describe('the seeded model', () => {
     it('places the demo accounts, and gives root both jobs', async () => {
         await seedAccessModel();
 
-        const rootMemberships = await membershipsOf(SEED_ADMIN_ID);
+        const rootMemberships = await accessService.membershipsOf(SEED_ADMIN_ID);
 
         // Two memberships for one person, because running a shop and operating the installation
         // are two jobs. Which one a request acts as is settled by the key it asks about — this is
@@ -51,9 +51,9 @@ describe('the seeded model', () => {
         ]);
 
         const [customer, editor, moderator] = await Promise.all([
-            membershipIn(SEED_USER_ID, DEPLOYMENT_TENANT_ID, 'tenant'),
-            membershipIn(SEED_EDITOR_ID, DEPLOYMENT_TENANT_ID, 'tenant'),
-            membershipIn(SEED_MODERATOR_ID, DEPLOYMENT_TENANT_ID, 'tenant')
+            accessService.membershipIn(SEED_USER_ID, DEPLOYMENT_TENANT_ID, 'tenant'),
+            accessService.membershipIn(SEED_EDITOR_ID, DEPLOYMENT_TENANT_ID, 'tenant'),
+            accessService.membershipIn(SEED_MODERATOR_ID, DEPLOYMENT_TENANT_ID, 'tenant')
         ]);
 
         // The shopper holds no role at all (a customer is computed from `verifiedAt`); each staff
@@ -69,13 +69,13 @@ describe('the seeded model', () => {
 
         const shopRoles = await Promise.all(
             [SEED_MANAGER_ID, SEED_WAREHOUSE_ID, SEED_SUPPORT_ID].map((id) =>
-                membershipIn(id, DEPLOYMENT_TENANT_ID, 'tenant')
+                accessService.membershipIn(id, DEPLOYMENT_TENANT_ID, 'tenant')
             )
         );
         expect(shopRoles.map((one) => one?.role)).toEqual(['manager', 'warehouse', 'support']);
 
         // A pure platform operator holds no shop's keys — that is what separates it from the admin.
-        const operatorMemberships = await membershipsOf(SEED_OPERATOR_ID);
+        const operatorMemberships = await accessService.membershipsOf(SEED_OPERATOR_ID);
         expect(operatorMemberships.map((one) => ({ scope: one.scope, role: one.role }))).toEqual([
             { scope: 'platform', role: 'operator' }
         ]);
@@ -85,14 +85,18 @@ describe('the seeded model', () => {
         await seedAccessModel();
         await seedAccessModel();
 
-        expect(await membershipsOf(SEED_ADMIN_ID)).toHaveLength(2);
+        expect(await accessService.membershipsOf(SEED_ADMIN_ID)).toHaveLength(2);
     });
 
     it('is the ONLY place a role is stored — the user document carries none', async () => {
         await seedUsers();
         await seedAccessModel();
 
-        const membership = await membershipIn(SEED_ADMIN_ID, DEPLOYMENT_TENANT_ID, 'tenant');
+        const membership = await accessService.membershipIn(
+            SEED_ADMIN_ID,
+            DEPLOYMENT_TENANT_ID,
+            'tenant'
+        );
         const published = await userRepository.findById(SEED_ADMIN_ID);
 
         /*

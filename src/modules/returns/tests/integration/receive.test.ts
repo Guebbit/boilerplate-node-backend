@@ -11,7 +11,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { createOrder, readOrder, timelineOf, toOrderItem } from '@modules/orders/tests/factories';
 import { carryOrderTo } from '@modules/delivery/tests/factories';
-import { assignRole } from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -289,7 +289,12 @@ describe('a staff buyer receiving their own return', () => {
     it('is allowed: the warehouse holds the key, and the refund follows', async () => {
         const fixture = await paidAndDelivered();
         const id = await approvedReturn(fixture);
-        await assignRole(fixture.user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'warehouse');
+        await accessService.assignRole(
+            fixture.user.id,
+            DEPLOYMENT_TENANT_ID,
+            'tenant',
+            'warehouse'
+        );
 
         const result = await receiveReturn(id, {}, callerContextAs('warehouse', fixture.user.id));
 
@@ -507,7 +512,12 @@ describe('what receiving answers and announces', () => {
             testCallerContext
         );
         if (!outcome.success) throw new Error('expected a return');
-        await assignRole(fixture.user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'warehouse');
+        await accessService.assignRole(
+            fixture.user.id,
+            DEPLOYMENT_TENANT_ID,
+            'tenant',
+            'warehouse'
+        );
 
         const result = await receiveReturn(
             String(outcome.data._id),

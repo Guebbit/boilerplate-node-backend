@@ -18,14 +18,14 @@ import '@infrastructure/config/dotenv';
 // Before any model loads: Mongoose defaults are read at schema build.
 import '@infrastructure/runtime/mongoose-boot';
 import { startJob, stopDatabase } from '@infrastructure/runtime/database';
-import { bootstrapAccessModel } from '@modules/access';
+import { accessService } from '@modules/access';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../run-script';
 
 /** Connect, upsert the shop, and log its id for the operator's records. */
 const main = (): Promise<void> =>
     startJob()
-        .then(() => bootstrapAccessModel('Shop'))
+        .then(() => accessService.bootstrapAccess('Shop'))
         .then((tenant) => {
             logger.info(`Access model bootstrapped: shop "${String(tenant._id)}".`);
         });

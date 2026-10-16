@@ -9,7 +9,7 @@
  * {@link UNOWNED_WRITES}, and the sweep fails until it is.
  */
 
-import { assignRole } from '@modules/access';
+import { accessService } from '@modules/access';
 import { createUser } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
 
@@ -99,7 +99,7 @@ export const createOwner = async (
         { email: `${name}@owners.test`, username: name, verifiedAt: new Date() },
         role ?? undefined
     );
-    if (platformRole) await assignRole(user.id, null, 'platform', platformRole);
+    if (platformRole) await accessService.assignRole(user.id, null, 'platform', platformRole);
 
     return { user, role };
 };

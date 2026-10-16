@@ -13,7 +13,7 @@
  */
 
 import type { AppModule } from '@kernel/registry';
-import { eraseMemberships, membershipsOf } from './services';
+import { accessService } from './services';
 
 /** This module's manifest entry: no routes, one personal-data section, exported and erased. */
 export default {
@@ -25,14 +25,14 @@ export default {
             // nothing a subject would recognise, and `role`/`scope` alone already answer "what can
             // this account do", which is what Art. 15 asks for here.
             collect: (subject) =>
-                membershipsOf(subject.userId).then((memberships) =>
+                accessService.membershipsOf(subject.userId).then((memberships) =>
                     memberships.map((membership) => ({
                         role: membership.role,
                         scope: membership.scope
                     }))
                 ),
             // Joins the caller's own hard-delete transaction — see `eraseMemberships`.
-            erase: eraseMemberships
+            erase: accessService.eraseMemberships
         }
     ]
 } satisfies AppModule;

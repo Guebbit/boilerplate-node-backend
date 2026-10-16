@@ -130,8 +130,11 @@ practical. Past roughly **300 lines** it stops being practical, and the sanction
 `services/` folder with an `index.ts` — not a second module, and not a `helpers.ts` on the side. <!-- doc-paths:ignore -->
 
 This is a size rule, not an architectural one, and nothing above the layer changes: controllers
-still import `../services`, the module barrel usually exports one `<domain>Service`, and the tier
-rules are untouched. It is written down because the alternative is worse in both directions — a
+still import `../services`, the module barrel exports one `<domain>Service` holding every operation
+the module offers, and the tier rules are untouched. An operation is published once, on that
+object, and never again by name: the object is the menu, and it is the seam a test spies on. What
+stays a named export is what is not an operation: constants, types, error classes, events, email
+builders and pure domain rules. It is written down because the alternative is worse in both directions — a
 1,200-line `service.ts` nobody wants to open, or a split that feels like breaking the convention
 and so gets done furtively. `account` is the one exception to "one `<domain>Service`" — see below
 for why.

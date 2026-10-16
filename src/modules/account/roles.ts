@@ -6,7 +6,7 @@
  */
 
 import { isUnrestrictedRole } from '@kernel/permissions';
-import { rolesOf } from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
@@ -14,4 +14,6 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
  * @returns whether `userId` holds an unrestricted role on this deployment's tenant
  */
 export const isUnrestrictedCaller = (userId: string): Promise<boolean> =>
-    rolesOf(userId, DEPLOYMENT_TENANT_ID).then((roles) => isUnrestrictedRole(roles.tenant));
+    accessService
+        .rolesOf(userId, DEPLOYMENT_TENANT_ID)
+        .then((roles) => isUnrestrictedRole(roles.tenant));

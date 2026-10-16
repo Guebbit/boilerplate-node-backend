@@ -19,7 +19,7 @@ import { auditRoleAssigned, auditRoleChange, auditRoleRevoked } from './role-aud
 /**
  * Create a shop, or return the one already carrying that slug.
  *
- * `id` is optional and only {@link bootstrapAccessModel} passes one — the fixed
+ * `id` is optional and only {@link bootstrapAccess} passes one — the fixed
  * `DEPLOYMENT_TENANT_ID` every deployment reads directly, so the row keeps the same id across an
  * `emptyDatabase()` + reseed cycle rather than minting a fresh one.
  */
@@ -237,5 +237,5 @@ export const DEPLOYMENT_TENANT_SLUG = 'shop';
  * is this plus the seed accounts' memberships; `scripts/db/bootstrap-access.ts` is this alone, for a
  * production deploy.
  */
-export const bootstrapAccessModel = (name: string): Promise<TenantDocument> =>
+export const bootstrapAccess = (name: string): Promise<TenantDocument> =>
     ensureTenant(DEPLOYMENT_TENANT_SLUG, name, DEPLOYMENT_TENANT_ID);

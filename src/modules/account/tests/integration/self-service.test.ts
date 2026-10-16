@@ -34,8 +34,7 @@ import { accountAuditActions } from '../../audit';
 import { accountAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
 import { MISSING_ID } from '@tests/ids';
-import { rolesOf } from '@modules/access';
-import * as accessPort from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { logger } from '@infrastructure/adapters/logger';
 import { imageStore } from '@infrastructure/adapters/image-store';
@@ -56,17 +55,6 @@ jest.mock('@infrastructure/observability/analytics', () => ({
     ...jest.requireActual('@infrastructure/observability/analytics'),
     emitAnalyticsEvent: jest.fn()
 }));
-
-/*
- * Same non-configurable-getter reason as the two ports above — `rolesOf` is wrapped in a
- * `jest.fn` that CALLS THROUGH to the real implementation by default (every other describe block
- * here needs the genuine membership lookup), so only the one case that overrides it with
- * `mockRejectedValueOnce` ever sees anything else.
- */
-jest.mock('@modules/access', () => {
-    const actual = jest.requireActual<typeof import('@modules/access')>('@modules/access');
-    return { __esModule: true, ...actual, rolesOf: jest.fn(actual.rolesOf) };
-});
 
 setupTestDb();
 
@@ -1025,7 +1013,7 @@ describe('what a completed reset leaves behind', () => {
         asSuccess(await resetWithLink(user));
 
         // The audience is computed from `verifiedAt`: nothing is granted, so no role appears.
-        const roles = await rolesOf(user.id, DEPLOYMENT_TENANT_ID);
+        const roles = await accessService.rolesOf(user.id, DEPLOYMENT_TENANT_ID);
         expect(roles.tenant).toBeNull();
         const reloaded = await userRepository.findById(user.id);
         expect(reloaded?.verifiedAt).toBeInstanceOf(Date);
@@ -1040,10 +1028,7 @@ describe('what a completed reset leaves behind', () => {
     it('still succeeds, logged, when the post-reset role lookup fails', async () => {
         const user = await createUser({ password: PASSPHRASE_PASSWORD });
         const loggedWarn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
-        // The mock factory above wraps `rolesOf` in a plain `jest.fn`, so this is genuinely a
-        // mock function, not the real export the compiler otherwise sees.
-        const mockedRolesOf = accessPort.rolesOf as jest.MockedFunction<typeof accessPort.rolesOf>;
-        mockedRolesOf.mockRejectedValueOnce(new Error('lookup unavailable'));
+        jest.spyOn(accessService, 'rolesOf').mockRejectedValueOnce(new Error('lookup unavailable'));
 
         const result = asSuccess(await resetWithLink(user));
 

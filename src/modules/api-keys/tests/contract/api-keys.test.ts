@@ -8,7 +8,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
-import { ensureTenant, DEPLOYMENT_TENANT_SLUG } from '@modules/access';
+import { accessService, DEPLOYMENT_TENANT_SLUG } from '@modules/access';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { reauthWindowSeconds } from '@kernel/config';
 
@@ -29,7 +29,7 @@ const IN_A_WEEK = (): string => new Date(Date.now() + 7 * 24 * 3_600_000).toISOS
  * comment.
  */
 beforeEach(async () => {
-    await ensureTenant(DEPLOYMENT_TENANT_SLUG, 'Contract test shop');
+    await accessService.ensureTenant(DEPLOYMENT_TENANT_SLUG, 'Contract test shop');
 });
 
 describe('GET /api-keys', () => {

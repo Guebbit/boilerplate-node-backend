@@ -10,7 +10,7 @@ import type { Caller, User, UserActions } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { decryptPii } from '@infrastructure/security/pii-encryption';
 import { heldRules } from '@kernel/ability';
-import { rolesOf, rolesOfMany, staffHoldersAmong } from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { phoneAad, type UserDocument, type UserWire } from './model';
 
@@ -99,19 +99,21 @@ export const userActionsFor = (
  *   may do to it; omitted by `account`, whose subject is the caller themselves
  */
 export const presentUserWithCurrentRole = (user: UserDocument, caller?: Caller): Promise<User> =>
-    rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then((roles) =>
-        presentUser(
-            user,
-            roles.tenant,
-            caller
-                ? userActionsFor(
-                      String(user._id),
-                      roles.tenant !== null || roles.platform !== null,
-                      caller
-                  )
-                : undefined
-        )
-    );
+    accessService
+        .rolesOf(String(user._id), DEPLOYMENT_TENANT_ID)
+        .then((roles) =>
+            presentUser(
+                user,
+                roles.tenant,
+                caller
+                    ? userActionsFor(
+                          String(user._id),
+                          roles.tenant !== null || roles.platform !== null,
+                          caller
+                      )
+                    : undefined
+            )
+        );
 
 /**
  * {@link presentUserWithCurrentRole} for a whole page of already-loaded rows: the roles in one
@@ -128,14 +130,16 @@ export const presentUsersWithCurrentRoles = (
 ): Promise<User[]> => {
     const ids = rows.map((user) => user.id);
 
-    return Promise.all([rolesOfMany(ids, DEPLOYMENT_TENANT_ID), staffHoldersAmong(ids)]).then(
-        ([roles, staff]) =>
-            rows.map((user) =>
-                presentUser(
-                    user,
-                    roles.get(user.id) ?? null,
-                    caller && userActionsFor(user.id, staff.has(user.id), caller)
-                )
+    return Promise.all([
+        accessService.rolesOfMany(ids, DEPLOYMENT_TENANT_ID),
+        accessService.staffHoldersAmong(ids)
+    ]).then(([roles, staff]) =>
+        rows.map((user) =>
+            presentUser(
+                user,
+                roles.get(user.id) ?? null,
+                caller && userActionsFor(user.id, staff.has(user.id), caller)
             )
+        )
     );
 };

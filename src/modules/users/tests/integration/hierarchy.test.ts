@@ -13,10 +13,10 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { observePort } from '@tests/ports';
 import { callerContextAs } from '@tests/callers';
 import * as auditPort from '@infrastructure/observability/audit';
-import { AccessInvariantError, assignRole, rolesOf } from '@modules/access';
+import { accessService, AccessInvariantError } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseReject } from '@infrastructure/http/response';
-import * as userService from '@modules/users/services';
+import { userService } from '@modules/users/services';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 
 // The audit port is replaced, not spied on — see `tests/support/ports.ts`.
@@ -40,7 +40,8 @@ const activeOf = (id: string) => stored(id).then((user) => user?.active);
 const usernameOf = (id: string) => stored(id).then((user) => user?.username);
 
 /** The tenant role the account holds now. */
-const heldRole = (id: string) => rolesOf(id, DEPLOYMENT_TENANT_ID).then(({ tenant }) => tenant);
+const heldRole = (id: string) =>
+    accessService.rolesOf(id, DEPLOYMENT_TENANT_ID).then(({ tenant }) => tenant);
 
 /** The refusal's first error code, for a result that must be one. */
 const refusalCode = (result: { success: boolean }): string | undefined => {
@@ -185,7 +186,7 @@ describe('the protection of staff accounts', () => {
 
     it('refuses every role but a role manager the platform operator’s account', async () => {
         const operator = await accountHolding('customer', 'operator-account');
-        await assignRole(operator.id, null, 'platform', 'operator');
+        await accessService.assignRole(operator.id, null, 'platform', 'operator');
 
         const results = await Promise.all(
             ['support', 'moderator', 'admin'].map((role) =>
@@ -204,7 +205,7 @@ describe('the protection of staff accounts', () => {
 
     it('protects an account holding a role in either scope', async () => {
         const both = await accountHolding('support', 'both-roles');
-        await assignRole(both.id, null, 'platform', 'operator');
+        await accessService.assignRole(both.id, null, 'platform', 'operator');
 
         const result = await userService.updateById(
             both.id,

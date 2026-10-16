@@ -3,7 +3,7 @@
  * The inactivity reaper's own reads, one per stage.
  */
 
-import { staffHoldersAmong } from '@modules/access';
+import { accessService } from '@modules/access';
 import { logger } from '@infrastructure/adapters/logger';
 import { userRepository } from '../repository';
 import { personalDataMinimisers } from '../erasure-registry';
@@ -17,9 +17,9 @@ import type { UserDocument } from '../model';
  * @param accounts - the reaper's candidates for one stage
  */
 const customersOnly = (accounts: UserDocument[]): Promise<UserDocument[]> =>
-    staffHoldersAmong(accounts.map((account) => String(account._id))).then((staff) =>
-        accounts.filter((account) => !staff.has(String(account._id)))
-    );
+    accessService
+        .staffHoldersAmong(accounts.map((account) => String(account._id)))
+        .then((staff) => accounts.filter((account) => !staff.has(String(account._id))));
 
 /**
  * Every account inactive past the warning threshold, never yet warned —

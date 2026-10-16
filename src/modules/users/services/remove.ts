@@ -17,7 +17,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import type { AfterErase } from '@kernel/registry';
-import { roleProtectedRefusal } from '@modules/access';
+import { accessService } from '@modules/access';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { personalDataErasers } from '../erasure-registry';
@@ -141,7 +141,7 @@ export const restoreById = (
     userRepository.findById(id).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
 
-        return roleProtectedRefusal(context, id).then((refusal) => {
+        return accessService.roleProtectedRefusal(context, id).then((refusal) => {
             if (refusal) return refusal;
             if (!user.deletedAt) return generateReject(409, [t('users.not-deleted')]);
             user.deletedAt = undefined;
@@ -171,7 +171,7 @@ export const removeById = (
     userRepository.findById(id).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
 
-        return roleProtectedRefusal(context, id).then(
-            (refusal) => refusal ?? remove(user, hardDelete, context)
-        );
+        return accessService
+            .roleProtectedRefusal(context, id)
+            .then((refusal) => refusal ?? remove(user, hardDelete, context));
     });

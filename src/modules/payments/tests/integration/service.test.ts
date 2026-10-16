@@ -48,7 +48,7 @@ import {
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asReject } from '@tests/response';
-import { assignRole } from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import {
     asCustomer,
@@ -349,7 +349,7 @@ describe('getForOrder', () => {
         const { user, order } = await paidOrder();
 
         const whileCustomer = await getForOrder(String(order._id), asModerator());
-        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'support');
+        await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'support');
         const whileStaff = await getForOrder(String(order._id), asModerator());
 
         expect([whileCustomer.data?.actions?.refund, whileStaff.data?.actions?.refund]).toEqual([
@@ -364,7 +364,7 @@ describe('getForOrder', () => {
 describe('a refund on one’s own order', () => {
     it('is offered, allowed and flagged ownOrder for a buyer promoted to moderator', async () => {
         const { user, order } = await paidOrder();
-        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'moderator');
+        await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'moderator');
         const own = asRole('moderator', user.id);
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
@@ -1430,7 +1430,7 @@ describe('recordOfflinePayment', () => {
     // also record the cash for it, and the audit row is flagged.
     it('lets the buyer record cash on their own order, flagged ownOrder', async () => {
         const { user, order } = await orderFor();
-        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
+        await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
         const result = await recordOfflinePayment(

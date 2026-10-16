@@ -7,7 +7,7 @@
 
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { membershipsOf } from '@modules/access';
+import { accessService } from '@modules/access';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 import type { PersonalDataEraser } from '@kernel/registry';
 import { personalDataErasers, setPersonalDataErasers } from '../../erasure-registry';
@@ -37,7 +37,7 @@ describe('hard-deleting an account', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(await membershipsOf(target.id)).toEqual([]);
+        expect(await accessService.membershipsOf(target.id)).toEqual([]);
         expect(await userRepository.findById(target.id)).toBeNull();
     });
 
@@ -52,6 +52,6 @@ describe('hard-deleting an account', () => {
 
         expect(response.status).toBeGreaterThanOrEqual(500);
         expect(await userRepository.findById(target.id)).not.toBeNull();
-        expect(await membershipsOf(target.id)).toHaveLength(1);
+        expect(await accessService.membershipsOf(target.id)).toHaveLength(1);
     });
 });
