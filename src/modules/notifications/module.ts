@@ -19,14 +19,7 @@ import { FULFILLMENT_ORDER_DELAYED } from '@modules/delivery';
 import { WISHLIST_ITEMS_REMOVED } from '@modules/wishlist';
 import { notificationsConfig } from './config';
 import { router } from './routes';
-import {
-    notificationsList,
-    notificationsDeleteByUserId,
-    onCartLinesRemoved,
-    onCartMergeRefused,
-    onFulfillmentOrderDelayed,
-    onWishlistItemsRemoved
-} from './services';
+import { notificationsService } from './services';
 
 /** This module's manifest entry: routes, event subscriptions, config, and locales. */
 export default {
@@ -37,16 +30,17 @@ export default {
     personalData: [
         {
             section: 'notifications',
-            collect: (subject) => notificationsList(subject.userId).then((view) => view.items),
-            // Joins the caller's own hard-delete transaction — see `notificationsDeleteByUserId`.
-            erase: notificationsDeleteByUserId
+            collect: (subject) =>
+                notificationsService.list(subject.userId).then((view) => view.items),
+            // Joins the caller's own hard-delete transaction — see `notificationsService.removeByUserId`.
+            erase: notificationsService.removeByUserId
         }
     ],
     subscribe: () => {
-        onDomainEvent(CART_LINES_REMOVED, onCartLinesRemoved);
-        onDomainEvent(WISHLIST_ITEMS_REMOVED, onWishlistItemsRemoved);
-        onDomainEvent(CART_MERGE_REFUSED, onCartMergeRefused);
-        onDomainEvent(FULFILLMENT_ORDER_DELAYED, onFulfillmentOrderDelayed);
+        onDomainEvent(CART_LINES_REMOVED, notificationsService.onCartLinesRemoved);
+        onDomainEvent(WISHLIST_ITEMS_REMOVED, notificationsService.onWishlistItemsRemoved);
+        onDomainEvent(CART_MERGE_REFUSED, notificationsService.onCartMergeRefused);
+        onDomainEvent(FULFILLMENT_ORDER_DELAYED, notificationsService.onFulfillmentOrderDelayed);
     },
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

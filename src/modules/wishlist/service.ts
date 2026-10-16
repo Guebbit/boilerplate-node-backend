@@ -38,14 +38,14 @@ const present = (wishlist: WishlistDocument | null): Promise<WishlistView> =>
 /**
  * Get the user's wishlist. Absence and emptiness are the same state — an empty view, never 404.
  */
-const wishlistGet = (userId: string): Promise<WishlistView> =>
+const get = (userId: string): Promise<WishlistView> =>
     wishlistRepository.findByUserId(userId).then(present);
 
 /**
  * The saved lines exactly as stored — product ids, no availability — for the personal-data export:
  * availability is the shop's live opinion of a product, not something the account holder saved.
  */
-const wishlistExportLines = (userId: string): Promise<{ productId: string }[]> =>
+const exportLines = (userId: string): Promise<{ productId: string }[]> =>
     wishlistRepository
         .findByUserId(userId)
         .then((wishlist) => savedProductIds(wishlist).map((productId) => ({ productId })));
@@ -58,7 +58,7 @@ const wishlistExportLines = (userId: string): Promise<{ productId: string }[]> =
  * already saved is idempotent (`$addToSet`), so a double-click answers the same 200 and fires no
  * second `WISHLIST_ITEM_ADDED`.
  */
-const wishlistAdd = (
+const add = (
     userId: string,
     productId: string,
     context: CallerContext
@@ -85,7 +85,7 @@ const wishlistAdd = (
  * 404 rather than silent success when the line is absent: a client deleting a line it cannot
  * see needs to know its view is stale — the same contract the cart's remove keeps.
  */
-const wishlistRemove = (
+const remove = (
     userId: string,
     productId: string,
     context: CallerContext
@@ -115,7 +115,7 @@ const wishlistRemove = (
  * still saved (retryable, nothing lost), while the reverse order could drop the line and then
  * fail to add it — the one outcome a shopper cannot repair.
  */
-const wishlistMoveToCart = (
+const moveToCart = (
     userId: string,
     productId: string,
     context: CallerContext
@@ -151,7 +151,7 @@ const wishlistMoveToCart = (
  * What a hard user deletion owes the wishlists — the `personalData.erase` hook (see
  * `module.ts`'s manifest), joining the caller's own hard-delete transaction.
  */
-export const wishlistDeleteByUserId = (userId: string, session: ClientSession): Promise<void> =>
+const removeByUserId = (userId: string, session: ClientSession): Promise<void> =>
     wishlistRepository.deleteByUserId(userId, session);
 
 /**
@@ -160,10 +160,7 @@ export const wishlistDeleteByUserId = (userId: string, session: ClientSession): 
  *
  * @param titles - the product's names by locale, carried on to the announcement (see `product.deleted`)
  */
-export const productRemoveFromWishlistsById = (
-    productId: string,
-    titles: Record<string, string>
-): Promise<void> =>
+const removeByProductId = (productId: string, titles: Record<string, string>): Promise<void> =>
     wishlistRepository.removeProductFromAll(productId).then((userIds) => {
         if (userIds.length === 0) return;
         return emitDomainEvent(WISHLIST_ITEMS_REMOVED, { userIds, productId, titles }).then(
@@ -171,13 +168,13 @@ export const productRemoveFromWishlistsById = (
         );
     });
 
-/** The module's barrel export — the controllers call through this, never the bare functions. */
+/** The module's one door — controllers and siblings call through this, never the bare functions. */
 export const wishlistService = {
-    wishlistGet,
-    wishlistExportLines,
-    wishlistAdd,
-    wishlistRemove,
-    wishlistMoveToCart,
-    wishlistDeleteByUserId,
-    productRemoveFromWishlistsById
+    get,
+    exportLines,
+    add,
+    remove,
+    moveToCart,
+    removeByUserId,
+    removeByProductId
 };

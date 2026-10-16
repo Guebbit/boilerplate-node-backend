@@ -36,7 +36,7 @@ beforeEach(() => {
 
 /** The ids in a user's inbox, newest first. */
 const inboxOf = (userId: string) =>
-    notificationsService.notificationsList(userId).then(({ items }) => items.map(({ id }) => id));
+    notificationsService.list(userId).then(({ items }) => items.map(({ id }) => id));
 
 /** A row for `userId`, aged `minutesAgo` so ordering never depends on insert speed. */
 const aged = (userId: string, minutesAgo: number) =>
@@ -67,7 +67,7 @@ describe('notificationsList', () => {
     it('answers an empty list, not an error, for a user with no notifications', async () => {
         const user = await createUser();
 
-        await expect(notificationsService.notificationsList(user.id)).resolves.toEqual({
+        await expect(notificationsService.list(user.id)).resolves.toEqual({
             items: []
         });
     });
@@ -78,14 +78,14 @@ describe('notificationsCreate', () => {
         const first = await createUser({ email: 'first@example.com' });
         const second = await createUser({ email: 'second@example.com' });
 
-        await notificationsService.notificationsCreate([makeRow(first.id), makeRow(second.id)]);
+        await notificationsService.create([makeRow(first.id), makeRow(second.id)]);
 
         await expect(inboxOf(first.id)).resolves.toHaveLength(1);
         await expect(inboxOf(second.id)).resolves.toHaveLength(1);
     });
 
     it('writes nothing, and does not fail, for an empty list', async () => {
-        await expect(notificationsService.notificationsCreate([])).resolves.toBeUndefined();
+        await expect(notificationsService.create([])).resolves.toBeUndefined();
 
         await expect(notificationRepository.count()).resolves.toBe(0);
     });
@@ -94,7 +94,7 @@ describe('notificationsCreate', () => {
         const user = await createUser();
         const publish = jest.mocked(stream.publishToUser);
 
-        await notificationsService.notificationsCreate([makeRow(user.id)]);
+        await notificationsService.create([makeRow(user.id)]);
 
         expect(publish).toHaveBeenCalledWith(
             user.id,
@@ -119,7 +119,7 @@ describe('notificationsCreate', () => {
     ])('pushes a payload the AsyncAPI contract accepts, for $code', async (row) => {
         const publish = jest.mocked(stream.publishToUser);
 
-        await notificationsService.notificationsCreate([row]);
+        await notificationsService.create([row]);
 
         const payload = publish.mock.calls[0]?.[2];
         expect(NotificationCreatedPayloadSchema.safeParse(payload).success).toBe(true);
@@ -129,7 +129,7 @@ describe('notificationsCreate', () => {
         const user = await createUser();
         const publish = jest.mocked(stream.publishToUser);
 
-        await notificationsService.notificationsCreate([makeRow(user.id)]);
+        await notificationsService.create([makeRow(user.id)]);
 
         expect(publish).not.toHaveBeenCalledWith(
             user.id,
@@ -149,7 +149,7 @@ describe('notificationsCreate', () => {
             for (let i = CAP - 1; i >= 1; i--) await aged(user.id, i + 1);
 
             // One past the cap: the oldest must go, and the newcomer stay.
-            await notificationsService.notificationsCreate([makeRow(user.id), makeRow(user.id)]);
+            await notificationsService.create([makeRow(user.id), makeRow(user.id)]);
 
             const ids = await inboxOf(user.id);
             expect(ids).toHaveLength(CAP);
@@ -162,7 +162,7 @@ describe('notificationsCreate', () => {
             for (let i = CAP - 1; i >= 1; i--) await aged(user.id, i + 1);
             const publish = jest.mocked(stream.publishToUser);
 
-            await notificationsService.notificationsCreate([makeRow(user.id)]);
+            await notificationsService.create([makeRow(user.id)]);
 
             expect(publish).toHaveBeenCalledWith(user.id, 'notifications.deleted', {
                 all: false,
@@ -176,10 +176,7 @@ describe('notificationsCreate', () => {
             for (let i = CAP; i >= 1; i--) await aged(crowded.id, i + 1);
             await aged(quiet.id, 5);
 
-            await notificationsService.notificationsCreate([
-                makeRow(crowded.id),
-                makeRow(quiet.id)
-            ]);
+            await notificationsService.create([makeRow(crowded.id), makeRow(quiet.id)]);
 
             await expect(inboxOf(crowded.id)).resolves.toHaveLength(CAP);
             await expect(inboxOf(quiet.id)).resolves.toHaveLength(2);
@@ -193,7 +190,7 @@ describe('notificationDelete', () => {
         const row = await createNotification({ userId: user.id });
         const publish = jest.mocked(stream.publishToUser);
 
-        const result = await notificationsService.notificationDelete(user.id, String(row._id));
+        const result = await notificationsService.remove(user.id, String(row._id));
 
         expect(result).toMatchObject({ success: true, message: 'Notification deleted.' });
         await expect(inboxOf(user.id)).resolves.toEqual([]);
@@ -209,7 +206,7 @@ describe('notificationDelete', () => {
         const row = await createNotification({ userId: owner.id });
         const publish = jest.mocked(stream.publishToUser);
 
-        const result = await notificationsService.notificationDelete(intruder.id, String(row._id));
+        const result = await notificationsService.remove(intruder.id, String(row._id));
 
         expect(result).toMatchObject({ success: false, status: 404 });
         expect(result.errors).toEqual([
@@ -222,10 +219,7 @@ describe('notificationDelete', () => {
     it('answers the same 404 for an id that does not exist at all', async () => {
         const user = await createUser();
 
-        const result = await notificationsService.notificationDelete(
-            user.id,
-            '000000000000000000000000'
-        );
+        const result = await notificationsService.remove(user.id, '000000000000000000000000');
 
         expect(result).toMatchObject({ success: false, status: 404 });
     });
@@ -239,7 +233,7 @@ describe('notificationsDismissAll', () => {
         await createNotification({ userId: user.id });
         const kept = await createNotification({ userId: other.id });
 
-        const result = await notificationsService.notificationsDismissAll(user.id);
+        const result = await notificationsService.dismissAll(user.id);
 
         expect(result).toMatchObject({ success: true, message: 'All notifications deleted.' });
         await expect(inboxOf(user.id)).resolves.toEqual([]);
@@ -249,7 +243,7 @@ describe('notificationsDismissAll', () => {
     it('succeeds on an inbox that is already empty', async () => {
         const user = await createUser();
 
-        await expect(notificationsService.notificationsDismissAll(user.id)).resolves.toMatchObject({
+        await expect(notificationsService.dismissAll(user.id)).resolves.toMatchObject({
             success: true
         });
     });
@@ -258,7 +252,7 @@ describe('notificationsDismissAll', () => {
         const user = await createUser();
         const publish = jest.mocked(stream.publishToUser);
 
-        await notificationsService.notificationsDismissAll(user.id);
+        await notificationsService.dismissAll(user.id);
 
         expect(publish).toHaveBeenCalledWith(user.id, 'notifications.deleted', {
             all: true,
@@ -275,12 +269,12 @@ describe('notificationsReadAll', () => {
         await createNotification({ userId: user.id });
         await createNotification({ userId: other.id });
 
-        const result = await notificationsService.notificationsReadAll(user.id);
+        const result = await notificationsService.readAll(user.id);
 
         expect(result.message).toBe('All notifications marked as read.');
-        const { items: mine } = await notificationsService.notificationsList(user.id);
+        const { items: mine } = await notificationsService.list(user.id);
         expect(mine.every(({ readAt }) => readAt !== undefined)).toBe(true);
-        const { items: theirs } = await notificationsService.notificationsList(other.id);
+        const { items: theirs } = await notificationsService.list(other.id);
         expect(theirs.every(({ readAt }) => readAt === undefined)).toBe(true);
     });
 
@@ -289,9 +283,9 @@ describe('notificationsReadAll', () => {
         const readAt = new Date('2026-01-01T00:00:00.000Z');
         await createNotification({ userId: user.id, readAt });
 
-        await notificationsService.notificationsReadAll(user.id);
+        await notificationsService.readAll(user.id);
 
-        const { items } = await notificationsService.notificationsList(user.id);
+        const { items } = await notificationsService.list(user.id);
         const [row] = items;
         expect(row?.readAt).toBe(readAt.toISOString());
     });
@@ -300,7 +294,7 @@ describe('notificationsReadAll', () => {
         const user = await createUser();
         const publish = jest.mocked(stream.publishToUser);
 
-        await notificationsService.notificationsReadAll(user.id);
+        await notificationsService.readAll(user.id);
 
         expect(publish).toHaveBeenCalledWith(user.id, 'notifications.read', {
             readAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) as string
@@ -315,7 +309,7 @@ describe('notificationsDeleteByUserId', () => {
 
         await expect(
             withTransaction((session) =>
-                notificationsService.notificationsDeleteByUserId(user.id, session).then(() => {
+                notificationsService.removeByUserId(user.id, session).then(() => {
                     throw new Error('the rest of the deletion failed');
                 })
             )
@@ -330,9 +324,7 @@ describe('notificationsDeleteByUserId', () => {
         await createNotification({ userId: gone.id });
         const kept = await createNotification({ userId: stays.id });
 
-        await withTransaction((session) =>
-            notificationsService.notificationsDeleteByUserId(gone.id, session)
-        );
+        await withTransaction((session) => notificationsService.removeByUserId(gone.id, session));
 
         await expect(inboxOf(gone.id)).resolves.toEqual([]);
         await expect(inboxOf(stays.id)).resolves.toEqual([String(kept._id)]);

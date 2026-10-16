@@ -24,8 +24,7 @@ import { enabledModules } from '../../../../modules';
 setupTestDb();
 
 /** A user's inbox, newest first. */
-const inboxOf = (userId: string) =>
-    notificationsService.notificationsList(userId).then(({ items }) => items);
+const inboxOf = (userId: string) => notificationsService.list(userId).then(({ items }) => items);
 
 describe('the module subscriptions', () => {
     beforeEach(() => {
@@ -57,7 +56,7 @@ describe('the module subscriptions', () => {
         it('tells each wishlist owner, with the wishlist’s own code', async () => {
             const saver = await createUser();
             const doomed = await createProduct({ title: 'Blue mug' });
-            await wishlistService.wishlistAdd(saver.id, String(doomed._id), testCallerContext);
+            await wishlistService.add(saver.id, String(doomed._id), testCallerContext);
 
             await productService.removeById(String(doomed._id), true);
 
@@ -74,7 +73,7 @@ describe('the module subscriptions', () => {
             const user = await createUser();
             const doomed = await createProduct({ title: 'Blue mug' });
             await cartService.cartItemAddById(user.id, String(doomed._id), 1);
-            await wishlistService.wishlistAdd(user.id, String(doomed._id), testCallerContext);
+            await wishlistService.add(user.id, String(doomed._id), testCallerContext);
 
             await productService.removeById(String(doomed._id), true);
 

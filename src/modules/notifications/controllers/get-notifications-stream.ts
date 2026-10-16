@@ -10,7 +10,7 @@ import type { Request, Response } from 'express';
 import { stillHoldsRuleViaCookie } from '@kernel/middlewares/authorizations';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
-import { streamNotifications } from '../services';
+import { notificationsService } from '../services';
 
 /**
  * GET /notifications/stream
@@ -31,7 +31,7 @@ export const getNotificationsStream = (request: Request, response: Response) => 
         return;
     }
 
-    streamNotifications(response, user.id, () =>
+    notificationsService.stream(response, user.id, () =>
         stillHoldsRuleViaCookie(request, 'read', 'Notification')
     );
 };

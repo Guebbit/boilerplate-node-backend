@@ -175,7 +175,7 @@ export const updateEntry = (
  * @param context - caller context for the `ADMIN_LOCALE_ENTRY_DELETED` audit emit; omitted by
  *   tests that call this as a plain helper — no context means no emit
  */
-export const deleteEntry = (
+export const removeEntry = (
     tag: string,
     app: string,
     entryId: string,

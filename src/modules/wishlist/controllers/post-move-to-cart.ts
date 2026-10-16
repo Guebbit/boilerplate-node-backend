@@ -1,7 +1,7 @@
 /**
  * @module
  * `POST /wishlist/:productId/move-to-cart` controller — thin HTTP adapter over
- * `wishlistService.wishlistMoveToCart`.
+ * `wishlistService.moveToCart`.
  */
 
 import type { Request, Response } from 'express';
@@ -27,7 +27,7 @@ export const postMoveToCart = (request: Request<{ productId: string }>, response
     if (!productId) return;
 
     return wishlistService
-        .wishlistMoveToCart(userId, productId, callerContextOf(request))
+        .moveToCart(userId, productId, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 

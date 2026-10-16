@@ -1,6 +1,6 @@
 /**
  * @module
- * `DELETE /wishlist/:productId` controller — thin HTTP adapter over `wishlistService.wishlistRemove`.
+ * `DELETE /wishlist/:productId` controller — thin HTTP adapter over `wishlistService.remove`.
  */
 
 import type { Request, Response } from 'express';
@@ -25,7 +25,7 @@ export const deleteWishlistItem = (request: Request<{ productId: string }>, resp
     if (!productId) return;
 
     return wishlistService
-        .wishlistRemove(userId, productId, callerContextOf(request))
+        .remove(userId, productId, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 

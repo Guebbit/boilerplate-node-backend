@@ -1,6 +1,6 @@
 /**
  * @module
- * `GET /notifications` controller — thin HTTP adapter over `notificationsService.notificationsList`.
+ * `GET /notifications` controller — thin HTTP adapter over `notificationsService.list`.
  */
 
 import type { Request, Response } from 'express';
@@ -15,7 +15,7 @@ import { notificationsService } from '../services';
  */
 export const getNotifications = (request: Request, response: Response) => {
     return notificationsService
-        .notificationsList(request.authContext!.id)
+        .list(request.authContext!.id)
         .then((view) => {
             successResponse<NotificationsResponse>(response, view);
         })

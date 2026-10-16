@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /notifications/dismiss-all` controller — thin HTTP adapter over `notificationsService.notificationsDismissAll`.
+ * `POST /notifications/dismiss-all` controller — thin HTTP adapter over `notificationsService.dismissAll`.
  */
 
 import type { Request, Response } from 'express';
@@ -14,7 +14,7 @@ import { notificationsService } from '../services';
  */
 export const postDismissAll = (request: Request, response: Response) => {
     return notificationsService
-        .notificationsDismissAll(request.authContext!.id)
+        .dismissAll(request.authContext!.id)
         .then((result) => {
             successResponse(response, result.data, 200, result.message);
         })

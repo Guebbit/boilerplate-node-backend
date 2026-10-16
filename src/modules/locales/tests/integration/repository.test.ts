@@ -254,7 +254,7 @@ describe('deleting a language', () => {
     it('refuses while it is still active', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
 
-        const result = await localeService.deleteLanguage('es');
+        const result = await localeService.removeLanguage('es');
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
@@ -271,7 +271,7 @@ describe('deleting a language', () => {
             }
         );
 
-        const result = await localeService.deleteLanguage('es');
+        const result = await localeService.removeLanguage('es');
 
         expect(result.success).toBe(true);
         expect(result.data).toEqual({ removedEntries: 2, removedTranslations: 0 });
@@ -283,13 +283,13 @@ describe('deleting a language', () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' }, { active: false });
         await givenLanguage('it', { 'cart.title': 'Carrello' });
 
-        await localeService.deleteLanguage('es');
+        await localeService.removeLanguage('es');
 
         expect(await localeEntryRepository.listKeys('it', FRONTEND)).toEqual(['cart.title']);
     });
 
     it('404s for a language that was never registered', async () => {
-        const result = await localeService.deleteLanguage('zz');
+        const result = await localeService.removeLanguage('zz');
 
         expect(result.status).toBe(404);
     });
@@ -315,7 +315,7 @@ describe('deleting a language', () => {
             undefined
         );
 
-        const result = await localeService.deleteLanguage('es');
+        const result = await localeService.removeLanguage('es');
 
         expect(result.data).toEqual({ removedEntries: 0, removedTranslations: 2 });
         expect(await translationRepository.findEntityTranslations('product', 'p1')).toEqual([]);
@@ -344,7 +344,7 @@ describe('deleting a language', () => {
             undefined
         );
 
-        await localeService.deleteLanguage('es');
+        await localeService.removeLanguage('es');
 
         const remaining = await translationRepository.findEntityTranslations('product', 'p1');
         expect(remaining.map((row) => row.locale)).toEqual(['it']);
@@ -353,7 +353,7 @@ describe('deleting a language', () => {
     it('refuses to delete the fallback locale even when inactive', async () => {
         await givenLanguage(FALLBACK, {}, { active: false });
 
-        const result = await localeService.deleteLanguage(FALLBACK);
+        const result = await localeService.removeLanguage(FALLBACK);
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
@@ -691,7 +691,7 @@ describe('searchEntries', () => {
     });
 });
 
-describe('updateEntry and deleteEntry', () => {
+describe('updateEntry and removeEntry', () => {
     it('refuses to reach a row through another language’s path', async () => {
         // Two routes addressing one row is the shape this API uses everywhere; the path segment
         // being decorative is not. Without the check, `PUT /locales/it/entries/<spanish row>`
@@ -703,7 +703,7 @@ describe('updateEntry and deleteEntry', () => {
         const updated = await localeService.updateEntry('it', FRONTEND, String(entry!._id), {
             value: 'Carrello'
         });
-        const deleted = await localeService.deleteEntry('it', FRONTEND, String(entry!._id));
+        const deleted = await localeService.removeEntry('it', FRONTEND, String(entry!._id));
 
         expect(updated.status).toBe(404);
         expect(deleted.status).toBe(404);
@@ -731,7 +731,7 @@ describe('updateEntry and deleteEntry', () => {
         const updated = await localeService.updateEntry('es', BACKEND, String(entry!._id), {
             value: 'Tu carrito'
         });
-        const deleted = await localeService.deleteEntry('es', BACKEND, String(entry!._id));
+        const deleted = await localeService.removeEntry('es', BACKEND, String(entry!._id));
 
         expect(updated.status).toBe(404);
         expect(deleted.status).toBe(404);
@@ -745,7 +745,7 @@ describe('updateEntry and deleteEntry', () => {
         const updated = await localeService.updateEntry('es', 'nope', String(entry!._id), {
             value: 'x'
         });
-        const deleted = await localeService.deleteEntry('es', 'nope', String(entry!._id));
+        const deleted = await localeService.removeEntry('es', 'nope', String(entry!._id));
         const listed = await localeService.searchEntries('es', { app: 'nope' });
 
         expect([updated.status, deleted.status, listed.status]).toEqual([422, 422, 422]);

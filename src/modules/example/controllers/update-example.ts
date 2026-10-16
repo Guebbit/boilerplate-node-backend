@@ -12,14 +12,15 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
 import { exampleService } from '../services';
 
-/** `PUT` and `PATCH /examples/:id` — one handler pair over `exampleService.update`. */
+/** `PUT` and `PATCH /examples/:id` — one handler pair over `exampleService.updateById`. */
 export const { replace: replaceExample, update: updateExample } = createUpdateController({
     versioned: true,
     entity: 'example',
     notFoundKey: 'example.not-found',
     replaceSchema: ReplaceExampleByIdBody,
     patchSchema: UpdateExampleByIdBody,
-    update: (id, changes, request) => exampleService.update(id, changes, callerContextOf(request)),
+    update: (id, changes, request) =>
+        exampleService.updateById(id, changes, callerContextOf(request)),
     // The service already answers in the contract's shape.
     present: (example) => example
 });

@@ -34,7 +34,7 @@ jest.mock('@infrastructure/observability/analytics', () => ({
 setupTestDb();
 
 const savedIds = async (userId: string) => {
-    const view = await wishlistService.wishlistGet(userId);
+    const view = await wishlistService.get(userId);
     return view.items.map(({ productId }) => productId);
 };
 
@@ -52,7 +52,7 @@ describe('wishlistRepository.addLine', () => {
     });
 });
 
-describe('wishlistGet: availability per line', () => {
+describe('get: availability per line', () => {
     it('names each saved product by what it can do right now', async () => {
         const user = await createUser();
         const onSale = await createProduct({ onHand: 5 });
@@ -63,7 +63,7 @@ describe('wishlistGet: availability per line', () => {
             await wishlistRepository.addLine(user.id, String(product._id));
         await productService.updateById(String(hidden._id), { active: false }, testCallerContext);
 
-        const view = await wishlistService.wishlistGet(user.id);
+        const view = await wishlistService.get(user.id);
 
         expect(view.items).toEqual([
             { productId: String(onSale._id), availability: 'in_stock' },
@@ -78,7 +78,7 @@ describe('wishlistGet: availability per line', () => {
         const scarce = await createProduct({ onHand: 1 });
         await wishlistRepository.addLine(user.id, String(scarce._id));
 
-        const view = await wishlistService.wishlistGet(user.id);
+        const view = await wishlistService.get(user.id);
 
         expect(view.items[0].availability).toBe('in_stock');
     });
@@ -89,9 +89,9 @@ describe('wishlistGet: availability per line', () => {
         await wishlistRepository.addLine(user.id, String(product._id));
 
         await productService.updateById(String(product._id), { active: false }, testCallerContext);
-        const hidden = await wishlistService.wishlistGet(user.id);
+        const hidden = await wishlistService.get(user.id);
         await productService.updateById(String(product._id), { active: true }, testCallerContext);
-        const shown = await wishlistService.wishlistGet(user.id);
+        const shown = await wishlistService.get(user.id);
 
         expect([hidden.items[0].availability, shown.items[0].availability]).toEqual([
             'removed',
@@ -103,12 +103,8 @@ describe('wishlistGet: availability per line', () => {
         const user = await createUser();
         const offSale = await createProduct({ onHand: 5, purchasable: false });
 
-        const saved = await wishlistService.wishlistAdd(
-            user.id,
-            String(offSale._id),
-            testCallerContext
-        );
-        const moved = await wishlistService.wishlistMoveToCart(
+        const saved = await wishlistService.add(user.id, String(offSale._id), testCallerContext);
+        const moved = await wishlistService.moveToCart(
             user.id,
             String(offSale._id),
             testCallerContext
@@ -123,28 +119,24 @@ describe('wishlistGet: availability per line', () => {
     });
 });
 
-describe('wishlistExportLines', () => {
+describe('exportLines', () => {
     it('carries the saved product ids only, no availability', async () => {
         const user = await createUser();
         const product = await createProduct({ purchasable: false });
         await wishlistRepository.addLine(user.id, String(product._id));
 
-        await expect(wishlistService.wishlistExportLines(user.id)).resolves.toEqual([
+        await expect(wishlistService.exportLines(user.id)).resolves.toEqual([
             { productId: String(product._id) }
         ]);
     });
 });
 
-describe('wishlistAdd', () => {
+describe('add', () => {
     it('saves a product and answers the view', async () => {
         const user = await createUser();
         const product = await createProduct();
 
-        const result = await wishlistService.wishlistAdd(
-            user.id,
-            String(product._id),
-            testCallerContext
-        );
+        const result = await wishlistService.add(user.id, String(product._id), testCallerContext);
 
         expect(result.success).toBe(true);
         expect(await savedIds(user.id)).toEqual([String(product._id)]);
@@ -154,12 +146,8 @@ describe('wishlistAdd', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        await wishlistService.wishlistAdd(user.id, String(product._id), testCallerContext);
-        const second = await wishlistService.wishlistAdd(
-            user.id,
-            String(product._id),
-            testCallerContext
-        );
+        await wishlistService.add(user.id, String(product._id), testCallerContext);
+        const second = await wishlistService.add(user.id, String(product._id), testCallerContext);
 
         expect(second.success).toBe(true);
         expect(await savedIds(user.id)).toEqual([String(product._id)]);
@@ -171,7 +159,7 @@ describe('wishlistAdd', () => {
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
 
         for (let attempt = 0; attempt < 3; attempt += 1)
-            await wishlistService.wishlistAdd(user.id, String(product._id), testCallerContext);
+            await wishlistService.add(user.id, String(product._id), testCallerContext);
 
         const added = analyticsSpy.mock.calls.filter(
             ([event]) => event.event === wishlistAnalyticsEvents.WISHLIST_ITEM_ADDED
@@ -183,11 +171,7 @@ describe('wishlistAdd', () => {
         const user = await createUser();
         const gone = await createProduct({ deletedAt: new Date().toISOString() });
 
-        const result = await wishlistService.wishlistAdd(
-            user.id,
-            String(gone._id),
-            testCallerContext
-        );
+        const result = await wishlistService.add(user.id, String(gone._id), testCallerContext);
 
         expect(result.status).toBe(404);
         expect(await savedIds(user.id)).toEqual([]);
@@ -197,11 +181,7 @@ describe('wishlistAdd', () => {
         const user = await createUser();
         const hidden = await createProduct({ active: false });
 
-        const result = await wishlistService.wishlistAdd(
-            user.id,
-            String(hidden._id),
-            testCallerContext
-        );
+        const result = await wishlistService.add(user.id, String(hidden._id), testCallerContext);
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -209,19 +189,15 @@ describe('wishlistAdd', () => {
     });
 });
 
-describe('wishlistRemove', () => {
+describe('remove', () => {
     it('removes exactly the named line', async () => {
         const user = await createUser();
         const keep = await createProduct({ title: 'Keep' });
         const drop = await createProduct({ title: 'Drop' });
-        await wishlistService.wishlistAdd(user.id, String(keep._id), testCallerContext);
-        await wishlistService.wishlistAdd(user.id, String(drop._id), testCallerContext);
+        await wishlistService.add(user.id, String(keep._id), testCallerContext);
+        await wishlistService.add(user.id, String(drop._id), testCallerContext);
 
-        const result = await wishlistService.wishlistRemove(
-            user.id,
-            String(drop._id),
-            testCallerContext
-        );
+        const result = await wishlistService.remove(user.id, String(drop._id), testCallerContext);
 
         expect(result.success).toBe(true);
         expect(await savedIds(user.id)).toEqual([String(keep._id)]);
@@ -231,7 +207,7 @@ describe('wishlistRemove', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        const result = await wishlistService.wishlistRemove(
+        const result = await wishlistService.remove(
             user.id,
             String(product._id),
             testCallerContext
@@ -242,13 +218,13 @@ describe('wishlistRemove', () => {
     });
 });
 
-describe('wishlistMoveToCart', () => {
+describe('moveToCart', () => {
     it('lands the product in the cart and drops the saved line', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await wishlistService.wishlistAdd(user.id, String(product._id), testCallerContext);
+        await wishlistService.add(user.id, String(product._id), testCallerContext);
 
-        const result = await wishlistService.wishlistMoveToCart(
+        const result = await wishlistService.moveToCart(
             user.id,
             String(product._id),
             testCallerContext
@@ -266,9 +242,9 @@ describe('wishlistMoveToCart', () => {
         const user = await createUser();
         const product = await createProduct();
         await cartService.cartItemAddById(user.id, String(product._id), 2);
-        await wishlistService.wishlistAdd(user.id, String(product._id), testCallerContext);
+        await wishlistService.add(user.id, String(product._id), testCallerContext);
 
-        await wishlistService.wishlistMoveToCart(user.id, String(product._id), testCallerContext);
+        await wishlistService.moveToCart(user.id, String(product._id), testCallerContext);
 
         const cart = await cartService.cartGetForBadge(user.id);
         expect(cart.items).toEqual([
@@ -280,7 +256,7 @@ describe('wishlistMoveToCart', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        const result = await wishlistService.wishlistMoveToCart(
+        const result = await wishlistService.moveToCart(
             user.id,
             String(product._id),
             testCallerContext
@@ -305,11 +281,11 @@ describe('wishlistMoveToCart', () => {
     it('answers 404 once the product leaves the public catalogue, and writes no cart line', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await wishlistService.wishlistAdd(user.id, String(product._id), testCallerContext);
+        await wishlistService.add(user.id, String(product._id), testCallerContext);
 
         await productService.updateById(String(product._id), { active: false }, testCallerContext);
 
-        const result = await wishlistService.wishlistMoveToCart(
+        const result = await wishlistService.moveToCart(
             user.id,
             String(product._id),
             testCallerContext
@@ -327,13 +303,13 @@ describe('wishlistMoveToCart', () => {
     it('answers 404 once the product is soft-deleted, and writes no cart line', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await wishlistService.wishlistAdd(user.id, String(product._id), testCallerContext);
+        await wishlistService.add(user.id, String(product._id), testCallerContext);
 
         await productService.removeById(String(product._id));
 
         await settleOutboxNudges();
 
-        const result = await wishlistService.wishlistMoveToCart(
+        const result = await wishlistService.moveToCart(
             user.id,
             String(product._id),
             testCallerContext
@@ -356,9 +332,9 @@ describe('wishlistMoveToCart', () => {
             const user = await createUser();
             const product = await createProduct();
             await cartService.cartItemAddById(user.id, String(product._id), 1);
-            await wishlistService.wishlistAdd(user.id, String(product._id), testCallerContext);
+            await wishlistService.add(user.id, String(product._id), testCallerContext);
 
-            const result = await wishlistService.wishlistMoveToCart(
+            const result = await wishlistService.moveToCart(
                 user.id,
                 String(product._id),
                 testCallerContext
@@ -382,9 +358,9 @@ describe('the module subscriptions', () => {
         const bob = await createUser({ email: 'bob@example.com', username: 'bob' });
         const doomed = await createProduct({ title: 'Doomed' });
         const kept = await createProduct({ title: 'Kept' });
-        await wishlistService.wishlistAdd(alice.id, String(doomed._id), testCallerContext);
-        await wishlistService.wishlistAdd(alice.id, String(kept._id), testCallerContext);
-        await wishlistService.wishlistAdd(bob.id, String(doomed._id), testCallerContext);
+        await wishlistService.add(alice.id, String(doomed._id), testCallerContext);
+        await wishlistService.add(alice.id, String(kept._id), testCallerContext);
+        await wishlistService.add(bob.id, String(doomed._id), testCallerContext);
 
         await productService.removeById(String(doomed._id), true);
 
@@ -397,7 +373,7 @@ describe('the module subscriptions', () => {
     it('a hard-deleted user takes their wishlist with them', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await wishlistService.wishlistAdd(user.id, String(product._id), testCallerContext);
+        await wishlistService.add(user.id, String(product._id), testCallerContext);
 
         await userService.removeById(user.id, true, callerContextAs('admin'));
 

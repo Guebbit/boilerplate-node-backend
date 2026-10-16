@@ -7,7 +7,7 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { feedbackRequestRepository } from '@modules/feedback/repository';
-import * as feedbackRequestService from '@modules/feedback/service';
+import { feedbackRequestService } from '@modules/feedback/service';
 
 setupTestDb();
 

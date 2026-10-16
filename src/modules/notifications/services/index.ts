@@ -6,29 +6,27 @@
  */
 
 import * as inbox from './inbox';
-
-export {
-    notificationsList,
-    notificationsCreate,
-    notificationDelete,
-    notificationsDismissAll,
-    notificationsReadAll,
-    notificationsDeleteByUserId
-} from './inbox';
-export {
+import {
     onCartLinesRemoved,
     onWishlistItemsRemoved,
     onCartMergeRefused,
     onFulfillmentOrderDelayed
 } from './subscribers';
-export { streamNotifications, publishToUser, openStreamCount } from './stream';
+import { streamNotifications, publishToUser, openStreamCount } from './stream';
 
-/** The service's public surface — controllers call through this, never the bare functions. */
+/** The service's public surface — controllers and siblings call through this, never the bare functions. */
 export const notificationsService = {
-    notificationsList: inbox.notificationsList,
-    notificationsCreate: inbox.notificationsCreate,
-    notificationDelete: inbox.notificationDelete,
-    notificationsDismissAll: inbox.notificationsDismissAll,
-    notificationsReadAll: inbox.notificationsReadAll,
-    notificationsDeleteByUserId: inbox.notificationsDeleteByUserId
+    list: inbox.notificationsList,
+    create: inbox.notificationsCreate,
+    remove: inbox.notificationDelete,
+    dismissAll: inbox.notificationsDismissAll,
+    readAll: inbox.notificationsReadAll,
+    removeByUserId: inbox.notificationsDeleteByUserId,
+    stream: streamNotifications,
+    publishToUser,
+    openStreamCount,
+    onCartLinesRemoved,
+    onWishlistItemsRemoved,
+    onCartMergeRefused,
+    onFulfillmentOrderDelayed
 };

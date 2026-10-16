@@ -1,6 +1,6 @@
 /**
  * @module
- * `PUT /wishlist/:productId` controller — thin HTTP adapter over `wishlistService.wishlistAdd`.
+ * `PUT /wishlist/:productId` controller — thin HTTP adapter over `wishlistService.add`.
  */
 
 import type { Request, Response } from 'express';
@@ -27,7 +27,7 @@ export const putWishlistItem = (request: Request<{ productId: string }>, respons
     if (!productId) return;
 
     return wishlistService
-        .wishlistAdd(userId, productId, callerContextOf(request))
+        .add(userId, productId, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 

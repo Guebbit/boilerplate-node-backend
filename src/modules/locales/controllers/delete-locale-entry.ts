@@ -1,7 +1,7 @@
 /**
  * @module
  * `DELETE /locales/:locale/apps/:app/entries/:entryId` controller — thin HTTP adapter over
- * `localeService.deleteEntry`.
+ * `localeService.removeEntry`.
  */
 
 import type { Request, Response } from 'express';
@@ -28,7 +28,7 @@ export const deleteLocaleEntry = (
     if (!entryId) return Promise.resolve();
 
     return localeService
-        .deleteEntry(request.params.locale, request.params.app, entryId, callerContextOf(request))
+        .removeEntry(request.params.locale, request.params.app, entryId, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 

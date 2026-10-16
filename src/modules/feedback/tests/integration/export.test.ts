@@ -9,7 +9,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
-import { create, updateStatus } from '@modules/feedback/service';
+import { feedbackRequestService } from '@modules/feedback/service';
 import feedbackModule from '@modules/feedback/module';
 
 setupTestDb();
@@ -26,7 +26,7 @@ const subject = (emailVerified: boolean) => ({
 
 /** Files one ticket under the victim's address. */
 const fileTicket = () =>
-    create({
+    feedbackRequestService.create({
         email: 'victim@example.com',
         subject: 'A complaint',
         message: 'my private complaint',
@@ -48,7 +48,10 @@ describe('the feedback section of an export', () => {
 
     it('exports status and respondedAt but never the staff-only adminNotes', async () => {
         const ticket = await fileTicket();
-        await updateStatus(ticket, { status: 'resolved', adminNotes: 'internal assessment' });
+        await feedbackRequestService.updateStatusById(String(ticket._id), {
+            status: 'resolved',
+            adminNotes: 'internal assessment'
+        });
 
         const section = await collect(subject(true));
         const exported = section?.[0];

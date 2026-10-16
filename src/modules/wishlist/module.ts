@@ -15,7 +15,7 @@ import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { PRODUCT_DELETED } from '@modules/products';
 import { router } from './routes';
-import { wishlistDeleteByUserId, productRemoveFromWishlistsById, wishlistService } from './service';
+import { wishlistService } from './service';
 
 /** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
@@ -25,14 +25,14 @@ export default {
     personalData: [
         {
             section: 'wishlist',
-            collect: (subject) => wishlistService.wishlistExportLines(subject.userId),
-            // Joins the caller's own hard-delete transaction — see `wishlistDeleteByUserId`.
-            erase: wishlistDeleteByUserId
+            collect: (subject) => wishlistService.exportLines(subject.userId),
+            // Joins the caller's own hard-delete transaction — see `wishlistService.removeByUserId`.
+            erase: wishlistService.removeByUserId
         }
     ],
     subscribe: () => {
         onDomainEvent(PRODUCT_DELETED, ({ productId, titles }) =>
-            productRemoveFromWishlistsById(productId, titles)
+            wishlistService.removeByProductId(productId, titles)
         );
     },
     locales: path.join(__dirname, 'locales')

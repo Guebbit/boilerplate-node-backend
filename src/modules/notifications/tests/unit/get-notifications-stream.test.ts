@@ -10,12 +10,12 @@
 import type { Request, Response } from 'express';
 import { asStub } from '@tests/stub';
 import { getNotificationsStream } from '@modules/notifications/controllers/get-notifications-stream';
-import { streamNotifications } from '@modules/notifications/services';
+import { notificationsService } from '@modules/notifications/services';
 import { stillHoldsRuleViaCookie } from '@kernel/middlewares/authorizations';
 
 jest.mock('@modules/notifications/services', () => ({
     __esModule: true,
-    streamNotifications: jest.fn()
+    notificationsService: { stream: jest.fn() }
 }));
 
 // Only `stillHoldsRuleViaCookie` is replaced — the module's other guards are untouched here.
@@ -46,7 +46,11 @@ describe('GET /notifications/stream', () => {
 
         // The stream owns the response for its lifetime; anything sent first would end it.
         expect(status).not.toHaveBeenCalled();
-        expect(streamNotifications).toHaveBeenCalledWith(response, 'user-1', expect.any(Function));
+        expect(notificationsService.stream).toHaveBeenCalledWith(
+            response,
+            'user-1',
+            expect.any(Function)
+        );
     });
 
     it('wires the recheck to the rule and the request the stream connected with', () => {
@@ -54,7 +58,7 @@ describe('GET /notifications/stream', () => {
         jest.mocked(stillHoldsRuleViaCookie).mockResolvedValueOnce(true);
 
         getNotificationsStream(request, makeResponse().response);
-        const call = jest.mocked(streamNotifications).mock.calls[0] as [
+        const call = jest.mocked(notificationsService.stream).mock.calls[0] as [
             Response,
             string,
             () => Promise<boolean>
@@ -83,6 +87,6 @@ describe('GET /notifications/stream', () => {
                 ]
             })
         );
-        expect(streamNotifications).not.toHaveBeenCalled();
+        expect(notificationsService.stream).not.toHaveBeenCalled();
     });
 });

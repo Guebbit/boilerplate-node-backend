@@ -314,7 +314,7 @@ import { ${names.pluralCamel}AuditActions } from './audit';`
  * @param payload - the validated body
 ${contextDocument(options, 'who acted; omitted by a caller that is not a request')} * @returns the saved document
  */
-export const create = (
+const create = (
     payload: Create${names.entity}Request${contextParameter(options)}
 ): Promise<${names.entity}Document> =>
     ${names.entityCamel}Repository
@@ -333,7 +333,7 @@ export const create = (
  * @param filters - page, pageSize and sort as they arrive from a query string
 ${contextDocument(options, 'who asked; omitted by a caller that is not a request')} * @returns the page and its pagination meta
  */
-export const search = (
+const search = (
     // page and pageSize accept strings: they arrive as query text, and normalizePagination
     // coerces and bounds them.
     filters: Omit<Record<string, unknown>, 'page' | 'pageSize'> & {
@@ -368,7 +368,7 @@ const applyUpdate = (
  * @param payload - the changes
 ${contextDocument(options, 'who acted')} * @returns a 404 reject when the id names nothing, otherwise the saved document
  */
-export const updateById = (
+const updateById = (
     id: string,
     payload: Update${names.entity}Request${contextParameter(options)}
 ): Promise<ResponseSuccess<${names.entity}Document> | ResponseReject> =>
@@ -390,7 +390,7 @@ export const updateById = (
  * @param id - the record id
 ${contextDocument(options, 'who acted')} * @returns a 404 reject when the id names nothing, otherwise success
  */
-export const remove = (
+const removeById = (
     id: string${contextParameter(options)}
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     ${names.entityCamel}Repository.findById(id).then((found) => {
@@ -408,8 +408,8 @@ export const remove = (
         });
     });
 
-/** The module's service object, used by the controllers in ./controllers. */
-export const ${names.entityCamel}Service = { create, search, updateById, remove };
+/** The module's one door: every operation once, here, and nowhere by name. */
+export const ${names.entityCamel}Service = { create, search, updateById, removeById };
 `;
 
 /** The one place a document becomes the wire shape. */
@@ -604,7 +604,7 @@ export const delete${names.entity} = (request: Request<{ id: string }>, response
     if (!id) return Promise.resolve();
 
     return ${names.entityCamel}Service
-        .remove(id${contextArgument(options)})
+        .removeById(id${contextArgument(options)})
         .then((result) => {
             if (refused(response, result)) return;
             successResponse(response, undefined, 200, result.message);

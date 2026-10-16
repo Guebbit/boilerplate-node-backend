@@ -1,6 +1,6 @@
 /**
  * @module
- * `productRemoveFromWishlistsById` announces whose wishlists held a removed product, with its
+ * `wishlistService.removeByProductId` announces whose wishlists held a removed product, with its
  * names, and announces nothing when none did — so `notifications` never writes a message about
  * nothing.
  */
@@ -11,7 +11,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { WISHLIST_ITEMS_REMOVED } from '../../events';
-import { productRemoveFromWishlistsById, wishlistService } from '../../service';
+import { wishlistService } from '../../service';
 
 setupTestDb();
 
@@ -27,9 +27,9 @@ describe('productRemoveFromWishlistsById', () => {
     it('announces whose wishlists held the product, with its names', async () => {
         const saver = await createUser();
         const product = await createProduct();
-        await wishlistService.wishlistAdd(saver.id, String(product._id), testCallerContext);
+        await wishlistService.add(saver.id, String(product._id), testCallerContext);
 
-        await productRemoveFromWishlistsById(String(product._id), { en: 'Blue mug' });
+        await wishlistService.removeByProductId(String(product._id), { en: 'Blue mug' });
 
         expect(announced).toHaveBeenCalledTimes(1);
         expect(announced).toHaveBeenCalledWith(
@@ -41,7 +41,7 @@ describe('productRemoveFromWishlistsById', () => {
     it('announces nothing when no wishlist held it', async () => {
         const product = await createProduct();
 
-        await productRemoveFromWishlistsById(String(product._id), { en: 'Blue mug' });
+        await wishlistService.removeByProductId(String(product._id), { en: 'Blue mug' });
 
         expect(announced).not.toHaveBeenCalled();
     });

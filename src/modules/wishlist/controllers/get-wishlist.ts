@@ -1,6 +1,6 @@
 /**
  * @module
- * `GET /wishlist` controller — thin HTTP adapter over `wishlistService.wishlistGet`.
+ * `GET /wishlist` controller — thin HTTP adapter over `wishlistService.get`.
  */
 
 import type { Request, Response } from 'express';
@@ -17,7 +17,7 @@ import type { WishlistResponse } from '@types';
  */
 export const getWishlist = (request: Request, response: Response) => {
     return wishlistService
-        .wishlistGet(request.authContext!.id)
+        .get(request.authContext!.id)
         .then((view) => {
             successResponse<WishlistResponse>(response, view);
         })

@@ -117,7 +117,7 @@ describe('a save and a move-to-cart on the same line', () => {
      * or a 5xx. The line itself may end up saved or moved — that is the race's honest result and
      * asserting either would be asserting an ordering the API never promised.
      *
-     * What this deliberately does NOT assert is the CART's quantity. `wishlistMoveToCart` reads
+     * What this deliberately does NOT assert is the CART's quantity. `wishlistService.moveToCart` reads
      * "is it saved" and writes the cart before removing the line, so N concurrent moves of one
      * saved line all read "saved" and the cart is incremented N times. Making the removal the
      * claim instead would close it, and would contradict `openapi.yaml`'s move-to-cart

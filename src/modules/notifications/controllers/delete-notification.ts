@@ -1,6 +1,6 @@
 /**
  * @module
- * `DELETE /notifications/:id` controller — thin HTTP adapter over `notificationsService.notificationDelete`.
+ * `DELETE /notifications/:id` controller — thin HTTP adapter over `notificationsService.remove`.
  */
 
 import type { Request, Response } from 'express';
@@ -19,7 +19,7 @@ export const deleteNotification = (request: Request<{ id: string }>, response: R
     if (!id) return;
 
     return notificationsService
-        .notificationDelete(request.authContext!.id, id)
+        .remove(request.authContext!.id, id)
         .then((result) => {
             if (refused(response, result)) return;
 

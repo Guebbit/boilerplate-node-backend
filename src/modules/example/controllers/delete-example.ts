@@ -23,7 +23,7 @@ export const deleteExample = (request: Request<{ id: string }>, response: Respon
     if (!id) return Promise.resolve();
 
     return exampleService
-        .remove(id, callerContextOf(request))
+        .removeById(id, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             successResponse(response, undefined, 200, result.message);

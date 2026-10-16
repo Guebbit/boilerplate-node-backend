@@ -20,7 +20,7 @@ import * as analyticsPort from '@infrastructure/observability/analytics';
 import { exampleAuditActions } from '../../audit';
 import { EXAMPLE_PUBLISHED } from '../../events';
 import { exampleRepository } from '../../repository';
-import { create, getById, getPublishedById, remove, search, update } from '../../services';
+import { exampleService } from '../../services';
 import { createExample, fieldOf } from '../factories';
 
 /*
@@ -62,7 +62,9 @@ describe('create', () => {
     it('writes a trimmed draft owned by the caller, and names the owner', async () => {
         const { user, context } = await aCustomer();
 
-        const created = asSuccess(await create({ title: '  A title ', body: ' A body ' }, context));
+        const created = asSuccess(
+            await exampleService.create({ title: '  A title ', body: ' A body ' }, context)
+        );
 
         expect(created.status).toBe(201);
         expect(created.data).toMatchObject({
@@ -76,7 +78,9 @@ describe('create', () => {
     });
 
     it('answers 401 for a caller with no identity', async () => {
-        const refused = asReject(await create({ title: 'T', body: 'B' }, testCallerContext));
+        const refused = asReject(
+            await exampleService.create({ title: 'T', body: 'B' }, testCallerContext)
+        );
 
         expect(refused.status).toBe(401);
         expect(await exampleRepository.count()).toBe(0);
@@ -86,7 +90,9 @@ describe('create', () => {
         const { context } = await aCustomer();
 
         await withEnvironment('NODE_EXAMPLE_BODY_MAX_LENGTH', '5', async () => {
-            const refused = asReject(await create({ title: 'T', body: '123456' }, context));
+            const refused = asReject(
+                await exampleService.create({ title: 'T', body: '123456' }, context)
+            );
 
             expect(refused.status).toBe(422);
         });
@@ -97,7 +103,7 @@ describe('create', () => {
         const { context } = await aCustomer();
 
         await withEnvironment('NODE_EXAMPLE_BODY_MAX_LENGTH', '5', async () => {
-            asSuccess(await create({ title: 'T', body: '12345' }, context));
+            asSuccess(await exampleService.create({ title: 'T', body: '12345' }, context));
         });
     });
 
@@ -105,7 +111,7 @@ describe('create', () => {
         const { context } = await aCustomer();
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        const created = asSuccess(await create({ title: 'T', body: 'B' }, context));
+        const created = asSuccess(await exampleService.create({ title: 'T', body: 'B' }, context));
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -121,7 +127,9 @@ describe('who may read what', () => {
         const { user, context } = await aCustomer();
         const mine = await createExample({ userId: user.id });
 
-        expect(await getById(String(mine._id), context)).toMatchObject({ id: String(mine._id) });
+        expect(await exampleService.getById(String(mine._id), context)).toMatchObject({
+            id: String(mine._id)
+        });
     });
 
     it('answers null, never a refusal, for someone else’s example', async () => {
@@ -129,7 +137,7 @@ describe('who may read what', () => {
         const { context: other } = await aCustomer('grace');
         const mine = await createExample({ userId: user.id });
 
-        expect(await getById(String(mine._id), other)).toBeNull();
+        expect(await exampleService.getById(String(mine._id), other)).toBeNull();
     });
 
     it('lets a caller holding display:Example read anyone’s', async () => {
@@ -137,13 +145,15 @@ describe('who may read what', () => {
         const { context: admin } = await anAdmin();
         const theirs = await createExample({ userId: user.id });
 
-        expect(await getById(String(theirs._id), admin)).toMatchObject({ ownerName: 'ada' });
+        expect(await exampleService.getById(String(theirs._id), admin)).toMatchObject({
+            ownerName: 'ada'
+        });
     });
 
     it('answers null for an id nothing holds', async () => {
         const { context } = await aCustomer();
 
-        expect(await getById(MISSING_ID, context)).toBeNull();
+        expect(await exampleService.getById(MISSING_ID, context)).toBeNull();
     });
 });
 
@@ -152,7 +162,7 @@ describe('getPublishedById', () => {
         const { user } = await aCustomer();
         const published = await createExample({ userId: user.id, status: ExampleStatus.published });
 
-        expect(await getPublishedById(String(published._id))).toMatchObject({
+        expect(await exampleService.getPublishedById(String(published._id))).toMatchObject({
             status: ExampleStatus.published
         });
     });
@@ -163,8 +173,8 @@ describe('getPublishedById', () => {
             const { user } = await aCustomer();
             const hidden = await createExample({ userId: user.id, status });
 
-            expect(await getPublishedById(String(hidden._id))).toBeNull();
-            expect(await getPublishedById(MISSING_ID)).toBeNull();
+            expect(await exampleService.getPublishedById(String(hidden._id))).toBeNull();
+            expect(await exampleService.getPublishedById(MISSING_ID)).toBeNull();
         }
     );
 });
@@ -176,7 +186,7 @@ describe('search', () => {
         await createExample({ userId: user.id, title: 'Mine' });
         await createExample({ userId: other.id, title: 'Theirs' });
 
-        const { items, meta } = await search({}, context);
+        const { items, meta } = await exampleService.search({}, context);
 
         expect(items.map((item) => item.title)).toEqual(['Mine']);
         expect(meta.totalItems).toBe(1);
@@ -189,7 +199,7 @@ describe('search', () => {
         await createExample({ userId: user.id, title: 'One' });
         await createExample({ userId: other.id, title: 'Two' });
 
-        const { items } = await search({ sort: ['title'] }, admin);
+        const { items } = await exampleService.search({ sort: ['title'] }, admin);
 
         expect(items.map((item) => [item.title, item.ownerName])).toEqual([
             ['One', 'ada'],
@@ -202,7 +212,7 @@ describe('search', () => {
         await createExample({ userId: user.id, title: 'Draft one' });
         await createExample({ userId: user.id, title: 'Out', status: ExampleStatus.published });
 
-        const { items } = await search({ status: ExampleStatus.published }, context);
+        const { items } = await exampleService.search({ status: ExampleStatus.published }, context);
 
         expect(items.map((item) => item.title)).toEqual(['Out']);
     });
@@ -213,7 +223,10 @@ describe('search', () => {
         await createExample({ userId: user.id, title: 'Kittens', body: 'about puppies too' });
         await createExample({ userId: user.id, title: 'Birds', body: 'y' });
 
-        const { items } = await search({ text: 'puppies', sort: ['title'] }, context);
+        const { items } = await exampleService.search(
+            { text: 'puppies', sort: ['title'] },
+            context
+        );
 
         expect(items.map((item) => item.title)).toEqual(['Kittens', 'Puppies']);
     });
@@ -222,19 +235,23 @@ describe('search', () => {
         const { user } = await aCustomer();
         await createExample({ userId: user.id });
 
-        const { items } = await search({}, testCallerContext);
+        const { items } = await exampleService.search({}, testCallerContext);
 
         expect(items).toEqual([]);
     });
 });
 
-describe('update', () => {
+describe('updateById', () => {
     it('edits the caller’s own example and trims what it writes', async () => {
         const { user, context } = await aCustomer();
         const mine = await createExample({ userId: user.id });
 
         const saved = asSuccess(
-            await update(String(mine._id), { title: ' New ', body: ' Words ' }, context)
+            await exampleService.updateById(
+                String(mine._id),
+                { title: ' New ', body: ' Words ' },
+                context
+            )
         );
 
         expect(saved.data).toMatchObject({
@@ -249,7 +266,9 @@ describe('update', () => {
         const { context: other } = await aCustomer('grace');
         const theirs = await createExample({ userId: user.id, title: 'Theirs' });
 
-        const refused = asReject(await update(String(theirs._id), { title: 'Mine now' }, other));
+        const refused = asReject(
+            await exampleService.updateById(String(theirs._id), { title: 'Mine now' }, other)
+        );
 
         expect(refused.status).toBe(404);
         expect(await fieldOf(String(theirs._id), 'title')).toBe('Theirs');
@@ -260,7 +279,9 @@ describe('update', () => {
         const { context: admin } = await anAdmin();
         const theirs = await createExample({ userId: user.id });
 
-        asSuccess(await update(String(theirs._id), { title: 'Edited by staff' }, admin));
+        asSuccess(
+            await exampleService.updateById(String(theirs._id), { title: 'Edited by staff' }, admin)
+        );
     });
 
     it('lets an administrator edit a fellow administrator’s example: nothing ranks, the key is the rule', async () => {
@@ -268,7 +289,13 @@ describe('update', () => {
         const { context: admin } = await anAdmin();
         const theirs = await createExample({ userId: peer.id, title: 'Theirs' });
 
-        asSuccess(await update(String(theirs._id), { title: 'Edited by a peer' }, admin));
+        asSuccess(
+            await exampleService.updateById(
+                String(theirs._id),
+                { title: 'Edited by a peer' },
+                admin
+            )
+        );
 
         expect(await fieldOf(String(theirs._id), 'title')).toBe('Edited by a peer');
     });
@@ -276,7 +303,9 @@ describe('update', () => {
     it('answers 404 for an id nothing holds', async () => {
         const { context } = await aCustomer();
 
-        expect(asReject(await update(MISSING_ID, { title: 'x' }, context)).status).toBe(404);
+        expect(
+            asReject(await exampleService.updateById(MISSING_ID, { title: 'x' }, context)).status
+        ).toBe(404);
     });
 
     it('refuses an illegal status move with 422, and keeps the old status', async () => {
@@ -284,7 +313,11 @@ describe('update', () => {
         const archived = await createExample({ userId: user.id, status: ExampleStatus.archived });
 
         const refused = asReject(
-            await update(String(archived._id), { status: ExampleStatus.published }, context)
+            await exampleService.updateById(
+                String(archived._id),
+                { status: ExampleStatus.published },
+                context
+            )
         );
 
         expect(refused.status).toBe(422);
@@ -296,9 +329,11 @@ describe('update', () => {
         const mine = await createExample({ userId: user.id });
 
         await withEnvironment('NODE_EXAMPLE_BODY_MAX_LENGTH', '3', async () => {
-            expect(asReject(await update(String(mine._id), { body: 'abcd' }, context)).status).toBe(
-                422
-            );
+            expect(
+                asReject(
+                    await exampleService.updateById(String(mine._id), { body: 'abcd' }, context)
+                ).status
+            ).toBe(422);
         });
     });
 
@@ -306,7 +341,13 @@ describe('update', () => {
         const { user, context } = await aCustomer();
         const mine = await createExample({ userId: user.id });
 
-        asSuccess(await update(String(mine._id), { status: ExampleStatus.draft }, context));
+        asSuccess(
+            await exampleService.updateById(
+                String(mine._id),
+                { status: ExampleStatus.draft },
+                context
+            )
+        );
     });
 
     it('audits the edit with the resulting status', async () => {
@@ -314,7 +355,11 @@ describe('update', () => {
         const mine = await createExample({ userId: user.id });
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        await update(String(mine._id), { status: ExampleStatus.archived }, context);
+        await exampleService.updateById(
+            String(mine._id),
+            { status: ExampleStatus.archived },
+            context
+        );
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -343,7 +388,11 @@ describe('publishing', () => {
         const mine = await createExample({ userId: user.id, title: 'Out soon' });
 
         const saved = asSuccess(
-            await update(String(mine._id), { status: ExampleStatus.published }, context)
+            await exampleService.updateById(
+                String(mine._id),
+                { status: ExampleStatus.published },
+                context
+            )
         );
         await settleOutboxNudges();
 
@@ -355,7 +404,11 @@ describe('publishing', () => {
         const { user, context } = await aCustomer();
         const mine = await createExample({ userId: user.id });
 
-        await update(String(mine._id), { status: ExampleStatus.published }, context);
+        await exampleService.updateById(
+            String(mine._id),
+            { status: ExampleStatus.published },
+            context
+        );
         await settleOutboxNudges();
 
         const rows = await outboxEventModel.find({ name: EXAMPLE_PUBLISHED }).lean().exec();
@@ -368,7 +421,11 @@ describe('publishing', () => {
         const seen = collectPublished();
         const mine = await createExample({ userId: user.id, title: 'Race' });
         const publish = () =>
-            update(String(mine._id), { status: ExampleStatus.published }, context);
+            exampleService.updateById(
+                String(mine._id),
+                { status: ExampleStatus.published },
+                context
+            );
 
         const [first, second] = await Promise.all([publish(), publish()]);
         await settleOutboxNudges();
@@ -383,7 +440,11 @@ describe('publishing', () => {
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const mine = await createExample({ userId: user.id });
 
-        await update(String(mine._id), { status: ExampleStatus.published }, context);
+        await exampleService.updateById(
+            String(mine._id),
+            { status: ExampleStatus.published },
+            context
+        );
 
         expect(analyticsSpy).toHaveBeenCalledWith(
             expect.objectContaining({ event: 'example_published' })
@@ -399,7 +460,7 @@ describe('publishing', () => {
             publishedAt: new Date('2026-01-01T00:00:00Z')
         });
 
-        await update(String(published._id), { title: 'Reworded' }, context);
+        await exampleService.updateById(String(published._id), { title: 'Reworded' }, context);
         await settleOutboxNudges();
 
         expect(seen).toEqual([]);
@@ -411,10 +472,14 @@ describe('publishing', () => {
         const mine = await createExample({ userId: user.id });
         const id = String(mine._id);
 
-        const first = asSuccess(await update(id, { status: ExampleStatus.published }, context));
-        await update(id, { status: ExampleStatus.archived }, context);
-        await update(id, { status: ExampleStatus.draft }, context);
-        const again = asSuccess(await update(id, { status: ExampleStatus.published }, context));
+        const first = asSuccess(
+            await exampleService.updateById(id, { status: ExampleStatus.published }, context)
+        );
+        await exampleService.updateById(id, { status: ExampleStatus.archived }, context);
+        await exampleService.updateById(id, { status: ExampleStatus.draft }, context);
+        const again = asSuccess(
+            await exampleService.updateById(id, { status: ExampleStatus.published }, context)
+        );
         await settleOutboxNudges();
 
         expect(seen).toHaveLength(2);
@@ -422,12 +487,12 @@ describe('publishing', () => {
     });
 });
 
-describe('remove', () => {
+describe('removeById', () => {
     it('deletes the caller’s own example', async () => {
         const { user, context } = await aCustomer();
         const mine = await createExample({ userId: user.id });
 
-        asSuccess(await remove(String(mine._id), context));
+        asSuccess(await exampleService.removeById(String(mine._id), context));
 
         expect(await exampleRepository.findById(String(mine._id))).toBeNull();
     });
@@ -437,7 +502,9 @@ describe('remove', () => {
         const { context: other } = await aCustomer('grace');
         const theirs = await createExample({ userId: user.id });
 
-        expect(asReject(await remove(String(theirs._id), other)).status).toBe(404);
+        expect(asReject(await exampleService.removeById(String(theirs._id), other)).status).toBe(
+            404
+        );
         expect(await exampleRepository.findById(String(theirs._id))).not.toBeNull();
     });
 
@@ -446,7 +513,7 @@ describe('remove', () => {
         const { context: admin } = await anAdmin();
         const theirs = await createExample({ userId: peer.id });
 
-        asSuccess(await remove(String(theirs._id), admin));
+        asSuccess(await exampleService.removeById(String(theirs._id), admin));
 
         expect(await exampleRepository.findById(String(theirs._id))).toBeNull();
     });
@@ -457,7 +524,7 @@ describe('remove', () => {
         const theirs = await createExample({ userId: user.id });
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        asSuccess(await remove(String(theirs._id), admin));
+        asSuccess(await exampleService.removeById(String(theirs._id), admin));
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({

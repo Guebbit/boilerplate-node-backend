@@ -285,7 +285,7 @@ const applyUpdate = (
  * @returns 404 when the caller may not edit one by that id, 422 for an illegal status move or an
  *   over-long body, otherwise the saved example
  */
-export const update = (
+export const updateById = (
     id: string,
     changes: UpdateExampleRequest,
     context: CallerContext
@@ -330,7 +330,7 @@ const deleteLoaded = (
  * @param context - the caller
  * @returns 404 when the caller may not delete one by that id
  */
-export const remove = (
+export const removeById = (
     id: string,
     context: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>

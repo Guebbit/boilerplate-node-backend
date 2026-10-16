@@ -125,7 +125,7 @@ export const updateLanguage = (
  * Refuses while still active — the two-step is the whole safeguard: this destroys days of work,
  * and an accidental `DELETE` should cost a toggle first, not the work itself.
  */
-export const deleteLanguage = (
+export const removeLanguage = (
     tag: string,
     context?: CallerContext
 ): Promise<

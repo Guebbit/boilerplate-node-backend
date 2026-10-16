@@ -214,7 +214,7 @@ describe('GET /notifications/stream', () => {
             .buffer(true)
             .parse(
                 untilEvent('notifications.created', () =>
-                    notificationsService.notificationsCreate([
+                    notificationsService.create([
                         {
                             userId: user._id,
                             code: 'notifications.cart-line-removed',

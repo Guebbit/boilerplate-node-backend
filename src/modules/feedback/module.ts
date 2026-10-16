@@ -11,7 +11,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { feedbackRateLimits } from './rate-limits';
-import { findOwnTicketsForExport } from './service';
+import { feedbackRequestService } from './service';
 import { feedbackConfig } from './config';
 
 /** This module's manifest entry: public contact form, keyed triage (`feedback.*`). */
@@ -32,7 +32,7 @@ export default {
             // in the contract precisely because most exports carry none.
             collect: (subject) =>
                 feedbackConfig().NODE_EXPORT_INCLUDE_FEEDBACK && subject.emailVerified
-                    ? findOwnTicketsForExport(subject.email)
+                    ? feedbackRequestService.findOwnTicketsForExport(subject.email)
                     : Promise.resolve(undefined)
         }
     ],

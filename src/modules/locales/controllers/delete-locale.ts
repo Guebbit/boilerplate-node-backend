@@ -1,6 +1,6 @@
 /**
  * @module
- * `DELETE /locales/:locale` controller — thin HTTP adapter over `localeService.deleteLanguage`.
+ * `DELETE /locales/:locale` controller — thin HTTP adapter over `localeService.removeLanguage`.
  */
 
 import type { Request, Response } from 'express';
@@ -18,7 +18,7 @@ import { catchAs, refused } from '@infrastructure/http/controller';
  */
 export const deleteLocale = (request: Request<{ locale: string }>, response: Response) =>
     localeService
-        .deleteLanguage(request.params.locale, callerContextOf(request))
+        .removeLanguage(request.params.locale, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 

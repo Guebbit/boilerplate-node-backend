@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /notifications/read-all` controller — thin HTTP adapter over `notificationsService.notificationsReadAll`.
+ * `POST /notifications/read-all` controller — thin HTTP adapter over `notificationsService.readAll`.
  */
 
 import type { Request, Response } from 'express';
@@ -14,7 +14,7 @@ import { notificationsService } from '../services';
  */
 export const postReadAll = (request: Request, response: Response) => {
     return notificationsService
-        .notificationsReadAll(request.authContext!.id)
+        .readAll(request.authContext!.id)
         .then((result) => {
             successResponse(response, result.data, 200, result.message);
         })

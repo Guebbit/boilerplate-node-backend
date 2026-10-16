@@ -23,7 +23,7 @@ import { EXAMPLE_PUBLISHED } from '../../events';
 import exampleModule from '../../module';
 import { exampleRepository } from '../../repository';
 import { collectPersonalData, eraseForUser } from '../../services/personal-data';
-import { setCover } from '../../services';
+import { exampleService } from '../../services';
 import { createExample, fieldOf } from '../factories';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -101,7 +101,7 @@ describe('setCover', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
         const saved = asSuccess(
-            await setCover(
+            await exampleService.setCover(
                 String(mine._id),
                 {
                     imageUrl: '/images/a.jpg',
@@ -125,8 +125,8 @@ describe('setCover', () => {
         const owner = await createUser();
         const mine = await createExample({ userId: owner.id });
         const context = callerContextAs('editor', owner.id);
-        await setCover(String(mine._id), image('old'), context);
-        await setCover(String(mine._id), image('new'), context);
+        await exampleService.setCover(String(mine._id), image('old'), context);
+        await exampleService.setCover(String(mine._id), image('new'), context);
 
         expect(imageStore.remove).toHaveBeenCalledWith('/images/old.jpg');
         expect(imageStore.remove).not.toHaveBeenCalledWith('/images/new.jpg');
@@ -139,7 +139,7 @@ describe('setCover', () => {
 
         // A pending key with nothing quarantined under it: the hand-off cannot read the upload.
         const saved = asSuccess(
-            await setCover(
+            await exampleService.setCover(
                 String(mine._id),
                 { ...image('slow'), pendingImageKey: 'missing' },
                 callerContextAs('editor', owner.id)
@@ -159,7 +159,7 @@ describe('setCover', () => {
         const theirs = await createExample({ userId: owner.id });
 
         const refused = asReject(
-            await setCover(
+            await exampleService.setCover(
                 String(theirs._id),
                 { imageUrl: '/images/x.jpg', thumbnailUrl: undefined, pendingImageKey: undefined },
                 callerContextAs('editor', stranger.id)

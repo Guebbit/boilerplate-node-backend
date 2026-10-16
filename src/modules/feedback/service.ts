@@ -70,7 +70,7 @@ const notifyMailbox = (): string =>
  *             way — filed as `spam`, notification skipped, still a `201`. A visible refusal would
  *             tell a spam script exactly which signal caught it.
  */
-export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestDocument> => {
+const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestDocument> => {
     const email = normalizeEmail(payload.email);
     const honeypotFilled = Boolean(payload.website?.trim());
 
@@ -135,7 +135,7 @@ export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestD
  * context means "not an HTTP request" (a test, or future internal reuse as a plain query helper),
  * so no event is emitted for those.
  */
-export const search = (
+const search = (
     // `page`/`pageSize` are widened to accept strings: they arrive from a query string, and
     // `normalizePagination` is what coerces and bounds them. `status` is already the closed enum
     // by the time it reaches here — the generated Zod schema validates it at the controller.
@@ -172,7 +172,7 @@ export const search = (
  * `save` rejects the promise rather than resolving a `ResponseReject`, which is why the return
  * type carries no reject case; `updateStatusById` is what can still answer 404, before this runs.
  */
-export const updateStatus = (
+const updateStatus = (
     feedback: FeedbackRequestDocument,
     payload: UpdateFeedbackRequestStatusRequest
 ): Promise<ResponseSuccess<FeedbackRequestDocument>> => {
@@ -191,7 +191,7 @@ export const updateStatus = (
  *
  * @returns A 404 `ResponseReject` when the id names no ticket, otherwise the save result.
  */
-export const updateStatusById = (
+const updateStatusById = (
     id: string,
     payload: UpdateFeedbackRequestStatusRequest,
     context?: CallerContext
@@ -219,7 +219,7 @@ export const updateStatusById = (
  *
  * @returns A 404 `ResponseReject` when the id names no ticket, otherwise the removal result.
  */
-export const remove = (
+const removeById = (
     id: string,
     context?: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
@@ -245,7 +245,7 @@ export const remove = (
  * substring. An account and a ticket sharing an address are still only a guess at being the same
  * person — the caller of this function is what decides whether that guess is worth taking.
  */
-export const findOwnTickets = (email: string): Promise<Lean<FeedbackRequestDocument>[]> =>
+const findOwnTickets = (email: string): Promise<Lean<FeedbackRequestDocument>[]> =>
     readAll(
         (page) =>
             feedbackRequestRepository.findAll(
@@ -280,16 +280,15 @@ const toExportFeedback = (ticket: Lean<FeedbackRequestDocument>): ExportFeedback
  *
  * @param email - the caller's own email, matched exactly
  */
-export const findOwnTicketsForExport = (email: string): Promise<ExportFeedbackTicket[]> =>
+const findOwnTicketsForExport = (email: string): Promise<ExportFeedbackTicket[]> =>
     findOwnTickets(email).then((tickets) => tickets.map((ticket) => toExportFeedback(ticket)));
 
 /** The module's barrel export — used by the controllers in `./controllers`. */
 export const feedbackRequestService = {
     create,
     search,
-    updateStatus,
     updateStatusById,
-    remove,
+    removeById,
     findOwnTickets,
     findOwnTicketsForExport
 };
