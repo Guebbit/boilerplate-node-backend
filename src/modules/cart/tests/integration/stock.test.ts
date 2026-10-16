@@ -201,7 +201,7 @@ describe('checkout holds units without selling them', () => {
 
         const outcomes = [first.success, second.success].toSorted();
         expect(outcomes).toEqual([false, true]);
-        // Exactly one hold, and the unit is still physically there — it leaves on payment.
+        // Exactly one hold, and the unit is still physically there — it leaves at dispatch.
         expect(await countersOf(lastOne._id)).toEqual({
             onHand: 1,
             reserved: 1,

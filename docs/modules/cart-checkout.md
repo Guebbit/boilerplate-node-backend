@@ -114,14 +114,14 @@ word each case differently:
 
 | `availability`       | Error code                 | Status | `details.lines[]` carries                                |
 | -------------------- | -------------------------- | ------ | -------------------------------------------------------- |
-| `removed`            | `CART_PRODUCT_UNAVAILABLE` | 404    | `productId`, `title` (absent for a hard-deleted product) |
+| `removed`            | `CART_PRODUCT_UNAVAILABLE` | 409    | `productId`, `title` (absent for a hard-deleted product) |
 | `unavailable`        | `CART_INSUFFICIENT_STOCK`  | 409    | `productId`, `title`, `requested`, `availability`        |
 | `out_of_stock`       | `CART_INSUFFICIENT_STOCK`  | 409    | `productId`, `title`, `requested`, `availability`        |
 | `insufficient_stock` | `CART_INSUFFICIENT_STOCK`  | 409    | `productId`, `title`, `requested`, `availability`        |
 
 A `preorder` line passes: it claims the product's allowance when the order is placed, not a shelf
 unit, and the order freezes `preorder` and the promised `releaseDate` onto the line. An off-sale product is "stock 0" with its own message, so it joins the stock refusal. A removed
-line outranks the rest: one hidden line answers the 404 even when another line is also short.
+line outranks the rest: one hidden line answers `CART_PRODUCT_UNAVAILABLE` even when another line is also short. Every refusal is a 409: the request conflicts with the product's current state, whether it is gone or only short.
 `CART_INSUFFICIENT_STOCK` lists every refused line at once, never the number left. The same
 refusal comes back from the reserve when a race takes the last unit between the pre-flight and the
 hold, so a sold-out line then reads `out_of_stock` and a short one `insufficient_stock`.

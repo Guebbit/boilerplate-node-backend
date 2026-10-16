@@ -78,6 +78,8 @@ describe('a hidden product (active: false)', () => {
         expect(!result.success && result.errors[0]).toMatchObject({
             code: 'CART_PRODUCT_UNAVAILABLE'
         });
+        // A 409 on every path: the pre-flight and the write-side refusal say the same thing.
+        expect(!result.success && result.status).toBe(409);
     });
 });
 

@@ -278,13 +278,13 @@ const resolveBilling = async (
  * `evaluateCheckout`'s pre-flight verdict caught it or `placeOrder`'s write did, so a customer
  * sees identical wording regardless of which check refused.
  *
- * `unavailable`'s status differs by caller: 404 pre-flight, since nothing has been written yet
- * and `lines` names every offending line; 409 once `placeOrder` has already run and refused for a
- * reason other than stock, with no lines to name — both existing behaviours, preserved as-is.
+ * `unavailable` is always a 409 (RFC 9110 §15.5.10: the request conflicts with the product's
+ * current state): the pre-flight names every offending line in `lines`, the refusal from
+ * `placeOrder` itself has none to name.
  */
 type StockRefusal =
     | { type: 'insufficient-stock'; shortfalls: readonly CheckoutShortfall[] }
-    | { type: 'unavailable'; status: 404 | 409; lines?: readonly UnavailableCartLine[] };
+    | { type: 'unavailable'; lines?: readonly UnavailableCartLine[] };
 
 /** Builds the wire-level reject for a {@link StockRefusal}. */
 const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
@@ -309,7 +309,7 @@ const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
                 }
             }
         ]);
-    return generateReject(refusal.status, [
+    return generateReject(409, [
         {
             code: ERROR_CODES.CART_PRODUCT_UNAVAILABLE,
             message: t('cart.product-unavailable'),
@@ -379,7 +379,7 @@ const refuseVerdict = (verdict: CheckoutVerdict): ResponseReject | undefined => 
         return generateReject(409, [{ code: ERROR_CODES.CART_EMPTY, message: t('cart.empty') }]);
     if (verdict.reason === 'insufficient-stock')
         return buildStockRefusal({ type: 'insufficient-stock', shortfalls: verdict.shortfalls });
-    return buildStockRefusal({ type: 'unavailable', status: 404, lines: verdict.lines });
+    return buildStockRefusal({ type: 'unavailable', lines: verdict.lines });
 };
 
 /**
@@ -515,8 +515,7 @@ const refusalForPlaceOrder = (
         ]);
     // `no-lines`/`product-missing` should not occur here — `evaluateCheckout` already proved the
     // basket good — but map them defensively rather than assume the invariant.
-    if (outcome.reason !== 'insufficient-stock')
-        return buildStockRefusal({ type: 'unavailable', status: 409 });
+    if (outcome.reason !== 'insufficient-stock') return buildStockRefusal({ type: 'unavailable' });
     // The reserve lost a race, so only stock can be the reason: sold out, or fewer left.
     return buildStockRefusal({
         type: 'insufficient-stock',

@@ -868,7 +868,7 @@ describe('orderConfirm', () => {
         expect(asReject(result).status).toBe(404);
     });
 
-    it('rejects with 404 when a line points at a deleted product', async () => {
+    it('rejects with 409 when a line points at a deleted product', async () => {
         // An order embeds a snapshot, and there is nothing to snapshot.
         const user = await createUser();
         await giveUserAnAddress(user.id);
@@ -878,7 +878,7 @@ describe('orderConfirm', () => {
 
         const result = await orderConfirm(user.id, testCallerContext);
 
-        expect(asReject(result).status).toBe(404);
+        expect(asReject(result).status).toBe(409);
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
     });
 
