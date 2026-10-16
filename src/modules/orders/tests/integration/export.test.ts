@@ -23,24 +23,9 @@ import { orderService } from '../../services';
  * The audit port is REPLACED, not spied on — see `cancel.test.ts` for the full reasoning
  * (`jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes).
  */
-jest.mock('@infrastructure/observability/audit', () => {
-    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
-        '@infrastructure/observability/audit'
-    );
-    const emitAuditEvent = jest.fn();
-    return {
-        __esModule: true,
-        ...actual,
-        emitAuditEvent,
-        recordAudit: (
-            context: Parameters<typeof actual.recordAudit>[0],
-            fields: Parameters<typeof actual.recordAudit>[1]
-        ) => {
-            if (!context) return;
-            emitAuditEvent(actual.buildAuditEvent(context, fields));
-        }
-    };
-});
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
 
 setupTestDb();
 

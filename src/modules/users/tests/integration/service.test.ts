@@ -30,27 +30,9 @@ import { logger } from '@infrastructure/adapters/logger';
 
 // See `tests/support/ports.ts`: the namespace import above must resolve a plain `jest.fn()`,
 // not the real (non-configurable) export, for `observePort` to be able to clear and hand it out.
-jest.mock('@infrastructure/observability/audit', () => {
-    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
-        '@infrastructure/observability/audit'
-    );
-    const emitAuditEvent = jest.fn();
-    return {
-        __esModule: true,
-        ...actual,
-        emitAuditEvent,
-        // `recordAudit` closes over its own module's real `emitAuditEvent`, immune to the
-        // override above — reroute it through the replacement so a spy on `emitAuditEvent` still
-        // sees every `recordAudit` call, exactly as it saw every direct one before.
-        recordAudit: (
-            context: Parameters<typeof actual.recordAudit>[0],
-            fields: Parameters<typeof actual.recordAudit>[1]
-        ) => {
-            if (!context) return;
-            emitAuditEvent(actual.buildAuditEvent(context, fields));
-        }
-    };
-});
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
 
 /**
  * Mock the image store, not the filesystem underneath it — same reasoning as

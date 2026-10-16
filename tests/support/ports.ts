@@ -47,3 +47,39 @@ export const observePort = <T extends (...args: never[]) => unknown>(
     mocked.mockClear();
     return mocked;
 };
+
+/**
+ * The module replacement for `@infrastructure/observability/audit`: every real export, with
+ * `emitAuditEvent` a plain `jest.fn()` and `recordAudit` routed through it.
+ *
+ * `recordAudit` closes over its own module's real `emitAuditEvent`, immune to the override, so it
+ * is rebuilt here to reach the replacement — a spy on `emitAuditEvent` then sees every
+ * `recordAudit` call, as it saw every direct one. A `recordAudit` with no context records nothing,
+ * like the real one.
+ *
+ * Declared per test file, because `jest.mock` is hoisted per module registry:
+ *
+ *     jest.mock('@infrastructure/observability/audit', () =>
+ *         jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+ *     );
+ *
+ * @returns the replacement module
+ */
+export const auditPortMock = () => {
+    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
+        '@infrastructure/observability/audit'
+    );
+    const emitAuditEvent = jest.fn();
+    return {
+        __esModule: true,
+        ...actual,
+        emitAuditEvent,
+        recordAudit: (
+            context: Parameters<typeof actual.recordAudit>[0],
+            fields: Parameters<typeof actual.recordAudit>[1]
+        ) => {
+            if (!context) return;
+            emitAuditEvent(actual.buildAuditEvent(context, fields));
+        }
+    };
+};

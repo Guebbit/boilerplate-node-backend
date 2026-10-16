@@ -31,26 +31,9 @@ import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 
 /* Replaced, not spied on — see `tests/support/ports.ts` for why. */
-jest.mock('@infrastructure/observability/audit', () => {
-    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
-        '@infrastructure/observability/audit'
-    );
-    const emitAuditEvent = jest.fn();
-    return {
-        __esModule: true,
-        ...actual,
-        emitAuditEvent,
-        // `recordAudit` closes over its own module's real `emitAuditEvent`; reroute it through the
-        // replacement so a spy on `emitAuditEvent` still sees every `recordAudit` call.
-        recordAudit: (
-            context: Parameters<typeof actual.recordAudit>[0],
-            fields: Parameters<typeof actual.recordAudit>[1]
-        ) => {
-            if (!context) return;
-            emitAuditEvent(actual.buildAuditEvent(context, fields));
-        }
-    };
-});
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
 jest.mock('@infrastructure/observability/analytics', () => ({
     __esModule: true,
     ...jest.requireActual('@infrastructure/observability/analytics'),

@@ -41,24 +41,9 @@ const { imageStore } = jest.requireMock<{ imageStore: { remove: jest.Mock } }>(
     '@infrastructure/adapters/image-store'
 );
 
-jest.mock('@infrastructure/observability/audit', () => {
-    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
-        '@infrastructure/observability/audit'
-    );
-    const emitAuditEvent = jest.fn();
-    return {
-        __esModule: true,
-        ...actual,
-        emitAuditEvent,
-        recordAudit: (
-            context: Parameters<typeof actual.recordAudit>[0],
-            fields: Parameters<typeof actual.recordAudit>[1]
-        ) => {
-            if (!context) return;
-            emitAuditEvent(actual.buildAuditEvent(context, fields));
-        }
-    };
-});
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
 
 setupTestDb();
 

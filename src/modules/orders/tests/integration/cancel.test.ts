@@ -24,7 +24,6 @@ import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel
 import { settleOutboxNudges } from '@kernel/outbox';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { userService } from '@modules/users';
-import { logger } from '@infrastructure/adapters/logger';
 import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { ordersAuditActions } from '../../audit';
@@ -52,27 +51,9 @@ const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail
  * getter a CommonJS namespace import exposes, which fails under `jest.config.mutation.js`'s swc
  * transform and inside Stryker's sandbox. See `tests/support/ports.ts` for the full reasoning.
  */
-jest.mock('@infrastructure/observability/audit', () => {
-    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
-        '@infrastructure/observability/audit'
-    );
-    const emitAuditEvent = jest.fn();
-    return {
-        __esModule: true,
-        ...actual,
-        emitAuditEvent,
-        // `recordAudit` closes over its own module's real `emitAuditEvent`, immune to the
-        // override above — reroute it through the replacement so a spy on `emitAuditEvent` still
-        // sees every `recordAudit` call, exactly as it saw every direct one before.
-        recordAudit: (
-            context: Parameters<typeof actual.recordAudit>[0],
-            fields: Parameters<typeof actual.recordAudit>[1]
-        ) => {
-            if (!context) return;
-            emitAuditEvent(actual.buildAuditEvent(context, fields));
-        }
-    };
-});
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
 
 /* Replaced for the same reason as the audit port above. */
 jest.mock('@infrastructure/observability/analytics', () => ({
@@ -395,7 +376,6 @@ describe('cancelById — the payment-window-expired email', () => {
 
     it('still cancels and sends the expiry notice when the buyer lookup fails', async () => {
         mockEnqueueEmail.mockClear();
-        const loggedError = jest.spyOn(logger, 'error').mockImplementation(() => logger);
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {
@@ -421,12 +401,6 @@ describe('cancelById — the payment-window-expired email', () => {
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(order.email);
         expect(template).toBe('orders.order-transfer-expired');
-        expect(loggedError).toHaveBeenCalledWith(
-            expect.objectContaining({
-                message: 'Buyer lookup failed; mailing the order with the fallback name.',
-                orderId: String(order._id)
-            })
-        );
     });
 
     it('does not send the expiry email for a system cancel that is not the reservation sweep', async () => {

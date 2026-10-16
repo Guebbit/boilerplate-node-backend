@@ -22,6 +22,8 @@ import {
 } from '@modules/payments/services';
 import { PAYMENT_REFUNDED } from '@modules/payments/events';
 import { paymentRepository } from '@modules/payments/repository';
+import { paymentModel } from '@modules/payments/model';
+import { paymentsAuditActions } from '@modules/payments/audit';
 import { presentPayment } from '@modules/payments/presenter';
 import { PaymentProviderError } from '@modules/payments/providers';
 import { withEnvironment } from '@tests/environment';
@@ -29,7 +31,14 @@ import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asReject } from '@tests/response';
+import { observePort } from '@tests/ports';
+import * as auditPort from '@infrastructure/observability/audit';
 import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/callers';
+
+/* Replaced, not spied on — see `tests/support/ports.ts` for why. */
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
 
 setupTestDb();
 
@@ -468,5 +477,23 @@ describe('the order payment status', () => {
         expect(payment.status).toBe('succeeded');
         expect(payment.refunds[0].status).not.toBe('succeeded');
         expect(await outboxEventModel.countDocuments({ name: PAYMENT_REFUNDED })).toBe(0);
+    });
+});
+
+describe('a succeeded payment with no providerRef', () => {
+    it('audits a failure, not a success, for money that never actually moved', async () => {
+        // Nothing succeeds before the provider is asked for an intent: this row is corrupted.
+        const { orderId } = await paidOrder();
+        await paymentModel.updateOne({ orderId }, { $unset: { providerRef: 1 } });
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        const result = await refund(orderId);
+
+        expect(result.success).toBe(true);
+        const refunds = auditSpy.mock.calls.filter(
+            ([event]) => event.action === paymentsAuditActions.ADMIN_PAYMENT_REFUNDED
+        );
+        expect(refunds).toHaveLength(1);
+        expect(refunds[0][0]).toMatchObject({ outcome: 'failure' });
     });
 });
