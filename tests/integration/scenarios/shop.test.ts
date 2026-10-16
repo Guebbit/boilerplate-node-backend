@@ -242,6 +242,13 @@ describe('each subject names a row that really has the property', () => {
         }
     });
 
+    it('the customer persona has recorded an analytics consent the gate will honour', async () => {
+        const user = await userModel.findById(SEED_USER_ID);
+
+        expect(user?.analyticsConsent).toBe(true);
+        expect(user?.analyticsConsentAt).toBeInstanceOf(Date);
+    });
+
     it('the two-factor persona has email 2FA armed and backup codes that verify', async () => {
         const user = await userModel
             .findOne({ email: seedCredentials.twoFactor.email })

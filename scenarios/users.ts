@@ -188,8 +188,10 @@ const namedUsers = [
         verifiedAt: new Date(),
         // `<paired-frontend>/src/modules/cart/tests/e2e/analytics.cy.ts` logs in as this account
         // and asserts the backend fires `cart_item_added` — `emitAnalyticsEvent`'s consent gate
-        // is opt-in, so this is the account that has opted in.
+        // is opt-in, so this is the account that has opted in. The answer needs its date: with no
+        // `analyticsConsentAt` the account counts as never asked, and the gate reads the header.
         analyticsConsent: true,
+        analyticsConsentAt: new Date(),
         ...userImages.customer
     }),
     makeUser({
@@ -260,6 +262,7 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
         // Alternating: a real customer base is a mix of opted-in and not, and `root`/`customer`
         // alone left the "granted" path exercised by exactly one account.
         analyticsConsent: index % 2 === 0,
+        analyticsConsentAt: new Date(),
         ...(index % 2 === 0 ? userImages.root : userImages.customer)
     })
 );

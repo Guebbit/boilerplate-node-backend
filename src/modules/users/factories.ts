@@ -32,7 +32,10 @@ export const PLAIN_PASSWORD = 'Fx7$qLwZ9m!';
  * never reaches a response, which is why `applyUserTransform` omits it too. `role` is omitted: see
  * the module docblock.
  */
-export type UserOverrides = Omit<OverridesFor<User>, 'verifiedAt' | 'role'> & {
+export type UserOverrides = Omit<
+    OverridesFor<User>,
+    'verifiedAt' | 'analyticsConsentAt' | 'role'
+> & {
     /** Plaintext. Hashed by the model's pre-save hook, never by a fixture. */
     password?: string;
     /** Enrolled second factors — the contract exposes only `twoFactorEnabledAt`. */
@@ -43,6 +46,8 @@ export type UserOverrides = Omit<OverridesFor<User>, 'verifiedAt' | 'role'> & {
     twoFactorBackupCodeSalt?: string;
     /** Same `Date`-or-string widening `OverridesFor` gives `deletedAt` — commonly pinned inline. */
     verifiedAt?: Date | string;
+    /** When the analytics consent was answered — the gate treats an answer with no date as never given. */
+    analyticsConsentAt?: Date | string;
 };
 
 /** A user ready for `userRepository.create`. */
