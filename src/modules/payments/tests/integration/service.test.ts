@@ -395,7 +395,7 @@ describe('a refund on one’s own order', () => {
 });
 
 /*
- * The refund rides the ORDER_REFUND_OWED event, and the subscription only exists once the
+ * The refund rides the `order.cancelled` event, and the subscription only exists once the
  * registry has run — a test that skipped `registerCheckoutModules` would assert the refund never
  * happens and pass for the wrong reason (same shape as the cart's erasure suite).
  */
@@ -416,10 +416,33 @@ describe('refund on cancel', () => {
         await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
 
         const cancelled = await orderService.cancelById(String(order._id), auth(user));
+        await settleOutboxNudges();
 
         expect(cancelled.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
+        expect(payment!.refunds).toHaveLength(1);
+        expect(payment!.refunds[0]).toMatchObject({ amount: 50, status: 'succeeded' });
+        expect(payment!.amountRefunded).toBe(50);
+    });
+
+    it('an operator cancelling without a refund opens no refund record', async () => {
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+        const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
+        await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+
+        const cancelled = await orderService.cancelById(
+            String(order._id),
+            asAdmin(),
+            { refund: false },
+            testCallerContext
+        );
+        await settleOutboxNudges();
+
+        expect(cancelled.success).toBe(true);
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.refunds).toHaveLength(0);
     });
 
     it('cancelling a never-paid order refunds nothing', async () => {
@@ -453,12 +476,12 @@ describe('refund on cancel', () => {
     });
 
     /*
-     * The provider is asked FIRST, before the status moves: a rejection leaves the payment
-     * `succeeded`, the one state the retry sweep can still act on, instead of a refund recorded
-     * as done with the money never actually returned.
+     * The record is opened BEFORE the provider is asked, so a refusal leaves it open: the cancel's
+     * event is delivered (nothing is retried through it), and the refund sweep finishes the same
+     * record with the same idempotency key. The payment stays `succeeded` throughout.
      */
-    it('keeps a failed refund retryable instead of recording it as done', () =>
-        withEnvironment('NODE_ORDER_EFFECT_RETRY_MINUTES', '0', async () => {
+    it('keeps a failed refund open for the sweep instead of recording it as done', () =>
+        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
             const { user, order } = await orderFor();
             await createIntent(String(order._id), auth(user));
             const paymentId = String(
@@ -471,16 +494,20 @@ describe('refund on cancel', () => {
                 .mockRejectedValueOnce(new Error('payment provider unreachable'));
 
             await orderService.cancelById(String(order._id), auth(user));
+            await settleOutboxNudges();
 
-            expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
-                'succeeded'
-            );
+            const stuck = await paymentRepository.findByOrderId(String(order._id));
+            expect(stuck!.status).toBe('succeeded');
+            expect(stuck!.refunds).toHaveLength(1);
+            expect(stuck!.refunds[0]).toMatchObject({ amount: 50, status: 'failed' });
+            // The event was answered, not left failing for the relay to deliver again.
+            expect(await outboxEventModel.countDocuments({ status: { $ne: 'published' } })).toBe(0);
 
-            expect(await orderService.retryPendingEffects()).toBe(1);
+            expect(await retryOpenRefunds()).toBe(1);
             expect(refundSpy).toHaveBeenCalledTimes(2);
-            expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
-                'succeeded'
-            );
+            const finished = await paymentRepository.findByOrderId(String(order._id));
+            expect(finished!.refunds).toHaveLength(1);
+            expect(finished!.refunds[0].status).toBe('succeeded');
             refundSpy.mockRestore();
         }));
 
@@ -539,7 +566,7 @@ describe('refund on cancel', () => {
      */
     it('refuses to refund through a provider this payment was never made with', () => {
         const retiredProvider = 'retired-psp';
-        return withEnvironment('NODE_ORDER_EFFECT_RETRY_MINUTES', '0', async () => {
+        return withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
             const { user, order } = await orderFor();
             await createIntent(String(order._id), auth(user));
             const paymentId = String(
@@ -558,6 +585,7 @@ describe('refund on cancel', () => {
 
             const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
             await orderService.cancelById(String(order._id), auth(user));
+            await settleOutboxNudges();
 
             expect(refundSpy).not.toHaveBeenCalled();
             expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(

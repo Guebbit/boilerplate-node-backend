@@ -11,7 +11,6 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
-import { orderService } from '@modules/orders';
 import { PaymentDisplayStatus, type PaymentAttentionItem } from '@types';
 import type { PaymentDocument } from '@modules/payments/model';
 import { paymentModel } from '@modules/payments/model';
@@ -21,13 +20,14 @@ import {
     listPayments,
     listRefunds,
     methodMix,
+    refundByOrder,
+    refundForOrder,
     retryOpenRefunds
 } from '@modules/payments/services';
 import { withEnvironment } from '@tests/environment';
-import { freezeDate } from '@tests/clock';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { asAdmin, asCustomer } from '@tests/callers';
+import { asAdmin, asCustomer, callerContextAs } from '@tests/callers';
 import { asSuccess } from '@tests/response';
 
 setupTestDb();
@@ -350,21 +350,29 @@ describe('listAttention', () => {
         ]);
     });
 
-    it('shows an order whose refund is owed, and drops it once the refund has landed', async () => {
-        const { order } = await seedPayment();
-        // The marker's own `updatedAt` is what ages it, so write it three hours ago.
-        freezeDate(Date.now() - 3 * 3_600_000);
-        try {
-            await orderService.markRefundOwed(String(order._id));
-        } finally {
-            jest.useRealTimers();
-        }
+    it('shows a cancelled hand-paid order as owed by hand, once, until an operator confirms it', async () => {
+        const { order } = await seedPayment({
+            provider: 'manual',
+            providerRef: undefined,
+            method: 'cash'
+        });
+        const orderId = String(order._id);
+
+        // The cancel's own refund listener: nobody can say the cash went back, so it only
+        // opens the record. A redelivery of the same event writes nothing more.
+        await refundForOrder(orderId);
+        await refundForOrder(orderId);
 
         expect(await attentionRows()).toEqual([
-            expect.objectContaining({ kind: 'order_refund_owed', orderId: String(order._id) })
+            expect.objectContaining({
+                kind: 'manual_refund_owed',
+                orderId,
+                amount: 50,
+                currency: 'EUR'
+            })
         ]);
 
-        await orderService.clearRefundOwed(String(order._id));
+        await refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
         expect(await attentionRows()).toEqual([]);
     });
 });

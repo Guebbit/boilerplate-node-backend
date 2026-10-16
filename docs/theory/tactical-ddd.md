@@ -165,7 +165,7 @@ flowchart TD
     A["a status written by assignment<br/>delivered → pending"] --> B["order is back in the<br/>customer's cancellable set"]
     B --> C["customer clicks cancel"]
     C --> D["afterCancel runs"]
-    D --> E2["ORDER_REFUND_OWED emitted"]
+    D --> E2["order.cancelled<br/>{ refund: true } delivered"]
     E2 --> E["payments refunds a<br/>succeeded payment"]
     D --> F["inventory release<br/>claims 'held' — no match"]
     E --> G["💸 real money returned on<br/>goods already delivered"]
@@ -203,8 +203,8 @@ window between an email save and a status move to guard against — impossible b
 rather than guarded.
 
 `POST /orders/{id}/cancel` is the one path that runs a cancellation, for a customer and an operator
-alike: the hold is released, `ORDER_CANCELLED` is announced for the fact, and — separately —
-`ORDER_REFUND_OWED` is announced when one is due, so `payments` refunds. A plain field write could
+alike: the hold is released and `ORDER_CANCELLED` is announced, in the cancel's own transaction,
+carrying `refund` — and when one is due `payments` opens the refund from that same event. A plain field write could
 never do that — a paid order set to `cancelled` by assignment would end with the customer's money
 kept and the stock held until the sweep.
 
@@ -246,11 +246,14 @@ is assigned, so a refused request is never a partial write.
 A cancellation has consequences — the stock comes back, and usually the money does too. Who decides
 which, and where that decision lives, is a separate question from which moves are legal.
 
-`order.cancelled` carries a `refund` flag rather than the listener inferring one — but the flag is
-for the record (and the customer-facing webhook), not for driving the refund itself. That is a
-second, separate event, `order.refund_owed`, emitted only when one is due: re-announcing
-`order.cancelled` to retry a stuck refund would re-deliver that webhook to every subscriber each
-time the sweep ran.
+`order.cancelled` carries a `refund` flag rather than the listener inferring one, and that flag is
+the whole promise: it is written to the outbox in the cancel's own transaction, `payments` opens a
+refund record from it, and the relay delivers the event again until that has happened. Once the
+record exists it is the durable intent (the refund sweep finishes it, forever, with the same
+idempotency key), so a provider refusal after that point is logged and the event is answered. A
+second event for the refund was tried and dropped: it needed its own marker on the order and its
+own sweep, a second mechanism for what the outbox already does. A redelivery cannot duplicate
+anything: the refund finds nothing left to return, and `webhooks` dedupes on the event id.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 25, 'rankSpacing': 40}}}%%
@@ -263,8 +266,7 @@ flowchart TD
     W --> R["inventory release<br/><i>always</i>"]
     R --> E["emit order.cancelled<br/>{ orderId, refund }<br/><i>the fact, once</i>"]
     E --> P{"refund?"}
-    P -->|true| M2["emit order.refund_owed<br/>{ orderId }"]
-    M2 --> M["payments refunds"]
+    P -->|true| M["payments opens the refund<br/>record and asks the provider"]
     P -->|false| N["money left alone"]
 
     classDef forced fill:#dcfce7,stroke:#16a34a,color:#111827;
@@ -276,9 +278,7 @@ cancellable precisely on the promise that the money comes back — the flag is o
 trusted. An operator can cancel without refunding, which is the replacement-going-out case. And
 `order.cancelled` fires either way, so the record of what happened does not depend on what was
 compensated; suppressing it for the no-refund case would make `order.cancelled` mean "cancelled and
-refunded", which is not what it says. `order.refund_owed`, by contrast, fires only when there is
-something to retry — its very existence IS the fact, so a stuck refund can be retried by
-re-announcing it alone, without touching anyone else who heard about the cancellation.
+refunded", which is not what it says.
 
 Returning money on its own is a separate route, `POST /payments/order/{orderId}/refund`, because it
 is a separate act: a goodwill refund leaves the order where it is. It lives in `payments` rather

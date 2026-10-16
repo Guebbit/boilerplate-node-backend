@@ -87,54 +87,32 @@ const receiptMismatch = (payment: PaymentDocument, state: ProviderPaymentState):
 };
 
 /**
- * Put the money of a payment that landed on an order nobody can still be paid back.
- *
- * Marker:   written BEFORE the attempt. Unlike a cancel, nothing retries this call itself, so a
- *           throw with no durable note first would lose the refund.
- * Refund:   `performRefund`, not a bare `provider.refund` — the payment ends up reading
- *           `refunded`, through the same at-most-once guard every other refund goes through.
- * Failure:  logged, never rethrown — the caller must still answer its own caller, and `orders`'
- *           own `ORDER_REFUND_OWED` sweep is what finishes it if this attempt didn't.
- *
- * @param orderId - the order whose payment is being returned
- * @returns the payment as the refund left it, or `null` when the refund did not land
- */
-const refundLostPayment = async (orderId: string): Promise<PaymentDocument | null> => {
-    await orderService.markRefundOwed(orderId);
-    const refunded = await performRefund(orderId)
-        .then((result) => orderService.clearRefundOwed(orderId).then(() => result))
-        .catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Payments: could not refund order ${orderId} after its payment landed on an order no longer payable — left for the retry sweep`,
-                error
-            });
-            // Stryker restore all
-            return null;
-        });
-    return refunded;
-};
-
-/**
- * Cancel the order of a payment whose amount, currency or payment id did not match. The cancel's
- * own refund announcement returns the money (`performRefund` needs only a `succeeded` payment).
- * When the cancel is refused — the order moved on its own meanwhile — the money is put back
- * directly instead. A cancel that throws is logged and left to the reservation expiry, which
- * cancels the still-pending order and refunds the same way.
+ * Cancel the order of a payment whose amount, currency or payment id did not match, then put the
+ * money back. The refund record is already open (`settleMismatch` wrote it with the `succeeded`
+ * mark), so what is left is only to ask the provider: the cancel's own refund event would do it
+ * too, and a refused cancel — the order moved on its own meanwhile — still returns the money. A
+ * failure of either step is logged and left: a cancel that throws is finished by the reservation
+ * expiry, a refund that throws by `retryOpenRefunds`.
  *
  * @param orderId - the order to cancel
  */
-const cancelMismatchedOrder = (orderId: string): Promise<void> =>
+const returnMismatchedMoney = (orderId: string): Promise<void> =>
     orderService
         .cancelById(orderId, SYSTEM_ACTOR, {}, systemCallerContext('Order'))
-        .then((cancelled) => {
-            if (cancelled.success) return undefined;
-            return refundLostPayment(orderId).then(() => undefined);
-        })
         .catch((error: unknown) => {
             // Stryker disable all
             logger.error({
-                message: `Payments: could not cancel order ${orderId} after a payment mismatch — the reservation expiry will, and refund it`,
+                message: `Payments: could not cancel order ${orderId} after a payment mismatch — the reservation expiry will`,
+                error
+            });
+            // Stryker restore all
+        })
+        .then(() => performRefund(orderId))
+        .then(() => undefined)
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not refund order ${orderId} after a payment mismatch — its refund record is open, and the refund sweep tries again`,
                 error
             });
             // Stryker restore all
@@ -160,50 +138,60 @@ const settleMismatch = (
     const orderId = String(payment.orderId);
 
     // What ARRIVED is written over the frozen figures, so the refund returns what was collected.
-    return paymentRepository
-        .updateStatusIfIn(orderId, SUCCESS_SETTLEABLE_PAYMENT_STATUSES, 'succeeded', {
-            ...(state.cardLast4 ? { cardLast4: state.cardLast4 } : {}),
-            ...(state.amountReceived === undefined ? {} : { amount: state.amountReceived }),
-            ...(state.currency ? { currency: state.currency } : {})
-        })
-        .then(async (recorded) => {
-            if (!recorded) return { payment, orderLost: true, transitioned: false };
+    return withTransaction(async (session) => {
+        const recorded = await paymentRepository.updateStatusIfIn(
+            orderId,
+            SUCCESS_SETTLEABLE_PAYMENT_STATUSES,
+            'succeeded',
+            {
+                ...(state.cardLast4 ? { cardLast4: state.cardLast4 } : {}),
+                ...(state.amountReceived === undefined ? {} : { amount: state.amountReceived }),
+                ...(state.currency ? { currency: state.currency } : {})
+            },
+            session
+        );
+        // The money is real the moment it is recorded, so its way back is opened with it: never
+        // durable without the record that returns it.
+        if (recorded) await openRefund(recorded, CANCELLATION_REQUEST, undefined, session);
+        return recorded;
+    }).then(async (recorded) => {
+        if (!recorded) return { payment, orderLost: true, transitioned: false };
 
-            for (const field of fields) paymentAmountMismatchTotal.inc({ field });
-            // Stryker disable all
-            logger.error({
-                message: `Payments: the provider reported a success for order ${orderId} that is not the payment frozen for it — order cancelled, money to be returned`,
-                paymentId: String(payment._id),
+        for (const field of fields) paymentAmountMismatchTotal.inc({ field });
+        // Stryker disable all
+        logger.error({
+            message: `Payments: the provider reported a success for order ${orderId} that is not the payment frozen for it — order cancelled, money to be returned`,
+            paymentId: String(payment._id),
+            fields,
+            expected: { amount: payment.amount, currency: payment.currency },
+            received: {
+                amount: state.amountReceived,
+                currency: state.currency,
+                paymentId: state.paymentId
+            }
+        });
+        // Stryker restore all
+        recordAudit(systemCallerContext('Payment'), {
+            action: paymentsAuditActions.PAYMENT_AMOUNT_MISMATCH,
+            outcome: 'failure',
+            targetType: 'payment',
+            targetId: String(payment._id),
+            metadata: {
+                order_id: orderId,
                 fields,
                 expected: { amount: payment.amount, currency: payment.currency },
                 received: {
                     amount: state.amountReceived,
                     currency: state.currency,
-                    paymentId: state.paymentId
+                    payment_id: state.paymentId
                 }
-            });
-            // Stryker restore all
-            recordAudit(systemCallerContext('Payment'), {
-                action: paymentsAuditActions.PAYMENT_AMOUNT_MISMATCH,
-                outcome: 'failure',
-                targetType: 'payment',
-                targetId: String(payment._id),
-                metadata: {
-                    order_id: orderId,
-                    fields,
-                    expected: { amount: payment.amount, currency: payment.currency },
-                    received: {
-                        amount: state.amountReceived,
-                        currency: state.currency,
-                        payment_id: state.paymentId
-                    }
-                }
-            });
-
-            await cancelMismatchedOrder(orderId);
-            const current = await paymentRepository.findByOrderId(orderId);
-            return { payment: current ?? recorded, orderLost: true, transitioned: true };
+            }
         });
+
+        await returnMismatchedMoney(orderId);
+        const current = await paymentRepository.findByOrderId(orderId);
+        return { payment: current ?? recorded, orderLost: true, transitioned: true };
+    });
 };
 
 /** What the settlement transaction decided, for what must happen once it has committed. */

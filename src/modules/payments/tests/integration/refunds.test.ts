@@ -63,6 +63,9 @@ const paidOrder = async () => {
         asCustomer(user.id),
         testCallerContext
     );
+    // Delivery is after the response: let the relay publish the settlement's rows before a test
+    // cancels, as a real cancel arrives a request later (a row waits behind its aggregate's earlier ones).
+    await settleOutboxNudges();
     return { user, order, orderId: String(order._id) };
 };
 
@@ -382,7 +385,7 @@ describe('cancelling an order that was already partly refunded', () => {
 
         const cancelled = await orderService.cancelById(orderId, asCustomer(user.id));
         expect(cancelled.success).toBe(true);
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        await settleOutboxNudges();
 
         const payment = await paymentOf(orderId);
         expect(payment.status).toBe('succeeded');

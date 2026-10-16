@@ -141,7 +141,6 @@ describe('orderSchema — indexes', () => {
             'orders_createdAt: createdAt+1',
             'orders_email: email+1',
             'orders_paidAt: paidAt+1',
-            'orders_pendingEffects: pendingEffects+1, updatedAt+1',
             'orders_status_createdAt: status+1, createdAt-1',
             'orders_status_payBy: status+1, payBy+1',
             'orders_transferReference: transferReference+1',
@@ -150,7 +149,7 @@ describe('orderSchema — indexes', () => {
         ]);
     });
 
-    it('declares only the reference lookup unique, and the four sparse ones sparse', () => {
+    it('declares only the reference lookup unique, and the three sparse ones sparse', () => {
         // A unique index anywhere else here would reject a customer's second order. Stated
         // explicitly because "no options" is the kind of fact that is never written down and
         // quietly acquires one. All three sparse indexes are sparse on purpose: most orders never
@@ -162,7 +161,6 @@ describe('orderSchema — indexes', () => {
             'orders_createdAt: (none)',
             'orders_email: (none)',
             'orders_paidAt: sparse=true',
-            'orders_pendingEffects: sparse=true',
             'orders_status_createdAt: (none)',
             'orders_status_payBy: (none)',
             'orders_transferReference: sparse=true, unique=true',

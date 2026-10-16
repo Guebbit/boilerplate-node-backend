@@ -72,15 +72,7 @@ const markSystemMove = (
     return announceMove(
         session,
         withTimeline(
-            (active) =>
-                orderRepository.updateStatusIfIn(
-                    orderId,
-                    [...from],
-                    to,
-                    undefined,
-                    undefined,
-                    active
-                ),
+            (active) => orderRepository.updateStatusIfIn(orderId, [...from], to, undefined, active),
             () => [{ type: MOVE_ROW[event], actor }]
         ),
         () => statusChangedEvent(orderId, from[0], to)

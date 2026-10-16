@@ -1,17 +1,18 @@
 /**
  * @module
- * Retrying a stuck refund must never re-deliver the cancellation webhook: `payments` subscribes
- * to its own `ORDER_REFUND_OWED` event, never to the `ORDER_CANCELLED` one `webhooks` fans out
- * on, so the sweep's retry cannot also create a second `order.cancelled` delivery row for every
- * subscriber. Cross-module by nature — orders, payments and webhooks' real `subscribe()` hooks
- * all in play — so it lives here rather than in any one module's own `tests/`.
+ * A cancel's refund rides the `order.cancelled` outbox row, nothing else. The row is written with
+ * the cancel; `payments` opens its refund record when the relay delivers it; a redelivery refunds
+ * nothing twice and re-sends no webhook (`webhooks` dedupes on the event id); a provider that
+ * refuses leaves the record open for the refund sweep. Cross-module by nature — orders, payments
+ * and webhooks' real `subscribe()` hooks all in play — so it lives here rather than in any one
+ * module's own `tests/`.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { withEnvironment } from '@tests/environment';
 import { resetDomainEvents } from '@kernel/events';
-import { settleOutboxNudges } from '@kernel/outbox';
+import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbox';
 import {
     callerAs,
     testCallerContext,
@@ -23,7 +24,8 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
 import paymentsModule from '@modules/payments/module';
-import { createIntent, confirmPayment } from '@modules/payments/services';
+import { createIntent, confirmPayment, retryOpenRefunds } from '@modules/payments/services';
+import { paymentRepository } from '@modules/payments/repository';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import webhooksModule from '@modules/webhooks/module';
 import { create as createSubscription } from '@modules/webhooks/services/subscriptions';
@@ -60,33 +62,86 @@ const paidOrder = async () => {
     return { user, order };
 };
 
-it('retries the owed refund without re-announcing the cancellation, and delivers it once', () =>
-    withEnvironment('NODE_ORDER_EFFECT_RETRY_MINUTES', '0', async () => {
-        registerCheckoutModules([paymentsModule, webhooksModule]);
-        await createSubscription(
-            { url: 'https://example.com/hook', eventTypes: ['*'] },
-            { caller: callerAs('manager'), analyticsConsent: false }
-        );
+/** The one `order.cancelled` row a cancel of this order wrote. */
+const cancelledRows = (orderId: string) =>
+    outboxEventModel.find({ name: 'order.cancelled', aggregateId: orderId }).lean().exec();
 
+/** Webhook deliveries made for `order.cancelled`, whoever subscribed. */
+const cancelledDeliveries = () =>
+    webhookDeliveryRepository.findAll({ tenant: TEST_TENANT_ID, eventType: 'order.cancelled' });
+
+/** A subscriber to everything, so a second delivery would show. */
+const subscribeToEverything = () =>
+    createSubscription(
+        { url: 'https://example.com/hook', eventTypes: ['*'] },
+        { caller: callerAs('manager'), analyticsConsent: false }
+    );
+
+beforeEach(() => {
+    registerCheckoutModules([paymentsModule, webhooksModule]);
+});
+
+it('writes one outbox row with the cancel, and the refund lands once the relay has delivered it', async () => {
+    const { user, order } = await paidOrder();
+    const orderId = String(order._id);
+
+    await orderService.cancelById(orderId, asCustomer(user.id));
+
+    expect(await cancelledRows(orderId)).toHaveLength(1);
+    await settleOutboxNudges();
+    const payment = await paymentRepository.findByOrderId(orderId);
+    expect(payment!.refunds).toHaveLength(1);
+    expect(payment!.refunds[0]).toMatchObject({ amount: 20, status: 'succeeded' });
+    const [row] = await cancelledRows(orderId);
+    expect(row).toMatchObject({ status: 'published' });
+});
+
+it('refunds nothing twice and sends no second webhook when the row is delivered again', async () => {
+    await subscribeToEverything();
+    const { user, order } = await paidOrder();
+    const orderId = String(order._id);
+    const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
+
+    await orderService.cancelById(orderId, asCustomer(user.id));
+    await settleOutboxNudges();
+    const [delivered] = await cancelledRows(orderId);
+
+    // A crash after the consumers returned but before the row was marked published, in effect.
+    await outboxEventModel.updateOne(
+        { _id: delivered._id },
+        { $set: { status: 'pending', nextAttemptAt: new Date(0) } }
+    );
+    await relayOutbox();
+
+    expect(refundSpy).toHaveBeenCalledTimes(1);
+    expect((await paymentRepository.findByOrderId(orderId))!.refunds).toHaveLength(1);
+    expect(await cancelledDeliveries()).toHaveLength(1);
+});
+
+it('leaves a refund the provider refused open for the sweep, and answers the event', () =>
+    withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+        await subscribeToEverything();
         const { user, order } = await paidOrder();
-
-        // The provider outage this whole mechanism exists for: the refund fails once.
+        const orderId = String(order._id);
         jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(
             new Error('payment provider unreachable')
         );
 
-        await orderService.cancelById(String(order._id), asCustomer(user.id));
+        await orderService.cancelById(orderId, asCustomer(user.id));
+        await settleOutboxNudges();
 
-        // Failed, so the marker is still owed — the retry is what finishes it, on a second,
-        // successful call to the (no longer mocked) provider.
-        expect(await orderService.retryPendingEffects()).toBe(1);
-
-        // `order.cancelled` fired exactly once — on the cancel itself. The retry announces
-        // `order.refund_owed` instead, which carries no webhook of its own, so a second
-        // `order.cancelled` delivery row here would mean the old bug is back.
-        const deliveries = await webhookDeliveryRepository.findAll({
-            tenant: TEST_TENANT_ID,
-            eventType: 'order.cancelled'
+        const stuck = await paymentRepository.findByOrderId(orderId);
+        expect(stuck!.refunds[0]).toMatchObject({ status: 'failed' });
+        // The record is the promise now, so the event is delivered and not retried.
+        const [row] = await cancelledRows(orderId);
+        expect(row).toMatchObject({
+            status: 'published',
+            attempts: 0
         });
-        expect(deliveries).toHaveLength(1);
+
+        expect(await retryOpenRefunds()).toBe(1);
+        expect((await paymentRepository.findByOrderId(orderId))!.refunds[0]).toMatchObject({
+            status: 'succeeded'
+        });
+        expect(await cancelledDeliveries()).toHaveLength(1);
     }));

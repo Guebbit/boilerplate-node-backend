@@ -139,7 +139,7 @@ refund.
   my withdrawal" the same way whatever the order's state. The client reloads the order from
   `Return.orderId`.
 - **The money does not move through the Return.** The cancel's own refund runs as for any cancel
-  (`ORDER_REFUND_OWED`, retried by the order's pending-effect sweep), so its `payment.refunded`
+  (the `refund` on `order.cancelled`, finished by the refund sweep if the provider refuses), so its `payment.refunded`
   carries no `returnId`, and `returns` does not close anything on it: the Return was closed already.
   The credit note follows that event as usual.
 - **Events:** the order's own `order.cancelled` first, then `return.requested` and `return.closed`

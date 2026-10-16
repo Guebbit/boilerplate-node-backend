@@ -97,7 +97,6 @@
         "sweep:reservations": "tsx scripts/ops/run-job.ts sweep:reservations",
         "reap:invoice-pdfs": "tsx scripts/ops/run-job.ts reap:invoice-pdfs",
         "reap:orders": "tsx scripts/ops/run-job.ts reap:orders",
-        "sweep:order-effects": "tsx scripts/ops/run-job.ts sweep:order-effects",
         "reap:payments": "tsx scripts/ops/run-job.ts reap:payments",
         "sweep:payment-effects": "tsx scripts/ops/run-job.ts sweep:payment-effects",
         "reap:returns": "tsx scripts/ops/run-job.ts reap:returns",

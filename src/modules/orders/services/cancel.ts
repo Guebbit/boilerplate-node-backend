@@ -1,20 +1,22 @@
 /**
  * @module
- * Cancelling an order, and making its consequences stick. The status move, the hold's release and
- * a paid order's claim on stock are ONE transaction: a release that throws rolls the status back
- * too, so units are never lost from sale behind an order that already reads `cancelled`. The refund is
- * not in it — that is money at a provider, which cannot roll back — so only its intent is written
- * down, in the status write itself; `retryPendingEffects` discharges it when the announcement was
- * not enough.
+ * Cancelling an order, and making its consequences stick. The status move, the hold's release, a
+ * paid order's claim on stock and the `order.cancelled` outbox row are ONE transaction: a release
+ * that throws rolls the status back too, so units are never lost from sale behind an order that
+ * already reads `cancelled`. The refund is not in it — that is money at a provider, which cannot
+ * roll back — so only the promise to make it is written down, as `refund` on the event itself.
+ * `payments` opens its refund record from that event, and the outbox relay retries the event
+ * until it has.
+ *
+ * See: docs/tools/outbox.md
  */
 
 import { systemCallerContext } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
-import { logger } from '@infrastructure/adapters/logger';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { OrderStatus } from '@types';
 import type { AuthContext } from '@types';
-import type { OrderDocument, OrderPendingEffect } from '../model';
+import type { OrderDocument } from '../model';
 import {
     generateReject,
     generateSuccess,
@@ -22,7 +24,6 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { inventoryService } from '@modules/inventory';
-import { emitDomainEvent } from '@kernel/events';
 import { announceInTransaction } from '@kernel/outbox';
 import type { ClientSession } from 'mongoose';
 import type { CallerContext } from '@types';
@@ -30,22 +31,15 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
-import { ORDER_CANCELLED, ORDER_REFUND_OWED } from '../events';
+import { ORDER_CANCELLED } from '../events';
 import { orderRepository } from '../repository';
 import { ORDER_EVENTS, statusesLeadingTo, type OrderActor } from '../domain';
-import { orderEffectRetryMinutes } from '../config';
 import { bankTransferExpiredEmail, cardHoldExpiredEmail, orderCancelledEmail } from '../emails';
 import { getById } from './read';
 import { withTimeline } from './timeline';
 import { mailBuyer } from './notify';
 import { cancelScope, actorOf } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
-
-/** The effect set a refunding cancel writes down. Frozen, since it rides into a `$set`. */
-const PENDING_REFUND = Object.freeze(['refund'] as const);
-
-/** How many owed effects one sweep discharges before asking to be run again. */
-const SWEEP_BATCH_SIZE = 200;
 
 /**
  * Give an order's stock claim back, inside the cancel's own transaction. A `held` reservation is
@@ -69,7 +63,6 @@ const giveBackStock = async (orderId: string, session: ClientSession): Promise<v
  * @param id - the order to cancel
  * @param from - the statuses the caller may cancel from
  * @param scope - the caller's ownership scope, riding in the same filter as the write
- * @param effects - the consequences to write down with the status
  * @param refund - whether the cancel owes the customer their money, carried on the announcement
  * @param by - who cancelled, for the timeline row: the lifecycle's own actor kind
  * @param actorId - the account that cancelled, when a person did
@@ -79,7 +72,6 @@ const moveToCancelled = (
     id: string,
     from: readonly string[],
     scope: Record<string, unknown> | undefined,
-    effects: readonly OrderPendingEffect[] | undefined,
     refund: boolean,
     by: OrderActor,
     actorId: string | undefined
@@ -93,7 +85,6 @@ const moveToCancelled = (
                         from,
                         OrderStatus.cancelled,
                         scope,
-                        effects,
                         active
                     ),
                 () => [{ type: 'cancelled', actor: actorId, data: { by } }]
@@ -107,10 +98,10 @@ const moveToCancelled = (
     );
 
 /**
- * Everything a successful cancel unlocks after its commit: announce the owed refund and discharge
- * its marker once every listener heard it — then the audit row, the analytics event, and the
- * customer's explanation by mail: the sweep's own expiry notice, or — when a person cancelled —
- * the cancelled notice saying what became of their money.
+ * Everything a successful cancel unlocks after its commit: the audit row, the analytics event, and
+ * the customer's explanation by mail — the sweep's own expiry notice, or, when a person cancelled,
+ * the cancelled notice saying what became of their money. The refund itself is not here: it rides
+ * the `order.cancelled` row the cancel's own transaction wrote.
  * @param context - the caller's context; absent for a system-initiated cancel (the reservation
  *   sweep), still audited as a system actor and
  *   reported under its own analytics name
@@ -127,14 +118,6 @@ const afterCancel = async (
     viaReservationExpiry = false,
     byPerson = false
 ): Promise<ResponseSuccess<OrderDocument>> => {
-    // The refund is a SEPARATE announcement, retried on its own: re-sending `ORDER_CANCELLED`
-    // to retry a stuck refund would re-deliver the customer-facing webhook every time the sweep
-    // ran. Discharged only once this send actually returns.
-    if (refund) {
-        const refunded = await emitDomainEvent(ORDER_REFUND_OWED, { orderId: String(order._id) });
-        if (refunded) await orderRepository.clearPendingEffect(String(order._id), 'refund');
-    }
-
     // A system cancel has no context and is audited as the system actor rather than skipped —
     // see the docblock above. Only the reservation sweep's own timeout is reported under the
     // expiry analytics name, so a timeout is never counted as a customer's choice to cancel and
@@ -242,13 +225,6 @@ export const cancelById = (
         // writes `fulfillment.shipped` in its own transaction, and exactly one of the two
         // matches. Goods that left cannot be cancelled whole.
         { ...scope, 'fulfillment.shipped': { $ne: true } },
-        /*
-         * The intent to refund is written WITH the cancel, in one document write, because
-         * the announcement below is not durable — `@kernel/events` has no retry, so a
-         * refund that throws is logged and lost. The marker is what `retryPendingEffects`
-         * finds afterwards.
-         */
-        refund ? PENDING_REFUND : undefined,
         refund,
         actor,
         // A system cancel (the reservation sweep) has no account behind it.
@@ -281,71 +257,6 @@ export const cancelById = (
 };
 
 /**
- * Mark a refund owed outside a cancel — `payments`' own "the money landed on an order no longer
- * payable" branch is the one caller: by the time it runs, something else already moved this
- * order to `cancelled`, so there is no cancel here to carry the marker the way `cancelById` does.
- * Feeds the same `retryPendingEffects` sweep below, and the same `ORDER_REFUND_OWED` retry path.
- *
- * @param orderId - the order whose payment settlement is putting the money back
- */
-export const markRefundOwed = (orderId: string): Promise<void> =>
-    orderRepository.addPendingEffect(orderId, 'refund');
-
-/**
- * Discharge {@link markRefundOwed}'s marker once the refund it was written for actually returns.
- *
- * @param orderId - the order whose refund just landed
- */
-export const clearRefundOwed = (orderId: string): Promise<void> =>
-    orderRepository.clearPendingEffect(orderId, 'refund').then(() => undefined);
-
-/**
- * `sweep:order-effects`'s sweep: the retry behind {@link cancelById}'s marker.
- *
- * Re-announces `ORDER_REFUND_OWED` — never `ORDER_CANCELLED` — for every order still owing a
- * refund, and clears the marker only once that send actually returns. Safe to run repeatedly —
- * `payments`' conditional refund write means a second announcement for an
- * already-refunded order finds nothing to do, and an order cancelled while never paid finds
- * nothing either.
- *
- * Driven from outside, like the reservation sweep and the `reap:*` scripts: the app ships no
- * scheduler.
- *
- * @returns how many orders were settled
- */
-export const retryPendingEffects = async (): Promise<number> => {
-    const due = await orderRepository.findWithPendingEffects(
-        new Date(Date.now() - orderEffectRetryMinutes() * 60_000),
-        SWEEP_BATCH_SIZE
-    );
-
-    let settled = 0;
-
-    for (const order of due) {
-        const orderId = String(order._id);
-
-        // The marker exists only because the cancel decided to refund, and it is the only effect
-        // this field can carry — `ORDER_REFUND_OWED` alone, never `ORDER_CANCELLED` again.
-        if (!(await emitDomainEvent(ORDER_REFUND_OWED, { orderId }))) continue;
-        if (await orderRepository.clearPendingEffect(orderId, 'refund')) settled += 1;
-    }
-
-    // A full batch means more is waiting. Said out loud, so a truncated run is not read as done.
-    if (due.length === SWEEP_BATCH_SIZE)
-        // Stryker disable all
-        logger.warn(
-            `Order effect sweep: hit the ${SWEEP_BATCH_SIZE}-order batch cap — run it again to continue`
-        );
-    // Stryker restore all
-
-    if (due.length > 0)
-        // Stryker disable next-line all
-        logger.info(`Order effect sweep: ${settled} of ${due.length} owed refunds settled`);
-
-    return settled;
-};
-
-/**
  * Cancel an order whose preorder buyer was asked to keep waiting and never answered: silence is a
  * cancel, and a cancel refunds in full (FTC 16 CFR 435.2 (b)(1)(iii), CRD Art. 18). Called by
  * `returns`, which reacts to `delivery`'s record of the silence, and only for an order with nothing
@@ -363,7 +274,6 @@ export const cancelUnanswered = (orderId: string): Promise<boolean> =>
         orderId,
         ORDER_EVENTS.cancelUnanswered.from,
         { 'fulfillment.shipped': { $ne: true } },
-        PENDING_REFUND,
         true,
         'fulfilment',
         undefined

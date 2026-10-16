@@ -32,7 +32,6 @@ export const ordersConfig = defineConfig({
         NODE_BANK_TRANSFER_HOLD_HOURS: int({ default: 168, min: 1 }),
         NODE_ADMIN_ORDER_MAX_LINES: int({ default: 100, min: 1 }),
         NODE_ADMIN_ORDER_MAX_LINE_QUANTITY: int({ default: 99_999, min: 1 }),
-        NODE_ORDER_EFFECT_RETRY_MINUTES: int({ default: 5, min: 0 }),
         NODE_WITHDRAWAL_PERIOD_DAYS: int({ default: 30, min: 21 }),
         NODE_ORDER_PII_RETENTION_DAYS: int({ default: 3650, min: 1 }),
         NODE_ORDER_EVENT_TEXT_RETENTION_DAYS: int({ default: 1095, min: 1 }),
@@ -134,15 +133,6 @@ export const transferInstructionsFor = (reference: string): OrderTransferInstruc
         reference
     };
 };
-
-/**
- * How long a cancelled order's refund gets before `sweep:order-effects` retries it.
- * A grace window, not a deadline: the refund normally settles milliseconds after the cancel, and
- * this only has to outlast a slow one. Read per call, like every other getter here, so a test
- * can vary it per case.
- * @returns the grace window in minutes
- */
-export const orderEffectRetryMinutes = (): number => ordersConfig().NODE_ORDER_EFFECT_RETRY_MINUTES;
 
 /**
  * How many days a consumer has to withdraw. The law's floor is 14 (Consumer Rights Directive

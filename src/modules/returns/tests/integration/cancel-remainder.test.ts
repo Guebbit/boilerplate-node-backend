@@ -792,6 +792,8 @@ describe('a preorder wait nobody answered', () => {
         await letSilenceRunOut();
 
         await cancelUnanswered(orderId, String(waiting._id), lateEnough);
+        // The whole-order cancel's refund is its `order.cancelled` row, delivered by the relay.
+        await settleOutboxNudges();
 
         const stored = await readOrder(orderId);
         expect(stored?.status).toBe(OrderStatus.cancelled);

@@ -1,6 +1,6 @@
 /**
  * @module
- * Giving money back — the operator action (`refundByOrder`) and the `ORDER_REFUND_OWED` listener's
+ * Giving money back — the operator action (`refundByOrder`) and the `order.cancelled` listener's
  * compensation (`refundForOrder`), both through `performRefund`. Nothing else in this module may
  * move money out.
  *
@@ -51,7 +51,7 @@ import { PaymentProviderError, providerNamed } from '../providers';
 import { paymentRepository } from '../repository';
 import { PAYMENT_REFUNDED } from '../events';
 import type { PaymentDocument, RefundLine, RefundRecord, RefundSettlement } from '../model';
-import { isHandRecorded, REFUNDABLE_PAYMENT_STATUS } from '../domain';
+import { isHandRecorded, OPEN_REFUND_STATUSES, REFUNDABLE_PAYMENT_STATUS } from '../domain';
 import { callerScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
 import { paymentNotFound } from './errors';
@@ -114,26 +114,34 @@ export const remainingOf = (payment: PaymentDocument): Money =>
     );
 
 /**
- * Record, unattended, that a hand-paid order's refund is left for an operator — the
- * automatic listener path only; `refundByOrder`'s own admin call never reaches this.
+ * Record, unattended, that a hand-paid order's refund is left for an operator — the automatic
+ * listener path only; `refundByOrder`'s own admin call never reaches this. There is no provider to
+ * ask and no one to say the cash went back, so the refund record is opened and left `pending`: it
+ * is what the needs-attention list shows, and the operator's own refund settles it by hand.
+ *
+ * Idempotent: a redelivery finds the record already open and writes nothing more.
  * @param orderId - the order whose payment stays `succeeded` until an operator confirms it
  * @param payment - the payment left untouched
  */
 const leaveForOperator = (orderId: string, payment: PaymentDocument): Promise<PaymentDocument> => {
-    // Stryker disable all
-    logger.warn(
-        `Payment for order ${orderId} was paid by hand — left \`succeeded\` for an operator to confirm the money actually went back.`
-    );
-    // Stryker restore all
-    // No `actorRole`/`actorUserId` override needed: `buildAuditEvent`'s defaults already read
-    // them off `SYSTEM_ACTOR`'s own caller.
-    recordAudit(systemCallerContext('Payment'), {
-        action: paymentsAuditActions.PAYMENT_REFUND_OWED_BY_HAND,
-        outcome: 'success',
-        targetType: 'order',
-        targetId: orderId
+    if (hasOpenRefund(payment)) return Promise.resolve(payment);
+
+    return openRefund(payment, CANCELLATION_REQUEST).then((opened) => {
+        // Stryker disable all
+        logger.warn(
+            `Payment for order ${orderId} was paid by hand — left \`succeeded\` for an operator to confirm the money actually went back.`
+        );
+        // Stryker restore all
+        // No `actorRole`/`actorUserId` override needed: `buildAuditEvent`'s defaults already read
+        // them off `SYSTEM_ACTOR`'s own caller.
+        recordAudit(systemCallerContext('Payment'), {
+            action: paymentsAuditActions.PAYMENT_REFUND_OWED_BY_HAND,
+            outcome: 'success',
+            targetType: 'order',
+            targetId: orderId
+        });
+        return opened?.payment ?? payment;
     });
-    return Promise.resolve(payment);
 };
 
 /**
@@ -428,8 +436,8 @@ const recordRefundFailure = (
 
 /**
  * Ask the provider to return one refund's money, and record its answer. A refusal marks the record
- * `failed` and rethrows, so the caller (the `ORDER_REFUND_OWED` listener) keeps its own retry
- * marker and the sweep finds the record open.
+ * `failed` and rethrows; the record stays open for the refund sweep, and the caller (the
+ * `order.cancelled` listener) logs it instead of rethrowing.
  *
  * @param payment - the payment (never `manual`, never without a `providerRef`)
  * @param refund - the record to send
@@ -548,7 +556,7 @@ const settledElsewhere = (orderId: string, refund: RefundRecord): Promise<Paymen
  * started instead of opening a second one for the same money.
  *
  * @param orderId - the order whose payment is being returned
- * @param context - present only for the admin request (`refundByOrder`); the `ORDER_REFUND_OWED`
+ * @param context - present only for the admin request (`refundByOrder`); the `order.cancelled`
  *  listener (`refundForOrder`) has none. Also what tells a hand-paid refund apart from the two
  *  callers: present means the operator asked (audited `success`), absent means the automatic
  *  listener did (left for an operator, audited `PAYMENT_REFUND_OWED_BY_HAND` instead).
@@ -675,16 +683,41 @@ export const refundByOrder = (
         );
 
 /**
- * `ORDER_REFUND_OWED`'s listener: give the money back if any was taken.
+ * Whether a payment holds a refund still waiting to settle — `pending` at the provider, `failed`
+ * for the sweep, or left for an operator by hand.
+ * @param payment - the payment
+ */
+const hasOpenRefund = (payment: PaymentDocument): boolean =>
+    payment.refunds.some((refund) => OPEN_REFUND_STATUSES.includes(refund.status));
+
+/**
+ * The `order.cancelled` listener's refund: give the money back if any was taken. The event is the
+ * only promise of it, delivered by the outbox until this resolves.
  *
- * Idempotent: a second event, or a cancel of a never-paid order, finds nothing left to return and
- * does nothing. Unattended, so a real PSP refund's outcome is only logged — but a hand-paid order
- * still gets its own audit row (`leaveForOperator`), since that one needs a human to act on it.
+ * Idempotent: a redelivery, or a cancel of a never-paid order, finds nothing left to return and
+ * does nothing. Once a refund record is open, that record is the durable promise —
+ * {@link retryOpenRefunds} finishes it, forever and with the same idempotency key — so a provider
+ * refusal is logged and not rethrown. A throw BEFORE the record exists (the database is down)
+ * still rejects, and the outbox delivers the event again.
+ *
+ * A hand-paid order opens its record and waits for an operator (`leaveForOperator`).
  *
  * @param orderId - the order that was cancelled
  */
 export const refundForOrder = (orderId: string): Promise<void> =>
-    performRefund(orderId).then(() => undefined);
+    performRefund(orderId)
+        .then(() => undefined)
+        .catch((error: unknown) =>
+            paymentRepository.findByOrderId(orderId).then((payment) => {
+                if (!payment || !hasOpenRefund(payment)) throw error;
+                // Stryker disable all
+                logger.error({
+                    message: `Payments: the refund for order ${orderId} was refused — its record is open, and the refund sweep tries again`,
+                    error
+                });
+                // Stryker restore all
+            })
+        );
 
 /**
  * Give back the money for goods a customer returned, or for a remainder cancelled before it

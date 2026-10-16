@@ -5,7 +5,7 @@
  * checkout can produce. `PAYMENT_RECORDED_OFFLINE` is admin-only too but keeps the plain
  * `payment.` prefix, since it names a kind of payment event rather than an admin override of one.
  *
- * `refundForOrder` (the `ORDER_REFUND_OWED` listener, not only a cancel's compensation) logs a
+ * `refundForOrder` (the refund half of the `order.cancelled` listener) logs a
  * real-provider refund rather than auditing it — there is no request behind it, like the
  * token-cleanup job — but still audits `PAYMENT_REFUND_OWED_BY_HAND` for a hand-paid order left
  * for an operator, since that one needs a human to see it.

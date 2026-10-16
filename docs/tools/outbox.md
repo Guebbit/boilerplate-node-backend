@@ -188,9 +188,13 @@ mark rows published with nobody listening.
   commit out of order are ordered by when they wrote, not when they committed.
 - **Same-process consumers.** The relay dispatches on the in-process bus. A consumer in another
   service needs a queue in front, as `webhooks` has — see [RabbitMQ](./rabbitmq.md).
-- **`order.refund_owed` stays on the in-process bus, on purpose.** It already has its own durable
-  record, the order's `pendingEffects` marker, which `retryPendingEffects` sweeps; and its handlers'
-  answer is what discharges that marker. An outbox row would be a second copy of the same promise.
+- **A refund has no marker of its own.** A cancel's refund is the `refund` flag on the
+  `order.cancelled` row. `payments` opens a refund record from it; a rejection before the record
+  exists makes the relay deliver the row again, and once it exists the record is the durable
+  intent (the refund sweep finishes it with the same idempotency key), so a provider refusal is
+  logged and the row is answered. A row that fails every attempt is parked `dead` and
+  `outbox_events_dead_total` pages: after about an hour of backoff the database or the code is
+  broken, which is worth a page.
 - **Delivery is after the response.** Every event above is published by the relay, not inside the
   request, so a listener sees it milliseconds later and a test that asserts the effect awaits
   `settleOutboxNudges()` first.

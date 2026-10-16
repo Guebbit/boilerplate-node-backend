@@ -96,9 +96,8 @@ export const onDomainEvent = <TEventName extends DomainEventName>(
  * decides what its own failure modes are, and it cannot do that for code it has never heard of.
  *
  * The return says whether they all got through, which is a different question from whether the
- * emit was allowed to proceed. An emitter that has written down an intention to retry — `orders`'
- * `pendingEffects` — needs it to know whether the intention is discharged; every other caller
- * ignores it and keeps the old fire-and-continue behaviour.
+ * emit was allowed to proceed. The outbox relay needs it to know whether to deliver a row again;
+ * every other caller ignores it and keeps the old fire-and-continue behaviour.
  *
  * @param name - the event name
  * @param payload - the event payload

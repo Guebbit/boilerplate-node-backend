@@ -114,7 +114,6 @@ its own supercronic, so the backup secrets stay out of the `cron` container. See
 | `npm run sweep:reservations`     | every 5 min    | Yes    | Drains every stale checkout hold (batches of 200) and cancels the order behind each.                                                                                        |
 | `npm run reap:invoice-pdfs`      | 02:08 nightly  | No     | Deletes stored invoice and credit-note PDFs past their retention window; the next download renders again.                                                                   |
 | `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed, and unsets a timeline row's staff text once its own window has.                                   |
-| `npm run sweep:order-effects`    | every 5 min    | No     | Re-announces ORDER_REFUND_OWED for a refund the event bus's one delivery attempt did not carry through.                                                                     |
 | `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                                                                                             |
 | `npm run sweep:payment-effects`  | every 5 min    | No     | Retries refunds the provider has not answered, and settles unsettled payments whose webhook never arrived.                                                                  |
 | `npm run reap:returns`           | 02:12 nightly  | No     | Unsets a return's free text (`note`, `declineReason`) once the return has not changed for its retention window.                                                             |
@@ -123,8 +122,8 @@ its own supercronic, so the backup secrets stay out of the `cron` container. See
 <!-- jobs:end -->
 
 The nightly jobs are staggered a few minutes apart so they do not all land on the connection pool at
-once. `sweep:webhook-retries`, `sweep:outbox`, `sweep:payment-effects`, `sweep:reservations` and
-`sweep:order-effects` run on a different schedule entirely, every 5 minutes or faster, because the
+once. `sweep:webhook-retries`, `sweep:outbox`, `sweep:payment-effects` and `sweep:reservations`
+run on a different schedule entirely, every 5 minutes or faster, because the
 sweep interval IS the retry/expiry granularity for what each covers — see
 [webhooks](../modules/webhooks.md#the-delivery-path),
 [payments](../modules/payments.md#one-settlement-transaction),
@@ -157,7 +156,7 @@ success or not); `ScheduledJobStale` (`docker/observability/prometheus.alert-rul
 fires when a nightly job's last success is more than 48 hours old, and keeps firing until the job runs again or its row is deleted. The 5-minute-or-faster
 jobs are excluded from that alert, each covered by its own faster-firing one instead:
 `sweep:webhook-retries` by `WebhookRetriesStalled` (15 min), and `sweep:outbox` /
-`sweep:payment-effects` / `sweep:reservations` / `sweep:order-effects` by `FrequentSweepStale`
+`sweep:payment-effects` / `sweep:reservations` by `FrequentSweepStale`
 (30 min) — 48 hours at that cadence would page two days after a stuck payment, a reservation
 nobody is expiring or a refund nobody is retrying. `ScheduledJobNeverSucceeded` covers every job that
 has a run series but no success series: one that has only ever failed. No Pushgateway needed: the value
@@ -226,16 +225,10 @@ is older than `NODE_HOLD_NOTE_RETENTION_DAYS` (default 365), on the same terms a
 only matches one still holding a note, and the wipe does not move `updatedAt`. Why a year:
 [Data Retention](../theory/data-retention.md#free-text-on-holds).
 
-`npm run sweep:order-effects` is a different kind of periodic job: not retention, but the retry
-behind a cancel's consequences. A cancel announces `ORDER_REFUND_OWED` — a separate event from the
-customer-facing `ORDER_CANCELLED`, so retrying the refund never re-delivers that webhook — and
-`payments` refunds off that announcement. The domain event bus has no retry, so a provider
-unreachable for the length of one call would leave the order cancelled and the refund lost.
-`cancelById` writes the intent to refund in the same document write that decides the cancel, and
-this sweep re-announces for whatever is still owed past `NODE_ORDER_EFFECT_RETRY_MINUTES`
-(default 5). Run it every 5 minutes, matching that grace window: a nightly run would leave a
-refund owed for up to 24 hours. It is safe to repeat, since a second pass over a settled order
-refunds nothing.
+A cancel's refund has no sweep of its own. The `order.cancelled` row the cancel writes carries the
+`refund` it owes, the outbox relay (`sweep:outbox`) delivers it until `payments` has opened the
+refund record, and from then on `sweep:payment-effects` finishes the record. See
+[the outbox](../tools/outbox.md#limits-on-purpose).
 
 The stock half of a cancel is not covered here, because it cannot half-happen: the status move,
 the hold's release (a paid, unshipped order's claim included) is one `withTransaction`. A release that throws

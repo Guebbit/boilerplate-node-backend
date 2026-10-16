@@ -6,7 +6,7 @@
  * Rules: only a `pending` order's owner can start paying; the order's move to `paid` is the
  *        gate, not the charge — the provider answers first, and a slipped-away order is refunded
  *        on the spot, so money moved iff the order says `paid`; a refund is the
- *        `ORDER_REFUND_OWED` listener, made at-most-once by `addRefund`'s conditional
+ *        `order.cancelled` listener, made at-most-once by `addRefund`'s conditional
  *        write on `amountRefunded`; the provider's own word, arriving by webhook, is the authority — the
  *        browser's is a hint that lets the happy path feel synchronous.
  *

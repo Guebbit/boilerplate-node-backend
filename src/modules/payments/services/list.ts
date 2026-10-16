@@ -114,9 +114,9 @@ const refundAttention = (row: RefundRow, kind: PaymentAttentionKind): PaymentAtt
 });
 
 /**
- * Every problem still recorded on a document, oldest first: refunds open past the threshold,
- * refunds owed by hand, orders owing their refund. A fixed problem has cleared its marker, so it
- * is not here.
+ * Every problem still recorded on a payment, oldest first: refunds open past the threshold, and
+ * refunds owed by hand. A refund owed is always an open record, so a fixed problem has closed it
+ * and is not here.
  */
 export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
     const cutoff = new Date(Date.now() - paymentAttentionMinutes() * 60_000);
@@ -126,19 +126,11 @@ export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
             openBefore: cutoff,
             limit: ATTENTION_LIMIT
         }),
-        paymentRepository.findOpenRefundRows({ manual: true, limit: ATTENTION_LIMIT }),
-        orderService.findOwedRefunds(cutoff, ATTENTION_LIMIT)
-    ]).then(([stale, manual, owed]) => ({
+        paymentRepository.findOpenRefundRows({ manual: true, limit: ATTENTION_LIMIT })
+    ]).then(([stale, manual]) => ({
         items: [
             ...stale.map((row) => refundAttention(row, PaymentAttentionKind.stale_refund)),
-            ...manual.map((row) => refundAttention(row, PaymentAttentionKind.manual_refund_owed)),
-            ...owed.map(
-                ({ orderId, since }): PaymentAttentionItem => ({
-                    kind: PaymentAttentionKind.order_refund_owed,
-                    orderId,
-                    since: since.toISOString()
-                })
-            )
+            ...manual.map((row) => refundAttention(row, PaymentAttentionKind.manual_refund_owed))
         ].toSorted((a, b) => a.since.localeCompare(b.since))
     }));
 };

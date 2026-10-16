@@ -185,7 +185,7 @@ groups:
           # counter alone would miss the second.
           - alert: ScheduledJobStale
             expr: |
-                time() - job_last_success_timestamp_seconds{task!~"sweep:webhook-retries|sweep:outbox|sweep:payment-effects|sweep:reservations|sweep:order-effects"} > 2 * 86400
+                time() - job_last_success_timestamp_seconds{task!~"sweep:webhook-retries|sweep:outbox|sweep:payment-effects|sweep:reservations"} > 2 * 86400
             for: 0m
             labels:
                 severity: warning
@@ -208,15 +208,15 @@ groups:
                 summary: 'A scheduled job has run but never succeeded'
                 description: '{{ $labels.task }} has been recorded as run for over an hour and has never recorded a success. Its lastError is on GET /observability/health, see docs/reference/ops.md#scheduled-jobs.'
 
-          # `sweep:outbox` (every minute), `sweep:payment-effects`, `sweep:reservations` and
-          # `sweep:order-effects` (every 5 minutes; `docker/crontab`) are excluded from the rule above for the same reason `sweep:webhook-retries` is: at
+          # `sweep:outbox` (every minute), `sweep:payment-effects` and `sweep:reservations`
+          # (every 5 minutes; `docker/crontab`) are excluded from the rule above for the same reason `sweep:webhook-retries` is: at
           # that cadence, the 48-hour threshold would page 48 hours after a stuck payment or a
           # reservation nobody is expiring. 30 minutes is six missed runs — long enough that one
           # slow pass never pages, short enough to catch a dead cron before it costs a customer a
           # refund or a stale hold.
           - alert: FrequentSweepStale
             expr: |
-                time() - job_last_success_timestamp_seconds{task=~"sweep:outbox|sweep:payment-effects|sweep:reservations|sweep:order-effects"} > 30 * 60
+                time() - job_last_success_timestamp_seconds{task=~"sweep:outbox|sweep:payment-effects|sweep:reservations"} > 30 * 60
             for: 0m
             labels:
                 severity: warning

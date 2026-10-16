@@ -58,9 +58,9 @@ operations:
         summary: A refund on a payment settled.
         description: >-
             One-to-one with the `payment.refunded` domain event — see `payments/services/refunds.ts`'s
-            `settleRefund`. Fired once per refund, whether an operator asked for it directly or the
-            `ORDER_REFUND_OWED` retry sweep completed it; never fired for a hand-paid refund left
-            for an operator to confirm by hand.
+            `settleRefund`. Fired once per refund, whether an operator asked for it directly, a cancel
+            opened it, or the refund retry sweep completed it; never fired while a hand-paid refund
+            waits for an operator to confirm it by hand.
         messages:
             - $ref: '#/channels/payment.refunded/messages/PaymentRefundedEvent'
 components:

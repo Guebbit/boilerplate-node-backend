@@ -67,7 +67,7 @@ Orders are normally created via checkout but can also be created manually (a cor
 
 > The domain behind these routes: [`payments`](../modules/payments.md) · routes and middleware: `src/modules/payments/routes.ts`
 
-An order's money, behind a provider port (`NODE_PAYMENT_PROVIDER`, no default: unset means no card payments, and the dev preload registers the `fake` [test double](../tools/test-doubles.md) — magic test cards, no outside calls). The intent freezes the order's total; the confirm charges and moves the order `pending → paid` atomically; cancelling a paid order refunds automatically, answering the `order.refund_owed` event rather than the customer-facing `order.cancelled` one `webhooks` fans out on. The fake provider declines exactly the method reference `pm_card_declined` and accepts any other, bar two that stay in flight (`pm_card_authentication_required`, `pm_card_processing`).
+An order's money, behind a provider port (`NODE_PAYMENT_PROVIDER`, no default: unset means no card payments, and the dev preload registers the `fake` [test double](../tools/test-doubles.md) — magic test cards, no outside calls). The intent freezes the order's total; the confirm charges and moves the order `pending → paid` atomically; cancelling a paid order refunds automatically, from the `refund` carried by the `order.cancelled` event `webhooks` also fans out on. The fake provider declines exactly the method reference `pm_card_declined` and accepts any other, bar two that stay in flight (`pm_card_authentication_required`, `pm_card_processing`).
 
 ## Delivery
 

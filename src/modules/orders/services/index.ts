@@ -4,7 +4,7 @@
  * into. A folder rather than one file because it passed ~300 lines; see `docs/theory/layers.md`.
  *
  * `place.ts` is the one function that writes a new order; `read.ts`, `crud.ts` and `remove.ts`
- * read, amend and delete one; `notify.ts` sends the placed-order email. `cancel.ts` runs the cancellation and the sweep behind its marker,
+ * read, amend and delete one; `notify.ts` sends the placed-order email. `cancel.ts` runs the cancellation,
  * `retention.ts` answers an erased account, `scope.ts` decides who may see what,
  */
 
@@ -14,8 +14,7 @@ import {
     getForCaller,
     openUnpaidOrderIds,
     getByTransferReference,
-    findManyByIds,
-    findOwedRefunds
+    findManyByIds
 } from './read';
 import { create, recordCreated, update, updateById } from './crud';
 import { remove, removeById, restoreById } from './remove';
@@ -23,13 +22,7 @@ import { placeOrder } from './place';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
 import { callerScope, ownerScope, ownLiveScope, withActions } from './scope';
-import {
-    cancelById,
-    cancelUnanswered,
-    retryPendingEffects,
-    markRefundOwed,
-    clearRefundOwed
-} from './cancel';
+import { cancelById, cancelUnanswered } from './cancel';
 import {
     markPaid,
     markProcessing,
@@ -80,7 +73,6 @@ export {
     openUnpaidOrderIds,
     getByTransferReference,
     findManyByIds,
-    findOwedRefunds,
     ownOrderIds,
     findOwnOrders,
     orderBriefsByIds,
@@ -90,13 +82,7 @@ export { create, recordCreated, update, updateById } from './crud';
 export { remove, removeById, restoreById } from './remove';
 export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './place';
 export { sendOrderPlacedEmail, mailBuyer } from './notify';
-export {
-    cancelById,
-    cancelUnanswered,
-    retryPendingEffects,
-    markRefundOwed,
-    clearRefundOwed
-} from './cancel';
+export { cancelById, cancelUnanswered } from './cancel';
 export {
     markPaid,
     markProcessing,
@@ -164,7 +150,6 @@ export const orderService = {
     openUnpaidOrderIds,
     getByTransferReference,
     findManyByIds,
-    findOwedRefunds,
     paidBuckets,
     productTotals,
     categoryTotals,
@@ -204,8 +189,5 @@ export const orderService = {
     anonymizeDueOrders,
     cancelById,
     cancelUnanswered,
-    retryPendingEffects,
-    markRefundOwed,
-    clearRefundOwed,
     withActions
 };

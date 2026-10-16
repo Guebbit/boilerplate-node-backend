@@ -18,20 +18,11 @@ declare module '@kernel/events' {
          * at-least-once: a listener dedupes on `meta.eventId`.
          *
          * `refund` carries the policy with the fact rather than letting the listener infer it: a
-         * customer cancelling is owed their money, an operator cancelling may not be.
+         * customer cancelling is owed their money, an operator cancelling may not be. It is also
+         * the only durable promise of that money: `payments` opens its refund record from this
+         * event, and the relay retries the event until the record exists.
          */
         'order.cancelled': { orderId: string; refund: boolean };
-
-        /**
-         * A cancelled order still owes its refund — split from `order.cancelled` so retrying the
-         * one effect `payments` owes never re-announces the whole cancellation: a retry sweep that
-         * re-sent `order.cancelled` just to nudge `payments` would duplicate the customer-facing
-         * webhook every time a provider outage outlasted one pass.
-         *
-         * Internal only — no AsyncAPI channel carries this. Nothing outside this application needs
-         * to know a refund was retried, only that the money eventually moved.
-         */
-        'order.refund_owed': { orderId: string };
 
         /**
          * An order's status moved, whoever moved it — a status-only admin override
@@ -80,9 +71,6 @@ declare module '@kernel/events' {
 
 /** Exported so an emitter and its listeners share one spelling instead of duplicated literals. */
 export const ORDER_CANCELLED = 'order.cancelled';
-
-/** See `DomainEventMap['order.refund_owed']` above. */
-export const ORDER_REFUND_OWED = 'order.refund_owed';
 
 /** See `DomainEventMap['order.status_changed']` above. */
 export const ORDER_STATUS_CHANGED = 'order.status_changed';

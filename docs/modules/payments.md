@@ -33,7 +33,6 @@ flowchart LR
     payments --> inventory
     payments --> orders
     orders -. "order.cancelled" .-> payments
-    orders -. "order.refund_owed" .-> payments
     payments -. "payment.refunded" .-> invoicing
     payments -. "payment.refunded" .-> returns
 
@@ -52,15 +51,22 @@ flowchart LR
 ## The story
 
 A payment is _about_ an order: the intent freezes its total, the confirm moves its status to
-`paid`. The arrow never comes back — [`orders`](./orders.md) announces `order.refund_owed` and this
-module answers with the refund. Separate from `order.cancelled` itself: retrying the refund must
-never re-deliver the customer-facing cancellation webhook every time a provider outage outlasts one
-sweep pass.
+`paid`. The arrow never comes back — [`orders`](./orders.md) announces `order.cancelled` with the
+`refund` it owes, and this module answers by opening the refund. The event is an outbox row written
+with the cancel, so the promise survives a crash; the refund RECORD is the promise from then on.
 
-This module also listens to `order.cancelled` itself, but for a different reason: closing a card
-intent nobody ever finished, so an abandoned one cannot resolve at the provider days later
-with no local row left to catch the charge it makes. Best-effort, and unrelated to the refund —
-a payment already `succeeded` is `order.refund_owed`'s to give back, never this listener's to close.
+This module's `order.cancelled` listener also closes a card intent nobody ever finished, so an
+abandoned one cannot resolve at the provider days later with no local row left to catch the charge
+it makes. Best-effort and first: a payment already `succeeded` is the refund's to give back, never
+the intent close's.
+
+**A refund that cannot be sent yet is a record, never a marker on the order.** The listener opens
+the record before the provider is asked. If the database fails before that, the listener rejects
+and the relay delivers the event again. After it, a provider refusal is logged and the event is
+answered: the refund sweep (`retryOpenRefunds`) finishes the open record with the same idempotency
+key, for as long as it takes. A hand-paid order opens its record too and waits for an operator:
+it shows on the needs-attention list as `manual_refund_owed`, and the operator's own refund
+settles it by hand.
 
 **`settlePayment` is the one place where the money and the goods agree.** It commits the order's
 held units itself rather than announcing and hoping, because that instant is the only moment a hold
@@ -162,7 +168,7 @@ flowchart TD
     C -->|no| W["record what arrived"]
     W --> A["audit payment.amount_mismatch,<br/>count it, log an error"]
     A --> X["cancel the order (system actor)"]
-    X --> R["ORDER_REFUND_OWED: the existing<br/>refund path returns the money"]
+    X --> R["the refund record is already open<br/>(written with the payment):<br/>the refund path returns the money"]
     R --> A409["confirm and sync answer 409<br/>PAYMENT_ORDER_NOT_PAYABLE;<br/>the webhook acknowledges"]
 ```
 
@@ -397,8 +403,8 @@ sequenceDiagram
 Every other refund dispatches to the provider named on the payment's own `provider` field — never
 the deployment's currently configured one — so a refund of an older payment still reaches the
 provider that actually took the money even after a deployment switches to another. The provider is
-asked BEFORE the status moves: a rejection leaves the payment `succeeded`, so the retry sweep
-(`ORDER_REFUND_OWED`, above) can actually retry it, instead of a failed attempt being recorded as a
+asked AFTER the record opens: a rejection leaves the payment `succeeded` and the record `failed`, so the
+refund sweep (above) can actually retry it, instead of a failed attempt being recorded as a
 successful one.
 
 Requires `create:Payment`, the same fresh-session tier as a refund (`create:Refund`) — an
@@ -524,7 +530,7 @@ flowchart LR
     ST -.->|declined| E["order stays pending<br/><i>units still held</i>"]
     ST -->|succeeded| F["order → paid<br/><i>orders</i>"]
     F --> G["commit the hold<br/><i>inventory · no counter moves<br/>until the parcel ships</i>"]
-    OC["orders"] -. "order.refund_owed" .-> R["refund<br/><i>if one was due</i>"]
+    OC["orders"] -. "order.cancelled" .-> R["refund<br/><i>if one was due</i>"]
 
     classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef port fill:#ede9fe,stroke:#7c3aed,color:#111827;
@@ -582,10 +588,10 @@ provider's `setFakeRefundFailure` simulates each code.
 `paymentService.methodMix` groups the payments that took money (`succeeded`) by
 method, provider and currency, for [`stats`](./stats.md).
 
-**Needs attention** lists four sources: a provider refund open longer than
-`NODE_PAYMENT_ATTENTION_MINUTES`; a refund owed by hand on a `manual` payment (nothing but the
-operator finishes it, so it shows at any age); a payment whose stock commit is still owed; an order
-cancelled after payment whose refund is still owed. An amount mismatch is not a stored state (an
+**Needs attention** lists two sources, both an open refund record: a provider refund open longer
+than `NODE_PAYMENT_ATTENTION_MINUTES`, and a refund owed by hand on a `manual` payment (nothing but
+the operator finishes it, so it shows at any age). A refund is never owed without a record: a cancel
+or a refund opens it before anything is asked of a provider. An amount mismatch is not a stored state (an
 audit row `payment.amount_mismatch`, a counter, a log), so the page links to the audit log instead.
 Each source is capped at 100 rows.
 

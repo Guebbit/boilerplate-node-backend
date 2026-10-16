@@ -33,10 +33,10 @@ declare module '@kernel/events' {
         /**
          * One refund settled — emitted from `./services/refunds.ts`'s `settleRefund`, on the same
          * at-most-once write, whether an operator asked for it (`refundByOrder`) or the automatic
-         * `ORDER_REFUND_OWED` compensation did. A payment can raise it more than once: each partial
+         * `order.cancelled` listener did. A payment can raise it more than once: each partial
          * refund is its own fact. `invoicing` is the listener that issues a credit note from it —
-         * see `docs/modules/invoicing.md`. Absent for a hand-paid refund left for an operator
-         * (`leaveForOperator`): no refund record exists there.
+         * see `docs/modules/invoicing.md`. Absent while a hand-paid refund waits for an operator
+         * (`leaveForOperator`): its record is open and nothing has settled yet.
          *
          * `amount` is THIS refund's, not the payment's. `full` says the refund is the whole payment,
          * the one case where a credit note mirrors the invoice instead of apportioning it.

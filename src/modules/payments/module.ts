@@ -2,10 +2,8 @@
  * @module
  * Payments: an order's money, behind a provider port (`./providers`), so the generic part of
  * taking money can be bought rather than built. Depends on orders (a payment freezes an order's
- * total, refunds answer `ORDER_REFUND_OWED` rather than the customer-facing `ORDER_CANCELLED` —
- * see `docs/modules/payments.md` — and `ORDER_CANCELLED` itself is only a best-effort trigger to
- * close a still-open intent at the provider, never a refund) and on inventory (the confirm commits
- * an order's held stock into a sale). Detaches an erased account through its own
+ * total, and a refunding `ORDER_CANCELLED` opens the refund — see `docs/modules/payments.md`)
+ * and on inventory (the confirm commits an order's held stock into a sale). Detaches an erased account through its own
  * `personalData.erase` hook — the payment survives account erasure, same as the order it paid for.
  *
  * See: docs/modules/payments.md
@@ -14,7 +12,7 @@
 import path from 'node:path';
 import type { AppModule, PublicEventTarget } from '@kernel/registry';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
-import { ORDER_REFUND_OWED, ORDER_CANCELLED } from '@modules/orders';
+import { ORDER_CANCELLED } from '@modules/orders';
 import { router } from './routes';
 import {
     refundForOrder,
@@ -93,13 +91,15 @@ export default {
         }
     ],
     subscribe: () => {
-        // `ORDER_REFUND_OWED`, not `ORDER_CANCELLED` — the event exists only when a refund is
-        // owed, so there is no boolean left to branch on.
-        onDomainEvent(ORDER_REFUND_OWED, ({ orderId }) => refundForOrder(orderId));
-        // `ORDER_CANCELLED` itself, for the OTHER thing a cancel can leave behind: a card intent
-        // nobody ever finished, still open at the provider. Best-effort — the cancel already
-        // happened by the time this runs, so a provider failure here is logged, never rethrown.
-        onDomainEvent(ORDER_CANCELLED, ({ orderId }) => cancelOpenIntentForOrder(orderId));
+        // `ORDER_CANCELLED` is both halves of what a cancel leaves with `payments`: a card intent
+        // nobody finished, still open at the provider (closed best-effort, never rethrown), and —
+        // when `refund` says so — the money already taken. The refund is the durable half: its
+        // event is an outbox row, and a rejection here makes the relay deliver it again.
+        onDomainEvent(ORDER_CANCELLED, ({ orderId, refund }) =>
+            cancelOpenIntentForOrder(orderId).then(() =>
+                refund ? refundForOrder(orderId) : undefined
+            )
+        );
         // This module's own two mails, from its own facts — see `./services/notify.ts`.
         onDomainEvent(PAYMENT_SUCCEEDED, mailPaymentReceived);
         onDomainEvent(PAYMENT_REFUNDED, mailRefundIssued);
@@ -108,7 +108,7 @@ export default {
     templates: path.join(__dirname, 'templates'),
     /**
      * One refunded payment, reached the way a shop reaches one: an order paid by card, then
-     * cancelled by an operator, with this module's own `ORDER_REFUND_OWED` listener returning the
+     * cancelled by an operator, with this module's own `order.cancelled` listener returning the
      * money. Named so the admin's refunded-payment screen has a row to open.
      *
      * The id behind it is the ORDER's: `GET /payments/order/{orderId}` is the only read path a

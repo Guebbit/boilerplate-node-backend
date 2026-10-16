@@ -920,17 +920,17 @@ components:
 
         PaymentAttentionKind:
             type: string
-            enum: [stale_refund, manual_refund_owed, payment_effect_pending, order_refund_owed]
+            enum: [stale_refund, manual_refund_owed]
             description: >-
                 `stale_refund` — a provider refund open past the threshold;
-                `manual_refund_owed` — money to hand back outside the system on a `manual` payment;
-                `payment_effect_pending` — the stock commit of a succeeded payment is still owed;
-                `order_refund_owed` — an order cancelled after payment whose refund has not happened.
+                `manual_refund_owed` — money to hand back outside the system on a `manual` payment.
+                Both are an open refund record on a payment: a cancel or a refund opens it before
+                anything is asked of a provider, so no refund is owed without one.
 
         PaymentAttentionItem:
             type: object
             additionalProperties: false
-            required: [kind, orderId, since]
+            required: [kind, orderId, paymentId, refundId, amount, currency, since]
             properties:
                 kind:
                     $ref: '#/components/schemas/PaymentAttentionKind'

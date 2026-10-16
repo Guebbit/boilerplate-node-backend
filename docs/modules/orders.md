@@ -44,7 +44,6 @@ flowchart LR
     orders -. "order.status_overridden" .-> delivery
     orders -. "order.status_changed" .-> invoicing
     orders -. "order.cancelled" .-> payments
-    orders -. "order.refund_owed" .-> payments
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -106,9 +105,8 @@ a reason — see [Who writes the status](#who-writes-the-status) below.
 
 ::: warning Two modules reach back, and both do it through events
 [`inventory`](./inventory.md) cancels an order when its hold times out (`inventory.reservation_expired`), and
-this module announces `order.refund_owed` (separate from `order.cancelled` itself, so retrying the
-refund never re-delivers the customer-facing cancellation webhook) so [`payments`](./payments.md)
-can refund. Neither is an import, which is what keeps a mutually-aware pair acyclic.
+this module announces `order.cancelled` with the `refund` it owes, so [`payments`](./payments.md)
+can open the refund from the same outbox row. Neither is an import, which is what keeps a mutually-aware pair acyclic.
 :::
 
 Each account reads back only its own orders; writing and soft-deleting is admin-only. The
@@ -129,10 +127,7 @@ a hard delete instead (409 `ORDER_INVOICED`), once and for as long as `paidAt` i
 `invoicing` freezes a legal document from that same transition, and it must survive the order it
 was issued for. The refusal does not trust the document the caller read: the hard delete is one
 `deleteOne` that filters on `status: cancelled` and `paidAt: null`, so a settlement or a reopen
-that commits in between turns it into the matching 409. `npm run
-sweep:order-effects`, every 5 minutes, re-announces `order.refund_owed` for a refund the event bus's one delivery
-attempt did not carry through. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the
-full mechanism.
+that commits in between turns it into the matching 409.
 
 ## When the account is erased
 
@@ -227,7 +222,7 @@ flowchart LR
     PR -->|"system: a digital fulfilment, or a<br/>remainder cancelled after every<br/>shipment arrived — both moves at once"| DE
     P -.->|"admin · or an expired hold"| CA["cancelled<br/><i>units released</i>"]
     PA -.->|"admin · refund due"| CA
-    CA -. "order.refund_owed" .-> PM["payments<br/><i>refunds if one was due</i>"]
+    CA -. "order.cancelled" .-> PM["payments<br/><i>refunds if one was due</i>"]
 
     classDef open fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
@@ -615,7 +610,6 @@ when the shop offers a longer withdrawal period.
 | `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`     | `10`    | Exports allowed per window, per ACCOUNT                                                                                                                                                        |
 | `NODE_ADMIN_ORDER_MAX_LINES`           | `100`   | Most lines an admin-created order (`POST /orders`) may carry. Over it: `422` `ORDER_LINE_LIMIT_EXCEEDED`. The contract's own ceiling is 1000; a larger value has no effect                     |
 | `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`   | `99999` | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                         |
-| `NODE_ORDER_EFFECT_RETRY_MINUTES`      | `5`     | Grace window after a cancel before `sweep:order-effects` retries an unsettled refund                                                                                                           |
 
 The VAT RATES charged against an order line are a different thing with a different owner — see
 [products](./products.md#configuration); this module only freezes onto the order the rate `products`

@@ -35,8 +35,6 @@
 8 2 * * * cd /app && npm run reap:invoice-pdfs
 # Anonymizes an order's remaining PII once its retention window has passed, and unsets a timeline row's staff text once its own window has.
 10 2 * * * cd /app && npm run reap:orders
-# Re-announces ORDER_REFUND_OWED for a refund the event bus's one delivery attempt did not carry through.
-*/5 * * * * cd /app && npm run sweep:order-effects
 # Deletes abandoned (never-settled) payment attempts past their retention window.
 15 2 * * * cd /app && npm run reap:payments
 # Retries refunds the provider has not answered, and settles unsettled payments whose webhook never arrived.

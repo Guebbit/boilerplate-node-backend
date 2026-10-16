@@ -100,21 +100,6 @@ export interface OrderReference {
     email: string;
 }
 
-/** Every effect a cancel can still owe — the schema's `enum`, and the source of {@link OrderPendingEffect}. */
-const ORDER_PENDING_EFFECTS = ['refund'] as const;
-
-/**
- * A consequence of a cancel that the cancel itself could not guarantee.
- *
- * One member, not because the stock half always heals — it does not. The reservation sweep
- * (`inventory/repository.ts`) only matches `held` reservations; a paid order's `committed` hold,
- * released by the cancel rather than swept, is never retried if that release throws, and those
- * units are lost from sale for good. The money half is tracked here because the domain event bus
- * has no retry of its own: a refund that throws is lost unless the intent to make it survives the
- * failure.
- */
-export type OrderPendingEffect = (typeof ORDER_PENDING_EFFECTS)[number];
-
 /**
  * Order Document interface: overrides the generated `Order`'s `userId`/`items`/`status`, and
  * redeclares `deletedAt`/`payBy`/`paidAt` as `Date` (the contract types both as ISO strings).
@@ -219,13 +204,6 @@ export interface OrderDocument
      */
     fulfillment?: FulfillmentSummary;
     /**
-     * What the cancel decided but has not yet seen through. Written in the same conditional write
-     * that moves the status, so the intent and the decision cannot come apart; emptied once the
-     * listener has actually returned. Non-empty means `retryPendingEffects` still owes this order
-     * something — absent and empty both mean settled.
-     */
-    pendingEffects?: OrderPendingEffect[];
-    /**
      * The RF creditor reference this order's `bank_transfer` checkout minted
      * (`src/modules/orders/domain/transfer-reference.ts`'s `buildReference`), from the SAME id
      * this write creates — never recomputed afterwards.
@@ -235,7 +213,7 @@ export interface OrderDocument
      *          `GET /payments/order-by-reference` cannot reach that order (its admin finds it by
      *          id through the normal order search instead).
      * On wire: not part of the `Order` contract — `applyOrderTransform` omits it, the same
-     *          treatment as `anonymizeAfter`/`pendingEffects` below, and it is surfaced only
+     *          treatment as `anonymizeAfter` below, and it is surfaced only
      *          through `transferInstructions.reference`.
      */
     transferReference?: string;
@@ -492,16 +470,6 @@ export const orderSchema = new Schema<OrderDocument>(
             type: Date
         },
         /*
-         * `default: undefined` overrides Mongoose's implicit `[]` for an array path, so an order
-         * that never cancelled carries no key at all — the difference between "owes nothing" and
-         * "was never asked". Only the cancel's own write creates it.
-         */
-        pendingEffects: {
-            type: [String],
-            enum: [...ORDER_PENDING_EFFECTS],
-            default: undefined
-        },
-        /*
          * The RF reference `placeOrder` mints for a `bank_transfer` order, from the same id this
          * write creates. Absent on a `card` order — no `required`, matching that.
          */
@@ -542,15 +510,6 @@ orderSchema.index({ userId: 1, deletedAt: 1 }, { name: 'orders_userId_deletedAt'
  * gets scrubbed, so nothing here may carry `expireAfterSeconds`.
  */
 orderSchema.index({ anonymizeAfter: 1 }, { name: 'orders_anonymizeAfter', sparse: true });
-/*
- * `retryPendingEffects`'s query — orders still owing an effect, oldest first. Sparse, so it holds
- * only the handful of orders between a cancel and its consequences rather than every order ever
- * placed. An empty array indexes no key, which is why draining the field is enough to leave it.
- */
-orderSchema.index(
-    { pendingEffects: 1, updatedAt: 1 },
-    { name: 'orders_pendingEffects', sparse: true }
-);
 /*
  * The Awaiting-transfer tab: pending orders, nearest `payBy` first.
  */
@@ -689,12 +648,11 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
  * through the same logic — see `normalize` in @infrastructure/persistence/create-repository.
  */
 export const applyOrderTransform = applySerialization(orderSchema, {
-    // `anonymizeAfter` is the reaper's own bookkeeping and `pendingEffects` the cancel sweep's,
-    // neither part of the `Order` contract — same reasoning as `users`' `pendingImageKey`/
-    // `inactivityWarnedAt`. `transferReference` is NOT
+    // `anonymizeAfter` is the reaper's own bookkeeping, not part of the `Order` contract — same
+    // reasoning as `users`' `pendingImageKey`/`inactivityWarnedAt`. `transferReference` is NOT
     // listed here: `omit` runs before `after` below, and `applyTransferInstructions` still needs
     // to read it — it strips the raw field itself, once it no longer does.
-    omit: ['anonymizeAfter', 'pendingEffects', 'withdrawUntil'],
+    omit: ['anonymizeAfter', 'withdrawUntil'],
     after: (serialized) => {
         applyOrderItems(serialized);
         // `currency` is required on the schema, so a serialized order always carries it; the

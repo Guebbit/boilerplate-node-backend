@@ -6,7 +6,7 @@
  * Owns:        the `Invoice`/`CreditNote` collections and their own numbering series, outright.
  * Depends on:  `orders` (the VAT breakdown, the seller's jurisdiction, an auth-scoped order read)
  *              and `payments` (`PAYMENT_REFUNDED`) — both reached through their own public
- *              barrels, same as `payments/module.ts` reaches `orders`' `ORDER_REFUND_OWED`.
+ *              barrels, same as `payments/module.ts` reaches `orders`' `ORDER_CANCELLED`.
  * Shares:      the `/orders` URL prefix with `orders` — see `./routes.ts` and
  *              `docs/api/contract-fragmentation.md`'s `account`/`addresses` precedent.
  *

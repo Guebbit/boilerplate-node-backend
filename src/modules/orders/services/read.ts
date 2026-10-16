@@ -202,27 +202,6 @@ export const findManyByIds = (ids: readonly string[]): Promise<OrderReference[]>
     ids.length === 0 ? Promise.resolve([]) : orderRepository.findManyReferences(ids);
 
 /**
- * Orders cancelled after payment whose refund is still owed, oldest first — the payments page's
- * needs-attention read. Only a refund the retry sweep has had its chance at: the grace window
- * is the caller's `cutoff`.
- *
- * @param cutoff - orders untouched at or before this instant
- * @param limit - the most to return
- * @returns the order id and when the debt was last touched
- */
-export const findOwedRefunds = (
-    cutoff: Date,
-    limit: number
-): Promise<{ orderId: string; since: Date }[]> =>
-    orderRepository
-        .findWithPendingEffects(cutoff, limit)
-        .then((orders) =>
-            orders
-                .filter((order) => order.pendingEffects?.includes('refund'))
-                .map((order) => ({ orderId: String(order._id), since: order.updatedAt ?? cutoff }))
-        );
-
-/**
  * The order a `bank_transfer` checkout stamped with this RF reference — `payments`' admin lookup,
  * which reads it back off a bank statement. Exact match only: normalizing what an admin pasted is
  * `orders/domain/transfer-reference.ts`'s job, before it gets here.

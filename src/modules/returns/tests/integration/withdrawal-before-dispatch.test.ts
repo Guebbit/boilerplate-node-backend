@@ -86,6 +86,8 @@ describe('a withdrawal before dispatch on a paid order', () => {
         expect(outcome.success).toBe(true);
         const stored = await readOrder(orderId);
         expect(stored?.status).toBe(OrderStatus.cancelled);
+        // The refund is the cancel's event, delivered by the relay after the response.
+        await settleOutboxNudges();
         const payment = await paymentService.getForOrder(orderId, asAdmin());
         expect(payment.success && payment.data).toMatchObject({
             status: 'succeeded',

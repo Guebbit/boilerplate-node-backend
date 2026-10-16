@@ -505,13 +505,12 @@ counters: `orders` asks it to hold units, `payments` asks it to turn a hold into
 The reverse direction is domain events, and it is a **separate** graph on purpose — an event edge is
 exactly the edge that would have made the import graph a cycle:
 
-| Event                           | Emitted by  | Handled by                   |
-| ------------------------------- | ----------- | ---------------------------- |
-| `product.deleted`               | `products`  | `cart`, `wishlist`           |
-| `order.status_changed`          | `orders`    | `delivery` (on `shipped`)    |
-| `order.cancelled`               | `orders`    | `webhooks` (fans out)        |
-| `order.refund_owed`             | `orders`    | `payments` (refunds)         |
-| `inventory.reservation_expired` | `inventory` | `orders` (cancels the order) |
+| Event                           | Emitted by  | Handled by                                  |
+| ------------------------------- | ----------- | ------------------------------------------- |
+| `product.deleted`               | `products`  | `cart`, `wishlist`                          |
+| `order.status_changed`          | `orders`    | `delivery` (on `shipped`)                   |
+| `order.cancelled`               | `orders`    | `webhooks` (fans out), `payments` (refunds) |
+| `inventory.reservation_expired` | `inventory` | `orders` (cancels the order)                |
 
 A user's hard delete is deliberately not in this table: it is not an event. Each module declares a
 `personalData.erase` hook and `users` runs them all inside one transaction, so a failing eraser

@@ -18,12 +18,7 @@ import {
     orderEventModel,
     applyOrderEventTransform
 } from './model';
-import type {
-    OrderDocument,
-    OrderEventDocument,
-    OrderPendingEffect,
-    OrderReference
-} from './model';
+import type { OrderDocument, OrderEventDocument, OrderReference } from './model';
 import { paymentStatusFilter, returnStatusFilter } from './domain';
 import type { FulfillmentSummary, StampedPaymentStatus, StampedReturnStatus } from './domain';
 import { Types } from 'mongoose';
@@ -256,10 +251,6 @@ const ownerScope = (userId: string): Record<string, unknown> => ({
  * `callerScope` (`services/scope.ts`) rides in the same filter, so there's no window between an
  * ownership check and the write.
  *
- * @param effects - consequences the mover cannot guarantee, stored in the SAME write as the
- *   status. Single-document atomicity is what makes them exactly as durable as the move that
- *   decided them; a second write could be the one that is lost. Only the cancel passes any —
- *   `delivery`'s shipped move has nothing that needs retrying.
  * @param session - joins the write to the caller's transaction — a cancel moves the status, the
  *   hold and the stock together or not at all
  */
@@ -268,7 +259,6 @@ const updateStatusIfIn = (
     from: readonly string[],
     to: string,
     scope?: Record<string, unknown>,
-    effects?: readonly OrderPendingEffect[],
     session?: ClientSession
 ): Promise<OrderDocument | null> =>
     orderModel
@@ -281,7 +271,7 @@ const updateStatusIfIn = (
                 ...scope,
                 status: { $in: [...from] }
             } as QueryFilter<OrderDocument>,
-            { $set: { status: to, ...(effects?.length ? { pendingEffects: [...effects] } : {}) } },
+            { $set: { status: to } },
             { returnDocument: 'after', session }
         )
         .exec();
@@ -446,25 +436,6 @@ const writeFulfillment = (
         .exec();
 
 /**
- * Orders whose consequences are still owed, oldest first — `retryPendingEffects`'s only query.
- *
- * `pendingEffects.0` rather than `$exists`, so a drained order (empty array) is settled without a
- * second write to unset the field. The grace window rides in the caller's `cutoff`: the happy
- * path clears the marker milliseconds after writing it, so anything still standing after it has
- * genuinely been dropped.
- *
- * @param cutoff - orders untouched at or before this instant are due for a retry
- * @param limit - how many to return at most, so one pass cannot fan out unboundedly
- * @returns the orders still owing an effect
- */
-const findWithPendingEffects = (cutoff: Date, limit: number): Promise<OrderDocument[]> =>
-    orderModel
-        .find({ 'pendingEffects.0': { $exists: true }, updatedAt: { $lte: cutoff } })
-        .sort({ updatedAt: 1 })
-        .limit(limit)
-        .exec();
-
-/**
  * What a sibling that lists something else composes onto its rows: the order's number and email.
  * Lean and projected, so no line, address or note is read.
  *
@@ -483,48 +454,6 @@ const findManyReferences = (ids: readonly string[]): Promise<OrderReference[]> =
                 email: row.email
             }))
         );
-
-/**
- * Discharge one effect, once its listener has actually returned.
- *
- * Conditional on the effect still being there, so a retry racing the original drain resolves at
- * the storage layer rather than double-counting. `timestamps: false` — draining is bookkeeping,
- * and bumping `updatedAt` would push every *other* pending effect on the order out past the
- * sweep's cutoff.
- *
- * @param orderId - the order that owed it
- * @param effect - the consequence now settled
- * @returns whether this call was the one that cleared it
- */
-const clearPendingEffect = (orderId: string, effect: OrderPendingEffect): Promise<boolean> =>
-    orderModel
-        .updateOne(
-            { _id: toObjectId(orderId), pendingEffects: effect },
-            { $pull: { pendingEffects: effect } },
-            { timestamps: false }
-        )
-        .exec()
-        .then(({ modifiedCount }) => modifiedCount > 0);
-
-/**
- * Add a pending effect outside a status move — settlement's own "the money landed on an order no
- * longer payable" refund is the one caller: the order's status already moved (to `cancelled`, by
- * whoever raced it there first), so there is no transition here to carry the marker on the way
- * {@link updateStatusIfIn}'s `effects` parameter does for an ordinary cancel.
- *
- * `$addToSet`, not `$set`: a second effect added later must not overwrite the first one still
- * owed. Timestamps run normally (unlike {@link clearPendingEffect}'s bookkeeping write) — this
- * marks the order as having just changed, which is what makes the grace window on
- * {@link findWithPendingEffects}'s `cutoff` mean anything for it.
- *
- * @param orderId - the order to mark
- * @param effect - the effect still owed
- */
-const addPendingEffect = (orderId: string, effect: OrderPendingEffect): Promise<void> =>
-    orderModel
-        .updateOne({ _id: toObjectId(orderId) }, { $addToSet: { pendingEffects: effect } })
-        .exec()
-        .then(() => undefined);
 
 /**
  * The ids of this account's never-paid orders still open — `pending`, with no `paidAt`, whatever
@@ -738,7 +667,6 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         from: readonly string[],
         to: string,
         scope?: Record<string, unknown>,
-        effects?: readonly OrderPendingEffect[],
         session?: ClientSession
     ) => Promise<OrderDocument | null>;
     markPaid: (
@@ -774,10 +702,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         summary: FulfillmentSummary,
         session: ClientSession
     ) => Promise<OrderDocument | null>;
-    findWithPendingEffects: (cutoff: Date, limit: number) => Promise<OrderDocument[]>;
     findManyReferences: (ids: readonly string[]) => Promise<OrderReference[]>;
-    clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
-    addPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<void>;
     findOpenUnpaidIdsOf: (userId: string, session?: ClientSession) => Promise<string[]>;
     detachUserId: (
         userId: string,
@@ -805,10 +730,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     applyStatusOverride,
     findInSession,
     writeFulfillment,
-    findWithPendingEffects,
     findManyReferences,
-    clearPendingEffect,
-    addPendingEffect,
     findOpenUnpaidIdsOf,
     detachUserId,
     startPiiClock,
