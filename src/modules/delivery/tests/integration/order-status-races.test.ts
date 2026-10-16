@@ -15,9 +15,8 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { orderModel } from '@modules/orders/model';
-import { fulfillmentOrdersOf, shipmentsOf } from '@modules/delivery/tests/factories';
+import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { fulfillmentOrdersOf, shipmentsOf } from '../factories';
 import { OrderStatus } from '@types';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { settleOutboxNudges } from '@kernel/outbox';
@@ -57,7 +56,7 @@ describe('D2 — two admins racing the same ship door', () => {
         // The claim under test: exactly one shipped-parcel email, never one per racer.
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
 
-        const stored = await orderModel.findById(order._id);
+        const stored = await readOrder(String(order._id));
         expect(stored?.status).toBe(OrderStatus.shipped);
         expect(await shipmentsOf(String(order._id))).toHaveLength(1);
     });
@@ -85,7 +84,7 @@ describe('D2 — two admins racing the same ship door', () => {
         const shipments = await shipmentsOf(String(order._id));
         const units = shipments.flatMap(({ lines }) => lines).map(({ quantity }) => quantity);
         expect(units.length).toBe(3);
-        const stored = await orderModel.findById(order._id);
+        const stored = await readOrder(String(order._id));
         expect(stored?.status).toBe(OrderStatus.shipped);
     });
 });
@@ -114,7 +113,7 @@ describe('a ship racing a cancel of the whole order', () => {
         expect(cancel.status).toBeLessThan(500);
         // The cancel announces itself; delivery's listener cancels the fulfillment orders after.
         await settleOutboxNudges();
-        const stored = await orderModel.findById(order._id);
+        const stored = await readOrder(String(order._id));
         const shipments = await shipmentsOf(String(order._id));
         const [after] = await fulfillmentOrdersOf(String(order._id));
         if (ship.status === 201) {

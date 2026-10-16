@@ -37,22 +37,20 @@
  */
 import { api } from '@tests/http';
 import { testCallerContext } from '@tests/callers';
-import { accountService } from '@modules/account/services';
+import { accountService } from '../../services';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
-// Not on the barrel — see `users/index.ts`. A spec may reach the model; runtime code may not.
-import { userModel } from '@modules/users/model';
+import {
+    createUser,
+    PLAIN_PASSWORD,
+    REPLACEMENT_PASSWORD,
+    userRepository
+} from '@modules/users/tests/factories';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
 import { withReloadedRateLimits } from '@tests/rate-limit-harness';
 import { cookieHeader, setCookie } from '@tests/cookies';
-import { registerOAuthProvider } from '@modules/account/oauth/providers';
+import { registerOAuthProvider } from '../../oauth/providers';
 import { fakeOAuthProvider } from '@scenarios/support/doubles/oauth-fake';
-import {
-    plantToken,
-    sessionHashesOf,
-    sessionRowsOf,
-    tokenTypesOf
-} from '@modules/account/tests/factories';
+import { plantToken, sessionHashesOf, sessionRowsOf, tokenTypesOf } from '../factories';
 
 setupTestDb();
 
@@ -75,7 +73,7 @@ describe('R1 — concurrent signups for one address', () => {
         expectNoServerErrors(results);
 
         // The invariant. Not "the first one won" — which one won is mongod's business.
-        const accounts = await userModel.countDocuments({ email });
+        const accounts = await userRepository.count({ email });
         expect(accounts).toBe(1);
     });
 
@@ -137,7 +135,7 @@ describe('R1 — concurrent signups for one address', () => {
             termsAccepted: true
         });
 
-        const accounts = await userModel.countDocuments({ email });
+        const accounts = await userRepository.count({ email });
         expect(second.status).toBe(409);
         expect(accounts).toBe(1);
     });
@@ -238,7 +236,7 @@ describe('two simultaneous OAuth signups for one identity', () => {
                 new URL(response.headers.location).searchParams.get('error') === 'provider_error';
             expect(signedIn || failed).toBe(true);
         }
-        expect(await userModel.countDocuments({ email: 'oauth.demo@example.com' })).toBe(1);
+        expect(await userRepository.count({ email: 'oauth.demo@example.com' })).toBe(1);
 
         const retry = await (await startAttempt())();
 

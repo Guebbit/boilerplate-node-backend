@@ -25,11 +25,11 @@ import {
 } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { giveAddress } from '@modules/addresses/tests/factories';
-import { cartService } from '@modules/cart/services';
-import { cartRepository } from '@modules/cart/repository';
-import { stockLevelRepository } from '@modules/inventory/repository';
+import { cartService } from '../../services';
+import { cartRepository } from '../../repository';
+import { stockLevelRepository } from '@modules/inventory/tests/factories';
 import { countOrders } from '@modules/orders/tests/factories';
-import { createIntent } from '@modules/payments/services';
+import { createIntent } from '@modules/payments';
 import { resetDomainEvents } from '@kernel/events';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { setupTestDb } from '@tests/setup-test-db';

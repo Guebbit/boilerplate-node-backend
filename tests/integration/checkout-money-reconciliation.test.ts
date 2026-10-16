@@ -4,7 +4,7 @@
  * written for (`POST /cart/checkout`) and what the payment intent asks the provider to take
  * (`POST /payments/intent`) must be the SAME amount, to the last minor unit.
  *
- * `tests/cross-cutting/money-reconciliation.property.test.ts` proves the pure composition; this
+ * `delivery/tests/unit/money-reconciliation.property.test.ts` proves the pure composition; this
  * drives the three real doors, which is where a number is assembled a second time. The expected
  * amount is computed here in integer minor units (per-unit rounding, the rule `money.ts`
  * documents), never by calling the code under test.

@@ -1,6 +1,6 @@
 /**
  * @module
- * Cross-cutting property — the composition of `orders.orderTotal` and `delivery.priceShipping`
+ * The composition of `orders.orderTotal` and `delivery.priceShipping`
  * that cart's checkout, the payment intent freeze, and the confirmation email each perform
  * themselves rather than call one another for. `totals.property.test.ts` and
  * `money.property.test.ts` prove `orders`' own functions in isolation; neither proves the
@@ -9,7 +9,7 @@
  */
 import fc from 'fast-check';
 import { sumLineItems, orderTotal } from '@modules/orders';
-import { findShippingMethod, priceShipping } from '@modules/delivery';
+import { findShippingMethod, priceShipping } from '../../domain';
 
 /** One seed for the file, and one place to change it. */
 const RUN = { seed: 20_260_902, numRuns: 300, endOnFailure: true } as const;

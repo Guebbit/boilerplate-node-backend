@@ -142,8 +142,11 @@ and emails, plus `export type *` from its model. See `docs/theory/strategic-ddd.
 Placement is by scope, and `eslint-plugin-boundaries` enforces the line at the import.
 See `docs/reference/tests.md`.
 
-- A test about **one module** lives in `src/modules/<module>/tests/`. A test about the **system** —
-  infrastructure, the kernel, or a rule that holds across every module — lives in `tests/`.
+- A test about **one module's rules** lives in `src/modules/<module>/tests/`, and may run the real
+  modules that module depends on (`dependsOn`) — through their barrel, or their
+  `tests/factories.ts` for storage. When several modules qualify, the one highest in the
+  dependency chain owns it. A test about the **system** — infrastructure, the kernel, a rule that
+  holds across every module, or a flow no single module depends on all of — lives in `tests/`.
 - Pick the suite by what the test needs: `unit` (one function, no database) · `cross-cutting` (a
   rule across every module) · `integration` (a real database, or the real app over HTTP) ·
   `contract` (HTTP against the spec) · `fuzz` (the spec, hostile).

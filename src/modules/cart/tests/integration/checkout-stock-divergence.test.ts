@@ -14,11 +14,11 @@ import { createProduct, countersOf, productRepository } from '@modules/products/
 import { productService } from '@modules/products';
 import { createUser } from '@modules/users/tests/factories';
 import { giveAddress } from '@modules/addresses/tests/factories';
-import { cartService } from '@modules/cart/services';
-import { cartRepository } from '@modules/cart/repository';
+import { cartService } from '../../services';
+import { cartRepository } from '../../repository';
 import { orderService } from '@modules/orders';
 import { countOrders } from '@modules/orders/tests/factories';
-import { stockLevelModel } from '@modules/inventory/model';
+import { forceStockLevel, stockLevelRepository } from '@modules/inventory/tests/factories';
 import { logger } from '@infrastructure/adapters/logger';
 import { resetDomainEvents } from '@kernel/events';
 import { registerCheckoutModules } from '@tests/checkout-modules';
@@ -46,24 +46,16 @@ const shopperBuyingThree = async (onHand: number) => {
     return { user, product };
 };
 
-/** Overwrite the level row's counters, leaving the catalogue's cached copy untouched. */
-const setLevel = (productId: Types.ObjectId, onHand: number, reserved: number) =>
-    stockLevelModel.updateOne(
-        { productId },
-        { $set: { onHand, reserved, available: onHand - reserved } }
-    );
-
 /** The level row's counters, read from `stocklevels` itself. */
 const levelOf = (productId: Types.ObjectId) =>
-    stockLevelModel
-        .findOne({ productId })
-        .lean()
+    stockLevelRepository
+        .findByProductId(String(productId))
         .then((level) => ({ onHand: level?.onHand, reserved: level?.reserved }));
 
 describe('the cache says there is stock, the level collection says there is not', () => {
     it('refuses the checkout at the hold, with no order and no unit moved', async () => {
         const { user, product } = await shopperBuyingThree(10);
-        await setLevel(product._id, 2, 0);
+        await forceStockLevel(product._id, 2, 0);
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
@@ -76,7 +68,7 @@ describe('the cache says there is stock, the level collection says there is not'
 
     it('names the blocking line from the level, not the cache, in the refusal', async () => {
         const { user, product } = await shopperBuyingThree(10);
-        await setLevel(product._id, 2, 0);
+        await forceStockLevel(product._id, 2, 0);
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
@@ -94,7 +86,7 @@ describe('the cache says there is stock, the level collection says there is not'
 
     it('sells exactly what the level holds when the cache over-reports', async () => {
         const { user, product } = await shopperBuyingThree(10);
-        await setLevel(product._id, 3, 0);
+        await forceStockLevel(product._id, 3, 0);
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
@@ -105,7 +97,7 @@ describe('the cache says there is stock, the level collection says there is not'
     it('does not let a cache that under-counts reservations sell the same units twice', async () => {
         // The cache believes nothing is reserved; the level knows 8 of 10 are held for others.
         const { user, product } = await shopperBuyingThree(10);
-        await setLevel(product._id, 10, 8);
+        await forceStockLevel(product._id, 10, 8);
         await productRepository.syncStockCache(String(product._id), { onHand: 10, reserved: 0 });
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -140,7 +132,7 @@ describe('the catalogue cache fails to sync after a stock write', () => {
         const checkout = await cartService.orderConfirm(user.id, testCallerContext, undefined);
         const orderId = String(checkout.success && checkout.data?._id);
 
-        await orderService.cancelById(orderId, asCustomer(user.id));
+        await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
 
         // The release moved the level to 0 held, and its own sync rewrote the whole cache from it.
         expect(await levelOf(product._id)).toEqual({ onHand: 10, reserved: 0 });

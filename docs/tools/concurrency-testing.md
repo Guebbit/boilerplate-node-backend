@@ -110,16 +110,16 @@ When the window is too narrow to hit over HTTP, force it instead. The cancel-vs-
 
 ## File map
 
-| Path                                                           | Contents                                                                                                                              |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/integration/concurrency/auth-races.test.ts`             | Signup, login, session revocation, one-time reset tokens, and the limiter proof                                                       |
-| `tests/integration/concurrency/cart-races.test.ts`             | Cart upsert under contention, checkout, account deletion racing a cart write                                                          |
-| `tests/integration/concurrency/payment-races.test.ts`          | Double confirm, webhook redelivery, confirm vs webhook, overselling, cancel vs pay                                                    |
-| `tests/integration/concurrency/checkout-interleavings.test.ts` | Checkout against a cart write injected at a fixed point: the loser answers `CART_CHANGED` and keeps none of its work                  |
-| `tests/integration/concurrency/order-status-races.test.ts`     | Two simultaneous status changes on one order: one move wins, the email follows only a write that landed                               |
-| `tests/integration/conditional-writes.test.ts`                 | Two editors on one `ETag`: exactly one write lands, the other is a 412 — the lost update, for products, users, orders and the account |
-| `tests/support/race.ts`                                        | `raceN`, status helpers, and the shared "no 5xx, no 429, nobody hung up" assertion                                                    |
-| `tests/support/setup.ts`                                       | Where the rate-limit budgets are raised, and why they are raised rather than disabled                                                 |
+| Path                                                                | Contents                                                                                                                              |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/modules/account/tests/integration/auth-races.test.ts`          | Signup, login, session revocation, one-time reset tokens, and the limiter proof                                                       |
+| `tests/integration/concurrency/cart-races.test.ts`                  | Cart upsert under contention, checkout, account deletion racing a cart write                                                          |
+| `tests/integration/concurrency/payment-races.test.ts`               | Double confirm, webhook redelivery, confirm vs webhook, overselling, cancel vs pay                                                    |
+| `src/modules/cart/tests/integration/checkout-interleavings.test.ts` | Checkout against a cart write injected at a fixed point: the loser answers `CART_CHANGED` and keeps none of its work                  |
+| `src/modules/delivery/tests/integration/order-status-races.test.ts` | Two simultaneous status changes on one order: one move wins, the email follows only a write that landed                               |
+| `tests/integration/conditional-writes.test.ts`                      | Two editors on one `ETag`: exactly one write lands, the other is a 412 — the lost update, for products, users, orders and the account |
+| `tests/support/race.ts`                                             | `raceN`, status helpers, and the shared "no 5xx, no 429, nobody hung up" assertion                                                    |
+| `tests/support/setup.ts`                                            | Where the rate-limit budgets are raised, and why they are raised rather than disabled                                                 |
 
 The lost update between two _editors_ is the one race here with a client-facing answer: an `If-Match` makes the loser a 412 instead of a silent overwrite. See [Conditional writes](../api/write-methods.md#conditional-writes-etag-and-if-match).
 

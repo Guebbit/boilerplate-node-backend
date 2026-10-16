@@ -6,7 +6,7 @@
  * tag through the registry-declared `cacheTag`, from a module that never imports `products` at
  * all. Nothing type-checks the two tags against each other, so this drives the real app end to
  * end and asserts the CACHED RESPONSE actually disappears — the same shape
- * `locale-cache-invalidation.test.ts` uses for the tier-1 dictionary, and for the same reason: a
+ * `locales/tests/integration/locale-cache-invalidation.test.ts` uses for the tier-1 dictionary, and for the same reason: a
  * unit test asserting `invalidateCacheTags` was called with a string would pass against a typo.
  */
 

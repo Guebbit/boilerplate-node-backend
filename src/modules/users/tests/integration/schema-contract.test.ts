@@ -55,7 +55,7 @@ describe('user schema', () => {
      * relies on. The application check in `authService.signup` (`findOne` → 409) isn't atomic:
      * two concurrent signups for one address can both pass the lookup and both insert, so only
      * the index can refuse the second write.
-     * `tests/integration/concurrency/auth-races.test.ts` drives the race itself; this case fails
+     * `account/tests/integration/auth-races.test.ts` drives the race itself; this case fails
      * fast if a schema edit quietly drops `unique`.
      */
     it('enforces email uniqueness at the database level', async () => {

@@ -2,7 +2,7 @@
  * @module
  * A return whose refund the payment provider refuses: the goods are back either way, the refund
  * stays open on the payment carrying the return's id, and the payment sweep completing it is what
- * closes the return — across two modules, so it lives here rather than in either.
+ * closes the return. `returns` depends on `payments`, so the real payment sweep runs here.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -18,9 +18,9 @@ import { inventoryService } from '@modules/inventory';
 import paymentsModule from '@modules/payments/module';
 import { createIntent, confirmPayment, paymentService } from '@modules/payments';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
-import returnsModule from '@modules/returns/module';
-import { createReturn, receiveReturn } from '@modules/returns';
-import { returnRepository } from '@modules/returns/repository';
+import returnsModule from '../../module';
+import { createReturn, receiveReturn } from '../../services';
+import { returnRepository } from '../../repository';
 
 setupTestDb();
 
@@ -61,8 +61,8 @@ const withdrawnOrder = async () => {
         asCustomer(user.id),
         testCallerContext
     );
-    if (outcome.kind !== 'created') throw new Error('expected a return');
-    return { shirt, orderId, returnId: String(outcome.created._id) };
+    if (!outcome.success) throw new Error('expected a return');
+    return { shirt, orderId, returnId: String(outcome.data._id) };
 };
 
 describe('a return whose refund the provider refuses', () => {

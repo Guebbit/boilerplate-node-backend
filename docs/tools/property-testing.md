@@ -86,7 +86,7 @@ That second one is worth internalising: a property that fails on your own assert
 | `tests/cross-cutting/search-regex.test.ts`                                    | The example-based half — timing, named metacharacters, negatives                |
 | `tests/unit/shared-kernel/money.property.test.ts`                             | `Money` never yields `NaN`, `Infinity` or a fraction of a minor unit            |
 | `src/modules/delivery/tests/unit/rates.property.test.ts`                      | the free-shipping boundary, for every items total                               |
-| `tests/cross-cutting/money-reconciliation.property.test.ts`                   | `orderTotal` composed with `priceShipping`, as every caller uses them           |
+| `src/modules/delivery/tests/unit/money-reconciliation.property.test.ts`       | `orderTotal` composed with `priceShipping`, as every caller uses them           |
 | `src/modules/inventory/tests/integration/ledger.property.test.ts`             | replaying a ledger reproduces the counters (real Mongo)                         |
 | `src/modules/inventory/tests/integration/multi-line-reserve.property.test.ts` | `reserved` equals the open holds, `available == onHand - reserved` (real Mongo) |
 

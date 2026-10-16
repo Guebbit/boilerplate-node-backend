@@ -3,8 +3,8 @@
  * An admin create or update and its role grant are one transaction: the grant is checked, and a
  * refusal audited, before any write; a failure inside it rolls the whole write back instead of
  * leaving a half-made account. Each case forces the role write (and, for a create, any delete that
- * could undo it) to fail, then looks at what is stored. Cross-module: `users` writes, `access`'s
- * `membershipModel` is what has to be forced to fail.
+ * could undo it) to fail, then looks at what is stored. `users` writes; `access`, which it depends
+ * on, owns the `membershipModel` write that is forced to fail.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -12,10 +12,9 @@ import { callerContextAs } from '@tests/callers';
 import { asStub } from '@tests/stub';
 import { observePort } from '@tests/ports';
 import * as auditPort from '@infrastructure/observability/audit';
-import { membershipModel } from '@modules/access/model';
-import { accessAuditActions } from '@modules/access/audit';
-import { userService } from '@modules/users';
-import { createUser, userRepository } from '@modules/users/tests/factories';
+import { accessAuditActions, membershipModel } from '@modules/access/tests/factories';
+import { userService } from '../../services';
+import { createUser, userRepository } from '../factories';
 
 // See `tests/support/ports.ts`: `observePort` needs a plain `jest.fn()` behind the namespace.
 jest.mock('@infrastructure/observability/audit', () => {

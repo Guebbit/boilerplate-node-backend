@@ -49,7 +49,7 @@ Everything that needs the real stack, in `tests/integration/` (the system) and `
 
 - **Routing and gates** — `app-health.test.ts` (`GET /`, unknown route, the observability routes without auth answering `401`, not `404` or `500`), `access.test.ts`, `cors.test.ts`, `security-middleware.test.ts`
 - **Money and stock across modules** — `checkout-money-reconciliation.test.ts`, `refund-webhook.test.ts`
-- **Races** — `tests/integration/concurrency/`, see [Concurrency Testing](./concurrency-testing.md)
+- **Races** — `tests/integration/concurrency/` and each module's own, see [Concurrency Testing](./concurrency-testing.md)
 - **Persistence and the outbox** — `tests/integration/persistence/`, `tests/integration/kernel/`
 - **Scenarios and scripts** — `tests/integration/scenarios/`, `tests/integration/scripts/`
 

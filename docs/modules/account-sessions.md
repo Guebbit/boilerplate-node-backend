@@ -561,7 +561,7 @@ racing on the SAME cookie — two tabs waking together, an interceptor retrying 
 identical old token, and only one can win the atomic claim. Without the grace window the loser's
 retry would look exactly like theft. Within it, the loser is reissued its own sibling token instead
 of rejected — proven under real concurrent load in
-`tests/integration/concurrency/auth-races.test.ts` (R5), not just asserted here.
+`src/modules/account/tests/integration/auth-races.test.ts` (R5), not just asserted here.
 
 ### Two windows, and why they must not be one
 

@@ -24,7 +24,7 @@ double.
 | Currency confusion                | cents vs. units; the currency code changed after pricing    | The currency is `NODE_DEFAULT_CURRENCY` (`orders/config.ts`), read server-side and frozen onto the order and payment documents. No endpoint chooses one; the refund body accepts an optional `currency` only as a check, refused unless it equals the payment's own — `payments/services/refunds.ts`, `payments/model.ts` |
 | Unit / measurement confusion      | weight in kg vs. g on a shipping fee                        | Shipping is priced from the basket's own line total by `priceShipping`, against a method resolved from a server-side table — the request names an ID, never a cost — `delivery/`, `cart/services/checkout.ts`                                                                                                             |
 
-`tests/cross-cutting/money-reconciliation.property.test.ts` asserts the arithmetic as a property
+`src/modules/delivery/tests/unit/money-reconciliation.property.test.ts` asserts the arithmetic as a property
 rather than by example, which is the only way to catch a rounding rule that is wrong only on
 certain inputs.
 

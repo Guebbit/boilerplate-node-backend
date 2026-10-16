@@ -4,8 +4,8 @@
  * (Q14 of the merge-alert plan: the order was placed while the product was on sale). `products`
  * announces either; `inventory` drops the level row on a hard delete only; `orders` and `payments`
  * do nothing: a pending order stays `pending`, nobody is emailed, and a card or offline payment
- * still goes through. Cross-module by nature (several modules' real `subscribe()` hooks), so it
- * lives here rather than in any one module's own `tests/`.
+ * still goes through. Every module involved is one `cart` depends on, so their real `subscribe()`
+ * hooks run here — checkout is where the order this protects is placed.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -31,12 +31,11 @@ import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, readProduct, productRepository } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
-import { cartItemSetById, orderConfirm } from '@modules/cart/services';
-import { cartRepository } from '@modules/cart/repository';
+import { cartItemSetById, orderConfirm } from '../../services';
+import { cartRepository } from '../../repository';
 import { readOrder } from '@modules/orders/tests/factories';
-import { createIntent } from '@modules/payments/services/intent';
-import { recordOfflinePayment } from '@modules/payments/services/offline';
-import { stockLevelRepository } from '@modules/inventory/repository';
+import { createIntent, recordOfflinePayment } from '@modules/payments';
+import { stockLevelRepository } from '@modules/inventory/tests/factories';
 
 setupTestDb();
 
