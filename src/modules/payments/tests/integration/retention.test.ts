@@ -13,12 +13,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { detachOrderUserId } from '@modules/orders/tests/factories';
-import {
-    createIntent,
-    confirmPayment,
-    reapAbandonedPayments,
-    recordOfflinePayment
-} from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { paymentModel, type PaymentDocument } from '@modules/payments/model';
 import { userService } from '@modules/users';
@@ -44,7 +39,7 @@ describe('payments — detach on account erasure', () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
-        const intent = await createIntent(String(order._id), asCustomer(user.id));
+        const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
         const payment = (intent as ResponseSuccess<Payment>).data;
 
         await userService.remove(user, true);
@@ -57,7 +52,7 @@ describe('payments — detach on account erasure', () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
-        const intent = await createIntent(String(order._id), asCustomer(user.id));
+        const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
         const payment = (intent as ResponseSuccess<Payment>).data;
 
         await userService.remove(user, true);
@@ -71,7 +66,7 @@ describe('payments — detach on account erasure', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         await detachOrderUserId(String(user._id), new Date(Date.now() + 100_000));
 
-        const recorded = await recordOfflinePayment(
+        const recorded = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'cash' },
             callerContextAs('admin')
@@ -88,7 +83,10 @@ describe('payments — detach on account erasure', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         await detachOrderUserId(String(user._id), new Date(Date.now() + 100_000));
 
-        const intent = await createIntent(String(order._id), asCustomer(String(stranger._id)));
+        const intent = await paymentService.createIntent(
+            String(order._id),
+            asCustomer(String(stranger._id))
+        );
 
         expect(intent.success).toBe(false);
     });
@@ -115,11 +113,11 @@ describe('payments — reapAbandonedPayments (reap-payments sweep)', () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
-        const intent = await createIntent(String(order._id), asCustomer(user.id));
+        const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
         const payment = (intent as ResponseSuccess<Payment>).data;
         await touch(payment.id, new Date(Date.now() - 8 * 24 * 60 * 60 * 1000));
 
-        await expect(reapAbandonedPayments()).resolves.toBe(1);
+        await expect(paymentService.reapAbandonedPayments()).resolves.toBe(1);
 
         await expect(paymentRepository.findById(payment.id)).resolves.toBeNull();
     });
@@ -129,11 +127,11 @@ describe('payments — reapAbandonedPayments (reap-payments sweep)', () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
-        const intent = await createIntent(String(order._id), asCustomer(user.id));
+        const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
         const payment = (intent as ResponseSuccess<Payment>).data;
         await touch(payment.id, new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
 
-        await expect(reapAbandonedPayments()).resolves.toBe(0);
+        await expect(paymentService.reapAbandonedPayments()).resolves.toBe(0);
 
         await expect(paymentRepository.findById(payment.id)).resolves.not.toBeNull();
     });
@@ -143,12 +141,17 @@ describe('payments — reapAbandonedPayments (reap-payments sweep)', () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
-        const intent = await createIntent(String(order._id), asCustomer(user.id));
+        const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
         const paymentId = (intent as ResponseSuccess<Payment>).data.id;
-        await confirmPayment(paymentId, 'pm_card_visa', asCustomer(user.id), testCallerContext);
+        await paymentService.confirmPayment(
+            paymentId,
+            'pm_card_visa',
+            asCustomer(user.id),
+            testCallerContext
+        );
         await touch(paymentId, new Date(Date.now() - 365 * 24 * 60 * 60 * 1000));
 
-        await expect(reapAbandonedPayments()).resolves.toBe(0);
+        await expect(paymentService.reapAbandonedPayments()).resolves.toBe(0);
 
         await expect(paymentRepository.findById(paymentId)).resolves.not.toBeNull();
     });

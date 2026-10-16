@@ -17,14 +17,14 @@ import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { inventoryService } from '@modules/inventory';
 import { orderService } from '@modules/orders';
-import { createIntent, confirmPayment, paymentService } from '@modules/payments';
+import { paymentService } from '@modules/payments';
 import paymentsModule from '@modules/payments/module';
 import invoicingModule from '@modules/invoicing/module';
 import returnsModule from '../../module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asAdmin, asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
 import { asReject } from '@tests/response';
-import { approveReturn, createReturn, declineReturn, receiveReturn } from '../../services';
+import { returnService } from '../../services';
 import { RETURN_CLOSED, RETURN_RECEIVED } from '../../events';
 import { returnRepository } from '../../repository';
 import { invoicingService, type CreditNoteDocument } from '@modules/invoicing';
@@ -78,9 +78,14 @@ const paidAndDelivered = async (
         { productId: String(shirt._id), quantity: 2 },
         { productId: String(mug._id), quantity: 1 }
     ]);
-    const intent = await createIntent(orderId, asCustomer(user.id));
+    const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
     if (!intent.success) throw new Error('intent refused');
-    await confirmPayment(intent.data.id, 'pm_card_visa', asCustomer(user.id), testCallerContext);
+    await paymentService.confirmPayment(
+        intent.data.id,
+        'pm_card_visa',
+        asCustomer(user.id),
+        testCallerContext
+    );
     // Through the real doors: each shipment takes its own units off the shelf.
     await carryOrderTo(orderId, 'delivered');
     return { user, shirt, mug, orderId };
@@ -92,7 +97,7 @@ const approvedReturn = async (
     reason: 'withdrawal' | 'defective' = 'withdrawal',
     lines?: { productId: string; quantity: number }[]
 ) => {
-    const outcome = await createReturn(
+    const outcome = await returnService.createReturn(
         { orderId: fixture.orderId, reason, ...(lines ? { lines } : {}) },
         asCustomer(fixture.user.id),
         testCallerContext
@@ -100,7 +105,7 @@ const approvedReturn = async (
     if (!outcome.success) throw new Error('expected a return');
     const id = String(outcome.data._id);
     if (reason !== 'withdrawal') {
-        await approveReturn(id, callerContextAs('admin'));
+        await returnService.approveReturn(id, callerContextAs('admin'));
     }
     return id;
 };
@@ -131,7 +136,7 @@ describe('the statuses the order shows beside its own', () => {
         const approved = await wireOrder(fixture.orderId);
         expect(approved.returnStatus).toBe('in_progress');
 
-        await receiveReturn(id, {}, callerContextAs('admin'));
+        await returnService.receiveReturn(id, {}, callerContextAs('admin'));
         const after = await wireOrder(fixture.orderId);
         expect(after.returnStatus).toBe('returned');
         expect(after.paymentStatus).toBe('refunded');
@@ -143,7 +148,7 @@ describe('the statuses the order shows beside its own', () => {
             { productId: String(fixture.mug._id), quantity: 1 }
         ]);
 
-        await receiveReturn(id, {}, callerContextAs('admin'));
+        await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         await eventually(() =>
             wireOrder(fixture.orderId).then(
@@ -164,7 +169,7 @@ describe('receiving a return', () => {
         onDomainEvent(RETURN_RECEIVED, () => events.push('received'));
         onDomainEvent(RETURN_CLOSED, () => events.push('closed'));
 
-        const result = await receiveReturn(id, {}, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(result.success && result.data).toMatchObject({
             status: 'closed',
@@ -188,7 +193,7 @@ describe('receiving a return', () => {
         const fixture = await paidAndDelivered();
         const id = await approvedReturn(fixture);
 
-        await receiveReturn(id, {}, callerContextAs('admin'));
+        await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         const movements = await inventoryService.listMovements({
             productId: String(fixture.shirt._id)
@@ -208,7 +213,7 @@ describe('receiving a return', () => {
             { productId: String(fixture.mug._id), quantity: 1 }
         ]);
 
-        const result = await receiveReturn(id, {}, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(result.success && result.data.refundAmount).toBe(10);
         const payment = await paymentOf(fixture.orderId);
@@ -221,9 +226,9 @@ describe('receiving a return', () => {
     it('is done once — a second receipt answers 409 and restocks nothing more', async () => {
         const fixture = await paidAndDelivered();
         const id = await approvedReturn(fixture);
-        await receiveReturn(id, {}, callerContextAs('admin'));
+        await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
-        const again = await receiveReturn(id, {}, callerContextAs('admin'));
+        const again = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(asReject(again).status).toBe(409);
         expect(asReject(again).errors[0].code).toBe('RETURN_NOT_RECEIVABLE');
@@ -235,8 +240,8 @@ describe('receiving a return', () => {
         const id = await approvedReturn(fixture);
 
         const results = await Promise.all([
-            receiveReturn(id, {}, callerContextAs('admin')),
-            receiveReturn(id, {}, callerContextAs('admin'))
+            returnService.receiveReturn(id, {}, callerContextAs('admin')),
+            returnService.receiveReturn(id, {}, callerContextAs('admin'))
         ]);
 
         expect(results.filter((result) => result.success)).toHaveLength(1);
@@ -245,20 +250,28 @@ describe('receiving a return', () => {
 
     it('refuses a return still waiting for staff', async () => {
         const fixture = await paidAndDelivered();
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId: fixture.orderId, reason: 'defective' },
             asCustomer(fixture.user.id),
             testCallerContext
         );
         if (!outcome.success) throw new Error('expected a return');
 
-        const result = await receiveReturn(String(outcome.data._id), {}, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(
+            String(outcome.data._id),
+            {},
+            callerContextAs('admin')
+        );
 
         expect(asReject(result).errors[0].code).toBe('RETURN_NOT_RECEIVABLE');
     });
 
     it('answers 404 for a return that does not exist', async () => {
-        const result = await receiveReturn('a'.repeat(24), {}, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(
+            'a'.repeat(24),
+            {},
+            callerContextAs('admin')
+        );
 
         expect(asReject(result).status).toBe(404);
     });
@@ -268,7 +281,7 @@ describe('receiving a return', () => {
         const id = await approvedReturn(fixture);
         mockEnqueueEmail.mockClear();
 
-        await receiveReturn(id, {}, callerContextAs('admin'));
+        await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         const mail = mockEnqueueEmail.mock.calls.find(
             ([, template]) => template === 'returns.notice'
@@ -288,7 +301,11 @@ describe('a staff buyer receiving their own return', () => {
             'warehouse'
         );
 
-        const result = await receiveReturn(id, {}, callerContextAs('warehouse', fixture.user.id));
+        const result = await returnService.receiveReturn(
+            id,
+            {},
+            callerContextAs('warehouse', fixture.user.id)
+        );
 
         expect(result.success && result.data.refundAmount).toBeGreaterThan(0);
     });
@@ -300,7 +317,7 @@ describe('what the customer gets back', () => {
         const fixture = await paidAndDelivered(15, 'express');
         const id = await approvedReturn(fixture);
 
-        const result = await receiveReturn(id, {}, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(result.success && result.data.refundAmount).toBe(75);
     });
@@ -313,23 +330,27 @@ describe('what the customer gets back', () => {
             shippingCost: 15
         });
         const orderId = String(order._id);
-        const intent = await createIntent(orderId, asCustomer(user.id));
+        const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
         if (!intent.success) throw new Error('intent refused');
-        await confirmPayment(
+        await paymentService.confirmPayment(
             intent.data.id,
             'pm_card_visa',
             asCustomer(user.id),
             testCallerContext
         );
         await carryOrderTo(orderId, 'delivered');
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
             asCustomer(user.id),
             testCallerContext
         );
         if (!outcome.success) throw new Error('expected a return');
 
-        const result = await receiveReturn(String(outcome.data._id), {}, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(
+            String(outcome.data._id),
+            {},
+            callerContextAs('admin')
+        );
 
         expect(result.success && result.data.refundAmount).toBe(150);
     });
@@ -338,7 +359,7 @@ describe('what the customer gets back', () => {
         const fixture = await paidAndDelivered(15, 'express');
         const id = await approvedReturn(fixture, 'defective');
 
-        const result = await receiveReturn(id, {}, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(result.success && result.data.refundAmount).toBe(85);
     });
@@ -349,7 +370,7 @@ describe('what the customer gets back', () => {
             { productId: String(fixture.shirt._id), quantity: 1 }
         ]);
 
-        const result = await receiveReturn(id, {}, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(result.success && result.data.refundAmount).toBe(30);
     });
@@ -358,7 +379,7 @@ describe('what the customer gets back', () => {
         const fixture = await paidAndDelivered();
         const id = await approvedReturn(fixture);
 
-        const result = await receiveReturn(
+        const result = await returnService.receiveReturn(
             id,
             { handlingDeduction: 12.5 },
             callerContextAs('admin')
@@ -374,7 +395,7 @@ describe('what the customer gets back', () => {
         const fixture = await paidAndDelivered();
         const id = await approvedReturn(fixture);
 
-        const result = await receiveReturn(
+        const result = await returnService.receiveReturn(
             id,
             { handlingDeduction: 70.01 },
             callerContextAs('admin')
@@ -394,7 +415,7 @@ describe('what the customer gets back', () => {
         });
         const id = await approvedReturn(fixture);
 
-        const result = await receiveReturn(id, {}, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         const payment = await paymentOf(fixture.orderId);
         // 70.00 was paid, 40.00 already went back: the return is owed 70.00 but only 30.00 is left.
@@ -413,7 +434,7 @@ describe('the credit note a received return issues', () => {
             { productId: String(fixture.mug._id), quantity: 1 }
         ]);
 
-        await receiveReturn(id, {}, callerContextAs('admin'));
+        await returnService.receiveReturn(id, {}, callerContextAs('admin'));
         let notes: CreditNoteDocument[] = [];
         await eventually(async () => {
             notes = await invoicingService.findCreditNotesForOrder(fixture.orderId);
@@ -436,7 +457,7 @@ describe('the credit note a received return issues', () => {
             { productId: String(fixture.mug._id), quantity: 1 }
         ]);
 
-        await receiveReturn(id, {}, callerContextAs('admin'));
+        await returnService.receiveReturn(id, {}, callerContextAs('admin'));
         const payment = await paymentOf(fixture.orderId);
         const [refund] = payment.refunds;
 
@@ -452,7 +473,7 @@ describe('what receiving answers and announces', () => {
         const heard: unknown[] = [];
         onDomainEvent(RETURN_RECEIVED, (payload) => heard.push(payload));
 
-        const result = await receiveReturn(id, {}, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(result.success && result.message).toBe(
             'Return received — the goods are back on sale.'
@@ -468,7 +489,7 @@ describe('what receiving answers and announces', () => {
             { productId: String(fixture.mug._id), quantity: 1 }
         ]);
 
-        const result = await receiveReturn(id, {}, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         // One shirt at 30 and the mug at 10; the 5.00 of delivery stays with the shop.
         expect(result.success && result.data.refundAmount).toBe(40);
@@ -479,7 +500,11 @@ describe('what receiving answers and announces', () => {
         const id = await approvedReturn(fixture);
         const refund = jest.spyOn(paymentService, 'refundForReturn');
 
-        const result = await receiveReturn(id, { handlingDeduction: 70 }, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(
+            id,
+            { handlingDeduction: 70 },
+            callerContextAs('admin')
+        );
 
         expect(result.success && result.data).toMatchObject({ status: 'closed', refundAmount: 0 });
         expect(refund).not.toHaveBeenCalled();
@@ -490,7 +515,7 @@ describe('what receiving answers and announces', () => {
         const id = await approvedReturn(fixture);
         jest.spyOn(orderService, 'getById').mockResolvedValue(undefined);
 
-        const result = await receiveReturn(id, {}, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
 
         expect(asReject(result).status).toBe(404);
         expect(asReject(result).errors[0]).toMatchObject({ message: 'The order was not found' });
@@ -498,7 +523,7 @@ describe('what receiving answers and announces', () => {
 
     it('answers a return not awaiting its goods before it looks at who is receiving', async () => {
         const fixture = await paidAndDelivered();
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId: fixture.orderId, reason: 'defective' },
             asCustomer(fixture.user.id),
             testCallerContext
@@ -511,7 +536,7 @@ describe('what receiving answers and announces', () => {
             'warehouse'
         );
 
-        const result = await receiveReturn(
+        const result = await returnService.receiveReturn(
             String(outcome.data._id),
             {},
             callerContextAs('warehouse', fixture.user.id)
@@ -527,16 +552,16 @@ describe('what receiving answers and announces', () => {
 describe('the order timeline of a return', () => {
     it('follows the return from request to close, naming the staff and never the buyer`s note', async () => {
         const fixture = await paidAndDelivered();
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId: fixture.orderId, reason: 'defective', note: 'the zip broke, call 555-0100' },
             asCustomer(fixture.user.id),
             testCallerContext
         );
         if (!outcome.success) throw new Error('expected a return');
         const id = String(outcome.data._id);
-        await approveReturn(id, callerContextAs('admin', 'admin-1'));
+        await returnService.approveReturn(id, callerContextAs('admin', 'admin-1'));
 
-        await receiveReturn(id, {}, callerContextAs('admin', 'admin-2'));
+        await returnService.receiveReturn(id, {}, callerContextAs('admin', 'admin-2'));
 
         const rows = await timelineOf(fixture.orderId, 'return_');
         expect(rows.map(({ type, actor }) => [type, actor])).toEqual([
@@ -552,20 +577,20 @@ describe('the order timeline of a return', () => {
 
     it('writes a withdrawal as requested and approved at once, and a decline without its reason', async () => {
         const withdrawn = await paidAndDelivered();
-        await createReturn(
+        await returnService.createReturn(
             { orderId: withdrawn.orderId, reason: 'withdrawal' },
             asCustomer(withdrawn.user.id),
             testCallerContext
         );
         const declined = await paidAndDelivered();
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId: declined.orderId, reason: 'other' },
             asCustomer(declined.user.id),
             testCallerContext
         );
         if (!outcome.success) throw new Error('expected a return');
 
-        await declineReturn(
+        await returnService.declineReturn(
             String(outcome.data._id),
             'private opinion of the customer',
             callerContextAs('admin', 'admin-1')
@@ -584,7 +609,7 @@ describe('the order timeline of a return', () => {
         const fixture = await paidAndDelivered();
         const id = await approvedReturn(fixture, 'defective');
 
-        await receiveReturn(id, {}, callerContextAs('admin'));
+        await returnService.receiveReturn(id, {}, callerContextAs('admin'));
         await eventually(() =>
             timelineOf(fixture.orderId).then((rows) =>
                 rows.some(({ type }) => type === 'credit_note_issued')

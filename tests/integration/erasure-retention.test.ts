@@ -15,7 +15,7 @@ import invoicingModule from '@modules/invoicing/module';
 import paymentsModule from '@modules/payments/module';
 import returnsModule from '@modules/returns/module';
 import feedbackModule from '@modules/feedback/module';
-import { createIntent, confirmPayment, paymentService } from '@modules/payments';
+import { paymentService } from '@modules/payments';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
@@ -51,9 +51,9 @@ describe('a hard delete of an account that has bought, been refunded and written
         const product = await createProduct({ price: 25 });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         const orderId = String(order._id);
-        const intent = await createIntent(orderId, asCustomer(user.id));
+        const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
         if (!intent.success) throw new Error('intent refused');
-        await confirmPayment(
+        await paymentService.confirmPayment(
             intent.data.id,
             FAKE_SUCCESS_METHOD,
             asCustomer(user.id),

@@ -12,12 +12,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
-import {
-    createIntent,
-    confirmPayment,
-    syncPayment,
-    applyWebhookSettlement
-} from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { PAYMENT_FAILED } from '@modules/payments/events';
 import { paymentsAuditActions } from '@modules/payments/audit';
@@ -60,7 +55,7 @@ const openIntent = async () => {
         callerContextAs('admin')
     );
     const orderId = String(created.data?._id);
-    const intent = await createIntent(orderId, asCustomer(user.id));
+    const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
     return { user, orderId, paymentId: String(intent.success && intent.data?.id) };
 };
 
@@ -69,8 +64,8 @@ const confirmWith = (
     paymentId: string,
     user: { id: string },
     method: string
-): ReturnType<typeof confirmPayment> =>
-    confirmPayment(paymentId, method, asCustomer(user.id), testCallerContext);
+): ReturnType<typeof paymentService.confirmPayment> =>
+    paymentService.confirmPayment(paymentId, method, asCustomer(user.id), testCallerContext);
 
 /** How many `payment.failed` rows the outbox holds, once the relay has settled. */
 const failedRows = (): Promise<number> =>
@@ -83,8 +78,8 @@ describe('a declined payment', () => {
         const payment = await paymentRepository.findByOrderId(orderId);
         const providerRef = String(payment?.providerRef);
 
-        await applyWebhookSettlement(providerRef);
-        await syncPayment(paymentId, asCustomer(user.id), testCallerContext);
+        await paymentService.applyWebhookSettlement(providerRef);
+        await paymentService.syncPayment(paymentId, asCustomer(user.id), testCallerContext);
 
         expect(await failedRows()).toBe(1);
     });
@@ -104,8 +99,8 @@ describe('a declined payment', () => {
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
 
         await confirmWith(paymentId, user, 'pm_card_declined');
-        await syncPayment(paymentId, asCustomer(user.id), testCallerContext);
-        await syncPayment(paymentId, asCustomer(user.id), testCallerContext);
+        await paymentService.syncPayment(paymentId, asCustomer(user.id), testCallerContext);
+        await paymentService.syncPayment(paymentId, asCustomer(user.id), testCallerContext);
 
         const failures = auditSpy.mock.calls.filter(
             ([event]) => event.action === paymentsAuditActions.PAYMENT_FAILED
@@ -125,8 +120,8 @@ describe('a payment that already succeeded', () => {
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
 
         await confirmWith(paymentId, user, 'pm_card_visa');
-        await syncPayment(paymentId, asCustomer(user.id), testCallerContext);
-        await syncPayment(paymentId, asCustomer(user.id), testCallerContext);
+        await paymentService.syncPayment(paymentId, asCustomer(user.id), testCallerContext);
+        await paymentService.syncPayment(paymentId, asCustomer(user.id), testCallerContext);
 
         const confirmed = auditSpy.mock.calls.filter(
             ([event]) => event.action === paymentsAuditActions.PAYMENT_CONFIRMED

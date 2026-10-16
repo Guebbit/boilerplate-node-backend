@@ -38,14 +38,7 @@ import {
 } from '@tests/callers';
 import { asReject } from '@tests/response';
 import { asStub } from '@tests/stub';
-import {
-    approveReturn,
-    createReturn,
-    declineReturn,
-    getReturn,
-    listReturns,
-    withActions
-} from '../../services';
+import { returnService } from '../../services';
 import { collectPersonalData } from '../../services/personal-data';
 import { RETURN_CLOSED, RETURN_REQUESTED } from '../../events';
 import { returnRepository } from '../../repository';
@@ -118,7 +111,7 @@ describe('a withdrawal before dispatch', () => {
         async (status) => {
             const { user, orderId } = await orderIn(status);
 
-            const outcome = await createReturn(
+            const outcome = await returnService.createReturn(
                 { orderId, reason: 'withdrawal' },
                 buyer(user),
                 testCallerContext
@@ -142,12 +135,12 @@ describe('a withdrawal before dispatch', () => {
         const paid = await orderIn(OrderStatus.paid);
         await markOrderPaidAt(paid.orderId, new Date());
 
-        await createReturn(
+        await returnService.createReturn(
             { orderId: unpaid.orderId, reason: 'withdrawal' },
             buyer(unpaid.user),
             testCallerContext
         );
-        await createReturn(
+        await returnService.createReturn(
             { orderId: paid.orderId, reason: 'withdrawal' },
             buyer(paid.user),
             testCallerContext
@@ -166,7 +159,11 @@ describe('a withdrawal before dispatch', () => {
         onDomainEvent(RETURN_REQUESTED, ({ orderId: id }) => void heard.push(`requested ${id}`));
         onDomainEvent(RETURN_CLOSED, ({ orderId: id }) => void heard.push(`closed ${id}`));
 
-        await createReturn({ orderId, reason: 'withdrawal' }, buyer(user), testCallerContext);
+        await returnService.createReturn(
+            { orderId, reason: 'withdrawal' },
+            buyer(user),
+            testCallerContext
+        );
 
         // The events ride the outbox: let the relay deliver them.
         await settleOutboxNudges();
@@ -176,7 +173,11 @@ describe('a withdrawal before dispatch', () => {
     it('leaves the order showing no return: nothing comes back', async () => {
         const { user, orderId } = await orderIn(OrderStatus.paid);
 
-        await createReturn({ orderId, reason: 'withdrawal' }, buyer(user), testCallerContext);
+        await returnService.createReturn(
+            { orderId, reason: 'withdrawal' },
+            buyer(user),
+            testCallerContext
+        );
 
         const stored = await readOrder(orderId);
         expect(stored?.toJSON().returnStatus).toBe('none');
@@ -184,9 +185,13 @@ describe('a withdrawal before dispatch', () => {
 
     it('cannot be made twice: the cancelled order is not returnable', async () => {
         const { user, orderId } = await orderIn(OrderStatus.paid);
-        await createReturn({ orderId, reason: 'withdrawal' }, buyer(user), testCallerContext);
+        await returnService.createReturn(
+            { orderId, reason: 'withdrawal' },
+            buyer(user),
+            testCallerContext
+        );
 
-        const again = await createReturn(
+        const again = await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
             buyer(user),
             testCallerContext
@@ -202,7 +207,7 @@ describe('a withdrawal before dispatch', () => {
         const { orderId } = await orderIn(OrderStatus.paid);
         const stranger = await createUser({ email: 'stranger@example.com' });
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
             buyer(stranger),
             testCallerContext
@@ -216,7 +221,7 @@ describe('a withdrawal before dispatch', () => {
     it('is not offered to an operator either — the right is the consumer’s', async () => {
         const { orderId } = await orderIn(OrderStatus.paid);
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
             asAdmin(),
             testCallerContext
@@ -228,7 +233,7 @@ describe('a withdrawal before dispatch', () => {
     it('refuses any other reason before dispatch — nothing has left the shop to send back', async () => {
         const { user, orderId } = await orderIn(OrderStatus.paid);
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'defective' },
             buyer(user),
             testCallerContext
@@ -264,7 +269,7 @@ describe('goods excluded from the right of withdrawal (Art. 16)', () => {
     it('leaves the excluded line out of a withdrawal that names no lines', async () => {
         const { user, shirt, orderId } = await orderWithExcluded();
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
             buyer(user),
             testCallerContext
@@ -279,7 +284,7 @@ describe('goods excluded from the right of withdrawal (Art. 16)', () => {
     it('refuses a return that names an excluded line', async () => {
         const { user, engraved, orderId } = await orderWithExcluded();
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             {
                 orderId,
                 reason: 'withdrawal',
@@ -303,7 +308,7 @@ describe('goods excluded from the right of withdrawal (Art. 16)', () => {
             status: OrderStatus.paid
         });
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId: String(order._id), reason: 'withdrawal' },
             buyer(user),
             testCallerContext
@@ -323,7 +328,7 @@ describe('a return on goods that have shipped', () => {
             const events: unknown[] = [];
             onDomainEvent(RETURN_REQUESTED, (payload) => events.push(payload));
 
-            const outcome = await createReturn(
+            const outcome = await returnService.createReturn(
                 { orderId, reason: 'withdrawal' },
                 buyer(user),
                 testCallerContext
@@ -360,7 +365,7 @@ describe('a return on goods that have shipped', () => {
         withEnvironmentOverrides({ NODE_RETURN_POSTAGE_PAYER: 'shop' }, async () => {
             const { user, orderId } = await orderIn(OrderStatus.delivered);
 
-            const outcome = await createReturn(
+            const outcome = await returnService.createReturn(
                 { orderId, reason: 'withdrawal' },
                 buyer(user),
                 testCallerContext
@@ -376,7 +381,11 @@ describe('a return on goods that have shipped', () => {
     it('leaves the order where it is — a return is its own object, delivered stays terminal', async () => {
         const { user, orderId } = await deliveredOrder();
 
-        await createReturn({ orderId, reason: 'withdrawal' }, buyer(user), testCallerContext);
+        await returnService.createReturn(
+            { orderId, reason: 'withdrawal' },
+            buyer(user),
+            testCallerContext
+        );
 
         const stored = await readOrder(orderId);
         expect(stored?.status).toBe(OrderStatus.delivered);
@@ -385,7 +394,7 @@ describe('a return on goods that have shipped', () => {
     it('waits for staff when the reason is not a withdrawal', async () => {
         const { user, orderId } = await deliveredOrder();
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'defective', note: 'Cracked handle' },
             buyer(user),
             testCallerContext
@@ -400,7 +409,7 @@ describe('a return on goods that have shipped', () => {
     it('returns only the named lines, and only as many units as were bought', async () => {
         const { user, mug, orderId } = await deliveredOrder();
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'defective', lines: [{ productId: String(mug._id), quantity: 1 }] },
             buyer(user),
             testCallerContext
@@ -413,7 +422,7 @@ describe('a return on goods that have shipped', () => {
     it('refuses more units than the order held', async () => {
         const { user, shirt, orderId } = await deliveredOrder();
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             {
                 orderId,
                 reason: 'defective',
@@ -433,7 +442,7 @@ describe('a return on goods that have shipped', () => {
         const { user, orderId } = await deliveredOrder();
         const other = await createProduct();
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             {
                 orderId,
                 reason: 'defective',
@@ -449,18 +458,18 @@ describe('a return on goods that have shipped', () => {
     it('counts what earlier returns took — the same units cannot come back twice', async () => {
         const { user, shirt, orderId } = await deliveredOrder();
         const oneShirt = [{ productId: String(shirt._id), quantity: 1 }];
-        await createReturn(
+        await returnService.createReturn(
             { orderId, reason: 'defective', lines: oneShirt },
             buyer(user),
             testCallerContext
         );
-        await createReturn(
+        await returnService.createReturn(
             { orderId, reason: 'defective', lines: oneShirt },
             buyer(user),
             testCallerContext
         );
 
-        const third = await createReturn(
+        const third = await returnService.createReturn(
             { orderId, reason: 'defective', lines: oneShirt },
             buyer(user),
             testCallerContext
@@ -476,8 +485,16 @@ describe('a return on goods that have shipped', () => {
         mockEnqueueEmail.mockClear();
 
         const outcomes = await Promise.all([
-            createReturn({ orderId, reason: 'defective' }, buyer(user), testCallerContext),
-            createReturn({ orderId, reason: 'defective' }, buyer(user), testCallerContext)
+            returnService.createReturn(
+                { orderId, reason: 'defective' },
+                buyer(user),
+                testCallerContext
+            ),
+            returnService.createReturn(
+                { orderId, reason: 'defective' },
+                buyer(user),
+                testCallerContext
+            )
         ]);
         await settleOutboxNudges();
 
@@ -492,15 +509,15 @@ describe('a return on goods that have shipped', () => {
     it('gives the units of a declined return back', async () => {
         const { user, shirt, orderId } = await deliveredOrder();
         const twoShirts = [{ productId: String(shirt._id), quantity: 2 }];
-        const first = await createReturn(
+        const first = await returnService.createReturn(
             { orderId, reason: 'defective', lines: twoShirts },
             buyer(user),
             testCallerContext
         );
         if (!first.success) throw new Error('expected a return');
-        await declineReturn(String(first.data._id), 'Used', callerContextAs('admin'));
+        await returnService.declineReturn(String(first.data._id), 'Used', callerContextAs('admin'));
 
-        const again = await createReturn(
+        const again = await returnService.createReturn(
             { orderId, reason: 'defective', lines: twoShirts },
             buyer(user),
             testCallerContext
@@ -513,7 +530,7 @@ describe('a return on goods that have shipped', () => {
         const { user, orderId } = await orderIn(OrderStatus.delivered);
         await setWithdrawUntil(orderId, new Date(Date.now() - 1000));
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
             buyer(user),
             testCallerContext
@@ -527,7 +544,7 @@ describe('a return on goods that have shipped', () => {
     it('refuses a cancelled order', async () => {
         const { user, orderId } = await orderIn(OrderStatus.cancelled);
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
             buyer(user),
             testCallerContext
@@ -542,7 +559,7 @@ describe('a return on goods that have shipped', () => {
 /** A `requested` return on a delivered order. */
 const requestedReturn = async () => {
     const fixture = await deliveredOrder();
-    const outcome = await createReturn(
+    const outcome = await returnService.createReturn(
         { orderId: fixture.orderId, reason: 'defective' },
         buyer(fixture.user),
         testCallerContext
@@ -556,7 +573,7 @@ describe('deciding a request', () => {
         const { returnId } = await requestedReturn();
         mockEnqueueEmail.mockClear();
 
-        const result = await approveReturn(returnId, callerContextAs('admin'));
+        const result = await returnService.approveReturn(returnId, callerContextAs('admin'));
 
         expect(result.success && result.data.status).toBe('approved');
         expect(result.success && result.data.decidedAt).toBeInstanceOf(Date);
@@ -567,7 +584,11 @@ describe('deciding a request', () => {
         const { returnId } = await requestedReturn();
         mockEnqueueEmail.mockClear();
 
-        const result = await declineReturn(returnId, 'Worn', callerContextAs('admin'));
+        const result = await returnService.declineReturn(
+            returnId,
+            'Worn',
+            callerContextAs('admin')
+        );
 
         expect(result.success && result.data).toMatchObject({
             status: 'declined',
@@ -580,8 +601,8 @@ describe('deciding a request', () => {
         const { returnId } = await requestedReturn();
 
         const results = await Promise.all([
-            approveReturn(returnId, callerContextAs('admin')),
-            declineReturn(returnId, 'No', callerContextAs('admin'))
+            returnService.approveReturn(returnId, callerContextAs('admin')),
+            returnService.declineReturn(returnId, 'No', callerContextAs('admin'))
         ]);
 
         expect(results.filter((result) => result.success)).toHaveLength(1);
@@ -592,14 +613,14 @@ describe('deciding a request', () => {
 
     it('does not decide a withdrawal — it was born approved', async () => {
         const { user, orderId } = await deliveredOrder();
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
             buyer(user),
             testCallerContext
         );
         if (!outcome.success) throw new Error('expected a return');
 
-        const result = await declineReturn(
+        const result = await returnService.declineReturn(
             String(outcome.data._id),
             'No',
             callerContextAs('admin')
@@ -614,7 +635,10 @@ describe('deciding a request', () => {
         const { user, returnId } = await requestedReturn();
         await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
 
-        const approval = await approveReturn(returnId, callerContextAs('manager', user.id));
+        const approval = await returnService.approveReturn(
+            returnId,
+            callerContextAs('manager', user.id)
+        );
 
         expect(approval.success && approval.data.status).toBe('approved');
     });
@@ -623,7 +647,7 @@ describe('deciding a request', () => {
         const { user, returnId } = await requestedReturn();
         await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
 
-        const declined = await declineReturn(
+        const declined = await returnService.declineReturn(
             returnId,
             'Changed my mind',
             callerContextAs('manager', user.id)
@@ -633,7 +657,7 @@ describe('deciding a request', () => {
     });
 
     it('answers 404 for a return that does not exist', async () => {
-        const result = await approveReturn('a'.repeat(24), callerContextAs('admin'));
+        const result = await returnService.approveReturn('a'.repeat(24), callerContextAs('admin'));
 
         expect(asReject(result).status).toBe(404);
     });
@@ -641,16 +665,17 @@ describe('deciding a request', () => {
 
 /** What a caller is offered on a stored return — `withActions`' `actions`. */
 const actionsOf = (
-    ...args: Parameters<typeof withActions>
-): ReturnType<typeof withActions>['actions'] => withActions(...args).actions;
+    ...args: Parameters<typeof returnService.withActions>
+): ReturnType<typeof returnService.withActions>['actions'] =>
+    returnService.withActions(...args).actions;
 
 describe('who sees which return', () => {
     it('shows a customer their own returns and staff all of them', async () => {
         const mine = await requestedReturn();
         await requestedReturn();
 
-        const own = await listReturns({}, buyer(mine.user));
-        const staff = await listReturns({}, asManager());
+        const own = await returnService.listReturns({}, buyer(mine.user));
+        const staff = await returnService.listReturns({}, asManager());
 
         expect(own.items.map(({ id }) => id)).toEqual([mine.returnId]);
         expect(staff.items).toHaveLength(2);
@@ -660,7 +685,7 @@ describe('who sees which return', () => {
         const mine = await requestedReturn();
         const theirs = await requestedReturn();
 
-        const page = await listReturns({ orderId: theirs.orderId }, buyer(mine.user));
+        const page = await returnService.listReturns({ orderId: theirs.orderId }, buyer(mine.user));
 
         expect(page.items).toEqual([]);
     });
@@ -668,9 +693,9 @@ describe('who sees which return', () => {
     it('filters by status for staff', async () => {
         const { returnId } = await requestedReturn();
         await requestedReturn();
-        await approveReturn(returnId, callerContextAs('admin'));
+        await returnService.approveReturn(returnId, callerContextAs('admin'));
 
-        const page = await listReturns({ status: 'approved' }, asManager());
+        const page = await returnService.listReturns({ status: 'approved' }, asManager());
 
         expect(page.items.map(({ id }) => id)).toEqual([returnId]);
     });
@@ -679,9 +704,9 @@ describe('who sees which return', () => {
         const { user, returnId } = await requestedReturn();
         const stranger = await createUser({ email: 'stranger@example.com' });
 
-        const asBuyer = await getReturn(returnId, buyer(user));
-        const asSupport = await getReturn(returnId, asRole('support'));
-        const asStranger = await getReturn(returnId, buyer(stranger));
+        const asBuyer = await returnService.getReturn(returnId, buyer(user));
+        const asSupport = await returnService.getReturn(returnId, asRole('support'));
+        const asStranger = await returnService.getReturn(returnId, buyer(stranger));
 
         expect(asBuyer.success).toBe(true);
         expect(asSupport.success).toBe(true);
@@ -720,7 +745,7 @@ describe('who sees which return', () => {
 
     it('offers the warehouse receive on an approved return, and not approve', async () => {
         const { returnId } = await requestedReturn();
-        await approveReturn(returnId, callerContextAs('admin'));
+        await returnService.approveReturn(returnId, callerContextAs('admin'));
         const stored = await returnRepository.findById(returnId);
 
         expect(actionsOf(stored!, asRole('warehouse'))).toEqual({
@@ -748,7 +773,11 @@ describe('the account export', () => {
     it('carries the text staff wrote when declining, and omits it while there is none', async () => {
         const declined = await requestedReturn();
         const open = await requestedReturn();
-        await declineReturn(declined.returnId, 'Worn beyond a trial', callerContextAs('admin'));
+        await returnService.declineReturn(
+            declined.returnId,
+            'Worn beyond a trial',
+            callerContextAs('admin')
+        );
 
         const [declinedSection] = await collectPersonalData(declined.user.id);
         const [openSection] = await collectPersonalData(open.user.id);
@@ -779,7 +808,7 @@ describe('what a refusal says', () => {
         const { orderId } = await deliveredOrder();
         const stranger = await createUser({ email: 'stranger-refusal@example.com' });
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'defective' },
             buyer(stranger),
             testCallerContext
@@ -794,11 +823,13 @@ describe('what a refusal says', () => {
         const { user, shirt, orderId } = await deliveredOrder();
         const other = await createProduct();
         const refuse = (productId: string, quantity: number) =>
-            createReturn(
-                { orderId, reason: 'defective', lines: [{ productId, quantity }] },
-                buyer(user),
-                testCallerContext
-            ).then((outcome) => (outcome.success ? undefined : outcome.errors[0]));
+            returnService
+                .createReturn(
+                    { orderId, reason: 'defective', lines: [{ productId, quantity }] },
+                    buyer(user),
+                    testCallerContext
+                )
+                .then((outcome) => (outcome.success ? undefined : outcome.errors[0]));
 
         expect(await refuse(String(other._id), 1)).toMatchObject({
             code: 'RETURN_LINES_INVALID',
@@ -812,9 +843,13 @@ describe('what a refusal says', () => {
 
     it('says nothing is left to return once everything has been taken back', async () => {
         const { user, orderId } = await deliveredOrder();
-        await createReturn({ orderId, reason: 'defective' }, buyer(user), testCallerContext);
+        await returnService.createReturn(
+            { orderId, reason: 'defective' },
+            buyer(user),
+            testCallerContext
+        );
 
-        const again = await createReturn(
+        const again = await returnService.createReturn(
             { orderId, reason: 'defective' },
             buyer(user),
             testCallerContext
@@ -832,7 +867,7 @@ describe('what a refusal says', () => {
         await forceOrderStatus(whole.orderId, OrderStatus.paid);
         const excludedMessage = 'Some of these goods are excluded from the right of withdrawal.';
 
-        const byLine = await createReturn(
+        const byLine = await returnService.createReturn(
             {
                 orderId: named.orderId,
                 reason: 'withdrawal',
@@ -841,7 +876,7 @@ describe('what a refusal says', () => {
             buyer(named.user),
             testCallerContext
         );
-        const beforeDispatch = await createReturn(
+        const beforeDispatch = await returnService.createReturn(
             { orderId: whole.orderId, reason: 'withdrawal' },
             buyer(whole.user),
             testCallerContext
@@ -857,12 +892,12 @@ describe('what a new return leaves behind', () => {
         const { user, orderId } = await deliveredOrder();
         const early = await orderIn(OrderStatus.paid);
 
-        const shipped = await createReturn(
+        const shipped = await returnService.createReturn(
             { orderId, reason: 'defective' },
             buyer(user),
             testCallerContext
         );
-        const withdrawn = await createReturn(
+        const withdrawn = await returnService.createReturn(
             { orderId: early.orderId, reason: 'withdrawal' },
             buyer(early.user),
             testCallerContext
@@ -891,7 +926,7 @@ describe('what a new return leaves behind', () => {
         const { user, orderId } = await deliveredOrder();
 
         setEnvironment({ NODE_RETURN_POSTAGE_PAYER: 'shop' });
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'defective' },
             buyer(user),
             testCallerContext
@@ -913,7 +948,7 @@ describe('what a new return leaves behind', () => {
             new Error('write failed')
         );
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'defective' },
             buyer(user),
             testCallerContext
@@ -928,12 +963,12 @@ describe('what a new return leaves behind', () => {
         const withdrawing = await orderIn(OrderStatus.shipped);
         await setWithdrawUntil(withdrawing.orderId, new Date(Date.now() + 86_400_000));
 
-        await createReturn(
+        await returnService.createReturn(
             { orderId: requested.orderId, reason: 'defective' },
             buyer(requested.user),
             testCallerContext
         );
-        await createReturn(
+        await returnService.createReturn(
             { orderId: withdrawing.orderId, reason: 'withdrawal' },
             buyer(withdrawing.user),
             testCallerContext
@@ -956,7 +991,7 @@ describe('what a new return leaves behind', () => {
             })
         );
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
             buyer(user),
             testCallerContext
@@ -972,8 +1007,8 @@ describe('what a decision leaves behind', () => {
         const approved = await requestedReturn();
         const declined = await requestedReturn();
 
-        await approveReturn(approved.returnId, callerContextAs('admin'));
-        await declineReturn(declined.returnId, 'Worn', callerContextAs('admin'));
+        await returnService.approveReturn(approved.returnId, callerContextAs('admin'));
+        await returnService.declineReturn(declined.returnId, 'Worn', callerContextAs('admin'));
 
         expect(auditedAs(returnsAuditActions.ADMIN_RETURN_APPROVED)).toEqual([
             expect.objectContaining({
@@ -998,8 +1033,15 @@ describe('what a decision leaves behind', () => {
         const declined = await requestedReturn();
         mockEnqueueEmail.mockClear();
 
-        const approval = await approveReturn(approved.returnId, callerContextAs('admin'));
-        const decline = await declineReturn(declined.returnId, 'Worn', callerContextAs('admin'));
+        const approval = await returnService.approveReturn(
+            approved.returnId,
+            callerContextAs('admin')
+        );
+        const decline = await returnService.declineReturn(
+            declined.returnId,
+            'Worn',
+            callerContextAs('admin')
+        );
 
         expect(mailSubject(0)).toBe('Your return was approved');
         expect(mailData(0).address).toEqual(expect.stringContaining('Send the goods to:'));
@@ -1014,7 +1056,7 @@ describe('what a decision leaves behind', () => {
         jest.spyOn(orderService, 'getById').mockResolvedValue(undefined);
         mockEnqueueEmail.mockClear();
 
-        const result = await approveReturn(returnId, callerContextAs('admin'));
+        const result = await returnService.approveReturn(returnId, callerContextAs('admin'));
 
         expect(result.success && result.data.status).toBe('approved');
         expect(orderId).toBeTruthy();
@@ -1025,7 +1067,7 @@ describe('what a decision leaves behind', () => {
 describe('the account export, field by field', () => {
     it('carries the customer’s note and the moment the return was opened', async () => {
         const fixture = await deliveredOrder();
-        await createReturn(
+        await returnService.createReturn(
             { orderId: fixture.orderId, reason: 'defective', note: 'The handle snapped' },
             buyer(fixture.user),
             testCallerContext

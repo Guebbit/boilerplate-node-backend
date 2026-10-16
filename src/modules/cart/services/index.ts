@@ -13,28 +13,10 @@ import * as merge from './merge';
 import * as cleanup from './cleanup';
 import * as shelf from './shelf';
 
-/*
- * Published by name as well as through the namespace: `module.ts` wires the two cleanup calls into
- * the events that trigger them, and the unit suite drives the item operations directly. The line
- * types stay in `./view`, where the two files that name them already import from — a barrel line
- * for a type nobody asks the barrel for is a name to keep in step for no reader.
- */
-export {
-    cartGet,
-    cartGetForBadge,
-    cartGetForView,
-    cartItemSetById,
-    cartItemAdd,
-    cartItemUpdateQuantity,
-    cartItemAddById,
-    cartItemRemoveById,
-    cartRemove,
-    cartShippingMethodSet
-} from './items';
-export { orderConfirm, type CheckoutChoices } from './checkout';
-export { cartDeleteByUserId, productRemoveFromCartsById } from './cleanup';
-export { cartMerge, type MergeResult } from './merge';
-export { productAvailabilityFor } from './shelf';
+export type { CheckoutChoices } from './checkout';
+export type { MergeResult } from './merge';
+export { cartItemSetById } from './items';
+export { orderConfirm } from './checkout';
 
 /** The module's barrel export — controllers and siblings call through this, never the bare functions. */
 export const cartService = {

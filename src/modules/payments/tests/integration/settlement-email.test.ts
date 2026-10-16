@@ -11,7 +11,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { createIntent, confirmPayment } from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { FAKE_DECLINE_METHOD } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { resetDomainEvents } from '@kernel/events';
@@ -55,9 +55,9 @@ const paidMailSent = (): boolean =>
 describe('payment succeeded — the customer gets an email', () => {
     it('mails the buyer once the payment settles and the stock actually commits', async () => {
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), asCustomer(user.id));
+        const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
 
-        await confirmPayment(
+        await paymentService.confirmPayment(
             String((intent as { data?: { id?: string } }).data?.id),
             GOOD_METHOD,
             asCustomer(user.id),
@@ -75,9 +75,9 @@ describe('payment succeeded — the customer gets an email', () => {
 
     it('sends no payment-succeeded mail for a declined attempt', async () => {
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), asCustomer(user.id));
+        const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
 
-        await confirmPayment(
+        await paymentService.confirmPayment(
             String((intent as { data?: { id?: string } }).data?.id),
             FAKE_DECLINE_METHOD,
             asCustomer(user.id),
@@ -92,16 +92,26 @@ describe('payment succeeded — the customer gets an email', () => {
 
     it('sends only one payment-succeeded mail even if confirm is called again for the same payment', async () => {
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), asCustomer(user.id));
+        const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
         const paymentId = String((intent as { data?: { id?: string } }).data?.id);
 
-        await confirmPayment(paymentId, GOOD_METHOD, asCustomer(user.id), testCallerContext);
+        await paymentService.confirmPayment(
+            paymentId,
+            GOOD_METHOD,
+            asCustomer(user.id),
+            testCallerContext
+        );
         // The mail send is fire-and-forget and its first step is a real Mongo read, so it does not
         // settle within one tick of `confirmPayment` resolving.
         await eventually(paidMailSent);
         // Already `succeeded` — `SETTLEABLE_PAYMENT_STATUSES` excludes it, so this retry settles
         // nothing new; it must not re-mail the customer a second "payment received".
-        await confirmPayment(paymentId, GOOD_METHOD, asCustomer(user.id), testCallerContext);
+        await paymentService.confirmPayment(
+            paymentId,
+            GOOD_METHOD,
+            asCustomer(user.id),
+            testCallerContext
+        );
         await settleOutboxNudges();
 
         const paidCalls = mockEnqueueEmail.mock.calls.filter(

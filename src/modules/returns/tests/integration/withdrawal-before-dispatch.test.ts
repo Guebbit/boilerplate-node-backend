@@ -22,7 +22,7 @@ import invoicingModule from '@modules/invoicing/module';
 import returnsModule from '../../module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asAdmin, asCustomer, testCallerContext } from '@tests/callers';
-import { createReturn } from '../../services';
+import { returnService } from '../../services';
 import { returnRepository } from '../../repository';
 import { eventually } from '@tests/eventually';
 import { payByCard } from '@modules/payments/tests/factories';
@@ -65,7 +65,7 @@ describe('a withdrawal before dispatch on a paid order', () => {
         const refunds: { returnId?: string; amount: number; full: boolean }[] = [];
         onDomainEvent(PAYMENT_REFUNDED, (payload) => void refunds.push(payload));
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
             asCustomer(user.id),
             testCallerContext
@@ -99,7 +99,7 @@ describe('a withdrawal before dispatch on a paid order', () => {
         const { user, orderId } = await paidOrder();
         mockEnqueueEmail.mockClear();
 
-        await createReturn(
+        await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
             asCustomer(user.id),
             testCallerContext
@@ -118,7 +118,7 @@ describe('a withdrawal before dispatch on a paid order', () => {
         const { user, orderId } = await paidOrder();
         mockEnqueueEmail.mockClear();
 
-        await createReturn(
+        await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
             asCustomer(user.id),
             testCallerContext

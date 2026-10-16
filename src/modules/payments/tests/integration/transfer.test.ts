@@ -16,16 +16,7 @@ import { resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { orderService } from '@modules/orders';
-import {
-    createIntent,
-    getForOrder,
-    getOrderByReference,
-    openTransferPayment,
-    reapAbandonedPayments,
-    reconcileStalePayments,
-    recordOfflinePayment,
-    syncPayment
-} from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { paymentModel } from '@modules/payments/model';
 import { paymentRepository } from '@modules/payments/repository';
 import { presentPayment } from '@modules/payments/presenter';
@@ -90,8 +81,8 @@ describe('opening the transfer payment', () => {
     it('mails the instructions once, however often the event is delivered', async () => {
         const { order } = await transferOrder();
 
-        await openTransferPayment(String(order._id));
-        await openTransferPayment(String(order._id));
+        await paymentService.openTransferPayment(String(order._id));
+        await paymentService.openTransferPayment(String(order._id));
 
         expect(templatesSent()).toEqual(['payments.transfer-instructions']);
         expect(await paymentModel.countDocuments({ orderId: order._id })).toBe(1);
@@ -111,7 +102,7 @@ describe('opening the transfer payment', () => {
             ...extras
         });
 
-        await openTransferPayment(String(order._id));
+        await paymentService.openTransferPayment(String(order._id));
 
         expect(await paymentOf(String(order._id))).toBeNull();
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
@@ -123,10 +114,10 @@ describe('opening the transfer payment', () => {
             paymentMethod: 'bank_transfer',
             payBy: new Date(Date.now() + 3_600_000).toISOString()
         });
-        await createIntent(String(order._id), asCustomer(user.id));
+        await paymentService.createIntent(String(order._id), asCustomer(user.id));
         mockEnqueueEmail.mockClear();
 
-        await openTransferPayment(String(order._id));
+        await paymentService.openTransferPayment(String(order._id));
 
         expect(await paymentOf(String(order._id))).toMatchObject({
             method: 'card',
@@ -163,7 +154,7 @@ describe('the instructions on the payment', () => {
         const user = await createUser();
         const { order, reference } = await transferOrder({ user });
 
-        const intent = await createIntent(String(order._id), asCustomer(user.id));
+        const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
 
         expect(intent.success).toBe(true);
         const switched = await paymentOf(String(order._id));
@@ -188,7 +179,7 @@ describe('what the buyer may still do', () => {
         const user = await createUser();
         const { order } = await transferOrder({ user });
 
-        const read = await getForOrder(String(order._id), asCustomer(user.id));
+        const read = await paymentService.getForOrder(String(order._id), asCustomer(user.id));
 
         expect(asSuccess(read).data.actions?.pay).toBe(true);
     });
@@ -198,7 +189,7 @@ describe('recording the money', () => {
     it('settles the very payment the order opened: the order is paid and nothing new is created', async () => {
         const { order, payment } = await transferOrder();
 
-        const recorded = await recordOfflinePayment(
+        const recorded = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'bank_transfer', reference: 'statement line 42' },
             callerContextAs('admin')
@@ -251,8 +242,8 @@ describe('a transfer that lands after its order was cancelled', () => {
         const { order, reference } = await transferOrder({ price: 20 });
         await lapse(String(order._id));
 
-        const found = await getOrderByReference(reference);
-        const recorded = await recordOfflinePayment(
+        const found = await paymentService.getOrderByReference(reference);
+        const recorded = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'bank_transfer', reference: 'late statement line' },
             callerContextAs('admin')
@@ -276,7 +267,7 @@ describe('a transfer that lands after its order was cancelled', () => {
             status: OrderStatus.cancelled
         });
 
-        const recorded = await recordOfflinePayment(
+        const recorded = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'bank_transfer' },
             callerContextAs('admin')
@@ -304,7 +295,7 @@ describe('how long the transfer payment is kept', () => {
         await lapse(String(closed.order._id));
         const user = await createUser({ email: 'card-buyer@example.com' });
         const card = await createOrder(user, [toOrderItem(await createProduct(), 1)]);
-        await createIntent(String(card._id), asCustomer(user.id));
+        await paymentService.createIntent(String(card._id), asCustomer(user.id));
         await orderService.cancelOnRequestById(
             String(card._id),
             asCustomer(user.id),
@@ -315,7 +306,7 @@ describe('how long the transfer payment is kept', () => {
         await touchedDaysAgo(String(closed.order._id), 60);
         await touchedDaysAgo(String(card._id), 60);
 
-        await reapAbandonedPayments();
+        await paymentService.reapAbandonedPayments();
 
         expect(await paymentOf(String(closed.order._id))).not.toBeNull();
         expect(await paymentOf(String(card._id))).toBeNull();
@@ -326,7 +317,7 @@ describe('how long the transfer payment is kept', () => {
         await lapse(String(order._id));
         await touchedDaysAgo(String(order._id), 400);
 
-        await reapAbandonedPayments();
+        await paymentService.reapAbandonedPayments();
 
         expect(await paymentOf(String(order._id))).toBeNull();
     });
@@ -338,8 +329,8 @@ describe('what has nothing to ask a provider', () => {
             const user = await createUser();
             const { order, payment } = await transferOrder({ user });
 
-            const swept = await reconcileStalePayments();
-            const synced = await syncPayment(
+            const swept = await paymentService.reconcileStalePayments();
+            const synced = await paymentService.syncPayment(
                 String(payment._id),
                 asCustomer(user.id),
                 testCallerContext

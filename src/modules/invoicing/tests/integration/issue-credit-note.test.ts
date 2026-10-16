@@ -16,7 +16,7 @@ import ordersModule from '@modules/orders/module';
 import paymentsModule from '@modules/payments/module';
 import invoicingModule from '@modules/invoicing/module';
 import { yearInZone } from '@modules/orders';
-import { createIntent, confirmPayment, refundForOrder, paymentService } from '@modules/payments';
+import { paymentService } from '@modules/payments';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
@@ -54,9 +54,9 @@ const paidAndInvoiced = async (overrides: Parameters<typeof createOrder>[2] = {}
     const product = await createProduct({ price: 25 });
     const order = await createOrder(user, [toOrderItem(product, 1)], overrides);
     const orderId = String(order._id);
-    const intent = await createIntent(orderId, asCustomer(user.id));
+    const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
     if (!intent.success) throw new Error('intent refused');
-    await confirmPayment(
+    await paymentService.confirmPayment(
         intent.data.id,
         FAKE_SUCCESS_METHOD,
         asCustomer(user.id),
@@ -80,9 +80,9 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         const product = await createProduct({ price: 25 });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
 
-        const intent = await createIntent(String(order._id), asCustomer(user.id));
+        const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
         if (!intent.success) throw new Error('intent refused');
-        await confirmPayment(
+        await paymentService.confirmPayment(
             intent.data.id,
             FAKE_SUCCESS_METHOD,
             asCustomer(user.id),
@@ -90,7 +90,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         );
         const invoice = await waitForInvoice(String(order._id));
 
-        await refundForOrder(String(order._id));
+        await paymentService.refundForOrder(String(order._id));
         const [creditNote] = await waitForNotes(String(order._id), 1);
 
         // Both series independently start their own year at 1 — the SAME printed number on two

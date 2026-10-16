@@ -14,15 +14,7 @@ import type { AppModule, PublicEventTarget } from '@kernel/registry';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { ORDER_CANCELLED, ORDER_CREATED } from '@modules/orders';
 import { router } from './routes';
-import {
-    openTransferPayment,
-    refundForOrder,
-    cancelOpenIntentForOrder,
-    detachUserId,
-    findOwnPaymentsForExport,
-    mailPaymentReceived,
-    mailRefundIssued
-} from './services';
+import { paymentService } from './services';
 import { paymentsRateLimits } from './rate-limits';
 // Also installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED,
 // PAYMENT_REFUNDED). Reached directly, never through this module's own barrel — see CLAUDE.md's
@@ -85,10 +77,10 @@ export default {
     personalData: [
         {
             section: 'payments',
-            collect: (subject) => findOwnPaymentsForExport(subject.userId),
+            collect: (subject) => paymentService.findOwnPaymentsForExport(subject.userId),
             // Detach, never delete — the payment survives the account, inside the same
             // hard-delete transaction. See `detachUserId`.
-            erase: detachUserId
+            erase: paymentService.detachUserId
         }
     ],
     subscribe: () => {
@@ -97,16 +89,16 @@ export default {
         // when `refund` says so — the money already taken. The refund is the durable half: its
         // event is an outbox row, and a rejection here makes the relay deliver it again.
         onDomainEvent(ORDER_CANCELLED, ({ orderId, refund, expired }) =>
-            cancelOpenIntentForOrder(orderId, expired).then(() =>
-                refund ? refundForOrder(orderId) : undefined
-            )
+            paymentService
+                .cancelOpenIntentForOrder(orderId, expired)
+                .then(() => (refund ? paymentService.refundForOrder(orderId) : undefined))
         );
         // A bank-transfer order is owed money from the moment it is placed: its payment, with the
         // reference and the instructions, opens with it.
-        onDomainEvent(ORDER_CREATED, ({ orderId }) => openTransferPayment(orderId));
+        onDomainEvent(ORDER_CREATED, ({ orderId }) => paymentService.openTransferPayment(orderId));
         // This module's own two mails, from its own facts — see `./services/notify.ts`.
-        onDomainEvent(PAYMENT_SUCCEEDED, mailPaymentReceived);
-        onDomainEvent(PAYMENT_REFUNDED, mailRefundIssued);
+        onDomainEvent(PAYMENT_SUCCEEDED, paymentService.mailPaymentReceived);
+        onDomainEvent(PAYMENT_REFUNDED, paymentService.mailRefundIssued);
     },
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates'),

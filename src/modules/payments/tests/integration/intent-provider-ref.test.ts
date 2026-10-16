@@ -12,7 +12,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { createIntent } from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import { asCustomer } from '@tests/callers';
@@ -37,9 +37,9 @@ describe('a second ask for the same payment', () => {
         const { user, orderId } = await anOrder();
         const prepare = jest.spyOn(fakePaymentProvider, 'prepare');
 
-        await createIntent(orderId, asCustomer(user.id));
+        await paymentService.createIntent(orderId, asCustomer(user.id));
         const stored = await paymentRepository.findByOrderId(orderId);
-        await createIntent(orderId, asCustomer(user.id));
+        await paymentService.createIntent(orderId, asCustomer(user.id));
 
         // First ask: nothing stored yet, so nothing to resume. Second: the stored reference.
         expect(prepare.mock.calls[0]?.[2]).toBeFalsy();
@@ -59,8 +59,8 @@ describe('a second ask for the same payment', () => {
         });
         const cancel = jest.spyOn(fakePaymentProvider, 'cancel').mockResolvedValue(undefined);
 
-        await createIntent(orderId, asCustomer(user.id));
-        const second = await createIntent(orderId, asCustomer(user.id));
+        await paymentService.createIntent(orderId, asCustomer(user.id));
+        const second = await paymentService.createIntent(orderId, asCustomer(user.id));
 
         expect(asReject(second).status).toBe(409);
         expect(asReject(second).errors[0].code).toBe('PAYMENT_IN_FLIGHT');
@@ -84,8 +84,8 @@ describe('a second ask for the same payment', () => {
 
         // No Idempotency-Key serialises these: both see a row with no reference yet.
         const answers = await Promise.all([
-            createIntent(orderId, asCustomer(user.id)),
-            createIntent(orderId, asCustomer(user.id))
+            paymentService.createIntent(orderId, asCustomer(user.id)),
+            paymentService.createIntent(orderId, asCustomer(user.id))
         ]);
 
         const refused = answers.filter((answer) => !answer.success);

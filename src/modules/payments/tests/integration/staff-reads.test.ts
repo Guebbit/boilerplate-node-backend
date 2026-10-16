@@ -14,16 +14,7 @@ import { resetDomainEvents } from '@kernel/events';
 import { PaymentDisplayStatus, type PaymentAttentionItem } from '@types';
 import type { PaymentDocument } from '@modules/payments/model';
 import { paymentModel } from '@modules/payments/model';
-import {
-    getForOrder,
-    listAttention,
-    listPayments,
-    listRefunds,
-    methodMix,
-    refundByOrder,
-    refundForOrder,
-    retryOpenRefunds
-} from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { withEnvironmentOverrides } from '@tests/environment';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
@@ -89,8 +80,10 @@ const backdate = (payment: PaymentDocument, minutesAgo: number) =>
         .exec();
 
 /** The ids on the first page of a staff list, in order. */
-const idsOf = (filters: Parameters<typeof listPayments>[0]): Promise<string[]> =>
-    listPayments(filters, asAdmin()).then(({ items }) => items.map((item) => item.id));
+const idsOf = (filters: Parameters<typeof paymentService.listPayments>[0]): Promise<string[]> =>
+    paymentService
+        .listPayments(filters, asAdmin())
+        .then(({ items }) => items.map((item) => item.id));
 
 /** A payment whose one refund failed `hoursAgo` hours ago — a stale-refund problem. */
 const staleRefund = (hoursAgo: number) =>
@@ -106,7 +99,7 @@ const staleRefund = (hoursAgo: number) =>
 
 /** The rows an attention read returns. */
 const attentionRows = (): Promise<PaymentAttentionItem[]> =>
-    listAttention().then(({ items }) => items);
+    paymentService.listAttention().then(({ items }) => items);
 
 /** One payment per label, keyed by the label it should read as. */
 const seedEveryLabel = async (): Promise<Map<PaymentDisplayStatus, string>> => {
@@ -142,7 +135,7 @@ describe('listPayments by displayStatus', () => {
         const ids = await seedEveryLabel();
 
         for (const [label, id] of ids) {
-            const page = await listPayments({ displayStatus: label }, asAdmin());
+            const page = await paymentService.listPayments({ displayStatus: label }, asAdmin());
 
             expect(page.items.map((item) => item.id)).toEqual([id]);
             expect(page.items[0].displayStatus).toBe(label);
@@ -179,8 +172,14 @@ describe('listPayments filters and sort', () => {
         });
         await seedPayment();
 
-        const created = await listPayments({ createdTo: '2026-02-01T00:00:00Z' }, asAdmin());
-        const received = await listPayments({ receivedFrom: '2026-01-01T00:00:00Z' }, asAdmin());
+        const created = await paymentService.listPayments(
+            { createdTo: '2026-02-01T00:00:00Z' },
+            asAdmin()
+        );
+        const received = await paymentService.listPayments(
+            { receivedFrom: '2026-01-01T00:00:00Z' },
+            asAdmin()
+        );
 
         expect(created.items.map((item) => item.id)).toEqual([String(old.payment._id)]);
         expect(received.items.map((item) => item.id)).toEqual([String(old.payment._id)]);
@@ -191,8 +190,8 @@ describe('listPayments filters and sort', () => {
         await seedPayment({ amount: 90 });
         await seedPayment({ amount: 60 });
 
-        const asc = await listPayments({ sort: ['amount'] }, asAdmin());
-        const desc = await listPayments({ sort: ['-amount'] }, asAdmin());
+        const asc = await paymentService.listPayments({ sort: ['amount'] }, asAdmin());
+        const desc = await paymentService.listPayments({ sort: ['-amount'] }, asAdmin());
 
         expect(asc.items.map((item) => item.amount)).toEqual([30, 60, 90]);
         expect(desc.items.map((item) => item.amount)).toEqual([90, 60, 30]);
@@ -201,7 +200,7 @@ describe('listPayments filters and sort', () => {
     it("composes each row with its order's number and email", async () => {
         const { order } = await seedPayment();
 
-        const { items } = await listPayments({}, asAdmin());
+        const { items } = await paymentService.listPayments({}, asAdmin());
 
         expect(items[0]).toMatchObject({ orderNumber: order.orderNumber, email: order.email });
     });
@@ -221,9 +220,11 @@ describe('what each audience is sent', () => {
         });
         const orderId = String(order._id);
 
-        const staff = asSuccess(await getForOrder(orderId, asAdmin())).data;
-        const payer = asSuccess(await getForOrder(orderId, asCustomer(user.id))).data;
-        const { items } = await listPayments({}, asAdmin());
+        const staff = asSuccess(await paymentService.getForOrder(orderId, asAdmin())).data;
+        const payer = asSuccess(
+            await paymentService.getForOrder(orderId, asCustomer(user.id))
+        ).data;
+        const { items } = await paymentService.listPayments({}, asAdmin());
         const [listed] = items;
 
         for (const payment of [staff, listed]) {
@@ -257,9 +258,11 @@ describe('listRefunds', () => {
             ]
         });
 
-        const all = await listRefunds({});
-        const failed = await listRefunds({ status: 'failed' });
-        const early = await listRefunds({ createdTo: new Date('2026-02-15T00:00:00Z') });
+        const all = await paymentService.listRefunds({});
+        const failed = await paymentService.listRefunds({ status: 'failed' });
+        const early = await paymentService.listRefunds({
+            createdTo: new Date('2026-02-15T00:00:00Z')
+        });
 
         expect(all.items.map((row) => row.createdAt.slice(0, 10))).toEqual([
             '2026-04-01',
@@ -293,7 +296,7 @@ describe('listAttention', () => {
             });
             await backdate(payment, 180);
 
-            const before = await listAttention();
+            const before = await paymentService.listAttention();
             expect(before.items).toEqual([
                 expect.objectContaining({
                     kind: 'stale_refund',
@@ -302,7 +305,7 @@ describe('listAttention', () => {
                 })
             ]);
 
-            expect(await retryOpenRefunds()).toBe(1);
+            expect(await paymentService.retryOpenRefunds()).toBe(1);
             expect(await attentionRows()).toEqual([]);
         }));
 
@@ -360,8 +363,8 @@ describe('listAttention', () => {
 
         // The cancel's own refund listener: nobody can say the cash went back, so it only
         // opens the record. A redelivery of the same event writes nothing more.
-        await refundForOrder(orderId);
-        await refundForOrder(orderId);
+        await paymentService.refundForOrder(orderId);
+        await paymentService.refundForOrder(orderId);
 
         expect(await attentionRows()).toEqual([
             expect.objectContaining({
@@ -372,7 +375,7 @@ describe('listAttention', () => {
             })
         ]);
 
-        await refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
+        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
         expect(await attentionRows()).toEqual([]);
     });
 });
@@ -395,7 +398,7 @@ describe('methodMix', () => {
         await seedPayment({ amount: 99, status: 'declined' });
         await seedPayment({ amount: 99, status: 'requires_confirmation' });
 
-        const rows = await methodMix({
+        const rows = await paymentService.methodMix({
             from: new Date(Date.now() - 3_600_000),
             to: new Date(Date.now() + 3_600_000),
             interval: 'day',

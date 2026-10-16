@@ -16,7 +16,7 @@ import { orderService } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
-import { refundByOrder, refundForReturn } from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
@@ -79,7 +79,9 @@ describe('a refund outside a return mails the buyer', () => {
     it('sends the refund notice to the buyer, naming a partial refund as part of the payment', async () => {
         const { order, orderId } = await paidOrder();
 
-        await refundByOrder(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
+        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+            amount: 30
+        });
         await waitForMails(() => mailsOf('payments.refund-issued').length > 0);
 
         expect(mailsOf('payments.refund-issued')[0][0].to).toBe(order.email);
@@ -90,7 +92,9 @@ describe('a refund outside a return mails the buyer', () => {
     it('says the refund is everything when the last part goes back', async () => {
         const { orderId } = await paidOrder();
 
-        await refundByOrder(orderId, asAdmin(), callerContextAs('admin'), { amount: 100 });
+        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+            amount: 100
+        });
         await waitForMails(() => mailsOf('payments.refund-issued').length > 0);
 
         expect(dataOf('payments.refund-issued').detail).toContain('everything');
@@ -99,9 +103,13 @@ describe('a refund outside a return mails the buyer', () => {
     it('judges "everything" from the refunds settled so far, so the last part says it and the first does not', async () => {
         const { orderId } = await paidOrder();
 
-        await refundByOrder(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
+        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+            amount: 30
+        });
         await waitForMails(() => mailsOf('payments.refund-issued').length === 1);
-        await refundByOrder(orderId, asAdmin(), callerContextAs('admin'), { amount: 70 });
+        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+            amount: 70
+        });
         await waitForMails(() => mailsOf('payments.refund-issued').length === 2);
 
         const [first, second] = mailsOf('payments.refund-issued').map((call) => call[2].detail);
@@ -125,7 +133,7 @@ describe('a refund that must not mail', () => {
     it("is silent for a return's refund — `returns` closes it with its own notice", async () => {
         const { orderId } = await paidOrder();
 
-        await refundForReturn(
+        await paymentService.refundForReturn(
             orderId,
             { returnId: '64b64c4f4f4f4f4f4f4f4f4f', amount: 50, lines: [], shipping: 0 },
             testCallerContext
@@ -140,7 +148,9 @@ describe('a refund that must not mail', () => {
         jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('provider down'));
 
         await expect(
-            refundByOrder(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 })
+            paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+                amount: 30
+            })
         ).rejects.toThrow('provider down');
         await settleOutboxNudges();
 

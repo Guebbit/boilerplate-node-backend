@@ -17,7 +17,7 @@ import { productService } from '@modules/products';
 import { inventoryService } from '@modules/inventory';
 import paymentsModule from '@modules/payments/module';
 import { resetDomainEvents } from '@kernel/events';
-import { cartGetForView, cartItemAddById, orderConfirm } from '../../services';
+import { cartService } from '../../services';
 import { cartRepository } from '../../repository';
 
 setupTestDb();
@@ -39,13 +39,15 @@ const preorderProduct = async (limit: number, onHand = 0) => {
 
 /** The availability of the one line in the user's cart. */
 const availabilityOf = (userId: string) =>
-    cartGetForView(userId, testCallerContext).then(({ items }) => items[0]?.availability);
+    cartService
+        .cartGetForView(userId, testCallerContext)
+        .then(({ items }) => items[0]?.availability);
 
 /** A user with an address, the product in their cart, and pickup chosen: ready to check out. */
 const shopperWith = async (productId: string, quantity: number, email?: string) => {
     const user = await createUser(email === undefined ? {} : { email });
     await giveAddress(user.id);
-    await cartItemAddById(user.id, productId, quantity);
+    await cartService.cartItemAddById(user.id, productId, quantity);
     await cartRepository.setShippingMethod(user.id, 'pickup');
     return user;
 };
@@ -55,7 +57,7 @@ describe('a preorder line', () => {
         const product = await preorderProduct(5);
         const user = await createUser();
 
-        await cartItemAddById(user.id, String(product._id), 3);
+        await cartService.cartItemAddById(user.id, String(product._id), 3);
 
         await expect(availabilityOf(user.id)).resolves.toBe('preorder');
     });
@@ -64,7 +66,7 @@ describe('a preorder line', () => {
         const product = await preorderProduct(2);
         const user = await createUser();
 
-        await cartItemAddById(user.id, String(product._id), 3);
+        await cartService.cartItemAddById(user.id, String(product._id), 3);
 
         await expect(availabilityOf(user.id)).resolves.toBe('insufficient_stock');
     });
@@ -73,7 +75,7 @@ describe('a preorder line', () => {
         const product = await preorderProduct(0, 50);
         const user = await createUser();
 
-        await cartItemAddById(user.id, String(product._id), 1);
+        await cartService.cartItemAddById(user.id, String(product._id), 1);
 
         await expect(availabilityOf(user.id)).resolves.toBe('out_of_stock');
     });
@@ -81,7 +83,7 @@ describe('a preorder line', () => {
     it('goes back to the shelf the moment the release date has passed', async () => {
         const product = await preorderProduct(0, 5);
         const user = await createUser();
-        await cartItemAddById(user.id, String(product._id), 1);
+        await cartService.cartItemAddById(user.id, String(product._id), 1);
 
         await productService.updateById(
             String(product._id),
@@ -99,7 +101,7 @@ describe('checking out a preorder', () => {
         const productId = String(product._id);
         const user = await shopperWith(productId, 2);
 
-        const result = await orderConfirm(user.id, testCallerContext, undefined);
+        const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(true);
         const line = result.success ? result.data.items[0] : undefined;
@@ -117,10 +119,10 @@ describe('checking out a preorder', () => {
         const product = await preorderProduct(2);
         const productId = String(product._id);
         const first = await shopperWith(productId, 2);
-        await orderConfirm(first.id, testCallerContext, undefined);
+        await cartService.orderConfirm(first.id, testCallerContext, undefined);
         const latecomer = await shopperWith(productId, 1, 'latecomer@example.com');
 
-        const result = await orderConfirm(latecomer.id, testCallerContext, undefined);
+        const result = await cartService.orderConfirm(latecomer.id, testCallerContext, undefined);
 
         expect(result.status).toBe(409);
         expect(!result.success && result.errors[0]).toMatchObject({
@@ -134,11 +136,11 @@ describe('checking out a preorder', () => {
         const ordinary = await createProduct({ onHand: 4 });
         const user = await createUser();
         await giveAddress(user.id);
-        await cartItemAddById(user.id, String(preorder._id), 1);
-        await cartItemAddById(user.id, String(ordinary._id), 2);
+        await cartService.cartItemAddById(user.id, String(preorder._id), 1);
+        await cartService.cartItemAddById(user.id, String(ordinary._id), 2);
         await cartRepository.setShippingMethod(user.id, 'pickup');
 
-        const result = await orderConfirm(user.id, testCallerContext, undefined);
+        const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(true);
         const frozen = result.success
@@ -157,7 +159,7 @@ describe('checking out a preorder', () => {
     it('keeps the promise frozen when the date later passes', async () => {
         const product = await preorderProduct(5);
         const user = await shopperWith(String(product._id), 1);
-        const placed = await orderConfirm(user.id, testCallerContext, undefined);
+        const placed = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
         await productService.updateById(
             String(product._id),

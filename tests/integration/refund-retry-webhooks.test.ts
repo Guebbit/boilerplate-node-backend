@@ -18,7 +18,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
 import paymentsModule from '@modules/payments/module';
-import { retryOpenRefunds } from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import webhooksModule from '@modules/webhooks/module';
@@ -129,7 +129,7 @@ it('leaves a refund the provider refused open for the sweep, and answers the eve
             attempts: 0
         });
 
-        expect(await retryOpenRefunds()).toBe(1);
+        expect(await paymentService.retryOpenRefunds()).toBe(1);
         expect((await paymentRepository.findByOrderId(orderId))!.refunds[0]).toMatchObject({
             status: 'succeeded'
         });

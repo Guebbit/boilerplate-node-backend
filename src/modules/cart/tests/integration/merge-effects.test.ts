@@ -16,7 +16,7 @@ import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { cartAnalyticsEvents } from '../../analytics';
 import { cartRepository, QUANTITY_LIMIT } from '../../repository';
 import { CART_LINES_REMOVED } from '../../events';
-import { cartItemAddById, cartMerge, productRemoveFromCartsById } from '../../services';
+import { cartService } from '../../services';
 
 /*
  * The analytics port is REPLACED with a recording wrapper around the real one, not spied on:
@@ -38,7 +38,7 @@ describe('a merge’s analytics', () => {
         const product = await createProduct();
         const emit = observePort(analyticsPort.emitAnalyticsEvent);
 
-        await cartMerge(
+        await cartService.cartMerge(
             user.id,
             [{ productId: String(product._id), quantity: 2 }],
             testCallerContext
@@ -56,10 +56,10 @@ describe('a merge’s analytics', () => {
     it('counts a line that grew an existing one as an update, not an add', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartItemAddById(user.id, String(product._id), 1);
+        await cartService.cartItemAddById(user.id, String(product._id), 1);
         const emit = observePort(analyticsPort.emitAnalyticsEvent);
 
-        await cartMerge(
+        await cartService.cartMerge(
             user.id,
             [{ productId: String(product._id), quantity: 3 }],
             testCallerContext
@@ -78,7 +78,7 @@ describe('a merge’s analytics', () => {
         const emit = observePort(analyticsPort.emitAnalyticsEvent);
 
         // An id nobody holds and no product has: refused as unavailable, written nowhere.
-        await cartMerge(
+        await cartService.cartMerge(
             user.id,
             [{ productId: '000000000000000000000000', quantity: 1 }],
             testCallerContext
@@ -92,13 +92,13 @@ describe('a merge that loses a race at the cap', () => {
     it('answers the line as capped, with what the cart holds, and counts nothing', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartItemAddById(user.id, String(product._id), 5);
+        await cartService.cartItemAddById(user.id, String(product._id), 5);
         // Between the rule's read and the write another request filled the line: the repository
         // refuses the add. Only a race can say so, hence a stand-in for it.
         jest.spyOn(cartRepository, 'upsertLine').mockResolvedValueOnce(QUANTITY_LIMIT);
         const emit = observePort(analyticsPort.emitAnalyticsEvent);
 
-        const { lines } = await cartMerge(
+        const { lines } = await cartService.cartMerge(
             user.id,
             [{ productId: String(product._id), quantity: 2 }],
             testCallerContext
@@ -129,9 +129,9 @@ describe('productRemoveFromCartsById', () => {
     it('announces whose carts held the product, with its names', async () => {
         const holder = await createUser();
         const product = await createProduct();
-        await cartItemAddById(holder.id, String(product._id), 1);
+        await cartService.cartItemAddById(holder.id, String(product._id), 1);
 
-        await productRemoveFromCartsById(String(product._id), { en: 'Blue mug' });
+        await cartService.productRemoveFromCartsById(String(product._id), { en: 'Blue mug' });
 
         expect(announced).toHaveBeenCalledTimes(1);
         expect(announced).toHaveBeenCalledWith(
@@ -143,7 +143,7 @@ describe('productRemoveFromCartsById', () => {
     it('announces nothing when no cart held it, so nobody is told about nothing', async () => {
         const product = await createProduct();
 
-        await productRemoveFromCartsById(String(product._id), { en: 'Blue mug' });
+        await cartService.productRemoveFromCartsById(String(product._id), { en: 'Blue mug' });
 
         expect(announced).not.toHaveBeenCalled();
     });

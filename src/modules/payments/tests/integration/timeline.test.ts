@@ -12,12 +12,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem, timelineOf } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { orderService } from '@modules/orders';
-import {
-    createIntent,
-    confirmPayment,
-    recordOfflinePayment,
-    refundByOrder
-} from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { recordDecline } from '@modules/payments/services/announce';
 import { PaymentProviderError } from '@modules/payments/providers';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
@@ -41,8 +36,8 @@ const paidOrder = async () => {
     const user = await createUser();
     const product = await createProduct({ price: 50 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
-    const intent = await createIntent(String(order._id), asCustomer(user.id));
-    await confirmPayment(
+    const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
+    await paymentService.confirmPayment(
         String((intent as { data?: { id?: string } }).data?.id),
         'pm_card_visa',
         asCustomer(user.id),
@@ -53,7 +48,9 @@ const paidOrder = async () => {
 
 /** Refund `amount` of the order's payment as the operator `admin-1`. */
 const refund = (orderId: string, amount: number) =>
-    refundByOrder(orderId, asAdmin(), callerContextAs('admin', 'admin-1'), { amount });
+    paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin', 'admin-1'), {
+        amount
+    });
 
 describe('the payment', () => {
     it('writes `paid` with the method the money came by, and no actor for a card', async () => {
@@ -75,7 +72,7 @@ describe('the payment', () => {
             callerContextAs('admin')
         );
 
-        await recordOfflinePayment(
+        await paymentService.recordOfflinePayment(
             String(placed.data!._id),
             { method: 'cash', reference: 'till-42' },
             callerContextAs('admin', 'cashier-1')
@@ -98,7 +95,7 @@ describe('the payment', () => {
             callerContextAs('admin')
         );
         const orderId = String(placed.data!._id);
-        await createIntent(orderId, asCustomer(user.id));
+        await paymentService.createIntent(orderId, asCustomer(user.id));
 
         await recordDecline(orderId, {});
         const again = await recordDecline(orderId, {});

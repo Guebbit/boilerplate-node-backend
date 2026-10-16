@@ -14,7 +14,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import type { OrderDocument } from '@modules/orders';
 import { buildReference } from '../domain';
-import { openTransferPayment, paymentService } from '../services';
+import { paymentService } from '../services';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 
@@ -45,7 +45,7 @@ export const transferOrder = async (
         paymentMethod: 'bank_transfer',
         payBy: new Date(Date.now() + (options.holdHours ?? 168) * 3_600_000).toISOString()
     });
-    await openTransferPayment(id.toHexString());
+    await paymentService.openTransferPayment(id.toHexString());
     const payment = await paymentRepository.findByOrderId(id.toHexString());
     if (!payment) throw new Error('the transfer payment did not open');
     return { order, payment, reference: buildReference(id.toHexString()) };

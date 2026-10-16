@@ -17,7 +17,7 @@ import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/test
 import { deliveryService } from '@modules/delivery';
 import { carryOrderTo, fulfillmentOrdersOf } from '@modules/delivery/tests/factories';
 import { OrderStatus } from '@types';
-import { createIntent, confirmPayment, paymentService } from '@modules/payments';
+import { paymentService } from '@modules/payments';
 import { invoicingService } from '@modules/invoicing';
 import { asAdmin, asCustomer, callerContextAs, testCallerContext } from '@tests/callers';
 import type { ResponseSuccess } from '@infrastructure/http/response';
@@ -39,7 +39,7 @@ describe('POST /account/export', () => {
         const { user, bearer } = await loginWithCookie();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 2)]);
-        const intent = await createIntent(String(order._id), asCustomer(user.id));
+        const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
         const payment = (intent as ResponseSuccess<Payment>).data;
 
         const response = await requestAndDownloadExport(bearer);
@@ -83,10 +83,10 @@ describe('POST /account/export', () => {
         const product = await createProduct({ price: 25, onHand: 5 });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         const orderId = String(order._id);
-        const intent = await createIntent(orderId, asCustomer(user.id));
+        const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
         if (!intent.success) throw new Error('intent refused');
         // The fake PSP's "always succeeds" reference.
-        await confirmPayment(
+        await paymentService.confirmPayment(
             intent.data.id,
             'pm_card_visa',
             asCustomer(user.id),

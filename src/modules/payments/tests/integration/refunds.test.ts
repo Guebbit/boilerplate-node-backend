@@ -13,7 +13,7 @@ import { createOrder, toOrderItem, readOrder } from '@modules/orders/tests/facto
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
-import { recordOfflinePayment, refundByOrder, retryOpenRefunds } from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { PAYMENT_REFUNDED } from '@modules/payments/events';
 import { paymentRepository } from '@modules/payments/repository';
 import { paymentModel } from '@modules/payments/model';
@@ -67,7 +67,7 @@ const paymentOf = async (orderId: string) => {
 
 /** Refund `amount` of the order's payment as an operator. */
 const refund = (orderId: string, body: { amount?: number; currency?: string } = {}) =>
-    refundByOrder(orderId, asAdmin(), callerContextAs('admin'), body);
+    paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), body);
 
 describe('a partial refund', () => {
     it('records the refund and keeps the payment succeeded, with the rest still refundable', async () => {
@@ -247,7 +247,7 @@ describe('a refund that asks for too much', () => {
             const { orderId } = await paidOrder();
             const providerRefund = fakePaymentProvider.refund.bind(fakePaymentProvider);
             jest.spyOn(fakePaymentProvider, 'refund').mockImplementationOnce(async (...args) => {
-                await retryOpenRefunds();
+                await paymentService.retryOpenRefunds();
                 return providerRefund(...args);
             });
 
@@ -327,14 +327,14 @@ describe('a refund the provider refuses', () => {
             spy.mockRejectedValueOnce(new Error('unreachable'));
             await expect(refund(orderId, { amount: 30 })).rejects.toThrow('unreachable');
 
-            expect(await retryOpenRefunds()).toBe(1);
+            expect(await paymentService.retryOpenRefunds()).toBe(1);
 
             const payment = await paymentOf(orderId);
             expect(payment.refunds[0]).toMatchObject({ status: 'succeeded' });
             expect(payment.refunds[0].failureReason).toBeUndefined();
             expect(spy.mock.calls[1][2].idempotencyKey).toBe(spy.mock.calls[0][2].idempotencyKey);
             // A second pass finds nothing open.
-            expect(await retryOpenRefunds()).toBe(0);
+            expect(await paymentService.retryOpenRefunds()).toBe(0);
         }));
 
     it('completes the payment when the sweep finishes the last part', () =>
@@ -346,7 +346,7 @@ describe('a refund the provider refuses', () => {
             const { status: statusNow } = await paymentOf(orderId);
             expect(statusNow).toBe('succeeded');
 
-            await retryOpenRefunds();
+            await paymentService.retryOpenRefunds();
 
             const after = await paymentOf(orderId);
             expect(after.status).toBe('succeeded');
@@ -391,7 +391,7 @@ describe('a partial refund on a payment recorded by hand', () => {
         const product = await createProduct({ price: 50 });
         const order = await createOrder(user, [toOrderItem(product, 2)]);
         const orderId = String(order._id);
-        await recordOfflinePayment(
+        await paymentService.recordOfflinePayment(
             orderId,
             { method: 'cash', reference: 'till' },
             callerContextAs('admin')

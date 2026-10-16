@@ -33,7 +33,10 @@ import {
 import { refundByOrder, refundForOrder, refundForReturn } from './refunds';
 import { retryOpenRefunds, reconcileStalePayments } from './effects';
 import { recordOfflinePayment } from './offline';
-import { getForOrder } from './view';
+import { openTransferPayment } from './transfer';
+import { mailPaymentReceived, mailRefundIssued } from './notify';
+import { callerScope, payerScope, buyerOrderScope, readsAllPayments } from './scope';
+import { getForOrder, withActions } from './view';
 import {
     detachUserId,
     findOwnPayments,
@@ -45,40 +48,19 @@ import { listPayments, listRefunds, listAttention } from './list';
 import { methodMix } from './stats';
 import { listPaymentMethods } from '../config';
 
+export type { OfflinePaymentInput } from './offline';
+export type { MixRow } from './stats';
+export type { PaymentMethodInfo } from '../config';
+
 /*
- * Every operation is published by name as well as through the object below: `module.ts` wires
- * `refundForOrder` and `detachUserId` into the events that trigger them, and the suites drive the
- * operations directly. Publishing only the object would break both call sites.
- *
  * `settlePayment` and `performRefund` are NOT published: each is the choreography beneath a door
  * that carries the guards (scope, own-money rule, order gate), so a caller going round the door
  * would skip them. `confirmPayment`/`syncPayment`/`applyWebhookSettlement` and
  * `refundByOrder`/`refundForOrder`/`refundForReturn` are the doors.
  */
-export { createIntent, cancelOpenIntentForOrder } from './intent';
-export { openTransferPayment } from './transfer';
-export {
-    confirmPayment,
-    syncPayment,
-    applyWebhookDelivery,
-    applyWebhookSettlement
-} from './settlement';
-export { refundByOrder, refundForOrder, refundForReturn } from './refunds';
-export { mailPaymentReceived, mailRefundIssued } from './notify';
-export { retryOpenRefunds, reconcileStalePayments } from './effects';
-export { recordOfflinePayment, type OfflinePaymentInput } from './offline';
-export { getForOrder, withActions } from './view';
-export {
-    detachUserId,
-    findOwnPayments,
-    findOwnPaymentsForExport,
-    reapAbandonedPayments
-} from './retention';
-export { callerScope, payerScope, buyerOrderScope, readsAllPayments } from './scope';
-export { getOrderByReference } from './lookup';
-export { listPayments, listRefunds, listAttention } from './list';
-export { methodMix, type MixRow } from './stats';
-export { listPaymentMethods, type PaymentMethodInfo } from '../config';
+export { createIntent } from './intent';
+export { confirmPayment } from './settlement';
+export { recordOfflinePayment } from './offline';
 
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
 export const paymentService = {
@@ -104,5 +86,13 @@ export const paymentService = {
     findOwnPayments,
     findOwnPaymentsForExport,
     reapAbandonedPayments,
-    listPaymentMethods
+    listPaymentMethods,
+    openTransferPayment,
+    mailPaymentReceived,
+    mailRefundIssued,
+    withActions,
+    callerScope,
+    payerScope,
+    buyerOrderScope,
+    readsAllPayments
 };

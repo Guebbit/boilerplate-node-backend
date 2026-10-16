@@ -13,7 +13,7 @@ import { callerContextAs } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { getOrderByReference, recordOfflinePayment } from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { buildReference } from '../../domain';
 import { transferOrder } from '../factories';
 import { asReject } from '@tests/response';
@@ -26,7 +26,7 @@ describe('getOrderByReference', () => {
     it('finds the order behind its own RF reference', async () => {
         const { order, reference } = await transferOrder();
 
-        const result = await getOrderByReference(reference);
+        const result = await paymentService.getOrderByReference(reference);
 
         expect(result.success).toBe(true);
         expect(orderIdOf(result)).toBe(String(order._id));
@@ -39,7 +39,7 @@ describe('getOrderByReference', () => {
             .join(' ')
             .toLowerCase();
 
-        const result = await getOrderByReference(grouped);
+        const result = await paymentService.getOrderByReference(grouped);
 
         expect(result.success).toBe(true);
         expect(orderIdOf(result)).toBe(String(order._id));
@@ -52,7 +52,9 @@ describe('getOrderByReference', () => {
             paymentMethod: 'bank_transfer'
         });
 
-        expect(asReject(await getOrderByReference(String(order._id))).status).toBe(404);
+        expect(asReject(await paymentService.getOrderByReference(String(order._id))).status).toBe(
+            404
+        );
     });
 
     it('answers 404 for a one-character typo, rather than matching the wrong order', async () => {
@@ -60,7 +62,7 @@ describe('getOrderByReference', () => {
         const lastChar = reference.at(-1)!;
         const typo = `${reference.slice(0, -1)}${lastChar === '0' ? '1' : '0'}`;
 
-        expect(asReject(await getOrderByReference(typo)).status).toBe(404);
+        expect(asReject(await paymentService.getOrderByReference(typo)).status).toBe(404);
     });
 
     it('answers 404 for a well-formed reference that matches no order', async () => {
@@ -68,11 +70,13 @@ describe('getOrderByReference', () => {
         // the lookup-miss branch, distinct from the checksum-rejection one above.
         const orphan = buildReference(new Types.ObjectId().toHexString());
 
-        expect(asReject(await getOrderByReference(orphan)).status).toBe(404);
+        expect(asReject(await paymentService.getOrderByReference(orphan)).status).toBe(404);
     });
 
     it('answers 404 for input that is neither a reference nor an ObjectId, same as a typo', async () => {
-        expect(asReject(await getOrderByReference('not-a-reference')).status).toBe(404);
+        expect(asReject(await paymentService.getOrderByReference('not-a-reference')).status).toBe(
+            404
+        );
     });
 });
 
@@ -80,10 +84,10 @@ describe("lookup then settle — the admin's two-step flow", () => {
     it('settles the order the lookup found, through the existing offline endpoint', async () => {
         const { order, reference } = await transferOrder();
 
-        const found = await getOrderByReference(reference);
+        const found = await paymentService.getOrderByReference(reference);
         expect(found.success).toBe(true);
 
-        const settled = await recordOfflinePayment(
+        const settled = await paymentService.recordOfflinePayment(
             orderIdOf(found),
             { method: 'bank_transfer', reference: 'bank statement line 42' },
             callerContextAs('admin')

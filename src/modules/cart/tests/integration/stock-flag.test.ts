@@ -22,7 +22,7 @@ import { productService } from '@modules/products';
 import { inventoryService } from '@modules/inventory';
 import paymentsModule from '@modules/payments/module';
 import { resetDomainEvents } from '@kernel/events';
-import { cartItemAddById, cartGetForView, orderConfirm } from '../../services';
+import { cartService } from '../../services';
 import { cartRepository } from '../../repository';
 
 setupTestDb();
@@ -38,7 +38,9 @@ afterEach(() => {
 
 /** The availability of the one line in the user's cart. */
 const flagOf = (userId: string) =>
-    cartGetForView(userId, testCallerContext).then(({ items }) => items[0]?.availability);
+    cartService
+        .cartGetForView(userId, testCallerContext)
+        .then(({ items }) => items[0]?.availability);
 
 /** Every key that appears anywhere in a JSON value, nested objects and arrays included. */
 const keysOf = (value: unknown): string[] => {
@@ -51,7 +53,7 @@ describe('GET /cart’s line availability', () => {
     it('is in_stock while the line fits, and insufficient_stock once it no longer does', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 5 });
-        await cartItemAddById(user.id, String(product._id), 4);
+        await cartService.cartItemAddById(user.id, String(product._id), 4);
         await expect(flagOf(user.id)).resolves.toBe('in_stock');
 
         await inventoryService.adjust(String(product._id), -2, 'stocktake');
@@ -62,7 +64,7 @@ describe('GET /cart’s line availability', () => {
     it('reads the ledger, not the catalogue cache that sits low', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 5 });
-        await cartItemAddById(user.id, String(product._id), 4);
+        await cartService.cartItemAddById(user.id, String(product._id), 4);
 
         await productService.syncStockCache(String(product._id), { onHand: 0, reserved: 0 });
 
@@ -72,7 +74,7 @@ describe('GET /cart’s line availability', () => {
     it('treats a line equal to what is for sale as fitting', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 4 });
-        await cartItemAddById(user.id, String(product._id), 4);
+        await cartService.cartItemAddById(user.id, String(product._id), 4);
 
         await expect(flagOf(user.id)).resolves.toBe('in_stock');
     });
@@ -80,7 +82,7 @@ describe('GET /cart’s line availability', () => {
     it('names a sold-out line out_of_stock', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 0 });
-        await cartItemAddById(user.id, String(product._id), 1);
+        await cartService.cartItemAddById(user.id, String(product._id), 1);
 
         await expect(flagOf(user.id)).resolves.toBe('out_of_stock');
     });
@@ -89,18 +91,20 @@ describe('GET /cart’s line availability', () => {
         const buyer = await createUser({ email: 'buyer@example.com' });
         await giveAddress(buyer.id);
         const product = await createProduct({ onHand: 10 });
-        await cartItemAddById(buyer.id, String(product._id), 6);
+        await cartService.cartItemAddById(buyer.id, String(product._id), 6);
         await cartRepository.setShippingMethod(buyer.id, 'pickup');
         resetDomainEvents();
         registerCheckoutModules([paymentsModule]);
-        await expect(orderConfirm(buyer.id, testCallerContext, undefined)).resolves.toMatchObject({
+        await expect(
+            cartService.orderConfirm(buyer.id, testCallerContext, undefined)
+        ).resolves.toMatchObject({
             success: true
         });
 
         const shopper = await createUser({ email: 'shopper@example.com' });
-        await cartItemAddById(shopper.id, String(product._id), 4);
+        await cartService.cartItemAddById(shopper.id, String(product._id), 4);
         await expect(flagOf(shopper.id)).resolves.toBe('in_stock');
-        await cartItemAddById(shopper.id, String(product._id), 1);
+        await cartService.cartItemAddById(shopper.id, String(product._id), 1);
 
         // 10 on the shelf, 6 held by the open order: 4 fit, 5 do not.
         await expect(flagOf(shopper.id)).resolves.toBe('insufficient_stock');
@@ -109,7 +113,7 @@ describe('GET /cart’s line availability', () => {
     it('names a line whose product is no longer shown removed, in the window before the pull', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartItemAddById(user.id, String(product._id), 1);
+        await cartService.cartItemAddById(user.id, String(product._id), 1);
         // No listeners: the real removal pulls the line out of every cart, which would leave
         // nothing to mark. This is the window before that cleanup ran.
         resetDomainEvents();
@@ -122,7 +126,7 @@ describe('GET /cart’s line availability', () => {
     it('names a hard-deleted product’s line removed too', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartItemAddById(user.id, String(product._id), 1);
+        await cartService.cartItemAddById(user.id, String(product._id), 1);
         resetDomainEvents();
 
         await productService.removeById(String(product._id), true);
@@ -134,10 +138,10 @@ describe('GET /cart’s line availability', () => {
         const user = await createUser();
         const plenty = await createProduct({ onHand: 50 });
         const scarce = await createProduct({ onHand: 1 });
-        await cartItemAddById(user.id, String(plenty._id), 2);
-        await cartItemAddById(user.id, String(scarce._id), 2);
+        await cartService.cartItemAddById(user.id, String(plenty._id), 2);
+        await cartService.cartItemAddById(user.id, String(scarce._id), 2);
 
-        const { items } = await cartGetForView(user.id, testCallerContext);
+        const { items } = await cartService.cartGetForView(user.id, testCallerContext);
 
         expect(items.map(({ availability }) => availability)).toEqual([
             'in_stock',

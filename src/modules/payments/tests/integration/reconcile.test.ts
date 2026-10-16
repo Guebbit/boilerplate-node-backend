@@ -15,7 +15,7 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
-import { createIntent, reconcileStalePayments } from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
@@ -39,7 +39,7 @@ const chargedAtProvider = async () => {
     const product = await createProduct({ price: 25, onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     const orderId = String(order._id);
-    await createIntent(orderId, asCustomer(user.id));
+    await paymentService.createIntent(orderId, asCustomer(user.id));
     const payment = await paymentRepository.findByOrderId(orderId);
     await fakePaymentProvider.confirm(String(payment?.providerRef), 'pm_card_visa');
     return { user, orderId };
@@ -50,7 +50,7 @@ describe('reconcileStalePayments', () => {
         withEnvironmentOverrides({ NODE_PAYMENT_RECONCILE_MINUTES: '0' }, async () => {
             const { orderId } = await chargedAtProvider();
 
-            const moved = await reconcileStalePayments();
+            const moved = await paymentService.reconcileStalePayments();
 
             expect(moved).toBe(1);
             const payment = await paymentRepository.findByOrderId(orderId);
@@ -63,7 +63,7 @@ describe('reconcileStalePayments', () => {
     it('asks for at most 200 payments per run', async () => {
         const find = jest.spyOn(paymentRepository, 'findStaleInFlight').mockResolvedValue([]);
 
-        await reconcileStalePayments();
+        await paymentService.reconcileStalePayments();
 
         expect(find).toHaveBeenCalledWith(expect.any(Date), 200);
         find.mockRestore();
@@ -72,7 +72,7 @@ describe('reconcileStalePayments', () => {
     it('leaves a payment younger than the grace window alone', async () => {
         const { orderId } = await chargedAtProvider();
 
-        const moved = await reconcileStalePayments();
+        const moved = await paymentService.reconcileStalePayments();
 
         expect(moved).toBe(0);
         const order = await orderService.getById(orderId);
@@ -82,9 +82,9 @@ describe('reconcileStalePayments', () => {
     it('is a no-op once the payment has settled, so a late webhook and the sweep do not double up', () =>
         withEnvironmentOverrides({ NODE_PAYMENT_RECONCILE_MINUTES: '0' }, async () => {
             await chargedAtProvider();
-            await reconcileStalePayments();
+            await paymentService.reconcileStalePayments();
 
-            expect(await reconcileStalePayments()).toBe(0);
+            expect(await paymentService.reconcileStalePayments()).toBe(0);
         }));
 });
 

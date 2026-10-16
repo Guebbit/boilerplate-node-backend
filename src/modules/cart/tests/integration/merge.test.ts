@@ -20,7 +20,7 @@ import { productService } from '@modules/products';
 import { inventoryService } from '@modules/inventory';
 import paymentsModule from '@modules/payments/module';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
-import { cartGet, cartItemAddById, cartMerge, orderConfirm } from '../../services';
+import { cartService } from '../../services';
 import { cartRepository } from '../../repository';
 import { CART_MERGE_REFUSED } from '../../events';
 
@@ -37,9 +37,11 @@ afterEach(() => {
 
 /** What the cart now holds, as `productId → quantity`. */
 const quantities = (userId: string) =>
-    cartGet(userId).then((lines) =>
-        Object.fromEntries(lines.map(({ productId, quantity }) => [productId, quantity]))
-    );
+    cartService
+        .cartGet(userId)
+        .then((lines) =>
+            Object.fromEntries(lines.map(({ productId, quantity }) => [productId, quantity]))
+        );
 
 /** A guest line, by product document. */
 const lineOf = (product: { _id: unknown }, quantity: number) => ({
@@ -61,7 +63,11 @@ describe('cartMerge', () => {
             const user = await createUser();
             const product = await createProduct();
 
-            const { lines } = await cartMerge(user.id, [lineOf(product, 2)], testCallerContext);
+            const { lines } = await cartService.cartMerge(
+                user.id,
+                [lineOf(product, 2)],
+                testCallerContext
+            );
 
             expect(lines).toEqual([
                 {
@@ -77,9 +83,13 @@ describe('cartMerge', () => {
         it('adds up a product held in both carts, like two POST /cart calls, and says "summed"', async () => {
             const user = await createUser();
             const product = await createProduct();
-            await cartItemAddById(user.id, String(product._id), 3);
+            await cartService.cartItemAddById(user.id, String(product._id), 3);
 
-            const { lines } = await cartMerge(user.id, [lineOf(product, 4)], testCallerContext);
+            const { lines } = await cartService.cartMerge(
+                user.id,
+                [lineOf(product, 4)],
+                testCallerContext
+            );
 
             expect(lines).toEqual([
                 {
@@ -96,9 +106,13 @@ describe('cartMerge', () => {
         it('stops a line at the ceiling and says "capped"', async () => {
             const user = await createUser();
             const product = await createProduct({ onHand: 5000 });
-            await cartItemAddById(user.id, String(product._id), 998);
+            await cartService.cartItemAddById(user.id, String(product._id), 998);
 
-            const { lines } = await cartMerge(user.id, [lineOf(product, 5)], testCallerContext);
+            const { lines } = await cartService.cartMerge(
+                user.id,
+                [lineOf(product, 5)],
+                testCallerContext
+            );
 
             expect(lines).toEqual([
                 {
@@ -119,7 +133,7 @@ describe('cartMerge', () => {
             const hidden = await createProduct();
             await productService.removeById(String(hidden._id), false);
 
-            const { lines } = await cartMerge(
+            const { lines } = await cartService.cartMerge(
                 user.id,
                 [lineOf(hidden, 1), lineOf(fine, 2), lineOf(scarce, 3)],
                 testCallerContext
@@ -142,7 +156,7 @@ describe('cartMerge', () => {
             const user = await createUser();
             const product = await createProduct();
 
-            const { lines } = await cartMerge(
+            const { lines } = await cartService.cartMerge(
                 user.id,
                 [lineOf(product, 1), lineOf(product, 2)],
                 testCallerContext
@@ -170,7 +184,11 @@ describe('cartMerge', () => {
             const user = await createUser();
             const product = await createProduct();
 
-            const { cart } = await cartMerge(user.id, [lineOf(product, 2)], testCallerContext);
+            const { cart } = await cartService.cartMerge(
+                user.id,
+                [lineOf(product, 2)],
+                testCallerContext
+            );
 
             expect(cart.items.map(({ productId }) => productId)).toEqual([String(product._id)]);
         });
@@ -181,7 +199,11 @@ describe('cartMerge', () => {
             const user = await createUser();
             const product = await createProduct({ onHand: 5 });
 
-            const { lines } = await cartMerge(user.id, [lineOf(product, 8)], testCallerContext);
+            const { lines } = await cartService.cartMerge(
+                user.id,
+                [lineOf(product, 8)],
+                testCallerContext
+            );
 
             expect(lines).toEqual([
                 {
@@ -198,7 +220,11 @@ describe('cartMerge', () => {
             const user = await createUser();
             const product = await createProduct({ onHand: 5 });
 
-            const { lines } = await cartMerge(user.id, [lineOf(product, 5)], testCallerContext);
+            const { lines } = await cartService.cartMerge(
+                user.id,
+                [lineOf(product, 5)],
+                testCallerContext
+            );
 
             expect(lines[0]).toMatchObject({ resulting: 5, availability: 'in_stock' });
         });
@@ -206,9 +232,13 @@ describe('cartMerge', () => {
         it('counts the summed quantity against what is for sale, and keeps the sum', async () => {
             const user = await createUser();
             const product = await createProduct({ onHand: 5 });
-            await cartItemAddById(user.id, String(product._id), 3);
+            await cartService.cartItemAddById(user.id, String(product._id), 3);
 
-            const { lines } = await cartMerge(user.id, [lineOf(product, 4)], testCallerContext);
+            const { lines } = await cartService.cartMerge(
+                user.id,
+                [lineOf(product, 4)],
+                testCallerContext
+            );
 
             expect(lines[0]).toMatchObject({
                 resulting: 7,
@@ -221,11 +251,15 @@ describe('cartMerge', () => {
         it('never lowers a line the cart already holds above what is for sale', async () => {
             const user = await createUser();
             const product = await createProduct({ onHand: 10 });
-            await cartItemAddById(user.id, String(product._id), 8);
+            await cartService.cartItemAddById(user.id, String(product._id), 8);
             // Five of the ten leave the shelf, through the ledger the merge reads.
             await inventoryService.adjust(String(product._id), -5, 'stocktake');
 
-            const { lines } = await cartMerge(user.id, [lineOf(product, 1)], testCallerContext);
+            const { lines } = await cartService.cartMerge(
+                user.id,
+                [lineOf(product, 1)],
+                testCallerContext
+            );
 
             expect(lines[0]).toMatchObject({
                 resulting: 9,
@@ -239,7 +273,11 @@ describe('cartMerge', () => {
             const user = await createUser();
             const sold = await createProduct({ onHand: 0 });
 
-            const { lines } = await cartMerge(user.id, [lineOf(sold, 2)], testCallerContext);
+            const { lines } = await cartService.cartMerge(
+                user.id,
+                [lineOf(sold, 2)],
+                testCallerContext
+            );
 
             expect(lines).toEqual([
                 {
@@ -255,9 +293,13 @@ describe('cartMerge', () => {
         it('flags a capped line that is also short, keeping the reason the cap gave', async () => {
             const user = await createUser();
             const product = await createProduct({ onHand: 10 });
-            await cartItemAddById(user.id, String(product._id), 998);
+            await cartService.cartItemAddById(user.id, String(product._id), 998);
 
-            const { lines } = await cartMerge(user.id, [lineOf(product, 5)], testCallerContext);
+            const { lines } = await cartService.cartMerge(
+                user.id,
+                [lineOf(product, 5)],
+                testCallerContext
+            );
 
             expect(lines[0]).toMatchObject({
                 resulting: 999,
@@ -270,18 +312,26 @@ describe('cartMerge', () => {
             const buyer = await createUser({ email: 'buyer@example.com' });
             await giveAddress(buyer.id);
             const product = await createProduct({ onHand: 10 });
-            await cartItemAddById(buyer.id, String(product._id), 6);
+            await cartService.cartItemAddById(buyer.id, String(product._id), 6);
             await cartRepository.setShippingMethod(buyer.id, 'pickup');
             resetDomainEvents();
             registerCheckoutModules([paymentsModule]);
             await expect(
-                orderConfirm(buyer.id, testCallerContext, undefined)
+                cartService.orderConfirm(buyer.id, testCallerContext, undefined)
             ).resolves.toMatchObject({ success: true });
             onDomainEvent(CART_MERGE_REFUSED, announced);
 
             const guest = await createUser({ email: 'guest@example.com' });
-            const fits = await cartMerge(guest.id, [lineOf(product, 4)], testCallerContext);
-            const over = await cartMerge(guest.id, [lineOf(product, 1)], testCallerContext);
+            const fits = await cartService.cartMerge(
+                guest.id,
+                [lineOf(product, 4)],
+                testCallerContext
+            );
+            const over = await cartService.cartMerge(
+                guest.id,
+                [lineOf(product, 1)],
+                testCallerContext
+            );
 
             // 10 on the shelf, 6 held by the open order: 4 left to sell. Four fit, five do not.
             expect(fits.lines[0]).toMatchObject({ resulting: 4, availability: 'in_stock' });
@@ -298,7 +348,7 @@ describe('cartMerge', () => {
             const nearly = await createProduct({ onHand: 4 });
             const hardly = await createProduct({ onHand: 1 });
 
-            const { lines } = await cartMerge(
+            const { lines } = await cartService.cartMerge(
                 user.id,
                 [lineOf(nearly, 5), lineOf(hardly, 5)],
                 testCallerContext
@@ -319,7 +369,7 @@ describe('cartMerge', () => {
             const none = await createProduct({ onHand: 0 });
             const one = await createProduct({ onHand: 1 });
 
-            const { lines } = await cartMerge(
+            const { lines } = await cartService.cartMerge(
                 user.id,
                 [lineOf(none, 3), lineOf(one, 3)],
                 testCallerContext
@@ -341,10 +391,10 @@ describe('cartMerge', () => {
             const user = await createUser();
             const fine = await createProduct();
             const hidden = await createProduct();
-            await cartItemAddById(user.id, String(hidden._id), 2);
+            await cartService.cartItemAddById(user.id, String(hidden._id), 2);
             await productService.removeById(String(hidden._id), false);
 
-            const { lines } = await cartMerge(
+            const { lines } = await cartService.cartMerge(
                 user.id,
                 [lineOf(hidden, 1), lineOf(fine, 1)],
                 testCallerContext
@@ -376,7 +426,11 @@ describe('cartMerge', () => {
             const gone = await createProduct();
             await productService.removeById(String(gone._id), true);
 
-            const { lines } = await cartMerge(user.id, [lineOf(gone, 3)], testCallerContext);
+            const { lines } = await cartService.cartMerge(
+                user.id,
+                [lineOf(gone, 3)],
+                testCallerContext
+            );
 
             expect(lines).toEqual([
                 {
@@ -399,7 +453,11 @@ describe('cartMerge', () => {
             await productService.removeById(String(hidden._id), false);
             await productService.removeById(String(deleted._id), false);
 
-            await cartMerge(user.id, [lineOf(hidden, 2), lineOf(deleted, 3)], testCallerContext);
+            await cartService.cartMerge(
+                user.id,
+                [lineOf(hidden, 2), lineOf(deleted, 3)],
+                testCallerContext
+            );
 
             expect(announced).toHaveBeenCalledTimes(1);
             expect(announced).toHaveBeenCalledWith(
@@ -426,7 +484,7 @@ describe('cartMerge', () => {
             const user = await createUser();
             const soldOut = await createProduct({ onHand: 0 });
 
-            await cartMerge(user.id, [lineOf(soldOut, 3)], testCallerContext);
+            await cartService.cartMerge(user.id, [lineOf(soldOut, 3)], testCallerContext);
 
             expect(announced).not.toHaveBeenCalled();
         });
@@ -436,7 +494,7 @@ describe('cartMerge', () => {
             const gone = await createProduct();
             await productService.removeById(String(gone._id), true);
 
-            await cartMerge(user.id, [lineOf(gone, 1)], testCallerContext);
+            await cartService.cartMerge(user.id, [lineOf(gone, 1)], testCallerContext);
 
             expect(announced).toHaveBeenCalledWith(
                 expect.objectContaining({ lines: [expect.objectContaining({ titles: {} })] }),
@@ -449,10 +507,10 @@ describe('cartMerge', () => {
             const summed = await createProduct();
             const scarce = await createProduct({ onHand: 1 });
             const capped = await createProduct({ onHand: 5000 });
-            await cartItemAddById(user.id, String(summed._id), 1);
-            await cartItemAddById(user.id, String(capped._id), 999);
+            await cartService.cartItemAddById(user.id, String(summed._id), 1);
+            await cartService.cartItemAddById(user.id, String(capped._id), 999);
 
-            await cartMerge(
+            await cartService.cartMerge(
                 user.id,
                 [lineOf(summed, 1), lineOf(scarce, 4), lineOf(capped, 1)],
                 testCallerContext
@@ -465,7 +523,7 @@ describe('cartMerge', () => {
             const user = await createUser();
             const product = await createProduct();
 
-            await cartMerge(user.id, [lineOf(product, 1)], testCallerContext);
+            await cartService.cartMerge(user.id, [lineOf(product, 1)], testCallerContext);
 
             expect(announced).not.toHaveBeenCalled();
         });

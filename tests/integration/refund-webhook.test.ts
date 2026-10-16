@@ -15,7 +15,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
 import paymentsModule from '@modules/payments/module';
-import { refundByOrder } from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import webhooksModule from '@modules/webhooks/module';
 import { create as createSubscription } from '@modules/webhooks/services/subscriptions';
 import { webhookDeliveryRepository } from '@modules/webhooks/repository';
@@ -60,7 +60,11 @@ it('an admin refund fans out a payment.refunded delivery carrying the amount and
 
     const { order } = await paidOrder(20);
 
-    const refunded = await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
+    const refunded = await paymentService.refundByOrder(
+        String(order._id),
+        asAdmin(),
+        callerContextAs('admin')
+    );
     expect(refunded.success).toBe(true);
     const currency = refunded.success ? refunded.data.currency : undefined;
 

@@ -16,7 +16,7 @@ import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { router } from './routes';
 import { PRODUCT_DELETED } from '@modules/products';
-import { cartDeleteByUserId, productRemoveFromCartsById, cartGet } from './services';
+import { cartService } from './services';
 import { cartConfig } from './config';
 import { cartRateLimits } from './rate-limits';
 
@@ -34,16 +34,18 @@ export default {
             // is catalogue data, not the caller's, and the shared `CartItem` contract this maps
             // onto is `additionalProperties: false`.
             collect: (subject) =>
-                cartGet(subject.userId).then((lines) =>
-                    lines.map(({ productId, quantity }) => ({ productId, quantity }))
-                ),
+                cartService
+                    .cartGet(subject.userId)
+                    .then((lines) =>
+                        lines.map(({ productId, quantity }) => ({ productId, quantity }))
+                    ),
             // Joins the caller's own hard-delete transaction — see `cartDeleteByUserId`.
-            erase: cartDeleteByUserId
+            erase: cartService.cartDeleteByUserId
         }
     ],
     subscribe: () => {
         onDomainEvent(PRODUCT_DELETED, ({ productId, titles }) =>
-            productRemoveFromCartsById(productId, titles)
+            cartService.productRemoveFromCartsById(productId, titles)
         );
     },
     locales: path.join(__dirname, 'locales')

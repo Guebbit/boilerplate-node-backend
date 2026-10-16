@@ -17,12 +17,7 @@ import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { orderService } from '@modules/orders';
 import invoicingModule from '@modules/invoicing/module';
 import { invoicingService } from '@modules/invoicing';
-import {
-    createIntent,
-    confirmPayment,
-    syncPayment,
-    applyWebhookDelivery
-} from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { PAYMENT_SUCCEEDED } from '@modules/payments/events';
 import { paymentsAuditActions } from '@modules/payments/audit';
@@ -65,7 +60,7 @@ const openIntent = async () => {
     const product = await createProduct({ price: 25, onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     const orderId = String(order._id);
-    const intent = await createIntent(orderId, asCustomer(user.id));
+    const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
     const payment = await paymentRepository.findByOrderId(orderId);
     return {
         user,
@@ -88,7 +83,7 @@ describe.each(MISMATCHES)('a provider success whose %s is not the one frozen', (
         const { user, product, orderId, paymentId, providerRef } = await openIntent();
         setFakeReceipt(providerRef, receipt);
 
-        const result = await confirmPayment(
+        const result = await paymentService.confirmPayment(
             paymentId,
             GOOD_METHOD,
             asCustomer(user.id),
@@ -119,7 +114,12 @@ describe('a mismatch recorded', () => {
         const { user, orderId, paymentId, providerRef } = await openIntent();
         setFakeReceipt(providerRef, { amountReceived: 47.5 });
 
-        await confirmPayment(paymentId, GOOD_METHOD, asCustomer(user.id), testCallerContext);
+        await paymentService.confirmPayment(
+            paymentId,
+            GOOD_METHOD,
+            asCustomer(user.id),
+            testCallerContext
+        );
 
         const payment = await paymentRepository.findByOrderId(orderId);
         expect(payment!.amount).toBe(47.5);
@@ -131,7 +131,12 @@ describe('a mismatch recorded', () => {
         const { user, paymentId, providerRef } = await openIntent();
         setFakeReceipt(providerRef, { currency: 'USD' });
 
-        await confirmPayment(paymentId, GOOD_METHOD, asCustomer(user.id), testCallerContext);
+        await paymentService.confirmPayment(
+            paymentId,
+            GOOD_METHOD,
+            asCustomer(user.id),
+            testCallerContext
+        );
 
         expect(paymentsAuditActions.PAYMENT_AMOUNT_MISMATCH.startsWith('security.')).toBe(false);
         expect(auditSpy).toHaveBeenCalledWith(
@@ -153,7 +158,7 @@ describe('a mismatch recorded', () => {
         const { user, paymentId, providerRef } = await openIntent();
         setFakeReceipt(providerRef, { amountReceived: 1 });
 
-        const result = await confirmPayment(
+        const result = await paymentService.confirmPayment(
             paymentId,
             GOOD_METHOD,
             asCustomer(user.id),
@@ -170,7 +175,11 @@ describe('the other doors into the same settlement', () => {
         await fakePaymentProvider.confirm(providerRef, GOOD_METHOD);
         setFakeReceipt(providerRef, { amountReceived: 1 });
 
-        const result = await syncPayment(paymentId, asCustomer(user.id), testCallerContext);
+        const result = await paymentService.syncPayment(
+            paymentId,
+            asCustomer(user.id),
+            testCallerContext
+        );
 
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
         expect((await orderService.getById(orderId))!.status).toBe('cancelled');
@@ -183,7 +192,7 @@ describe('the other doors into the same settlement', () => {
         setFakeReceipt(providerRef, { amountReceived: 1 });
 
         await expect(
-            applyWebhookDelivery({ id: 'evt_mismatch', providerRef })
+            paymentService.applyWebhookDelivery({ id: 'evt_mismatch', providerRef })
         ).resolves.toBeUndefined();
 
         expect((await orderService.getById(orderId))!.status).toBe('cancelled');
@@ -196,7 +205,7 @@ describe('the other doors into the same settlement', () => {
         jest.spyOn(fakePaymentProvider, 'confirm').mockResolvedValueOnce({ status: 'succeeded' });
         expect(providerRef).toBeTruthy();
 
-        const result = await confirmPayment(
+        const result = await paymentService.confirmPayment(
             paymentId,
             GOOD_METHOD,
             asCustomer(user.id),
@@ -212,7 +221,7 @@ describe('a matching success', () => {
     it('is accepted exactly as before — the check costs an honest payment nothing', async () => {
         const { user, orderId, paymentId } = await openIntent();
 
-        const result = await confirmPayment(
+        const result = await paymentService.confirmPayment(
             paymentId,
             GOOD_METHOD,
             asCustomer(user.id),
@@ -228,7 +237,7 @@ describe('a matching success', () => {
         const { user, orderId, paymentId, providerRef } = await openIntent();
         setFakeReceipt(providerRef, { amountReceived: 50 + 1e-9 });
 
-        const result = await confirmPayment(
+        const result = await paymentService.confirmPayment(
             paymentId,
             GOOD_METHOD,
             asCustomer(user.id),
@@ -249,7 +258,7 @@ describe('a crash after the mismatch was recorded', () => {
             new Error('process died')
         );
 
-        const result = await confirmPayment(
+        const result = await paymentService.confirmPayment(
             paymentId,
             GOOD_METHOD,
             asCustomer(user.id),
@@ -283,7 +292,12 @@ describe('a crash after the mismatch was recorded', () => {
             ])
         );
 
-        await confirmPayment(paymentId, GOOD_METHOD, asCustomer(user.id), testCallerContext);
+        await paymentService.confirmPayment(
+            paymentId,
+            GOOD_METHOD,
+            asCustomer(user.id),
+            testCallerContext
+        );
 
         expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('succeeded');
     });

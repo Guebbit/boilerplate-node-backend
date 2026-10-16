@@ -17,7 +17,7 @@ import paymentsModule from '@modules/payments/module';
 import returnsModule from '../../module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
-import { approveReturn, createReturn, receiveReturn } from '../../services';
+import { returnService } from '../../services';
 import { closeReturn } from '../../services/close';
 import { RETURN_CLOSED, RETURN_RECEIVED, RETURN_REQUESTED } from '../../events';
 import { returnRepository } from '../../repository';
@@ -67,14 +67,14 @@ const returnRows = () =>
 /** Opens a defective-goods return on a delivered order, approved and ready to receive. */
 const approvedReturn = async () => {
     const { user, shirt, orderId } = await orderIn(OrderStatus.delivered);
-    const outcome = await createReturn(
+    const outcome = await returnService.createReturn(
         { orderId, reason: 'defective' },
         asCustomer(user.id),
         testCallerContext
     );
     if (!outcome.success) throw new Error('expected a return');
     const id = String(outcome.data._id);
-    await approveReturn(id, callerContextAs('admin'));
+    await returnService.approveReturn(id, callerContextAs('admin'));
     return { id, orderId, shirt };
 };
 
@@ -87,7 +87,7 @@ describe('return.requested', () => {
             (payload, meta) => void heard.push([payload, meta.eventId])
         );
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             { orderId, reason: 'defective' },
             asCustomer(user.id),
             testCallerContext
@@ -115,7 +115,11 @@ describe('return.requested', () => {
         jest.spyOn(outboxEventModel, 'create').mockRejectedValueOnce(new Error('disk full'));
 
         await expect(
-            createReturn({ orderId, reason: 'defective' }, asCustomer(user.id), testCallerContext)
+            returnService.createReturn(
+                { orderId, reason: 'defective' },
+                asCustomer(user.id),
+                testCallerContext
+            )
         ).rejects.toThrow('disk full');
 
         expect(await returnRepository.findByOrderId(orderId)).toHaveLength(0);
@@ -127,7 +131,7 @@ describe('a withdrawal before dispatch', () => {
     it('writes requested then closed, one row each, both keyed on the order', async () => {
         const { user, orderId } = await orderIn(OrderStatus.paid);
 
-        await createReturn(
+        await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
             asCustomer(user.id),
             testCallerContext
@@ -147,7 +151,7 @@ describe('return.received and return.closed', () => {
         const { id, orderId, shirt } = await approvedReturn();
         const shelfBefore = await countersOf(shirt._id);
 
-        const result = await receiveReturn(id, {}, callerContextAs('admin'));
+        const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
         await settleOutboxNudges();
 
         expect(result.success).toBe(true);
@@ -167,7 +171,9 @@ describe('return.received and return.closed', () => {
         const shelfBefore = await countersOf(shirt._id);
         jest.spyOn(outboxEventModel, 'create').mockRejectedValueOnce(new Error('disk full'));
 
-        await expect(receiveReturn(id, {}, callerContextAs('admin'))).rejects.toThrow('disk full');
+        await expect(returnService.receiveReturn(id, {}, callerContextAs('admin'))).rejects.toThrow(
+            'disk full'
+        );
 
         const stored = await returnRepository.findById(id);
         expect(stored?.status).toBe('approved');
@@ -178,7 +184,7 @@ describe('return.received and return.closed', () => {
 
     it('closing twice announces once', async () => {
         const { id } = await approvedReturn();
-        await receiveReturn(id, {}, callerContextAs('admin'));
+        await returnService.receiveReturn(id, {}, callerContextAs('admin'));
         await settleOutboxNudges();
 
         await expect(closeReturn(id)).resolves.toBeNull();

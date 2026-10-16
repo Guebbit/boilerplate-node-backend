@@ -15,12 +15,7 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
-import {
-    applyWebhookSettlement,
-    createIntent,
-    reconcileStalePayments,
-    syncPayment
-} from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { PAYMENT_FAILED } from '@modules/payments/events';
 import { paymentModel } from '@modules/payments/model';
 import { paymentRepository } from '@modules/payments/repository';
@@ -63,7 +58,7 @@ const cancelledOrder = async () => {
     const product = await createProduct({ price: 25, onHand: 10 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
     const orderId = String(order._id);
-    await createIntent(orderId, asCustomer(user.id));
+    await paymentService.createIntent(orderId, asCustomer(user.id));
     const providerRef = String(await providerRefOf(orderId));
     await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
     // `order.cancelled` reaches the listener through the outbox, not inline.
@@ -109,7 +104,7 @@ describe('cancelling an order with an open intent', () => {
         const product = await createProduct({ price: 25, onHand: 10 });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         const orderId = String(order._id);
-        await createIntent(orderId, asCustomer(user.id));
+        await paymentService.createIntent(orderId, asCustomer(user.id));
         jest.spyOn(fakePaymentProvider, 'cancel').mockRejectedValueOnce(new Error('down'));
 
         await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
@@ -126,7 +121,7 @@ describe('a late report on a cancelled payment', () => {
             const { orderId, providerRef } = await cancelledOrder();
             setFakeOutcome(providerRef, { status });
 
-            await applyWebhookSettlement(providerRef);
+            await paymentService.applyWebhookSettlement(providerRef);
             await settleOutboxNudges();
 
             expect(await statusOf(orderId)).toBe('cancelled');
@@ -138,7 +133,7 @@ describe('a late report on a cancelled payment', () => {
         const { user, orderId } = await cancelledOrder();
         const payment = await paymentRepository.findByOrderId(orderId);
 
-        const answer = await syncPayment(
+        const answer = await paymentService.syncPayment(
             String(payment?._id),
             asCustomer(user.id),
             testCallerContext
@@ -151,7 +146,7 @@ describe('a late report on a cancelled payment', () => {
         const { orderId, providerRef } = await cancelledOrder();
         await fakePaymentProvider.confirm(providerRef, 'pm_card_visa');
 
-        await applyWebhookSettlement(providerRef);
+        await paymentService.applyWebhookSettlement(providerRef);
 
         const payment = await paymentRepository.findByOrderId(orderId);
         expect(payment?.status).toBe('succeeded');
@@ -163,9 +158,9 @@ describe('a late report on a cancelled payment', () => {
     it('is a no-op the second time, so a redelivered success refunds once', async () => {
         const { orderId, providerRef } = await cancelledOrder();
         await fakePaymentProvider.confirm(providerRef, 'pm_card_visa');
-        await applyWebhookSettlement(providerRef);
+        await paymentService.applyWebhookSettlement(providerRef);
 
-        await applyWebhookSettlement(providerRef);
+        await paymentService.applyWebhookSettlement(providerRef);
 
         expect(await refundCountOf(orderId)).toBe(1);
     });
@@ -175,7 +170,7 @@ describe('a late report on a cancelled payment', () => {
             const { orderId, providerRef } = await cancelledOrder();
             await fakePaymentProvider.confirm(providerRef, 'pm_card_visa');
 
-            expect(await reconcileStalePayments()).toBe(0);
+            expect(await paymentService.reconcileStalePayments()).toBe(0);
 
             expect(await statusOf(orderId)).toBe('cancelled');
         }));

@@ -21,18 +21,7 @@ import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
 import { userService } from '@modules/users';
 import { inventoryService } from '@modules/inventory';
-import {
-    createIntent,
-    confirmPayment,
-    syncPayment,
-    applyWebhookDelivery,
-    applyWebhookSettlement,
-    getForOrder,
-    withActions,
-    refundByOrder,
-    recordOfflinePayment,
-    retryOpenRefunds
-} from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { paymentModel } from '@modules/payments/model';
 import { PAYMENT_SUCCEEDED } from '@modules/payments/events';
@@ -91,7 +80,7 @@ describe('createIntent', () => {
     it('freezes the order total into the intent', async () => {
         const { user, order } = await orderFor(25, 2);
 
-        const result = await createIntent(String(order._id), auth(user));
+        const result = await paymentService.createIntent(String(order._id), auth(user));
 
         expect(result.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -115,7 +104,7 @@ describe('createIntent', () => {
             shippingCost: 15
         });
 
-        const result = await createIntent(String(order._id), auth(user));
+        const result = await paymentService.createIntent(String(order._id), auth(user));
 
         expect(result.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -127,8 +116,8 @@ describe('createIntent', () => {
     it('answers the same intent when asked twice — one payment per order is a database fact', async () => {
         const { user, order } = await orderFor();
 
-        const first = await createIntent(String(order._id), auth(user));
-        const second = await createIntent(String(order._id), auth(user));
+        const first = await paymentService.createIntent(String(order._id), auth(user));
+        const second = await paymentService.createIntent(String(order._id), auth(user));
 
         expect(first.success).toBe(true);
         expect(second.success).toBe(true);
@@ -139,7 +128,7 @@ describe('createIntent', () => {
         const { order } = await orderFor();
         const stranger = await createUser({ email: 'stranger@example.com' });
 
-        const result = await createIntent(String(order._id), auth(stranger));
+        const result = await paymentService.createIntent(String(order._id), auth(stranger));
 
         expect(asReject(result).status).toBe(404);
     });
@@ -148,7 +137,7 @@ describe('createIntent', () => {
         const { user, order } = await orderFor();
         await forceOrderStatus(String(order._id), 'shipped');
 
-        const result = await createIntent(String(order._id), auth(user));
+        const result = await paymentService.createIntent(String(order._id), auth(user));
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
@@ -157,7 +146,7 @@ describe('createIntent', () => {
     it('writes `card` as the method — the vocabulary offline payments share the row with', async () => {
         const { user, order } = await orderFor();
 
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
 
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.method).toBe('card');
@@ -167,11 +156,16 @@ describe('createIntent', () => {
 describe('confirmPayment', () => {
     it('moves the order to paid and the payment to succeeded, in that dependency', async () => {
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), auth(user));
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
         expect(intent.success).toBe(true);
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
 
-        const result = await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        const result = await paymentService.confirmPayment(
+            paymentId,
+            GOOD_METHOD,
+            auth(user),
+            testCallerContext
+        );
 
         expect(result.success).toBe(true);
         const storedOrder = await orderService.getById(String(order._id));
@@ -187,9 +181,9 @@ describe('confirmPayment', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             paymentMethod: 'bank_transfer'
         });
-        const intent = await createIntent(String(order._id), auth(user));
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
 
-        await confirmPayment(
+        await paymentService.confirmPayment(
             String(intent.success && intent.data?.id),
             GOOD_METHOD,
             auth(user),
@@ -206,7 +200,7 @@ describe('confirmPayment', () => {
             paymentMethod: 'bank_transfer'
         });
 
-        await recordOfflinePayment(
+        await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'bank_transfer', reference: 'TRX-JB8' },
             callerContextAs('admin')
@@ -219,10 +213,10 @@ describe('confirmPayment', () => {
 
     it('reports a decline with the stable code, leaves the order pending, and stays retryable', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
 
-        const declined = await confirmPayment(
+        const declined = await paymentService.confirmPayment(
             paymentId,
             FAKE_DECLINE_METHOD,
             auth(user),
@@ -236,17 +230,22 @@ describe('confirmPayment', () => {
         ).resolves.toBe('pending');
 
         // The decline is a state, not a dead end: the same document confirms with a better card.
-        const retried = await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        const retried = await paymentService.confirmPayment(
+            paymentId,
+            GOOD_METHOD,
+            auth(user),
+            testCallerContext
+        );
         expect(retried.success).toBe(true);
     });
 
     it('refuses a payment that is not the caller`s as absence', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
         const stranger = await createUser({ email: 'stranger@example.com' });
 
-        const result = await confirmPayment(
+        const result = await paymentService.confirmPayment(
             paymentId,
             GOOD_METHOD,
             auth(stranger),
@@ -258,11 +257,16 @@ describe('confirmPayment', () => {
 
     it('refuses a second confirm — the money already moved', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
-        await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        await paymentService.confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
 
-        const again = await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        const again = await paymentService.confirmPayment(
+            paymentId,
+            GOOD_METHOD,
+            auth(user),
+            testCallerContext
+        );
 
         expect(asReject(again).status).toBe(409);
         expect(asReject(again).errors[0].code).toBe('PAYMENT_NOT_CONFIRMABLE');
@@ -270,11 +274,11 @@ describe('confirmPayment', () => {
 
     it('refuses a new intent once the money moved', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
-        await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        await paymentService.confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
 
-        const result = await createIntent(String(order._id), auth(user));
+        const result = await paymentService.createIntent(String(order._id), auth(user));
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
@@ -285,13 +289,18 @@ describe('confirmPayment', () => {
         // Charging the card and then refunding it would still work, but it loses the provider's
         // own fee on that refund — A1 refuses up front instead, before the provider is ever asked.
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), auth(user));
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String((intent as { data?: { id?: string } }).data?.id);
         await orderService.cancelOnRequestById(String(order._id), auth(user));
 
         const confirmSpy = jest.spyOn(fakePaymentProvider, 'confirm');
         const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
-        const result = await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        const result = await paymentService.confirmPayment(
+            paymentId,
+            GOOD_METHOD,
+            auth(user),
+            testCallerContext
+        );
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
@@ -311,11 +320,11 @@ describe('confirmPayment', () => {
 describe('getForOrder', () => {
     it('answers the caller`s own payment and a stranger`s as absence', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const stranger = await createUser({ email: 'stranger@example.com' });
 
-        const own = await getForOrder(String(order._id), auth(user));
-        const other = await getForOrder(String(order._id), auth(stranger));
+        const own = await paymentService.getForOrder(String(order._id), auth(user));
+        const other = await paymentService.getForOrder(String(order._id), auth(stranger));
 
         expect(own.success).toBe(true);
         expect(asReject(other).status).toBe(404);
@@ -329,9 +338,9 @@ describe('getForOrder', () => {
     it('offers the refund action to a moderator, not just an admin', async () => {
         const { user, order } = await paidOrder();
 
-        const asAdminResult = await getForOrder(String(order._id), asAdmin());
-        const asModResult = await getForOrder(String(order._id), asModerator());
-        const asSelfResult = await getForOrder(String(order._id), auth(user));
+        const asAdminResult = await paymentService.getForOrder(String(order._id), asAdmin());
+        const asModResult = await paymentService.getForOrder(String(order._id), asModerator());
+        const asSelfResult = await paymentService.getForOrder(String(order._id), auth(user));
 
         expect(asAdminResult.data?.actions?.refund).toBe(true);
         expect(asModResult.data?.actions?.refund).toBe(true);
@@ -343,9 +352,9 @@ describe('getForOrder', () => {
     it('offers the refund on a customer’s money and on a staff member’s alike', async () => {
         const { user, order } = await paidOrder();
 
-        const whileCustomer = await getForOrder(String(order._id), asModerator());
+        const whileCustomer = await paymentService.getForOrder(String(order._id), asModerator());
         await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'support');
-        const whileStaff = await getForOrder(String(order._id), asModerator());
+        const whileStaff = await paymentService.getForOrder(String(order._id), asModerator());
 
         expect([whileCustomer.data?.actions?.refund, whileStaff.data?.actions?.refund]).toEqual([
             true,
@@ -363,8 +372,8 @@ describe('a refund on one’s own order', () => {
         const own = asRole('moderator', user.id);
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        const offered = await getForOrder(String(order._id), own);
-        const refunded = await refundByOrder(
+        const offered = await paymentService.getForOrder(String(order._id), own);
+        const refunded = await paymentService.refundByOrder(
             String(order._id),
             own,
             callerContextAs('moderator', user.id)
@@ -384,7 +393,11 @@ describe('a refund on one’s own order', () => {
         const { order } = await paidOrder();
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        await refundByOrder(String(order._id), asModerator(), callerContextAs('moderator'));
+        await paymentService.refundByOrder(
+            String(order._id),
+            asModerator(),
+            callerContextAs('moderator')
+        );
 
         expect(auditSpy).not.toHaveBeenCalledWith(
             expect.objectContaining({ metadata: expect.objectContaining({ ownOrder: true }) })
@@ -409,9 +422,9 @@ describe('refund on cancel', () => {
 
     it('cancelling a paid order refunds its payment', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
-        await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        await paymentService.confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
 
         const cancelled = await orderService.cancelOnRequestById(String(order._id), auth(user));
         await settleOutboxNudges();
@@ -426,9 +439,9 @@ describe('refund on cancel', () => {
 
     it('an operator cancelling without a refund opens no refund record', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
-        await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        await paymentService.confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
 
         const cancelled = await orderService.cancelOnRequestById(
             String(order._id),
@@ -445,7 +458,7 @@ describe('refund on cancel', () => {
 
     it('cancelling a never-paid order refunds nothing', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
 
         const cancelled = await orderService.cancelOnRequestById(String(order._id), auth(user));
 
@@ -461,7 +474,7 @@ describe('refund on cancel', () => {
         await inventoryService.reserveForOrder(String(order._id), [
             { productId: String(line.product._id), quantity: 2 }
         ]);
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const { providerRef } = (await paymentRepository.findByOrderId(String(order._id)))!;
         const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
 
@@ -481,11 +494,16 @@ describe('refund on cancel', () => {
     it('keeps a failed refund open for the sweep instead of recording it as done', () =>
         withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
             const { user, order } = await orderFor();
-            await createIntent(String(order._id), auth(user));
+            await paymentService.createIntent(String(order._id), auth(user));
             const paymentId = String(
                 (await paymentRepository.findByOrderId(String(order._id)))!._id
             );
-            await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+            await paymentService.confirmPayment(
+                paymentId,
+                GOOD_METHOD,
+                auth(user),
+                testCallerContext
+            );
 
             const refundSpy = jest
                 .spyOn(fakePaymentProvider, 'refund')
@@ -501,7 +519,7 @@ describe('refund on cancel', () => {
             // The event was answered, not left failing for the relay to deliver again.
             expect(await outboxEventModel.countDocuments({ status: { $ne: 'published' } })).toBe(0);
 
-            expect(await retryOpenRefunds()).toBe(1);
+            expect(await paymentService.retryOpenRefunds()).toBe(1);
             expect(refundSpy).toHaveBeenCalledTimes(2);
             const finished = await paymentRepository.findByOrderId(String(order._id));
             expect(finished!.refunds).toHaveLength(1);
@@ -512,7 +530,7 @@ describe('refund on cancel', () => {
     it('leaves an open refund on an order lost mid-payment for the sweep to finish', () =>
         withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
             const { user, order } = await orderFor();
-            const intent = await createIntent(String(order._id), auth(user));
+            const intent = await paymentService.createIntent(String(order._id), auth(user));
             const paymentId = String((intent as { data?: { id?: string } }).data?.id);
 
             const refundSpy = jest
@@ -533,7 +551,7 @@ describe('refund on cancel', () => {
                     return originalConfirm(providerRef, methodRef);
                 });
 
-            const result = await confirmPayment(
+            const result = await paymentService.confirmPayment(
                 paymentId,
                 GOOD_METHOD,
                 auth(user),
@@ -549,7 +567,7 @@ describe('refund on cancel', () => {
             expect(stuck!.refunds).toHaveLength(1);
             expect(stuck!.refunds[0]).toMatchObject({ amount: 50, status: 'failed' });
 
-            expect(await retryOpenRefunds()).toBe(1);
+            expect(await paymentService.retryOpenRefunds()).toBe(1);
             const finished = await paymentRepository.findByOrderId(String(order._id));
             expect(finished!.status).toBe('succeeded');
             expect(finished!.refunds).toHaveLength(1);
@@ -566,11 +584,16 @@ describe('refund on cancel', () => {
         const retiredProvider = 'retired-psp';
         return withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
             const { user, order } = await orderFor();
-            await createIntent(String(order._id), auth(user));
+            await paymentService.createIntent(String(order._id), auth(user));
             const paymentId = String(
                 (await paymentRepository.findByOrderId(String(order._id)))!._id
             );
-            await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+            await paymentService.confirmPayment(
+                paymentId,
+                GOOD_METHOD,
+                auth(user),
+                testCallerContext
+            );
             // Simulate a payment made under a provider this build no longer registers.
             await paymentRepository.updateStatusIfIn(
                 String(order._id),
@@ -595,12 +618,12 @@ describe('refund on cancel', () => {
 
     it('pins refunded as terminal against a webhook that arrives after the cancel refund', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const providerRef = String(
             (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
         );
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
-        await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        await paymentService.confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
         await orderService.cancelOnRequestById(String(order._id), auth(user));
 
         // The setup this test actually cares about: cancelling really did refund it already.
@@ -611,7 +634,7 @@ describe('refund on cancel', () => {
         // The webhook arrives unbidden and late — the browser-driven confirm already settled and
         // the cancel already refunded it by the time the provider's own callback catches up.
         setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
-        await applyWebhookSettlement(providerRef);
+        await paymentService.applyWebhookSettlement(providerRef);
 
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
@@ -627,7 +650,7 @@ describe('refund on cancel', () => {
     it('returns a charge that lands after the customer cancelled the order, with one refund record', async () => {
         const { user, order } = await orderFor();
         const orderId = String(order._id);
-        const intent = await createIntent(orderId, auth(user));
+        const intent = await paymentService.createIntent(orderId, auth(user));
         const originalConfirm = fakePaymentProvider.confirm;
         jest.spyOn(fakePaymentProvider, 'confirm').mockImplementationOnce(
             async (providerRef, methodRef) => {
@@ -636,7 +659,7 @@ describe('refund on cancel', () => {
             }
         );
 
-        const result = await confirmPayment(
+        const result = await paymentService.confirmPayment(
             String(intent.success && intent.data?.id),
             GOOD_METHOD,
             auth(user),
@@ -669,8 +692,8 @@ const placedOrder = async (onHand = 10, quantity = 3, email?: string) => {
 };
 
 const payFor = async (orderId: string, user: { id: string }) => {
-    const intent = await createIntent(orderId, auth(user));
-    return confirmPayment(
+    const intent = await paymentService.createIntent(orderId, auth(user));
+    return paymentService.confirmPayment(
         String(intent.success && intent.data?.id),
         GOOD_METHOD,
         auth(user),
@@ -700,9 +723,9 @@ describe('the confirm commits the order’s held units', () => {
 
     it('leaves the hold alone when the card is declined', async () => {
         const { user, product, order } = await placedOrder(10, 3);
-        const intent = await createIntent(String(order._id), auth(user));
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
 
-        const declined = await confirmPayment(
+        const declined = await paymentService.confirmPayment(
             String(intent.success && intent.data?.id),
             FAKE_DECLINE_METHOD,
             auth(user),
@@ -717,11 +740,11 @@ describe('the confirm commits the order’s held units', () => {
 
     it('commits once even if the confirm is replayed', async () => {
         const { user, product, order } = await placedOrder(10, 3);
-        const intent = await createIntent(String(order._id), auth(user));
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String(intent.success && intent.data?.id);
 
-        await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
-        await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        await paymentService.confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        await paymentService.confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
 
         // No ledger row for a payment, replayed or not. Two guards refuse the replay independently — the order's
         // conditional `pending → paid` and the reservation's own `held → committed` claim.
@@ -735,20 +758,20 @@ describe('the confirm commits the order’s held units', () => {
         // browser's own "I finished" call race routinely, and two copies of this choreography
         // would each commit the hold.
         const { user, product, order } = await placedOrder(10, 3);
-        const intent = await createIntent(String(order._id), auth(user));
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String(intent.success && intent.data?.id);
         const providerRef = String(
             (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
         );
-        await confirmPayment(
+        await paymentService.confirmPayment(
             paymentId,
             'pm_card_authentication_required',
             auth(user),
             testCallerContext
         );
 
-        await applyWebhookSettlement(providerRef);
-        await syncPayment(paymentId, auth(user), testCallerContext);
+        await paymentService.applyWebhookSettlement(providerRef);
+        await paymentService.syncPayment(paymentId, auth(user), testCallerContext);
 
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -761,20 +784,20 @@ describe('the confirm commits the order’s held units', () => {
         // arrives after. `settlePayment`'s idempotence must hold from either direction, not just
         // the one the test above happens to cover.
         const { user, product, order } = await placedOrder(10, 3);
-        const intent = await createIntent(String(order._id), auth(user));
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String(intent.success && intent.data?.id);
         const providerRef = String(
             (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
         );
-        await confirmPayment(
+        await paymentService.confirmPayment(
             paymentId,
             'pm_card_authentication_required',
             auth(user),
             testCallerContext
         );
 
-        await syncPayment(paymentId, auth(user), testCallerContext);
-        await applyWebhookSettlement(providerRef);
+        await paymentService.syncPayment(paymentId, auth(user), testCallerContext);
+        await paymentService.applyWebhookSettlement(providerRef);
 
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -892,10 +915,10 @@ describe('one settlement transaction', () => {
     it('commits once when the webhook and the browser settle at the same moment', async () => {
         const { user, order } = await placedOrder(10, 3);
         const orderId = String(order._id);
-        const intent = await createIntent(orderId, auth(user));
+        const intent = await paymentService.createIntent(orderId, auth(user));
         const paymentId = String(intent.success && intent.data?.id);
         const providerRef = String((await paymentRepository.findByOrderId(orderId))!.providerRef);
-        await confirmPayment(
+        await paymentService.confirmPayment(
             paymentId,
             'pm_card_authentication_required',
             auth(user),
@@ -904,8 +927,8 @@ describe('one settlement transaction', () => {
         const before = await outboxCount('order.status_changed');
 
         await Promise.all([
-            applyWebhookSettlement(providerRef),
-            syncPayment(paymentId, auth(user), testCallerContext)
+            paymentService.applyWebhookSettlement(providerRef),
+            paymentService.syncPayment(paymentId, auth(user), testCallerContext)
         ]);
 
         expect(await orderStatusOf(orderId)).toBe('paid');
@@ -934,10 +957,10 @@ describe('one settlement transaction', () => {
 describe('in-flight settlement', () => {
     it('records a challenge without paying the order', async () => {
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), auth(user));
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String(intent.success && intent.data?.id);
 
-        const result = await confirmPayment(
+        const result = await paymentService.confirmPayment(
             paymentId,
             'pm_card_authentication_required',
             auth(user),
@@ -953,10 +976,10 @@ describe('in-flight settlement', () => {
 
     it('records an asynchronous method as processing, order still unpaid', async () => {
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), auth(user));
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String(intent.success && intent.data?.id);
 
-        const result = await confirmPayment(
+        const result = await paymentService.confirmPayment(
             paymentId,
             'pm_card_processing',
             auth(user),
@@ -979,9 +1002,9 @@ describe('in-flight settlement', () => {
     it('extends the hold to the bank-transfer window once the payment goes processing', () =>
         withEnvironmentOverrides({ NODE_RESERVATION_TTL_MINUTES: '0' }, async () => {
             const { user, product, order } = await placedOrder(10, 3);
-            const intent = await createIntent(String(order._id), auth(user));
+            const intent = await paymentService.createIntent(String(order._id), auth(user));
 
-            await confirmPayment(
+            await paymentService.confirmPayment(
                 String(intent.success && intent.data?.id),
                 'pm_card_processing',
                 auth(user),
@@ -1004,10 +1027,10 @@ describe('in-flight settlement', () => {
     // hold exists to prevent.
     it('refuses a card confirm once the order has no hold, rather than charging for stock that may be gone', async () => {
         const { user, product, order } = await placedOrder(10, 3);
-        const intent = await createIntent(String(order._id), auth(user));
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
         await inventoryService.releaseForOrder(String(order._id), 'expire');
 
-        const result = await confirmPayment(
+        const result = await paymentService.confirmPayment(
             String(intent.success && intent.data?.id),
             'pm_card_visa',
             auth(user),
@@ -1023,9 +1046,9 @@ describe('in-flight settlement', () => {
     it('does not extend the hold for a mere challenge — only processing does', () =>
         withEnvironmentOverrides({ NODE_RESERVATION_TTL_MINUTES: '0' }, async () => {
             const { user, product, order } = await placedOrder(10, 3);
-            const intent = await createIntent(String(order._id), auth(user));
+            const intent = await paymentService.createIntent(String(order._id), auth(user));
 
-            await confirmPayment(
+            await paymentService.confirmPayment(
                 String(intent.success && intent.data?.id),
                 'pm_card_authentication_required',
                 auth(user),
@@ -1047,15 +1070,15 @@ describe('in-flight settlement', () => {
         // Offering the form back is how a customer pays twice: the browser is mid-challenge at
         // the provider, and a second method attached here would open a second charge.
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), auth(user));
-        await confirmPayment(
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
+        await paymentService.confirmPayment(
             String(intent.success && intent.data?.id),
             'pm_card_authentication_required',
             auth(user),
             testCallerContext
         );
 
-        const result = await getForOrder(String(order._id), auth(user));
+        const result = await paymentService.getForOrder(String(order._id), auth(user));
 
         expect(result.success && result.data?.actions?.pay).toBe(false);
     });
@@ -1064,31 +1087,36 @@ describe('in-flight settlement', () => {
         // `isPayable` refuses the echo `system` may still write onto `paid` — this pins that the
         // withdrawal actually reaches the wire, not just the domain function in isolation.
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), auth(user));
-        await confirmPayment(
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
+        await paymentService.confirmPayment(
             String(intent.success && intent.data?.id),
             GOOD_METHOD,
             auth(user),
             testCallerContext
         );
 
-        const result = await getForOrder(String(order._id), auth(user));
+        const result = await paymentService.getForOrder(String(order._id), auth(user));
 
         expect(result.success && result.data?.actions?.pay).toBe(false);
     });
 
     it('refuses to attach a second method to a payment already in flight', async () => {
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), auth(user));
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String(intent.success && intent.data?.id);
-        await confirmPayment(
+        await paymentService.confirmPayment(
             paymentId,
             'pm_card_authentication_required',
             auth(user),
             testCallerContext
         );
 
-        const second = await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        const second = await paymentService.confirmPayment(
+            paymentId,
+            GOOD_METHOD,
+            auth(user),
+            testCallerContext
+        );
 
         expect(asReject(second).status).toBe(409);
         expect(asReject(second).errors[0].code).toBe('PAYMENT_NOT_CONFIRMABLE');
@@ -1102,10 +1130,15 @@ describe('in-flight settlement', () => {
 describe('syncPayment', () => {
     it('answers a provider decline as 409, leaving the order pending and the hold held', async () => {
         const { user, product, order } = await placedOrder(10, 3);
-        const intent = await createIntent(String(order._id), auth(user));
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String(intent.success && intent.data?.id);
         // In flight: the bank hasn't answered yet, so nothing has touched the order or the hold.
-        await confirmPayment(paymentId, 'pm_card_processing', auth(user), testCallerContext);
+        await paymentService.confirmPayment(
+            paymentId,
+            'pm_card_processing',
+            auth(user),
+            testCallerContext
+        );
 
         // The provider's own eventual answer, forced rather than awaited — this is the outcome a
         // real async method CAN settle to, not one `pm_card_processing`'s own fixture produces.
@@ -1113,7 +1146,7 @@ describe('syncPayment', () => {
             .spyOn(fakePaymentProvider, 'retrieve')
             .mockResolvedValueOnce({ status: 'declined' });
 
-        const result = await syncPayment(paymentId, auth(user), testCallerContext);
+        const result = await paymentService.syncPayment(paymentId, auth(user), testCallerContext);
         retrieveSpy.mockRestore();
 
         expect(asReject(result).status).toBe(409);
@@ -1135,7 +1168,11 @@ describe('syncPayment', () => {
         expect(payment.providerRef).toBeUndefined();
 
         const retrieveSpy = jest.spyOn(fakePaymentProvider, 'retrieve');
-        const result = await syncPayment(String(payment._id), auth(user), testCallerContext);
+        const result = await paymentService.syncPayment(
+            String(payment._id),
+            auth(user),
+            testCallerContext
+        );
         retrieveSpy.mockRestore();
 
         expect(asReject(result).status).toBe(409);
@@ -1147,7 +1184,7 @@ describe('syncPayment', () => {
 /** One unconfirmed intent, and the provider reference its webhook would name. */
 const unconfirmedIntent = async () => {
     const { user, order } = await orderFor();
-    await createIntent(String(order._id), auth(user));
+    await paymentService.createIntent(String(order._id), auth(user));
     const payment = await paymentRepository.findByOrderId(String(order._id));
     return { order, providerRef: String(payment!.providerRef) };
 };
@@ -1167,7 +1204,7 @@ describe('applyWebhookSettlement', () => {
         const { order, providerRef } = await unconfirmedIntent();
         setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
 
-        await applyWebhookSettlement(providerRef);
+        await paymentService.applyWebhookSettlement(providerRef);
 
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
@@ -1182,7 +1219,7 @@ describe('applyWebhookSettlement', () => {
         const { order, providerRef } = await unconfirmedIntent();
         const retrieve = jest.spyOn(fakePaymentProvider, 'retrieve');
 
-        await applyWebhookSettlement(providerRef);
+        await paymentService.applyWebhookSettlement(providerRef);
 
         expect(retrieve).toHaveBeenCalledWith(providerRef);
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -1194,13 +1231,13 @@ describe('applyWebhookSettlement', () => {
     it('leaves a settled payment alone, without asking the provider anything', async () => {
         const { order, providerRef } = await unconfirmedIntent();
         setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
-        await applyWebhookSettlement(providerRef);
+        await paymentService.applyWebhookSettlement(providerRef);
         const retrieve = jest.spyOn(fakePaymentProvider, 'retrieve');
 
         // A later `declined` for an intent that already succeeded must not un-pay the order —
         // the terminal states are outside `SETTLEABLE_PAYMENT_STATUSES` for exactly this.
         setFakeOutcome(providerRef, { status: 'declined' });
-        await applyWebhookSettlement(providerRef);
+        await paymentService.applyWebhookSettlement(providerRef);
 
         expect(retrieve).not.toHaveBeenCalled();
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -1210,7 +1247,9 @@ describe('applyWebhookSettlement', () => {
     it('does nothing for an intent this application does not know', async () => {
         const retrieve = jest.spyOn(fakePaymentProvider, 'retrieve');
 
-        await expect(applyWebhookSettlement('fake_pi_nobody')).resolves.toBeUndefined();
+        await expect(
+            paymentService.applyWebhookSettlement('fake_pi_nobody')
+        ).resolves.toBeUndefined();
 
         expect(retrieve).not.toHaveBeenCalled();
     });
@@ -1219,7 +1258,7 @@ describe('applyWebhookSettlement', () => {
         const { order, providerRef } = await unconfirmedIntent();
         setFakeOutcome(providerRef, { status: 'declined', cardLast4: '0002' });
 
-        await applyWebhookSettlement(providerRef);
+        await paymentService.applyWebhookSettlement(providerRef);
 
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('declined');
@@ -1235,7 +1274,7 @@ describe('applyWebhookSettlement', () => {
 describe('applyWebhookDelivery', () => {
     it('settles on the redelivery of a delivery whose first settlement failed', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const providerRef = String(
             (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
         );
@@ -1247,11 +1286,13 @@ describe('applyWebhookDelivery', () => {
             .spyOn(paymentRepository, 'updateStatusIfIn')
             .mockRejectedValueOnce(new Error('transient failure'));
 
-        await expect(applyWebhookDelivery(event)).rejects.toThrow('transient failure');
+        await expect(paymentService.applyWebhookDelivery(event)).rejects.toThrow(
+            'transient failure'
+        );
         updateSpy.mockRestore();
 
         // The provider's redelivery of the SAME event id is what settles it for real.
-        await applyWebhookDelivery(event);
+        await paymentService.applyWebhookDelivery(event);
 
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
@@ -1260,15 +1301,18 @@ describe('applyWebhookDelivery', () => {
 
     it('settles a repeated delivery once, with no ledger of event ids behind it', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const providerRef = String(
             (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
         );
         setFakeOutcome(providerRef, { status: 'succeeded' });
         const event = { id: 'evt_twice', providerRef };
 
-        await Promise.all([applyWebhookDelivery(event), applyWebhookDelivery(event)]);
-        await applyWebhookDelivery(event);
+        await Promise.all([
+            paymentService.applyWebhookDelivery(event),
+            paymentService.applyWebhookDelivery(event)
+        ]);
+        await paymentService.applyWebhookDelivery(event);
 
         expect((await orderService.getById(String(order._id)))!.status).toBe('paid');
         expect(await outboxEventModel.countDocuments({ name: 'payment.succeeded' })).toBe(1);
@@ -1277,7 +1321,9 @@ describe('applyWebhookDelivery', () => {
     it('does nothing for a delivery that names no intent', async () => {
         const retrieveSpy = jest.spyOn(fakePaymentProvider, 'retrieve');
 
-        await expect(applyWebhookDelivery({ id: 'evt_no_intent' })).resolves.toBeUndefined();
+        await expect(
+            paymentService.applyWebhookDelivery({ id: 'evt_no_intent' })
+        ).resolves.toBeUndefined();
 
         expect(retrieveSpy).not.toHaveBeenCalled();
         retrieveSpy.mockRestore();
@@ -1289,7 +1335,11 @@ describe('refundByOrder', () => {
         // The whole point of the standalone action: a goodwill refund is not a cancellation.
         const { order } = await paidOrder();
 
-        const result = await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
+        const result = await paymentService.refundByOrder(
+            String(order._id),
+            asAdmin(),
+            callerContextAs('admin')
+        );
 
         expect(result.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -1300,9 +1350,13 @@ describe('refundByOrder', () => {
 
     it('refuses the second attempt with 409 rather than paying twice', async () => {
         const { order } = await paidOrder();
-        await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
+        await paymentService.refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
 
-        const result = await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
+        const result = await paymentService.refundByOrder(
+            String(order._id),
+            asAdmin(),
+            callerContextAs('admin')
+        );
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(409);
@@ -1311,9 +1365,13 @@ describe('refundByOrder', () => {
 
     it('refuses a payment that never succeeded with 409', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
 
-        const result = await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
+        const result = await paymentService.refundByOrder(
+            String(order._id),
+            asAdmin(),
+            callerContextAs('admin')
+        );
 
         expect(asReject(result).status).toBe(409);
     });
@@ -1321,7 +1379,11 @@ describe('refundByOrder', () => {
     it('answers 404 when the order never had a payment', async () => {
         const { order } = await orderFor();
 
-        const result = await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
+        const result = await paymentService.refundByOrder(
+            String(order._id),
+            asAdmin(),
+            callerContextAs('admin')
+        );
 
         expect(asReject(result).status).toBe(404);
     });
@@ -1330,7 +1392,7 @@ describe('refundByOrder', () => {
         const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
         const { order } = await paidOrder();
 
-        await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
+        await paymentService.refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
 
         expect(refundSpy).toHaveBeenCalledTimes(1);
         refundSpy.mockRestore();
@@ -1348,13 +1410,17 @@ describe('refundByOrder', () => {
             .mockRejectedValueOnce(new Error('payment provider unreachable'));
 
         await expect(
-            refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'))
+            paymentService.refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'))
         ).rejects.toThrow('payment provider unreachable');
         expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
             'succeeded'
         );
 
-        const retried = await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
+        const retried = await paymentService.refundByOrder(
+            String(order._id),
+            asAdmin(),
+            callerContextAs('admin')
+        );
 
         expect(retried.success).toBe(true);
         expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
@@ -1368,7 +1434,7 @@ describe('recordOfflinePayment', () => {
     it('records the money and settles exactly like a card payment — order paid, stock committed', async () => {
         const { product, order } = await placedOrder(10, 3);
 
-        const result = await recordOfflinePayment(
+        const result = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'cash', reference: 'till-42' },
             callerContextAs('admin')
@@ -1398,10 +1464,14 @@ describe('recordOfflinePayment', () => {
             shippingCost: 5
         });
         const orderId = String(order._id);
-        await createIntent(orderId, auth(user));
+        await paymentService.createIntent(orderId, auth(user));
         await paymentModel.updateOne({ orderId }, { amount: 7 });
 
-        await recordOfflinePayment(orderId, { method: 'cash' }, callerContextAs('admin'));
+        await paymentService.recordOfflinePayment(
+            orderId,
+            { method: 'cash' },
+            callerContextAs('admin')
+        );
         await settleOutboxNudges();
 
         const payment = await paymentRepository.findByOrderId(orderId);
@@ -1414,7 +1484,11 @@ describe('recordOfflinePayment', () => {
         const { order } = await placedOrder(10, 1);
         const before = Date.now();
 
-        await recordOfflinePayment(String(order._id), { method: 'cash' }, callerContextAs('admin'));
+        await paymentService.recordOfflinePayment(
+            String(order._id),
+            { method: 'cash' },
+            callerContextAs('admin')
+        );
 
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.receivedAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
@@ -1428,7 +1502,7 @@ describe('recordOfflinePayment', () => {
         await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        const result = await recordOfflinePayment(
+        const result = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'cash' },
             callerContextAs('admin', user.id)
@@ -1448,7 +1522,7 @@ describe('recordOfflinePayment', () => {
         const { order } = await orderFor();
         await forceOrderStatus(String(order._id), 'cancelled');
 
-        const result = await recordOfflinePayment(
+        const result = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'cash' },
             callerContextAs('admin')
@@ -1460,9 +1534,13 @@ describe('recordOfflinePayment', () => {
 
     it('refuses a second recording once the order is already paid', async () => {
         const { order } = await orderFor();
-        await recordOfflinePayment(String(order._id), { method: 'cash' }, callerContextAs('admin'));
+        await paymentService.recordOfflinePayment(
+            String(order._id),
+            { method: 'cash' },
+            callerContextAs('admin')
+        );
 
-        const result = await recordOfflinePayment(
+        const result = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'cash' },
             callerContextAs('admin')
@@ -1474,8 +1552,8 @@ describe('recordOfflinePayment', () => {
 
     it('refuses while a card charge is still reachable at the provider (B)', async () => {
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), auth(user));
-        await confirmPayment(
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
+        await paymentService.confirmPayment(
             String(intent.success && intent.data?.id),
             'pm_card_authentication_required',
             auth(user),
@@ -1484,7 +1562,7 @@ describe('recordOfflinePayment', () => {
         const prepared = await paymentRepository.findByOrderId(String(order._id));
 
         const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
-        const result = await recordOfflinePayment(
+        const result = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'cash' },
             callerContextAs('admin')
@@ -1504,15 +1582,15 @@ describe('recordOfflinePayment', () => {
 
     it('allows recording over a card attempt nobody completed — declined, or never confirmed', async () => {
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), auth(user));
-        await confirmPayment(
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
+        await paymentService.confirmPayment(
             String(intent.success && intent.data?.id),
             FAKE_DECLINE_METHOD,
             auth(user),
             testCallerContext
         );
 
-        const result = await recordOfflinePayment(
+        const result = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'bank_transfer', reference: 'TRX-1' },
             callerContextAs('admin')
@@ -1530,12 +1608,12 @@ describe('recordOfflinePayment', () => {
      */
     it('cancels a never-confirmed intent at the provider before recording the money by hand', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const prepared = await paymentRepository.findByOrderId(String(order._id));
         expect(prepared!.status).toBe('requires_confirmation');
 
         const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
-        const result = await recordOfflinePayment(
+        const result = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'cash', reference: 'till-1' },
             callerContextAs('admin')
@@ -1554,7 +1632,7 @@ describe('recordOfflinePayment', () => {
         const { product, order } = await placedOrder(10, 3);
 
         const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
-        const result = await recordOfflinePayment(
+        const result = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'cash', reference: 'till-2' },
             callerContextAs('admin')
@@ -1569,7 +1647,7 @@ describe('recordOfflinePayment', () => {
     it('refuses a `receivedAt` in the future', async () => {
         const { order } = await orderFor();
 
-        const result = await recordOfflinePayment(
+        const result = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'cash', receivedAt: new Date(Date.now() + 60_000).toISOString() },
             callerContextAs('admin')
@@ -1600,7 +1678,11 @@ describe('recordOfflinePayment — refunding it back', () => {
     it('leaves a cancelled offline payment succeeded, for an operator to confirm', async () => {
         const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
         const { user, order } = await orderFor();
-        await recordOfflinePayment(String(order._id), { method: 'cash' }, callerContextAs('admin'));
+        await paymentService.recordOfflinePayment(
+            String(order._id),
+            { method: 'cash' },
+            callerContextAs('admin')
+        );
 
         const cancelled = await orderService.cancelOnRequestById(String(order._id), auth(user));
 
@@ -1613,10 +1695,14 @@ describe('recordOfflinePayment — refunding it back', () => {
 
     it('only the admin refund endpoint can set refundedByHand, after that', async () => {
         const { user, order } = await orderFor();
-        await recordOfflinePayment(String(order._id), { method: 'cash' }, callerContextAs('admin'));
+        await paymentService.recordOfflinePayment(
+            String(order._id),
+            { method: 'cash' },
+            callerContextAs('admin')
+        );
         await orderService.cancelOnRequestById(String(order._id), auth(user));
 
-        const refunded = await refundByOrder(
+        const refunded = await paymentService.refundByOrder(
             String(order._id),
             asAdmin(),
             callerContextAs('admin')
@@ -1639,7 +1725,7 @@ describe('order.cancelled — closing a still-open intent at the provider', () =
 
     it('cancels the open intent at the provider once its order is cancelled', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const prepared = await paymentRepository.findByOrderId(String(order._id));
 
         const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
@@ -1658,7 +1744,7 @@ describe('order.cancelled — closing a still-open intent at the provider', () =
         // Best-effort: unlike `recordOfflinePayment`'s own synchronous guard, the order is already
         // gone by the time this listener runs — there is no request left here to refuse.
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
 
         const cancelSpy = jest
             .spyOn(fakePaymentProvider, 'cancel')
@@ -1694,17 +1780,17 @@ describe('order.cancelled — closing a still-open intent at the provider', () =
 describe('getForOrder — what the caller may do', () => {
     it('offers the operator a refund on money that arrived, once', async () => {
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), auth(user));
-        await confirmPayment(
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
+        await paymentService.confirmPayment(
             String((intent as { data?: { id?: string } }).data?.id),
             GOOD_METHOD,
             auth(user),
             testCallerContext
         );
 
-        const before = await getForOrder(String(order._id), asAdmin());
-        await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
-        const after = await getForOrder(String(order._id), asAdmin());
+        const before = await paymentService.getForOrder(String(order._id), asAdmin());
+        await paymentService.refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
+        const after = await paymentService.getForOrder(String(order._id), asAdmin());
 
         expect((before as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
             refund: true
@@ -1717,15 +1803,15 @@ describe('getForOrder — what the caller may do', () => {
 
     it('never offers a customer the refund control', async () => {
         const { user, order } = await orderFor();
-        const intent = await createIntent(String(order._id), auth(user));
-        await confirmPayment(
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
+        await paymentService.confirmPayment(
             String((intent as { data?: { id?: string } }).data?.id),
             GOOD_METHOD,
             auth(user),
             testCallerContext
         );
 
-        const result = await getForOrder(String(order._id), auth(user));
+        const result = await paymentService.getForOrder(String(order._id), auth(user));
 
         expect((result as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
             refund: false
@@ -1734,9 +1820,9 @@ describe('getForOrder — what the caller may do', () => {
 
     it('offers `pay` while the intent stands and the order can still reach paid', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
 
-        const result = await getForOrder(String(order._id), auth(user));
+        const result = await paymentService.getForOrder(String(order._id), auth(user));
 
         expect((result as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
             pay: true
@@ -1747,11 +1833,11 @@ describe('getForOrder — what the caller may do', () => {
         // Both halves of the question. A retryable intent on an order that can no longer reach
         // `paid` is not a payment anyone may complete.
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         await orderService.cancelOnRequestById(String(order._id), auth(user));
 
         // Read as the payer: any other reader is refused `pay` for the caller's half alone.
-        const result = await getForOrder(String(order._id), auth(user));
+        const result = await paymentService.getForOrder(String(order._id), auth(user));
 
         expect((result as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
             pay: false
@@ -1762,21 +1848,21 @@ describe('getForOrder — what the caller may do', () => {
     // an account that shops.
     it('offers `pay` to the payer and withholds it from staff reading the same payment', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
 
-        const asPayer = await getForOrder(String(order._id), auth(user));
-        const asStaff = await getForOrder(String(order._id), asModerator());
+        const asPayer = await paymentService.getForOrder(String(order._id), auth(user));
+        const asStaff = await paymentService.getForOrder(String(order._id), asModerator());
 
         expect([asPayer.data?.actions?.pay, asStaff.data?.actions?.pay]).toEqual([true, false]);
     });
 
     it('withholds `pay` from a customer who is not the payer, key or no key', async () => {
         const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
+        await paymentService.createIntent(String(order._id), auth(user));
         const payment = await paymentRepository.findByOrderId(String(order._id));
         const stranger = await createUser({ email: 'not-the-payer@example.com' });
 
-        const body = withActions(payment!, order, auth(stranger));
+        const body = paymentService.withActions(payment!, order, auth(stranger));
 
         expect(body.actions?.pay).toBe(false);
     });

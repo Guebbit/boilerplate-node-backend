@@ -46,16 +46,10 @@ import { deliveryService } from '@modules/delivery';
 import { OrderStatus } from '@types';
 import { inventoryService } from '@modules/inventory';
 import paymentsModule from '@modules/payments/module';
-import { createIntent, confirmPayment, paymentService } from '@modules/payments';
+import { paymentService } from '@modules/payments';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import returnsModule from '../../module';
-import {
-    approveReturn,
-    cancelUnanswered,
-    createReturn,
-    getReturnOptions,
-    receiveReturn
-} from '../../services';
+import { returnService } from '../../services';
 import { returnRepository } from '../../repository';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -95,9 +89,14 @@ const partlyShipped = async (mugOverrides: Parameters<typeof createProduct>[0] =
         { productId: String(shirt._id), quantity: 2 },
         { productId: String(mug._id), quantity: 1 }
     ]);
-    const intent = await createIntent(orderId, asCustomer(user.id));
+    const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
     if (!intent.success) throw new Error('intent refused');
-    await confirmPayment(intent.data.id, 'pm_card_visa', asCustomer(user.id), testCallerContext);
+    await paymentService.confirmPayment(
+        intent.data.id,
+        'pm_card_visa',
+        asCustomer(user.id),
+        testCallerContext
+    );
     await forceOrderStatus(orderId, OrderStatus.processing);
     const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
     const shipped = await deliveryService.shipFulfillmentOrder(
@@ -120,7 +119,7 @@ type Fixture = Awaited<ReturnType<typeof partlyShipped>>;
 
 /** The buyer's own request to cancel what has not shipped. */
 const buyerCancels = (fixture: Fixture) =>
-    createReturn(
+    returnService.createReturn(
         {
             orderId: fixture.orderId,
             reason: 'withdrawal',
@@ -132,7 +131,7 @@ const buyerCancels = (fixture: Fixture) =>
     );
 
 /** A created cancellation, or a loud failure. */
-const created = (outcome: Awaited<ReturnType<typeof createReturn>>) => {
+const created = (outcome: Awaited<ReturnType<typeof returnService.createReturn>>) => {
     if (!outcome.success)
         throw new Error(`expected a cancellation: ${JSON.stringify(outcome.errors)}`);
     return outcome.data;
@@ -143,14 +142,19 @@ const returnShippedGoods = async (
     fixture: Fixture,
     reason: 'withdrawal' | 'defective' = 'withdrawal'
 ) => {
-    const outcome = await createReturn(
+    const outcome = await returnService.createReturn(
         { orderId: fixture.orderId, reason },
         asCustomer(fixture.user.id),
         testCallerContext
     );
     const opened = created(outcome);
-    if (reason !== 'withdrawal') await approveReturn(String(opened._id), callerContextAs('admin'));
-    const received = await receiveReturn(String(opened._id), {}, callerContextAs('admin'));
+    if (reason !== 'withdrawal')
+        await returnService.approveReturn(String(opened._id), callerContextAs('admin'));
+    const received = await returnService.receiveReturn(
+        String(opened._id),
+        {},
+        callerContextAs('admin')
+    );
     if (!received.success) throw new Error('receipt refused');
     return received.data;
 };
@@ -230,12 +234,12 @@ describe('the buyer cancelling what has not shipped', () => {
             fulfillmentOrderId: fixture.fulfillmentOrderId
         };
 
-        const defective = await createReturn(
+        const defective = await returnService.createReturn(
             { ...base, reason: 'defective' },
             buyer,
             testCallerContext
         );
-        const withLines = await createReturn(
+        const withLines = await returnService.createReturn(
             {
                 ...base,
                 reason: 'withdrawal',
@@ -244,12 +248,12 @@ describe('the buyer cancelling what has not shipped', () => {
             buyer,
             testCallerContext
         );
-        const none = await createReturn(
+        const none = await returnService.createReturn(
             { orderId: fixture.orderId, reason: 'withdrawal', kind: 'cancellation' },
             buyer,
             testCallerContext
         );
-        const goodsReturnNamingOne = await createReturn(
+        const goodsReturnNamingOne = await returnService.createReturn(
             {
                 orderId: fixture.orderId,
                 reason: 'withdrawal',
@@ -275,7 +279,7 @@ describe('the buyer cancelling what has not shipped', () => {
         });
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             {
                 orderId: String(order._id),
                 reason: 'withdrawal',
@@ -323,7 +327,7 @@ describe('the buyer cancelling what has not shipped', () => {
         const fixture = await partlyShipped();
         const stranger = await createUser({ email: 'stranger-cancel@example.com' });
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             {
                 orderId: fixture.orderId,
                 reason: 'withdrawal',
@@ -366,7 +370,7 @@ describe('the buyer cancelling what has not shipped', () => {
 
 /** A staff request to cancel the remainder, with the caller's role. */
 const staffCancels = (fixture: Fixture, role: 'moderator' | 'warehouse') =>
-    createReturn(
+    returnService.createReturn(
         {
             orderId: fixture.orderId,
             reason: 'other',
@@ -434,7 +438,7 @@ describe('staff cancelling what has not shipped', () => {
     it('refuses staff naming withdrawal on a stranger’s order, and writes nothing', async () => {
         const fixture = await partlyShipped();
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             {
                 orderId: fixture.orderId,
                 reason: 'withdrawal',
@@ -457,7 +461,7 @@ describe('staff cancelling what has not shipped', () => {
     it('asks the key before the reason: a warehouse naming withdrawal is told 403, not 422', async () => {
         const fixture = await partlyShipped();
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             {
                 orderId: fixture.orderId,
                 reason: 'withdrawal',
@@ -480,12 +484,12 @@ describe('staff cancelling what has not shipped', () => {
             fulfillmentOrderId: fixture.fulfillmentOrderId
         };
 
-        const other = await createReturn(
+        const other = await returnService.createReturn(
             { ...base, reason: 'other' },
             asBuyingModerator,
             callerContextAs('moderator')
         );
-        const withdrawal = await createReturn(
+        const withdrawal = await returnService.createReturn(
             { ...base, reason: 'withdrawal' },
             asBuyingModerator,
             callerContextAs('moderator')
@@ -501,7 +505,7 @@ describe('staff cancelling what has not shipped', () => {
     it('answers a stranger’s order 404 to staff who cannot read orders, not 409 or 403', async () => {
         const fixture = await partlyShipped();
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             {
                 orderId: fixture.orderId,
                 reason: 'other',
@@ -611,7 +615,7 @@ describe('GET /returns/options', () => {
         const fixture = await partlyShipped();
         const buyer = asCustomer(fixture.user.id);
 
-        const options = await getReturnOptions(fixture.orderId, buyer);
+        const options = await returnService.getReturnOptions(fixture.orderId, buyer);
 
         expect(options.success && options.data).toMatchObject({
             orderId: fixture.orderId,
@@ -636,7 +640,10 @@ describe('GET /returns/options', () => {
         const fixture = await partlyShipped();
         await returnShippedGoods(fixture);
 
-        const options = await getReturnOptions(fixture.orderId, asCustomer(fixture.user.id));
+        const options = await returnService.getReturnOptions(
+            fixture.orderId,
+            asCustomer(fixture.user.id)
+        );
 
         expect(options.success && options.data.returnable).toEqual([]);
         expect(options.success && options.data.cancellable[0]).toMatchObject({
@@ -655,8 +662,11 @@ describe('GET /returns/options', () => {
         });
         await fulfillmentOrdersOf(String(order._id));
 
-        const own = await getReturnOptions(String(order._id), asCustomer(user.id));
-        const other = await getReturnOptions(String(order._id), asCustomer(stranger.id));
+        const own = await returnService.getReturnOptions(String(order._id), asCustomer(user.id));
+        const other = await returnService.getReturnOptions(
+            String(order._id),
+            asCustomer(stranger.id)
+        );
 
         expect(own.success && own.data).toMatchObject({ returnable: [], cancellable: [] });
         expect(asReject(other).status).toBe(404);
@@ -665,8 +675,8 @@ describe('GET /returns/options', () => {
     // `cancel` is the door's own rule, asked for this caller: the button never offers a refusal.
     it('says per caller whether the cancel is theirs: the buyer, staff with the key, and not staff without it', async () => {
         const fixture = await partlyShipped();
-        const cancelFor = async (caller: Parameters<typeof getReturnOptions>[1]) => {
-            const options = await getReturnOptions(fixture.orderId, caller);
+        const cancelFor = async (caller: Parameters<typeof returnService.getReturnOptions>[1]) => {
+            const options = await returnService.getReturnOptions(fixture.orderId, caller);
             return options.success ? options.data.cancellable.map(({ cancel }) => cancel) : [];
         };
 
@@ -680,8 +690,14 @@ describe('GET /returns/options', () => {
         await setWithdrawUntil(closed.orderId, new Date(Date.now() - 1000));
         const excluded = await partlyShipped({ noWithdrawal: true });
 
-        const afterWindow = await getReturnOptions(closed.orderId, asCustomer(closed.user.id));
-        const engraved = await getReturnOptions(excluded.orderId, asCustomer(excluded.user.id));
+        const afterWindow = await returnService.getReturnOptions(
+            closed.orderId,
+            asCustomer(closed.user.id)
+        );
+        const engraved = await returnService.getReturnOptions(
+            excluded.orderId,
+            asCustomer(excluded.user.id)
+        );
 
         expect(afterWindow.success && afterWindow.data.cancellable[0].cancel).toBe(false);
         expect(engraved.success && engraved.data.cancellable[0].cancel).toBe(false);
@@ -690,7 +706,7 @@ describe('GET /returns/options', () => {
     it('lets staff who read returns see any order’s', async () => {
         const fixture = await partlyShipped();
 
-        const options = await getReturnOptions(fixture.orderId, asAdmin());
+        const options = await returnService.getReturnOptions(fixture.orderId, asAdmin());
 
         expect(options.success && options.data.cancellable).toHaveLength(1);
     });
@@ -714,7 +730,7 @@ describe('returning goods that shipped in part', () => {
         );
         const buyer = asCustomer(user.id);
 
-        const tooMany = await createReturn(
+        const tooMany = await returnService.createReturn(
             {
                 orderId,
                 reason: 'defective',
@@ -723,7 +739,7 @@ describe('returning goods that shipped in part', () => {
             buyer,
             testCallerContext
         );
-        const one = await createReturn(
+        const one = await returnService.createReturn(
             {
                 orderId,
                 reason: 'defective',
@@ -732,7 +748,7 @@ describe('returning goods that shipped in part', () => {
             buyer,
             testCallerContext
         );
-        const again = await createReturn(
+        const again = await returnService.createReturn(
             {
                 orderId,
                 reason: 'defective',
@@ -765,7 +781,11 @@ describe('returning goods that shipped in part', () => {
                 asAdmin(),
                 callerContextAs('admin')
             ),
-            createReturn({ orderId, reason: 'withdrawal' }, asCustomer(user.id), testCallerContext)
+            returnService.createReturn(
+                { orderId, reason: 'withdrawal' },
+                asCustomer(user.id),
+                testCallerContext
+            )
         ]);
 
         const stored = await readOrder(orderId);
@@ -811,9 +831,14 @@ const shirtShippedPreorderWaiting = async ({ shipShirt = true } = {}) => {
         { productId: String(shirt._id), quantity: 1 },
         { productId: gameId, quantity: 2, kind: 'preorder' }
     ]);
-    const intent = await createIntent(orderId, asCustomer(user.id));
+    const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
     if (!intent.success) throw new Error('intent refused');
-    await confirmPayment(intent.data.id, 'pm_card_visa', asCustomer(user.id), testCallerContext);
+    await paymentService.confirmPayment(
+        intent.data.id,
+        'pm_card_visa',
+        asCustomer(user.id),
+        testCallerContext
+    );
     await forceOrderStatus(orderId, OrderStatus.processing);
     const all = await fulfillmentOrdersOf(orderId);
     const ordinary = all.find(({ status }) => status === 'open');
@@ -836,7 +861,7 @@ describe('cancelling a preorder that is still waiting for stock', () => {
         const fixture = await shirtShippedPreorderWaiting();
         const gameId = String(fixture.game._id);
 
-        const outcome = await createReturn(
+        const outcome = await returnService.createReturn(
             {
                 orderId: fixture.orderId,
                 reason: 'withdrawal',
@@ -871,7 +896,11 @@ describe('a preorder wait nobody answered', () => {
         const fixture = await shirtShippedPreorderWaiting();
         await letSilenceRunOut();
 
-        await cancelUnanswered(fixture.orderId, fixture.fulfillmentOrderId, lateEnough);
+        await returnService.cancelUnanswered(
+            fixture.orderId,
+            fixture.fulfillmentOrderId,
+            lateEnough
+        );
 
         const [cancellation] = await returnRepository.findByOrderId(fixture.orderId);
         expect(cancellation).toMatchObject({
@@ -892,8 +921,16 @@ describe('a preorder wait nobody answered', () => {
         const fixture = await shirtShippedPreorderWaiting();
         await letSilenceRunOut();
 
-        await cancelUnanswered(fixture.orderId, fixture.fulfillmentOrderId, lateEnough);
-        await cancelUnanswered(fixture.orderId, fixture.fulfillmentOrderId, lateEnough);
+        await returnService.cancelUnanswered(
+            fixture.orderId,
+            fixture.fulfillmentOrderId,
+            lateEnough
+        );
+        await returnService.cancelUnanswered(
+            fixture.orderId,
+            fixture.fulfillmentOrderId,
+            lateEnough
+        );
 
         expect(await returnRepository.findByOrderId(fixture.orderId)).toHaveLength(1);
         expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: 20 }]);
@@ -903,7 +940,11 @@ describe('a preorder wait nobody answered', () => {
         const fixture = await shirtShippedPreorderWaiting({ shipShirt: false });
         await letSilenceRunOut();
 
-        await cancelUnanswered(fixture.orderId, fixture.fulfillmentOrderId, lateEnough);
+        await returnService.cancelUnanswered(
+            fixture.orderId,
+            fixture.fulfillmentOrderId,
+            lateEnough
+        );
         await settleOutboxNudges();
 
         const stored = await readOrder(fixture.orderId);
@@ -917,7 +958,7 @@ describe('a preorder wait nobody answered', () => {
         // Asked on day 31 and not yet expired on day 40: the buyer may still answer.
         await deliveryService.runPreorderSweep(new Date(Date.now() + 31 * DAY));
 
-        await cancelUnanswered(
+        await returnService.cancelUnanswered(
             fixture.orderId,
             fixture.fulfillmentOrderId,
             new Date(Date.now() + 40 * DAY)
@@ -945,9 +986,9 @@ describe('a preorder wait nobody answered', () => {
         await inventoryService.reserveForOrder(orderId, [
             { productId: gameId, quantity: 2, kind: 'preorder' }
         ]);
-        const intent = await createIntent(orderId, asCustomer(user.id));
+        const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
         if (!intent.success) throw new Error('intent refused');
-        await confirmPayment(
+        await paymentService.confirmPayment(
             intent.data.id,
             'pm_card_visa',
             asCustomer(user.id),
@@ -956,7 +997,7 @@ describe('a preorder wait nobody answered', () => {
         const [waiting] = await fulfillmentOrdersOf(orderId);
         await letSilenceRunOut();
 
-        await cancelUnanswered(orderId, String(waiting._id), lateEnough);
+        await returnService.cancelUnanswered(orderId, String(waiting._id), lateEnough);
         // The whole-order cancel's refund is its `order.cancelled` row, delivered by the relay.
         await settleOutboxNudges();
 

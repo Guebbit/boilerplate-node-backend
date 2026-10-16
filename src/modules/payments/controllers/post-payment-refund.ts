@@ -10,7 +10,7 @@
 import type { Request, Response } from 'express';
 import type { Payment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
-import { paymentService, readsAllPayments } from '../services';
+import { paymentService } from '../services';
 import { presentPayment } from '../presenter';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { RefundPaymentByOrderBody } from '@api/schemas.zod';
@@ -34,7 +34,7 @@ export const postPaymentRefund = (request: Request<{ orderId?: string }>, respon
             if (refused(response, result)) return;
             successResponse<Payment>(
                 response,
-                presentPayment(result.data, readsAllPayments(request.authContext)),
+                presentPayment(result.data, paymentService.readsAllPayments(request.authContext)),
                 200,
                 result.message
             );

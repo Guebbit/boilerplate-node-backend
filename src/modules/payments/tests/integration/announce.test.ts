@@ -12,7 +12,7 @@ import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
-import { createIntent, confirmPayment } from '@modules/payments/services';
+import { paymentService } from '@modules/payments/services';
 import { recordDecline } from '@modules/payments/services/announce';
 import { paymentRepository } from '@modules/payments/repository';
 import { PAYMENT_FAILED, PAYMENT_SUCCEEDED } from '@modules/payments/events';
@@ -54,8 +54,8 @@ const placedOrder = async () => {
 
 /** Intent, then a good card. */
 const payFor = async (orderId: string, user: { id: string }) => {
-    const intent = await createIntent(orderId, asCustomer(user.id));
-    return confirmPayment(
+    const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
+    return paymentService.confirmPayment(
         String(intent.success && intent.data?.id),
         'pm_card_visa',
         asCustomer(user.id),
@@ -84,7 +84,7 @@ describe('a settlement that completes', () => {
         const { user, order } = await placedOrder();
         await payFor(String(order._id), user);
         const payment = (await paymentRepository.findByOrderId(String(order._id)))!;
-        await confirmPayment(
+        await paymentService.confirmPayment(
             String(payment._id),
             'pm_card_visa',
             asCustomer(user.id),
@@ -116,7 +116,7 @@ describe('a settlement that dies after charging', () => {
     it('announces nothing when the order was cancelled meanwhile — the refund path owns that', async () => {
         const { user, order } = await placedOrder();
         const orderId = String(order._id);
-        const intent = await createIntent(orderId, asCustomer(user.id));
+        const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
         const originalConfirm = fakePaymentProvider.confirm;
         jest.spyOn(fakePaymentProvider, 'confirm').mockImplementationOnce(
             async (providerRef, methodRef) => {
@@ -124,7 +124,7 @@ describe('a settlement that dies after charging', () => {
                 return originalConfirm(providerRef, methodRef);
             }
         );
-        await confirmPayment(
+        await paymentService.confirmPayment(
             String(intent.success && intent.data?.id),
             'pm_card_visa',
             asCustomer(user.id),
@@ -142,7 +142,7 @@ describe('a settlement that dies after charging', () => {
 /** An order with a card intent that nobody has confirmed: the state a decline lands on. */
 const awaitingConfirmation = async () => {
     const { user, order } = await placedOrder();
-    await createIntent(String(order._id), asCustomer(user.id));
+    await paymentService.createIntent(String(order._id), asCustomer(user.id));
     return String(order._id);
 };
 
