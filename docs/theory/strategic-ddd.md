@@ -297,9 +297,9 @@ the reasoning is in [account-two-factor](../modules/account-two-factor.md#what-t
     - `default: 'disallow'` refuses an EDGE no policy claims, so classifying a new tier is not
       enough: its arrows have to be argued for before it can import anything.
 2. **Relation.** What a module's spec may import depends on WHICH module owns it, and a glob
-   cannot say "its own". `capture` reads the module name out of the path and
-   `{{ from.element.captured.module }}` compares the two sides, so one policy covers every
-   domain, including one added later.
+   cannot say "its own". `capture` reads the module name out of the path, and
+   the template `from.element.captured.module` compares the two sides, so one policy covers
+   every domain, including one added later.
 
 ### The one door
 
