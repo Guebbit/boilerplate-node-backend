@@ -111,15 +111,16 @@ flowchart TD
     M --> F["fill empty buckets in code"]
 ```
 
-| Question        | Rule                                                                                                          |
-| --------------- | ------------------------------------------------------------------------------------------------------------- |
-| A sale's date   | `paidAt`, written in one place (`orders` `markPaid`), reached by card, sync, webhook and offline              |
-| Money's date    | the document's `issuedAt`: an invoice follows its payment by seconds, a credit note its refund                |
-| A refund's date | its credit note's `issuedAt`                                                                                  |
-| Whose days      | the shop's: `NODE_SHOP_TIMEZONE`, a named IANA zone (a fixed offset is refused, since it ignores summer time) |
-| Week            | starts Monday                                                                                                 |
-| `from`, `to`    | shop-local calendar days, both inclusive, as `YYYY-MM-DD`                                                     |
-| Bounds          | at most two years and 400 buckets, else 422                                                                   |
+| Question         | Rule                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- |
+| A sale's date    | `paidAt`, written in one place (`orders` `markPaid`), reached by card, sync, webhook and offline              |
+| Money's date     | the document's `issuedAt`: an invoice follows its payment by seconds, a credit note its refund                |
+| A refund's date  | its credit note's `issuedAt`                                                                                  |
+| The payments mix | a payment's own `createdAt`, for payments that took money — not `paidAt`                                      |
+| Whose days       | the shop's: `NODE_SHOP_TIMEZONE`, a named IANA zone (a fixed offset is refused, since it ignores summer time) |
+| Week             | starts Monday                                                                                                 |
+| `from`, `to`     | shop-local calendar days, both inclusive, as `YYYY-MM-DD`                                                     |
+| Bounds           | at most two years and 400 buckets, else 422                                                                   |
 
 Bucket edges and window bounds both come from the same zone: `$dateTrunc` cuts buckets with Mongo's
 own tz database, and the bounds use `Intl` through `zonedStartOfDay`. A test on the real binary

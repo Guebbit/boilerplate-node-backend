@@ -60,7 +60,7 @@ paths:
                 session that made it. `expiresAt` is required and at most one year ahead, or the
                 request is refused with 422. The minter is mailed that a key was created, and every
                 key a person minted is revoked (and listed to them by mail) when they log out
-                everywhere or reset their password.
+                everywhere, reset their password or report an email change as not theirs.
             operationId: mintApiKey
             security:
                 - bearerAuth: []

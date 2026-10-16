@@ -540,8 +540,9 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # The order exists and is visible to the caller, but its status is past the
-                # cancellable pair (pending, paid). `errors[].code` is `ORDER_NOT_CANCELLABLE`.
+                # The order exists and is visible to the caller, but its status is past what THIS
+                # caller may cancel: a customer's own order only while pending or paid; an operator's
+                # also while processing, until anything ships. `errors[].code` is `ORDER_NOT_CANCELLABLE`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }

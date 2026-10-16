@@ -365,13 +365,14 @@ cancel is conditional on `fulfillment.shipped` not being set.
 shipment leaves **nothing** remaining anywhere; until then it stays `processing`, and its
 `fulfillmentStatus` reads `partially_fulfilled`. Refused:
 
-| Case                                                                | Answer                                          |
-| ------------------------------------------------------------------- | ----------------------------------------------- |
-| more than remains, a product that is not there, the same twice      | `422 DELIVERY_LINES_INVALID`                    |
-| a tracked method with no code                                       | `422 DELIVERY_TRACKING_CODE_REQUIRED`           |
-| a fulfillment order on hold, closed or cancelled; a cancelled order | `409 DELIVERY_NOT_SHIPPABLE`                    |
-| a digital one                                                       | `409 DELIVERY_NOT_PHYSICAL` — fulfil it instead |
-| an order that is not `processing`                                   | `409 ORDER_NOT_PROCESSING`                      |
+| Case                                                                                          | Answer                                          |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| more than remains, a product that is not there, the same twice                                | `422 DELIVERY_LINES_INVALID`                    |
+| a tracked method with no code                                                                 | `422 DELIVERY_TRACKING_CODE_REQUIRED`           |
+| a fulfillment order on hold, closed or cancelled; a cancelled or never-paid (`pending`) order | `409 DELIVERY_NOT_SHIPPABLE`                    |
+| a forced first shipment that finds the order no longer `paid` (it moved meanwhile)            | `409 ORDER_NOT_PAID`                            |
+| a digital one                                                                                 | `409 DELIVERY_NOT_PHYSICAL` — fulfil it instead |
+| an order that is not `processing`                                                             | `409 ORDER_NOT_PROCESSING`                      |
 
 ### `forced`
 

@@ -384,8 +384,9 @@ sequenceDiagram
   [the staff Payments page](#the-staff-payments-page)), and keeps its share of `amountRefunded`, so nothing is opened beside it. `retryOpenRefunds` (run by
   `npm run sweep:payment-effects`) and the next cancel or operator call both finish it.
 - **The default is everything left.** `POST /payments/order/{orderId}/refund` with no body returns
-  all that is still refundable; with an `amount` it returns that part. More than what is left is a
-  422 (`PAYMENT_REFUND_EXCEEDS_REMAINING`); nothing left is a 409.
+  all that is still refundable; with an `amount` it returns that part. An `amount` over what is
+  left, nothing left included, is a 422 (`PAYMENT_REFUND_EXCEEDS_REMAINING`); with no `amount`,
+  nothing left is a 409 (`PAYMENT_NOT_REFUNDABLE`).
 - **A refund can pay for a return.** `refundForReturn` (called by [`returns`](./returns.md) when goods
   are received) opens a refund with `reason: return` and the return's `returnId`, clamped to what the
   payment has left. `payment.refunded` carries the `returnId`, so `returns` closes the return when

@@ -1,9 +1,10 @@
 /**
  * @module
  * What an account export carries of the goods, read through the generated response schema: a
- * shipment of a method that carries no tracking has no `trackingCode`, a fulfillment order has no
- * staff note, and the export must still be a valid `DownloadAccountExport200Response`. The schema is
- * the one the paired frontend validates a downloaded export against.
+ * shipment of a method that carries no tracking has no `trackingCode`, a fulfillment order carries
+ * its hold note when staff wrote one (staff's assessment of a person is that person's data), and the
+ * export must still be a valid `DownloadAccountExport200Response`. The schema is the one the paired
+ * frontend validates a downloaded export against.
  */
 
 import { DownloadAccountExport200Response } from '@api/schemas.zod';

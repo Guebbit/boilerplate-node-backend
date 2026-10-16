@@ -292,10 +292,10 @@ refund policy, and no caller can reach the state while skipping the consequences
 plain move to `cancelled` for exactly that reason. What the conditional write buys is that **at most
 one caller runs the sequence**; a double-click and the reservation sweep cannot both proceed.
 
-What it does not buy is atomicity. The three steps run in order, not together, so a crash between the
-status write and `releaseForOrder` leaves a cancelled order holding stock until the sweep reclaims
-it. An aggregate would close that window by making the three one act; so would a transaction, which
-is what the SQL twin has. It is a real gap and a small one.
+The status move, the stock coming back and the `order.cancelled` outbox row are one transaction
+(`moveToCancelled`), so a crash cannot leave a cancelled order holding stock or a cancel nobody
+heard of. What runs after the commit is the catalogue's stock cache, which is a mirror and cannot
+roll back; the next stock write refreshes it.
 
 ---
 

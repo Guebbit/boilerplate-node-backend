@@ -209,6 +209,9 @@ five-minute tick and two drains would only fight over the same claims.
 
 The `status: 1, expiresAt: 1` index exists for exactly that query, and for nothing else.
 
+Only an operator's on-demand run through the route is audited (`admin.reservations.swept`); the scheduled
+run writes no audit row, since it has no caller.
+
 When a hold is swept, `inventory.reservation_expired` is published through the transactional
 outbox, in the same transaction as the release, so the units come back and the announcement exists
 together or not at all; the relay retries until [`orders`](./orders.md) has heard it, and `orders`

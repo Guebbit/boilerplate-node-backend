@@ -800,7 +800,7 @@ describe('GET /payments/order-by-reference', () => {
         expect(response.status).toBe(404);
     });
 
-    it('refuses the order`s own owner — matching a transfer is admin-only', async () => {
+    it('refuses the order`s own owner — matching a transfer is staff-only', async () => {
         const { customerBearer, reference } = await transferOrder();
 
         const response = await api()

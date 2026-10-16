@@ -583,6 +583,7 @@ paths:
                 refresh still ends the device; in `cookie` mode it is the one session. Revoking the
                 current session is allowed and equivalent to `POST /account/logout`, except that the
                 cookies of OTHER clients cannot be cleared from here; their next request simply fails.
+                Needs a fresh session (sensitive tier, `401 REAUTH_REQUIRED` when stale).
             operationId: revokeSession
             security:
                 - bearerAuth: []
@@ -808,9 +809,10 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/TwoFactorDeliveryEnvelope'
-                # An expired or forged challenge, and an account with no such method armed, answer
-                # alike: neither should tell a caller which one they hit.
+                # An expired or forged challenge is a 401.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # A method the account has not armed and a method that does not exist answer alike:
+                # neither should tell a caller which one they hit.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -983,8 +985,8 @@ paths:
                 # Also answered when a human-challenge provider is active and the caller's
                 # token is missing or refused — see antibot/openapi.yaml.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                # Signing up with an email that is already registered, a challenge token already
-                # spent (rung 3), or `Idempotency-Key` naming a request still in flight.
+                # Signing up with an email that is already registered, or `Idempotency-Key` naming a
+                # request still in flight. A spent challenge token is a 401 `ANTIBOT_VERIFICATION_FAILED`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 # Also answered when `Idempotency-Key` was already used with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -1068,7 +1070,7 @@ paths:
         post:
             tags: [Auth]
             summary: Logout from all devices
-            description: Logs out the authenticated user from ALL devices by deleting every session the account holds and clearing authentication cookies.
+            description: Logs out the authenticated user from ALL devices by deleting every session the account holds and clearing authentication cookies. Needs a fresh session (sensitive tier, `401 REAUTH_REQUIRED` when stale).
             operationId: logoutAll
             security:
                 - bearerAuth: []
@@ -1099,7 +1101,8 @@ paths:
 
                 Starting a NEW build costs one mail from the per-mailbox mail budget, since it ends in a
                 mailed link: a spent budget answers `429`, and the previous export is left in place.
-                Asking while one is `building` is not charged.
+                Asking while one is `building` is not charged. Needs a fresh session (sensitive tier:
+                `401 REAUTH_REQUIRED`), as does downloading the file.
             operationId: requestAccountExport
             security:
                 - bearerAuth: []
@@ -1171,7 +1174,7 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 status:
                     type: string
-                    enum: [building, ready, failed]
+                    enum: [building]
                     description: >-
                         `building` on a fresh request. A request never answers `ready` or `failed`:
                         asking again after either REPLACES the export with a new `building` one.

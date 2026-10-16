@@ -95,8 +95,9 @@ purpose any more, and keep the login. That step is on by default.
 | `NODE_INACTIVE_MINIMISE_DAYS` | 1095 days, on | the account is minimised (table below) |
 | `NODE_INACTIVE_ACCOUNT_DAYS`  | 0, disabled   | warned, then soft-, then hard-deleted  |
 
-**Activity** is the latest login or the latest API-key use. An account driven only through its
-API keys is a live integration, not an idle account.
+**Activity** is the latest signed-in session use (a login, a refresh, any request not marked
+passive) or the latest API-key use. An account driven only through its API keys is a live
+integration, not an idle account.
 
 | Data on an inactive account | Its purpose                  | On inactivity                             |
 | --------------------------- | ---------------------------- | ----------------------------------------- |

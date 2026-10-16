@@ -12,7 +12,7 @@ x-error-codes:
     DELIVERY_OVERRIDE_REASON_REQUIRED: { status: 422, description: 'A forced shipment or delivery requires a reason and none was supplied.' }
     DELIVERY_TRACKING_CODE_REQUIRED: { status: 422, description: 'Shipping a tracked method requires a tracking code and none was supplied.' }
     DELIVERY_LINES_INVALID: { status: 422, description: 'A shipment line names a product that is not on the fulfillment order, asks for more than remains of it, or names the same product twice.' }
-    DELIVERY_NOT_SHIPPABLE: { status: 409, description: 'The fulfillment order cannot ship now: it is on hold, closed or cancelled, or the order is cancelled.' }
+    DELIVERY_NOT_SHIPPABLE: { status: 409, description: 'The fulfillment order cannot ship now: it is on hold, closed or cancelled, or the order is cancelled, or still `pending` (never paid: start or pay it first).' }
     DELIVERY_NOT_PHYSICAL: { status: 409, description: 'A digital fulfillment order has nothing to ship; fulfil it instead.' }
     DELIVERY_NOT_DIGITAL: { status: 409, description: 'A physical fulfillment order cannot be fulfilled without a shipment; ship it instead.' }
     DELIVERY_NOT_HOLDABLE: { status: 409, description: 'Only an open or in-progress fulfillment order can be put on hold.' }

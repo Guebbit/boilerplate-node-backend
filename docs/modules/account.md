@@ -225,6 +225,15 @@ the requested address is compared against every account's `email` _and_ `pending
 time**, the `users_email` and `users_pending_email` unique indexes catch whatever changed in the
 up-to-24-hours between the two.
 
+### How long each link and challenge lives
+
+| What                                   | Lives                                                                                                                      |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| the new address's confirmation link    | 24 hours                                                                                                                   |
+| the old address's undo link            | 7 days                                                                                                                     |
+| the account-deletion confirmation link | 1 hour (`deletion-request.ts`)                                                                                             |
+| a login's two-factor challenge         | 5 minutes, 10 when a delivered factor (email) is armed, since the code must cross a mail queue (`two-factor-challenge.ts`) |
+
 ## Data export {#data-export}
 
 "Give me my data" (GDPR Art. 15 and 20) is a job, not a request. Building the answer reads every

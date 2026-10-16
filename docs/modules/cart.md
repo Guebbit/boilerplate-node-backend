@@ -81,8 +81,8 @@ Field names match the contract's `CartItem` — `{ productId, quantity }` — so
 wire line are the same shape, and there is no mapper between them to keep in sync.
 
 **A line holds at most `NODE_CART_LINE_MAX` units** (default 10, the contract's hard ceiling is 999):
-a `PUT` past it, an add that would push a line past it and a reorder all answer 422
-`CART_QUANTITY_LIMIT` (a reorder clamps instead), and checkout re-checks every line, so a basket
+a `PUT` past it and an add that would push a line past it answer 422
+`CART_QUANTITY_LIMIT`, a reorder clamps to what room is left instead, and checkout re-checks every line, so a basket
 filled before the ceiling was lowered is refused with the lines named rather than quietly trimmed.
 It is one of three caps on denial of inventory, with `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` and
 `NODE_RESERVATION_TTL_MINUTES` — see [checkout](./cart-checkout.md).
