@@ -1,12 +1,10 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
-import sharp from 'sharp';
 import { api, authenticateAs } from '@tests/http';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { setupTestDb } from '@tests/setup-test-db';
-import { localeRepository } from '@modules/locales/repository';
-import { makeLocale } from '@modules/locales/factories';
-import { currentEnvironment } from '@infrastructure/config/store';
+import { givenLocale } from '@modules/locales/tests/factories';
+import { decodablePng, publicDirectory } from '@tests/images';
 
 /**
  * Writing a product through the MULTIPART body, which is the only way to send one with an image.
@@ -27,7 +25,7 @@ import { currentEnvironment } from '@infrastructure/config/store';
 
 // `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
 // runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
-const UPLOAD_DIRECTORY = path.resolve(currentEnvironment().NODE_PUBLIC_PATH!, 'images');
+const UPLOAD_DIRECTORY = path.join(publicDirectory(), 'images');
 
 /**
  * A genuinely decodable PNG, not merely a magic-byte header — see the matching fixture in
@@ -37,11 +35,7 @@ const UPLOAD_DIRECTORY = path.resolve(currentEnvironment().NODE_PUBLIC_PATH!, 'i
 let PNG_BYTES: Buffer;
 
 beforeAll(async () => {
-    PNG_BYTES = await sharp({
-        create: { width: 4, height: 4, channels: 3, background: { r: 10, g: 20, b: 30 } }
-    })
-        .png()
-        .toBuffer();
+    PNG_BYTES = await decodablePng();
 });
 
 // Files only — the digest pipeline's `thumbs/` derivative directory lives alongside the uploads,
@@ -64,9 +58,7 @@ describe('writing a product through a multipart body', () => {
     beforeEach(async () => {
         // Every case below writes the fallback locale — see the same note in
         // `locales/tests/integration/translations.test.ts`.
-        await localeRepository.create(
-            makeLocale({ tag: FALLBACK, name: FALLBACK, nativeName: FALLBACK })
-        );
+        await givenLocale(FALLBACK);
     });
 
     /* A test that stores a file for real removes it — the original, its thumbnail and anything still

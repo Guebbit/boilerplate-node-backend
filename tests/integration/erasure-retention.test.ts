@@ -25,6 +25,7 @@ import { giveAddress } from '@modules/addresses/tests/factories';
 import { invoiceModel, creditNoteModel } from '@modules/invoicing/model';
 import { returnModel } from '@modules/returns/model';
 import { feedbackRequestModel } from '@modules/feedback/model';
+import { eventually } from '@tests/eventually';
 
 /** The fake PSP's "always succeeds" reference (`scenarios/support/doubles/payments/fake.ts`). */
 const FAKE_SUCCESS_METHOD = 'pm_card_visa';
@@ -43,15 +44,6 @@ beforeEach(() => {
 
 afterEach(() => resetDomainEvents());
 
-/** Polls a fire-and-forget listener's own write until it lands, or gives up. */
-const waitUntil = async (count: () => Promise<number>, wanted: number, timeoutMs = 3000) => {
-    const startedAt = Date.now();
-    while ((await count()) < wanted) {
-        if (Date.now() - startedAt > timeoutMs) throw new Error('waitUntil: timed out');
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-};
-
 describe('a hard delete of an account that has bought, been refunded and written in', () => {
     it('takes the address book and leaves every legal record', async () => {
         const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
@@ -67,9 +59,13 @@ describe('a hard delete of an account that has bought, been refunded and written
             asCustomer(user.id),
             testCallerContext
         );
-        await waitUntil(() => invoiceModel.countDocuments({ orderId }), 1);
+        await eventually(() =>
+            invoiceModel.countDocuments({ orderId }).then((count) => count >= 1)
+        );
         await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
-        await waitUntil(() => creditNoteModel.countDocuments({ orderId }), 1);
+        await eventually(() =>
+            creditNoteModel.countDocuments({ orderId }).then((count) => count >= 1)
+        );
         await returnModel.create({
             orderId: order._id,
             orderNumber: order.orderNumber ?? 'N-1',

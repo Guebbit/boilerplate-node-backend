@@ -19,6 +19,7 @@
 
 import { randomUUID } from 'node:crypto';
 import amqplib from 'amqplib';
+import { retryUntil } from '@tests/eventually';
 import { containerEngine, containerEngineAvailable, startContainer } from '@tests/container-engine';
 
 const IMAGE = process.env.NODE_TEST_RABBITMQ_IMAGE ?? 'docker.io/library/rabbitmq:4-management';
@@ -80,22 +81,14 @@ const call = (base: URL, path: string, init: RequestInit = {}): Promise<Response
 };
 
 /** Resolves once the broker accepts an AMQP connection, or rejects after `timeoutMs`. */
-const waitForBroker = (url: string, timeoutMs: number): Promise<void> => {
-    const deadline = Date.now() + timeoutMs;
-
-    const attempt = (): Promise<void> =>
-        amqplib
-            .connect(url)
-            .then((connection) => connection.close())
-            .catch((error: unknown) => {
-                if (Date.now() > deadline)
-                    throw new Error(`RabbitMQ never answered at ${url}: ${String(error)}`);
-
-                return new Promise<void>((resolve) => setTimeout(resolve, 500)).then(attempt);
-            });
-
-    return attempt();
-};
+const waitForBroker = (url: string, timeoutMs: number): Promise<void> =>
+    retryUntil(
+        () => amqplib.connect(url).then((connection) => connection.close()),
+        timeoutMs,
+        500
+    ).catch((error: unknown) => {
+        throw new Error(`RabbitMQ never answered at ${url}: ${String(error)}`);
+    });
 
 /**
  * The vhost's connections, as the management API reports them — which is on its stats interval

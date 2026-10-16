@@ -6,7 +6,7 @@
 
 import '@tests/contract';
 import { api } from '@tests/http';
-import { withEnvironment, withEnvironmentOverrides } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 
 describe('GET /shop', () => {
     it('answers the seller, the currency, where it ships and where returns go, with no credential', async () => {
@@ -62,7 +62,7 @@ describe('GET /shop', () => {
     });
 
     it('leaves the VAT number out when the shop has none', () =>
-        withEnvironment('NODE_SHOP_VAT_NUMBER', '', async () => {
+        withEnvironmentOverrides({ NODE_SHOP_VAT_NUMBER: '' }, async () => {
             const response = await api().get('/shop');
 
             expect(response.body.data).not.toHaveProperty('vatNumber');

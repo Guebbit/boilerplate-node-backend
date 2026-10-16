@@ -12,6 +12,7 @@
 
 import net from 'node:net';
 import { containerEngine, containerEngineAvailable, startContainer } from '@tests/container-engine';
+import { retryUntil } from '@tests/eventually';
 
 const IMAGE = process.env.NODE_TEST_REDIS_IMAGE ?? 'docker.io/library/redis:7-alpine';
 
@@ -21,28 +22,24 @@ export interface TestRedis {
 }
 
 /** Resolves when Redis answers `PING`, or rejects once `timeoutMs` has passed. */
-const waitForPong = (port: number, timeoutMs: number): Promise<void> => {
-    const deadline = Date.now() + timeoutMs;
-
-    const attempt = (): Promise<void> =>
-        new Promise<void>((resolve, reject) => {
-            const socket = net.connect(port, '127.0.0.1');
-            socket.on('connect', () => socket.write('PING\r\n'));
-            socket.on('data', (chunk) => {
-                socket.end();
-                if (chunk.toString().startsWith('+PONG')) resolve();
-                else reject(new Error(`Redis answered ${chunk.toString().trim()}`));
-            });
-            socket.on('error', reject);
-        }).catch((error: unknown) => {
-            if (Date.now() > deadline)
-                throw new Error(`Redis never answered on ${String(port)}: ${String(error)}`);
-
-            return new Promise<void>((resolve) => setTimeout(resolve, 250)).then(attempt);
-        });
-
-    return attempt();
-};
+const waitForPong = (port: number, timeoutMs: number): Promise<void> =>
+    retryUntil(
+        () =>
+            new Promise<void>((resolve, reject) => {
+                const socket = net.connect(port, '127.0.0.1');
+                socket.on('connect', () => socket.write('PING\r\n'));
+                socket.on('data', (chunk) => {
+                    socket.end();
+                    if (chunk.toString().startsWith('+PONG')) resolve();
+                    else reject(new Error(`Redis answered ${chunk.toString().trim()}`));
+                });
+                socket.on('error', reject);
+            }),
+        timeoutMs,
+        250
+    ).catch((error: unknown) => {
+        throw new Error(`Redis never answered on ${String(port)}: ${String(error)}`);
+    });
 
 /**
  * A Redis to count in, and the way to stop it.

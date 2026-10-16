@@ -8,7 +8,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factories';
 import { outboxEventModel } from '@kernel/outbox';
 import { withTransaction } from '@infrastructure/runtime/database';
@@ -160,7 +160,7 @@ describe('giving a preorder claim back', () => {
 
     it('expiry of an unpaid hold gives the allowance back', async () => {
         const productId = await preorderProduct(5);
-        await withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', async () => {
+        await withEnvironmentOverrides({ NODE_RESERVATION_TTL_MINUTES: '0' }, async () => {
             await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 3)]);
         });
 

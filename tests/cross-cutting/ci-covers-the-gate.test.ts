@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { REPO_ROOT } from '@tests/paths';
 
 /**
  * Guard: every check `npm run complete` runs has a CI job behind it.
@@ -20,11 +21,9 @@ import path from 'node:path';
  * `mutation.yml` are nightly and deliberately absent from `complete`.
  */
 
-const ROOT = path.join(__dirname, '..', '..');
-
 const packageScripts = (): Record<string, string> =>
     (
-        JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
+        JSON.parse(readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')) as {
             scripts: Record<string, string>;
         }
     ).scripts;
@@ -56,7 +55,7 @@ const expand = (
 
 /** Every script name any workflow invokes, plus everything those names expand to. */
 const scriptsRunByCi = (all: Record<string, string>): Set<string> => {
-    const workflows = path.join(ROOT, '.github', 'workflows');
+    const workflows = path.join(REPO_ROOT, '.github', 'workflows');
     const named = readdirSync(workflows)
         .filter((file) => file.endsWith('.yml'))
         .flatMap((file) =>

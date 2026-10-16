@@ -10,8 +10,7 @@ import { settleOutboxNudges } from '@kernel/outbox';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct, productRepository } from '@modules/products/tests/factories';
-import { localeRepository } from '@modules/locales/repository';
-import { makeLocale } from '@modules/locales/factories';
+import { givenLocale } from '@modules/locales/tests/factories';
 import { translator } from '@infrastructure/i18n';
 
 setupTestDb();
@@ -40,9 +39,7 @@ const titleTooShort = () => {
 const FALLBACK = 'en';
 
 beforeEach(async () => {
-    await localeRepository.create(
-        makeLocale({ tag: FALLBACK, name: FALLBACK, nativeName: FALLBACK })
-    );
+    await givenLocale(FALLBACK);
 });
 
 describe('POST /products', () => {
@@ -218,7 +215,7 @@ describe('PUT /products/{id}', () => {
     // `translations` is part of the replaced representation too: a stored locale
     // the PUT leaves out is deleted, not kept. Keeping one is what PATCH is for.
     it('deletes every stored locale the PUT leaves out', async () => {
-        await localeRepository.create(makeLocale({ tag: 'it', name: 'it', nativeName: 'it' }));
+        await givenLocale('it');
         const { bearer } = await authenticateAsRole('editor');
         const created = await api()
             .post('/products')
@@ -248,7 +245,7 @@ describe('PUT /products/{id}', () => {
     });
 
     it('refuses a PUT whose translations leave out the fallback locale', async () => {
-        await localeRepository.create(makeLocale({ tag: 'it', name: 'it', nativeName: 'it' }));
+        await givenLocale('it');
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({ title: 'Bed', price: 10 });
 

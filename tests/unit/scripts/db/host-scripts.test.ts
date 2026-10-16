@@ -36,11 +36,10 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { getDatabaseUri } from '@infrastructure/runtime/database';
 import { setEnvironment } from '@tests/environment';
-
-const ROOT = path.join(__dirname, '../../../..');
+import { REPO_ROOT } from '@tests/paths';
 
 const packageScripts: Record<string, string> = JSON.parse(
-    readFileSync(path.join(ROOT, 'package.json'), 'utf8')
+    readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')
 ).scripts;
 
 const hostScript = packageScripts.host;

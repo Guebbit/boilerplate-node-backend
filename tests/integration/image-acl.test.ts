@@ -1,12 +1,10 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import sharp from 'sharp';
 import { api, authenticateAs } from '@tests/http';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { setupTestDb } from '@tests/setup-test-db';
-import { localeRepository } from '@modules/locales/repository';
-import { makeLocale } from '@modules/locales/factories';
-import { currentEnvironment } from '@infrastructure/config/store';
+import { givenLocale } from '@modules/locales/tests/factories';
+import { decodablePng, publicDirectory } from '@tests/images';
 
 /**
  * A client may never name a path in the image store — the cross-module rule behind
@@ -22,17 +20,13 @@ import { currentEnvironment } from '@infrastructure/config/store';
 
 // `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
 // runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
-const PUBLIC_DIRECTORY = path.resolve(currentEnvironment().NODE_PUBLIC_PATH!);
+const PUBLIC_DIRECTORY = publicDirectory();
 
 /** A decodable PNG: every upload without a broker is digested inline, so sharp must accept it. */
 let PNG_BYTES: Buffer;
 
 beforeAll(async () => {
-    PNG_BYTES = await sharp({
-        create: { width: 4, height: 4, channels: 3, background: { r: 10, g: 20, b: 30 } }
-    })
-        .png()
-        .toBuffer();
+    PNG_BYTES = await decodablePng();
 });
 
 setupTestDb();
@@ -97,7 +91,7 @@ describe('imageUrl is never a client-named path', () => {
     let userId: string;
 
     beforeEach(async () => {
-        await localeRepository.create(makeLocale({ tag: 'en', name: 'en', nativeName: 'en' }));
+        await givenLocale('en');
         const admin = await authenticateAs('admin');
         const user = await authenticateAs('user');
         adminBearer = admin.bearer;

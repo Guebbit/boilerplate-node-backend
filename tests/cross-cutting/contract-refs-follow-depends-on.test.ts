@@ -14,9 +14,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { isDeployed } from '@tests/paths';
-
-/** `src/modules`, resolved from this file. */
-const MODULES = path.join(__dirname, '..', '..', 'src', 'modules');
+import { MODULES_ROOT } from '@tests/paths';
 
 /** A sibling file reference: `$ref: '../<module>/openapi.yaml#...'`. */
 const SIBLING_REF = /\$ref:\s*['"]\.\.\/([a-z-]+)\/openapi\.yaml#/g;
@@ -29,12 +27,12 @@ interface CrossReference {
 
 /** Every module folder that ships a contract. */
 const withContract = (): string[] =>
-    readdirSync(MODULES, { withFileTypes: true })
+    readdirSync(MODULES_ROOT, { withFileTypes: true })
         .filter((entry) => entry.isDirectory())
         .map((entry) => entry.name)
         .filter((name) => {
             try {
-                readFileSync(path.join(MODULES, name, 'openapi.yaml'));
+                readFileSync(path.join(MODULES_ROOT, name, 'openapi.yaml'));
                 return true;
             } catch {
                 return false;
@@ -43,14 +41,14 @@ const withContract = (): string[] =>
 
 /** The siblings one module's contract refers to, one entry per reference. */
 const referencesOf = (module: string): CrossReference[] =>
-    [...readFileSync(path.join(MODULES, module, 'openapi.yaml'), 'utf8').matchAll(SIBLING_REF)]
+    [...readFileSync(path.join(MODULES_ROOT, module, 'openapi.yaml'), 'utf8').matchAll(SIBLING_REF)]
         .map((match) => ({ from: module, to: match[1] }))
         .filter(({ to }) => to !== module);
 
 /** What `module.yaml` says the module depends on. */
 const dependenciesOf = (module: string): string[] => {
     const { dependsOn } = parseYaml(
-        readFileSync(path.join(MODULES, module, 'module.yaml'), 'utf8')
+        readFileSync(path.join(MODULES_ROOT, module, 'module.yaml'), 'utf8')
     ) as { dependsOn?: string[] };
     return dependsOn ?? [];
 };

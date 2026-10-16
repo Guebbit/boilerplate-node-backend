@@ -1,11 +1,10 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
-import sharp from 'sharp';
 import { api, authenticateAs } from '@tests/http';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { setupTestDb } from '@tests/setup-test-db';
 import { maxUploadBytes } from '@infrastructure/http/middlewares/upload';
-import { currentEnvironment } from '@infrastructure/config/store';
+import { decodablePng, publicDirectory } from '@tests/images';
 
 /**
  * What actually reaches the disk.
@@ -23,7 +22,7 @@ import { currentEnvironment } from '@infrastructure/config/store';
 
 // `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
 // runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
-const UPLOAD_DIRECTORY = path.resolve(currentEnvironment().NODE_PUBLIC_PATH!, 'images');
+const UPLOAD_DIRECTORY = path.join(publicDirectory(), 'images');
 
 /**
  * A genuinely decodable PNG, not merely a magic-byte header.
@@ -37,11 +36,7 @@ const UPLOAD_DIRECTORY = path.resolve(currentEnvironment().NODE_PUBLIC_PATH!, 'i
 let PNG_BYTES: Buffer;
 
 beforeAll(async () => {
-    PNG_BYTES = await sharp({
-        create: { width: 4, height: 4, channels: 3, background: { r: 10, g: 20, b: 30 } }
-    })
-        .png()
-        .toBuffer();
+    PNG_BYTES = await decodablePng();
 });
 
 /**

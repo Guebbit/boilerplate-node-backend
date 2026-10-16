@@ -10,7 +10,7 @@
 import express from 'express';
 import supertest from 'supertest';
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { testCallerContext } from '@tests/callers';
 import { asReject } from '@tests/response';
 import { createUser, userRepository } from '@modules/users/tests/factories';
@@ -32,7 +32,7 @@ const refusals = () =>
 
 /** Run `body` with a mailbox budget of `limit` a day. */
 const withBudget = (limit: number, body: () => Promise<void>) =>
-    withEnvironment('NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX', String(limit), body);
+    withEnvironmentOverrides({ NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX: String(limit) }, body);
 
 /** A route behind the body-address limiter, answering 200 when the request gets through. */
 const routeBehindLimiter = async () => {

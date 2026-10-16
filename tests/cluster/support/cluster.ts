@@ -17,6 +17,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { startEphemeralMongo } from '@scenarios/support/ephemeral-mongo';
 import { startInProcessMongod } from '@scenarios/support/ephemeral-mongod';
+import { retryUntil } from '@tests/eventually';
 import { REPO_ROOT } from '@tests/paths';
 
 export interface Cluster {
@@ -53,27 +54,23 @@ const freePort = (): Promise<number> =>
 const MAX_CAPTURED_CHUNKS = 40;
 
 /** Resolves once something is accepting connections on `port`, or rejects after `timeoutMs`. */
-const waitForListening = (port: number, timeoutMs: number): Promise<void> => {
-    const deadline = Date.now() + timeoutMs;
-
-    const attempt = (): Promise<void> =>
-        new Promise<void>((resolve, reject) => {
-            const socket = net.connect(port, '127.0.0.1');
-            socket.on('connect', () => {
-                socket.end(() => resolve());
-            });
-            socket.on('error', reject);
-        }).catch((error: unknown) => {
-            if (Date.now() > deadline)
-                throw new Error(
-                    `The cluster never listened on ${String(port)} within ${String(timeoutMs)}ms: ${String(error)}`
-                );
-
-            return new Promise<void>((resolve) => setTimeout(resolve, 250)).then(attempt);
-        });
-
-    return attempt();
-};
+const waitForListening = (port: number, timeoutMs: number): Promise<void> =>
+    retryUntil(
+        () =>
+            new Promise<void>((resolve, reject) => {
+                const socket = net.connect(port, '127.0.0.1');
+                socket.on('connect', () => {
+                    socket.end(() => resolve());
+                });
+                socket.on('error', reject);
+            }),
+        timeoutMs,
+        250
+    ).catch((error: unknown) => {
+        throw new Error(
+            `The cluster never listened on ${String(port)} within ${String(timeoutMs)}ms: ${String(error)}`
+        );
+    });
 
 /**
  * `src/app.ts`'s own boot line, once per worker — the signal {@link waitForWorkers} counts.
@@ -100,23 +97,19 @@ const waitForWorkers = (
     workers: number,
     timeoutMs: number,
     countReady: () => number
-): Promise<void> => {
-    const deadline = Date.now() + timeoutMs;
-
-    const attempt = (): Promise<void> => {
-        if (countReady() >= workers) return Promise.resolve();
-        if (Date.now() > deadline)
-            return Promise.reject(
-                new Error(
-                    `Only ${String(countReady())}/${String(workers)} workers reported listening within ${String(timeoutMs)}ms`
-                )
-            );
-
-        return new Promise<void>((resolve) => setTimeout(resolve, 100)).then(attempt);
-    };
-
-    return attempt();
-};
+): Promise<void> =>
+    retryUntil(
+        () =>
+            countReady() >= workers
+                ? Promise.resolve()
+                : Promise.reject(
+                      new Error(
+                          `Only ${String(countReady())}/${String(workers)} workers reported listening within ${String(timeoutMs)}ms`
+                      )
+                  ),
+        timeoutMs,
+        100
+    );
 
 /**
  * Boot a cluster of `workers` processes with `env` layered over the defaults.

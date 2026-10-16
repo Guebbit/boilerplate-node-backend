@@ -8,7 +8,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment, withoutEnvironment, setEnvironment } from '@tests/environment';
+import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
 import { observePort } from '@tests/ports';
 import {
     createProduct,
@@ -52,7 +52,7 @@ const levelOf = async (productId: string) => {
  * file would expire the holds every other case here depends on.
  */
 const withoutWindow = (body: () => Promise<void>) =>
-    withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', body);
+    withEnvironmentOverrides({ NODE_RESERVATION_TTL_MINUTES: '0' }, body);
 
 describe('reserveForOrder', () => {
     it('holds every line or none of them', async () => {
@@ -148,7 +148,7 @@ describe('reserveForOrder', () => {
     });
 
     it('falls back to NODE_RESERVATION_TTL_MINUTES when no window is given', () =>
-        withEnvironment('NODE_RESERVATION_TTL_MINUTES', '45', async () => {
+        withEnvironmentOverrides({ NODE_RESERVATION_TTL_MINUTES: '45' }, async () => {
             const product = await createProduct({ onHand: 10 });
             const orderId = anOrderId();
             const before = Date.now();
@@ -165,7 +165,7 @@ describe('reserveForOrder', () => {
 
     // An unpaid hold takes stock from every other buyer, so the shipped window is short.
     it('holds a card checkout for 15 minutes when nothing configures it', () =>
-        withoutEnvironment(['NODE_RESERVATION_TTL_MINUTES'], async () => {
+        withEnvironmentOverrides({ NODE_RESERVATION_TTL_MINUTES: undefined }, async () => {
             const product = await createProduct({ onHand: 10 });
             const orderId = anOrderId();
             const before = Date.now();

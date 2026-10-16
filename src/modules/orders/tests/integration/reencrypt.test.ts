@@ -6,7 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { keyVersionOf } from '@infrastructure/security/versioned-secret';
@@ -34,7 +34,7 @@ describe('orders reencrypt', () => {
             notes: 'Leave with the concierge'
         });
 
-        await withEnvironment('NODE_PII_ENCRYPTION_KEY', ROTATED_PII_KEY, async () => {
+        await withEnvironmentOverrides({ NODE_PII_ENCRYPTION_KEY: ROTATED_PII_KEY }, async () => {
             const report = await ordersModule.reencrypt(false);
 
             expect(report.rewritten).toBe(6);

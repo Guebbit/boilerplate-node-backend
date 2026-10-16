@@ -24,7 +24,7 @@ import {
     refundForOrder,
     retryOpenRefunds
 } from '@modules/payments/services';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asAdmin, asCustomer, callerContextAs } from '@tests/callers';
@@ -280,7 +280,7 @@ describe('listRefunds', () => {
 
 describe('listAttention', () => {
     it('lists a stale provider refund, and drops it once the sweep has finished it', () =>
-        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
             const { payment } = await seedPayment({
                 amountRefunded: 10,
                 refunds: [
@@ -309,7 +309,7 @@ describe('listAttention', () => {
     it(
         'lists the oldest problem first, and no more than 100 from one source',
         () =>
-            withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+            withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
                 // Oldest of all, then 100 younger ones: 101 in the source, 100 may come back.
                 const oldest = await staleRefund(500);
                 await Promise.all(

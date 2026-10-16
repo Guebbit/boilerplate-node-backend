@@ -25,7 +25,7 @@ import { PAYMENT_FAILED } from '@modules/payments/events';
 import { paymentModel } from '@modules/payments/model';
 import { paymentRepository } from '@modules/payments/repository';
 import { presentPayment } from '@modules/payments/presenter';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { fakePaymentProvider, setFakeOutcome } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
@@ -171,7 +171,7 @@ describe('a late report on a cancelled payment', () => {
     });
 
     it('is skipped by the reconciliation sweep', () =>
-        withEnvironment('NODE_PAYMENT_RECONCILE_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_RECONCILE_MINUTES: '0' }, async () => {
             const { orderId, providerRef } = await cancelledOrder();
             await fakePaymentProvider.confirm(providerRef, 'pm_card_visa');
 

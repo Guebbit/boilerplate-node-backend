@@ -10,7 +10,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import {
@@ -582,7 +582,7 @@ describe('the delivery, across several cancels and returns', () => {
 
 describe('a cancellation whose refund the provider refuses', () => {
     it('stays closed, leaves the refund failed, and the payment sweep completes it', () =>
-        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
             const fixture = await partlyShipped();
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
 

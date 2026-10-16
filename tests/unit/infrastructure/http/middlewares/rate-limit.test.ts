@@ -14,7 +14,7 @@ import { ipKeyGenerator } from 'express-rate-limit';
 import type { Request, Response } from 'express';
 import { asStub } from '@tests/stub';
 import { rateLimitConfig } from '@infrastructure/http/config';
-import { withoutEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import {
     addressBlockOf,
     identityOf,
@@ -47,7 +47,7 @@ describe('rate limit defaults', () => {
         // The window is the load-bearing half of the pair: the same 100 requests spread over a
         // quarter of an hour is a session quota an ordinary browsing session trips. Unset first:
         // `tests/support/setup-environment.ts` raises it tenfold for the suites.
-        withoutEnvironment(['NODE_RATE_LIMIT_WINDOW_MS'], () => {
+        withEnvironmentOverrides({ NODE_RATE_LIMIT_WINDOW_MS: undefined }, () => {
             expect(rateLimitConfig().NODE_RATE_LIMIT_WINDOW_MS).toBe(60 * 1000);
             expect(DEFAULT_RATE_LIMIT_MAX).toBe(100);
             return Promise.resolve();

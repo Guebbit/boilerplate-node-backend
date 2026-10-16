@@ -6,7 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { observePort } from '@tests/ports';
 import { asReject, asSuccess } from '@tests/response';
 import { callerContextAs, testCallerContext } from '@tests/callers';
@@ -89,7 +89,7 @@ describe('create', () => {
     it('refuses a body over the deployment’s ceiling, and writes nothing', async () => {
         const { context } = await aCustomer();
 
-        await withEnvironment('NODE_EXAMPLE_BODY_MAX_LENGTH', '5', async () => {
+        await withEnvironmentOverrides({ NODE_EXAMPLE_BODY_MAX_LENGTH: '5' }, async () => {
             const refused = asReject(
                 await exampleService.create({ title: 'T', body: '123456' }, context)
             );
@@ -102,7 +102,7 @@ describe('create', () => {
     it('accepts a body exactly at the ceiling', async () => {
         const { context } = await aCustomer();
 
-        await withEnvironment('NODE_EXAMPLE_BODY_MAX_LENGTH', '5', async () => {
+        await withEnvironmentOverrides({ NODE_EXAMPLE_BODY_MAX_LENGTH: '5' }, async () => {
             asSuccess(await exampleService.create({ title: 'T', body: '12345' }, context));
         });
     });
@@ -328,7 +328,7 @@ describe('updateById', () => {
         const { user, context } = await aCustomer();
         const mine = await createExample({ userId: user.id });
 
-        await withEnvironment('NODE_EXAMPLE_BODY_MAX_LENGTH', '3', async () => {
+        await withEnvironmentOverrides({ NODE_EXAMPLE_BODY_MAX_LENGTH: '3' }, async () => {
             expect(
                 asReject(
                     await exampleService.updateById(String(mine._id), { body: 'abcd' }, context)

@@ -7,7 +7,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment, setEnvironment } from '@tests/environment';
+import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
 import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { createUser } from '@modules/users/tests/factories';
@@ -357,7 +357,7 @@ describe('a return on goods that have shipped', () => {
     );
 
     it('freezes who pays the postage when the return is opened', () =>
-        withEnvironment('NODE_RETURN_POSTAGE_PAYER', 'shop', async () => {
+        withEnvironmentOverrides({ NODE_RETURN_POSTAGE_PAYER: 'shop' }, async () => {
             const { user, orderId } = await orderIn(OrderStatus.delivered);
 
             const outcome = await createReturn(

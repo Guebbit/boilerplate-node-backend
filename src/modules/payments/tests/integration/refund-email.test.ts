@@ -16,16 +16,13 @@ import { orderService } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
-import {
-    createIntent,
-    confirmPayment,
-    refundByOrder,
-    refundForReturn
-} from '@modules/payments/services';
+import { refundByOrder, refundForReturn } from '@modules/payments/services';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/callers';
+import { eventually } from '@tests/eventually';
+import { payByCard } from '@modules/payments/tests/factories';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -46,21 +43,11 @@ afterEach(() => {
 });
 
 /**
- * Waits for `predicate` to turn true, polling.
- * @throws {Error} if `predicate` never turns true within `timeoutMs`
+ * Waits for `done`, letting each poll deliver the outbox pass that started meanwhile — the mail
+ * rides the outbox.
  */
-const waitUntil = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
-    const startedAt = Date.now();
-    while (!predicate()) {
-        if (Date.now() - startedAt > timeoutMs) throw new Error('waitUntil: timed out');
-        // The mail now rides the outbox: each poll lets a pass that started meanwhile deliver.
-        await settleOutboxNudges();
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-};
-
-/** Gives any straggler mail every chance to show up before an absence is asserted. */
-const settleQuietly = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 150));
+const waitForMails = (done: () => boolean): Promise<void> =>
+    eventually(() => settleOutboxNudges().then(done));
 
 /** The mails queued so far under one template name. */
 const mailsOf = (template: string) =>
@@ -81,13 +68,7 @@ const paidOrder = async () => {
     await inventoryService.reserveForOrder(String(order._id), [
         { productId: String(product._id), quantity: 2 }
     ]);
-    const intent = await createIntent(String(order._id), asCustomer(user.id));
-    await confirmPayment(
-        String((intent as { data?: { id?: string } }).data?.id),
-        'pm_card_visa',
-        asCustomer(user.id),
-        testCallerContext
-    );
+    await payByCard(order, user);
     // Delivery is after the response: let the relay publish the settlement's rows before the
     // test moves the order on, as the paid order of a real shop has them delivered long before.
     await settleOutboxNudges();
@@ -99,7 +80,7 @@ describe('a refund outside a return mails the buyer', () => {
         const { order, orderId } = await paidOrder();
 
         await refundByOrder(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
-        await waitUntil(() => mailsOf('payments.refund-issued').length > 0);
+        await waitForMails(() => mailsOf('payments.refund-issued').length > 0);
 
         expect(mailsOf('payments.refund-issued')[0][0].to).toBe(order.email);
         expect(dataOf('payments.refund-issued').body).toContain('30.00');
@@ -110,7 +91,7 @@ describe('a refund outside a return mails the buyer', () => {
         const { orderId } = await paidOrder();
 
         await refundByOrder(orderId, asAdmin(), callerContextAs('admin'), { amount: 100 });
-        await waitUntil(() => mailsOf('payments.refund-issued').length > 0);
+        await waitForMails(() => mailsOf('payments.refund-issued').length > 0);
 
         expect(dataOf('payments.refund-issued').detail).toContain('everything');
     });
@@ -119,9 +100,9 @@ describe('a refund outside a return mails the buyer', () => {
         const { orderId } = await paidOrder();
 
         await refundByOrder(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 });
-        await waitUntil(() => mailsOf('payments.refund-issued').length === 1);
+        await waitForMails(() => mailsOf('payments.refund-issued').length === 1);
         await refundByOrder(orderId, asAdmin(), callerContextAs('admin'), { amount: 70 });
-        await waitUntil(() => mailsOf('payments.refund-issued').length === 2);
+        await waitForMails(() => mailsOf('payments.refund-issued').length === 2);
 
         const [first, second] = mailsOf('payments.refund-issued').map((call) => call[2].detail);
         expect(first).toContain('part of what you paid');
@@ -133,7 +114,7 @@ describe('a refund outside a return mails the buyer', () => {
         mockEnqueueEmail.mockClear();
 
         await orderService.cancelOnRequestById(orderId, asCustomer(user.id), {}, testCallerContext);
-        await waitUntil(() => mailsOf('payments.refund-issued').length > 0);
+        await waitForMails(() => mailsOf('payments.refund-issued').length > 0);
 
         expect(mailsOf('orders.order-cancelled')).toHaveLength(1);
         expect(mailsOf('payments.refund-issued')).toHaveLength(1);
@@ -149,7 +130,7 @@ describe('a refund that must not mail', () => {
             { returnId: '64b64c4f4f4f4f4f4f4f4f4f', amount: 50, lines: [], shipping: 0 },
             testCallerContext
         );
-        await settleQuietly();
+        await settleOutboxNudges();
 
         expect(mailsOf('payments.refund-issued')).toHaveLength(0);
     });
@@ -161,7 +142,7 @@ describe('a refund that must not mail', () => {
         await expect(
             refundByOrder(orderId, asAdmin(), callerContextAs('admin'), { amount: 30 })
         ).rejects.toThrow('provider down');
-        await settleQuietly();
+        await settleOutboxNudges();
 
         expect(mailsOf('payments.refund-issued')).toHaveLength(0);
     });

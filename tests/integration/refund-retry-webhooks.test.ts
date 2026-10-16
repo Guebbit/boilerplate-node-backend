@@ -10,26 +10,22 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbox';
-import {
-    callerAs,
-    testCallerContext,
-    asCustomer,
-    TEST_TENANT_ID,
-    callerContextAs
-} from '@tests/callers';
+import { callerAs, asCustomer, TEST_TENANT_ID, callerContextAs } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
 import paymentsModule from '@modules/payments/module';
-import { createIntent, confirmPayment, retryOpenRefunds } from '@modules/payments/services';
+import { retryOpenRefunds } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import webhooksModule from '@modules/webhooks/module';
 import { create as createSubscription } from '@modules/webhooks/services/subscriptions';
 import { webhookDeliveryRepository } from '@modules/webhooks/repository';
+import { payByCard } from '@modules/payments/tests/factories';
+import { asSuccess } from '@tests/response';
 
 setupTestDb();
 
@@ -48,14 +44,8 @@ const paidOrder = async () => {
         [{ productId: String(product._id), quantity: 1 }],
         callerContextAs('admin')
     );
-    const order = created.data!;
-    const intent = await createIntent(String(order._id), asCustomer(user.id));
-    await confirmPayment(
-        String(intent.success && intent.data?.id),
-        'pm_card_visa',
-        asCustomer(user.id),
-        testCallerContext
-    );
+    const order = asSuccess(created).data;
+    await payByCard(order, user);
     // Delivery is after the response: let the relay publish the settlement's rows before the
     // test cancels, as a real cancel arrives a request later.
     await settleOutboxNudges();
@@ -119,7 +109,7 @@ it('refunds nothing twice and sends no second webhook when the row is delivered 
 });
 
 it('leaves a refund the provider refused open for the sweep, and answers the event', () =>
-    withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+    withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
         await subscribeToEverything();
         const { user, order } = await paidOrder();
         const orderId = String(order._id);

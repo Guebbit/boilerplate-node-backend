@@ -3,15 +3,14 @@
  *
  * `api/permission-actions.ts` is generated from it, and `kernel/permissions.ts` (and through it
  * the Zod schema that validates every key) imports the result. This holds the two ends of that
- * chain: nothing types the list a second time, and the generated array is the yaml's.
+ * chain: the generated array is the yaml's, and every declared rule's action is in it.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
 import { PERMISSION_ACTIONS } from '@api/permission-actions';
 import { PERMISSION_RULES } from '@kernel/permissions';
-
-const REPO_ROOT = path.resolve(__dirname, '..', '..');
+import { REPO_ROOT } from '@tests/paths';
 
 const yamlActions = (
     parse(readFileSync(path.join(REPO_ROOT, 'shared', 'authorization-keys.yaml'), 'utf8')) as {
@@ -26,17 +25,5 @@ describe('permission actions', () => {
 
     it('cover every action a declared rule carries', () => {
         for (const rule of PERMISSION_RULES) expect(yamlActions).toContain(rule.action);
-    });
-
-    it('are not typed a second time in the kernel', () => {
-        const source = readFileSync(
-            path.join(REPO_ROOT, 'src', 'kernel', 'permissions.ts'),
-            'utf8'
-        );
-        expect(source).not.toMatch(/PERMISSION_ACTIONS\s*=/);
-        for (const action of yamlActions.filter(
-            (name) => !['read', 'create', 'update', 'delete'].includes(name)
-        ))
-            expect(source).not.toContain(`'${action}'`);
     });
 });

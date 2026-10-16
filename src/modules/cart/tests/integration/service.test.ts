@@ -10,7 +10,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment, withoutEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 
 // The queue, not the copy: what checkout owes the customer is that a confirmation was DISPATCHED
@@ -83,10 +83,12 @@ const storedQuantity = async (userId: string, productId: string): Promise<number
  * Runs `body` with the per-line ceiling (`NODE_CART_LINE_MAX`) at the shipped default. Pinned
  * rather than left to the environment, so a developer's own `.env` value cannot move it.
  */
-const atDefault = (body: () => Promise<void>) => withEnvironment('NODE_CART_LINE_MAX', '10', body);
+const atDefault = (body: () => Promise<void>) =>
+    withEnvironmentOverrides({ NODE_CART_LINE_MAX: '10' }, body);
 
 /** Runs `body` with the per-line ceiling at the contract's hard 999, for the cases about that bound. */
-const atHardCap = (body: () => Promise<void>) => withEnvironment('NODE_CART_LINE_MAX', '999', body);
+const atHardCap = (body: () => Promise<void>) =>
+    withEnvironmentOverrides({ NODE_CART_LINE_MAX: '999' }, body);
 
 /**
  * Gives a user a default address — the checkout rule requires one for `standard`/`express`
@@ -1218,8 +1220,8 @@ describe('orderConfirm', () => {
 
 /** Runs `body` with `bank_transfer` offered — both required env vars, restored afterwards. */
 const withBankTransferConfigured = (body: () => Promise<void>) =>
-    withEnvironment('NODE_BANK_TRANSFER_BENEFICIARY', 'Guebbit Shop', () =>
-        withEnvironment('NODE_BANK_TRANSFER_IBAN', 'DE89370400440532013000', body)
+    withEnvironmentOverrides({ NODE_BANK_TRANSFER_BENEFICIARY: 'Guebbit Shop' }, () =>
+        withEnvironmentOverrides({ NODE_BANK_TRANSFER_IBAN: 'DE89370400440532013000' }, body)
     );
 
 describe('orderConfirm — paymentMethod', () => {
@@ -1249,8 +1251,8 @@ describe('orderConfirm — paymentMethod', () => {
     it('refuses bank_transfer when this deployment has not configured it', () =>
         // Explicitly unset: `tests/support/setup-environment.ts` configures transfer for the whole worker, so
         // "this deployment offers no transfer" is a state this case has to create.
-        withoutEnvironment(
-            ['NODE_BANK_TRANSFER_BENEFICIARY', 'NODE_BANK_TRANSFER_IBAN'],
+        withEnvironmentOverrides(
+            { NODE_BANK_TRANSFER_BENEFICIARY: undefined, NODE_BANK_TRANSFER_IBAN: undefined },
             async () => {
                 const user = await createUser();
                 await giveUserAnAddress(user.id);
@@ -1271,7 +1273,7 @@ describe('orderConfirm — paymentMethod', () => {
         'stamps paymentMethod and a payBy the configured hold-hours away',
         () =>
             withBankTransferConfigured(() =>
-                withEnvironment('NODE_BANK_TRANSFER_HOLD_HOURS', '48', async () => {
+                withEnvironmentOverrides({ NODE_BANK_TRANSFER_HOLD_HOURS: '48' }, async () => {
                     const user = await createUser();
                     await giveUserAnAddress(user.id);
                     const product = await createProduct();
@@ -1386,20 +1388,23 @@ describe('orderConfirm — paymentMethod', () => {
     });
 
     it('lets a stricter shop hold an account to a single open order', async () => {
-        await withEnvironment('NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT', '1', async () => {
-            const user = await createUser();
-            await giveUserAnAddress(user.id);
-            const product = await createProduct();
-            await createOrder(user, [toOrderItem(product)], {
-                status: 'pending',
-                paymentMethod: 'card'
-            });
-            await cartItemSetById(user.id, String(product._id), 1);
+        await withEnvironmentOverrides(
+            { NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: '1' },
+            async () => {
+                const user = await createUser();
+                await giveUserAnAddress(user.id);
+                const product = await createProduct();
+                await createOrder(user, [toOrderItem(product)], {
+                    status: 'pending',
+                    paymentMethod: 'card'
+                });
+                await cartItemSetById(user.id, String(product._id), 1);
 
-            const result = await orderConfirm(user.id, testCallerContext, undefined);
+                const result = await orderConfirm(user.id, testCallerContext, undefined);
 
-            expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT');
-        });
+                expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT');
+            }
+        );
     });
 
     it('does not count a cancelled order against the cap', async () => {

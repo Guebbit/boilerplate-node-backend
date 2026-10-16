@@ -6,7 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { orderService } from '@modules/orders';
 import { createProduct } from '@modules/products/tests/factories';
@@ -18,6 +18,7 @@ import { auditLogger } from '@infrastructure/adapters/logger';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { invoicingRepository } from '../../repository';
 import { invoicingService } from '../../services';
+import { eventually } from '@tests/eventually';
 
 /** A second, distinctly-addressed customer — `authenticateAs('user')` always mints the same
  * default address, which collides the second time one test needs two customers. */
@@ -44,16 +45,13 @@ setupTestDb();
 afterEach(emptyFileSandbox);
 
 /** Waits out the fire-and-forget `ORDER_STATUS_CHANGED` listener that freezes the invoice. */
-const waitUntilInvoiced = async (orderId: string, bearer: string, timeoutMs = 2000) => {
-    const startedAt = Date.now();
-    for (;;) {
-        const response = await api().get(`/orders/${orderId}/invoice`).set('Authorization', bearer);
-        if (response.status === 200) return;
-        if (Date.now() - startedAt > timeoutMs)
-            throw new Error('waitUntilInvoiced: timed out — still 404');
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-};
+const waitUntilInvoiced = (orderId: string, bearer: string): Promise<void> =>
+    eventually(() =>
+        api()
+            .get(`/orders/${orderId}/invoice`)
+            .set('Authorization', bearer)
+            .then((response) => response.status === 200)
+    );
 
 describe('GET /orders/{id}/invoice', () => {
     it('refuses a never-paid order with 404 ORDER_INVOICE_NOT_ISSUED', async () => {
@@ -177,7 +175,7 @@ describe('GET /orders/{id}/invoice — when the render queue is full', () => {
     // Retention 0 so the invoice is rendered on every download (the polling helper below included):
     // a stored copy would answer without ever reaching the renderer this case makes refuse.
     it('answers 503 SERVICE_UNAVAILABLE with Retry-After', () =>
-        withEnvironment('NODE_INVOICE_PDF_RETENTION_DAYS', '0', async () => {
+        withEnvironmentOverrides({ NODE_INVOICE_PDF_RETENTION_DAYS: '0' }, async () => {
             const { bearer, user } = await authenticateAs('user');
             const product = await createProduct();
             const order = await createOrder(user, [toOrderItem(product, 1)]);

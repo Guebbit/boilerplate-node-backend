@@ -10,24 +10,18 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { resetDomainEvents } from '@kernel/events';
-import {
-    callerAs,
-    testCallerContext,
-    asCustomer,
-    asAdmin,
-    TEST_TENANT_ID,
-    callerContextAs
-} from '@tests/callers';
+import { callerAs, asAdmin, TEST_TENANT_ID, callerContextAs } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
 import paymentsModule from '@modules/payments/module';
-import { createIntent, confirmPayment, refundByOrder } from '@modules/payments/services';
+import { refundByOrder } from '@modules/payments/services';
 import webhooksModule from '@modules/webhooks/module';
 import { create as createSubscription } from '@modules/webhooks/services/subscriptions';
 import { webhookDeliveryRepository } from '@modules/webhooks/repository';
-import type { WebhookDeliveryDocument } from '@modules/webhooks/model';
-import type { Lean } from '@infrastructure/persistence/create-repository';
+import { eventually } from '@tests/eventually';
+import { payByCard } from '@modules/payments/tests/factories';
+import { asSuccess } from '@tests/response';
 
 setupTestDb();
 
@@ -45,41 +39,17 @@ const paidOrder = async (price: number) => {
         [{ productId: String(product._id), quantity: 1 }],
         callerContextAs('admin')
     );
-    const order = created.data!;
-    const intent = await createIntent(String(order._id), asCustomer(user.id));
-    await confirmPayment(
-        String(intent.success && intent.data?.id),
-        'pm_card_visa',
-        asCustomer(user.id),
-        testCallerContext
-    );
+    const order = asSuccess(created).data;
+    await payByCard(order, user);
     return { user, order };
 };
 
-/**
- * `markRefunded` fires `PAYMENT_REFUNDED` fire-and-forget (`void emitDomainEvent(...)`, same
- * reasoning as `PAYMENT_SUCCEEDED` in `payments/services/settlement.ts`), so the delivery row lands after
- * `refundByOrder`'s own promise already resolved — polled, same pattern as
- * `payments/tests/integration/settlement-email.test.ts`'s `waitUntil`, since the fan-out is itself
- * two real Mongo round-trips (`findEnabled`, then `create`), not one microtask.
- * @throws {Error} if no matching delivery appears within `timeoutMs`
- */
-const waitForDelivery = async (
-    orderId: string,
-    timeoutMs = 2000
-): Promise<Lean<WebhookDeliveryDocument>> => {
-    const startedAt = Date.now();
-    for (;;) {
-        const [delivery] = await webhookDeliveryRepository.findAll({
-            tenant: TEST_TENANT_ID,
-            eventType: 'payment.refunded'
-        });
-        if (delivery) return delivery;
-        if (Date.now() - startedAt > timeoutMs)
-            throw new Error(`waitForDelivery: no payment.refunded delivery for order ${orderId}`);
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-};
+/** The `payment.refunded` deliveries recorded for the test tenant. */
+const refundDeliveries = () =>
+    webhookDeliveryRepository.findAll({
+        tenant: TEST_TENANT_ID,
+        eventType: 'payment.refunded'
+    });
 
 it('an admin refund fans out a payment.refunded delivery carrying the amount and currency', async () => {
     registerCheckoutModules([paymentsModule, webhooksModule]);
@@ -94,8 +64,11 @@ it('an admin refund fans out a payment.refunded delivery carrying the amount and
     expect(refunded.success).toBe(true);
     const currency = refunded.success ? refunded.data.currency : undefined;
 
-    const delivery = await waitForDelivery(String(order._id));
-    expect(delivery.payload).toMatchObject({
+    // `markRefunded` fires `PAYMENT_REFUNDED` fire-and-forget, so the delivery row lands after
+    // `refundByOrder` resolved: two real Mongo round-trips (`findEnabled`, then `create`).
+    await eventually(() => refundDeliveries().then((rows) => rows.length > 0));
+    const [delivery] = await refundDeliveries();
+    expect(delivery?.payload).toMatchObject({
         orderId: String(order._id),
         amount: 20,
         currency

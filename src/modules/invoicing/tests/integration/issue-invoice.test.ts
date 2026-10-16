@@ -10,6 +10,7 @@ import { freezeDate } from '@tests/clock';
 import { setEnvironment } from '@tests/environment';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { OrderStatus } from '@types';
 import usersModule from '@modules/users/module';
 import productsModule from '@modules/products/module';
@@ -25,6 +26,7 @@ import { decryptInvoiceParty } from '../../pii';
 import { invoicingRepository } from '../../repository';
 import { invoicingService } from '../../services';
 import { shopTimezone } from '@modules/shop';
+import { waitForInvoice } from '../factories';
 
 setupTestDb();
 
@@ -33,17 +35,6 @@ beforeEach(() => {
 });
 
 afterEach(() => resetDomainEvents());
-
-/** Waits out the fire-and-forget `ORDER_STATUS_CHANGED` listener that freezes the invoice. */
-const waitForInvoice = async (orderId: string, timeoutMs = 2000) => {
-    const startedAt = Date.now();
-    for (;;) {
-        const invoice = await invoicingRepository.findInvoiceByOrderId(orderId);
-        if (invoice) return invoice;
-        if (Date.now() - startedAt > timeoutMs) throw new Error('waitForInvoice: timed out');
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-};
 
 describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
     it('freezes an invoice, numbered, the moment the order reaches paid', async () => {
@@ -304,7 +295,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         const order = await createOrder(user, []);
 
         await orderService.markPaid(String(order._id));
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await settleOutboxNudges();
 
         await expect(
             invoicingRepository.findInvoiceByOrderId(String(order._id))

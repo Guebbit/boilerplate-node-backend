@@ -7,7 +7,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { testCallerContext, callerContextAs } from '@tests/callers';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { createUser } from '@modules/users/tests/factories';
@@ -328,7 +328,7 @@ describe('moveToCart', () => {
      */
     // A ceiling of one unit fills the line with a single add, whatever the shop's own default.
     it('forwards the cart 422 once the existing line is already full, instead of a 404', () =>
-        withEnvironment('NODE_CART_LINE_MAX', '1', async () => {
+        withEnvironmentOverrides({ NODE_CART_LINE_MAX: '1' }, async () => {
             const user = await createUser();
             const product = await createProduct();
             await cartService.cartItemAddById(user.id, String(product._id), 1);

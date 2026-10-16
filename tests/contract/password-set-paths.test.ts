@@ -22,6 +22,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
 import { plantToken } from '@modules/account/tests/factories';
+import { REPO_ROOT } from '@tests/paths';
 
 setupTestDb();
 
@@ -127,7 +128,7 @@ interface RawSpec {
 }
 
 /** Where the bundled contract sits on disk — `npm run contracts:bundle` writes it. */
-const SPEC_FILE = path.join(__dirname, '..', '..', 'openapi.yaml');
+const SPEC_FILE = path.join(REPO_ROOT, 'openapi.yaml');
 
 /** The schema name a request body points at, whatever its media type, or none. */
 const bodySchemaNames = (requestBody: unknown): string[] => {

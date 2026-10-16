@@ -18,9 +18,9 @@ import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { invoiceModel } from '../../model';
 import { decryptInvoiceParty } from '../../pii';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { keyVersionOf } from '@infrastructure/security/versioned-secret';
-import { invoicingRepository } from '../../repository';
+import { waitForInvoice } from '../factories';
 
 setupTestDb();
 
@@ -29,17 +29,6 @@ beforeEach(() => {
 });
 
 afterEach(() => resetDomainEvents());
-
-/** Waits out the fire-and-forget `ORDER_STATUS_CHANGED` listener that freezes the invoice. */
-const waitForInvoice = async (orderId: string, timeoutMs = 2000) => {
-    const startedAt = Date.now();
-    for (;;) {
-        const invoice = await invoicingRepository.findInvoiceByOrderId(orderId);
-        if (invoice) return invoice;
-        if (Date.now() - startedAt > timeoutMs) throw new Error('waitForInvoice: timed out');
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-};
 
 describe('invoicing reencrypt', () => {
     it('moves the buyer address to the newest key, and a second run changes nothing', async () => {
@@ -58,7 +47,7 @@ describe('invoicing reencrypt', () => {
         const invoice = await waitForInvoice(String(order._id));
         const rotation = 'v2:new-pii-key-material,v1:test-pii-encryption-key';
 
-        await withEnvironment('NODE_PII_ENCRYPTION_KEY', rotation, async () => {
+        await withEnvironmentOverrides({ NODE_PII_ENCRYPTION_KEY: rotation }, async () => {
             const first = await invoicingModule.reencrypt(false);
             expect(first.rewritten).toBe(5);
             const second = await invoicingModule.reencrypt(false);

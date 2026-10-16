@@ -28,8 +28,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
 import type { RequestInputSource } from '@infrastructure/http/request';
-
-const ROOT = path.resolve(__dirname, '../..');
+import { REPO_ROOT } from '@tests/paths';
 
 interface MountedRoute {
     method: string;
@@ -47,7 +46,7 @@ interface MountedRoute {
     controllerFile?: string;
 }
 
-const read = (relative: string): string => readFileSync(path.join(ROOT, relative), 'utf8');
+const read = (relative: string): string => readFileSync(path.join(REPO_ROOT, relative), 'utf8');
 
 /**
  * Every router file the app mounts, with the prefix it is mounted under.

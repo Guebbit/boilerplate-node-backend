@@ -11,7 +11,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, saveProduct, countersOf } from '@modules/products/tests/factories';
 import {
@@ -193,7 +193,7 @@ describe('create', () => {
     // The open-order cap is a checkout rule (`cart/services/checkout.ts`): an operator raising an
     // order for a customer is not the shopper the cap exists to stop.
     it('skips the open-order cap that guards checkout', () =>
-        withEnvironment('NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT', '1', async () => {
+        withEnvironmentOverrides({ NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: '1' }, async () => {
             const user = await createUser();
             const product = await createProduct({ price: 25 });
             const items = [{ productId: String(product._id), quantity: 1 }];
@@ -251,7 +251,7 @@ describe('create', () => {
     // `currency` is frozen the same way `orderNumber` is — read once, at creation, never
     // recomputed against whatever the deployment's config says later.
     it('freezes the shop currency at creation, unaffected by a later config change', () =>
-        withEnvironment('NODE_DEFAULT_CURRENCY', 'GBP', async () => {
+        withEnvironmentOverrides({ NODE_DEFAULT_CURRENCY: 'GBP' }, async () => {
             const user = await createUser();
             const product = await createProduct({ title: 'Keyboard', price: 25 });
 
@@ -265,7 +265,7 @@ describe('create', () => {
             ).data;
             expect(order.currency).toBe('GBP');
 
-            return withEnvironment('NODE_DEFAULT_CURRENCY', 'USD', async () => {
+            return withEnvironmentOverrides({ NODE_DEFAULT_CURRENCY: 'USD' }, async () => {
                 const reread = await orderRepository.findById(String(order._id));
                 expect(reread!.currency).toBe('GBP');
             });
@@ -323,13 +323,13 @@ describe('create', () => {
 
     describe('the admin order limits', () => {
         it('accepts exactly as many lines as NODE_ADMIN_ORDER_MAX_LINES', () =>
-            withEnvironment('NODE_ADMIN_ORDER_MAX_LINES', '2', async () => {
+            withEnvironmentOverrides({ NODE_ADMIN_ORDER_MAX_LINES: '2' }, async () => {
                 const created = await createWithLines([1, 1]);
                 expect(created.success).toBe(true);
             }));
 
         it('refuses one line over NODE_ADMIN_ORDER_MAX_LINES with 422, naming the limit, and writes nothing', () =>
-            withEnvironment('NODE_ADMIN_ORDER_MAX_LINES', '2', async () => {
+            withEnvironmentOverrides({ NODE_ADMIN_ORDER_MAX_LINES: '2' }, async () => {
                 const refused = asReject(await createWithLines([1, 1, 1]));
 
                 expect(refused.status).toBe(422);
@@ -339,7 +339,7 @@ describe('create', () => {
             }));
 
         it('accepts a quantity equal to NODE_ADMIN_ORDER_MAX_LINE_QUANTITY and refuses one more', () =>
-            withEnvironment('NODE_ADMIN_ORDER_MAX_LINE_QUANTITY', '3', async () => {
+            withEnvironmentOverrides({ NODE_ADMIN_ORDER_MAX_LINE_QUANTITY: '3' }, async () => {
                 const created = await createWithLines([3]);
                 expect(created.success).toBe(true);
 

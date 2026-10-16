@@ -117,7 +117,9 @@ describe('withSpan — error', () => {
     });
 
     it('still ends the span even when the callback throws', async () => {
-        await withSpan('failing-span-2', () => Promise.reject(new Error('boom'))).catch(() => {});
+        await expect(
+            withSpan('failing-span-2', () => Promise.reject(new Error('boom')))
+        ).rejects.toThrow('boom');
         const spans = exporter.getFinishedSpans();
         expect(spans.some((s) => s.name === 'failing-span-2')).toBe(true);
     });
@@ -128,9 +130,9 @@ describe('withSpan — error', () => {
     });
 
     it('records an exception event on the span', async () => {
-        await withSpan('exc-span', () => Promise.reject(new Error('exception message'))).catch(
-            () => {}
-        );
+        await expect(
+            withSpan('exc-span', () => Promise.reject(new Error('exception message')))
+        ).rejects.toThrow('exception message');
         const spans = exporter.getFinishedSpans();
         const span = spans.find((s) => s.name === 'exc-span');
         const exceptionEvent = span?.events.find((e) => e.name === 'exception');
@@ -140,7 +142,9 @@ describe('withSpan — error', () => {
 
     it('keeps the stack trace in a relaxed environment', async () => {
         setEnvironment({ NODE_ENV: 'development' });
-        await withSpan('dev-span', () => Promise.reject(new Error('x'))).catch(() => {});
+        await expect(withSpan('dev-span', () => Promise.reject(new Error('x')))).rejects.toThrow(
+            'x'
+        );
 
         const event = exporter
             .getFinishedSpans()
@@ -151,9 +155,9 @@ describe('withSpan — error', () => {
 
     it('records no stack trace and no message in production', async () => {
         setEnvironment({ NODE_ENV: 'production' });
-        await withSpan('prod-span', () =>
-            Promise.reject(new TypeError('dup key {email: "a@b.c"}'))
-        ).catch(() => {});
+        await expect(
+            withSpan('prod-span', () => Promise.reject(new TypeError('dup key {email: "a@b.c"}')))
+        ).rejects.toThrow(TypeError);
 
         const event = exporter
             .getFinishedSpans()

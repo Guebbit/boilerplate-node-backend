@@ -7,7 +7,7 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { setEnvironment, withEnvironment } from '@tests/environment';
+import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
 import { api, loginBearer } from '@tests/http';
 import { userRepository, createUser } from '@modules/users/tests/factories';
 import { mintSession } from '../factories';
@@ -80,7 +80,7 @@ describe('the send budget shared by 2FA and step-up', () => {
     });
 
     it('counts a 2FA send and a step-up send together, refusing the third', () =>
-        withEnvironment('NODE_MFA_ACCOUNT_SEND_MAX', '2', async () => {
+        withEnvironmentOverrides({ NODE_MFA_ACCOUNT_SEND_MAX: '2' }, async () => {
             const user = await userRepository.create({
                 username: 'oauthonly',
                 email: 'oauth@example.com',

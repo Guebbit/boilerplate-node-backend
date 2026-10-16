@@ -8,7 +8,8 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { currentEnvironment, overrideEnvironment } from '@infrastructure/config/store';
+import { currentEnvironment } from '@infrastructure/config/store';
+import { setEnvironment } from '@tests/environment';
 import { resolveSecretFiles } from '@infrastructure/config/secret-files';
 import { databaseConfig } from '@infrastructure/runtime/config';
 
@@ -205,7 +206,7 @@ describe('a password merged into its URL', () => {
 describe('through the config store', () => {
     it('hands a slice the resolved URL and leaves process.env without it', () => {
         directory = mkdtempSync(path.join(tmpdir(), 'secret-files-'));
-        const restore = overrideEnvironment({
+        setEnvironment({
             NODE_DB_URI: 'mongodb://api@database:27017/api',
             NODE_DB_PASSWORD_FILE: secretFile('db', 'from-file\n')
         });
@@ -214,7 +215,6 @@ describe('through the config store', () => {
             expect(process.env.NODE_DB_PASSWORD).toBeUndefined();
             expect(currentEnvironment().NODE_DB_PASSWORD).toBe('from-file');
         } finally {
-            restore();
             rmSync(directory, { recursive: true, force: true });
         }
     });

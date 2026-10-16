@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import type { ClientSession } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { withTransaction } from '@infrastructure/runtime/database';
 import {
     markDomainEventsWired,
@@ -143,7 +143,7 @@ describe('relayOutbox', () => {
     });
 
     it('reschedules a failed dispatch with backoff, and parks it dead after the last attempt', async () => {
-        await withEnvironment('NODE_OUTBOX_MAX_ATTEMPTS', '2', async () => {
+        await withEnvironmentOverrides({ NODE_OUTBOX_MAX_ATTEMPTS: '2' }, async () => {
             subscribe(() => true);
             await write(1);
 
@@ -164,7 +164,7 @@ describe('relayOutbox', () => {
     });
 
     it('does not let a dead event block the aggregate behind it', async () => {
-        await withEnvironment('NODE_OUTBOX_MAX_ATTEMPTS', '1', async () => {
+        await withEnvironmentOverrides({ NODE_OUTBOX_MAX_ATTEMPTS: '1' }, async () => {
             subscribe((n) => n === 1);
             await write(1);
             await write(2);

@@ -21,12 +21,14 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/callers';
+import { eventually } from '@tests/eventually';
 import { creditNoteNumberCounterModel } from '../../model';
 import { decryptInvoiceParty } from '../../pii';
 import { invoicingRepository } from '../../repository';
 import { invoicingService } from '../../services';
 import { shopTimezone } from '@modules/shop';
 import { OrderStatus } from '@types';
+import { waitForInvoice } from '../factories';
 
 /** The fake PSP's "always succeeds" reference (`scenarios/support/doubles/payments/fake.ts`). */
 const FAKE_SUCCESS_METHOD = 'pm_card_visa';
@@ -46,17 +48,6 @@ beforeEach(() => {
 
 afterEach(() => resetDomainEvents());
 
-/** Polls a fire-and-forget listener's own write until it lands, or gives up. */
-const waitUntil = async <T>(read: () => Promise<T | null>, timeoutMs = 2000): Promise<T> => {
-    const startedAt = Date.now();
-    for (;;) {
-        const value = await read();
-        if (value) return value;
-        if (Date.now() - startedAt > timeoutMs) throw new Error('waitUntil: timed out');
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-};
-
 /** A customer who paid 25.00 and whose invoice has been frozen. */
 const paidAndInvoiced = async (overrides: Parameters<typeof createOrder>[2] = {}) => {
     const user = await createUser();
@@ -71,17 +62,17 @@ const paidAndInvoiced = async (overrides: Parameters<typeof createOrder>[2] = {}
         asCustomer(user.id),
         testCallerContext
     );
-    const invoice = await waitUntil(() => invoicingRepository.findInvoiceByOrderId(orderId));
+    const invoice = await waitForInvoice(orderId);
     return { orderId, invoice };
 };
 
-/** Polls until the order has `count` credit notes. */
-const waitForNotes = (orderId: string, count: number) =>
-    waitUntil(() =>
-        invoicingRepository
-            .findCreditNotesByOrderId(orderId)
-            .then((notes) => (notes.length >= count ? notes : null))
+/** The order's credit notes, once it has `count` of them. */
+const waitForNotes = async (orderId: string, count: number) => {
+    await eventually(() =>
+        invoicingRepository.findCreditNotesByOrderId(orderId).then((notes) => notes.length >= count)
     );
+    return invoicingRepository.findCreditNotesByOrderId(orderId);
+};
 
 describe('issuing a credit note off PAYMENT_REFUNDED', () => {
     it('freezes a credit note, numbered in its own series, once the refund lands', async () => {
@@ -97,16 +88,10 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
             asCustomer(user.id),
             testCallerContext
         );
-        const invoice = await waitUntil(() =>
-            invoicingRepository.findInvoiceByOrderId(String(order._id))
-        );
+        const invoice = await waitForInvoice(String(order._id));
 
         await refundForOrder(String(order._id));
-        const [creditNote] = await waitUntil(() =>
-            invoicingRepository
-                .findCreditNotesByOrderId(String(order._id))
-                .then((notes) => (notes.length > 0 ? notes : null))
-        );
+        const [creditNote] = await waitForNotes(String(order._id), 1);
 
         // Both series independently start their own year at 1 — the SAME printed number on two
         // different documents is expected, not a collision; only `invoiceId`/`invoiceNumber`

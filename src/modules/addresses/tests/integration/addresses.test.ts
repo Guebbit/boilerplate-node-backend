@@ -6,7 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { asReject } from '@tests/response';
 import { createUser } from '@modules/users/tests/factories';
 // Relative, not the barrel: a module's own tests may not import its own `index.ts` (CLAUDE.md's
@@ -22,7 +22,8 @@ const labelsOf = (userId: string) =>
     addressService.list(userId).then((view) => view.addresses.map(({ label }) => label));
 
 /** Run `body` with the cap at 3, so a case does not write twenty entries. */
-const withCap = (body: () => Promise<void>) => withEnvironment('NODE_ADDRESS_BOOK_MAX', '3', body);
+const withCap = (body: () => Promise<void>) =>
+    withEnvironmentOverrides({ NODE_ADDRESS_BOOK_MAX: '3' }, body);
 
 const defaults = async (userId: string) => {
     const view = await addressService.list(userId);

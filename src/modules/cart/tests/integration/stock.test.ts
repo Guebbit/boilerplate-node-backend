@@ -8,7 +8,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
@@ -45,7 +45,7 @@ beforeEach(() => {
  * mid-run.
  */
 const withoutWindow = (body: () => Promise<void>) =>
-    withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', body);
+    withEnvironmentOverrides({ NODE_RESERVATION_TTL_MINUTES: '0' }, body);
 
 describe('checkout holds units without selling them', () => {
     it('a completed checkout reserves the ordered units and takes none off the shelf', async () => {

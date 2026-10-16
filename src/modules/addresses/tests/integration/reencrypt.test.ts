@@ -6,7 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
 import { keyVersionOf } from '@infrastructure/security/versioned-secret';
 import addressesModule from '../../module';
@@ -32,7 +32,7 @@ describe('addresses reencrypt', () => {
         await addressService.create(user.id, ADDRESS);
         const stored = () => addressBookModel.collection.findOne({ userId: user._id });
 
-        await withEnvironment('NODE_PII_ENCRYPTION_KEY', ROTATED_PII_KEY, async () => {
+        await withEnvironmentOverrides({ NODE_PII_ENCRYPTION_KEY: ROTATED_PII_KEY }, async () => {
             const dry = await addressesModule.reencrypt(true);
             expect(dry.rewritten).toBe(0);
             expect(dry.found['addressbooks.items.city']).toEqual({ v1: 1 });

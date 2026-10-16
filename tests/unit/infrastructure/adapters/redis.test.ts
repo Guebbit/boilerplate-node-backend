@@ -12,7 +12,7 @@ import {
     SocketTimeoutError
 } from 'redis';
 import { configuredRedisUrl, isRedisConnectionError } from '@infrastructure/adapters/redis';
-import { overrideEnvironment } from '@infrastructure/config/store';
+import { setEnvironment } from '@tests/environment';
 
 describe('isRedisConnectionError', () => {
     // The real classes, as node-redis throws them — each reports `.name === 'Error'`.
@@ -34,30 +34,24 @@ describe('isRedisConnectionError', () => {
 
 describe('configuredRedisUrl', () => {
     it('assembles the URL from host and port, and puts the password in it encoded', () => {
-        const restore = overrideEnvironment({
+        setEnvironment({
             NODE_REDIS_URL: undefined,
             NODE_REDIS_HOST: 'cache',
             NODE_REDIS_PORT: '6379',
             NODE_REDIS_PASSWORD: 'p@ss/w#d'
         });
-        try {
-            expect(configuredRedisUrl()).toBe('redis://:p%40ss%2Fw%23d@cache:6379');
-        } finally {
-            restore();
-        }
+
+        expect(configuredRedisUrl()).toBe('redis://:p%40ss%2Fw%23d@cache:6379');
     });
 
     it('carries no credentials when no password is set', () => {
-        const restore = overrideEnvironment({
+        setEnvironment({
             NODE_REDIS_URL: undefined,
             NODE_REDIS_HOST: 'cache',
             NODE_REDIS_PORT: '6379',
             NODE_REDIS_PASSWORD: undefined
         });
-        try {
-            expect(configuredRedisUrl()).toBe('redis://cache:6379');
-        } finally {
-            restore();
-        }
+
+        expect(configuredRedisUrl()).toBe('redis://cache:6379');
     });
 });

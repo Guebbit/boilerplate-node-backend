@@ -1,4 +1,5 @@
 import { setupTestDb } from '@tests/setup-test-db';
+import { eventually } from '@tests/eventually';
 import {
     leaseModel,
     withLease,
@@ -22,18 +23,6 @@ setupTestDb();
 /** A minute — long enough that nothing in these cases expires by accident. */
 const MINUTE_MS = 60_000;
 
-/**
- * Poll until `name`'s lease document exists — confirmation that a prior `withLease` call's
- * acquisition has actually landed, rather than guessing with a fixed `setTimeout`.
- */
-const waitForLeaseOwner = async (name: string): Promise<void> => {
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-        if (await leaseModel.exists({ _id: name })) return;
-        await new Promise((resolve) => setTimeout(resolve, 5));
-    }
-    throw new Error(`lease "${name}" was never acquired`);
-};
-
 describe('withLease', () => {
     it('runs the body for only one of two callers contending for the same held lease', async () => {
         const started: number[] = [];
@@ -48,7 +37,10 @@ describe('withLease', () => {
                 finishFirst = () => resolve(1);
             });
         });
-        await waitForLeaseOwner('scheduled-jobs-test.fresh');
+        // The first acquisition has landed once its lease document exists.
+        await eventually(() =>
+            leaseModel.exists({ _id: 'scheduled-jobs-test.fresh' }).then(Boolean)
+        );
 
         const second = withLease('scheduled-jobs-test.fresh', MINUTE_MS, () => {
             started.push(2);

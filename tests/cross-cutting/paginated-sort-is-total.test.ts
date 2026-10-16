@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { isDeployed } from '@tests/paths';
+import { REPO_ROOT } from '@tests/paths';
 
 /**
  * Guard: a `$sort` that a `$skip` pages through must be TOTAL — its last key unique.
@@ -20,7 +21,7 @@ import { isDeployed } from '@tests/paths';
  * including the ones nobody has written yet.
  */
 
-const SOURCE_ROOT = path.join(__dirname, '..', '..', 'src');
+const SOURCE_ROOT = path.join(REPO_ROOT, 'src');
 
 /** Keys that make a sort total. `_id` is the primary key; a model may name its own unique field. */
 const UNIQUE_KEYS = new Set(['_id', 'id']);

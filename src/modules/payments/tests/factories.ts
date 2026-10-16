@@ -1,19 +1,20 @@
 /**
  * @module
- * Payments test factories — a bank-transfer order as the checkout leaves it, with its transfer
- * payment opened through the module's own door (`order.created`'s listener), so a test that needs
+ * Payments test factories — paying an order by card, and a bank-transfer order as the checkout
+ * leaves it, with its transfer payment opened through the module's own door (`order.created`'s listener), so a test that needs
  * "an order waiting for a transfer" gets the reference, the deadline and the `requires_action` row a
  * real one has. Writes past nothing: the helper is the listener, called once.
  */
 
 import { Types } from 'mongoose';
+import { asCustomer, testCallerContext } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import type { OrderDocument } from '@modules/orders';
 import { buildReference } from '../domain';
-import { openTransferPayment } from '../services';
+import { openTransferPayment, paymentService } from '../services';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 
@@ -48,4 +49,21 @@ export const transferOrder = async (
     const payment = await paymentRepository.findByOrderId(id.toHexString());
     if (!payment) throw new Error('the transfer payment did not open');
     return { order, payment, reference: buildReference(id.toHexString()) };
+};
+
+/**
+ * Pays `order` by card through the fake provider: the buyer opens an intent, then confirms it with
+ * the provider's always-approved test card. Delivery of the settlement's events is after the
+ * response — a test that moves the order on settles the outbox itself.
+ *
+ * @param order - the order to pay
+ * @param user - the buyer
+ * @throws {Error} when the intent is refused
+ */
+export const payByCard = async (order: OrderDocument, user: UserDocument): Promise<void> => {
+    const buyer = asCustomer(user.id);
+    const intent = await paymentService.createIntent(String(order._id), buyer);
+    if (!intent.success) throw new Error('intent refused');
+
+    await paymentService.confirmPayment(intent.data.id, 'pm_card_visa', buyer, testCallerContext);
 };

@@ -24,7 +24,7 @@ import { asReject, asSuccess } from '@tests/response';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { accountAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
-import { setEnvironment, withEnvironment } from '@tests/environment';
+import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
 
 /*
  * The analytics port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
@@ -265,7 +265,7 @@ describe('signup', () => {
     });
 
     it('stamps the configured terms version, and records no consent date when none was asked', async () => {
-        await withEnvironment('NODE_TERMS_VERSION', '2026-10', () =>
+        await withEnvironmentOverrides({ NODE_TERMS_VERSION: '2026-10' }, () =>
             accountService
                 .signup(
                     {

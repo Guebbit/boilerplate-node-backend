@@ -10,9 +10,13 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { checkoutAs } from '@tests/checkout-as';
 import { requestAndDownloadExport } from '@tests/account-export';
+import { eventually } from '@tests/eventually';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
+import { deliveryService } from '@modules/delivery';
+import { carryOrderTo, fulfillmentOrdersOf } from '@modules/delivery/tests/factories';
+import { OrderStatus } from '@types';
 import { createIntent, confirmPayment, paymentService } from '@modules/payments';
 import { invoicingService } from '@modules/invoicing';
 import { asAdmin, asCustomer, callerContextAs, testCallerContext } from '@tests/callers';
@@ -26,15 +30,6 @@ setupTestDb();
 
 // A requested export is built in the background and written to the sandbox: wait, then sweep.
 afterEach(() => settleInlineExports().then(emptyFileSandbox));
-
-/** Polls until a fire-and-forget listener's write has landed (the count reaches 1), or gives up. */
-const waitForCount = async (count: () => Promise<number>, timeoutMs = 3000): Promise<void> => {
-    const startedAt = Date.now();
-    while ((await count()) < 1) {
-        if (Date.now() - startedAt > timeoutMs) throw new Error('waitForCount: timed out');
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-};
 
 /** The metadata an exported session may carry, and nothing more: never a credential. */
 const EXPORTED_SESSION_KEYS = new Set(['id', 'createdAt', 'expiration', 'lastUsedAt', 'device']);
@@ -97,12 +92,12 @@ describe('POST /account/export', () => {
             asCustomer(user.id),
             testCallerContext
         );
-        await waitForCount(() =>
-            invoicingService.findInvoiceForOrder(orderId).then((row) => +(row !== null))
+        await eventually(() =>
+            invoicingService.findInvoiceForOrder(orderId).then((row) => row !== null)
         );
         await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
-        await waitForCount(() =>
-            invoicingService.findCreditNotesForOrder(orderId).then((rows) => rows.length)
+        await eventually(() =>
+            invoicingService.findCreditNotesForOrder(orderId).then((rows) => rows.length > 0)
         );
         const added = await api()
             .post('/cart')
@@ -124,6 +119,35 @@ describe('POST /account/export', () => {
             documentFields
         ]);
         expect(data.cart).toEqual([{ productId: String(product._id), quantity: 2 }]);
+    });
+
+    it('carries a shipment and a held fulfillment order, and satisfies the contract', async () => {
+        const { user, bearer } = await authenticateAs('user');
+        const shirt = await createProduct({ price: 25, onHand: 5 });
+        const shipped = await createOrder(user, [toOrderItem(shirt, 1)]);
+        await carryOrderTo(String(shipped._id), 'shipped');
+        const waiting = await createOrder(user, [toOrderItem(shirt, 1)]);
+        await forceOrderStatus(String(waiting._id), OrderStatus.processing);
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(waiting._id));
+        await deliveryService.holdFulfillmentOrder(
+            String(fulfillmentOrder._id),
+            { reason: 'high_risk', note: 'rang twice' },
+            asAdmin(),
+            callerContextAs('admin')
+        );
+
+        const response = await requestAndDownloadExport(bearer);
+
+        const data = response.data as {
+            shipments: { orderId: string; trackingCode?: string }[];
+            fulfillmentOrders: { orderId: string; holdNote?: string }[];
+        };
+        expect(data.shipments).toEqual([
+            expect.objectContaining({ orderId: String(shipped._id), trackingCode: 'TRK-CARRIED01' })
+        ]);
+        expect(data.fulfillmentOrders).toContainEqual(
+            expect.objectContaining({ orderId: String(waiting._id), holdNote: 'rang twice' })
+        );
     });
 
     it("never includes another account's orders", async () => {

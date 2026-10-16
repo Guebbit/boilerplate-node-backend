@@ -22,7 +22,13 @@
 
 import { stopLimitsRedis } from '@infrastructure/adapters/limits-redis';
 import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
+import express from 'express';
+import type { AddressInfo } from 'node:net';
+import type { Request, RequestHandler } from 'express';
 import { setEnvironment } from '@tests/environment';
+import { asStub } from '@tests/stub';
+import { withReloadedRateLimits } from '@tests/rate-limit-harness';
+import type { AuthContext } from '@types';
 
 /** How many times a `connect()` was asked for across the run, whatever the client instance. */
 let connectCalls = 0;
@@ -133,5 +139,71 @@ describe('the rate limiter’s Redis connection', () => {
         return Promise.resolve(store.increment('a')).then(() => {
             expect(connectCalls).toBe(0);
         });
+    });
+});
+
+/*
+ * Two budgets keyed alike on one request are two counters, not one hit counted twice.
+ *
+ * `POST /payments/:id/confirm` mounts the attempt and the decline budgets, both keyed on the
+ * account. With the limits Redis configured, `express-rate-limit` tells stores apart by their
+ * `prefix`; a store without one made the pair read as `ERR_ERL_DOUBLE_COUNT`. The Redis here is
+ * unreachable on purpose: the counters fall back to memory, but the store wrappers are the same
+ * ones a working Redis runs behind. It is the one case that fails if the store's `prefix` is
+ * dropped.
+ */
+
+/** Stands in for `getAuth` resolving one account — only `.id` is read by `accountIdOf`. */
+const asAccount = (id: string): RequestHandler => {
+    return (request: Request, _response, next) => {
+        request.authContext = asStub<AuthContext>({ id });
+        next();
+    };
+};
+
+describe('payment budgets keyed on the same account, counted through a Redis-backed store', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+        jest.resetModules();
+    });
+
+    it('are not reported as one hit counted twice on POST /payments/:id/confirm', async () => {
+        const reported: string[] = [];
+        const { attempt, decline } = await withReloadedRateLimits(
+            async () => {
+                const { logger } = await import('@infrastructure/adapters/logger');
+                jest.spyOn(logger, 'error').mockImplementation((...problems: unknown[]) => {
+                    for (const problem of problems)
+                        if (problem instanceof Error)
+                            reported.push((problem as { code?: string }).code ?? problem.message);
+                });
+                return import('@modules/payments/rate-limits');
+            },
+            { NODE_RATE_LIMIT_REDIS_URL: 'redis://127.0.0.1:1' },
+            (limits) => ({
+                attempt: limits.paymentConfirmAttemptLimiter,
+                decline: limits.paymentConfirmDeclineLimiter
+            })
+        );
+
+        const app = express();
+        app.use(asAccount('account-1'));
+        app.post('/confirm', attempt, decline, (_request, response) => {
+            response.status(200).json({ success: true });
+        });
+        // A real listener and `fetch`, not supertest: this is a store test, and a unit test may not
+        // boot the app. Port 0 asks the OS for a free one.
+        const server = app.listen(0);
+        try {
+            const { port } = server.address() as AddressInfo;
+            const answer = await fetch(`http://127.0.0.1:${String(port)}/confirm`, {
+                method: 'POST'
+            });
+            expect(answer.status).toBe(200);
+        } finally {
+            server.close();
+        }
+
+        expect(reported).not.toContain('ERR_ERL_DOUBLE_COUNT');
     });
 });

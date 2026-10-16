@@ -16,7 +16,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { OrderStatus } from '@types';
 import { inventoryService } from '@modules/inventory';
 import { invoicingService } from '@modules/invoicing';
-import { createIntent, confirmPayment, paymentService, PAYMENT_REFUNDED } from '@modules/payments';
+import { paymentService, PAYMENT_REFUNDED } from '@modules/payments';
 import paymentsModule from '@modules/payments/module';
 import invoicingModule from '@modules/invoicing/module';
 import returnsModule from '../../module';
@@ -24,6 +24,8 @@ import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asAdmin, asCustomer, testCallerContext } from '@tests/callers';
 import { createReturn } from '../../services';
 import { returnRepository } from '../../repository';
+import { eventually } from '@tests/eventually';
+import { payByCard } from '@modules/payments/tests/factories';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -40,18 +42,6 @@ beforeEach(() => {
 
 afterEach(() => resetDomainEvents());
 
-/**
- * Waits for work no relay pass awaits: the refund mail starts inside `announceRefund` with `void`,
- * so `settleOutboxNudges` returns before it is sent.
- */
-const waitFor = async (check: () => Promise<boolean>): Promise<void> => {
-    const startedAt = Date.now();
-    while (!(await check())) {
-        if (Date.now() - startedAt > 3000) throw new Error('waitFor: timed out');
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-};
-
 /** A customer who bought a shirt (30.00) and a mug (10.00), and paid for it by card. */
 const paidOrder = async () => {
     const user = await createUser({ email: 'withdrawer@example.com' });
@@ -63,9 +53,7 @@ const paidOrder = async () => {
         { productId: String(shirt._id), quantity: 1 },
         { productId: String(mug._id), quantity: 1 }
     ]);
-    const intent = await createIntent(orderId, asCustomer(user.id));
-    if (!intent.success) throw new Error('intent refused');
-    await confirmPayment(intent.data.id, 'pm_card_visa', asCustomer(user.id), testCallerContext);
+    await payByCard(order, user);
     // Delivery is after the response: let the relay publish the settlement's rows first.
     await settleOutboxNudges();
     return { user, orderId };
@@ -139,7 +127,9 @@ describe('a withdrawal before dispatch on a paid order', () => {
         const named = (template: string) =>
             mockEnqueueEmail.mock.calls.filter(([, name]) => name === template);
         await settleOutboxNudges();
-        await waitFor(() => Promise.resolve(named('payments.refund-issued').length > 0));
+        // The refund mail starts inside `announceRefund` with `void`, so `settleOutboxNudges`
+        // returns before it is sent.
+        await eventually(() => named('payments.refund-issued').length > 0);
 
         expect(named('payments.refund-issued')).toHaveLength(1);
         expect(named('returns.notice')).toHaveLength(1);

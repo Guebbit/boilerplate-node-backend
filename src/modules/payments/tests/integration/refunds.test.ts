@@ -13,27 +13,22 @@ import { createOrder, toOrderItem, readOrder } from '@modules/orders/tests/facto
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
-import {
-    createIntent,
-    confirmPayment,
-    recordOfflinePayment,
-    refundByOrder,
-    retryOpenRefunds
-} from '@modules/payments/services';
+import { recordOfflinePayment, refundByOrder, retryOpenRefunds } from '@modules/payments/services';
 import { PAYMENT_REFUNDED } from '@modules/payments/events';
 import { paymentRepository } from '@modules/payments/repository';
 import { paymentModel } from '@modules/payments/model';
 import { paymentsAuditActions } from '@modules/payments/audit';
 import { presentPayment } from '@modules/payments/presenter';
 import { PaymentProviderError } from '@modules/payments/providers';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asReject } from '@tests/response';
 import { observePort } from '@tests/ports';
 import * as auditPort from '@infrastructure/observability/audit';
-import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/callers';
+import { asCustomer, asAdmin, callerContextAs } from '@tests/callers';
+import { payByCard } from '@modules/payments/tests/factories';
 
 /* Replaced, not spied on — see `tests/support/ports.ts` for why. */
 jest.mock('@infrastructure/observability/audit', () =>
@@ -56,13 +51,7 @@ const paidOrder = async () => {
     const user = await createUser();
     const product = await createProduct({ price: 50 });
     const order = await createOrder(user, [toOrderItem(product, 2)]);
-    const intent = await createIntent(String(order._id), asCustomer(user.id));
-    await confirmPayment(
-        String((intent as { data?: { id?: string } }).data?.id),
-        'pm_card_visa',
-        asCustomer(user.id),
-        testCallerContext
-    );
+    await payByCard(order, user);
     // Delivery is after the response: let the relay publish the settlement's rows before a test
     // cancels, as a real cancel arrives a request later (a row waits behind its aggregate's earlier ones).
     await settleOutboxNudges();
@@ -254,7 +243,7 @@ describe('a refund that asks for too much', () => {
     // The sweep finishing the record while its opener is still at the provider: the opener lost the
     // conditional settle, and the money did go back, so it must not be told there was nothing.
     it('reports success to the caller whose open refund the sweep settled first', () =>
-        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
             const { orderId } = await paidOrder();
             const providerRefund = fakePaymentProvider.refund.bind(fakePaymentProvider);
             jest.spyOn(fakePaymentProvider, 'refund').mockImplementationOnce(async (...args) => {
@@ -332,7 +321,7 @@ describe('a refund the provider refuses', () => {
     });
 
     it('is finished by the sweep with the same idempotency key', () =>
-        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
             const spy = jest.spyOn(fakePaymentProvider, 'refund');
             const { orderId } = await paidOrder();
             spy.mockRejectedValueOnce(new Error('unreachable'));
@@ -349,7 +338,7 @@ describe('a refund the provider refuses', () => {
         }));
 
     it('completes the payment when the sweep finishes the last part', () =>
-        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
             const { orderId } = await paidOrder();
             await refund(orderId, { amount: 40 });
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));

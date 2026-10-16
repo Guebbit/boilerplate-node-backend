@@ -15,7 +15,7 @@ import { text } from 'node:stream/consumers';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setupTestDb } from '@tests/setup-test-db';
-import { setEnvironment, withEnvironment } from '@tests/environment';
+import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
 import { asReject } from '@tests/response';
 import { testCallerContext } from '@tests/callers';
 import { createUser, userRepository } from '@modules/users/tests/factories';
@@ -433,7 +433,7 @@ describe('one live export per account', () => {
 
 /** Run `body` with a mailbox budget of `limit` mails a day. */
 const withBudget = (limit: number, body: () => Promise<void>) =>
-    withEnvironment('NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX', String(limit), body);
+    withEnvironmentOverrides({ NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX: String(limit) }, body);
 
 describe('the mailbox budget', () => {
     it('answers 429 once the mailbox is spent, and the ready export stays downloadable', () =>

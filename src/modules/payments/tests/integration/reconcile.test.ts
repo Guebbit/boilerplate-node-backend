@@ -17,7 +17,7 @@ import { settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
 import { createIntent, reconcileStalePayments } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
@@ -47,7 +47,7 @@ const chargedAtProvider = async () => {
 
 describe('reconcileStalePayments', () => {
     it('settles a payment the provider charged but never told us about', () =>
-        withEnvironment('NODE_PAYMENT_RECONCILE_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_RECONCILE_MINUTES: '0' }, async () => {
             const { orderId } = await chargedAtProvider();
 
             const moved = await reconcileStalePayments();
@@ -80,7 +80,7 @@ describe('reconcileStalePayments', () => {
     });
 
     it('is a no-op once the payment has settled, so a late webhook and the sweep do not double up', () =>
-        withEnvironment('NODE_PAYMENT_RECONCILE_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_RECONCILE_MINUTES: '0' }, async () => {
             await chargedAtProvider();
             await reconcileStalePayments();
 

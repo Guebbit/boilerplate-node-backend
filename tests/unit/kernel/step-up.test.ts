@@ -19,7 +19,7 @@ import { asCustomer, asAdmin } from '../../support/callers';
 import { callerInScope } from '@kernel/permissions';
 import type { AuthContext } from '@types';
 import { requirePermission } from '@kernel/middlewares/authorizations';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 
 const emitAuditEvent = jest.fn();
 
@@ -95,7 +95,7 @@ describe('a key that demands step-up', () => {
     });
 
     it('reads the tier window per request, so a changed setting moves the line', () =>
-        withEnvironment('NODE_REAUTH_TIME_CRITICAL', '60', () => {
+        withEnvironmentOverrides({ NODE_REAUTH_TIME_CRITICAL: '60' }, () => {
             const response = makeResponse();
 
             requirePermission('delete', 'User')(

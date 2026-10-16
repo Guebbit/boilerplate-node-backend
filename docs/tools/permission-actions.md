@@ -46,8 +46,9 @@ runs the same script again because its `rm -rf ./api` removes the file.
 
 ## Guards
 
-- Backend: `tests/cross-cutting/permission-actions.test.ts` (the generated array equals the yaml, no
-  second list in the kernel) and `tests/unit/scripts/contracts/permission-actions-render.test.ts`.
+- Backend: `tests/cross-cutting/permission-actions.test.ts` (the generated array equals the yaml,
+  and every declared rule's action is in it) and
+  `tests/unit/scripts/contracts/permission-actions-render.test.ts`.
 - Frontend: `npm run check:permission-actions` compares the committed file with a fresh render.
 - Pair: `check:spec-identity` fails when the yaml copy differs from the backend's.
 

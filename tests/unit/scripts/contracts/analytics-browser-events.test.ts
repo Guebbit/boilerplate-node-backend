@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parse, stringify } from 'yaml';
@@ -7,8 +7,19 @@ import {
     withBrowserEvents
 } from '../../../../scripts/contracts/analytics-browser-events';
 
+/** The scratch directories this file made, removed after each case. */
+const made: string[] = [];
+
+afterEach(() => {
+    for (const folder of made.splice(0)) rmSync(folder, { recursive: true, force: true });
+});
+
 /** A scratch directory for the fragments one case writes. */
-const scratch = (): string => mkdtempSync(path.join(os.tmpdir(), 'browser-events-'));
+const scratch = (): string => {
+    const folder = mkdtempSync(path.join(os.tmpdir(), 'browser-events-'));
+    made.push(folder);
+    return folder;
+};
 
 /** Writes one fragment declaring the given schemas, returning its path. */
 const fragment = (schemas: Record<string, unknown>): string => {

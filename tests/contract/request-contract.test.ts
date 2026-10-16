@@ -41,274 +41,17 @@ import type { Response } from 'supertest';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { roleReaching } from '@tests/shopper-routes';
-import { createProduct } from '@modules/products/tests/factories';
 import { PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { ZodType } from 'zod';
 import { validPayload, invalidPayloads } from '@tests/contract-data';
 import { isNullable, listOperations, type Operation, type SchemaNode } from '@tests/spec-walk';
 import { seedWorld, buildUrl, requiredHeadersOf, OBJECT_ID, type World } from '@tests/spec-world';
 import * as zodSchemas from '@api/schemas.zod';
-import {
-    CreateUserBody,
-    CreateProductBody,
-    CreateOrderBody,
-    AddCartItemBody,
-    CreateFeedbackRequestBody,
-    SignupBody,
-    LoginBody
-} from '@api/schemas.zod';
-import { localeRepository } from '@modules/locales/repository';
-import { makeLocale } from '@modules/locales/factories';
+import { givenLocale } from '@modules/locales/tests/factories';
 
 setupTestDb();
 
 // `@tests/http`'s import boots the real app, which registers every enabled module's `translatables`.
-
-// CreateOrderBody's userId/items[].productId are opaque strings to the schema — the contract
-// has no way to say "must reference a real document" — so the generated payload is patched with
-// ids that actually exist before being sent, the same relinking problem (and fix) the
-// frontend's random mock profile solves for the same reason.
-//
-// `skipField` names whichever field an invalid-payload case is testing: patching it here would
-// silently undo the violation under test (most importantly `userId` itself — always patching it
-// meant every "userId is missing/wrong-type" case sent a valid userId anyway, defeating the
-// case entirely).
-const withRealOrderReferences = async (
-    payload: Record<string, unknown>,
-    skipField?: string
-): Promise<Record<string, unknown>> => {
-    // A shelf no generated quantity can exhaust, for the same reason the ids are patched in:
-    // `quantity ≤ available` is a business rule the schema cannot express, and this file only
-    // asks whether the API honours its own CONTRACT — the refusal has its own scenario tests.
-    // The same goes for the admin line limits: `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY` is a
-    // deployment knob under the contract's wider ceiling, so a generated quantity is clamped to 1.
-    const [product, { user }] = await Promise.all([
-        createProduct({ onHand: 1_000_000_000 }),
-        authenticateAs('user')
-    ]);
-    const result: Record<string, unknown> = { ...payload };
-    if (skipField !== 'userId') result.userId = String(user._id);
-    if (Array.isArray(payload.items))
-        result.items = (payload.items as { quantity: number }[]).map((item) => ({
-            ...item,
-            quantity: 1,
-            productId: String(product._id)
-        }));
-    return result;
-};
-
-// passwordConfirm must equal password — a cross-field business rule the schema itself doesn't
-// encode (each field only has its own independent length constraint), so it's patched in here
-// rather than in the generic contract-data walker.
-const withMatchingPasswordConfirm = (payload: Record<string, unknown>) => ({
-    ...payload,
-    passwordConfirm: payload.password
-});
-
-// `role` is `type: string` in the contract — no enum, because roles are DATA a deployment may
-// add to (`shared/authorization-roles.yaml`'s own header) — so a randomly generated string is
-// contract-legal but names no declared role, same class of gap as `userId`/`productId` above:
-// the schema cannot say "must reference something real". Patched to a staff role that actually exists
-// for the same reason those are patched with real ids.
-const withRealRole = (payload: Record<string, unknown>) => ({
-    ...payload,
-    role: 'editor'
-});
-
-describe('POST /users (contract-derived)', () => {
-    it('accepts a payload the contract declares legal', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const payload = withRealRole(validPayload(CreateUserBody));
-
-        const response = await api().post('/users').set('Authorization', bearer).send(payload);
-
-        expect(response.status).toBeGreaterThanOrEqual(200);
-        expect(response.status).toBeLessThan(300);
-    });
-
-    it.each(invalidPayloads(CreateUserBody))(
-        'rejects a payload where $field is $violation',
-        async ({ payload }) => {
-            const { bearer } = await authenticateAs('admin');
-            const response = await api().post('/users').set('Authorization', bearer).send(payload);
-
-            expect(response.status).toBe(422);
-            expect(response.body.success).toBe(false);
-        }
-    );
-});
-
-// `translations` is a `Record<locale, {...} | null>` to the schema — it cannot say "the key must
-// be this deployment's actual fallback locale, and a real row must exist for it". Same relinking
-// problem `withRealOrderReferences` solves for `userId`/`productId`, patched the same way.
-const withRealTranslations = (payload: Record<string, unknown>) => ({
-    ...payload,
-    translations: { en: { title: 'Generated Product Title' } }
-});
-
-describe('POST /products (contract-derived)', () => {
-    beforeEach(async () => {
-        await localeRepository.create(makeLocale({ tag: 'en', name: 'en', nativeName: 'en' }));
-    });
-
-    it('accepts a payload the contract declares legal', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const payload = withRealTranslations(validPayload(CreateProductBody));
-
-        const response = await api().post('/products').set('Authorization', bearer).send(payload);
-
-        expect(response.status).toBeGreaterThanOrEqual(200);
-        expect(response.status).toBeLessThan(300);
-    });
-
-    it.each(invalidPayloads(CreateProductBody))(
-        'rejects a payload where $field is $violation',
-        async ({ payload }) => {
-            const { bearer } = await authenticateAs('admin');
-            const response = await api()
-                .post('/products')
-                .set('Authorization', bearer)
-                .send(payload);
-
-            expect(response.status).toBe(422);
-            expect(response.body.success).toBe(false);
-        }
-    );
-});
-
-describe('POST /orders (contract-derived)', () => {
-    it('accepts a payload the contract declares legal', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const payload = await withRealOrderReferences(validPayload(CreateOrderBody));
-
-        const response = await api().post('/orders').set('Authorization', bearer).send(payload);
-
-        expect(response.status).toBeGreaterThanOrEqual(200);
-        expect(response.status).toBeLessThan(300);
-    });
-
-    it.each(invalidPayloads(CreateOrderBody))(
-        'rejects a payload where $field is $violation',
-        async ({ field, payload }) => {
-            const { bearer } = await authenticateAs('admin');
-            // Only patch in real references for fields other than the one under test — doing so
-            // would overwrite the violation under test.
-            const finalPayload =
-                field === 'items' ? payload : await withRealOrderReferences(payload, field);
-            const response = await api()
-                .post('/orders')
-                .set('Authorization', bearer)
-                .send(finalPayload);
-
-            expect(response.status).toBe(422);
-            expect(response.body.success).toBe(false);
-        }
-    );
-});
-
-describe('POST /cart (contract-derived)', () => {
-    it('accepts a payload the contract declares legal', async () => {
-        const [{ bearer }, product] = await Promise.all([authenticateAs('user'), createProduct()]);
-        // `quantity` pinned to 1: the generated one is the contract's own hard ceiling (999), which
-        // a shop's per-line cap (default 10) correctly refuses as a business rule, not as a shape.
-        const payload = {
-            ...validPayload(AddCartItemBody),
-            productId: String(product._id),
-            quantity: 1
-        };
-
-        const response = await api().post('/cart').set('Authorization', bearer).send(payload);
-
-        expect(response.status).toBeGreaterThanOrEqual(200);
-        expect(response.status).toBeLessThan(300);
-    });
-
-    it.each(invalidPayloads(AddCartItemBody))(
-        'rejects a payload where $field is $violation',
-        async ({ field, payload }) => {
-            const [{ bearer }, product] = await Promise.all([
-                authenticateAs('user'),
-                createProduct()
-            ]);
-            // productId is opaque to the schema (any string satisfies it) — only the quantity
-            // violation is a genuine schema-level rejection; keep productId pointing at a real
-            // product for every other case so the 422 can only be about the field under test.
-            const finalPayload =
-                field === 'productId' ? payload : { ...payload, productId: String(product._id) };
-            const response = await api()
-                .post('/cart')
-                .set('Authorization', bearer)
-                .send(finalPayload);
-
-            expect(response.status).toBe(422);
-            expect(response.body.success).toBe(false);
-        }
-    );
-});
-
-describe('POST /feedback/contact (contract-derived)', () => {
-    it('accepts a payload the contract declares legal', async () => {
-        const payload = validPayload(CreateFeedbackRequestBody);
-
-        const response = await api().post('/feedback/contact').send(payload);
-
-        expect(response.status).toBeGreaterThanOrEqual(200);
-        expect(response.status).toBeLessThan(300);
-    });
-
-    it.each(invalidPayloads(CreateFeedbackRequestBody))(
-        'rejects a payload where $field is $violation',
-        async ({ payload }) => {
-            const response = await api().post('/feedback/contact').send(payload);
-
-            expect(response.status).toBe(422);
-            expect(response.body.success).toBe(false);
-        }
-    );
-});
-
-describe('POST /account/signup (contract-derived)', () => {
-    it('accepts a payload the contract declares legal', async () => {
-        const payload = withMatchingPasswordConfirm(validPayload(SignupBody));
-
-        const response = await api().post('/account/signup').send(payload);
-
-        expect(response.status).toBeGreaterThanOrEqual(200);
-        expect(response.status).toBeLessThan(300);
-    });
-
-    it.each(invalidPayloads(SignupBody))(
-        'rejects a payload where $field is $violation',
-        async ({ field, payload }) => {
-            // Don't fix up passwordConfirm when IT is the field under test — that would
-            // overwrite the violation.
-            const finalPayload =
-                field === 'passwordConfirm' ? payload : withMatchingPasswordConfirm(payload);
-            const response = await api().post('/account/signup').send(finalPayload);
-
-            expect(response.status).toBe(422);
-            expect(response.body.success).toBe(false);
-        }
-    );
-});
-
-describe('POST /account/login (contract-derived, invalid payloads only)', () => {
-    // No "accepts a valid payload" case here: LoginBody only requires an email shape and a
-    // minimum password length, neither of which can correspond to a real account by
-    // construction, so a contract-valid login payload legitimately gets 401, not 2xx. That
-    // path already has real-credential coverage elsewhere (tests/contract/... auth flows); this
-    // block covers what's unique to contract-derived data — malformed payloads must still be
-    // rejected as 422 before credentials are even checked.
-    it.each(invalidPayloads(LoginBody))(
-        'rejects a payload where $field is $violation',
-        async ({ payload }) => {
-            const response = await api().post('/account/login').send(payload);
-
-            expect(response.status).toBe(422);
-            expect(response.body.success).toBe(false);
-        }
-    );
-});
 
 // ─── invalid QUERY parameters ──────────────────────────────────────────────────────────────────
 //
@@ -337,9 +80,8 @@ const adminQueryWith =
 
 /** A locale row real enough for `/locales/{locale}/...` to reach its own query validation, rather than 404ing on an unknown tag first. */
 const withRealLocale = async (): Promise<string> => {
-    const tag = 'qp';
-    await localeRepository.create(makeLocale({ tag, name: tag, nativeName: tag }));
-    return tag;
+    await givenLocale('qp');
+    return 'qp';
 };
 
 /** One way to reach an operation with an enum/pattern query parameter, over real HTTP. */
@@ -453,33 +195,27 @@ describe('invalid query parameters (contract-derived)', () => {
     );
 });
 
-// ─── every other write operation ───────────────────────────────────────────────────────────────
+// ─── every write operation ─────────────────────────────────────────────────────────────────────
 //
-// The seven blocks above are the ones that needed hand-written glue to reach a 2xx. Everything
-// else the spec declares under POST, PUT or PATCH is walked here from `listOperations()`, so a
-// write added tomorrow is covered without anyone remembering to add it. These cases assert the
-// weaker property that holds without a scenario behind each one: a body the contract declares
-// legal is never refused as a validation failure, and one it declares illegal always is.
+// Everything the spec declares under POST, PUT or PATCH is walked here from `listOperations()`, so
+// a write added tomorrow is covered without anyone remembering to add it. The property that holds
+// without a scenario behind each one: a body the contract declares legal is never refused as a
+// validation failure, and one it declares illegal always is. `STRICT_2XX` names the operations
+// whose legal body, once `FIELD_OVERRIDES` has relinked it, is also answered with a success.
 
-/** The operations the blocks above already drive, with the stronger 2xx assertion. */
-const BESPOKE_OPERATIONS = new Set([
+/** The operations whose relinked legal body must be answered with a 2xx, not just not refused. */
+const STRICT_2XX = new Set([
     'createUser',
     'createProduct',
     'createOrder',
     'addCartItem',
     'createFeedbackRequest',
-    'signup',
-    'login'
+    'signup'
 ]);
 
 /** Every POST/PUT/PATCH with a JSON body. */
-const ALL_WRITE_OPERATIONS = listOperations().filter(
+const WRITE_OPERATIONS = listOperations().filter(
     (operation) => ['post', 'put', 'patch'].includes(operation.method) && operation.bodySchema
-);
-
-/** The ones no block above owns — those get the weaker cases here in full. */
-const WRITE_OPERATIONS = ALL_WRITE_OPERATIONS.filter(
-    (operation) => !BESPOKE_OPERATIONS.has(operation.operationId ?? '')
 );
 
 /** `createUser` -> `CreateUserBody`: the name orval gives the Zod schema of an operation's body. */
@@ -535,12 +271,31 @@ type FieldOverride = (world: World, payload: Record<string, unknown>) => unknown
 /**
  * Fields the contract cannot describe well enough to generate: an `Id` is an opaque string to the
  * schema but an ObjectId to the database, a confirmation must equal the password beside it, a
- * permission must be one the caller holds. Same relinking as `withRealOrderReferences` above,
+ * permission must be one the caller holds. The relinking is done
  * once per operation, and never applied to the field a case is testing.
  */
 const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
-    createUser: { role: () => 'customer' },
+    // `role` is a plain string to the schema, because roles are data a deployment may add to.
+    createUser: { role: () => 'editor' },
+    // `translations` is a `Record<locale, ...>` to the schema: it cannot say the key must be the
+    // deployment's fallback locale, whose row must exist.
     createProduct: { translations: () => ({ en: { title: 'Generated Product Title' } }) },
+    createOrder: {
+        userId: (world) => world.userId,
+        // A shelf no generated quantity can exhaust, and the admin line limit is a deployment knob
+        // under the contract's wider ceiling: one unit of the seeded product.
+        items: (world, payload) =>
+            Array.isArray(payload.items)
+                ? (payload.items as Record<string, unknown>[]).map((item) => ({
+                      ...item,
+                      quantity: 1,
+                      productId: world.productId
+                  }))
+                : payload.items
+    },
+    // The generated quantity is the contract's hard ceiling (999); the shop's per-line cap refuses it.
+    addCartItem: { productId: (world) => world.productId, quantity: () => 1 },
+    signup: { passwordConfirm: (_world, payload) => payload.password },
     searchUsers: { id: () => [OBJECT_ID] },
     searchProducts: { id: () => [OBJECT_ID] },
     searchOrders: {
@@ -658,7 +413,7 @@ const LEGAL_CASES = STATEFUL_FREE_OPERATIONS.flatMap((operation) =>
 );
 
 /** One null case per nullable body field, per content type. */
-const NULL_CASES = ALL_WRITE_OPERATIONS.filter(
+const NULL_CASES = WRITE_OPERATIONS.filter(
     (operation) => !((operation.operationId ?? '') in NEEDS_STATE_OR_SIGNATURE)
 ).flatMap((operation) =>
     nullableFieldsOf(operation.bodySchema).flatMap((field) =>
@@ -699,20 +454,20 @@ const expectBodyAccepted = (response: Response): void => {
 describe('every write operation (contract-derived)', () => {
     // The fallback locale must exist as a row for a product or translation write to name it.
     beforeEach(async () => {
-        await localeRepository.create(makeLocale({ tag: 'en', name: 'en', nativeName: 'en' }));
+        await givenLocale('en');
     });
 
-    it('walks more than the seven hand-written blocks', () => {
+    it('walks every write operation the spec declares', () => {
         expect(WRITE_OPERATIONS.length).toBeGreaterThan(40);
-        expect(ALL_WRITE_OPERATIONS.length - WRITE_OPERATIONS.length).toBe(BESPOKE_OPERATIONS.size);
     });
 
     it('names only operations that exist in every table above', () => {
-        const known = new Set(ALL_WRITE_OPERATIONS.map((operation) => operation.operationId));
+        const known = new Set(WRITE_OPERATIONS.map((operation) => operation.operationId));
         const named = [
             ...Object.keys(NEEDS_STATE_OR_SIGNATURE),
             ...Object.keys(FIELD_OVERRIDES),
-            ...REFUSED_BEFORE_VALIDATION
+            ...REFUSED_BEFORE_VALIDATION,
+            ...STRICT_2XX
         ];
         expect(named.filter((id) => !known.has(id))).toEqual([]);
     });
@@ -730,6 +485,10 @@ describe('every write operation (contract-derived)', () => {
             const response = await sendWrite(operation, legalBody(operation), contentType);
 
             expectBodyAccepted(response);
+            if (!STRICT_2XX.has(operation.operationId ?? '')) return;
+
+            expect(response.status).toBeGreaterThanOrEqual(200);
+            expect(response.status).toBeLessThan(300);
         }
     );
 

@@ -17,6 +17,8 @@ import paymentsModule from '@modules/payments/module';
 import { resetDomainEvents } from '@kernel/events';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, testCallerContext } from '@tests/callers';
+import { eventually } from '@tests/eventually';
+import { settleOutboxNudges } from '@kernel/outbox';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -37,21 +39,6 @@ afterEach(() => {
 
 /** The reference the demo's own panel sends — an opaque handle, never a card number. */
 const GOOD_METHOD = 'pm_card_visa';
-
-/**
- * Waits for `predicate` to turn true, polling rather than a single microtask flush — the mail
- * send is fire-and-forget (`void mailBuyer(...)`, same reasoning as the `PAYMENT_SUCCEEDED` event
- * beside it) and its own first step is a REAL Mongo read (`userService.getById`), which does not
- * necessarily settle within one `setImmediate` tick of `confirmPayment`'s own promise resolving.
- * @throws {Error} if `predicate` never turns true within `timeoutMs`
- */
-const waitUntil = async (predicate: () => boolean, timeoutMs = 2000): Promise<void> => {
-    const startedAt = Date.now();
-    while (!predicate()) {
-        if (Date.now() - startedAt > timeoutMs) throw new Error('waitUntil: timed out');
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-};
 
 /** One customer with one order, ready to pay for it. */
 const orderFor = async () => {
@@ -76,7 +63,9 @@ describe('payment succeeded — the customer gets an email', () => {
             asCustomer(user.id),
             testCallerContext
         );
-        await waitUntil(paidMailSent);
+        // The mail send is fire-and-forget and its first step is a real Mongo read, so it does not
+        // settle within one tick of `confirmPayment` resolving.
+        await eventually(paidMailSent);
 
         const [envelope] = mockEnqueueEmail.mock.calls.find(
             ([, template]) => template === 'payments.payment-received'
@@ -96,7 +85,7 @@ describe('payment succeeded — the customer gets an email', () => {
         );
         // Nothing to wait ON here — a decline never reaches the mail send at all — so this proves
         // absence by giving any straggler every chance to show up before asserting it did not.
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await settleOutboxNudges();
 
         expect(paidMailSent()).toBe(false);
     });
@@ -107,11 +96,13 @@ describe('payment succeeded — the customer gets an email', () => {
         const paymentId = String((intent as { data?: { id?: string } }).data?.id);
 
         await confirmPayment(paymentId, GOOD_METHOD, asCustomer(user.id), testCallerContext);
-        await waitUntil(paidMailSent);
+        // The mail send is fire-and-forget and its first step is a real Mongo read, so it does not
+        // settle within one tick of `confirmPayment` resolving.
+        await eventually(paidMailSent);
         // Already `succeeded` — `SETTLEABLE_PAYMENT_STATUSES` excludes it, so this retry settles
         // nothing new; it must not re-mail the customer a second "payment received".
         await confirmPayment(paymentId, GOOD_METHOD, asCustomer(user.id), testCallerContext);
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await settleOutboxNudges();
 
         const paidCalls = mockEnqueueEmail.mock.calls.filter(
             ([, template]) => template === 'payments.payment-received'

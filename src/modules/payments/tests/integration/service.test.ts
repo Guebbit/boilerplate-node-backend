@@ -37,7 +37,7 @@ import { paymentRepository } from '@modules/payments/repository';
 import { paymentModel } from '@modules/payments/model';
 import { PAYMENT_SUCCEEDED } from '@modules/payments/events';
 import { ORDER_STATUS_CHANGED } from '@modules/orders';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { observePort } from '@tests/ports';
 import * as auditPort from '@infrastructure/observability/audit';
 import {
@@ -58,6 +58,7 @@ import {
     testCallerContext,
     callerContextAs
 } from '@tests/callers';
+import { payByCard } from '@modules/payments/tests/factories';
 
 // The audit port is replaced, not spied on — see `tests/support/ports.ts`.
 jest.mock('@infrastructure/observability/audit', () =>
@@ -82,13 +83,7 @@ const auth = (user: { id: string }) => asCustomer(user.id);
 /** A customer who paid: intent, then a good card. The fixture the money tests start from. */
 const paidOrder = async () => {
     const { user, order } = await orderFor();
-    const intent = await createIntent(String(order._id), auth(user));
-    await confirmPayment(
-        String((intent as { data?: { id?: string } }).data?.id),
-        GOOD_METHOD,
-        auth(user),
-        testCallerContext
-    );
+    await payByCard(order, user);
     return { user, order };
 };
 
@@ -484,7 +479,7 @@ describe('refund on cancel', () => {
      * record with the same idempotency key. The payment stays `succeeded` throughout.
      */
     it('keeps a failed refund open for the sweep instead of recording it as done', () =>
-        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
             const { user, order } = await orderFor();
             await createIntent(String(order._id), auth(user));
             const paymentId = String(
@@ -515,7 +510,7 @@ describe('refund on cancel', () => {
         }));
 
     it('leaves an open refund on an order lost mid-payment for the sweep to finish', () =>
-        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
             const { user, order } = await orderFor();
             const intent = await createIntent(String(order._id), auth(user));
             const paymentId = String((intent as { data?: { id?: string } }).data?.id);
@@ -569,7 +564,7 @@ describe('refund on cancel', () => {
      */
     it('refuses to refund through a provider this payment was never made with', () => {
         const retiredProvider = 'retired-psp';
-        return withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+        return withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
             const { user, order } = await orderFor();
             await createIntent(String(order._id), auth(user));
             const paymentId = String(
@@ -982,7 +977,7 @@ describe('in-flight settlement', () => {
      * The TTL is zeroed so an un-extended hold is already stale by the time the sweep below runs.
      */
     it('extends the hold to the bank-transfer window once the payment goes processing', () =>
-        withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_RESERVATION_TTL_MINUTES: '0' }, async () => {
             const { user, product, order } = await placedOrder(10, 3);
             const intent = await createIntent(String(order._id), auth(user));
 
@@ -1026,7 +1021,7 @@ describe('in-flight settlement', () => {
     });
 
     it('does not extend the hold for a mere challenge — only processing does', () =>
-        withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_RESERVATION_TTL_MINUTES: '0' }, async () => {
             const { user, product, order } = await placedOrder(10, 3);
             const intent = await createIntent(String(order._id), auth(user));
 

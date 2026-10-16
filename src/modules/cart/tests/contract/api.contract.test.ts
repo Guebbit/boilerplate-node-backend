@@ -12,7 +12,7 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole, staleBearerFor } from '@tests/http';
 import { checkoutAs, shownTotal } from '@tests/checkout-as';
-import { withEnvironment, withoutEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
@@ -108,7 +108,7 @@ describe('POST /cart', () => {
     });
 
     it('422s an add that would push a line past the per-line ceiling', () =>
-        withEnvironment('NODE_CART_LINE_MAX', '2', async () => {
+        withEnvironmentOverrides({ NODE_CART_LINE_MAX: '2' }, async () => {
             const { bearer, product } = await authenticateWithCart(2);
 
             const response = await api()
@@ -121,7 +121,7 @@ describe('POST /cart', () => {
         }));
 
     it('422s an add whose new line is already past the per-line ceiling', () =>
-        withEnvironment('NODE_CART_LINE_MAX', '10', async () => {
+        withEnvironmentOverrides({ NODE_CART_LINE_MAX: '10' }, async () => {
             const { bearer } = await authenticateAs('user');
             const product = await createProduct();
 
@@ -904,8 +904,8 @@ describe('POST /cart/checkout', () => {
     it('matches the error contract for an unoffered payment method', () =>
         // Explicitly unset: `tests/support/setup-environment.ts` configures transfer for the whole worker, so
         // "this deployment offers no transfer" is a state this case has to create.
-        withoutEnvironment(
-            ['NODE_BANK_TRANSFER_BENEFICIARY', 'NODE_BANK_TRANSFER_IBAN'],
+        withEnvironmentOverrides(
+            { NODE_BANK_TRANSFER_BENEFICIARY: undefined, NODE_BANK_TRANSFER_IBAN: undefined },
             async () => {
                 const { bearer } = await authenticateWithCart();
 
@@ -922,8 +922,12 @@ describe('POST /cart/checkout', () => {
         ['names card', { paymentMethod: 'card' }],
         ['names no method', {}]
     ])('refuses a checkout that %s when no card provider is configured', (_case, body) =>
-        withoutEnvironment(
-            ['NODE_PAYMENT_PROVIDER', 'NODE_BANK_TRANSFER_BENEFICIARY', 'NODE_BANK_TRANSFER_IBAN'],
+        withEnvironmentOverrides(
+            {
+                NODE_PAYMENT_PROVIDER: undefined,
+                NODE_BANK_TRANSFER_BENEFICIARY: undefined,
+                NODE_BANK_TRANSFER_IBAN: undefined
+            },
             async () => {
                 const { bearer } = await authenticateWithCart();
 
@@ -938,36 +942,39 @@ describe('POST /cart/checkout', () => {
     // The instructions are the payment's: the order is placed first, `order.created` opens the
     // transfer payment, and the buyer reads the instructions off it.
     it('matches the contract for a bank_transfer checkout, whose payment then carries the instructions', () =>
-        withEnvironment('NODE_BANK_TRANSFER_BENEFICIARY', 'Guebbit Shop', () =>
-            withEnvironment('NODE_BANK_TRANSFER_IBAN', 'DE89370400440532013000', async () => {
-                const { bearer } = await authenticateWithCart();
+        withEnvironmentOverrides({ NODE_BANK_TRANSFER_BENEFICIARY: 'Guebbit Shop' }, () =>
+            withEnvironmentOverrides(
+                { NODE_BANK_TRANSFER_IBAN: 'DE89370400440532013000' },
+                async () => {
+                    const { bearer } = await authenticateWithCart();
 
-                await api()
-                    .put('/cart/shipping-method')
-                    .set('Authorization', bearer)
-                    .send({ shippingMethodId: 'pickup' });
-                const response = await checkoutAs(bearer, { paymentMethod: 'bank_transfer' });
-                await settleOutboxNudges();
+                    await api()
+                        .put('/cart/shipping-method')
+                        .set('Authorization', bearer)
+                        .send({ shippingMethodId: 'pickup' });
+                    const response = await checkoutAs(bearer, { paymentMethod: 'bank_transfer' });
+                    await settleOutboxNudges();
 
-                expect(response.status).toBe(201);
-                expect(response.body.data.paymentMethod).toBe('bank_transfer');
-                expect(response.body.data.payBy).toEqual(expect.any(String));
-                expect(response.body.data).not.toHaveProperty('transferInstructions');
-                const payment = await api()
-                    .get(`/payments/order/${String(response.body.data.id)}`)
-                    .set('Authorization', bearer);
-                expect(payment.status).toBe(200);
-                expect(payment.body.data.nextAction).toEqual({
-                    type: 'bank_transfer',
-                    beneficiary: 'Guebbit Shop',
-                    // Grouped into 4s for display — see `bankTransferIbanFriendly`.
-                    iban: 'DE89 3704 0044 0532 0130 00',
-                    // The exact RF code is `buildReference`'s own concern
-                    // (`payments/tests/unit/transfer-reference.test.ts`) — this pins its shape.
-                    reference: expect.stringMatching(/^RF\d{2}[\dA-Z]{19}$/),
-                    payBy: response.body.data.payBy
-                });
-            })
+                    expect(response.status).toBe(201);
+                    expect(response.body.data.paymentMethod).toBe('bank_transfer');
+                    expect(response.body.data.payBy).toEqual(expect.any(String));
+                    expect(response.body.data).not.toHaveProperty('transferInstructions');
+                    const payment = await api()
+                        .get(`/payments/order/${String(response.body.data.id)}`)
+                        .set('Authorization', bearer);
+                    expect(payment.status).toBe(200);
+                    expect(payment.body.data.nextAction).toEqual({
+                        type: 'bank_transfer',
+                        beneficiary: 'Guebbit Shop',
+                        // Grouped into 4s for display — see `bankTransferIbanFriendly`.
+                        iban: 'DE89 3704 0044 0532 0130 00',
+                        // The exact RF code is `buildReference`'s own concern
+                        // (`payments/tests/unit/transfer-reference.test.ts`) — this pins its shape.
+                        reference: expect.stringMatching(/^RF\d{2}[\dA-Z]{19}$/),
+                        payBy: response.body.data.payBy
+                    });
+                }
+            )
         ));
 });
 

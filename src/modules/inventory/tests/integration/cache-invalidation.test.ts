@@ -6,7 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factories';
 import { inventoryService } from '../../services';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
@@ -51,7 +51,7 @@ describe('the products cache tag, cleared where stock is written', () => {
     it('clears it when the sweep releases an expired hold', async () => {
         const product = await createProduct({ onHand: 5 });
         // A zero-minute window: the hold is stale the moment it is taken.
-        await withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', async () => {
+        await withEnvironmentOverrides({ NODE_RESERVATION_TTL_MINUTES: '0' }, async () => {
             await inventoryService.reserveForOrder(anOrderId(), [
                 { productId: String(product._id), quantity: 1 }
             ]);

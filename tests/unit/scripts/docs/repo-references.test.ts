@@ -6,12 +6,16 @@
  *                   strips them before every such call.
  * `trackedTargets`: what a citation may resolve to — and what it may not.
  */
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { gitEnvironment, resolves, trackedTargets } from '../../../../scripts/docs/repo-references';
 import { setProcessEnvironment } from '@tests/environment';
+
+/** `execFile` without blocking the event loop. */
+const run = promisify(execFile);
 
 /** The three vars git exports into a hook's process — put back after every case by the harness. */
 const HOOK_VARS = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE'] as const;
@@ -48,20 +52,18 @@ describe('trackedTargets', () => {
     /** A scratch repo, so the case controls exactly which files git tracks. */
     let root: string;
 
-    beforeEach(() => {
-        root = mkdtempSync(path.join(os.tmpdir(), 'repo-references-'));
+    beforeEach(async () => {
+        root = await mkdtemp(path.join(os.tmpdir(), 'repo-references-'));
         // git: an empty repo, then stage files — `ls-files` lists the index, no commit needed.
-        execFileSync('git', ['init', '--quiet'], { cwd: root, env: gitEnvironment() });
+        await run('git', ['init', '--quiet'], { cwd: root, env: gitEnvironment() });
         for (const file of ['src/kept.ts', '.2brain/llm-wiki/src/gone.ts.md']) {
-            mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
-            writeFileSync(path.join(root, file), '');
+            await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+            await writeFile(path.join(root, file), '');
         }
-        execFileSync('git', ['add', '.'], { cwd: root, env: gitEnvironment() });
+        await run('git', ['add', '.'], { cwd: root, env: gitEnvironment() });
     });
 
-    afterEach(() => {
-        rmSync(root, { recursive: true, force: true });
-    });
+    afterEach(() => rm(root, { recursive: true, force: true }));
 
     it('resolves a tracked source file', () => {
         expect(resolves(trackedTargets(root).targets, 'src/kept.ts')).toBe(true);

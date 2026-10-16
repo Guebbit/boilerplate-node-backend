@@ -28,7 +28,7 @@ import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import type { ReadableSpan } from '@opentelemetry/sdk-trace';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { asStub } from '@tests/stub';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { NoopSpanProcessor } from '@opentelemetry/sdk-trace';
 import {
     buildProcessors,
@@ -60,9 +60,8 @@ describe('otel-sdk — buildProcessors', () => {
     });
 
     it('exports when only the traces-specific endpoint is set', async () => {
-        await withEnvironment(
-            'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT',
-            'http://localhost:4318/v1/traces',
+        await withEnvironmentOverrides(
+            { OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: 'http://localhost:4318/v1/traces' },
             () => {
                 expect(buildProcessors()[0]).not.toBeInstanceOf(NoopSpanProcessor);
                 return Promise.resolve();
@@ -77,11 +76,14 @@ describe('otel-sdk — buildProcessors', () => {
             .spyOn(OTLPTraceExporter.prototype, 'export')
             .mockImplementation((_spans, callback) => callback({ code: 0 }));
 
-        await withEnvironment('OTEL_EXPORTER_OTLP_ENDPOINT', 'http://localhost:4318', async () => {
-            const [processor] = buildProcessors();
-            processor.onEnd(sampledSpanStub());
-            await processor.forceFlush();
-        });
+        await withEnvironmentOverrides(
+            { OTEL_EXPORTER_OTLP_ENDPOINT: 'http://localhost:4318' },
+            async () => {
+                const [processor] = buildProcessors();
+                processor.onEnd(sampledSpanStub());
+                await processor.forceFlush();
+            }
+        );
 
         expect(exportSpy).toHaveBeenCalledTimes(1);
         exportSpy.mockRestore();

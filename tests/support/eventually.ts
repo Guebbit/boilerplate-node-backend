@@ -5,17 +5,48 @@
  * the condition holds, so a fast machine pays nothing and a slow one has the whole window.
  */
 
+/** Resolves after `ms` — the one pause the polling helpers below share. */
+const pause = (ms: number): Promise<void> =>
+    new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+
 /**
  * Poll `done` until it is true or the window closes. Never throws: the assertion that follows is
  * what should fail, with its own message, not an opaque timeout here.
  *
- * @param done - the condition to wait for
+ * @param done - the condition to wait for; may read a database
  * @param windowMs - how long to keep trying
  */
-export const eventually = async (done: () => boolean, windowMs = 2000): Promise<void> => {
+export const eventually = async (
+    done: () => boolean | Promise<boolean>,
+    windowMs = 3000
+): Promise<void> => {
     const deadline = Date.now() + windowMs;
-    while (!done() && Date.now() < deadline)
-        await new Promise((resolve) => {
-            setTimeout(resolve, 20);
+    while (!(await done()) && Date.now() < deadline) await pause(20);
+};
+
+/**
+ * Run `attempt` until it resolves, retrying each rejection after `intervalMs` until `deadlineMs`
+ * has passed; then the last rejection is rethrown. For a container or a socket that is not up yet,
+ * where the failure of the final attempt is the message.
+ *
+ * @param attempt - one try
+ * @param deadlineMs - how long to keep retrying
+ * @param intervalMs - the pause between tries
+ */
+export const retryUntil = <T>(
+    attempt: () => Promise<T>,
+    deadlineMs: number,
+    intervalMs: number
+): Promise<T> => {
+    const deadline = Date.now() + deadlineMs;
+
+    const run = (): Promise<T> =>
+        attempt().catch((error: unknown) => {
+            if (Date.now() > deadline) throw error;
+            return pause(intervalMs).then(run);
         });
+
+    return run();
 };

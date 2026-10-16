@@ -7,7 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerAs } from '@tests/callers';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
 import { keyVersionOf } from '@infrastructure/security/versioned-secret';
 import webhooksModule from '../../module';
@@ -28,9 +28,8 @@ describe('webhooks reencrypt', () => {
             { caller: callerAs('manager'), analyticsConsent: false }
         );
 
-        await withEnvironment(
-            'NODE_WEBHOOK_SECRET_ENCRYPTION_KEY',
-            ROTATED_WEBHOOK_KEY,
+        await withEnvironmentOverrides(
+            { NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: ROTATED_WEBHOOK_KEY },
             async () => {
                 const report = await webhooksModule.reencrypt(false);
 

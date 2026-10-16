@@ -28,6 +28,7 @@ import { approveReturn, createReturn, declineReturn, receiveReturn } from '../..
 import { RETURN_CLOSED, RETURN_RECEIVED } from '../../events';
 import { returnRepository } from '../../repository';
 import { invoicingService, type CreditNoteDocument } from '@modules/invoicing';
+import { eventually } from '@tests/eventually';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -46,15 +47,6 @@ afterEach(() => {
     resetDomainEvents();
     jest.restoreAllMocks();
 });
-
-/** Waits for a fire-and-forget listener's write — the refund's `PAYMENT_REFUNDED` closes a return. */
-const waitFor = async (check: () => Promise<boolean>): Promise<void> => {
-    const startedAt = Date.now();
-    while (!(await check())) {
-        if (Date.now() - startedAt > 3000) throw new Error('waitFor: timed out');
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-};
 
 /** A distinct address per customer. */
 let customers = 0;
@@ -153,7 +145,7 @@ describe('the statuses the order shows beside its own', () => {
 
         await receiveReturn(id, {}, callerContextAs('admin'));
 
-        await waitFor(() =>
+        await eventually(() =>
             wireOrder(fixture.orderId).then(
                 ({ paymentStatus }) => paymentStatus === 'partially_refunded'
             )
@@ -188,7 +180,7 @@ describe('receiving a return', () => {
             status: 'succeeded',
             returnId: id
         });
-        await waitFor(() => Promise.resolve(events.length === 2));
+        await eventually(() => events.length === 2);
         expect(events.toSorted()).toEqual(['closed', 'received']);
     });
 
@@ -423,7 +415,7 @@ describe('the credit note a received return issues', () => {
 
         await receiveReturn(id, {}, callerContextAs('admin'));
         let notes: CreditNoteDocument[] = [];
-        await waitFor(async () => {
+        await eventually(async () => {
             notes = await invoicingService.findCreditNotesForOrder(fixture.orderId);
             return notes.length > 0;
         });
@@ -593,7 +585,7 @@ describe('the order timeline of a return', () => {
         const id = await approvedReturn(fixture, 'defective');
 
         await receiveReturn(id, {}, callerContextAs('admin'));
-        await waitFor(() =>
+        await eventually(() =>
             timelineOf(fixture.orderId).then((rows) =>
                 rows.some(({ type }) => type === 'credit_note_issued')
             )

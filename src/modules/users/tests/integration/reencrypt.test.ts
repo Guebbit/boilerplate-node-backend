@@ -6,7 +6,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerContextAs } from '@tests/callers';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { keyVersionOf } from '@infrastructure/security/versioned-secret';
 import usersModule from '../../module';
 import { userModel } from '../../model';
@@ -23,7 +23,7 @@ describe('users reencrypt', () => {
         const user = await createUser();
         await userService.updateById(user.id, { phone: '+1 555 0100' }, callerContextAs('admin'));
 
-        await withEnvironment('NODE_PII_ENCRYPTION_KEY', ROTATED_PII_KEY, async () => {
+        await withEnvironmentOverrides({ NODE_PII_ENCRYPTION_KEY: ROTATED_PII_KEY }, async () => {
             const report = await usersModule.reencrypt(false);
 
             expect(report.rewritten).toBe(1);

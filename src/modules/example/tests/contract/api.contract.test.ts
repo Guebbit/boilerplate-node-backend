@@ -7,7 +7,6 @@
  */
 
 import '@tests/contract';
-import sharp from 'sharp';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole, loginBearer } from '@tests/http';
 import { requestAndDownloadExport } from '@tests/account-export';
@@ -16,6 +15,7 @@ import { MISSING_ID } from '@tests/ids';
 import { createUser } from '@modules/users/tests/factories';
 import { ExampleStatus } from '@types';
 import { createExample } from '../factories';
+import { decodablePng } from '@tests/images';
 
 setupTestDb();
 
@@ -26,11 +26,7 @@ const MALFORMED_ID = 'not-an-object-id';
 let PNG_BYTES: Buffer;
 
 beforeAll(async () => {
-    PNG_BYTES = await sharp({
-        create: { width: 4, height: 4, channels: 3, background: { r: 10, g: 20, b: 30 } }
-    })
-        .png()
-        .toBuffer();
+    PNG_BYTES = await decodablePng();
 });
 
 afterEach(emptyFileSandbox);

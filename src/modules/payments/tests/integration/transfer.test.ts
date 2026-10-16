@@ -8,7 +8,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
@@ -153,7 +153,7 @@ describe('the instructions on the payment', () => {
     });
 
     it('add the BIC only when the deployment configured one', () =>
-        withEnvironment('NODE_BANK_TRANSFER_BIC', 'COBADEFFXXX', async () => {
+        withEnvironmentOverrides({ NODE_BANK_TRANSFER_BIC: 'COBADEFFXXX' }, async () => {
             const { payment } = await transferOrder();
 
             expect(presentPayment(payment).nextAction).toMatchObject({ bic: 'COBADEFFXXX' });
@@ -176,7 +176,7 @@ describe('the instructions on the payment', () => {
     });
 
     it('say nothing when the deployment no longer offers transfers', () =>
-        withEnvironment('NODE_BANK_TRANSFER_BENEFICIARY', '', async () => {
+        withEnvironmentOverrides({ NODE_BANK_TRANSFER_BENEFICIARY: '' }, async () => {
             const { payment } = await transferOrder();
 
             expect(presentPayment(payment).nextAction).toBeUndefined();
@@ -334,7 +334,7 @@ describe('how long the transfer payment is kept', () => {
 
 describe('what has nothing to ask a provider', () => {
     it('is left alone by the reconcile sweep and by the browser’s sync', () =>
-        withEnvironment('NODE_PAYMENT_RECONCILE_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_RECONCILE_MINUTES: '0' }, async () => {
             const user = await createUser();
             const { order, payment } = await transferOrder({ user });
 

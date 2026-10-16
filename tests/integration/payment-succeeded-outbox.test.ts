@@ -10,7 +10,6 @@ import { createProduct } from '@modules/products/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
-import { createIntent, confirmPayment } from '@modules/payments/services';
 import paymentsModule from '@modules/payments/module';
 import webhooksModule from '@modules/webhooks/module';
 import {
@@ -19,7 +18,9 @@ import {
 } from '@modules/webhooks/repository';
 import { mintRingSecret } from '@modules/webhooks/secrets';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
+import { callerContextAs } from '@tests/callers';
+import { payByCard } from '@modules/payments/tests/factories';
+import { asSuccess } from '@tests/response';
 
 setupTestDb();
 
@@ -51,14 +52,8 @@ const settledOrder = async () => {
         [{ productId: String(product._id), quantity: 1 }],
         callerContextAs('admin')
     );
-    const order = created.data!;
-    const intent = await createIntent(String(order._id), asCustomer(user.id));
-    await confirmPayment(
-        String(intent.success && intent.data?.id),
-        'pm_card_visa',
-        asCustomer(user.id),
-        testCallerContext
-    );
+    const order = asSuccess(created).data;
+    await payByCard(order, user);
     return order;
 };
 

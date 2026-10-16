@@ -12,7 +12,7 @@ import {
     stopDatabase
 } from '@infrastructure/runtime/database';
 import { observeDatabaseCommands } from '@infrastructure/persistence/command-metrics';
-import { setEnvironment, withoutEnvironment } from '@tests/environment';
+import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
 
 // `connect` is mocked below, so there is no driver client for the real observer to listen to.
 jest.mock('@infrastructure/persistence/command-metrics', () => ({
@@ -40,7 +40,7 @@ describe('the per-query time limit', () => {
 
     it('sets the configured limit as a Mongoose global, defaulting to 5 s', async () => {
         const setSpy = jest.spyOn(mongoose, 'set');
-        await withoutEnvironment(['NODE_MONGO_MAX_TIME_MS'], () => {
+        await withEnvironmentOverrides({ NODE_MONGO_MAX_TIME_MS: undefined }, () => {
             configureMongoose();
             return Promise.resolve();
         });

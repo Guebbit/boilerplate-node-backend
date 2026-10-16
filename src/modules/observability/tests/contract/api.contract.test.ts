@@ -17,6 +17,7 @@ import { createAdminUser, createUser, PLAIN_PASSWORD } from '@modules/users/test
 import { connection } from '@infrastructure/runtime/database';
 import { leaseModel } from '@infrastructure/persistence/lease';
 import { currentEnvironment } from '@infrastructure/config/store';
+import { eventually } from '@tests/eventually';
 
 setupTestDb();
 
@@ -31,14 +32,9 @@ setupTestDb();
  * spec.
  */
 const pollUntilAudited = async (bearer: string, query: string) => {
-    for (let attempt = 0; attempt < 20; attempt++) {
-        const response = await api()
-            .get(`/observability/audit${query}`)
-            .set('Authorization', bearer);
-        if (response.body?.data?.items?.length > 0) return response;
-        await new Promise((resolve) => setTimeout(resolve, 25));
-    }
-    throw new Error('audit entry never reached GET /observability/audit');
+    const read = () => api().get(`/observability/audit${query}`).set('Authorization', bearer);
+    await eventually(() => read().then((response) => response.body?.data?.items?.length > 0));
+    return read();
 };
 
 describe('GET /observability/health', () => {

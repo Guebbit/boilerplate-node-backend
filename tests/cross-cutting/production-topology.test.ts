@@ -1,25 +1,25 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
+import { REPO_ROOT } from '@tests/paths';
 
 /**
  * Guard: the production deployment's security posture is a property of two files, not a memory.
  *
- * `docker-compose.production.yml` and `docker/Dockerfile.production` carry four decisions that
- * cost nothing to keep and are invisible to every other check in the gate — a container gains a
+ * `docker-compose.production.yml` and `docker/Dockerfile.production` carry decisions that cost
+ * nothing to keep and are invisible to every other check in the gate — a container gains a
  * writable root, a database publishes a port, an `--inspect` flag survives a debugging session, a
- * dependency's postinstall runs during the image build. None of them breaks a test, a type or a
- * lint rule. They break the deployment, in production, silently.
+ * dependency's postinstall runs during the image build, a service mounts a secret that is not its
+ * own. None of them breaks a test, a type or a lint rule. They break the deployment, in
+ * production, silently.
  *
  * Each is the kind of property a human catches by reading the files, once, in review — and never
  * again once the reviewer's attention moves elsewhere. This is the same reading, on every push.
  *
- * Deliberately narrow. It asserts the four properties that were actually reasoned about, not an
- * inventory of every key in the compose file — a census fails on the next legitimate edit and
- * teaches people to delete the test.
+ * Deliberately narrow. It asserts the properties that were actually reasoned about (one `describe`
+ * each below), not an inventory of every key in the compose file — a census fails on the next
+ * legitimate edit and teaches people to delete the test.
  */
-
-const ROOT = path.join(__dirname, '..', '..');
 
 /**
  * One entry of a service's `ports:`, in either spelling compose accepts — the short string
@@ -64,7 +64,7 @@ const isComposeFile = (value: unknown): value is ComposeFile =>
  * https://eemeli.org/yaml/#yaml-1-1-merge-keys
  */
 const parsedCompose: unknown = parse(
-    readFileSync(path.join(ROOT, 'docker-compose.production.yml'), 'utf8'),
+    readFileSync(path.join(REPO_ROOT, 'docker-compose.production.yml'), 'utf8'),
     { merge: true }
 );
 if (!isComposeFile(parsedCompose))
@@ -75,7 +75,7 @@ if (!isComposeFile(parsedCompose))
 const compose = parsedCompose;
 
 /** The production image's build recipe, as text — the assertions below are about what it does NOT contain. */
-const dockerfile = readFileSync(path.join(ROOT, 'docker', 'Dockerfile.production'), 'utf8');
+const dockerfile = readFileSync(path.join(REPO_ROOT, 'docker', 'Dockerfile.production'), 'utf8');
 
 /**
  * The three services that run this repository's own code.
@@ -246,7 +246,10 @@ describe('production runs no debugger', () => {
      * anchor, an override and an env file default are all covered by one match.
      */
     it('no --inspect flag survives in the production image or stack', () => {
-        const composeText = readFileSync(path.join(ROOT, 'docker-compose.production.yml'), 'utf8');
+        const composeText = readFileSync(
+            path.join(REPO_ROOT, 'docker-compose.production.yml'),
+            'utf8'
+        );
 
         expect(dockerfile).not.toMatch(/--inspect/);
         expect(composeText).not.toMatch(/--inspect/);

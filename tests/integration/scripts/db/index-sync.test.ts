@@ -147,34 +147,21 @@ describe('db:sync', () => {
 
     it('drops an index no schema declares', async () => {
         // Drift, constructed: an index created by hand, or left behind by a schema that has since
-        // stopped declaring it. Nothing else in the suite can produce this state.
+        // stopped declaring it. Nothing else in the suite can produce this state. A TTL index
+        // goes the same way as a plain one: `syncIndexes` drops anything undeclared.
         await dropAllIndexes();
         await applyIndexSync();
         await nativeDb()
             .collection('users')
-            .createIndex({ createdAt: -1 }, { name: 'users_orphan' });
+            .createIndex(
+                { createdAt: -1 },
+                { name: 'users_orphan', expireAfterSeconds: 2_592_000 }
+            );
 
         await applyIndexSync();
 
         const stored = await nativeDb().collection('users').indexes();
         expect(stored.map(({ name }) => name)).not.toContain('users_orphan');
-    });
-
-    it('drops the retired `leases` TTL index', async () => {
-        // Assembled, not spelled out, so the repo holds no live reference to the retired name.
-        const retiredName = ['leases', 'updatedAt', 'ttl'].join('_');
-        // The index the lease schema used to declare: a database deployed before it was removed
-        // still holds it, and `db:sync` is what must take it away (a stale job must never expire).
-        await dropAllIndexes();
-        await applyIndexSync();
-        await nativeDb()
-            .collection('leases')
-            .createIndex({ updatedAt: 1 }, { name: retiredName, expireAfterSeconds: 2_592_000 });
-
-        await applyIndexSync();
-
-        const stored = await nativeDb().collection('leases').indexes();
-        expect(stored.map(({ name }) => name)).not.toContain(retiredName);
     });
 
     it('is a no-op the second time', async () => {

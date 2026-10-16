@@ -225,14 +225,14 @@ assignment, a `delete` or an `Object.assign` onto it in `tests/` and every `src/
 and names the helper. Overrides last **one case**: a `setupFilesAfterEnv` hook resets them after
 every test, back to what the file began with (the file sandbox's directories).
 
-| Helper                                                | Use                                                                                    |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `setEnvironment({ NAME: 'x', OTHER: undefined })`     | Override for the rest of the case; `undefined` unsets                                  |
-| `withEnvironment` / `withEnvironmentOverrides`        | Override for a body, restore after                                                     |
-| `withoutEnvironment` / `withoutEnvironmentInThisFile` | Unset for the body, or before every case of the file                                   |
-| `setProcessEnvironment({ NAME: 'x' })`                | The REAL `process.env`, for a script or library that reads it; restored after the case |
-| `slice.slice.inspect(env)`                            | Judge a plain object against a slice, no process                                       |
-| `assertConfigIn(slices, env)`                         | The whole gate against a plain object                                                  |
+| Helper                                            | Use                                                                                    |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `setEnvironment({ NAME: 'x', OTHER: undefined })` | Override for the rest of the case; `undefined` unsets                                  |
+| `withEnvironmentOverrides({ NAME: 'x' }, body)`   | Override for a body (`undefined` unsets), restore after; resolves to what `body` does  |
+| `withoutEnvironmentInThisFile(keys)`              | Unset before every case of the file                                                    |
+| `setProcessEnvironment({ NAME: 'x' })`            | The REAL `process.env`, for a script or library that reads it; restored after the case |
+| `slice.slice.inspect(env)`                        | Judge a plain object against a slice, no process                                       |
+| `assertConfigIn(slices, env)`                     | The whole gate against a plain object                                                  |
 
 Set a value in a `beforeEach`, not a `beforeAll`: the reset runs after the first case. A suite that
 re-imports a module (`jest.resetModules()`) keeps its overrides, because the store's state lives on

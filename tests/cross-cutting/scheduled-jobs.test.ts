@@ -4,6 +4,7 @@ import { resolveJobs } from '@kernel/registry';
 import { appJobs } from '../../src/app/jobs';
 import { enabledModules } from '../../src/modules';
 import { looksLikeCron } from '../../scripts/docs/jobs-render';
+import { REPO_ROOT } from '@tests/paths';
 
 /**
  * Guard: every scheduled job is declared once, on a module manifest or in `src/app/jobs.ts`, and
@@ -13,8 +14,6 @@ import { looksLikeCron } from '../../scripts/docs/jobs-render';
  *
  * See: docs/reference/ops.md#scheduled-jobs
  */
-
-const ROOT = path.join(__dirname, '..', '..');
 
 /** Every job in the build, in the order the crontab lists them. */
 const JOBS = [...appJobs, ...resolveJobs(enabledModules)];
@@ -54,7 +53,7 @@ describe('the declared jobs', () => {
  * so the one runner every job goes through has to live there.
  */
 describe('every scheduled job ships in the production image', () => {
-    const { scripts } = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
+    const { scripts } = JSON.parse(readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')) as {
         scripts: Record<string, string>;
     };
 

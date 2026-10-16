@@ -25,7 +25,7 @@ import type { Response } from 'supertest';
 import { api, authenticateAs } from '@tests/http';
 import { checkoutAs } from '@tests/checkout-as';
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
@@ -60,7 +60,7 @@ describe('R3 — concurrent writes of the SAME product', () => {
      * size is a knob, and a ceiling below it would turn the last adds into refusals.
      */
     it('leaves one cart holding one line, never the same product twice', () =>
-        withEnvironment('NODE_CART_LINE_MAX', String(RACE_SIZE), async () => {
+        withEnvironmentOverrides({ NODE_CART_LINE_MAX: String(RACE_SIZE) }, async () => {
             const { user, bearer } = await authenticateAs();
             const product = await createProduct({ onHand: RACE_SIZE * 5 });
 

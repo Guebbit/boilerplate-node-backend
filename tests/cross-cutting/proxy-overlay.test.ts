@@ -1,16 +1,16 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
+import { REPO_ROOT } from '@tests/paths';
 
 /**
  * Guard: the shared Traefik overlay is the one container facing the internet, so what it mounts and
  * how it finds a client are a security property of one file, kept by reading the file on every push.
  *
- * Narrow on purpose: the four decisions that were reasoned about (no Docker socket, routes only,
- * port 80 only redirects, a hop count for the app), not an inventory of the overlay's keys.
+ * Narrow on purpose: the five decisions that were reasoned about (no Docker socket, routes only,
+ * port 80 only redirects, a hop count for the app, a per-client alias with no routing labels), not
+ * an inventory of the overlay's keys.
  */
-
-const ROOT = path.join(__dirname, '..', '..');
 
 /** The overlay's services, as far as this file reads them. */
 interface Overlay {
@@ -35,10 +35,13 @@ const isOverlay = (value: unknown): value is Overlay =>
  * gives for compose's own `!reset` tag, which it reads correctly as an empty list anyway.
  * https://eemeli.org/yaml/#options
  */
-const parsed: unknown = parse(readFileSync(path.join(ROOT, 'docker-compose.proxy.yml'), 'utf8'), {
-    merge: true,
-    logLevel: 'error'
-});
+const parsed: unknown = parse(
+    readFileSync(path.join(REPO_ROOT, 'docker-compose.proxy.yml'), 'utf8'),
+    {
+        merge: true,
+        logLevel: 'error'
+    }
+);
 if (!isOverlay(parsed))
     throw new Error('[proxy-overlay] docker-compose.proxy.yml did not parse to an object.');
 

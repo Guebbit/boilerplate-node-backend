@@ -18,6 +18,7 @@
 import { z } from 'zod';
 import amqplib, { type Channel, type ChannelModel, type ConsumeMessage } from 'amqplib';
 import { withEnvironmentOverrides } from '@tests/environment';
+import { retryUntil } from '@tests/eventually';
 import { startRabbitMq, type TestRabbitMq } from './support/rabbitmq';
 
 /** The adapter under test, as a fresh copy of its module (each copy owns one connection). */
@@ -72,18 +73,15 @@ const waitUntil = (
     check: () => boolean | Promise<boolean>,
     what: string,
     timeoutMs = 15_000
-): Promise<void> => {
-    const deadline = Date.now() + timeoutMs;
-
-    const poll = (): Promise<void> =>
-        Promise.resolve(check()).then((done) => {
-            if (done) return;
-            if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
-            return new Promise<void>((resolve) => setTimeout(resolve, 100)).then(poll);
-        });
-
-    return poll();
-};
+): Promise<void> =>
+    retryUntil(
+        () =>
+            Promise.resolve(check()).then((done) => {
+                if (!done) throw new Error(`Timed out waiting for ${what}`);
+            }),
+        timeoutMs,
+        100
+    );
 
 /** Resolves after `ms` — for asserting that something does NOT happen. */
 const quiet = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));

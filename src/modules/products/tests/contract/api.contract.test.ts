@@ -9,7 +9,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factories';
 import { productRepository } from '../../repository';
 
@@ -308,7 +308,7 @@ describe('GET /products/{id}', () => {
     // Every money-carrying resource carries its own currency — never a hard-coded EUR on
     // the frontend's side.
     it('reads the live NODE_DEFAULT_CURRENCY, not a fixed default', () =>
-        withEnvironment('NODE_DEFAULT_CURRENCY', 'GBP', async () => {
+        withEnvironmentOverrides({ NODE_DEFAULT_CURRENCY: 'GBP' }, async () => {
             const product = await createProduct();
             const response = await api().get(`/products/${String(product._id)}`);
 

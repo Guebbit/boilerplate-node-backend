@@ -7,7 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { seedOrder, seedDigitalOrder, readOrder } from '@modules/orders/tests/factories';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import {
     markPaid,
     markProcessing,
@@ -153,7 +153,7 @@ describe('markDelivered', () => {
     });
 
     it('honours the shortest period a deployment may offer', () =>
-        withEnvironment('NODE_WITHDRAWAL_PERIOD_DAYS', '21', async () => {
+        withEnvironmentOverrides({ NODE_WITHDRAWAL_PERIOD_DAYS: '21' }, async () => {
             const order = await seedOrder(OrderStatus.shipped);
 
             const updated = await markDelivered(

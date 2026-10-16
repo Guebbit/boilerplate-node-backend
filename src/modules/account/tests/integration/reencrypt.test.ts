@@ -7,7 +7,7 @@
 
 import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 import { keyVersionOf } from '@infrastructure/security/versioned-secret';
 import accountModule from '../../module';
@@ -32,7 +32,7 @@ describe('account reencrypt', () => {
             ]
         });
 
-        await withEnvironment('NODE_TOTP_ENCRYPTION_KEY', ROTATED_TOTP_KEY, async () => {
+        await withEnvironmentOverrides({ NODE_TOTP_ENCRYPTION_KEY: ROTATED_TOTP_KEY }, async () => {
             const report = await accountModule.reencrypt(false);
 
             expect(report.rewritten).toBe(1);

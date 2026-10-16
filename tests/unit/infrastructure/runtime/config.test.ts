@@ -14,12 +14,7 @@ import {
     nodeEnvironment,
     serverConfig
 } from '@infrastructure/runtime/config';
-import {
-    withEnvironment,
-    withoutEnvironment,
-    withoutEnvironmentInThisFile,
-    setEnvironment
-} from '@tests/environment';
+import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 
 withoutEnvironmentInThisFile([
     'NODE_ENV',
@@ -146,18 +141,5 @@ describe('the logging slice', () => {
 
         setEnvironment({ NODE_LOG_LEVEL: 'loud' });
         expect(() => loggingConfig()).toThrow(/NODE_LOG_LEVEL/);
-    });
-});
-
-describe('the helpers restore what they touched', () => {
-    it('sets and unsets through the environment helpers', async () => {
-        await withEnvironment('NODE_ENV', 'production', () => {
-            expect(isRelaxedEnvironment()).toBe(false);
-            return Promise.resolve();
-        });
-        await withoutEnvironment(['NODE_PORT'], () => {
-            expect(serverConfig().NODE_PORT).toBe(3000);
-            return Promise.resolve();
-        });
     });
 });

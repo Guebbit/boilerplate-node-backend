@@ -8,10 +8,8 @@
 jest.mock('../../services/job-health', () => ({ jobHealth: () => Promise.resolve([]) }));
 jest.mock('../../services/parked-jobs', () => ({ queueHealth: () => Promise.resolve([]) }));
 
-import { resetEnvironment, setEnvironment } from '@tests/environment';
+import { setEnvironment } from '@tests/environment';
 import { buildObservabilityHealth } from '../../services/health';
-
-afterEach(resetEnvironment);
 
 describe('buildObservabilityHealth identity', () => {
     it('reports an unset NODE_ENV as unset, because an unset one is a deployment, not development', async () => {

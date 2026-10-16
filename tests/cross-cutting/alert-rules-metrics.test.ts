@@ -13,8 +13,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
-
-const ROOT = path.join(__dirname, '..', '..');
+import { REPO_ROOT } from '@tests/paths';
 
 /** The shape of the rule file this test reads: groups of rules with an `expr`. */
 interface RuleFile {
@@ -34,12 +33,15 @@ const sourceFiles = (directory: string): string[] =>
     });
 
 const rules = parse(
-    readFileSync(path.join(ROOT, 'docker', 'observability', 'prometheus.alert-rules.yaml'), 'utf8')
+    readFileSync(
+        path.join(REPO_ROOT, 'docker', 'observability', 'prometheus.alert-rules.yaml'),
+        'utf8'
+    )
 ) as RuleFile;
 
 /** Every `name: '<metric>'` literal a counter or gauge is registered under. */
 const registered = new Set(
-    sourceFiles(path.join(ROOT, 'src')).flatMap((file) =>
+    sourceFiles(path.join(REPO_ROOT, 'src')).flatMap((file) =>
         [...readFileSync(file, 'utf8').matchAll(/name:\s*'([a-z][a-z0-9_]*)'/g)].map(
             ([, name]) => name
         )
