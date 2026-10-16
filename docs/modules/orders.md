@@ -145,6 +145,9 @@ a reason — see [Who writes the status](#who-writes-the-status) below.
 [`inventory`](./inventory.md) cancels an order when its hold times out (`inventory.reservation_expired`), and
 this module announces `order.cancelled` with the `refund` it owes, so [`payments`](./payments.md)
 can open the refund from the same outbox row. Neither is an import, which is what keeps a mutually-aware pair acyclic.
+The `refund` flag is the cancel's policy, for `payments` alone: the public `order.cancelled` webhook
+carries only `{ orderId }`, since "owed" is not "paid back", and a subscriber hears `payment.refunded`
+when money actually moved.
 :::
 
 Each account reads back only its own orders; writing and soft-deleting is admin-only. The
@@ -152,9 +155,9 @@ Each account reads back only its own orders; writing and soft-deleting is admin-
 
 Two scheduled jobs via `docker/crontab`. `npm run reap:orders`, nightly, replaces an order's
 remaining PII (email, shipping name/phone/street, notes) with placeholders once
-`NODE_ORDER_PII_RETENTION_DAYS` has passed from the order's OWN `createdAt`, counted from account
-erasure or that date, whichever is later — amounts, line items and dates survive, only the person
-is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
+`NODE_ORDER_PII_RETENTION_DAYS` has passed from the order's OWN `createdAt` — due at `createdAt`
+plus that many days, or at once when account erasure or inactivity minimisation comes later; a
+never-paid order is due at once — amounts, line items and dates survive, only the person is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
 module's `personalData.minimise` hook, keeping its `userId`; a live, active account's orders keep
 their personal fields, since order history is part of the contract
 ([why](../theory/data-retention.md#orders-kept-while-the-account-lives)). An admin can still hard-delete an order, but only one that is `cancelled` and was never paid

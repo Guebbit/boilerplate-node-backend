@@ -62,7 +62,8 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
     [ORDER_CANCELLED]: {
         toPublicEvent: (payload: DomainEventMap[typeof ORDER_CANCELLED]) => ({
             eventType: 'order.cancelled',
-            data: { orderId: payload.orderId, refund: payload.refund }
+            // The refund flag is a policy for `payments`; a subscriber hears `payment.refunded`.
+            data: { orderId: payload.orderId }
         })
     }
 };

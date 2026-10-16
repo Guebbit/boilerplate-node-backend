@@ -103,7 +103,7 @@ components:
                     type: string
                 reason:
                     type: string
-                    description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`.
+                    description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`; `no_answer` when the shop itself cancelled a preorder's remainder after its buyer never answered the late-date question.
             additionalProperties: false
         ReturnReceivedPayload:
             type: object
