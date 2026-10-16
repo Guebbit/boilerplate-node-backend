@@ -75,6 +75,45 @@ const unchangedOrPushed = (
             unchanged ? { cart: unchanged, created: false } : pushNewLine(owner, line, quantity)
         );
 
+/** What {@link resolveAddMiss} answers when room has reappeared: try the whole add again. */
+const RETRY = Symbol('retry');
+
+/**
+ * The `'add'` miss: the atomic increment matched nothing, which is ambiguous — no such line yet,
+ * or one a concurrent write changed since. One more read settles it.
+ *
+ * @param owner - whose cart
+ * @param line - the product
+ * @param quantity - units to add
+ * @param lineMax - the per-line ceiling the caller's own filter used
+ * @returns the pushed line, `QUANTITY_LIMIT` when there is genuinely no room, or `RETRY` when
+ *   room reappeared and the same convergence the duplicate-key branch uses should run
+ */
+const resolveAddMiss = (
+    owner: QueryFilter<CartDocument>,
+    line: Types.ObjectId,
+    quantity: number,
+    lineMax: number
+): Promise<LineWrite | typeof QUANTITY_LIMIT | typeof RETRY> =>
+    cartModel
+        .findOne({ ...owner, 'items.productId': line })
+        .exec()
+        .then<LineWrite | typeof QUANTITY_LIMIT | typeof RETRY>((existing) => {
+            const currentQuantity = existing?.items.find((item) =>
+                item.productId.equals(line)
+            )?.quantity;
+
+            // No line yet: the filter only guards a line that exists, so a NEW line is checked
+            // against the ceiling here, before anything is written.
+            if (currentQuantity === undefined)
+                return quantity > lineMax ? QUANTITY_LIMIT : pushNewLine(owner, line, quantity);
+            if (currentQuantity + quantity > lineMax) return QUANTITY_LIMIT;
+
+            // Room exists now, even though the atomic attempt just missed — read afterward, so
+            // still not the answer itself; only the next attempt's own filter can commit to it.
+            return RETRY;
+        });
+
 /**
  * Set or increment one cart line, creating the cart if the user has none.
  *
@@ -144,29 +183,12 @@ const upsertLine = (
                 if (cart) return { cart, created: false };
                 if (mode === 'set') return unchangedOrPushed(owner, line, quantity);
 
-                return cartModel
-                    .findOne({ ...owner, 'items.productId': line })
-                    .exec()
-                    .then<LineWrite | typeof QUANTITY_LIMIT>((existing) => {
-                        const currentQuantity = existing?.items.find((item) =>
-                            item.productId.equals(line)
-                        )?.quantity;
-
-                        // No line yet: the filter above only guards a line that exists, so a NEW
-                        // line is checked against the ceiling here, before anything is written.
-                        if (currentQuantity === undefined)
-                            return quantity > lineMax
-                                ? QUANTITY_LIMIT
-                                : pushNewLine(owner, line, quantity);
-                        if (currentQuantity + quantity > lineMax) return QUANTITY_LIMIT;
-
-                        // Room exists now, even though the atomic attempt above just missed — read
-                        // afterward, so still not the answer itself; only the next attempt's own
-                        // filter can commit to it.
-                        if (attemptsLeft <= 1)
-                            throw new Error('cart: exhausted retries resolving a contended add');
-                        return upsertLine(userId, productId, quantity, mode, attemptsLeft - 1);
-                    });
+                return resolveAddMiss(owner, line, quantity, lineMax).then((resolved) => {
+                    if (resolved !== RETRY) return resolved;
+                    if (attemptsLeft <= 1)
+                        throw new Error('cart: exhausted retries resolving a contended add');
+                    return upsertLine(userId, productId, quantity, mode, attemptsLeft - 1);
+                });
             })
             .catch((error: unknown) => {
                 if (attemptsLeft <= 1 || !isDuplicateKey(error)) throw error;

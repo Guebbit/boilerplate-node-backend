@@ -21,4 +21,9 @@ export type { LineAvailability, AvailabilityFacts, AvailabilityProduct } from '.
 
 export type { MergeLineFacts, MergePlan, MergeReason } from './merge';
 
-export type { CheckoutShortfall, UnavailableCartLine, ShippingRequirementVerdict } from './rules';
+export type {
+    CheckoutShortfall,
+    CheckoutVerdict,
+    UnavailableCartLine,
+    ShippingRequirementVerdict
+} from './rules';

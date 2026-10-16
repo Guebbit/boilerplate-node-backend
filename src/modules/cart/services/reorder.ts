@@ -18,8 +18,6 @@ import {
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { productService } from '@modules/products';
-import type { ProductDocument } from '@modules/products';
 import type { AuthContext } from '@types';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -27,16 +25,16 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { cartLineMax } from '../config';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
+import { planMergeLine } from '../domain';
 import { cartRepository, QUANTITY_LIMIT } from '../repository';
+import { isListed, readShelf } from './shelf';
 import { toCartView, type CartView } from './view';
 import { ERROR_CODES } from '@api/error-codes';
 
-/** A line the order asks for, resolved against today's catalogue. */
+/** A line the order asks for, kept because the product can still be bought. */
 interface ReorderLine {
     productId: string;
     quantity: number;
-    /** `null` when the product is gone, inactive or soft-deleted — not addable. */
-    product: ProductDocument | null;
 }
 
 /**
@@ -44,7 +42,8 @@ interface ReorderLine {
  *
  * A vanished, inactive or soft-deleted product is dropped here, not refused — a single
  * unavailable line must not block the rest of the order. The caller rejects the whole reorder
- * only once none come through.
+ * only once none come through. One read of the shelf for every line, the same one the merge
+ * makes.
  * @param order - the order being reordered
  */
 const resolveReorderLines = (order: OrderDocument): Promise<ReorderLine[]> => {
@@ -53,14 +52,12 @@ const resolveReorderLines = (order: OrderDocument): Promise<ReorderLine[]> => {
         quantity: item.quantity
     }));
 
-    return Promise.all(
-        requested.map(
-            (line): Promise<ReorderLine> =>
-                productService
-                    .findPublicById(line.productId)
-                    .then((product) => ({ ...line, product }))
-        )
-    ).then((lines) => lines.filter((line) => line.product !== null));
+    return readShelf(requested.map(({ productId }) => productId)).then((shelves) =>
+        requested.filter(({ productId }) => {
+            const shelf = shelves.get(productId);
+            return shelf !== undefined && isListed(shelf);
+        })
+    );
 };
 
 /**
@@ -68,7 +65,8 @@ const resolveReorderLines = (order: OrderDocument): Promise<ReorderLine[]> => {
  *
  * One at a time, in the original order: each `upsertLine` reads and rewrites the same cart
  * document, so a parallel add would lose lines to a last-write-wins race — which is also what
- * lets `quantities` below track each write without re-reading the cart per line.
+ * lets `quantities` below track each write without re-reading the cart per line. How much of a
+ * line fits is the merge's own rule ({@link planMergeLine}), so the two cannot disagree.
  * @param userId - the caller whose cart is being filled
  * @param lines - the addable lines, as resolved by {@link resolveReorderLines}
  */
@@ -79,16 +77,20 @@ const addLinesToCart = async (userId: string, lines: ReorderLine[]): Promise<voi
     );
 
     for (const line of lines) {
-        const already = quantities.get(line.productId) ?? 0;
-        const room = cartLineMax() - already;
-        if (room <= 0) continue;
+        const held = quantities.get(line.productId) ?? 0;
+        const { add } = planMergeLine({
+            requested: line.quantity,
+            held,
+            listed: true,
+            lineMax: cartLineMax()
+        });
+        if (add <= 0) continue;
 
-        const added = Math.min(line.quantity, room);
-        const result = await cartRepository.upsertLine(userId, line.productId, added, 'add');
+        const result = await cartRepository.upsertLine(userId, line.productId, add, 'add');
         // QUANTITY_LIMIT here means `quantities` was already stale by write time (a
         // concurrent change to this same cart) — best-effort, so the line is skipped
         // rather than retried.
-        if (result !== QUANTITY_LIMIT) quantities.set(line.productId, already + added);
+        if (result !== QUANTITY_LIMIT) quantities.set(line.productId, held + add);
     }
 };
 

@@ -21,7 +21,9 @@ import {
     orderTotal,
     placeOrder,
     sendOrderPlacedEmail,
-    type OrderDocument
+    type OrderDocument,
+    type PlaceOrderInput,
+    type PlaceOrderOutcome
 } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { userService } from '@modules/users';
@@ -38,6 +40,7 @@ import {
     evaluateShippingRequirement,
     needsShipping,
     type CheckoutShortfall,
+    type CheckoutVerdict,
     type UnavailableCartLine
 } from '../domain';
 import {
@@ -363,6 +366,170 @@ const refuseChangedTotal = (
 };
 
 /**
+ * The refusal for a basket that cannot become an order, or `undefined` when it can. The rule is in
+ * `../domain`; what a refusal looks like on the wire is here. Explicit `code`s rather than bare
+ * strings: the checkout-failure analytics event reports this code, so it must stay stable and
+ * locale-independent while `message` is translated for the user.
+ *
+ * @param verdict - `evaluateCheckout`'s answer
+ */
+const refuseVerdict = (verdict: CheckoutVerdict): ResponseReject | undefined => {
+    if (verdict.ok) return undefined;
+    if (verdict.reason === 'empty')
+        return generateReject(409, [{ code: ERROR_CODES.CART_EMPTY, message: t('cart.empty') }]);
+    if (verdict.reason === 'insufficient-stock')
+        return buildStockRefusal({ type: 'insufficient-stock', shortfalls: verdict.shortfalls });
+    return buildStockRefusal({ type: 'unavailable', status: 404, lines: verdict.lines });
+};
+
+/**
+ * A line filled before the per-line ceiling was lowered: refused, naming the lines, rather than
+ * quietly trimmed — the buyer decides what to drop.
+ *
+ * @param joined - the cart's lines whose product still resolves
+ */
+const refuseOverLimit = (joined: readonly JoinedCartLine[]): ResponseReject | undefined => {
+    const maxPerLine = cartLineMax();
+    const overLimit = joined.filter((line) => line.quantity > maxPerLine);
+    if (overLimit.length === 0) return undefined;
+
+    return generateReject(422, [
+        {
+            code: ERROR_CODES.CART_QUANTITY_LIMIT,
+            message: t('cart.quantity-limit'),
+            details: { max: maxPerLine, productIds: overLimit.map((line) => line.productId) }
+        }
+    ]);
+};
+
+/**
+ * A physical basket names a shipping method, and — only when that method demands it — an address.
+ * A digital-only basket needs neither.
+ *
+ * @param joined - the cart's lines whose product still resolves
+ * @param shippingMethod - the method the cart chose, if any
+ * @param address - the delivery address, if one was given
+ */
+const refuseShippingRequirement = (
+    joined: readonly JoinedCartLine[],
+    shippingMethod: StaticShippingMethod | undefined,
+    address: AddressItem | undefined
+): ResponseReject | undefined => {
+    const verdict = evaluateShippingRequirement(joined, shippingMethod, address !== undefined);
+    if (verdict.ok) return undefined;
+
+    return generateReject(422, [
+        verdict.reason === 'method-required'
+            ? {
+                  code: ERROR_CODES.CART_SHIPPING_METHOD_REQUIRED,
+                  message: t('cart.shipping-method-required')
+              }
+            : fieldError('addressId', t('cart.address-required'), ERROR_CODES.CART_ADDRESS_REQUIRED)
+    ]);
+};
+
+/** Everything {@link placeOrderInputOf} assembles an order write from. */
+interface CheckoutPlacement {
+    user: { id: string; email: string };
+    buyerLocale: string;
+    notes: string | undefined;
+    joined: readonly JoinedCartLine[];
+    requestedMethod: string;
+    billingAddress: AddressItem;
+    address: AddressItem | undefined;
+    shippingMethod: StaticShippingMethod | undefined;
+    holdMinutes: number | undefined;
+    userId: string;
+    /** The cart version the lines were read at; the cart is emptied only if it still holds. */
+    version: number;
+}
+
+/**
+ * The write `placeOrder` is asked for. Freezing the lines, allocating the order number, minting a
+ * `bank_transfer` reference and holding the stock are its job; what is genuinely checkout's own
+ * is the pre-flight above and the cart clear, which commits with the order (`commitWith`) so a
+ * lost race writes no order at all.
+ *
+ * @param placement - what the pre-flight resolved
+ */
+const placeOrderInputOf = ({
+    user,
+    buyerLocale,
+    notes,
+    joined,
+    requestedMethod,
+    billingAddress,
+    address,
+    shippingMethod,
+    holdMinutes,
+    userId,
+    version
+}: CheckoutPlacement): PlaceOrderInput => ({
+    userId: user.id,
+    email: user.email,
+    locale: buyerLocale,
+    notes,
+    lines: joined.map((line) => ({
+        item: { productId: line.productId, quantity: line.quantity },
+        // Already a plain, lean object — `readCartLines` joins via `productService.findManyByIds`,
+        // not a hydrated `populate()`, so no `.toObject()` cast is needed here any more.
+        product: line.product
+    })),
+    paymentMethod: requestedMethod,
+    billingAddress: toOrderAddress(billingAddress),
+    shipping: {
+        ...(address ? { address: toOrderAddress(address) } : {}),
+        ...(shippingMethod
+            ? {
+                  method: {
+                      id: shippingMethod.id,
+                      // The shop's CURRENT currency, not a frozen one — this runs as `placeOrder`
+                      // is still deciding what to freeze onto the new order. Every line counts
+                      // toward the free-shipping line, as the cart's own quote counts it.
+                      priceFor: (frozenLines) =>
+                          shippingPriceFor(shippingMethod, frozenLines, shopCurrency())
+                  }
+              }
+            : {}),
+        holdMinutes
+    },
+    // Emptied only if the cart still holds the lines this checkout read; `false` aborts the
+    // order's transaction, so the cart's contents end up on exactly one of two racing orders.
+    commitWith: (session) =>
+        cartRepository
+            .clearLinesIfUnchanged(userId, version, session)
+            .then((cleared) => cleared !== null)
+});
+
+/**
+ * What a refused write answers with.
+ *
+ * @param outcome - `placeOrder`'s verdict, known to be a refusal
+ */
+const refusalForPlaceOrder = (
+    outcome: Exclude<PlaceOrderOutcome, { ok: true }>
+): ResponseReject => {
+    if (outcome.reason === 'superseded')
+        return generateReject(409, [
+            { code: ERROR_CODES.CART_CHANGED, message: t('cart.changed') }
+        ]);
+    // `no-lines`/`product-missing` should not occur here — `evaluateCheckout` already proved the
+    // basket good — but map them defensively rather than assume the invariant.
+    if (outcome.reason !== 'insufficient-stock')
+        return buildStockRefusal({ type: 'unavailable', status: 409 });
+    // The reserve lost a race, so only stock can be the reason: sold out, or fewer left.
+    return buildStockRefusal({
+        type: 'insufficient-stock',
+        shortfalls: outcome.shortfalls.map(({ productId, title, requested, available }) => ({
+            productId,
+            title,
+            requested,
+            availability: available === 0 ? 'out_of_stock' : 'insufficient_stock'
+        }))
+    });
+};
+
+/**
  * The checkout body proper, split out of {@link orderConfirm} for its `.catch` envelope and
  * observability side effects. `async`/`await`, not chained: every step depends on the value
  * the previous one resolved, and any throw here still rejects through the caller's `.catch`.
@@ -445,55 +612,15 @@ const runCheckout = async (
             }
         }))
     );
-    if (!verdict.ok) {
-        if (verdict.reason === 'empty')
-            return generateReject(409, [
-                { code: ERROR_CODES.CART_EMPTY, message: t('cart.empty') }
-            ]);
-        if (verdict.reason === 'insufficient-stock')
-            return buildStockRefusal({
-                type: 'insufficient-stock',
-                shortfalls: verdict.shortfalls
-            });
-        return buildStockRefusal({ type: 'unavailable', status: 404, lines: verdict.lines });
-    }
+    const verdictRefusal = refuseVerdict(verdict);
+    if (verdictRefusal) return verdictRefusal;
 
-    // A line filled before the per-line ceiling was lowered: refused here, naming the lines, rather
-    // than quietly trimmed (the buyer decides what to drop).
-    const maxPerLine = cartLineMax();
-    const overLimit = joined.filter((line) => line.quantity > maxPerLine);
-    if (overLimit.length > 0)
-        return generateReject(422, [
-            {
-                code: ERROR_CODES.CART_QUANTITY_LIMIT,
-                message: t('cart.quantity-limit'),
-                details: { max: maxPerLine, productIds: overLimit.map((line) => line.productId) }
-            }
-        ]);
+    const overLimitRefusal = refuseOverLimit(joined);
+    if (overLimitRefusal) return overLimitRefusal;
 
-    /*
-     * The rest of the rule, once shipping applicability itself is settled above: a physical
-     * basket names a method, and — only when that method demands it — an address. A
-     * digital-only basket needs neither.
-     */
-    const shippingRequirement = evaluateShippingRequirement(
-        joined,
-        shippingMethod,
-        address !== undefined
-    );
-    if (!shippingRequirement.ok)
-        return generateReject(422, [
-            shippingRequirement.reason === 'method-required'
-                ? {
-                      code: ERROR_CODES.CART_SHIPPING_METHOD_REQUIRED,
-                      message: t('cart.shipping-method-required')
-                  }
-                : fieldError(
-                      'addressId',
-                      t('cart.address-required'),
-                      ERROR_CODES.CART_ADDRESS_REQUIRED
-                  )
-        ]);
+    // The rest of the rule, once shipping applicability itself is settled above.
+    const requirementRefusal = refuseShippingRequirement(joined, shippingMethod, address);
+    if (requirementRefusal) return requirementRefusal;
 
     // After the shipping requirement, so a physical basket short of a method or an address is
     // told that first; only then does the invoice's own address get resolved.
@@ -520,62 +647,22 @@ const runCheckout = async (
      * only what is genuinely checkout's own: the pre-flight above, and the cart clear, which
      * commits with the order (`commitWith`) so a lost race writes no order at all.
      */
-    const outcome = await placeOrder({
-        userId: user.id,
-        email: user.email,
-        locale: buyerLocale,
-        notes,
-        lines: joined.map((line) => ({
-            item: { productId: line.productId, quantity: line.quantity },
-            // Already a plain, lean object — `readCartLines` joins via `productService.findManyByIds`,
-            // not a hydrated `populate()`, so no `.toObject()` cast is needed here any more.
-            product: line.product
-        })),
-        paymentMethod: requestedMethod,
-        billingAddress: toOrderAddress(billingAddress),
-        shipping: {
-            ...(address ? { address: toOrderAddress(address) } : {}),
-            ...(shippingMethod
-                ? {
-                      method: {
-                          id: shippingMethod.id,
-                          // The shop's CURRENT currency, not a frozen one — this runs as `placeOrder`
-                          // is still deciding what to freeze onto the new order. Every line counts
-                          // toward the free-shipping line, as the cart's own quote counts it.
-                          priceFor: (frozenLines) =>
-                              shippingPriceFor(shippingMethod, frozenLines, shopCurrency())
-                      }
-                  }
-                : {}),
-            holdMinutes
-        },
-        // Emptied only if the cart still holds the lines this checkout read; `false` aborts the
-        // order's transaction, so the cart's contents end up on exactly one of two racing orders.
-        commitWith: (session) =>
-            cartRepository
-                .clearLinesIfUnchanged(userId, version, session)
-                .then((cleared) => cleared !== null)
-    });
-    if (!outcome.ok) {
-        if (outcome.reason === 'superseded')
-            return generateReject(409, [
-                { code: ERROR_CODES.CART_CHANGED, message: t('cart.changed') }
-            ]);
-        // `no-lines`/`product-missing` should not occur here — `evaluateCheckout` above already
-        // proved the basket good — but map them defensively rather than assume the invariant.
-        if (outcome.reason !== 'insufficient-stock')
-            return buildStockRefusal({ type: 'unavailable', status: 409 });
-        // The reserve lost a race, so only stock can be the reason: sold out, or fewer left.
-        return buildStockRefusal({
-            type: 'insufficient-stock',
-            shortfalls: outcome.shortfalls.map(({ productId, title, requested, available }) => ({
-                productId,
-                title,
-                requested,
-                availability: available === 0 ? 'out_of_stock' : 'insufficient_stock'
-            }))
-        });
-    }
+    const outcome = await placeOrder(
+        placeOrderInputOf({
+            user,
+            buyerLocale,
+            notes,
+            joined,
+            requestedMethod,
+            billingAddress,
+            address,
+            shippingMethod,
+            holdMinutes,
+            userId,
+            version
+        })
+    );
+    if (!outcome.ok) return refusalForPlaceOrder(outcome);
     const { order } = outcome;
 
     // Sent from the service, not the controller: only this point knows the order stood.

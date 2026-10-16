@@ -12,17 +12,15 @@
  */
 
 import { emitDomainEvent } from '@kernel/events';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { productService } from '@modules/products';
 import type { CallerContext, AddCartItemRequest, MergeLineResult } from '@types';
-import { cartAnalyticsEvents } from '../analytics';
 import { planMergeLine } from '../domain';
 import { CART_MERGE_REFUSED } from '../events';
 import type { CartDocument } from '../model';
 import { cartLineMax } from '../config';
 import { cartRepository, QUANTITY_LIMIT } from '../repository';
-import { cartGetForBadge } from './items';
-import { readShelf, shelfAvailability, type Shelf } from './shelf';
+import { cartGetForBadge, trackLineWrite } from './items';
+import { isListed, readShelf, shelfAvailability, type Shelf } from './shelf';
 import type { CartView } from './view';
 
 /** What a merge answers with: the cart as it now stands, and what became of each guest line. */
@@ -41,27 +39,6 @@ interface MergeStep {
 const heldIn = (cart: CartDocument | null, productId: string): number =>
     cart?.items.find((item) => String(item.productId) === productId)?.quantity ?? 0;
 
-/** Whether the catalogue shows the product publicly — the same test `findPublicById` applies. */
-const isListed = (shelf: Shelf): boolean => shelfAvailability(shelf) !== 'removed';
-
-/**
- * A line the cart took: the analytics event `POST /cart` would have fired for it. `created` is
- * the repository's word for "a new line", which is what tells added from updated.
- */
-const trackAdd = (
-    context: CallerContext,
-    productId: string,
-    quantity: number,
-    created: boolean
-): void =>
-    emitAnalyticsEvent({
-        ...buildAnalyticsBase(context),
-        event: created
-            ? cartAnalyticsEvents.CART_ITEM_ADDED
-            : cartAnalyticsEvents.CART_ITEM_UPDATED,
-        properties: { product_id: productId, quantity }
-    });
-
 /**
  * Write what the rule decided. The cart's own conditional write is the cap's real guard, so a
  * `QUANTITY_LIMIT` here means a concurrent add used the room since the rule looked: nothing was
@@ -76,7 +53,7 @@ const writeAdd = (
     cartRepository.upsertLine(userId, productId, quantity, 'add').then((write) => {
         if (write === QUANTITY_LIMIT)
             return cartRepository.findByUserId(userId).then((cart) => ({ cart, raced: true }));
-        trackAdd(context, productId, quantity, write.created);
+        trackLineWrite(context, productId, quantity, write.created);
         return { cart: write.cart, raced: false };
     });
 
@@ -191,7 +168,7 @@ export const cartMerge = (
     context: CallerContext
 ): Promise<MergeResult> =>
     mergeLines(userId, lines, context).then((results) =>
-        announceRemoved(userId, results).then(() =>
-            cartGetForBadge(userId).then((cart) => ({ cart, lines: results }))
-        )
+        announceRemoved(userId, results)
+            .then(() => cartGetForBadge(userId))
+            .then((cart) => ({ cart, lines: results }))
     );

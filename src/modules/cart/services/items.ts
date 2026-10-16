@@ -56,6 +56,12 @@ export const cartGetForView = (userId: string, context: CallerContext): Promise<
         return view;
     });
 
+/** The 422 for a line over the shop's per-line ceiling, however the write reached it. */
+const quantityLimit = (): ResponseReject =>
+    generateReject(422, [
+        { code: ERROR_CODES.CART_QUANTITY_LIMIT, message: t('cart.quantity-limit') }
+    ]);
+
 /**
  * Shared logic for adding/setting a cart item quantity.
  *
@@ -81,16 +87,10 @@ const upsertCartItem = (
 ): Promise<ResponseSuccess<CartView> | ResponseReject> =>
     productService.findPublicById(id).then((product) => {
         if (!product) return generateReject(404, [t('products.not-found')]);
-        if (mode === 'set' && quantity > cartLineMax())
-            return generateReject(422, [
-                { code: ERROR_CODES.CART_QUANTITY_LIMIT, message: t('cart.quantity-limit') }
-            ]);
+        if (mode === 'set' && quantity > cartLineMax()) return quantityLimit();
 
         return cartRepository.upsertLine(userId, id, quantity, mode).then((result) => {
-            if (result === QUANTITY_LIMIT)
-                return generateReject(422, [
-                    { code: ERROR_CODES.CART_QUANTITY_LIMIT, message: t('cart.quantity-limit') }
-                ]);
+            if (result === QUANTITY_LIMIT) return quantityLimit();
 
             // 201 says a line was created; 200 that one already there changed or was left as it was.
             return toCartView(result.cart).then((view) =>
@@ -113,8 +113,31 @@ export const cartItemSetById = (
     upsertCartItem(userId, id, quantity, 'set');
 
 /**
- * Announce a cart-line write that succeeded: `201` made the line (`CART_ITEM_ADDED`), anything else
- * changed one already there (`CART_ITEM_UPDATED`). A refusal emits nothing.
+ * The analytics event for a cart-line write that landed: a created line is `CART_ITEM_ADDED`,
+ * one already there that changed is `CART_ITEM_UPDATED`. One spelling for the single-product
+ * routes and the guest-cart merge.
+ * @param context - the caller, for the analytics base
+ * @param productId - the product whose line was written
+ * @param quantity - the quantity the caller sent
+ * @param created - whether the write made the line
+ */
+export const trackLineWrite = (
+    context: CallerContext,
+    productId: string,
+    quantity: number,
+    created: boolean
+): void =>
+    emitAnalyticsEvent({
+        ...buildAnalyticsBase(context),
+        event: created
+            ? cartAnalyticsEvents.CART_ITEM_ADDED
+            : cartAnalyticsEvents.CART_ITEM_UPDATED,
+        properties: { product_id: productId, quantity }
+    });
+
+/**
+ * Announce a cart-line write that succeeded: `201` made the line, anything else changed one
+ * already there. A refusal emits nothing.
  * @param context - the caller, for the analytics base
  * @param result - what the write answered
  * @param id - the product whose line was written
@@ -127,15 +150,7 @@ const emitItemWritten = (
     id: string,
     quantity: number
 ): ResponseSuccess<CartView> | ResponseReject => {
-    if (result.success)
-        emitAnalyticsEvent({
-            ...buildAnalyticsBase(context),
-            event:
-                result.status === 201
-                    ? cartAnalyticsEvents.CART_ITEM_ADDED
-                    : cartAnalyticsEvents.CART_ITEM_UPDATED,
-            properties: { product_id: id, quantity }
-        });
+    if (result.success) trackLineWrite(context, id, quantity, result.status === 201);
     return result;
 };
 
@@ -263,8 +278,10 @@ export const cartShippingMethodSet = (
             ])
         );
 
-    return cartRepository.findByUserId(userId).then((cart) =>
-        readCartLines(cart).then((lines) => {
+    return cartRepository
+        .findByUserId(userId)
+        .then((cart) => readCartLines(cart))
+        .then((lines) => {
             const joined = lines.filter((line) => isJoined(line));
 
             if (!needsShipping(joined))
@@ -287,6 +304,5 @@ export const cartShippingMethodSet = (
                 .setShippingMethod(userId, shippingMethodId)
                 .then((updated) => toCartView(updated))
                 .then((view) => generateSuccess(view));
-        })
-    );
+        });
 };

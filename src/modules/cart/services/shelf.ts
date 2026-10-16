@@ -65,6 +65,14 @@ export const shelfAvailability = (
     lineAvailability({ product: availabilityProductOf(product), available, quantity });
 
 /**
+ * Whether the catalogue shows the product publicly — the same test `findPublicById` applies. A
+ * product merely off sale is listed; a hidden or deleted one is not.
+ *
+ * @param shelf - the product and its ledger units
+ */
+export const isListed = (shelf: Shelf): boolean => shelfAvailability(shelf) !== 'removed';
+
+/**
  * The availability of each product as a line without a quantity: what a wishlist line reads.
  * Two queries however many products there are.
  *
