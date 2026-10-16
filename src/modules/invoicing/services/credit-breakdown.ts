@@ -9,7 +9,7 @@
  */
 
 import { orderTaxBreakdown, type OrderTaxBreakdown } from '@modules/orders';
-import type { CreditLine } from '../domain';
+import { asTaxItems, type CreditLine } from '../domain';
 
 /**
  * Extract VAT from every share the way the invoice itself did, so the figures reconcile exactly.
@@ -23,9 +23,10 @@ export const creditBreakdownOf = (
     currency: string
 ): OrderTaxBreakdown =>
     orderTaxBreakdown({
-        items: lines.map((line) => ({
-            quantity: line.quantity,
-            product: { price: line.unitPrice, taxRate: line.taxRate, requiresShipping: false }
+        // Delivery is already folded into the rate rows, so no line ships anything of its own.
+        items: asTaxItems(lines).map(({ quantity, product }) => ({
+            quantity,
+            product: { ...product, requiresShipping: false }
         })),
         shippingCost: undefined,
         currency

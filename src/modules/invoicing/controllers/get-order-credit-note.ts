@@ -6,27 +6,13 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
-import { buyerIdOf, orderService } from '@modules/orders';
+import { buyerIdOf } from '@modules/orders';
 import { invoicingService } from '../services';
-import { rejectResponse } from '@infrastructure/http/response';
-import { isValidObjectId, requireId } from '@infrastructure/http/ids';
-import { catchAs } from '@infrastructure/http/controller';
+import { requireId } from '@infrastructure/http/ids';
+import { catchAs, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { mayReadCreditNotes } from '../services/credit-note-access';
-import { ERROR_CODES } from '@api/error-codes';
 import { recordStaffRead } from '@kernel/staff-read';
 import { invoicingAuditActions } from '../audit';
-
-/** The 404 for a credit note the order does not have — one answer for absent and someone else's. */
-const notIssued = (response: Response): void => {
-    rejectResponse(response, 404, [
-        {
-            code: ERROR_CODES.ORDER_CREDIT_NOTE_NOT_ISSUED,
-            message: t('invoicing.credit-note-not-issued')
-        }
-    ]);
-};
 
 /** GET /orders/:id/credit-notes/:creditNoteId — the credit-note PDF; non-admin callers see only their own order's, and staff need the payments staff read. */
 export const getOrderCreditNote = (
@@ -36,55 +22,37 @@ export const getOrderCreditNote = (
     const id = requireId(request, response, { notFound: 'orders.not-found' });
     if (!id) return;
 
-    // Not checked up front like the order: an unknown credit note answers "not issued" only to a
-    // caller who may see the order at all, and a malformed one must answer exactly that.
-    const { creditNoteId } = request.params;
+    return invoicingService
+        .creditNoteForCaller(
+            id,
+            request.params.creditNoteId,
+            request.authContext,
+            callerContextOf(request)
+        )
+        .then((result) => {
+            if (refused(response, result)) return undefined;
+            const { document: creditNote, order } = result.data;
 
-    return orderService
-        .getForCaller(id, request.authContext)
-        .then((order) => {
-            if (!order) {
-                rejectResponse(response, 404, [t('orders.not-found')]);
-                return undefined;
-            }
-            // Staff who may read the order but not the money get the one answer a stranger gets.
-            if (
-                !isValidObjectId(creditNoteId) ||
-                !mayReadCreditNotes(order, request.authContext, callerContextOf(request))
-            ) {
-                notIssued(response);
-                return undefined;
-            }
+            recordStaffRead(request, {
+                key: 'display:Order',
+                action: invoicingAuditActions.ADMIN_CREDIT_NOTE_VIEWED,
+                targetType: 'credit_note',
+                // The row id, not the number: it repeats across the invoice series.
+                targetId: String(creditNote._id),
+                ownerId: buyerIdOf(order)
+            });
 
-            return invoicingService
-                .findCreditNoteForOrderById(String(order._id), creditNoteId)
-                .then((creditNote) => {
-                    if (!creditNote) {
-                        notIssued(response);
-                        return undefined;
-                    }
-
-                    recordStaffRead(request, {
-                        key: 'display:Order',
-                        action: invoicingAuditActions.ADMIN_CREDIT_NOTE_VIEWED,
-                        targetType: 'credit_note',
-                        // The row id, not the number: it repeats across the invoice series.
-                        targetId: String(creditNote._id),
-                        ownerId: buyerIdOf(order)
-                    });
-
-                    return invoicingService.renderCreditNotePdf(creditNote).then((pdf) => {
-                        response
-                            .status(200)
-                            .setHeader('Content-Type', 'application/pdf')
-                            .setHeader(
-                                'Content-Disposition',
-                                `inline; filename="credit-note-${creditNote.number}.pdf"`
-                            )
-                            .setHeader('Cache-Control', 'private, no-store')
-                            .send(pdf);
-                    });
-                });
+            return invoicingService.renderCreditNotePdf(creditNote).then((pdf) => {
+                response
+                    .status(200)
+                    .setHeader('Content-Type', 'application/pdf')
+                    .setHeader(
+                        'Content-Disposition',
+                        `inline; filename="credit-note-${creditNote.number}.pdf"`
+                    )
+                    .setHeader('Cache-Control', 'private, no-store')
+                    .send(pdf);
+            });
         })
         .catch(catchAs(response, 'Credit note generation failed'));
 };

@@ -8,6 +8,7 @@
 
 import { reencryptOf } from '@infrastructure/security/reencrypt';
 import { bucketOf, type ReportWindow } from '@infrastructure/persistence/report';
+import { incrementYearlyCounter } from '@infrastructure/persistence/yearly-counter';
 import { Types } from 'mongoose';
 import type { ClientSession, Document, Model } from 'mongoose';
 import {
@@ -91,12 +92,13 @@ interface WithId {
  * Insert a new invoice. A second invoice for one order is refused by the schema's own unique
  * index with a duplicate-key error: the caller reads the winner back once its transaction aborts.
  * @param fields - every frozen field the invoice is issued with, and its pre-allocated `_id`
- * @param session - the transaction that also allocated the invoice's number
+ * @param session - the transaction that also allocated the invoice's number; required, since the
+ *   number is only safe to take inside the unit that inserts the document
  * @returns the inserted invoice
  */
 const insertInvoice = (
     fields: FrozenTaxDocument & WithId,
-    session?: ClientSession
+    session: ClientSession
 ): Promise<InvoiceDocument> =>
     // Mongoose `create` with an array is the only form that takes `{ session }`; it resolves an array.
     // https://mongoosejs.com/docs/api/model.html#Model.create()
@@ -142,7 +144,8 @@ const findCreditNoteByRefundId = (refundId: string): Promise<CreditNoteDocument 
  * write, but the event bus itself promises no de-duplication of its own.
  * @param fields - every frozen field, plus the invoice this credit note reverses, its refund and
  *   its pre-allocated `_id`
- * @param session - the transaction that also allocated the credit note's number
+ * @param session - the transaction that also allocated the credit note's number; required, for
+ *   the same reason as {@link insertInvoice}
  */
 const insertCreditNote = (
     fields: FrozenTaxDocument &
@@ -151,32 +154,9 @@ const insertCreditNote = (
             invoiceNumber: string;
             refundId: string;
         },
-    session?: ClientSession
+    session: ClientSession
 ): Promise<CreditNoteDocument> =>
     creditNoteModel.create([fields], { session }).then(([creditNote]) => creditNote);
-
-/**
- * Atomically allocate the next sequence number in a counter for `year`, upserting the year's row
- * on its first use — the same primitive `orders/repository.ts#incrementOrderNumberCounter` uses,
- * shared here since both this module's series need it.
- * @param counterModel - which series' counter to increment
- * @param year - the UTC calendar year the sequence belongs to
- * @param session - the transaction the allocation belongs to: an aborted insert gives the number back
- * @returns the sequence number just allocated (1 for the year's first document in that series)
- */
-const incrementCounter = (
-    counterModel: typeof invoiceNumberCounterModel,
-    year: number,
-    session?: ClientSession
-): Promise<number> =>
-    counterModel
-        .findOneAndUpdate(
-            { _id: year },
-            { $inc: { seq: 1 } },
-            { upsert: true, returnDocument: 'after', session }
-        )
-        .exec()
-        .then((counter) => counter.seq);
 
 /** Invoicing's own repository — no generic CRUD, see the module docblock. */
 export const invoicingRepository = {
@@ -190,8 +170,10 @@ export const invoicingRepository = {
     findCreditNoteById,
     findCreditNoteByRefundId,
     insertCreditNote,
-    incrementInvoiceNumberCounter: (year: number, session?: ClientSession): Promise<number> =>
-        incrementCounter(invoiceNumberCounterModel, year, session),
-    incrementCreditNoteNumberCounter: (year: number, session?: ClientSession): Promise<number> =>
-        incrementCounter(creditNoteNumberCounterModel, year, session)
+    // Required session: the number and the insert must commit or abort together, or the gap-free
+    // series loses a number (VAT Directive Art. 226(2)).
+    incrementInvoiceNumberCounter: (year: number, session: ClientSession): Promise<number> =>
+        incrementYearlyCounter(invoiceNumberCounterModel, year, session),
+    incrementCreditNoteNumberCounter: (year: number, session: ClientSession): Promise<number> =>
+        incrementYearlyCounter(creditNoteNumberCounterModel, year, session)
 };

@@ -186,7 +186,8 @@ directory) and streamed from there for `NODE_INVOICE_PDF_RETENTION_DAYS` (30); t
 `providers/index.ts` declares `EInvoicingProvider`, shaped after `payments/providers` (one
 interface, one shipped implementation, an env var choosing between them): `pdf`
 (`providers/pdf.ts`) is the only one this boilerplate ships, rendering through the
-EJS + Puppeteer pipeline (`renderHtmlToPdf`). Italy's SdI and the EU's Peppol network are
+EJS + Puppeteer pipeline (`renderHtmlToPdf`). `issue` returns the PDF bytes the buyer downloads;
+the contract, the routes and the controllers are PDF-only. Italy's SdI and the EU's Peppol network are
 integrations, not built here — both transmit a structured document to a third party and get back a
 delivery outcome, a shape genuinely different from "hand back some bytes", so a real adapter's
 `issue` would also need to report that outcome onto the document. Left for whoever builds the

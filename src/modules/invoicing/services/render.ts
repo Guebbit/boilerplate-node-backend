@@ -11,7 +11,7 @@
 import { logger } from '@infrastructure/adapters/logger';
 import { readDocument, writeDocument } from '@infrastructure/adapters/document-store';
 import { invoicingConfig } from '../config';
-import { decryptInvoiceParty } from '../pii';
+import { decryptInvoiceParty, type InvoiceDocumentKind } from '../pii';
 import { resolveEInvoicingProvider } from '../providers';
 import type { EInvoicingDocument } from '../providers';
 import type { InvoiceDocument, CreditNoteDocument } from '../model';
@@ -24,8 +24,8 @@ import type { InvoiceDocument, CreditNoteDocument } from '../model';
  */
 const sharedFields = (
     document: InvoiceDocument | CreditNoteDocument,
-    kind: 'invoice' | 'credit-note'
-): Omit<EInvoicingDocument, 'kind'> => ({
+    kind: InvoiceDocumentKind
+): Omit<EInvoicingDocument, 'kind' | 'reversalOf'> => ({
     number: document.number,
     issuedAt: document.issuedAt,
     currency: document.currency,
@@ -47,12 +47,41 @@ const sharedFields = (
 });
 
 /**
- * The stored copy of a document, or a fresh render that is then stored.
- *
- * `0` retention stores nothing: always a render. A failing store (a read error, a full disk) must
- * never fail the download, so either half falls back to rendering and says so in the log. Two
- * simultaneous first downloads both render, which is harmless: the bytes are the same, and the
- * store's write is atomic.
+ * The stored copy of a document, or `undefined` when there is none or it cannot be read — a read
+ * error must never fail a download, so it falls back to rendering and says so in the log.
+ * @param name - the stored name, e.g. `invoice-<id>.pdf`
+ */
+const readStored = (name: string): Promise<Buffer | undefined> =>
+    readDocument(name).catch((error: unknown) => {
+        // Stryker disable next-line all
+        logger.warn({
+            message: 'A stored document could not be read; rendering it.',
+            name,
+            error
+        });
+        return undefined;
+    });
+
+/**
+ * Keep a fresh render for the next download. A failing store (a full disk) never fails this one:
+ * the bytes are handed back whether or not they were kept.
+ * @param name - the stored name, e.g. `invoice-<id>.pdf`
+ * @param bytes - the rendered document
+ */
+const storeBestEffort = (name: string, bytes: Buffer): Promise<Buffer> =>
+    writeDocument(name, bytes).then(
+        () => bytes,
+        (error: unknown) => {
+            // Stryker disable next-line all
+            logger.warn({ message: 'A rendered document could not be stored.', name, error });
+            return bytes;
+        }
+    );
+
+/**
+ * The stored copy of a document, or a fresh render that is then stored. `0` retention stores
+ * nothing: always a render. Two simultaneous first downloads both render, which is harmless: the
+ * bytes are the same, and the store's write is atomic.
  *
  * @param name - the stored name, e.g. `invoice-<id>.pdf`
  * @param render - renders the document from its frozen row
@@ -60,34 +89,9 @@ const sharedFields = (
 const storedOrRendered = (name: string, render: () => Promise<Buffer>): Promise<Buffer> => {
     if (invoicingConfig().NODE_INVOICE_PDF_RETENTION_DAYS === 0) return render();
 
-    return readDocument(name)
-        .catch((error: unknown) => {
-            // Stryker disable next-line all
-            logger.warn({
-                message: 'A stored document could not be read; rendering it.',
-                name,
-                error
-            });
-            return undefined;
-        })
-        .then(
-            (stored) =>
-                stored ??
-                render().then((bytes) =>
-                    writeDocument(name, bytes).then(
-                        () => bytes,
-                        (error: unknown) => {
-                            // Stryker disable next-line all
-                            logger.warn({
-                                message: 'A rendered document could not be stored.',
-                                name,
-                                error
-                            });
-                            return bytes;
-                        }
-                    )
-                )
-        );
+    return readStored(name).then(
+        (stored) => stored ?? render().then((bytes) => storeBestEffort(name, bytes))
+    );
 };
 
 /**
@@ -99,9 +103,7 @@ const storedOrRendered = (name: string, render: () => Promise<Buffer>): Promise<
  */
 export const renderInvoicePdf = (invoice: InvoiceDocument): Promise<Buffer> =>
     storedOrRendered(`invoice-${String(invoice._id)}.pdf`, () =>
-        resolveEInvoicingProvider()
-            .issue({ kind: 'invoice', ...sharedFields(invoice, 'invoice') })
-            .then((artifact) => artifact.bytes)
+        resolveEInvoicingProvider().issue({ kind: 'invoice', ...sharedFields(invoice, 'invoice') })
     );
 
 /**
@@ -111,11 +113,9 @@ export const renderInvoicePdf = (invoice: InvoiceDocument): Promise<Buffer> =>
  */
 export const renderCreditNotePdf = (creditNote: CreditNoteDocument): Promise<Buffer> =>
     storedOrRendered(`credit-note-${String(creditNote._id)}.pdf`, () =>
-        resolveEInvoicingProvider()
-            .issue({
-                kind: 'creditNote',
-                ...sharedFields(creditNote, 'credit-note'),
-                reversalOf: { number: creditNote.invoiceNumber }
-            })
-            .then((artifact) => artifact.bytes)
+        resolveEInvoicingProvider().issue({
+            kind: 'creditNote',
+            ...sharedFields(creditNote, 'credit-note'),
+            reversalOf: { number: creditNote.invoiceNumber }
+        })
     );

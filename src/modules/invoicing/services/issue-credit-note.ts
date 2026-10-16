@@ -9,15 +9,14 @@
  */
 
 import { Types } from 'mongoose';
-import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { orderService, orderTotal } from '@modules/orders';
 import { translator } from '@infrastructure/i18n';
 import { invoicingRepository } from '../repository';
 import { decryptInvoiceParty, encryptInvoiceParty } from '../pii';
 import { findInvoiceForOrder } from './issue-invoice';
-import { allocateCreditNoteNumber } from './numbering';
-import { creditShares, type CreditableInvoice, type RefundedGoods } from '../domain';
+import { allocateCreditNoteNumber, readWinner } from './numbering';
+import { asTaxItems, creditShares, type CreditableInvoice, type RefundedGoods } from '../domain';
 import { creditBreakdownOf } from './credit-breakdown';
 import type { CreditNoteDocument, InvoiceDocument } from '../model';
 
@@ -98,28 +97,11 @@ const reversedFigures = (
         taxSummary: breakdown.taxSummary,
         shippingByRate: breakdown.shippingByRate,
         grandTotal: orderTotal({
-            items: lines.map((line) => ({
-                quantity: line.quantity,
-                product: { price: line.unitPrice, taxRate: line.taxRate }
-            })),
+            items: asTaxItems(lines),
             shippingCost: undefined,
             currency: invoice.currency
         })
     };
-};
-
-/**
- * What a lost race reads back: the credit note the winner wrote for this refund.
- * @param refundId - the refund both writers were crediting
- * @returns a `catch` handler that rethrows anything but a duplicate-key error
- * @throws {unknown} the original error when it is not a duplicate, or when no winner can be found
- */
-const readWinner = (refundId: string) => (error: unknown) => {
-    if (!isDuplicateKey(error)) throw error;
-    return invoicingRepository.findCreditNoteByRefundId(refundId).then((existing) => {
-        if (!existing) throw error;
-        return existing;
-    });
 };
 
 /**
@@ -196,7 +178,7 @@ export const issueCreditNote = (input: RefundedInput): Promise<CreditNoteDocumen
                             .then(() => note)
                     )
             )
-        ).catch(readWinner(input.refundId));
+        ).catch(readWinner(() => invoicingRepository.findCreditNoteByRefundId(input.refundId)));
     });
 
 /**

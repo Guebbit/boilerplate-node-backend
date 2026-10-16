@@ -6,3 +6,4 @@
 
 export { creditShares } from './credit-shares';
 export type { CreditableInvoice, RefundedGoods, CreditLine } from './credit-shares';
+export { asTaxItems } from './tax-items';

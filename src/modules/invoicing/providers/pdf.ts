@@ -46,5 +46,5 @@ export const pdfEInvoicingProvider: EInvoicingProvider = {
                 root: process.cwd()
             })
             .then((html) => renderHtmlToPdf(html, { format: 'A4' }))
-            .then((bytes) => ({ contentType: 'application/pdf', bytes: Buffer.from(bytes) }))
+            .then((bytes) => Buffer.from(bytes))
 };

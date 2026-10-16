@@ -11,13 +11,12 @@
  */
 
 import { Types } from 'mongoose';
-import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { orderService, orderTaxBreakdown, orderTotal, billingAddressOf } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { invoicingRepository } from '../repository';
 import { encryptInvoiceParty } from '../pii';
-import { allocateInvoiceNumber } from './numbering';
+import { allocateInvoiceNumber, readWinner } from './numbering';
 import type { InvoiceDocument, InvoiceLine, InvoiceSeller } from '../model';
 import { shopIdentity } from '@modules/shop';
 
@@ -47,22 +46,6 @@ const frozenLines = (order: OrderDocument): InvoiceLine[] =>
         taxRate: item.product.taxRate,
         ...(item.product.rateType === undefined ? {} : { rateType: item.product.rateType })
     }));
-
-/**
- * What a lost race reads back: the invoice the winner wrote for this order.
- * @param orderId - the order both writers were invoicing
- * @returns a `catch` handler that rethrows anything but a duplicate-key error
- * @throws {unknown} the original error when it is not a duplicate, or when no winner can be found
- */
-const readWinner = (orderId: string) => (error: unknown) => {
-    if (!isDuplicateKey(error)) throw error;
-    return findInvoiceForOrder(orderId).then((existing) => {
-        // Unreachable outside a corrupted unique index: the duplicate key error IS the
-        // existing row's own guarantee that a `findOne` right behind it finds something.
-        if (!existing) throw error;
-        return existing;
-    });
-};
 
 /**
  * Freezes and numbers one order's invoice — the whole job `module.ts`'s `ORDER_STATUS_CHANGED`
@@ -146,7 +129,7 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
                         .then(() => invoice)
                 )
         )
-    ).catch(readWinner(String(order._id)));
+    ).catch(readWinner(() => findInvoiceForOrder(String(order._id))));
 };
 
 /**

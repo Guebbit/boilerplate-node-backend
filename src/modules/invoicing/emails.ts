@@ -13,6 +13,7 @@ import { lineTaxFromRateTotals } from '@modules/orders';
 import type { EInvoicingDocument } from './providers';
 import type { InvoiceLine } from './model';
 import { shopTimezone } from '@modules/shop';
+import { asTaxItems } from './domain';
 
 /**
  * EN 16931's VAT category codes — `S`tandard, `Z`ero-rated goods, `E`xempt from tax. This
@@ -153,10 +154,7 @@ const buildVatBlock = (
         ])
     );
     const perLine = lineTaxFromRateTotals(
-        document.lines.map((line) => ({
-            quantity: line.quantity,
-            product: { price: line.unitPrice, taxRate: line.taxRate }
-        })),
+        asTaxItems(document.lines),
         document.currency,
         goodsTaxByRate
     );

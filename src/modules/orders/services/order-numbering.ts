@@ -6,25 +6,20 @@
  * (`orderRepository.incrementOrderNumberCounter`) — this file only decides the string.
  */
 
+import { formatYearlySequence } from '@infrastructure/persistence/yearly-counter';
 import { yearInZone } from '../domain/shop-time';
 import { orderRepository } from '../repository';
 import { shopTimezone } from '@modules/shop';
 
 /**
- * How wide the sequence portion of an order number is padded, e.g. `000041`. A gap in the
- * sequence is acceptable — see {@link allocateOrderNumber}'s own docblock — the same way
- * Shopify's `#1001` can skip a number a failed write burned.
- */
-const SEQUENCE_WIDTH = 6;
-
-/**
  * Allocates and formats the next order number for the current year of the shop's calendar (`NODE_SHOP_TIMEZONE`) —
- * `{year}-{sequence}`, zero-padded to {@link SEQUENCE_WIDTH} digits (e.g. `2026-000041`).
+ * `{year}-{sequence}`, zero-padded (e.g. `2026-000041`).
  *
  * Called once, at order-creation time — the caller stores the result on `Order.orderNumber` —
  * and never again for the same order, so a re-downloaded receipt always shows the same number. If
  * the order write that follows this call fails, the number allocated here is never reused: a
- * documented, acceptable gap rather than a bug, and no rollback is attempted for it.
+ * documented, acceptable gap rather than a bug, and no rollback is attempted for it (Shopify's
+ * `#1001` can skip a number a failed write burned the same way).
  *
  * @internal The counter step beneath `placeOrder`; unpublished so no sibling burns a number.
  * @returns the formatted order number for a new order
@@ -34,5 +29,5 @@ export const allocateOrderNumber = (): Promise<string> => {
 
     return orderRepository
         .incrementOrderNumberCounter(year)
-        .then((sequence) => `${year}-${String(sequence).padStart(SEQUENCE_WIDTH, '0')}`);
+        .then((sequence) => formatYearlySequence(year, sequence));
 };

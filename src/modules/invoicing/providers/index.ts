@@ -16,8 +16,7 @@ import { createProviderRegistry, requireProvider } from '@infrastructure/runtime
 import { defineProbe } from '@infrastructure/config/define';
 import { invoicingConfig } from '../config';
 import { pdfEInvoicingProvider } from './pdf';
-import type { InvoiceLine, InvoiceParty, InvoiceSeller } from '../model';
-import type { OrderTaxSummaryRow } from '@types';
+import type { FrozenTaxDocument } from '../model';
 
 /** Which kind of document is being issued — each prints under its own title and disclaimer. */
 export type EInvoicingDocumentKind = 'invoice' | 'creditNote';
@@ -27,33 +26,11 @@ export type EInvoicingDocumentKind = 'invoice' | 'creditNote';
  * `FrozenTaxDocument` persists, plus the printed number and which kind of document this is. Never
  * the Mongoose document itself: a provider must not be able to reach the database.
  */
-export interface EInvoicingDocument {
+export type EInvoicingDocument = Omit<FrozenTaxDocument, 'orderId'> & {
     kind: EInvoicingDocumentKind;
-    number: string;
-    issuedAt: Date;
-    currency: string;
-    locale: string;
-    orderNumber: string;
-    billingAddress?: InvoiceParty;
-    seller: InvoiceSeller;
-    lines: InvoiceLine[];
-    shippingCost?: number;
-    netTotal: number;
-    taxTotal: number;
-    shippingNetAmount: number;
-    shippingTaxAmount: number;
-    taxSummary: OrderTaxSummaryRow[];
-    shippingByRate: OrderTaxSummaryRow[];
-    grandTotal: number;
     /** Present only on a credit note — the invoice it reverses. */
     reversalOf?: { number: string };
-}
-
-/** What issuing a document hands back — bytes, and the media type they are. */
-export interface EInvoicingArtifact {
-    contentType: string;
-    bytes: Buffer;
-}
+};
 
 /** What an implementation must provide. */
 export interface EInvoicingProvider {
@@ -61,11 +38,12 @@ export interface EInvoicingProvider {
     name: string;
 
     /**
-     * Turn a frozen document into its durable artefact — a rendered PDF today; a real SdI/Peppol
-     * adapter would transmit an XML payload instead and hand back whatever it gets in return.
+     * Turn a frozen document into the PDF the buyer downloads. A real SdI/Peppol adapter would
+     * also transmit its XML to the authority; the buyer's copy stays a PDF.
      * @param document - every frozen field the document was issued with
+     * @returns the PDF's bytes
      */
-    issue(document: EInvoicingDocument): Promise<EInvoicingArtifact>;
+    issue(document: EInvoicingDocument): Promise<Buffer>;
 }
 
 /**

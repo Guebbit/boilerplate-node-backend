@@ -13,6 +13,7 @@ import {
     findCreditNoteForOrderById
 } from './issue-credit-note';
 import { renderInvoicePdf, renderCreditNotePdf } from './render';
+import { invoiceForCaller, creditNotesForCaller, creditNoteForCaller } from './for-caller';
 import { moneyBuckets } from './stats';
 
 export { issueInvoice, findInvoiceForOrder } from './issue-invoice';
@@ -25,7 +26,6 @@ export {
 export { renderInvoicePdf, renderCreditNotePdf } from './render';
 export type { DocumentTotals, MoneyBucket } from './stats';
 export { reencryptInvoices } from './reencrypt';
-export { allocateInvoiceNumber, allocateCreditNoteNumber } from './numbering';
 
 /** The service's public surface — every controller and event listener goes through this. */
 export const invoicingService = {
@@ -34,6 +34,9 @@ export const invoicingService = {
     issueCreditNote,
     findCreditNotesForOrder,
     findCreditNoteForOrderById,
+    invoiceForCaller,
+    creditNotesForCaller,
+    creditNoteForCaller,
     renderInvoicePdf,
     renderCreditNotePdf,
     moneyBuckets

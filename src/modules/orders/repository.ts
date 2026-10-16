@@ -28,6 +28,7 @@ import { paymentStatusFilter, returnStatusFilter } from './domain';
 import type { FulfillmentSummary, StampedPaymentStatus, StampedReturnStatus } from './domain';
 import { Types } from 'mongoose';
 import type { PipelineStage, QueryFilter, ClientSession } from 'mongoose';
+import { incrementYearlyCounter } from '@infrastructure/persistence/yearly-counter';
 import { encryptOrderPii } from './pii';
 import { ANONYMIZED_EMAIL } from './domain/anonymization';
 import { OrderStatus } from '@types';
@@ -669,26 +670,15 @@ const scrubDueForAnonymization = (cutoff: Date): Promise<number> =>
         .then(({ modifiedCount }) => modifiedCount);
 
 /**
- * Atomically bumps the order-number sequence for `year` and returns the new value — one
- * `findOneAndUpdate` upsert with `$inc`, so two callers racing the same year still get distinct,
- * contiguous numbers. Mongo serializes concurrent writes to the same document; this is what makes
- * that guarantee do the work instead of a read-then-increment in application code.
- * https://www.mongodb.com/docs/manual/reference/method/db.collection.findOneAndUpdate/
+ * The next order-number sequence for `year`: one atomic upsert, so two callers racing the same
+ * year still get distinct, contiguous numbers. No session, because the number is a label and a
+ * gap is acceptable — see `services/order-numbering.ts`.
  *
- * @param year - the UTC calendar year the sequence belongs to
+ * @param year - the shop-calendar year the sequence belongs to
  * @returns the sequence number just allocated (1 for the year's first order)
  */
 const incrementOrderNumberCounter = (year: number): Promise<number> =>
-    orderNumberCounterModel
-        .findOneAndUpdate(
-            { _id: year },
-            { $inc: { seq: 1 } },
-            // Upsert creates the year's row on its first order; `returnDocument: 'after'` hands
-            // back the incremented value rather than the pre-update one.
-            { upsert: true, returnDocument: 'after' }
-        )
-        .exec()
-        .then((counter) => counter.seq);
+    incrementYearlyCounter(orderNumberCounterModel, year);
 
 /**
  * Permanently remove an order that is cancelled and was never paid, as one conditional write: the

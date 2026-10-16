@@ -7,13 +7,10 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
-import { buyerIdOf, orderService } from '@modules/orders';
+import { buyerIdOf } from '@modules/orders';
 import { invoicingService } from '../services';
-import { rejectResponse } from '@infrastructure/http/response';
 import { requireId } from '@infrastructure/http/ids';
-import { catchAs } from '@infrastructure/http/controller';
-import { ERROR_CODES } from '@api/error-codes';
+import { catchAs, refused } from '@infrastructure/http/controller';
 import { recordStaffRead } from '@kernel/staff-read';
 import { invoicingAuditActions } from '../audit';
 
@@ -23,51 +20,37 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
     const id = requireId(request, response, { notFound: 'orders.not-found' });
     if (!id) return;
 
-    return orderService
-        .getForCaller(id, request.authContext)
-        .then((order) => {
-            if (!order) {
-                rejectResponse(response, 404, [t('orders.not-found')]);
-                return undefined;
-            }
+    return invoicingService
+        .invoiceForCaller(id, request.authContext)
+        .then((result) => {
+            if (refused(response, result)) return undefined;
+            const { document: invoice, order } = result.data;
 
-            return invoicingService.findInvoiceForOrder(String(order._id)).then((invoice) => {
-                if (!invoice) {
-                    rejectResponse(response, 404, [
-                        {
-                            code: ERROR_CODES.ORDER_INVOICE_NOT_ISSUED,
-                            message: t('invoicing.not-issued')
-                        }
-                    ]);
-                    return undefined;
-                }
-
-                recordStaffRead(request, {
-                    key: 'display:Order',
-                    action: invoicingAuditActions.ADMIN_INVOICE_VIEWED,
-                    targetType: 'invoice',
-                    // The row id, not the number: the invoice and credit-note series both restart
-                    // at 1 each year, and `GET /audit?target=` filters on `targetId` alone.
-                    targetId: String(invoice._id),
-                    ownerId: buyerIdOf(order)
-                });
-
-                return invoicingService.renderInvoicePdf(invoice).then((pdf) =>
-                    response
-                        .status(200)
-                        .setHeader('Content-Type', 'application/pdf')
-                        // `inline`, not `attachment`: the frontend holds the blob either way and
-                        // decides what to do with it — download, or a same-tab preview.
-                        .setHeader(
-                            'Content-Disposition',
-                            `inline; filename="invoice-${invoice.number}.pdf"`
-                        )
-                        // Personal and financial data — never a shared/CDN cache, and never the
-                        // browser's own disk cache either.
-                        .setHeader('Cache-Control', 'private, no-store')
-                        .send(pdf)
-                );
+            recordStaffRead(request, {
+                key: 'display:Order',
+                action: invoicingAuditActions.ADMIN_INVOICE_VIEWED,
+                targetType: 'invoice',
+                // The row id, not the number: the invoice and credit-note series both restart
+                // at 1 each year, and `GET /audit?target=` filters on `targetId` alone.
+                targetId: String(invoice._id),
+                ownerId: buyerIdOf(order)
             });
+
+            return invoicingService.renderInvoicePdf(invoice).then((pdf) =>
+                response
+                    .status(200)
+                    .setHeader('Content-Type', 'application/pdf')
+                    // `inline`, not `attachment`: the frontend holds the blob either way and
+                    // decides what to do with it — download, or a same-tab preview.
+                    .setHeader(
+                        'Content-Disposition',
+                        `inline; filename="invoice-${invoice.number}.pdf"`
+                    )
+                    // Personal and financial data — never a shared/CDN cache, and never the
+                    // browser's own disk cache either.
+                    .setHeader('Cache-Control', 'private, no-store')
+                    .send(pdf)
+            );
         })
         .catch(catchAs(response, 'Invoice generation failed'));
 };

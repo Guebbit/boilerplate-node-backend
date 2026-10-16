@@ -48,7 +48,7 @@ beforeEach(async () => {
     let calls = 0;
     issue.mockImplementation(() => {
         calls += 1;
-        return Promise.resolve({ bytes: Buffer.from(`pdf-${String(calls)}`) });
+        return Promise.resolve(Buffer.from(`pdf-${String(calls)}`));
     });
 });
 
