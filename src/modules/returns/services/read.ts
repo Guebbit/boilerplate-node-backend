@@ -14,7 +14,7 @@ import {
 } from '@infrastructure/http/response';
 import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
-import { ownOrderIds } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import type { AuthContext, Return, ReturnActions } from '@types';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { returnRepository } from '../repository';
@@ -85,7 +85,9 @@ export const listReturns = (
 
     if (isStaff(authContext)) return search({});
 
-    return ownOrderIds(authContext.id).then((ids) => search({ orderId: { $in: ids } }));
+    return orderService
+        .ownOrderIds(authContext.id)
+        .then((ids) => search({ orderId: { $in: ids } }));
 };
 
 /**

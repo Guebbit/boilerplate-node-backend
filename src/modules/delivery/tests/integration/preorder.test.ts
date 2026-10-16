@@ -19,7 +19,7 @@ import { testCallerContext } from '@tests/callers';
 import { inventoryService } from '@modules/inventory';
 import { OrderStatus } from '@types';
 import { fulfillmentOrdersOf, paidPreorderOrder } from '@modules/delivery/tests/factories';
-import { releaseAllocated } from '@modules/delivery/services';
+import { deliveryService } from '@modules/delivery/services';
 import deliveryModule from '@modules/delivery/module';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
@@ -130,8 +130,8 @@ describe('stock arriving for a paid preorder', () => {
         await fulfillmentOrdersOf(orderId);
         await receiveAndSettle(productIds[0], 2);
 
-        await releaseAllocated(orderId, productIds[0], 1);
-        await releaseAllocated(orderId, productIds[0], 1);
+        await deliveryService.releaseAllocated(orderId, productIds[0], 1);
+        await deliveryService.releaseAllocated(orderId, productIds[0], 1);
 
         const all = await fulfillmentOrdersOf(orderId);
         expect(all.map(({ number, status }) => [number, status])).toEqual([

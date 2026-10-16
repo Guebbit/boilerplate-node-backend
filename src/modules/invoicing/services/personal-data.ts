@@ -6,7 +6,7 @@
  * same Art. 17(3)(b)/(e) retention exemption `orders/model.ts`'s own `userId` comment documents.
  */
 
-import { findOwnOrders } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import { invoicingRepository } from '../repository';
 import { presentExportedDocument, type ExportedDocument } from '../presenter';
 
@@ -19,7 +19,7 @@ import { presentExportedDocument, type ExportedDocument } from '../presenter';
 export const collectPersonalData = (
     userId: string
 ): Promise<{ invoices: ExportedDocument[]; creditNotes: ExportedDocument[] }> =>
-    findOwnOrders(userId).then((orders) =>
+    orderService.findOwnOrders(userId).then((orders) =>
         Promise.all(
             orders.map((order) =>
                 Promise.all([

@@ -17,7 +17,7 @@ import {
 } from '@infrastructure/http/response';
 import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
-import { remainderOptions, shippedQuantities } from '@modules/delivery';
+import { deliveryService } from '@modules/delivery';
 import { orderService, isExcludedFromWithdrawal } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import type { AuthContext, ReturnOptions } from '@types';
@@ -76,8 +76,8 @@ export const getReturnOptions = (
 
         return Promise.all([
             returnRepository.findByOrderId(orderId),
-            shippedQuantities(orderId),
-            remainderOptions(orderId, order.fulfillment?.shipped === true)
+            deliveryService.shippedQuantities(orderId),
+            deliveryService.remainderOptions(orderId, order.fulfillment?.shipped === true)
         ]).then(([returns, shipped, remainders]) => {
             // Excluded goods (Art. 16) never come back, so they are not offered.
             const excluded = new Set(

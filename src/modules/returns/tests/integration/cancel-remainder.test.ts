@@ -42,7 +42,7 @@ import {
     fulfillmentOrdersOf,
     shipmentsOf
 } from '@modules/delivery/tests/factories';
-import { runPreorderSweep, shipFulfillmentOrder } from '@modules/delivery';
+import { deliveryService } from '@modules/delivery';
 import { OrderStatus } from '@types';
 import { inventoryService } from '@modules/inventory';
 import paymentsModule from '@modules/payments/module';
@@ -100,7 +100,7 @@ const partlyShipped = async (mugOverrides: Parameters<typeof createProduct>[0] =
     await confirmPayment(intent.data.id, 'pm_card_visa', asCustomer(user.id), testCallerContext);
     await forceOrderStatus(orderId, OrderStatus.processing);
     const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
-    const shipped = await shipFulfillmentOrder(
+    const shipped = await deliveryService.shipFulfillmentOrder(
         String(fulfillmentOrder._id),
         { lines: [{ productId: String(shirt._id), quantity: 2 }] },
         asAdmin(),
@@ -706,7 +706,7 @@ describe('returning goods that shipped in part', () => {
         });
         const orderId = String(order._id);
         const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
-        await shipFulfillmentOrder(
+        await deliveryService.shipFulfillmentOrder(
             String(fulfillmentOrder._id),
             { lines: [{ productId: String(shirt._id), quantity: 1 }] },
             asAdmin(),
@@ -759,7 +759,7 @@ describe('returning goods that shipped in part', () => {
         const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
 
         const [shipped, withdrawn] = await Promise.all([
-            shipFulfillmentOrder(
+            deliveryService.shipFulfillmentOrder(
                 String(fulfillmentOrder._id),
                 {},
                 asAdmin(),
@@ -820,7 +820,7 @@ const shirtShippedPreorderWaiting = async ({ shipShirt = true } = {}) => {
     const waiting = all.find(({ status }) => status === 'on_hold');
     if (!ordinary || !waiting) throw new Error('the order did not split');
     if (shipShirt) {
-        const shipped = await shipFulfillmentOrder(
+        const shipped = await deliveryService.shipFulfillmentOrder(
             String(ordinary._id),
             {},
             asAdmin(),
@@ -863,8 +863,8 @@ describe('a preorder wait nobody answered', () => {
 
     /** Ask the buyer (day 31), then let the window close and the sweep say so (day 62). */
     const letSilenceRunOut = async () => {
-        await runPreorderSweep(new Date(Date.now() + 31 * DAY));
-        await runPreorderSweep(lateEnough);
+        await deliveryService.runPreorderSweep(new Date(Date.now() + 31 * DAY));
+        await deliveryService.runPreorderSweep(lateEnough);
     };
 
     it('cancels what had not shipped as a no_answer return, refunds it, and gives the allowance back', async () => {
@@ -915,7 +915,7 @@ describe('a preorder wait nobody answered', () => {
     it('does nothing while the window is still open, so a "keep waiting" that came first wins', async () => {
         const fixture = await shirtShippedPreorderWaiting();
         // Asked on day 31 and not yet expired on day 40: the buyer may still answer.
-        await runPreorderSweep(new Date(Date.now() + 31 * DAY));
+        await deliveryService.runPreorderSweep(new Date(Date.now() + 31 * DAY));
 
         await cancelUnanswered(
             fixture.orderId,

@@ -11,42 +11,41 @@
  */
 
 import { listMethods, startFulfilment } from './start';
-import { getForOrder } from './read';
-import { shipFulfillmentOrder } from './ship';
-import { deliverShipment } from './deliver';
-import { fulfillFulfillmentOrder } from './fulfill';
-import { holdFulfillmentOrder, releaseFulfillmentOrder } from './holds';
-import { editShipmentTracking } from './tracking';
-import { confirmWait } from './confirm-wait';
-
-export { listMethods, startFulfilment } from './start';
-export {
+import {
     getForOrder,
     shippedQuantities,
     remainderOptions,
     waitHasExpired,
     findShipmentsForOrders,
-    findFulfillmentOrdersForOrders,
-    type RemainderOption
+    findFulfillmentOrdersForOrders
 } from './read';
-export { ensureFulfillmentOrders } from './ensure';
-export { shipFulfillmentOrder, type ShipInput } from './ship';
-export { deliverShipment, type DeliverInput } from './deliver';
-export { fulfillFulfillmentOrder } from './fulfill';
-export { holdFulfillmentOrder, releaseFulfillmentOrder, type HoldInput } from './holds';
-export { editShipmentTracking } from './tracking';
-export { cancelRemainder, cancelAllForOrder, type RemainderCancel } from './cancel-remainder';
-export { syncWithOverride } from './override-sync';
-export { ActRefusal } from './act';
-export { splitForAllocation, type Split } from './split';
-export { releaseAllocated } from './release-allocated';
-export { onReleaseDateChanged } from './slip';
-export { runPreorderSweep, type PreorderSweepResult } from './preorder-sweep';
-export { confirmWait } from './confirm-wait';
-export { listPreorderFulfillmentOrders, summarizePreorders, type BoardQuery } from './board';
-export { scrubHoldNotes } from './retention';
+import { ensureFulfillmentOrders } from './ensure';
+import { shipFulfillmentOrder } from './ship';
+import { deliverShipment } from './deliver';
+import { fulfillFulfillmentOrder } from './fulfill';
+import { holdFulfillmentOrder, releaseFulfillmentOrder } from './holds';
+import { editShipmentTracking } from './tracking';
+import { cancelRemainder, cancelAllForOrder } from './cancel-remainder';
+import { syncWithOverride } from './override-sync';
+import { splitForAllocation } from './split';
+import { releaseAllocated } from './release-allocated';
+import { onReleaseDateChanged } from './slip';
+import { runPreorderSweep } from './preorder-sweep';
+import { confirmWait } from './confirm-wait';
+import { listPreorderFulfillmentOrders, summarizePreorders } from './board';
+import { scrubHoldNotes } from './retention';
 
-/** The module's one service handle — every controller in this module goes through it. */
+export type { RemainderOption } from './read';
+export type { ShipInput } from './ship';
+export type { DeliverInput } from './deliver';
+export type { HoldInput } from './holds';
+export type { RemainderCancel } from './cancel-remainder';
+export type { Split } from './split';
+export type { PreorderSweepResult } from './preorder-sweep';
+export type { BoardQuery } from './board';
+export { ActRefusal } from './act';
+
+/** The module's one door — every operation on fulfillment orders and shipments. */
 export const deliveryService = {
     listMethods,
     getForOrder,
@@ -57,5 +56,21 @@ export const deliveryService = {
     holdFulfillmentOrder,
     releaseFulfillmentOrder,
     editShipmentTracking,
-    confirmWait
+    confirmWait,
+    shippedQuantities,
+    remainderOptions,
+    waitHasExpired,
+    findShipmentsForOrders,
+    findFulfillmentOrdersForOrders,
+    ensureFulfillmentOrders,
+    cancelRemainder,
+    cancelAllForOrder,
+    syncWithOverride,
+    splitForAllocation,
+    releaseAllocated,
+    onReleaseDateChanged,
+    runPreorderSweep,
+    listPreorderFulfillmentOrders,
+    summarizePreorders,
+    scrubHoldNotes
 };

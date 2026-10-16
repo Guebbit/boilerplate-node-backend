@@ -8,7 +8,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { seedOrder } from '@modules/orders/tests/factories';
-import { removeById, restoreById } from '@modules/orders/services';
+import { orderService } from '@modules/orders/services';
 import { ordersAuditActions } from '../../audit';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
@@ -33,7 +33,7 @@ describe('removeById', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const order = await seedOrder(OrderStatus.pending);
 
-        await removeById(String(order._id), false, callerContextAs('admin'));
+        await orderService.removeById(String(order._id), false, callerContextAs('admin'));
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -50,7 +50,7 @@ describe('removeById', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const order = await seedOrder(OrderStatus.cancelled);
 
-        await removeById(String(order._id), true, callerContextAs('admin'));
+        await orderService.removeById(String(order._id), true, callerContextAs('admin'));
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -67,7 +67,7 @@ describe('removeById', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const order = await seedOrder(OrderStatus.pending);
 
-        await removeById(String(order._id));
+        await orderService.removeById(String(order._id));
 
         expect(auditSpy).not.toHaveBeenCalled();
     });
@@ -77,9 +77,9 @@ describe('restoreById', () => {
     it('audits ORDER_RESTORED on a restore', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const order = await seedOrder(OrderStatus.pending);
-        await removeById(String(order._id));
+        await orderService.removeById(String(order._id));
 
-        await restoreById(String(order._id), callerContextAs('admin'));
+        await orderService.restoreById(String(order._id), callerContextAs('admin'));
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -94,9 +94,9 @@ describe('restoreById', () => {
     it('records no audit row when called with no context', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const order = await seedOrder(OrderStatus.pending);
-        await removeById(String(order._id));
+        await orderService.removeById(String(order._id));
 
-        await restoreById(String(order._id));
+        await orderService.restoreById(String(order._id));
 
         expect(auditSpy).not.toHaveBeenCalled();
     });

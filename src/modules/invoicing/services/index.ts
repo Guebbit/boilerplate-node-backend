@@ -16,18 +16,12 @@ import { renderInvoicePdf, renderCreditNotePdf } from './render';
 import { invoiceForCaller, creditNotesForCaller, creditNoteForCaller } from './for-caller';
 import { moneyBuckets } from './stats';
 
-export { issueInvoice, findInvoiceForOrder } from './issue-invoice';
-export {
-    issueCreditNote,
-    findCreditNotesForOrder,
-    findCreditNoteForOrderById,
-    type RefundedInput
-} from './issue-credit-note';
-export { renderInvoicePdf, renderCreditNotePdf } from './render';
-export type { DocumentTotals, MoneyBucket } from './stats';
-export { reencryptInvoices } from './reencrypt';
+import { reencryptInvoices } from './reencrypt';
 
-/** The service's public surface — every controller and event listener goes through this. */
+export type { RefundedInput } from './issue-credit-note';
+export type { DocumentTotals, MoneyBucket } from './stats';
+
+/** The module's one door — every operation, so a sibling or a test reaches one place. */
 export const invoicingService = {
     issueInvoice,
     findInvoiceForOrder,
@@ -39,5 +33,6 @@ export const invoicingService = {
     creditNoteForCaller,
     renderInvoicePdf,
     renderCreditNotePdf,
-    moneyBuckets
+    moneyBuckets,
+    reencryptInvoices
 };

@@ -10,7 +10,7 @@ import { PRODUCT_CREATED } from '@modules/products';
 import { emitDomainEvent, resetDomainEvents } from '@kernel/events';
 import inventoryModule from '../../module';
 import { stockLevelRepository } from '../../repository';
-import { listMovements, receive } from '../../services';
+import { inventoryService } from '../../services';
 
 setupTestDb();
 
@@ -34,7 +34,7 @@ const onHandOf = (productId: string): Promise<number | undefined> =>
 
 /** How many ledger rows the product has. */
 const movementCount = (productId: string): Promise<number> =>
-    listMovements({ productId }).then(({ items }) => items.length);
+    inventoryService.listMovements({ productId }).then(({ items }) => items.length);
 
 describe('PRODUCT_CREATED listener', () => {
     it('opens the level at zero and books no movement', async () => {
@@ -49,7 +49,7 @@ describe('PRODUCT_CREATED listener', () => {
     it('opens it once when the same event is delivered twice, and leaves what a receipt booked', async () => {
         const productId = await productWithoutLevel();
         await emitDomainEvent(PRODUCT_CREATED, { productId });
-        await receive(productId, 7);
+        await inventoryService.receive(productId, 7);
 
         await emitDomainEvent(PRODUCT_CREATED, { productId });
 

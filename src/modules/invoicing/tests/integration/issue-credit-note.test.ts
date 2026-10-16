@@ -24,7 +24,7 @@ import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/
 import { creditNoteNumberCounterModel } from '../../model';
 import { decryptInvoiceParty } from '../../pii';
 import { invoicingRepository } from '../../repository';
-import { issueCreditNote } from '../../services';
+import { invoicingService } from '../../services';
 import { shopTimezone } from '@modules/shop';
 import { OrderStatus } from '@types';
 
@@ -181,7 +181,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         });
         const [note] = await waitForNotes(orderId, 1);
 
-        const again = await issueCreditNote({
+        const again = await invoicingService.issueCreditNote({
             orderId,
             refundId: note.refundId,
             amount: 20,
@@ -198,7 +198,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         freezeDate(new Date('2026-12-31T23:30:00Z'));
 
         try {
-            const note = await issueCreditNote({
+            const note = await invoicingService.issueCreditNote({
                 orderId,
                 refundId: 'refund-new-year',
                 amount: 5,
@@ -216,7 +216,10 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         const year = yearInZone(new Date(), shopTimezone());
         const input = { orderId, refundId: 'refund-race', amount: 5, full: false };
 
-        const [first, second] = await Promise.all([issueCreditNote(input), issueCreditNote(input)]);
+        const [first, second] = await Promise.all([
+            invoicingService.issueCreditNote(input),
+            invoicingService.issueCreditNote(input)
+        ]);
 
         // One document, one number: the loser's allocation rolled back with its aborted insert.
         expect(String(first?._id)).toBe(String(second?._id));
@@ -234,7 +237,12 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
             .mockRejectedValueOnce(new Error('disk full'));
 
         await expect(
-            issueCreditNote({ orderId, refundId: 'refund-fail', amount: 5, full: false })
+            invoicingService.issueCreditNote({
+                orderId,
+                refundId: 'refund-fail',
+                amount: 5,
+                full: false
+            })
         ).rejects.toThrow('disk full');
         insert.mockRestore();
 
@@ -252,7 +260,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         const orderId = String(order._id);
         const year = yearInZone(new Date(), shopTimezone());
 
-        const note = await issueCreditNote({
+        const note = await invoicingService.issueCreditNote({
             orderId,
             refundId: 'refund-uninvoiced',
             amount: 25,

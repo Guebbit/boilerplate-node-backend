@@ -19,25 +19,17 @@ import path from 'node:path';
 import type { AppModule, PublicEventTarget } from '@kernel/registry';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import {
+    orderService,
     ORDER_CANCELLED,
     ORDER_STATUS_CHANGED,
-    ORDER_STATUS_OVERRIDDEN,
-    ownOrderIds
+    ORDER_STATUS_OVERRIDDEN
 } from '@modules/orders';
 import { PREORDER_ALLOCATED } from '@modules/inventory';
 import { PRODUCT_RELEASE_DATE_CHANGED } from '@modules/products';
 import { OrderStatus } from '@types';
 import { router } from './routes';
 import { deliveryConfig } from './config';
-import {
-    cancelAllForOrder,
-    ensureFulfillmentOrders,
-    findFulfillmentOrdersForOrders,
-    findShipmentsForOrders,
-    onReleaseDateChanged,
-    releaseAllocated,
-    syncWithOverride
-} from './services';
+import { deliveryService } from './services';
 import { presentExportFulfillmentOrder, presentExportShipment } from './presenter';
 // Also installs this module's event declarations. Reached directly, never through this module's
 // own barrel — see CLAUDE.md's module-barrel rule.
@@ -92,8 +84,9 @@ export default {
             // so this module never has to page through full order documents (or navigate
             // `.search()`'s own `_id`/`id` normalization trap) just to get them.
             collect: (subject) =>
-                ownOrderIds(subject.userId)
-                    .then((orderIds) => findShipmentsForOrders(orderIds))
+                orderService
+                    .ownOrderIds(subject.userId)
+                    .then((orderIds) => deliveryService.findShipmentsForOrders(orderIds))
                     .then((shipments) =>
                         shipments.map((shipment) => presentExportShipment(shipment))
                     )
@@ -101,8 +94,9 @@ export default {
         {
             section: 'fulfillmentOrders',
             collect: (subject) =>
-                ownOrderIds(subject.userId)
-                    .then((orderIds) => findFulfillmentOrdersForOrders(orderIds))
+                orderService
+                    .ownOrderIds(subject.userId)
+                    .then((orderIds) => deliveryService.findFulfillmentOrdersForOrders(orderIds))
                     .then((all) => all.map((one) => presentExportFulfillmentOrder(one)))
         }
     ],
@@ -113,17 +107,17 @@ export default {
      */
     subscribe: () => {
         onDomainEvent(ORDER_STATUS_CHANGED, ({ orderId, to }) =>
-            to === OrderStatus.paid ? ensureFulfillmentOrders(orderId) : undefined
+            to === OrderStatus.paid ? deliveryService.ensureFulfillmentOrders(orderId) : undefined
         );
-        onDomainEvent(ORDER_CANCELLED, ({ orderId }) => cancelAllForOrder(orderId));
+        onDomainEvent(ORDER_CANCELLED, ({ orderId }) => deliveryService.cancelAllForOrder(orderId));
         onDomainEvent(ORDER_STATUS_OVERRIDDEN, ({ orderId, to, at }) =>
-            syncWithOverride(orderId, to, new Date(at))
+            deliveryService.syncWithOverride(orderId, to, new Date(at))
         );
         onDomainEvent(PREORDER_ALLOCATED, ({ orderId, productId, waiting }) =>
-            releaseAllocated(orderId, productId, waiting)
+            deliveryService.releaseAllocated(orderId, productId, waiting)
         );
         onDomainEvent(PRODUCT_RELEASE_DATE_CHANGED, ({ productId }) =>
-            onReleaseDateChanged(productId)
+            deliveryService.onReleaseDateChanged(productId)
         );
     },
     locales: path.join(__dirname, 'locales'),

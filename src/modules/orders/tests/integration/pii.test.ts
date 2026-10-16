@@ -9,7 +9,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { orderService, findOwnOrders } from '../../services';
+import { orderService } from '../../services';
 import { orderModel } from '../../model';
 
 setupTestDb();
@@ -72,7 +72,7 @@ describe('order PII at rest', () => {
         await seedPiiOrder(user);
 
         const found = await orderService.search({}, orderService.ownerScope(String(user._id)));
-        const exported = await findOwnOrders(String(user._id));
+        const exported = await orderService.findOwnOrders(String(user._id));
 
         expect(found.items[0]?.shippingAddress).toMatchObject(SHIPPING);
         expect(found.items[0]?.notes).toBe(NOTES);

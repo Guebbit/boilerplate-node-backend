@@ -16,14 +16,7 @@ import {
     timelineOf
 } from '@modules/orders/tests/factories';
 import { OrderStatus } from '@types';
-import {
-    shipFulfillmentOrder,
-    deliverShipment,
-    fulfillFulfillmentOrder,
-    holdFulfillmentOrder,
-    releaseFulfillmentOrder,
-    cancelAllForOrder
-} from '@modules/delivery/services';
+import { deliveryService } from '@modules/delivery/services';
 import { fulfillmentOrdersOf, shipmentsOf } from '@modules/delivery/tests/factories';
 import { asAdmin, callerContextAs } from '@tests/callers';
 import { resetDomainEvents } from '@kernel/events';
@@ -65,7 +58,7 @@ describe('shipping and delivering', () => {
         const { order, product, fulfillmentOrderId } = await processingOrder();
         const orderId = String(order._id);
 
-        await shipFulfillmentOrder(
+        await deliveryService.shipFulfillmentOrder(
             fulfillmentOrderId,
             { lines: [{ productId: String(product._id), quantity: 1 }], trackingCode: 'TRK-1' },
             asAdmin(),
@@ -73,7 +66,7 @@ describe('shipping and delivering', () => {
         );
         expect(await trail(orderId)).toEqual([['shipment_shipped', 'admin-1']]);
 
-        await shipFulfillmentOrder(fulfillmentOrderId, {}, asAdmin(), admin);
+        await deliveryService.shipFulfillmentOrder(fulfillmentOrderId, {}, asAdmin(), admin);
         // The shipment is the fact, the order's move its consequence: each pair in that order.
         expect(await trail(orderId)).toEqual([
             ['shipment_shipped', 'admin-1'],
@@ -85,10 +78,15 @@ describe('shipping and delivering', () => {
     it('carries the tracking code and the ids, and the arrival closes the order', async () => {
         const { order, fulfillmentOrderId } = await processingOrder();
         const orderId = String(order._id);
-        await shipFulfillmentOrder(fulfillmentOrderId, { trackingCode: 'TRK-9' }, asAdmin(), admin);
+        await deliveryService.shipFulfillmentOrder(
+            fulfillmentOrderId,
+            { trackingCode: 'TRK-9' },
+            asAdmin(),
+            admin
+        );
         const [shipment] = await shipmentsOf(orderId);
 
-        await deliverShipment(String(shipment._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(shipment._id), {}, asAdmin(), admin);
 
         const rows = await timelineOf(orderId);
         expect(rows.map(({ type }) => type)).toEqual([
@@ -111,7 +109,7 @@ describe('shipping and delivering', () => {
             status: OrderStatus.processing
         });
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
-        await holdFulfillmentOrder(
+        await deliveryService.holdFulfillmentOrder(
             String(fulfillmentOrder._id),
             { reason: 'other' },
             asAdmin(),
@@ -119,7 +117,7 @@ describe('shipping and delivering', () => {
         );
         const before = await timelineOf(String(order._id));
 
-        const refused = await shipFulfillmentOrder(
+        const refused = await deliveryService.shipFulfillmentOrder(
             String(fulfillmentOrder._id),
             {},
             asAdmin(),
@@ -134,7 +132,11 @@ describe('shipping and delivering', () => {
         const order = await seedDigitalOrder(OrderStatus.processing, new Date());
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
 
-        await fulfillFulfillmentOrder(String(fulfillmentOrder._id), asAdmin(), admin);
+        await deliveryService.fulfillFulfillmentOrder(
+            String(fulfillmentOrder._id),
+            asAdmin(),
+            admin
+        );
 
         const rows = await timelineOf(String(order._id));
         expect(rows.map(({ type }) => type)).toEqual([
@@ -150,13 +152,13 @@ describe('holds', () => {
         const { order, fulfillmentOrderId } = await processingOrder();
         const orderId = String(order._id);
 
-        await holdFulfillmentOrder(
+        await deliveryService.holdFulfillmentOrder(
             fulfillmentOrderId,
             { reason: 'high_risk', note: 'caller sounded odd' },
             asAdmin(),
             admin
         );
-        await releaseFulfillmentOrder(fulfillmentOrderId, asAdmin(), admin);
+        await deliveryService.releaseFulfillmentOrder(fulfillmentOrderId, asAdmin(), admin);
 
         const rows = await timelineOf(orderId);
         expect(rows).toMatchObject([
@@ -172,7 +174,7 @@ describe('an order cancelled whole', () => {
         const { order } = await processingOrder();
         const orderId = String(order._id);
 
-        await cancelAllForOrder(orderId);
+        await deliveryService.cancelAllForOrder(orderId);
 
         expect(await timelineOf(orderId)).toEqual([]);
     });

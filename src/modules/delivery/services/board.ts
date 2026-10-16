@@ -14,7 +14,7 @@
 
 import { callerForSubject } from '@kernel/permissions';
 import { heldRules } from '@kernel/ability';
-import { orderBriefsByIds, ownOrderIds } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import {
     buildPaginatedMeta,
     normalizePagination,
@@ -53,7 +53,7 @@ const readableOrders = (
 ): Promise<readonly string[] | undefined> => {
     if (!authContext) return Promise.resolve([]);
     const readsEvery = heldRules(callerForSubject(authContext, 'Order')).has('display:Order');
-    return readsEvery ? Promise.resolve(undefined) : ownOrderIds(authContext.id);
+    return readsEvery ? Promise.resolve(undefined) : orderService.ownOrderIds(authContext.id);
 };
 
 /**
@@ -92,7 +92,7 @@ export const listPreorderFulfillmentOrders = async (
         limit: pagination.pageSize
     });
     const [briefs, shipments] = await Promise.all([
-        orderBriefsByIds([...new Set(items.map(({ orderId }) => String(orderId)))]),
+        orderService.orderBriefsByIds([...new Set(items.map(({ orderId }) => String(orderId)))]),
         shipmentRepository.findByFulfillmentOrderIds(items.map(({ _id }) => String(_id)))
     ]);
 

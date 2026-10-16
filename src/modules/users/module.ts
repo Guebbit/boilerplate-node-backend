@@ -19,7 +19,7 @@ import {
 } from '@kernel/registry';
 import { router } from './routes';
 import { userRepository } from './repository';
-import { reencryptUserPhones, userService } from './services';
+import { userService } from './services';
 import { setPersonalDataErasers, setPersonalDataMinimisers } from './erasure-registry';
 import './events';
 import { usersConfig } from './config';
@@ -62,7 +62,7 @@ export default {
         }
     ],
     // The phone is PII-encrypted. The TOTP secrets on this same document are `account`'s walk.
-    reencrypt: reencryptUserPhones,
+    reencrypt: userService.reencryptUserPhones,
     // The PII encryption key: see `./config`.
     config: [usersConfig.slice]
 } satisfies AppModule;

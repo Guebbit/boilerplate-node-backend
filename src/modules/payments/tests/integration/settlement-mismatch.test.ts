@@ -16,7 +16,7 @@ import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { orderService } from '@modules/orders';
 import invoicingModule from '@modules/invoicing/module';
-import { findInvoiceForOrder } from '@modules/invoicing';
+import { invoicingService } from '@modules/invoicing';
 import {
     createIntent,
     confirmPayment,
@@ -104,7 +104,7 @@ describe.each(MISMATCHES)('a provider success whose %s is not the one frozen', (
         expect(payment!.refunds).toHaveLength(1);
         // Nothing was paid: no announcement, no invoice, and the units are back on the shelf.
         expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(0);
-        expect(await findInvoiceForOrder(orderId)).toBeNull();
+        expect(await invoicingService.findInvoiceForOrder(orderId)).toBeNull();
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
         // The field that differed is what the counter and the audit row name.
         const counted = await paymentAmountMismatchTotal.get();

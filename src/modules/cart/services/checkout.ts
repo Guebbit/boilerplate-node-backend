@@ -19,8 +19,6 @@ import { toMinorUnits } from '@shared-kernel/money';
 import {
     orderService,
     orderTotal,
-    placeOrder,
-    sendOrderPlacedEmail,
     type OrderDocument,
     type PlaceOrderInput,
     type PlaceOrderOutcome
@@ -646,7 +644,7 @@ const runCheckout = async (
      * only what is genuinely checkout's own: the pre-flight above, and the cart clear, which
      * commits with the order (`commitWith`) so a lost race writes no order at all.
      */
-    const outcome = await placeOrder(
+    const outcome = await orderService.placeOrder(
         placeOrderInputOf({
             user,
             buyerLocale,
@@ -665,7 +663,7 @@ const runCheckout = async (
     const { order } = outcome;
 
     // Sent from the service, not the controller: only this point knows the order stood.
-    sendOrderPlacedEmail(order, buyerLocale, user.username, user.email);
+    orderService.sendOrderPlacedEmail(order, buyerLocale, user.username, user.email);
     return generateSuccess<OrderDocument>(order);
 };
 

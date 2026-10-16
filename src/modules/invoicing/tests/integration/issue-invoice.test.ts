@@ -16,14 +16,14 @@ import productsModule from '@modules/products/module';
 import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
 import invoicingModule from '@modules/invoicing/module';
-import { markPaid, yearInZone } from '@modules/orders';
+import { orderService, yearInZone } from '@modules/orders';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, timelineOf, toOrderItem } from '@modules/orders/tests/factories';
 import { invoiceNumberCounterModel } from '../../model';
 import { decryptInvoiceParty } from '../../pii';
 import { invoicingRepository } from '../../repository';
-import { issueInvoice } from '../../services';
+import { invoicingService } from '../../services';
 import { shopTimezone } from '@modules/shop';
 
 setupTestDb();
@@ -59,7 +59,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             }
         });
 
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
         const invoice = await waitForInvoice(String(order._id));
 
         expect(invoice.number).toMatch(/^\d{4}-\d{6}$/);
@@ -92,7 +92,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             }
         });
 
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
         const invoice = await waitForInvoice(String(order._id));
 
         expect(decryptInvoiceParty(invoice.billingAddress!, 'invoice', invoice._id).fullName).toBe(
@@ -113,7 +113,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             }
         });
 
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
         const invoice = await waitForInvoice(String(order._id));
 
         expect(invoice.billingAddress).toBeUndefined();
@@ -132,7 +132,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             products.map((product) => toOrderItem(product, 1))
         );
 
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
         const invoice = await waitForInvoice(String(order._id));
 
         // Read field by field: a Mongoose array of subdocuments is not plain data, and `toEqual` trips on it.
@@ -158,7 +158,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         const exempt = await createProduct({ price: 20, taxClass: 'zero', rateType: 'exempt' });
         const order = await createOrder(user, [toOrderItem(zeroRated, 1), toOrderItem(exempt, 1)]);
 
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
         const invoice = await waitForInvoice(String(order._id));
 
         expect(invoice.lines.map((line) => line.rateType)).toEqual(['zero-rated', 'exempt']);
@@ -172,8 +172,8 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             createOrder(user, [toOrderItem(product, 1)])
         ]);
 
-        await markPaid(String(orderA._id));
-        await markPaid(String(orderB._id));
+        await orderService.markPaid(String(orderA._id));
+        await orderService.markPaid(String(orderB._id));
         const [invoiceA, invoiceB] = await Promise.all([
             waitForInvoice(String(orderA._id)),
             waitForInvoice(String(orderB._id))
@@ -195,7 +195,10 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
 
         // Two callers racing the same fact — a redelivered event, or two settlements — both call
         // this; the unique index refuses the second insert and its transaction gives the number back.
-        const [first, second] = await Promise.all([issueInvoice(order), issueInvoice(order)]);
+        const [first, second] = await Promise.all([
+            invoicingService.issueInvoice(order),
+            invoicingService.issueInvoice(order)
+        ]);
 
         expect(first?.number).toBe(second?.number);
         expect(String(first?._id)).toBe(String(second?._id));
@@ -212,7 +215,10 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             status: OrderStatus.paid
         });
 
-        const [first] = await Promise.all([issueInvoice(order), issueInvoice(order)]);
+        const [first] = await Promise.all([
+            invoicingService.issueInvoice(order),
+            invoicingService.issueInvoice(order)
+        ]);
 
         const rows = await timelineOf(String(order._id));
         expect(rows).toHaveLength(1);
@@ -230,8 +236,8 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         });
         const year = yearInZone(new Date(), shopTimezone());
 
-        const first = await issueInvoice(order);
-        const again = await issueInvoice(order);
+        const first = await invoicingService.issueInvoice(order);
+        const again = await invoicingService.issueInvoice(order);
 
         expect(String(again?._id)).toBe(String(first?._id));
         const counter = await invoiceNumberCounterModel.findById(year).lean().exec();
@@ -249,12 +255,14 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
             .spyOn(invoicingRepository, 'insertInvoice')
             .mockRejectedValueOnce(new Error('disk full'));
 
-        await expect(issueInvoice(order)).rejects.toThrow('disk full');
+        await expect(invoicingService.issueInvoice(order)).rejects.toThrow('disk full');
         insert.mockRestore();
 
         // The allocation shared the insert's transaction, so nothing was spent.
         expect(await invoiceNumberCounterModel.findById(year).lean().exec()).toBeNull();
-        await expect(issueInvoice(order)).resolves.toMatchObject({ number: `${year}-000001` });
+        await expect(invoicingService.issueInvoice(order)).resolves.toMatchObject({
+            number: `${year}-000001`
+        });
     });
 
     it("numbers an invoice by the shop's calendar year, not UTC's", async () => {
@@ -267,7 +275,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         freezeDate(new Date('2026-12-31T23:30:00Z'));
 
         try {
-            const invoice = await issueInvoice(order);
+            const invoice = await invoicingService.issueInvoice(order);
 
             expect(invoice?.number).toBe('2027-000001');
             expect(invoice?.issuedAt).toEqual(new Date('2026-12-31T23:30:00Z'));
@@ -282,7 +290,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         const user = await createUser();
         const product = await createProduct({ price: 10 });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
-        const issued = await issueInvoice(order);
+        const issued = await invoicingService.issueInvoice(order);
 
         setEnvironment({ NODE_SHOP_TIMEZONE: 'Asia/Tokyo' });
         const stored = await invoicingRepository.findInvoiceByOrderId(String(order._id));
@@ -295,7 +303,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         const user = await createUser();
         const order = await createOrder(user, []);
 
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
         await new Promise((resolve) => setTimeout(resolve, 50));
 
         await expect(

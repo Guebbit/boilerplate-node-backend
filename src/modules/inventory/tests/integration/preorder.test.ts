@@ -13,21 +13,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { outboxEventModel } from '@kernel/outbox';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { StockMovementReason } from '@types';
-import {
-    availableFor,
-    commitForOrder,
-    listMovements,
-    listPreorders,
-    lowStockCount,
-    receive,
-    releaseCommittedForOrder,
-    releaseForOrder,
-    releaseLinesForOrder,
-    reserveForOrder,
-    runReservationSweep,
-    setPreorderLimit,
-    shipLinesForOrder
-} from '../../services';
+import { inventoryService } from '../../services';
 import {
     reservationRepository,
     stockLevelRepository,
@@ -63,7 +49,7 @@ const levelOf = (productId: string) =>
 const preorderProduct = async (limit: number) => {
     const product = await createProduct({ onHand: 0 });
     const productId = String(product._id);
-    await setPreorderLimit(productId, limit);
+    await inventoryService.setPreorderLimit(productId, limit);
     return productId;
 };
 
@@ -87,7 +73,7 @@ describe('reserving a preorder', () => {
     it('claims the allowance and leaves the shelf alone', async () => {
         const productId = await preorderProduct(5);
 
-        const outcome = await reserveForOrder(anOrderId(), [claim(productId, 3)]);
+        const outcome = await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 3)]);
 
         expect(outcome).toMatchObject({ held: true });
         expect(await levelOf(productId)).toEqual({
@@ -100,9 +86,9 @@ describe('reserving a preorder', () => {
 
     it('refuses what the allowance cannot cover, reporting what is left of it', async () => {
         const productId = await preorderProduct(5);
-        await reserveForOrder(anOrderId(), [claim(productId, 3)]);
+        await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 3)]);
 
-        const outcome = await reserveForOrder(anOrderId(), [claim(productId, 3)]);
+        const outcome = await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 3)]);
 
         expect(outcome).toMatchObject({
             held: false,
@@ -114,7 +100,9 @@ describe('reserving a preorder', () => {
     it('refuses a preorder on a product that has no allowance at all', async () => {
         const product = await createProduct({ onHand: 0 });
 
-        const outcome = await reserveForOrder(anOrderId(), [claim(String(product._id), 1)]);
+        const outcome = await inventoryService.reserveForOrder(anOrderId(), [
+            claim(String(product._id), 1)
+        ]);
 
         expect(outcome).toMatchObject({ held: false });
     });
@@ -122,9 +110,9 @@ describe('reserving a preorder', () => {
     it('does not sell the shelf against the allowance: stock on hand is not preorder room', async () => {
         const product = await createProduct({ onHand: 50 });
         const productId = String(product._id);
-        await setPreorderLimit(productId, 2);
+        await inventoryService.setPreorderLimit(productId, 2);
 
-        const outcome = await reserveForOrder(anOrderId(), [claim(productId, 3)]);
+        const outcome = await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 3)]);
 
         expect(outcome).toMatchObject({ held: false, shortfalls: [{ available: 2 }] });
     });
@@ -132,7 +120,7 @@ describe('reserving a preorder', () => {
     it('records the claim in its own ledger column', async () => {
         const productId = await preorderProduct(5);
 
-        await reserveForOrder(anOrderId(), [claim(productId, 2)]);
+        await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 2)]);
 
         const { items } = await stockMovementRepository.search({ productId });
         expect(items).toMatchObject([
@@ -149,7 +137,7 @@ describe('reserving a preorder', () => {
         const productId = await preorderProduct(5);
         const scarce = await createProduct({ onHand: 0 });
 
-        const outcome = await reserveForOrder(anOrderId(), [
+        const outcome = await inventoryService.reserveForOrder(anOrderId(), [
             claim(productId, 2),
             { productId: String(scarce._id), quantity: 1 }
         ]);
@@ -163,9 +151,9 @@ describe('giving a preorder claim back', () => {
     it('release gives the allowance back, never `reserved`', async () => {
         const productId = await preorderProduct(5);
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [claim(productId, 3)]);
+        await inventoryService.reserveForOrder(orderId, [claim(productId, 3)]);
 
-        expect(await releaseForOrder(orderId)).toBe(true);
+        expect(await inventoryService.releaseForOrder(orderId)).toBe(true);
 
         expect(await levelOf(productId)).toMatchObject({ reserved: 0, preordered: 0 });
     });
@@ -173,10 +161,10 @@ describe('giving a preorder claim back', () => {
     it('expiry of an unpaid hold gives the allowance back', async () => {
         const productId = await preorderProduct(5);
         await withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', async () => {
-            await reserveForOrder(anOrderId(), [claim(productId, 3)]);
+            await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 3)]);
         });
 
-        await runReservationSweep();
+        await inventoryService.runReservationSweep();
 
         expect(await levelOf(productId)).toMatchObject({ reserved: 0, preordered: 0 });
     });
@@ -184,10 +172,10 @@ describe('giving a preorder claim back', () => {
     it('a paid order cancelled before stock arrives gives the allowance back', async () => {
         const productId = await preorderProduct(5);
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [claim(productId, 3)]);
-        await commitForOrder(orderId);
+        await inventoryService.reserveForOrder(orderId, [claim(productId, 3)]);
+        await inventoryService.commitForOrder(orderId);
 
-        expect(await releaseCommittedForOrder(orderId)).toBe(true);
+        expect(await inventoryService.releaseCommittedForOrder(orderId)).toBe(true);
 
         expect(await levelOf(productId)).toMatchObject({ reserved: 0, preordered: 0 });
     });
@@ -195,11 +183,11 @@ describe('giving a preorder claim back', () => {
     it('a remainder cancel of a preorder line gives back the allowance, and of a stock line the shelf', async () => {
         const productId = await preorderProduct(5);
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [claim(productId, 3)]);
-        await commitForOrder(orderId);
+        await inventoryService.reserveForOrder(orderId, [claim(productId, 3)]);
+        await inventoryService.commitForOrder(orderId);
 
         await withTransaction((session) =>
-            releaseLinesForOrder(orderId, [claim(productId, 2)], session)
+            inventoryService.releaseLinesForOrder(orderId, [claim(productId, 2)], session)
         );
 
         expect(await levelOf(productId)).toMatchObject({ reserved: 0, preordered: 1 });
@@ -213,9 +201,9 @@ describe('paying for a preorder', () => {
         const productId = await preorderProduct(5);
         const orderId = anOrderId();
         const before = Date.now();
-        await reserveForOrder(orderId, [claim(productId, 1)]);
+        await inventoryService.reserveForOrder(orderId, [claim(productId, 1)]);
 
-        await commitForOrder(orderId);
+        await inventoryService.commitForOrder(orderId);
 
         const hold = await reservationRepository.findByOrderId(orderId);
         expect(hold?.status).toBe('committed');
@@ -225,12 +213,12 @@ describe('paying for a preorder', () => {
     it('serves a paid preorder at once when stock already arrived while it was unpaid', async () => {
         const productId = await preorderProduct(5);
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [claim(productId, 2)]);
+        await inventoryService.reserveForOrder(orderId, [claim(productId, 2)]);
         // The receipt finds only unpaid holds, so nothing is allocated yet.
-        await receive(productId, 4);
+        await inventoryService.receive(productId, 4);
         expect(await levelOf(productId)).toMatchObject({ reserved: 0, preordered: 2 });
 
-        await commitForOrder(orderId);
+        await inventoryService.commitForOrder(orderId);
 
         expect(await levelOf(productId)).toMatchObject({ onHand: 4, reserved: 2, preordered: 0 });
         expect(await announced()).toEqual([{ orderId, productId, waiting: 0 }]);
@@ -243,12 +231,12 @@ describe('a receipt serving the queue', () => {
         const first = anOrderId();
         const second = anOrderId();
         // Ordered first, paid last.
-        await reserveForOrder(first, [claim(productId, 2)]);
-        await reserveForOrder(second, [claim(productId, 2)]);
-        await commitForOrder(second);
-        await commitForOrder(first);
+        await inventoryService.reserveForOrder(first, [claim(productId, 2)]);
+        await inventoryService.reserveForOrder(second, [claim(productId, 2)]);
+        await inventoryService.commitForOrder(second);
+        await inventoryService.commitForOrder(first);
 
-        await receive(productId, 2);
+        await inventoryService.receive(productId, 2);
 
         expect(await announced()).toEqual([{ orderId: second, productId, waiting: 0 }]);
         const served = await reservationRepository.findByOrderId(second);
@@ -260,10 +248,10 @@ describe('a receipt serving the queue', () => {
     it('splits a short delivery: the order gets what exists and keeps waiting for the rest', async () => {
         const productId = await preorderProduct(10);
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [claim(productId, 3)]);
-        await commitForOrder(orderId);
+        await inventoryService.reserveForOrder(orderId, [claim(productId, 3)]);
+        await inventoryService.commitForOrder(orderId);
 
-        await receive(productId, 2);
+        await inventoryService.receive(productId, 2);
 
         const hold = await reservationRepository.findByOrderId(orderId);
         expect(hold?.items).toMatchObject([
@@ -277,10 +265,10 @@ describe('a receipt serving the queue', () => {
     it('turns the claim into a real hold without making the units sellable in between', async () => {
         const productId = await preorderProduct(10);
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [claim(productId, 2)]);
-        await commitForOrder(orderId);
+        await inventoryService.reserveForOrder(orderId, [claim(productId, 2)]);
+        await inventoryService.commitForOrder(orderId);
 
-        await receive(productId, 2);
+        await inventoryService.receive(productId, 2);
 
         const level = await stockLevelRepository.findByProductId(productId);
         expect(level?.available).toBe(0);
@@ -297,10 +285,10 @@ describe('a receipt serving the queue', () => {
     it('leaves the surplus sellable once every paid preorder is served', async () => {
         const productId = await preorderProduct(10);
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [claim(productId, 2)]);
-        await commitForOrder(orderId);
+        await inventoryService.reserveForOrder(orderId, [claim(productId, 2)]);
+        await inventoryService.commitForOrder(orderId);
 
-        await receive(productId, 5);
+        await inventoryService.receive(productId, 5);
 
         const level = await stockLevelRepository.findByProductId(productId);
         expect(level?.available).toBe(3);
@@ -308,9 +296,9 @@ describe('a receipt serving the queue', () => {
 
     it('does not serve a preorder that is still unpaid', async () => {
         const productId = await preorderProduct(10);
-        await reserveForOrder(anOrderId(), [claim(productId, 2)]);
+        await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 2)]);
 
-        await receive(productId, 5);
+        await inventoryService.receive(productId, 5);
 
         expect(await announced()).toEqual([]);
         expect(await levelOf(productId)).toMatchObject({ onHand: 5, reserved: 0, preordered: 2 });
@@ -319,7 +307,7 @@ describe('a receipt serving the queue', () => {
     it('is a plain receipt when nothing is waiting', async () => {
         const product = await createProduct({ onHand: 1 });
 
-        await receive(String(product._id), 4);
+        await inventoryService.receive(String(product._id), 4);
 
         expect(await announced()).toEqual([]);
         expect(await levelOf(String(product._id))).toMatchObject({ onHand: 5, reserved: 0 });
@@ -328,12 +316,12 @@ describe('a receipt serving the queue', () => {
     it('lets the allocated units ship like any other, and only those', async () => {
         const productId = await preorderProduct(10);
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [claim(productId, 3)]);
-        await commitForOrder(orderId);
-        await receive(productId, 2);
+        await inventoryService.reserveForOrder(orderId, [claim(productId, 3)]);
+        await inventoryService.commitForOrder(orderId);
+        await inventoryService.receive(productId, 2);
 
         await withTransaction((session) =>
-            shipLinesForOrder(orderId, [{ productId, quantity: 2 }], session)
+            inventoryService.shipLinesForOrder(orderId, [{ productId, quantity: 2 }], session)
         );
 
         expect(await levelOf(productId)).toMatchObject({ onHand: 0, reserved: 0, preordered: 1 });
@@ -349,13 +337,15 @@ describe('shipping a preorder claim nothing was allocated to', () => {
     it('is refused, and moves no counter and leaves the hold as it was', async () => {
         const productId = await preorderProduct(10);
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [claim(productId, 3)]);
-        await commitForOrder(orderId);
+        await inventoryService.reserveForOrder(orderId, [claim(productId, 3)]);
+        await inventoryService.commitForOrder(orderId);
         const levelBefore = await levelOf(productId);
         const holdBefore = await reservationRepository.findByOrderId(orderId);
 
         await expect(
-            withTransaction((session) => shipLinesForOrder(orderId, [claim(productId, 3)], session))
+            withTransaction((session) =>
+                inventoryService.shipLinesForOrder(orderId, [claim(productId, 3)], session)
+            )
         ).rejects.toThrow(/still a preorder claim/);
 
         expect(await levelOf(productId)).toEqual(levelBefore);
@@ -369,11 +359,11 @@ describe('what a shopper may buy', () => {
     it('reads the allowance, not the shelf, for a product named as a preorder', async () => {
         const product = await createProduct({ onHand: 50 });
         const productId = String(product._id);
-        await setPreorderLimit(productId, 4);
-        await reserveForOrder(anOrderId(), [claim(productId, 1)]);
+        await inventoryService.setPreorderLimit(productId, 4);
+        await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 1)]);
 
-        const sellable = await availableFor([productId], new Set([productId]));
-        const onTheShelf = await availableFor([productId]);
+        const sellable = await inventoryService.availableFor([productId], new Set([productId]));
+        const onTheShelf = await inventoryService.availableFor([productId]);
 
         expect(sellable.get(productId)).toBe(3);
         expect(onTheShelf.get(productId)).toBe(50);
@@ -384,11 +374,11 @@ describe('the preorder board', () => {
     it('splits outstanding units between paid and unpaid orders, and counts the lifetime orders', async () => {
         const productId = await preorderProduct(10);
         const paid = anOrderId();
-        await reserveForOrder(paid, [claim(productId, 2)]);
-        await commitForOrder(paid);
-        await reserveForOrder(anOrderId(), [claim(productId, 3)]);
+        await inventoryService.reserveForOrder(paid, [claim(productId, 2)]);
+        await inventoryService.commitForOrder(paid);
+        await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 3)]);
 
-        const { items, meta } = await listPreorders();
+        const { items, meta } = await inventoryService.listPreorders();
 
         expect(meta.totalItems).toBe(1);
         expect(items).toMatchObject([
@@ -408,7 +398,7 @@ describe('the preorder board', () => {
         const productId = await preorderProduct(4);
         await createProduct({ onHand: 9 });
 
-        const { items } = await listPreorders();
+        const { items } = await inventoryService.listPreorders();
 
         expect(items).toMatchObject([{ productId, preordered: 0, left: 4, held: 0, paid: 0 }]);
     });
@@ -416,7 +406,7 @@ describe('the preorder board', () => {
 
 describe('setPreorderLimit', () => {
     it('answers 404 for an unknown product and writes nothing', async () => {
-        const result = await setPreorderLimit('f'.repeat(24), 3);
+        const result = await inventoryService.setPreorderLimit('f'.repeat(24), 3);
 
         expect(result).toMatchObject({ success: false, status: 404 });
     });
@@ -427,7 +417,7 @@ describe('setPreorderLimit', () => {
         const productId = await preorderProduct(5);
         auditSpy.mockClear();
 
-        await setPreorderLimit(productId, 8, callerContextAs('admin'));
+        await inventoryService.setPreorderLimit(productId, 8, callerContextAs('admin'));
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -436,19 +426,21 @@ describe('setPreorderLimit', () => {
                 metadata: { preorderLimit: 8 }
             })
         );
-        const ledger = await listMovements({ productId });
+        const ledger = await inventoryService.listMovements({ productId });
         expect(ledger.items).toEqual([]);
     });
 
     it('lets the limit drop below what is outstanding: those orders stand, new ones are refused', async () => {
         const productId = await preorderProduct(5);
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [claim(productId, 4)]);
+        await inventoryService.reserveForOrder(orderId, [claim(productId, 4)]);
 
-        await setPreorderLimit(productId, 1);
+        await inventoryService.setPreorderLimit(productId, 1);
 
         expect(await levelOf(productId)).toMatchObject({ preordered: 4, preorderLimit: 1 });
-        expect(await reserveForOrder(anOrderId(), [claim(productId, 1)])).toMatchObject({
+        expect(
+            await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 1)])
+        ).toMatchObject({
             held: false
         });
     });
@@ -462,6 +454,6 @@ describe('the low-stock gauge', () => {
         });
         await createProduct({ onHand: 0 });
 
-        expect(await lowStockCount()).toBe(1);
+        expect(await inventoryService.lowStockCount()).toBe(1);
     });
 });

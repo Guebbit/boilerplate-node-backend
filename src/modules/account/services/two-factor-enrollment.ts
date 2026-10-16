@@ -6,12 +6,7 @@
  */
 
 import { t } from '@infrastructure/i18n';
-import {
-    clearDeliveredCode,
-    userService,
-    type TwoFactorMethodRecord,
-    type UserDocument
-} from '@modules/users';
+import { userService, type TwoFactorMethodRecord, type UserDocument } from '@modules/users';
 import {
     generateSuccess,
     generateReject,
@@ -147,7 +142,7 @@ const beginSetup = (
     // Disarmed BEFORE the handler runs: a restart that fails halfway must not leave the
     // old secret armed next to a new pending one.
     entry.enrolledAt = undefined;
-    clearDeliveredCode(entry);
+    userService.clearDeliveredCode(entry);
 
     return handler.setup(user, entry, context).then((payload) => {
         // The armed flag is derived by the write itself, from the entries as stored: a disarmed

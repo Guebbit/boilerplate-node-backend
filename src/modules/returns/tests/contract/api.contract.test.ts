@@ -14,7 +14,7 @@ import type { UserDocument } from '@modules/users';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { carryOrderTo, fulfillmentOrdersOf } from '@modules/delivery/tests/factories';
-import { shipFulfillmentOrder } from '@modules/delivery';
+import { deliveryService } from '@modules/delivery';
 import { asAdmin, callerContextAs } from '@tests/callers';
 import { OrderStatus } from '@types';
 import { returnRepository } from '../../repository';
@@ -395,7 +395,7 @@ const partlyShippedFor = async (user: UserDocument) => {
         status: OrderStatus.processing
     });
     const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
-    await shipFulfillmentOrder(
+    await deliveryService.shipFulfillmentOrder(
         String(fulfillmentOrder._id),
         { lines: [{ productId: String(shipped._id), quantity: 1 }] },
         asAdmin(),

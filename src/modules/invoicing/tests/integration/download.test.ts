@@ -8,7 +8,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
-import { markPaid } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
@@ -17,7 +17,7 @@ import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
 import { auditLogger } from '@infrastructure/adapters/logger';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { invoicingRepository } from '../../repository';
-import { issueCreditNote } from '../../services';
+import { invoicingService } from '../../services';
 
 /** A second, distinctly-addressed customer — `authenticateAs('user')` always mints the same
  * default address, which collides the second time one test needs two customers. */
@@ -74,7 +74,7 @@ describe('GET /orders/{id}/invoice', () => {
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
 
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
         await waitUntilInvoiced(String(order._id), bearer);
 
         const response = await api()
@@ -100,7 +100,7 @@ describe('GET /orders/{id}/invoice', () => {
         });
         jest.mocked(renderHtmlToPdf).mockClear();
 
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
         await waitUntilInvoiced(String(order._id), bearer);
 
         const html = jest.mocked(renderHtmlToPdf).mock.calls.map(([page]) => page);
@@ -114,7 +114,7 @@ describe('GET /orders/{id}/invoice', () => {
         const stranger = await authenticateAnotherUser();
         const product = await createProduct();
         const order = await createOrder(owner.user, [toOrderItem(product, 1)]);
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
         await waitUntilInvoiced(String(order._id), owner.bearer);
 
         const response = await api()
@@ -129,7 +129,7 @@ describe('GET /orders/{id}/invoice', () => {
         const admin = await authenticateAs('admin');
         const product = await createProduct();
         const order = await createOrder(owner.user, [toOrderItem(product, 1)]);
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
         await waitUntilInvoiced(String(order._id), owner.bearer);
 
         const response = await api()
@@ -144,7 +144,7 @@ describe('GET /orders/{id}/invoice', () => {
         const admin = await authenticateAs('admin');
         const product = await createProduct();
         const order = await createOrder(owner.user, [toOrderItem(product, 1)]);
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
         await waitUntilInvoiced(String(order._id), owner.bearer);
         const auditSpy = jest.spyOn(auditLogger, 'log').mockImplementation(() => auditLogger);
         const viewedActions = () =>
@@ -181,7 +181,7 @@ describe('GET /orders/{id}/invoice — when the render queue is full', () => {
             const { bearer, user } = await authenticateAs('user');
             const product = await createProduct();
             const order = await createOrder(user, [toOrderItem(product, 1)]);
-            await markPaid(String(order._id));
+            await orderService.markPaid(String(order._id));
             await waitUntilInvoiced(String(order._id), bearer);
             jest.mocked(renderHtmlToPdf).mockRejectedValueOnce(new ServiceBusyError('queue full'));
 
@@ -200,7 +200,7 @@ describe('GET /orders/{id}/invoice — the stored copy', () => {
         const { bearer, user } = await authenticateAs('user');
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
         // The polling helper downloads (and so renders and stores) until the invoice exists.
         await waitUntilInvoiced(String(order._id), bearer);
         jest.mocked(renderHtmlToPdf).mockClear();
@@ -230,7 +230,7 @@ describe('GET /orders/{id} — the actions.invoice flag', () => {
             .set('Authorization', bearer);
         expect(before.body.data.actions.invoice).toBe(false);
 
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
 
         const after = await api()
             .get(`/orders/${String(order._id)}`)
@@ -273,9 +273,9 @@ const refundedOrder = async () => {
     const product = await createProduct();
     const order = await createOrder(owner.user, [toOrderItem(product, 1)]);
     const orderId = String(order._id);
-    await markPaid(orderId);
+    await orderService.markPaid(orderId);
     await waitUntilInvoiced(orderId, owner.bearer);
-    const creditNote = await issueCreditNote({
+    const creditNote = await invoicingService.issueCreditNote({
         orderId,
         refundId: 'refund-2',
         amount: 1,
@@ -383,9 +383,9 @@ describe('GET /orders/{id}/credit-notes/{creditNoteId}', () => {
         const product = await createProduct();
         const order = await createOrder(owner.user, [toOrderItem(product, 1)]);
         const orderId = String(order._id);
-        await markPaid(orderId);
+        await orderService.markPaid(orderId);
         await waitUntilInvoiced(orderId, owner.bearer);
-        const creditNote = await issueCreditNote({
+        const creditNote = await invoicingService.issueCreditNote({
             orderId,
             refundId: 'refund-1',
             amount: 1,

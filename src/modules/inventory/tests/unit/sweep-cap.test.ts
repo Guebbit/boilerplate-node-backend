@@ -15,7 +15,7 @@ jest.mock('@kernel/outbox', () => ({
 }));
 
 import { reservationRepository } from '../../repository';
-import { runReservationSweep } from '../../services';
+import { inventoryService } from '../../services';
 
 /** A full batch: 200 holds past their window, none of which a release finds. */
 const fullBatch = Array.from({ length: 200 }, (_, index) => ({
@@ -31,7 +31,7 @@ describe('runReservationSweep — the cap', () => {
             .mockResolvedValue(fullBatch as never);
         const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
 
-        await runReservationSweep();
+        await inventoryService.runReservationSweep();
 
         expect(find).toHaveBeenCalledTimes(50);
         expect(warn).toHaveBeenCalledTimes(1);
@@ -44,7 +44,7 @@ describe('runReservationSweep — the cap', () => {
             .mockResolvedValueOnce(fullBatch.slice(0, 3) as never);
         const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
 
-        await runReservationSweep();
+        await inventoryService.runReservationSweep();
 
         expect(find).toHaveBeenCalledTimes(2);
         expect(warn).not.toHaveBeenCalled();

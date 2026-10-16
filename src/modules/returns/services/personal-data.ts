@@ -7,7 +7,7 @@
  * record of a consumer-rights act, not a preference.
  */
 
-import { ownOrderIds } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import type { ExportReturn } from '@types';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
@@ -39,6 +39,7 @@ const toExportReturn = (returned: ReturnDocument): ExportReturn => ({
  * @param userId - the account requesting its export
  */
 export const collectPersonalData = (userId: string): Promise<ExportReturn[]> =>
-    ownOrderIds(userId)
+    orderService
+        .ownOrderIds(userId)
         .then((orderIds) => returnRepository.findByOrderIds(orderIds))
         .then((returns) => returns.map((returned) => toExportReturn(returned)));

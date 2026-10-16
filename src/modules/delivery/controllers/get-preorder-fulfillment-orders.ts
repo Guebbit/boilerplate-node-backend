@@ -10,7 +10,7 @@ import {
     SummarizePreorderFulfillmentOrdersQueryParams
 } from '@api/schemas.zod';
 import { createListController } from '@infrastructure/surfaces/create-list-controller';
-import { listPreorderFulfillmentOrders, summarizePreorders } from '../services';
+import { deliveryService } from '../services';
 
 /** Handles `GET /delivery/fulfillment-orders`. */
 export const getPreorderFulfillmentOrders = createListController({
@@ -21,7 +21,8 @@ export const getPreorderFulfillmentOrders = createListController({
     }).partial(),
     // `preorder` and `late` are booleans, and `dueWithin` a number, which a query string carries as text.
     input: { booleans: ['preorder', 'late'], numbers: ['dueWithin'] },
-    runList: (parsed, request) => listPreorderFulfillmentOrders(parsed, request.authContext)
+    runList: (parsed, request) =>
+        deliveryService.listPreorderFulfillmentOrders(parsed, request.authContext)
 });
 
 /** Handles `GET /delivery/fulfillment-orders/summary`. */
@@ -31,5 +32,5 @@ export const getPreorderSummary = createListController({
         page: pageSchema,
         pageSize: pageSizeSchema
     }).partial(),
-    runList: (parsed, request) => summarizePreorders(parsed, request.authContext)
+    runList: (parsed, request) => deliveryService.summarizePreorders(parsed, request.authContext)
 });

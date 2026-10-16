@@ -27,7 +27,7 @@ import { asReject } from '@tests/response';
 import { approveReturn, createReturn, declineReturn, receiveReturn } from '../../services';
 import { RETURN_CLOSED, RETURN_RECEIVED } from '../../events';
 import { returnRepository } from '../../repository';
-import { findCreditNotesForOrder, type CreditNoteDocument } from '@modules/invoicing';
+import { invoicingService, type CreditNoteDocument } from '@modules/invoicing';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -424,7 +424,7 @@ describe('the credit note a received return issues', () => {
         await receiveReturn(id, {}, callerContextAs('admin'));
         let notes: CreditNoteDocument[] = [];
         await waitFor(async () => {
-            notes = await findCreditNotesForOrder(fixture.orderId);
+            notes = await invoicingService.findCreditNotesForOrder(fixture.orderId);
             return notes.length > 0;
         });
 
@@ -601,7 +601,7 @@ describe('the order timeline of a return', () => {
 
         const rows = await timelineOf(fixture.orderId);
         expect(rows.filter(({ type }) => type === 'invoice_issued')).toHaveLength(1);
-        const [note] = await findCreditNotesForOrder(fixture.orderId);
+        const [note] = await invoicingService.findCreditNotesForOrder(fixture.orderId);
         expect(rows.find(({ type }) => type === 'credit_note_issued')?.data).toMatchObject({
             creditNoteId: String(note._id),
             number: note.number

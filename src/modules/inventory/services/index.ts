@@ -35,11 +35,6 @@ import {
 } from './levels';
 import { receive, adjust, setPreorderLimit } from './admin';
 
-/*
- * Every operation is published by name as well as through the object below: `module.ts` and
- * `metrics.ts` call `openLevel`, `removeLevel`, `receive` and `lowStockCount` directly, and the
- * suites drive the rest. The barrel's surface must not shrink when a file moves.
- */
 export type {
     StockLine,
     StockShortfall,
@@ -47,30 +42,6 @@ export type {
     LevelFilters,
     MovementFilters
 } from './types';
-export { reserveForOrder } from './reserve';
-export {
-    commitForOrder,
-    shipForOrder,
-    shipLinesForOrder,
-    releaseLinesForOrder,
-    releaseForOrder,
-    releaseCommittedForOrder,
-    refreshStockCacheForOrder,
-    extendHoldForOrder
-} from './holds';
-export { restockReturnedLines } from './returns';
-export { refreshStockCacheForProducts } from './transition';
-export { runReservationSweep } from './sweep';
-export {
-    availableFor,
-    openLevel,
-    removeLevel,
-    listLevels,
-    lowStockCount,
-    listMovements,
-    listPreorders
-} from './levels';
-export { receive, adjust, setPreorderLimit } from './admin';
 
 /** The module's one service handle. */
 export const inventoryService = {

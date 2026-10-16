@@ -18,7 +18,7 @@ import productsModule from '@modules/products/module';
 import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
 import invoicingModule from '@modules/invoicing/module';
-import { issueInvoice, issueCreditNote } from '@modules/invoicing';
+import { invoicingService } from '@modules/invoicing';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, detachOrderUserId, toOrderItem } from '@modules/orders/tests/factories';
@@ -80,7 +80,7 @@ const paidOrder = async (options: {
             ...(options.currency ? { currency: options.currency } : {})
         }
     );
-    await issuedAt(options.paidAt, () => issueInvoice(order));
+    await issuedAt(options.paidAt, () => invoicingService.issueInvoice(order));
     return order;
 };
 
@@ -118,7 +118,12 @@ const seedScenario = async () => {
     await paidOrder({ user: regular, product, quantity: 2, paidAt: '2026-03-10T23:30:00Z' });
     await paidOrder({ user: regular, product, quantity: 1, paidAt: '2026-02-01T10:00:00Z' });
     await issuedAt('2026-03-12T10:00:00Z', () =>
-        issueCreditNote({ orderId: String(a._id), refundId: 'refund-a', amount: 122, full: true })
+        invoicingService.issueCreditNote({
+            orderId: String(a._id),
+            refundId: 'refund-a',
+            amount: 122,
+            full: true
+        })
     );
     await createOrder(first, [toOrderItem(product, 1)], {
         status: OrderStatus.cancelled,
@@ -199,7 +204,7 @@ describe('getSalesStats', () => {
             createdAt: '2026-03-10T11:00:00Z',
             deletedAt: '2026-03-11T12:00:00Z'
         });
-        await issuedAt('2026-03-10T11:00:00Z', () => issueInvoice(gone));
+        await issuedAt('2026-03-10T11:00:00Z', () => invoicingService.issueInvoice(gone));
 
         const { currencies } = await statsService.getSalesStats(
             periodOf('2026-03-09', '2026-03-13')

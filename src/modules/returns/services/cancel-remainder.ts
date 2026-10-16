@@ -25,7 +25,7 @@ import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { nudgeOutbox } from '@kernel/outbox';
 import { systemCallerContext } from '@kernel/permissions';
-import { cancelRemainder, remainderOptions, waitHasExpired, ActRefusal } from '@modules/delivery';
+import { deliveryService, ActRefusal } from '@modules/delivery';
 import { inventoryService } from '@modules/inventory';
 import { isBuyer, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
@@ -142,7 +142,12 @@ const cancelUnderLock = (
         await returnRepository.lockOrder(orderId, session);
         const earlier = await returnRepository.findByOrderId(orderId, session);
 
-        const cancelled = await cancelRemainder(fulfillmentOrderId, orderId, session, reason);
+        const cancelled = await deliveryService.cancelRemainder(
+            fulfillmentOrderId,
+            orderId,
+            session,
+            reason
+        );
         if (!cancelled.ok)
             return cancelled.reason === 'not-found' ? 'not-found' : 'nothing-to-cancel';
 
@@ -282,8 +287,9 @@ export const createCancellation = (
     return orderService.getForCaller(input.orderId, authContext).then((order) => {
         if (!order) return generateReject(404, [t('returns.order-not-found')]);
 
-        return remainderOptions(input.orderId, order.fulfillment?.shipped === true).then(
-            (options) => {
+        return deliveryService
+            .remainderOptions(input.orderId, order.fulfillment?.shipped === true)
+            .then((options) => {
                 const option = options.find((one) => one.fulfillmentOrderId === fulfillmentOrderId);
                 // Nothing shipped yet, or nothing left on it: the whole order is cancelled instead.
                 if (!option) return nothingToCancel();
@@ -309,8 +315,7 @@ export const createCancellation = (
                         if (error instanceof ActRefusal) return error.reject;
                         throw error instanceof Error ? error : new Error(String(error));
                     });
-            }
-        );
+            });
     });
 };
 
@@ -369,7 +374,7 @@ export const cancelUnanswered = (
     fulfillmentOrderId: string,
     now: Date = new Date()
 ): Promise<void> =>
-    waitHasExpired(fulfillmentOrderId, now).then((expired) => {
+    deliveryService.waitHasExpired(fulfillmentOrderId, now).then((expired) => {
         if (!expired) return undefined;
 
         return orderService.getById(orderId).then((order) => {
@@ -377,10 +382,12 @@ export const cancelUnanswered = (
             if (order.fulfillment?.shipped === true)
                 return cancelRemainderUnanswered(order, fulfillmentOrderId);
 
-            return remainderOptions(orderId, true).then((live) =>
-                live.every((option) => option.fulfillmentOrderId === fulfillmentOrderId)
-                    ? orderService.cancelUnanswered(orderId).then(() => undefined)
-                    : undefined
-            );
+            return deliveryService
+                .remainderOptions(orderId, true)
+                .then((live) =>
+                    live.every((option) => option.fulfillmentOrderId === fulfillmentOrderId)
+                        ? orderService.cancelUnanswered(orderId).then(() => undefined)
+                        : undefined
+                );
         });
     });

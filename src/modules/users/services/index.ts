@@ -52,7 +52,8 @@ import {
     touchLastActive,
     touchApiKeyUse
 } from './credentials';
-import { clearLapsedPreviousEmail } from './credentials';
+import { clearLapsedPreviousEmail, clearDeliveredCode } from './credentials';
+import { reencryptUserPhones, reencryptTwoFactorSecrets } from './reencrypt';
 import { exportSignInMethods } from './sign-in-methods';
 import {
     registerSelfService,
@@ -70,21 +71,15 @@ import {
     findReaperSoftDeletedPastGrace
 } from './reaper';
 
-/*
- * The names below are published as well as carried by `userService`: the suites drive the
- * operations directly, and the barrel's surface must not shrink when a file moves.
- */
 export { isAuthenticatable } from '../authenticatable';
-export { search, getById, findByEmail } from './read';
-export { enqueueIfPending } from './image';
-export { create } from './create';
-export { reencryptUserPhones, reencryptTwoFactorSecrets } from './reencrypt';
 export type { TwoFactorSecretRing } from './reencrypt';
-export { update, updateById } from './update';
-export { remove, restoreById, removeById } from './remove';
-export { clearDeliveredCode } from './credentials';
 
-/** The service's public surface — the controllers call through this, never the bare functions. */
+/**
+ * The service's public surface — the controllers call through this, never the bare functions.
+ * `update` and `remove` take an already-loaded document and skip the rank check, for the trusted
+ * callers that hold the record and the right to change it; `updateById` and `removeById` load by
+ * id and ask first.
+ */
 export const userService = {
     search,
     getById,
@@ -126,6 +121,9 @@ export const userService = {
     touchLastActive,
     touchApiKeyUse,
     clearLapsedPreviousEmail,
+    clearDeliveredCode,
+    reencryptUserPhones,
+    reencryptTwoFactorSecrets,
     linkOAuthAccount,
     unlinkOAuthAccount,
     findInactiveUnwarned,

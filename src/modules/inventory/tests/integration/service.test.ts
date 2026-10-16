@@ -17,22 +17,7 @@ import {
     countersOf
 } from '@modules/products/tests/factories';
 import { StockMovementReason } from '@types';
-import {
-    reserveForOrder,
-    commitForOrder,
-    shipForOrder,
-    shipLinesForOrder,
-    releaseLinesForOrder,
-    releaseForOrder,
-    releaseCommittedForOrder,
-    runReservationSweep,
-    refreshStockCacheForProducts,
-    receive,
-    adjust,
-    listLevels,
-    lowStockCount,
-    listMovements
-} from '../../services';
+import { inventoryService } from '../../services';
 import { reservationRepository, stockLevelRepository } from '../../repository';
 import { reservationModel, stockLevelModel } from '../../model';
 import { inventoryAuditActions } from '../../audit';
@@ -74,7 +59,7 @@ describe('reserveForOrder', () => {
         const plenty = await createProduct({ title: 'Plenty', onHand: 50 });
         const scarce = await createProduct({ title: 'Scarce', onHand: 1 });
 
-        const outcome = await reserveForOrder(anOrderId(), [
+        const outcome = await inventoryService.reserveForOrder(anOrderId(), [
             { productId: String(plenty._id), quantity: 2 },
             { productId: String(scarce._id), quantity: 5 }
         ]);
@@ -106,7 +91,7 @@ describe('reserveForOrder', () => {
         const plenty = await createProduct({ title: 'Plenty', onHand: 50 });
         const scarce = await createProduct({ title: 'Scarce', onHand: 1 });
 
-        await reserveForOrder(anOrderId(), [
+        await inventoryService.reserveForOrder(anOrderId(), [
             { productId: String(plenty._id), quantity: 2 },
             { productId: String(scarce._id), quantity: 5 }
         ]);
@@ -114,7 +99,7 @@ describe('reserveForOrder', () => {
         // A reserve and its undo, both on the row — hiding the reversal would make the ledger
         // unreconcilable: "nothing happened" and "two things cancelled out" are different facts,
         // and only the second explains a gap in a stock take.
-        const rows = await listMovements({ productId: String(plenty._id) });
+        const rows = await inventoryService.listMovements({ productId: String(plenty._id) });
         expect(rows.items.map((row) => row.reason)).toEqual([
             StockMovementReason.release,
             StockMovementReason.reserve
@@ -126,8 +111,8 @@ describe('reserveForOrder', () => {
         const orderId = anOrderId();
         const lines = [{ productId: String(product._id), quantity: 3 }];
 
-        const first = await reserveForOrder(orderId, lines);
-        const second = await reserveForOrder(orderId, lines);
+        const first = await inventoryService.reserveForOrder(orderId, lines);
+        const second = await inventoryService.reserveForOrder(orderId, lines);
 
         expect(first).toEqual({ held: true, expiresAt: expect.any(Date) });
         // The retry reports the FIRST call's own expiry, never a fresh guess it never wrote.
@@ -149,7 +134,7 @@ describe('reserveForOrder', () => {
         const orderId = anOrderId();
         const before = Date.now();
 
-        await reserveForOrder(
+        await inventoryService.reserveForOrder(
             orderId,
             [{ productId: String(product._id), quantity: 1 }],
             60 * 24 * 7
@@ -168,7 +153,9 @@ describe('reserveForOrder', () => {
             const orderId = anOrderId();
             const before = Date.now();
 
-            await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 1 }]);
+            await inventoryService.reserveForOrder(orderId, [
+                { productId: String(product._id), quantity: 1 }
+            ]);
 
             const hold = await reservationRepository.findByOrderId(orderId);
             const expected = before + 45 * 60_000;
@@ -183,7 +170,9 @@ describe('reserveForOrder', () => {
             const orderId = anOrderId();
             const before = Date.now();
 
-            await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 1 }]);
+            await inventoryService.reserveForOrder(orderId, [
+                { productId: String(product._id), quantity: 1 }
+            ]);
 
             const hold = await reservationRepository.findByOrderId(orderId);
             const expected = before + 15 * 60_000;
@@ -204,7 +193,9 @@ describe('reserveForOrder', () => {
         const spy = jest.spyOn(reservationModel, 'create').mockRejectedValue(failure);
 
         await expect(
-            reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 3 }])
+            inventoryService.reserveForOrder(anOrderId(), [
+                { productId: String(product._id), quantity: 3 }
+            ])
         ).rejects.toThrow('connection reset');
 
         // And nothing was held on the way out.
@@ -229,7 +220,9 @@ describe('reserveForOrder', () => {
                 reads += 1;
                 return realFind(productId);
             });
-        await reserveForOrder(anOrderId(), [{ productId: String(probe._id), quantity: 1 }]);
+        await inventoryService.reserveForOrder(anOrderId(), [
+            { productId: String(probe._id), quantity: 1 }
+        ]);
         const lastRead = reads;
         counting.mockRestore();
 
@@ -242,7 +235,7 @@ describe('reserveForOrder', () => {
                 : realFind(productId);
         });
         const orderId = anOrderId();
-        const outcome = await reserveForOrder(orderId, [
+        const outcome = await inventoryService.reserveForOrder(orderId, [
             { productId: String(product._id), quantity: 3 }
         ]);
         jest.restoreAllMocks();
@@ -264,7 +257,9 @@ describe('reserveForOrder', () => {
         const productA = await createProduct({ title: 'A', onHand: 10 });
         const productB = await createProduct({ title: 'B', onHand: 10 });
         const otherOrderId = anOrderId();
-        await reserveForOrder(otherOrderId, [{ productId: String(productB._id), quantity: 4 }]);
+        await inventoryService.reserveForOrder(otherOrderId, [
+            { productId: String(productB._id), quantity: 4 }
+        ]);
 
         const realApplyDelta = stockLevelRepository.applyDelta;
         let calls = 0;
@@ -282,7 +277,7 @@ describe('reserveForOrder', () => {
 
         const orderId = anOrderId();
         await expect(
-            reserveForOrder(orderId, [
+            inventoryService.reserveForOrder(orderId, [
                 { productId: String(productA._id), quantity: 2 },
                 { productId: String(productB._id), quantity: 3 }
             ])
@@ -306,9 +301,11 @@ describe('reserveForOrder', () => {
 
     it('refuses when the units exist but are all held', async () => {
         const product = await createProduct({ onHand: 4 });
-        await reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 4 }]);
+        await inventoryService.reserveForOrder(anOrderId(), [
+            { productId: String(product._id), quantity: 4 }
+        ]);
 
-        const outcome = await reserveForOrder(anOrderId(), [
+        const outcome = await inventoryService.reserveForOrder(anOrderId(), [
             { productId: String(product._id), quantity: 1 }
         ]);
 
@@ -336,9 +333,11 @@ describe('commitForOrder', () => {
     it('moves no counter', async () => {
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 3 }
+        ]);
 
-        expect(await commitForOrder(orderId)).toBe(true);
+        expect(await inventoryService.commitForOrder(orderId)).toBe(true);
         // Paying moves nothing: the units are still on the shelf, still spoken for. Read from
         // `stocklevels`, the source of truth: the catalogue's copy is refreshed only when units
         // were allocated, so it would keep reading the old numbers even if the commit moved them.
@@ -348,7 +347,9 @@ describe('commitForOrder', () => {
     it('still answers true when the hold cannot be read for the cache refresh afterwards', async () => {
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 3 }
+        ]);
         const realFind = reservationRepository.findByOrderId;
         let reads = 0;
         const spy = jest.spyOn(reservationRepository, 'findByOrderId').mockImplementation((id) => {
@@ -357,7 +358,7 @@ describe('commitForOrder', () => {
             return reads === 1 ? realFind(id) : Promise.reject(new Error('read failed'));
         });
 
-        const committed = await commitForOrder(orderId);
+        const committed = await inventoryService.commitForOrder(orderId);
         spy.mockRestore();
 
         expect(committed).toBe(true);
@@ -366,10 +367,12 @@ describe('commitForOrder', () => {
     it('writes no ledger row — nothing moved, and the date lives on the hold', async () => {
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
-        await commitForOrder(orderId);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 3 }
+        ]);
+        await inventoryService.commitForOrder(orderId);
 
-        const ledger = await listMovements({ productId: String(product._id) });
+        const ledger = await inventoryService.listMovements({ productId: String(product._id) });
         expect(ledger.items.map(({ reason }) => reason)).toEqual([StockMovementReason.reserve]);
     });
 
@@ -377,11 +380,13 @@ describe('commitForOrder', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 3 }
+        ]);
 
-        await commitForOrder(orderId);
+        await inventoryService.commitForOrder(orderId);
         auditSpy.mockClear();
-        expect(await commitForOrder(orderId)).toBe(false);
+        expect(await inventoryService.commitForOrder(orderId)).toBe(false);
 
         // Still one claim, not two: the reservation's status claim is what refuses the replay.
         expect(await levelOf(String(product._id))).toEqual({ onHand: 10, reserved: 3 });
@@ -393,10 +398,12 @@ describe('commitForOrder', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
-        await releaseForOrder(orderId);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 3 }
+        ]);
+        await inventoryService.releaseForOrder(orderId);
 
-        expect(await commitForOrder(orderId)).toBe(false);
+        expect(await inventoryService.commitForOrder(orderId)).toBe(false);
         expect(await countersOf(String(product._id))).toEqual({
             onHand: 10,
             reserved: 0,
@@ -421,7 +428,7 @@ describe('commitForOrder', () => {
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
 
-        expect(await commitForOrder(orderId)).toBe(false);
+        expect(await inventoryService.commitForOrder(orderId)).toBe(false);
 
         // No hold ever existed, so no counter had anything to move.
         expect(await countersOf(String(product._id))).toEqual({
@@ -445,8 +452,8 @@ const committedHold = async () => {
     const product = await createProduct({ onHand: 10 });
     const productId = String(product._id);
     const orderId = anOrderId();
-    await reserveForOrder(orderId, [{ productId, quantity: 3 }]);
-    await commitForOrder(orderId);
+    await inventoryService.reserveForOrder(orderId, [{ productId, quantity: 3 }]);
+    await inventoryService.commitForOrder(orderId);
     return { productId, orderId };
 };
 
@@ -455,9 +462,9 @@ describe('shipLinesForOrder and releaseLinesForOrder', () => {
         const { productId, orderId } = await committedHold();
 
         const shipped = await withTransaction((session) =>
-            shipLinesForOrder(orderId, [{ productId, quantity: 1 }], session)
+            inventoryService.shipLinesForOrder(orderId, [{ productId, quantity: 1 }], session)
         );
-        await refreshStockCacheForProducts([productId]);
+        await inventoryService.refreshStockCacheForProducts([productId]);
 
         expect(shipped).toBe(true);
         expect(await countersOf(productId)).toEqual({ onHand: 9, reserved: 2, available: 7 });
@@ -470,19 +477,19 @@ describe('shipLinesForOrder and releaseLinesForOrder', () => {
         const { productId, orderId } = await committedHold();
 
         await withTransaction((session) =>
-            shipLinesForOrder(orderId, [{ productId, quantity: 3 }], session)
+            inventoryService.shipLinesForOrder(orderId, [{ productId, quantity: 3 }], session)
         );
 
         const hold = await reservationRepository.findByOrderId(orderId);
         expect(hold?.status).toBe('shipped');
-        expect(await shipForOrder(orderId)).toBe(false);
+        expect(await inventoryService.shipForOrder(orderId)).toBe(false);
     });
 
     it('takes no more than the hold holds of a product', async () => {
         const { productId, orderId } = await committedHold();
 
         await withTransaction((session) =>
-            shipLinesForOrder(orderId, [{ productId, quantity: 9 }], session)
+            inventoryService.shipLinesForOrder(orderId, [{ productId, quantity: 9 }], session)
         );
 
         expect(await levelOf(productId)).toEqual({ onHand: 7, reserved: 0 });
@@ -492,9 +499,9 @@ describe('shipLinesForOrder and releaseLinesForOrder', () => {
         const { productId, orderId } = await committedHold();
 
         const released = await withTransaction((session) =>
-            releaseLinesForOrder(orderId, [{ productId, quantity: 2 }], session)
+            inventoryService.releaseLinesForOrder(orderId, [{ productId, quantity: 2 }], session)
         );
-        await refreshStockCacheForProducts([productId]);
+        await inventoryService.refreshStockCacheForProducts([productId]);
 
         expect(released).toBe(true);
         expect(await countersOf(productId)).toEqual({ onHand: 10, reserved: 1, available: 9 });
@@ -506,7 +513,7 @@ describe('shipLinesForOrder and releaseLinesForOrder', () => {
         const { productId, orderId } = await committedHold();
 
         await withTransaction((session) =>
-            releaseLinesForOrder(orderId, [{ productId, quantity: 3 }], session)
+            inventoryService.releaseLinesForOrder(orderId, [{ productId, quantity: 3 }], session)
         );
 
         const hold = await reservationRepository.findByOrderId(orderId);
@@ -518,9 +525,11 @@ describe('shipLinesForOrder and releaseLinesForOrder', () => {
 
         await expect(
             withTransaction((session) =>
-                shipLinesForOrder(orderId, [{ productId, quantity: 1 }], session).then(() => {
-                    throw new Error('the act failed later');
-                })
+                inventoryService
+                    .shipLinesForOrder(orderId, [{ productId, quantity: 1 }], session)
+                    .then(() => {
+                        throw new Error('the act failed later');
+                    })
             )
         ).rejects.toThrow('the act failed later');
 
@@ -534,7 +543,7 @@ describe('shipLinesForOrder and releaseLinesForOrder', () => {
         const product = await createProduct({ onHand: 10 });
 
         const shipped = await withTransaction((session) =>
-            shipLinesForOrder(
+            inventoryService.shipLinesForOrder(
                 anOrderId(),
                 [{ productId: String(product._id), quantity: 1 }],
                 session
@@ -547,10 +556,10 @@ describe('shipLinesForOrder and releaseLinesForOrder', () => {
 
     it('answers false for a release with no open hold, silently', async () => {
         const { productId, orderId } = await committedHold();
-        await shipForOrder(orderId);
+        await inventoryService.shipForOrder(orderId);
 
         const released = await withTransaction((session) =>
-            releaseLinesForOrder(orderId, [{ productId, quantity: 1 }], session)
+            inventoryService.releaseLinesForOrder(orderId, [{ productId, quantity: 1 }], session)
         );
 
         expect(released).toBe(false);
@@ -561,17 +570,19 @@ describe('shipForOrder', () => {
     it('takes the units off the shelf and leaves availability alone', async () => {
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
-        await commitForOrder(orderId);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 3 }
+        ]);
+        await inventoryService.commitForOrder(orderId);
 
-        expect(await shipForOrder(orderId)).toBe(true);
+        expect(await inventoryService.shipForOrder(orderId)).toBe(true);
 
         expect(await countersOf(String(product._id))).toEqual({
             onHand: 7,
             reserved: 0,
             available: 7
         });
-        const ledger = await listMovements({
+        const ledger = await inventoryService.listMovements({
             productId: String(product._id),
             reason: StockMovementReason.ship
         });
@@ -582,12 +593,14 @@ describe('shipForOrder', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
-        await commitForOrder(orderId);
-        await shipForOrder(orderId);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 3 }
+        ]);
+        await inventoryService.commitForOrder(orderId);
+        await inventoryService.shipForOrder(orderId);
         auditSpy.mockClear();
 
-        expect(await shipForOrder(orderId)).toBe(false);
+        expect(await inventoryService.shipForOrder(orderId)).toBe(false);
 
         expect(await countersOf(String(product._id))).toMatchObject({ onHand: 7, reserved: 0 });
         expect(auditSpy).not.toHaveBeenCalled();
@@ -596,13 +609,15 @@ describe('shipForOrder', () => {
     it('still ships a hold whose payment commit never landed', async () => {
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 3 }
+        ]);
 
-        expect(await shipForOrder(orderId)).toBe(true);
+        expect(await inventoryService.shipForOrder(orderId)).toBe(true);
 
         expect(await countersOf(String(product._id))).toMatchObject({ onHand: 7, reserved: 0 });
         // The payment's own retry then finds a shipped hold: a replay, not an incident.
-        expect(await commitForOrder(orderId)).toBe(false);
+        expect(await inventoryService.commitForOrder(orderId)).toBe(false);
     });
 
     it('alarms a shipment with no hold, and moves nothing', async () => {
@@ -610,7 +625,7 @@ describe('shipForOrder', () => {
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
 
-        expect(await shipForOrder(orderId)).toBe(false);
+        expect(await inventoryService.shipForOrder(orderId)).toBe(false);
 
         expect(await countersOf(String(product._id))).toMatchObject({ onHand: 10, reserved: 0 });
         expect(auditSpy).toHaveBeenCalledWith(
@@ -627,10 +642,12 @@ describe('shipForOrder', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
-        await releaseForOrder(orderId);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 3 }
+        ]);
+        await inventoryService.releaseForOrder(orderId);
 
-        expect(await shipForOrder(orderId)).toBe(false);
+        expect(await inventoryService.shipForOrder(orderId)).toBe(false);
 
         expect(await countersOf(String(product._id))).toMatchObject({ onHand: 10, reserved: 0 });
         expect(auditSpy).toHaveBeenCalledWith(
@@ -643,18 +660,20 @@ describe('releaseCommittedForOrder', () => {
     it('gives a paid, unshipped claim back without touching the shelf', async () => {
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 4 }]);
-        await commitForOrder(orderId);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 4 }
+        ]);
+        await inventoryService.commitForOrder(orderId);
 
-        expect(await releaseCommittedForOrder(orderId)).toBe(true);
-        expect(await releaseCommittedForOrder(orderId)).toBe(false);
+        expect(await inventoryService.releaseCommittedForOrder(orderId)).toBe(true);
+        expect(await inventoryService.releaseCommittedForOrder(orderId)).toBe(false);
 
         expect(await countersOf(String(product._id))).toEqual({
             onHand: 10,
             reserved: 0,
             available: 10
         });
-        const ledger = await listMovements({
+        const ledger = await inventoryService.listMovements({
             productId: String(product._id),
             reason: StockMovementReason.release
         });
@@ -665,13 +684,17 @@ describe('releaseCommittedForOrder', () => {
         const product = await createProduct({ onHand: 10 });
         const unpaid = anOrderId();
         const shipped = anOrderId();
-        await reserveForOrder(unpaid, [{ productId: String(product._id), quantity: 1 }]);
-        await reserveForOrder(shipped, [{ productId: String(product._id), quantity: 1 }]);
-        await commitForOrder(shipped);
-        await shipForOrder(shipped);
+        await inventoryService.reserveForOrder(unpaid, [
+            { productId: String(product._id), quantity: 1 }
+        ]);
+        await inventoryService.reserveForOrder(shipped, [
+            { productId: String(product._id), quantity: 1 }
+        ]);
+        await inventoryService.commitForOrder(shipped);
+        await inventoryService.shipForOrder(shipped);
 
-        expect(await releaseCommittedForOrder(unpaid)).toBe(false);
-        expect(await releaseCommittedForOrder(shipped)).toBe(false);
+        expect(await inventoryService.releaseCommittedForOrder(unpaid)).toBe(false);
+        expect(await inventoryService.releaseCommittedForOrder(shipped)).toBe(false);
     });
 });
 
@@ -679,10 +702,12 @@ describe('releaseForOrder', () => {
     it('gives the units back and is at most once', async () => {
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 4 }]);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 4 }
+        ]);
 
-        expect(await releaseForOrder(orderId)).toBe(true);
-        expect(await releaseForOrder(orderId)).toBe(false);
+        expect(await inventoryService.releaseForOrder(orderId)).toBe(true);
+        expect(await inventoryService.releaseForOrder(orderId)).toBe(false);
         expect(await countersOf(String(product._id))).toEqual({
             onHand: 10,
             reserved: 0,
@@ -694,14 +719,18 @@ describe('releaseForOrder', () => {
         const product = await createProduct({ onHand: 10 });
         const cancelled = anOrderId();
         const abandoned = anOrderId();
-        await reserveForOrder(cancelled, [{ productId: String(product._id), quantity: 1 }]);
-        await releaseForOrder(cancelled);
-        await reserveForOrder(abandoned, [{ productId: String(product._id), quantity: 1 }]);
-        await releaseForOrder(abandoned, StockMovementReason.expire);
+        await inventoryService.reserveForOrder(cancelled, [
+            { productId: String(product._id), quantity: 1 }
+        ]);
+        await inventoryService.releaseForOrder(cancelled);
+        await inventoryService.reserveForOrder(abandoned, [
+            { productId: String(product._id), quantity: 1 }
+        ]);
+        await inventoryService.releaseForOrder(abandoned, StockMovementReason.expire);
 
         // Same arithmetic, different reasons — "changed their mind" and "never came back" are
         // different facts about the shop, and only one of them is a conversion problem.
-        const ledger = await listMovements({ productId: String(product._id) });
+        const ledger = await inventoryService.listMovements({ productId: String(product._id) });
         const reasons = ledger.items.map((row) => row.reason);
         expect(reasons).toContain(StockMovementReason.release);
         expect(reasons).toContain(StockMovementReason.expire);
@@ -712,7 +741,7 @@ describe('receive', () => {
     it('raises what exists and makes it available immediately', async () => {
         const product = await createProduct({ onHand: 0 });
 
-        const result = await receive(String(product._id), 12, 'pallet 42');
+        const result = await inventoryService.receive(String(product._id), 12, 'pallet 42');
 
         expect(result.success).toBe(true);
         expect(result.data).toMatchObject({ onHand: 12, reserved: 0, available: 12 });
@@ -720,9 +749,11 @@ describe('receive', () => {
 
     it('does not disturb an existing hold', async () => {
         const product = await createProduct({ onHand: 5 });
-        await reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 5 }]);
+        await inventoryService.reserveForOrder(anOrderId(), [
+            { productId: String(product._id), quantity: 5 }
+        ]);
 
-        const result = await receive(String(product._id), 10);
+        const result = await inventoryService.receive(String(product._id), 10);
 
         // The hold is untouched; the delivery is what becomes sellable.
         expect(result.data).toMatchObject({ onHand: 15, reserved: 5, available: 10 });
@@ -730,16 +761,16 @@ describe('receive', () => {
 
     it('writes the ledger newest first', async () => {
         const product = await createProduct({ onHand: 0 });
-        await receive(String(product._id), 1, 'first');
-        await receive(String(product._id), 2, 'second');
+        await inventoryService.receive(String(product._id), 1, 'first');
+        await inventoryService.receive(String(product._id), 2, 'second');
 
-        const { items } = await listMovements({ productId: String(product._id) });
+        const { items } = await inventoryService.listMovements({ productId: String(product._id) });
 
         expect(items.map((movement) => movement.onHandDelta)).toEqual([2, 1]);
     });
 
     it('404s for a product that does not exist', async () => {
-        const result = await receive('c'.repeat(24), 5);
+        const result = await inventoryService.receive('c'.repeat(24), 5);
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -750,18 +781,20 @@ describe('adjust', () => {
     it('applies a correction in either direction', async () => {
         const product = await createProduct({ onHand: 10 });
 
-        const down = await adjust(String(product._id), -3, 'damaged');
+        const down = await inventoryService.adjust(String(product._id), -3, 'damaged');
         expect(down.data).toMatchObject({ onHand: 7 });
 
-        const up = await adjust(String(product._id), 2, 'miscount');
+        const up = await inventoryService.adjust(String(product._id), 2, 'miscount');
         expect(up.data).toMatchObject({ onHand: 9 });
     });
 
     it('refuses a correction that would go below what is already promised', async () => {
         const product = await createProduct({ onHand: 10 });
-        await reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 8 }]);
+        await inventoryService.reserveForOrder(anOrderId(), [
+            { productId: String(product._id), quantity: 8 }
+        ]);
 
-        const result = await adjust(String(product._id), -5, 'stocktake');
+        const result = await inventoryService.adjust(String(product._id), -5, 'stocktake');
 
         /*
          * Eight units are promised to an order that exists. Letting this through would make
@@ -783,12 +816,14 @@ describe('adjust', () => {
     it('refuses a correction below units paid for and not yet shipped', async () => {
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
-        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
-        await commitForOrder(orderId);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 3 }
+        ]);
+        await inventoryService.commitForOrder(orderId);
 
         // `onHand` is the shelf count until dispatch, so the paid units are still inside it and
         // still promised: a correction cutting below them is refused.
-        const result = await adjust(String(product._id), -8, 'stocktake');
+        const result = await inventoryService.adjust(String(product._id), -8, 'stocktake');
 
         expect(result.status).toBe(409);
         expect(await countersOf(String(product._id))).toMatchObject({ onHand: 10, reserved: 3 });
@@ -796,9 +831,11 @@ describe('adjust', () => {
 
     it('allows a correction down to exactly what is promised', async () => {
         const product = await createProduct({ onHand: 10 });
-        await reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 8 }]);
+        await inventoryService.reserveForOrder(anOrderId(), [
+            { productId: String(product._id), quantity: 8 }
+        ]);
 
-        const result = await adjust(String(product._id), -2, 'stocktake');
+        const result = await inventoryService.adjust(String(product._id), -2, 'stocktake');
 
         // The boundary is inclusive: onHand may equal reserved, it may not fall below it.
         expect(result.success).toBe(true);
@@ -806,7 +843,7 @@ describe('adjust', () => {
     });
 
     it('404s for a product that does not exist', async () => {
-        const result = await adjust('c'.repeat(24), -1);
+        const result = await inventoryService.adjust('c'.repeat(24), -1);
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -836,7 +873,7 @@ describe('adjust', () => {
                 return false;
             });
 
-        const result = await adjust(productId, -1, 'stocktake');
+        const result = await inventoryService.adjust(productId, -1, 'stocktake');
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -848,15 +885,19 @@ describe('runReservationSweep', () => {
     it('releases stale holds and leaves fresh ones alone', async () => {
         const product = await createProduct({ onHand: 20 });
         const fresh = anOrderId();
-        await reserveForOrder(fresh, [{ productId: String(product._id), quantity: 5 }]);
+        await inventoryService.reserveForOrder(fresh, [
+            { productId: String(product._id), quantity: 5 }
+        ]);
 
         let stale = '';
         await withoutWindow(async () => {
             stale = anOrderId();
-            await reserveForOrder(stale, [{ productId: String(product._id), quantity: 5 }]);
+            await inventoryService.reserveForOrder(stale, [
+                { productId: String(product._id), quantity: 5 }
+            ]);
         });
 
-        const expired = await runReservationSweep();
+        const expired = await inventoryService.runReservationSweep();
 
         expect(expired).toBe(1);
         // The fresh hold survives — a sweep is a deadline, not a purge.
@@ -882,14 +923,14 @@ describe('runReservationSweep', () => {
                     orderIds
                         .slice(start, start + 50)
                         .map((orderId) =>
-                            reserveForOrder(orderId, [
+                            inventoryService.reserveForOrder(orderId, [
                                 { productId: String(product._id), quantity: 1 }
                             ])
                         )
                 );
         });
 
-        const expired = await runReservationSweep();
+        const expired = await inventoryService.runReservationSweep();
 
         expect(expired).toBe(450);
         expect(await reservationModel.countDocuments({ status: 'held' })).toBe(0);
@@ -903,10 +944,12 @@ describe('runReservationSweep', () => {
     it('is idempotent', async () =>
         withoutWindow(async () => {
             const product = await createProduct({ onHand: 20 });
-            await reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 5 }]);
+            await inventoryService.reserveForOrder(anOrderId(), [
+                { productId: String(product._id), quantity: 5 }
+            ]);
 
-            expect(await runReservationSweep()).toBe(1);
-            expect(await runReservationSweep()).toBe(0);
+            expect(await inventoryService.runReservationSweep()).toBe(1);
+            expect(await inventoryService.runReservationSweep()).toBe(0);
             expect(await countersOf(String(product._id))).toEqual({
                 onHand: 20,
                 reserved: 0,
@@ -920,12 +963,16 @@ describe('runReservationSweep', () => {
             const healthy = await createProduct({ onHand: 20 });
             const brokenOrder = anOrderId();
             const healthyOrder = anOrderId();
-            await reserveForOrder(brokenOrder, [{ productId: String(broken._id), quantity: 5 }]);
-            await reserveForOrder(healthyOrder, [{ productId: String(healthy._id), quantity: 5 }]);
+            await inventoryService.reserveForOrder(brokenOrder, [
+                { productId: String(broken._id), quantity: 5 }
+            ]);
+            await inventoryService.reserveForOrder(healthyOrder, [
+                { productId: String(healthy._id), quantity: 5 }
+            ]);
             // Records that disagree with the hold: nothing reserved left to give back.
             await stockLevelModel.updateOne({ productId: broken._id }, { $set: { reserved: 0 } });
 
-            expect(await runReservationSweep()).toBe(1);
+            expect(await inventoryService.runReservationSweep()).toBe(1);
             const brokenHold = await reservationRepository.findByOrderId(brokenOrder);
             const healthyHold = await reservationRepository.findByOrderId(healthyOrder);
             expect(brokenHold?.status).toBe('held');
@@ -938,9 +985,11 @@ describe('listLevels', () => {
         await createProduct({ title: 'Empty', onHand: 0 });
         await createProduct({ title: 'Plenty', onHand: 100 });
         const allHeld = await createProduct({ title: 'All held', onHand: 30 });
-        await reserveForOrder(anOrderId(), [{ productId: String(allHeld._id), quantity: 30 }]);
+        await inventoryService.reserveForOrder(anOrderId(), [
+            { productId: String(allHeld._id), quantity: 30 }
+        ]);
 
-        const result = await listLevels();
+        const result = await inventoryService.listLevels();
 
         // The two zero-availability rows sort ahead of the plentiful one, and they are
         // distinguishable — which is the whole reason the board shows three numbers. Which of
@@ -967,7 +1016,7 @@ describe('listLevels', () => {
         await createProduct({ title: 'Low', onHand: 2 });
         await createProduct({ title: 'Fine', onHand: 500 });
 
-        const result = await listLevels({ lowOnly: true });
+        const result = await inventoryService.listLevels({ lowOnly: true });
 
         expect(result.items.map((level) => level.title)).toEqual(['Low']);
         // The total follows the filter, not the collection — otherwise the board would report
@@ -981,7 +1030,7 @@ describe('listLevels', () => {
         await createProduct({ title: 'On the line', onHand: 5 });
         await createProduct({ title: 'Just above', onHand: 6 });
 
-        const result = await listLevels({ lowOnly: true });
+        const result = await inventoryService.listLevels({ lowOnly: true });
 
         expect(result.items.map((level) => level.title)).toEqual(['On the line']);
         setEnvironment({ NODE_LOW_STOCK_THRESHOLD: undefined });
@@ -995,7 +1044,7 @@ describe('listLevels', () => {
             releaseDate: new Date(Date.now() + 30 * 86_400_000).toISOString()
         });
 
-        const result = await listLevels({ lowOnly: true });
+        const result = await inventoryService.listLevels({ lowOnly: true });
 
         expect(result.items.map((level) => level.title)).toEqual(['Waiting']);
         setEnvironment({ NODE_LOW_STOCK_THRESHOLD: undefined });
@@ -1011,8 +1060,8 @@ describe('listLevels', () => {
         await createProduct({ active: true, onHand: 40, reserved: 40 });
         const hidden = await createProduct({ active: false, onHand: 1, reserved: 0 });
 
-        const board = await listLevels({ lowOnly: true });
-        const gauge = await lowStockCount();
+        const board = await inventoryService.listLevels({ lowOnly: true });
+        const gauge = await inventoryService.lowStockCount();
 
         expect(board.meta.totalItems).toBe(3);
         expect(gauge).toBe(2);
@@ -1024,7 +1073,7 @@ describe('listLevels', () => {
         for (let index = 0; index < 5; index += 1)
             await createProduct({ title: `P${index}`, onHand: index });
 
-        const result = await listLevels({ page: 2, pageSize: 2 });
+        const result = await inventoryService.listLevels({ page: 2, pageSize: 2 });
 
         expect(result.items.map((level) => level.available)).toEqual([2, 3]);
         expect(result.meta).toMatchObject({

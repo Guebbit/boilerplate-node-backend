@@ -13,13 +13,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
 import { StockMovementReason } from '@types';
-import {
-    commitForOrder,
-    releaseCommittedForOrder,
-    releaseForOrder,
-    reserveForOrder,
-    shipForOrder
-} from '../../services';
+import { inventoryService } from '../../services';
 import { reservationRepository, stockLevelRepository } from '../../repository';
 import { stockLevelModel } from '../../model';
 
@@ -57,14 +51,14 @@ describe('a crash between the claim and the counter move', () => {
     it('ship: a retry takes the units off the shelf', async () => {
         const product = await createProduct({ onHand: 10 });
         const productId = String(product._id);
-        await reserveForOrder(ORDER, [{ productId, quantity: 4 }]);
-        await commitForOrder(ORDER);
+        await inventoryService.reserveForOrder(ORDER, [{ productId, quantity: 4 }]);
+        await inventoryService.commitForOrder(ORDER);
         failOnce(StockMovementReason.ship);
 
-        await expect(shipForOrder(ORDER)).rejects.toThrow('connection reset');
+        await expect(inventoryService.shipForOrder(ORDER)).rejects.toThrow('connection reset');
         const hold = await reservationRepository.findByOrderId(ORDER);
         expect(hold?.status).toBe('committed');
-        await shipForOrder(ORDER);
+        await inventoryService.shipForOrder(ORDER);
 
         expect(await levelOf(productId)).toEqual({ onHand: 6, reserved: 0 });
     });
@@ -72,11 +66,11 @@ describe('a crash between the claim and the counter move', () => {
     it('release: a retry gives the units back', async () => {
         const product = await createProduct({ onHand: 10 });
         const productId = String(product._id);
-        await reserveForOrder(ORDER, [{ productId, quantity: 4 }]);
+        await inventoryService.reserveForOrder(ORDER, [{ productId, quantity: 4 }]);
         failOnce(StockMovementReason.release);
 
-        await expect(releaseForOrder(ORDER)).rejects.toThrow('connection reset');
-        await releaseForOrder(ORDER);
+        await expect(inventoryService.releaseForOrder(ORDER)).rejects.toThrow('connection reset');
+        await inventoryService.releaseForOrder(ORDER);
 
         expect(await levelOf(productId)).toEqual({ onHand: 10, reserved: 0 });
     });
@@ -84,12 +78,14 @@ describe('a crash between the claim and the counter move', () => {
     it('release of a paid claim: a retry makes the units sellable again', async () => {
         const product = await createProduct({ onHand: 10 });
         const productId = String(product._id);
-        await reserveForOrder(ORDER, [{ productId, quantity: 4 }]);
-        await commitForOrder(ORDER);
+        await inventoryService.reserveForOrder(ORDER, [{ productId, quantity: 4 }]);
+        await inventoryService.commitForOrder(ORDER);
         failOnce(StockMovementReason.release);
 
-        await expect(releaseCommittedForOrder(ORDER)).rejects.toThrow('connection reset');
-        await releaseCommittedForOrder(ORDER);
+        await expect(inventoryService.releaseCommittedForOrder(ORDER)).rejects.toThrow(
+            'connection reset'
+        );
+        await inventoryService.releaseCommittedForOrder(ORDER);
 
         expect(await levelOf(productId)).toEqual({ onHand: 10, reserved: 0 });
     });
@@ -100,14 +96,14 @@ describe('a line whose counters refuse', () => {
         const first = await createProduct({ onHand: 10 });
         const second = await createProduct({ onHand: 10 });
         const [firstId, secondId] = [String(first._id), String(second._id)].toSorted();
-        await reserveForOrder(ORDER, [
+        await inventoryService.reserveForOrder(ORDER, [
             { productId: firstId, quantity: 4 },
             { productId: secondId, quantity: 4 }
         ]);
         // Records that disagree with the hold: the later line has nothing reserved to ship.
         await stockLevelModel.updateOne({ productId: secondId }, { $set: { reserved: 0 } });
 
-        await expect(shipForOrder(ORDER)).rejects.toThrow('the counters refused');
+        await expect(inventoryService.shipForOrder(ORDER)).rejects.toThrow('the counters refused');
 
         const hold = await reservationRepository.findByOrderId(ORDER);
         expect(hold?.status).toBe('held');

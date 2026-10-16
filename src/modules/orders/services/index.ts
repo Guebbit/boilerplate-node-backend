@@ -8,13 +8,25 @@
  * `retention.ts` answers an erased account, `scope.ts` decides who may see what,
  */
 
-import { search, getById, getForCaller, openUnpaidOrderIds, findManyByIds } from './read';
-import { create, recordCreated, update, updateById } from './crud';
-import { remove, removeById, restoreById } from './remove';
+import {
+    search,
+    getById,
+    getForCaller,
+    billingAddressOf,
+    openUnpaidOrderIds,
+    findManyByIds,
+    ownOrderIds,
+    findOwnOrders,
+    orderBriefsByIds
+} from './read';
+import { create, recordCreated, updateById } from './crud';
+import { removeById, restoreById } from './remove';
 import { placeOrder } from './place';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
-import { callerScope, ownerScope, ownLiveScope, withActions } from './scope';
+import { callerScope, cancelScope, actorOf, ownerScope, ownLiveScope, withActions } from './scope';
+import { freezeOrderLines } from './snapshot';
+import { reencryptOrders } from './reencrypt';
 import {
     cancelOnRequestById,
     withdrawById,
@@ -59,68 +71,11 @@ import {
     pipeline
 } from './stats';
 
-/*
- * Every operation is published by name as well as through the object below: `module.ts` wires
- * `expireReservationById` and `detachUserId` into the events that trigger them, `orders/index.ts` publishes
- * `placeOrder` to `cart`, and the suites drive the operations directly. Publishing fewer names
- * here would break each of those callers.
- */
-export {
-    search,
-    getById,
-    getForCaller,
-    billingAddressOf,
-    openUnpaidOrderIds,
-    findManyByIds,
-    ownOrderIds,
-    findOwnOrders,
-    orderBriefsByIds,
-    type OrderBrief
-} from './read';
-export { create, recordCreated, update, updateById } from './crud';
-export { remove, removeById, restoreById } from './remove';
-export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './place';
-export { sendOrderPlacedEmail, mailBuyer } from './notify';
-export {
-    cancelOnRequestById,
-    withdrawById,
-    expireReservationById,
-    cancelForErasureById,
-    cancelForPaymentMismatchById,
-    cancelUnanswered,
-    type CancelCause
-} from './cancel';
-export {
-    markPaid,
-    markProcessing,
-    markShipped,
-    markDelivered,
-    markFulfilmentComplete,
-    markPaymentStatus,
-    markReturnStatus
-} from './status';
-export {
-    readOrder,
-    recordFulfillmentProgress,
-    recordForcedFulfilment,
-    shipStock,
-    refreshShelf,
-    type ForcedFulfilment
-} from './fulfillment';
-export { overrideStatus } from './override';
-export { openOrderExport, type OrderExport } from './export';
-export {
-    appendTimeline,
-    readTimeline,
-    collectTimelineOf,
-    clearTimelineActor,
-    scrubTimelineText,
-    deleteTimelineOf
-} from './timeline';
-export { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
-export { callerScope, cancelScope, actorOf, ownerScope, ownLiveScope, withActions } from './scope';
-export { freezeOrderLines } from './snapshot';
-export { reencryptOrders } from './reencrypt';
+export type { OrderBrief } from './read';
+export type { PlaceOrderInput, PlaceOrderOutcome } from './place';
+export type { CancelCause } from './cancel';
+export type { ForcedFulfilment } from './fulfillment';
+export type { OrderExport } from './export';
 export type {
     PaidBucket,
     ProductTotal,
@@ -139,8 +94,16 @@ export const orderService = {
     getById,
     getForCaller,
     callerScope,
+    cancelScope,
+    actorOf,
     ownerScope,
     ownLiveScope,
+    billingAddressOf,
+    ownOrderIds,
+    findOwnOrders,
+    orderBriefsByIds,
+    freezeOrderLines,
+    reencryptOrders,
     create,
     placeOrder,
     sendOrderPlacedEmail,
@@ -155,9 +118,7 @@ export const orderService = {
     cancellationCohort,
     pipeline,
     recordCreated,
-    update,
     updateById,
-    remove,
     removeById,
     restoreById,
     markPaid,

@@ -18,7 +18,7 @@ import { asReject } from '@tests/response';
 import { productService } from '@modules/products';
 import { timelineOf } from '@modules/orders/tests/factories';
 import { fulfillmentOrdersOf, paidPreorderOrder } from '@modules/delivery/tests/factories';
-import { getForOrder, runPreorderSweep, cancelAllForOrder } from '@modules/delivery/services';
+import { deliveryService } from '@modules/delivery/services';
 import { confirmWait } from '@modules/delivery/services/confirm-wait';
 import deliveryModule from '@modules/delivery/module';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
@@ -168,8 +168,7 @@ describe('a release date that moves', () => {
         await moveDate(productIds[0], inDays(40));
 
         // A redelivery: the date is already the expected one.
-        const { onReleaseDateChanged } = await import('@modules/delivery/services');
-        await onReleaseDateChanged(productIds[0]);
+        await deliveryService.onReleaseDateChanged(productIds[0]);
 
         expect(await delayedEvents()).toHaveLength(1);
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
@@ -267,7 +266,7 @@ describe('the buyer saying keep waiting', () => {
         const { orderId, productIds, user } = await preorder(30);
         await waitingOf(orderId);
         const read = async () => {
-            const result = await getForOrder(orderId, asCustomer(user.id));
+            const result = await deliveryService.getForOrder(orderId, asCustomer(user.id));
             return result.success
                 ? result.data.fulfillmentOrders[0].actions.confirmWait
                 : undefined;
@@ -287,8 +286,8 @@ describe('the daily sweep', () => {
         await waitingOf(orderId);
         const later = inDays(31);
 
-        const first = await runPreorderSweep(later);
-        const second = await runPreorderSweep(inDays(32));
+        const first = await deliveryService.runPreorderSweep(later);
+        const second = await deliveryService.runPreorderSweep(inDays(32));
         await settleOutboxNudges();
 
         expect([first, second]).toEqual([
@@ -303,7 +302,10 @@ describe('the daily sweep', () => {
     it('leaves a date still ahead alone', async () => {
         await preorder(30);
 
-        expect(await runPreorderSweep(inDays(10))).toEqual({ asked: 0, expired: 0 });
+        expect(await deliveryService.runPreorderSweep(inDays(10))).toEqual({
+            asked: 0,
+            expired: 0
+        });
     });
 
     it('does not ask about goods already allocated: that is the Late view, not a question', async () => {
@@ -313,25 +315,31 @@ describe('the daily sweep', () => {
         await inventoryService.receive(productIds[0], 2);
         await settleOutboxNudges();
 
-        expect(await runPreorderSweep(inDays(40))).toEqual({ asked: 0, expired: 0 });
+        expect(await deliveryService.runPreorderSweep(inDays(40))).toEqual({
+            asked: 0,
+            expired: 0
+        });
     });
 
     it('does not ask again after the buyer said keep waiting, until a newer date passes', async () => {
         const { orderId, user } = await preorder(30);
         await waitingOf(orderId);
-        await runPreorderSweep(inDays(31));
+        await deliveryService.runPreorderSweep(inDays(31));
         await confirmWait(await waitingIdOf(orderId), asCustomer(user.id), testCallerContext);
 
-        expect(await runPreorderSweep(inDays(45))).toEqual({ asked: 0, expired: 0 });
+        expect(await deliveryService.runPreorderSweep(inDays(45))).toEqual({
+            asked: 0,
+            expired: 0
+        });
     });
 
     it('announces a wait that ran 30 days without an answer, and only then', async () => {
         const { orderId } = await preorder(30);
         await waitingOf(orderId);
-        await runPreorderSweep(inDays(31));
+        await deliveryService.runPreorderSweep(inDays(31));
 
-        const early = await runPreorderSweep(inDays(50));
-        const due = await runPreorderSweep(inDays(62));
+        const early = await deliveryService.runPreorderSweep(inDays(50));
+        const due = await deliveryService.runPreorderSweep(inDays(62));
 
         expect([early.expired, due.expired]).toEqual([0, 1]);
         expect(await expiredEvents()).toHaveLength(1);
@@ -341,10 +349,10 @@ describe('the daily sweep', () => {
     it('announces an expired wait again each day, until its cancel lands', async () => {
         const { orderId } = await preorder(30);
         await waitingOf(orderId);
-        await runPreorderSweep(inDays(31));
-        await runPreorderSweep(inDays(62));
+        await deliveryService.runPreorderSweep(inDays(31));
+        await deliveryService.runPreorderSweep(inDays(62));
 
-        const again = await runPreorderSweep(inDays(63));
+        const again = await deliveryService.runPreorderSweep(inDays(63));
 
         expect(again.expired).toBe(1);
         expect(await expiredEvents()).toHaveLength(2);
@@ -353,8 +361,8 @@ describe('the daily sweep', () => {
     it('refuses a keep-waiting that comes after the window closed', async () => {
         const { orderId, user } = await preorder(30);
         await waitingOf(orderId);
-        await runPreorderSweep(inDays(31));
-        await runPreorderSweep(inDays(62));
+        await deliveryService.runPreorderSweep(inDays(31));
+        await deliveryService.runPreorderSweep(inDays(62));
 
         const late = await confirmWait(
             await waitingIdOf(orderId),
@@ -368,10 +376,13 @@ describe('the daily sweep', () => {
     it('does not announce a wait the buyer answered', async () => {
         const { orderId, user } = await preorder(30);
         await waitingOf(orderId);
-        await runPreorderSweep(inDays(31));
+        await deliveryService.runPreorderSweep(inDays(31));
         await confirmWait(await waitingIdOf(orderId), asCustomer(user.id), testCallerContext);
 
-        expect(await runPreorderSweep(inDays(70))).toEqual({ asked: 0, expired: 0 });
+        expect(await deliveryService.runPreorderSweep(inDays(70))).toEqual({
+            asked: 0,
+            expired: 0
+        });
     });
 });
 
@@ -379,17 +390,17 @@ describe('why a fulfillment order was cancelled', () => {
     it('says no_answer when the buyer was asked and the window closed, else order', async () => {
         const silent = await preorder(30);
         await waitingOf(silent.orderId);
-        await runPreorderSweep(inDays(31));
+        await deliveryService.runPreorderSweep(inDays(31));
         // The 30 days run out, and the sweep says so.
-        await runPreorderSweep(inDays(62));
+        await deliveryService.runPreorderSweep(inDays(62));
         const other = await paidPreorderOrder(
             [{ quantity: 1, releaseDate: inDays(60) }],
             'other@example.com'
         );
         await waitingOf(other.orderId);
 
-        await cancelAllForOrder(silent.orderId);
-        await cancelAllForOrder(other.orderId);
+        await deliveryService.cancelAllForOrder(silent.orderId);
+        await deliveryService.cancelAllForOrder(other.orderId);
 
         const [silentOne] = await fulfillmentOrdersOf(silent.orderId);
         const [otherOne] = await fulfillmentOrdersOf(other.orderId);
@@ -416,8 +427,7 @@ describe('what the timeline says of a preorder', () => {
     it('writes the move, then the notice, for a slip, and each only once', async () => {
         const { orderId, productIds } = await preorder(30);
         await moveDate(productIds[0], inDays(75));
-        const { onReleaseDateChanged } = await import('@modules/delivery/services');
-        await onReleaseDateChanged(productIds[0]);
+        await deliveryService.onReleaseDateChanged(productIds[0]);
 
         const rows = await trailOf(orderId);
 
@@ -465,8 +475,8 @@ describe('what the timeline says of a preorder', () => {
 
     it('writes wait_expired when the buyer stayed silent', async () => {
         const { orderId } = await preorder(30);
-        await runPreorderSweep(inDays(31));
-        await runPreorderSweep(inDays(62));
+        await deliveryService.runPreorderSweep(inDays(31));
+        await deliveryService.runPreorderSweep(inDays(62));
 
         const types = await typesOf(orderId);
 

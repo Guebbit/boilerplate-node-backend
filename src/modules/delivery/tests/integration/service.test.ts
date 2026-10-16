@@ -23,18 +23,7 @@ import {
 import { orderService, withdrawUntilFrom } from '@modules/orders';
 import { OrderStatus } from '@types';
 import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '@modules/delivery/domain';
-import {
-    shipFulfillmentOrder,
-    deliverShipment,
-    fulfillFulfillmentOrder,
-    holdFulfillmentOrder,
-    releaseFulfillmentOrder,
-    editShipmentTracking,
-    getForOrder,
-    cancelAllForOrder,
-    ensureFulfillmentOrders,
-    splitForAllocation
-} from '@modules/delivery/services';
+import { deliveryService } from '@modules/delivery/services';
 import { fulfillmentOrderRepository } from '@modules/delivery/repository';
 import { fulfillmentOrderModel } from '@modules/delivery/model';
 import { fulfillmentOrdersOf, shipmentsOf } from '@modules/delivery/tests/factories';
@@ -87,12 +76,17 @@ const processingOrderOf = async (
 /** Ship `lines` (or everything, when omitted) from the order's one physical fulfillment order. */
 const shipFrom = async (
     orderId: string,
-    input: Parameters<typeof shipFulfillmentOrder>[1] = {},
+    input: Parameters<typeof deliveryService.shipFulfillmentOrder>[1] = {},
     number = 1
 ) => {
     const all = await fulfillmentOrdersOf(orderId);
     const fulfillmentOrder = all.find((one) => one.number === number)!;
-    return shipFulfillmentOrder(String(fulfillmentOrder._id), input, asAdmin(), admin);
+    return deliveryService.shipFulfillmentOrder(
+        String(fulfillmentOrder._id),
+        input,
+        asAdmin(),
+        admin
+    );
 };
 
 describe('rates', () => {
@@ -153,7 +147,9 @@ describe('the fulfillment orders of a paid order', () => {
         });
         jest.spyOn(orderService, 'recordFulfillmentProgress').mockResolvedValueOnce(null);
 
-        await expect(ensureFulfillmentOrders(String(order._id))).resolves.toBeUndefined();
+        await expect(
+            deliveryService.ensureFulfillmentOrders(String(order._id))
+        ).resolves.toBeUndefined();
 
         expect(await fulfillmentOrderRepository.findByOrderId(String(order._id))).toEqual([]);
     });
@@ -192,8 +188,11 @@ describe('the fulfillment orders of a paid order', () => {
         const { user, order } = await processingOrderOf([1]);
         const pending = await createOrder(user, [toOrderItem(await createProduct(), 1)]);
 
-        const early = await getForOrder(String(pending._id), asCustomer(String(user._id)));
-        const own = await getForOrder(String(order._id), asAdmin());
+        const early = await deliveryService.getForOrder(
+            String(pending._id),
+            asCustomer(String(user._id))
+        );
+        const own = await deliveryService.getForOrder(String(order._id), asAdmin());
 
         expect(early.success && early.data).toEqual({ fulfillmentOrders: [], shipments: [] });
         expect(own.success && own.data.fulfillmentOrders[0].actions.ship).toBe(true);
@@ -361,13 +360,13 @@ describe('shipping in parts', () => {
         const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
 
         const results = await Promise.allSettled([
-            shipFulfillmentOrder(
+            deliveryService.shipFulfillmentOrder(
                 String(fulfillmentOrder._id),
                 { lines: [{ productId, quantity: 2 }] },
                 asAdmin(),
                 admin
             ),
-            shipFulfillmentOrder(
+            deliveryService.shipFulfillmentOrder(
                 String(fulfillmentOrder._id),
                 { lines: [{ productId, quantity: 2 }] },
                 asAdmin(),
@@ -388,12 +387,12 @@ describe('shipping in parts', () => {
         await shipFrom(orderId);
         const [one, two] = await shipmentsOf(orderId);
 
-        await deliverShipment(String(one._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(one._id), {}, asAdmin(), admin);
         let stored = await orderService.getById(orderId);
         expect(stored!.status).toBe(OrderStatus.shipped);
         expect(stored!.withdrawUntil).toBeUndefined();
 
-        await deliverShipment(String(two._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(two._id), {}, asAdmin(), admin);
         stored = await orderService.getById(orderId);
         const last = await shipmentsOf(orderId).then((all) => all.at(-1)!);
         expect(stored!.status).toBe(OrderStatus.delivered);
@@ -408,7 +407,12 @@ describe('delivering', () => {
         const [shipment] = await shipmentsOf(String(order._id));
         mockEnqueueEmail.mockClear();
 
-        const result = await deliverShipment(String(shipment._id), {}, asAdmin(), admin);
+        const result = await deliveryService.deliverShipment(
+            String(shipment._id),
+            {},
+            asAdmin(),
+            admin
+        );
 
         expect(result.success).toBe(true);
         const stored = await orderService.getById(String(order._id));
@@ -428,7 +432,7 @@ describe('delivering', () => {
         await shipFrom(String(order._id));
         const [shipment] = await shipmentsOf(String(order._id));
 
-        await deliverShipment(String(shipment._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(shipment._id), {}, asAdmin(), admin);
 
         const [delivered] = await shipmentsOf(String(order._id));
         const stored = await orderService.getById(String(order._id));
@@ -446,9 +450,14 @@ describe('delivering', () => {
         const { order } = await processingOrderOf();
         await shipFrom(String(order._id));
         const [shipment] = await shipmentsOf(String(order._id));
-        await deliverShipment(String(shipment._id), {}, asAdmin(), admin);
+        await deliveryService.deliverShipment(String(shipment._id), {}, asAdmin(), admin);
 
-        const again = await deliverShipment(String(shipment._id), {}, asAdmin(), admin);
+        const again = await deliveryService.deliverShipment(
+            String(shipment._id),
+            {},
+            asAdmin(),
+            admin
+        );
 
         expect(asReject(again).status).toBe(409);
         expect(asReject(again).errors[0].code).toBe('DELIVERY_NOT_DELIVERABLE');
@@ -459,7 +468,7 @@ describe('delivering', () => {
         await shipFrom(String(order._id));
         const [shipment] = await shipmentsOf(String(order._id));
 
-        const result = await deliverShipment(
+        const result = await deliveryService.deliverShipment(
             String(shipment._id),
             { forced: true, reason: 'carrier confirmed by phone' },
             asAdmin(),
@@ -480,13 +489,13 @@ describe('delivering', () => {
         await shipFrom(String(order._id));
         const [shipment] = await shipmentsOf(String(order._id));
 
-        const noKey = await deliverShipment(
+        const noKey = await deliveryService.deliverShipment(
             String(shipment._id),
             { forced: true, reason: 'x' },
             asAdmin(),
             callerContextAs('customer')
         );
-        const noReason = await deliverShipment(
+        const noReason = await deliveryService.deliverShipment(
             String(shipment._id),
             { forced: true },
             asAdmin(),
@@ -505,14 +514,14 @@ describe('delivering', () => {
         await shipFrom(String(order._id), { trackingCode: 'TRK-TYPO0001' });
         const [shipment] = await shipmentsOf(String(order._id));
 
-        const fixed = await editShipmentTracking(
+        const fixed = await deliveryService.editShipmentTracking(
             String(shipment._id),
             'TRK-FIXED001',
             asAdmin(),
             admin
         );
-        await deliverShipment(String(shipment._id), {}, asAdmin(), admin);
-        const late = await editShipmentTracking(
+        await deliveryService.deliverShipment(String(shipment._id), {}, asAdmin(), admin);
+        const late = await deliveryService.editShipmentTracking(
             String(shipment._id),
             'TRK-LATE0001',
             asAdmin(),
@@ -548,8 +557,11 @@ describe('forced shipments', () => {
     it('refuses a forced ship from a warehouse login, and one with no reason, and writes no shipment', async () => {
         const { order } = await processingOrderOf([1], { status: OrderStatus.paid });
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
-        const forceShip = (input: Parameters<typeof shipFulfillmentOrder>[1], role: string) =>
-            shipFulfillmentOrder(
+        const forceShip = (
+            input: Parameters<typeof deliveryService.shipFulfillmentOrder>[1],
+            role: string
+        ) =>
+            deliveryService.shipFulfillmentOrder(
                 String(fulfillmentOrder._id),
                 input,
                 asRole(role),
@@ -593,7 +605,7 @@ describe('digital fulfilment', () => {
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
         expect(fulfillmentOrder.kind).toBe('digital');
 
-        const result = await fulfillFulfillmentOrder(
+        const result = await deliveryService.fulfillFulfillmentOrder(
             String(fulfillmentOrder._id),
             asAdmin(),
             admin
@@ -619,12 +631,17 @@ describe('digital fulfilment', () => {
         const [physicalFo] = await fulfillmentOrdersOf(String(order._id));
         const [digitalFo] = await fulfillmentOrdersOf(String(digital._id));
 
-        const fulfilPhysical = await fulfillFulfillmentOrder(
+        const fulfilPhysical = await deliveryService.fulfillFulfillmentOrder(
             String(physicalFo._id),
             asAdmin(),
             admin
         );
-        const shipDigital = await shipFulfillmentOrder(String(digitalFo._id), {}, asAdmin(), admin);
+        const shipDigital = await deliveryService.shipFulfillmentOrder(
+            String(digitalFo._id),
+            {},
+            asAdmin(),
+            admin
+        );
 
         expect(asReject(fulfilPhysical).errors[0].code).toBe('DELIVERY_NOT_DIGITAL');
         expect(asReject(shipDigital).errors[0].code).toBe('DELIVERY_NOT_PHYSICAL');
@@ -651,7 +668,7 @@ describe('the account export', () => {
     it('carries staff’s hold note and no staff id', async () => {
         const { user, order } = await processingOrderOf();
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
-        await holdFulfillmentOrder(
+        await deliveryService.holdFulfillmentOrder(
             String(fulfillmentOrder._id),
             { reason: 'high_risk', note: 'rang twice' },
             asAdmin('staff-42'),
@@ -678,7 +695,7 @@ describe('holds', () => {
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
         const id = String(fulfillmentOrder._id);
 
-        const held = await holdFulfillmentOrder(
+        const held = await deliveryService.holdFulfillmentOrder(
             id,
             { reason: 'high_risk', note: 'check' },
             asAdmin(),
@@ -686,7 +703,7 @@ describe('holds', () => {
         );
         const refused = await shipFrom(String(order._id));
         const stored = await orderService.getById(String(order._id));
-        const released = await releaseFulfillmentOrder(id, asAdmin(), admin);
+        const released = await deliveryService.releaseFulfillmentOrder(id, asAdmin(), admin);
         const shipped = await shipFrom(String(order._id));
 
         expect(held.success && held.data.status).toBe('on_hold');
@@ -706,12 +723,12 @@ describe('holds', () => {
             { $set: { status: 'on_hold', holdReason: 'awaiting_stock' } }
         );
 
-        const release = await releaseFulfillmentOrder(
+        const release = await deliveryService.releaseFulfillmentOrder(
             String(fulfillmentOrder._id),
             asAdmin(),
             admin
         );
-        const holdAgain = await holdFulfillmentOrder(
+        const holdAgain = await deliveryService.holdFulfillmentOrder(
             String(fulfillmentOrder._id),
             { reason: 'other' },
             asAdmin(),
@@ -725,7 +742,7 @@ describe('holds', () => {
     it('never ships a held fulfillment order, forced or not', async () => {
         const { order } = await processingOrderOf([1], { status: OrderStatus.paid });
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
-        await holdFulfillmentOrder(
+        await deliveryService.holdFulfillmentOrder(
             String(fulfillmentOrder._id),
             { reason: 'other' },
             asAdmin(),
@@ -747,7 +764,7 @@ describe('an order that is cancelled', () => {
 
         await orderService.cancelOnRequestById(orderId, asAdmin(), {}, admin);
         await settleOutboxNudges();
-        await cancelAllForOrder(orderId);
+        await deliveryService.cancelAllForOrder(orderId);
 
         const all = await fulfillmentOrderRepository.findByOrderId(orderId);
         expect(all.map(({ status }) => status)).toEqual(['cancelled']);
@@ -769,7 +786,12 @@ describe('an order that is cancelled', () => {
         const otherId = String(other.order._id);
         const [fulfillmentOrder] = await fulfillmentOrdersOf(otherId);
         await orderService.cancelOnRequestById(otherId, asAdmin(), {}, admin);
-        const late = await shipFulfillmentOrder(String(fulfillmentOrder._id), {}, asAdmin(), admin);
+        const late = await deliveryService.shipFulfillmentOrder(
+            String(fulfillmentOrder._id),
+            {},
+            asAdmin(),
+            admin
+        );
         expect(asReject(late).errors[0].code).toBe('DELIVERY_NOT_SHIPPABLE');
     });
 });
@@ -795,7 +817,9 @@ describe('a short stock delivery', () => {
     it('moves the allocated units to a new open fulfillment order and keeps the rest held', async () => {
         const { orderId, fulfillmentOrderId, productId } = await awaitingStock(3);
 
-        const split = await splitForAllocation(fulfillmentOrderId, [{ productId, quantity: 2 }]);
+        const split = await deliveryService.splitForAllocation(fulfillmentOrderId, [
+            { productId, quantity: 2 }
+        ]);
 
         expect(split?.released).toMatchObject({ number: 2, status: 'open' });
         expect(split?.released.lines[0]).toMatchObject({ quantity: 2, shippedQuantity: 0 });
@@ -808,10 +832,16 @@ describe('a short stock delivery', () => {
 
     it('lets the released units ship, while the held ones still cannot be released by hand', async () => {
         const { orderId, fulfillmentOrderId, productId } = await awaitingStock(3);
-        const split = await splitForAllocation(fulfillmentOrderId, [{ productId, quantity: 2 }]);
+        const split = await deliveryService.splitForAllocation(fulfillmentOrderId, [
+            { productId, quantity: 2 }
+        ]);
 
         const shipped = await shipFrom(orderId, {}, 2);
-        const release = await releaseFulfillmentOrder(fulfillmentOrderId, asAdmin(), admin);
+        const release = await deliveryService.releaseFulfillmentOrder(
+            fulfillmentOrderId,
+            asAdmin(),
+            admin
+        );
 
         expect(split).toBeDefined();
         expect(shipped.success).toBe(true);
@@ -824,7 +854,9 @@ describe('a short stock delivery', () => {
     it('simply ends the hold when the arrival covers everything, with no second order', async () => {
         const { orderId, fulfillmentOrderId, productId } = await awaitingStock(2);
 
-        const split = await splitForAllocation(fulfillmentOrderId, [{ productId, quantity: 2 }]);
+        const split = await deliveryService.splitForAllocation(fulfillmentOrderId, [
+            { productId, quantity: 2 }
+        ]);
 
         expect(split?.held).toBeUndefined();
         expect(split?.released).toMatchObject({ number: 1, status: 'open' });
@@ -837,13 +869,13 @@ describe('a short stock delivery', () => {
         const plain = await processingOrderOf([1], {}, 'plain-split@example.com');
         const [plainFo] = await fulfillmentOrdersOf(String(plain.order._id));
 
-        const tooMany = await splitForAllocation(held.fulfillmentOrderId, [
+        const tooMany = await deliveryService.splitForAllocation(held.fulfillmentOrderId, [
             { productId: held.productId, quantity: 2 }
         ]);
-        const notHeld = await splitForAllocation(String(plainFo._id), [
+        const notHeld = await deliveryService.splitForAllocation(String(plainFo._id), [
             { productId: String(plain.products[0]._id), quantity: 1 }
         ]);
-        const missing = await splitForAllocation('65dcdec2b18ad5e4bd597f01', []);
+        const missing = await deliveryService.splitForAllocation('65dcdec2b18ad5e4bd597f01', []);
 
         expect([tooMany, notHeld, missing]).toEqual([undefined, undefined, undefined]);
         const [after] = await fulfillmentOrdersOf(held.orderId);
@@ -854,7 +886,9 @@ describe('a short stock delivery', () => {
         const { orderId, fulfillmentOrderId, productId } = await awaitingStock(2);
         await orderService.cancelOnRequestById(orderId, asAdmin(), {}, admin);
 
-        const split = await splitForAllocation(fulfillmentOrderId, [{ productId, quantity: 1 }]);
+        const split = await deliveryService.splitForAllocation(fulfillmentOrderId, [
+            { productId, quantity: 1 }
+        ]);
 
         expect(split).toBeUndefined();
     });

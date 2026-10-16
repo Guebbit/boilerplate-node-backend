@@ -13,7 +13,7 @@ import { inventoryService } from '@modules/inventory';
 import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
 import { OrderStatus } from '@types';
 import type { Shipment } from '@types';
-import { ensureFulfillmentOrders, shipFulfillmentOrder, deliverShipment } from '../services';
+import { deliveryService } from '../services';
 import { fulfillmentOrderRepository, shipmentRepository } from '../repository';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 
@@ -31,7 +31,9 @@ export interface ShipEverythingOptions {
  * @param orderId - the order
  */
 export const fulfillmentOrdersOf = (orderId: string): Promise<FulfillmentOrderDocument[]> =>
-    ensureFulfillmentOrders(orderId).then(() => fulfillmentOrderRepository.findByOrderId(orderId));
+    deliveryService
+        .ensureFulfillmentOrders(orderId)
+        .then(() => fulfillmentOrderRepository.findByOrderId(orderId));
 
 /**
  * The order's shipments, in the order they were cut.
@@ -55,7 +57,7 @@ export const shipEverything = async (
     const all = await fulfillmentOrdersOf(orderId);
     for (const fulfillmentOrder of all) {
         if (fulfillmentOrder.kind !== 'physical' || fulfillmentOrder.status !== 'open') continue;
-        const result = await shipFulfillmentOrder(
+        const result = await deliveryService.shipFulfillmentOrder(
             String(fulfillmentOrder._id),
             options,
             asAdmin(),
@@ -76,7 +78,7 @@ export const deliverEverything = async (orderId: string): Promise<Shipment[]> =>
     const all = await shipmentsOf(orderId);
     for (const shipment of all) {
         if (shipment.status !== 'shipped') continue;
-        const result = await deliverShipment(
+        const result = await deliveryService.deliverShipment(
             String(shipment._id),
             {},
             asAdmin(),

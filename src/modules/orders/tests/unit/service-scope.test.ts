@@ -18,7 +18,7 @@
  */
 
 import { Types } from 'mongoose';
-import { orderService, actorOf } from '../../services';
+import { orderService } from '../../services';
 import { asCustomer, asAdmin, asModerator } from '@tests/callers';
 
 const USER_ID = '507f1f77bcf86cd799439011';
@@ -63,22 +63,22 @@ describe('orderService.callerScope', () => {
 
 describe('actorOf', () => {
     it('reads a customer off the customer lifecycle column', () => {
-        expect(actorOf(asCustomer(USER_ID))).toBe('customer');
+        expect(orderService.actorOf(asCustomer(USER_ID))).toBe('customer');
     });
 
     it('reads an admin off the admin lifecycle column', () => {
-        expect(actorOf(asAdmin(USER_ID))).toBe('admin');
+        expect(orderService.actorOf(asAdmin(USER_ID))).toBe('admin');
     });
 
     it('reads a moderator off the admin lifecycle column, not the customer one', () => {
         // The bug this pins: `update:Order` is held by name, not through the scope
         // wildcard, so asking for the wildcard alone silently treated a moderator as a
         // customer here.
-        expect(actorOf(asModerator(USER_ID))).toBe('admin');
+        expect(orderService.actorOf(asModerator(USER_ID))).toBe('admin');
     });
 
     it('reads the customer column when there is no auth context at all', () => {
-        expect(actorOf(undefined)).toBe('customer');
+        expect(orderService.actorOf(undefined)).toBe('customer');
     });
 });
 

@@ -19,7 +19,7 @@ import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel
 import { settleOutboxNudges } from '@kernel/outbox';
 import deliveryModule from '@modules/delivery/module';
 import { SHIPMENT_SHIPPED, SHIPMENT_DELIVERED } from '@modules/delivery/events';
-import { shipFulfillmentOrder, syncWithOverride } from '@modules/delivery/services';
+import { deliveryService } from '@modules/delivery/services';
 import { fulfillmentOrdersOf, shipmentsOf } from '@modules/delivery/tests/factories';
 import { asAdmin } from '@tests/callers';
 
@@ -97,7 +97,7 @@ describe('an override forward to shipped', () => {
     it('takes only what had not shipped, and the shelf once', async () => {
         const { orderId, productId } = await processingOrder();
         const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
-        await shipFulfillmentOrder(
+        await deliveryService.shipFulfillmentOrder(
             String(fulfillmentOrder._id),
             { lines: [{ productId, quantity: 1 }] },
             asAdmin(),
@@ -125,7 +125,7 @@ describe('an override forward to shipped', () => {
         await override(orderId, OrderStatus.shipped);
         const at = await overriddenAt(orderId);
 
-        await syncWithOverride(orderId, OrderStatus.shipped, at);
+        await deliveryService.syncWithOverride(orderId, OrderStatus.shipped, at);
 
         expect(await shipmentsOf(orderId)).toHaveLength(1);
     });
@@ -135,7 +135,7 @@ describe('an override forward to delivered', () => {
     it('delivers every shipment at the same instant the withdrawal deadline was counted from', async () => {
         const { orderId, productId } = await processingOrder();
         const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
-        await shipFulfillmentOrder(
+        await deliveryService.shipFulfillmentOrder(
             String(fulfillmentOrder._id),
             { lines: [{ productId, quantity: 1 }] },
             asAdmin(),

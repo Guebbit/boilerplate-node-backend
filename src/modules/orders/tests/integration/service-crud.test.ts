@@ -20,18 +20,9 @@ import {
     forceOrderStatus,
     toOrderItem
 } from '@modules/orders/tests/factories';
-import {
-    getById,
-    getForCaller,
-    create,
-    update,
-    updateById,
-    remove,
-    removeById,
-    restoreById,
-    search,
-    callerScope
-} from '@modules/orders/services';
+import { orderService } from '@modules/orders/services';
+import { update } from '../../services/crud';
+import { remove } from '../../services/remove';
 import { orderRepository } from '../../repository';
 import { asReject, asSuccess } from '@tests/response';
 import { asCustomer, asAdmin, callerAs, callerContextAs, testCallerContext } from '@tests/callers';
@@ -61,7 +52,7 @@ const refusedLines = async (
     const user = await createUser();
     const scarce = await createProduct({ onHand: 1 });
 
-    const result = await create(
+    const result = await orderService.create(
         user.id,
         user.email,
         [{ productId: String(scarce._id), quantity: 5 }],
@@ -86,7 +77,7 @@ const seedOrder = async () => {
     const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
     const mouse = await createProduct({ title: 'Mouse', price: 10 });
 
-    const result = await create(
+    const result = await orderService.create(
         String(user._id),
         user.email,
         [
@@ -120,7 +111,7 @@ const createWithLines = async (quantities: number[]) => {
         )
     );
 
-    return create(String(user._id), user.email, items, callerContextAs('admin'));
+    return orderService.create(String(user._id), user.email, items, callerContextAs('admin'));
 };
 
 describe('create', () => {
@@ -128,7 +119,7 @@ describe('create', () => {
         const user = await createUser();
         const product = await createProduct({ title: 'Keyboard', price: 25 });
 
-        const result = await create(
+        const result = await orderService.create(
             String(user._id),
             user.email,
             [{ productId: String(product._id), quantity: 2 }],
@@ -148,8 +139,18 @@ describe('create', () => {
         const product = await createProduct({ title: 'Keyboard', price: 25 });
         const items = [{ productId: String(product._id), quantity: 1 }];
 
-        const forPeer = await create(peer.id, peer.email, items, callerContextAs('admin', me.id));
-        const forMe = await create(me.id, me.email, items, callerContextAs('admin', me.id));
+        const forPeer = await orderService.create(
+            peer.id,
+            peer.email,
+            items,
+            callerContextAs('admin', me.id)
+        );
+        const forMe = await orderService.create(
+            me.id,
+            me.email,
+            items,
+            callerContextAs('admin', me.id)
+        );
 
         expect([forPeer.success, forMe.success]).toEqual([true, true]);
         expect(await countOrders()).toBe(2);
@@ -168,7 +169,7 @@ describe('create', () => {
             const fine = await createProduct({ title: 'Keyboard', price: 25, onHand: 5 });
             const refused = await createProduct({ title: 'Mouse', price: 10, onHand: 5, ...flags });
 
-            const result = await create(
+            const result = await orderService.create(
                 String(user._id),
                 user.email,
                 [
@@ -197,13 +198,13 @@ describe('create', () => {
             const product = await createProduct({ price: 25 });
             const items = [{ productId: String(product._id), quantity: 1 }];
 
-            const first = await create(
+            const first = await orderService.create(
                 String(user._id),
                 user.email,
                 items,
                 callerContextAs('admin')
             );
-            const second = await create(
+            const second = await orderService.create(
                 String(user._id),
                 user.email,
                 items,
@@ -223,7 +224,7 @@ describe('create', () => {
         const product = await createProduct({ title: 'Keyboard', price: 25 });
 
         const first = asSuccess(
-            await create(
+            await orderService.create(
                 String(user._id),
                 user.email,
                 [{ productId: String(product._id), quantity: 1 }],
@@ -231,7 +232,7 @@ describe('create', () => {
             )
         ).data;
         const second = asSuccess(
-            await create(
+            await orderService.create(
                 String(user._id),
                 user.email,
                 [{ productId: String(product._id), quantity: 1 }],
@@ -255,7 +256,7 @@ describe('create', () => {
             const product = await createProduct({ title: 'Keyboard', price: 25 });
 
             const order = asSuccess(
-                await create(
+                await orderService.create(
                     String(user._id),
                     user.email,
                     [{ productId: String(product._id), quantity: 1 }],
@@ -309,7 +310,12 @@ describe('create', () => {
     it('rejects an empty item list with 422', async () => {
         const user = await createUser();
 
-        const result = await create(String(user._id), user.email, [], callerContextAs('admin'));
+        const result = await orderService.create(
+            String(user._id),
+            user.email,
+            [],
+            callerContextAs('admin')
+        );
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(422);
@@ -355,7 +361,7 @@ describe('create', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        const result = await create(
+        const result = await orderService.create(
             String(user._id),
             user.email,
             [
@@ -372,7 +378,7 @@ describe('create', () => {
         // All-or-nothing: a partially-fulfilled order would charge for items nobody ordered.
         const user = await createUser();
 
-        await create(
+        await orderService.create(
             String(user._id),
             user.email,
             [{ productId: MISSING_ID, quantity: 1 }],
@@ -391,7 +397,7 @@ describe('create', () => {
         // own lookup for the placed-order email both have to survive this, not just one of them.
         jest.spyOn(userService, 'getById').mockRejectedValue(new Error('lookup unavailable'));
 
-        const result = await create(
+        const result = await orderService.create(
             String(user._id),
             user.email,
             [{ productId: String(product._id), quantity: 1 }],
@@ -421,7 +427,7 @@ describe('create', () => {
         const createSpy = jest.spyOn(orderRepository, 'create');
         const counterSpy = jest.spyOn(orderRepository, 'incrementOrderNumberCounter');
 
-        const result = await create(
+        const result = await orderService.create(
             user.id,
             user.email,
             [{ productId: String(scarce._id), quantity: 5 }],
@@ -467,7 +473,7 @@ describe('create', () => {
         jest.spyOn(orderRepository, 'create').mockRejectedValueOnce(new Error('mongo is down'));
 
         await expect(
-            create(
+            orderService.create(
                 user.id,
                 user.email,
                 [{ productId: String(product._id), quantity: 2 }],
@@ -489,7 +495,7 @@ describe('create', () => {
         const createSpy = jest.spyOn(orderRepository, 'create');
 
         await expect(
-            create(
+            orderService.create(
                 user.id,
                 user.email,
                 [{ productId: String(product._id), quantity: 2 }],
@@ -507,24 +513,24 @@ describe('getById', () => {
     it('returns the order for a bare id lookup', async () => {
         const { order } = await seedOrder();
 
-        const found = await getById(String(order._id));
+        const found = await orderService.getById(String(order._id));
 
         expect(String(found!._id)).toBe(String(order._id));
     });
 
     it('returns undefined for an id that does not exist', async () => {
-        await expect(getById(MISSING_ID)).resolves.toBeUndefined();
+        await expect(orderService.getById(MISSING_ID)).resolves.toBeUndefined();
     });
 
     it('returns undefined for an empty id without querying', async () => {
-        await expect(getById(undefined)).resolves.toBeUndefined();
-        await expect(getById('')).resolves.toBeUndefined();
+        await expect(orderService.getById(undefined)).resolves.toBeUndefined();
+        await expect(orderService.getById('')).resolves.toBeUndefined();
     });
 
     it('returns the order when the scope matches', async () => {
         const { order, user } = await seedOrder();
 
-        const found = await getById(String(order._id), { userId: user._id });
+        const found = await orderService.getById(String(order._id), { userId: user._id });
 
         expect(found).toBeDefined();
         expect(String(found?._id)).toBe(String(order._id));
@@ -533,8 +539,8 @@ describe('getById', () => {
     it('returns the same hydrated document whether or not the read is scoped', async () => {
         const { order, user } = await seedOrder();
 
-        const scoped = await getById(String(order._id), { userId: user._id });
-        const unscoped = await getById(String(order._id));
+        const scoped = await orderService.getById(String(order._id), { userId: user._id });
+        const unscoped = await orderService.getById(String(order._id));
 
         // `_id` present on both — a Mongoose document, not a scope-dependent wire shape.
         expect(String(scoped?._id)).toBe(String(order._id));
@@ -549,7 +555,7 @@ describe('getById', () => {
         const { order } = await seedOrder();
         const stranger = await createUser({ email: 'stranger@example.com' });
 
-        const found = await getById(String(order._id), { userId: stranger._id });
+        const found = await orderService.getById(String(order._id), { userId: stranger._id });
 
         expect(found).toBeUndefined();
     });
@@ -561,8 +567,8 @@ describe('getById', () => {
         // separate aggregate-and-normalize path.
         const { order, user } = await seedOrder();
 
-        const scoped = await getById(String(order._id), { userId: user._id });
-        const unscoped = await getById(String(order._id));
+        const scoped = await orderService.getById(String(order._id), { userId: user._id });
+        const unscoped = await orderService.getById(String(order._id));
 
         // 2 lines, 3 units, 2×25 + 1×10 = 60.
         expect(scoped?.toJSON()).toMatchObject({ totalItems: 2, totalQuantity: 3, totalPrice: 60 });
@@ -671,7 +677,7 @@ describe('updateById', () => {
     it('updates an existing order', async () => {
         const { order } = await seedOrder();
 
-        const result = await updateById(
+        const result = await orderService.updateById(
             String(order._id),
             { email: 'moved@example.com' },
             callerContextAs('admin')
@@ -682,7 +688,7 @@ describe('updateById', () => {
     });
 
     it('rejects with 404 for an id that does not exist', async () => {
-        const result = await updateById(
+        const result = await orderService.updateById(
             MISSING_ID,
             { email: 'moved@example.com' },
             testCallerContext
@@ -724,7 +730,7 @@ describe('restoreById', () => {
         const { order } = await seedOrder();
         await remove(order);
 
-        const result = await restoreById(String(order._id));
+        const result = await orderService.restoreById(String(order._id));
 
         expect(result.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
@@ -736,7 +742,7 @@ describe('restoreById', () => {
     it('answers 409 for an order that is not deleted', async () => {
         const { order } = await seedOrder();
 
-        const result = await restoreById(String(order._id));
+        const result = await orderService.restoreById(String(order._id));
 
         expect(asReject(result).status).toBe(409);
     });
@@ -746,7 +752,7 @@ describe('removeById', () => {
     it('soft-deletes an existing order by default', async () => {
         const { order } = await seedOrder();
 
-        const result = await removeById(String(order._id));
+        const result = await orderService.removeById(String(order._id));
 
         expect(result.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
@@ -757,14 +763,14 @@ describe('removeById', () => {
     it('hard-deletes an existing cancelled order when asked', async () => {
         const { order } = await seedCancelledOrder();
 
-        const result = await removeById(String(order._id), true);
+        const result = await orderService.removeById(String(order._id), true);
 
         expect(result.success).toBe(true);
         await expect(orderRepository.findById(String(order._id))).resolves.toBeNull();
     });
 
     it('rejects with 404 for an id that does not exist', async () => {
-        const result = await removeById(MISSING_ID);
+        const result = await orderService.removeById(MISSING_ID);
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(404);
@@ -773,7 +779,7 @@ describe('removeById', () => {
     it('deletes nothing when the id does not exist', async () => {
         const { order } = await seedOrder();
 
-        await removeById(MISSING_ID, true);
+        await orderService.removeById(MISSING_ID, true);
 
         await expect(orderRepository.findById(String(order._id))).resolves.not.toBeNull();
     });
@@ -784,16 +790,20 @@ describe('getForCaller', () => {
         const { first, second, firstOrder } = await twoBuyers();
         const id = String(firstOrder._id);
 
-        await expect(getForCaller(id, asCustomer(first.id))).resolves.toBeDefined();
-        await expect(getForCaller(id, asAdmin(second.id))).resolves.toBeDefined();
-        await expect(getForCaller(id, asCustomer(second.id))).resolves.toBeUndefined();
+        await expect(orderService.getForCaller(id, asCustomer(first.id))).resolves.toBeDefined();
+        await expect(orderService.getForCaller(id, asAdmin(second.id))).resolves.toBeDefined();
+        await expect(orderService.getForCaller(id, asCustomer(second.id))).resolves.toBeUndefined();
     });
 
     it('answers undefined for an unknown or missing id', async () => {
         const { first } = await twoBuyers();
 
-        await expect(getForCaller(MISSING_ID, asCustomer(first.id))).resolves.toBeUndefined();
-        await expect(getForCaller(undefined, asCustomer(first.id))).resolves.toBeUndefined();
+        await expect(
+            orderService.getForCaller(MISSING_ID, asCustomer(first.id))
+        ).resolves.toBeUndefined();
+        await expect(
+            orderService.getForCaller(undefined, asCustomer(first.id))
+        ).resolves.toBeUndefined();
     });
 });
 
@@ -802,12 +812,15 @@ describe('callerScope hides soft-deleted orders', () => {
         const { order } = await seedOrder();
         const userId = String(order.userId);
 
-        await removeById(String(order._id));
+        await orderService.removeById(String(order._id));
 
-        const own = await search({}, callerScope(asCustomer(userId)));
+        const own = await orderService.search({}, orderService.callerScope(asCustomer(userId)));
         expect(own.items).toHaveLength(0);
 
-        const adminSearch = await search({}, callerScope(asAdmin(userId)));
+        const adminSearch = await orderService.search(
+            {},
+            orderService.callerScope(asAdmin(userId))
+        );
         expect(adminSearch.items).toHaveLength(1);
     });
 });
@@ -834,7 +847,10 @@ describe('a client filter never widens the caller’s scope', () => {
     it('answers nothing for a customer filtering on another buyer’s id', async () => {
         const { first, second } = await twoBuyers();
 
-        const result = await search({ userId: second.id }, callerScope(asCustomer(first.id)));
+        const result = await orderService.search(
+            { userId: second.id },
+            orderService.callerScope(asCustomer(first.id))
+        );
 
         expect(result.items).toHaveLength(0);
     });
@@ -842,9 +858,9 @@ describe('a client filter never widens the caller’s scope', () => {
     it('still answers an operator’s own userId filter', async () => {
         const { second, secondOrder } = await twoBuyers();
 
-        const result = await search(
+        const result = await orderService.search(
             { userId: second.id },
-            callerScope(asAdmin('65dc8a99604c307b702b5cc0'))
+            orderService.callerScope(asAdmin('65dc8a99604c307b702b5cc0'))
         );
 
         expect(result.items.map((item) => item.id)).toEqual([String(secondOrder._id)]);

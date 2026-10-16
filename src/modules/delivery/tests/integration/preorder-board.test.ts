@@ -19,13 +19,7 @@ import {
     paidPreorderOrder,
     shipEverything
 } from '@modules/delivery/tests/factories';
-import {
-    cancelAllForOrder,
-    holdFulfillmentOrder,
-    listPreorderFulfillmentOrders,
-    runPreorderSweep,
-    summarizePreorders
-} from '@modules/delivery/services';
+import { deliveryService } from '@modules/delivery/services';
 import deliveryModule from '@modules/delivery/module';
 import { forceOrderStatus } from '@modules/orders/tests/factories';
 import { productService } from '@modules/products';
@@ -65,8 +59,11 @@ const arrive = async (productId: string, quantity: number) => {
 };
 
 /** Every row the board lists for an admin, with the filters given. */
-const board = (query: Parameters<typeof listPreorderFulfillmentOrders>[0] = {}, now?: Date) =>
-    listPreorderFulfillmentOrders(query, asAdmin(), now).then(({ items }) => items);
+const board = (
+    query: Parameters<typeof deliveryService.listPreorderFulfillmentOrders>[0] = {},
+    now?: Date
+) =>
+    deliveryService.listPreorderFulfillmentOrders(query, asAdmin(), now).then(({ items }) => items);
 
 /** The order ids of some rows, sorted, for comparing sets. */
 const orderIdsOf = (rows: readonly { orderId: string }[]) =>
@@ -107,9 +104,9 @@ describe('every state filter returns exactly the rows that are in that state', (
         await forceOrderStatus(orders.delivered.orderId, OrderStatus.processing);
         await shipEverything(orders.delivered.orderId, { trackingCode: 'TRK-BOARD02' });
         await deliverEverything(orders.delivered.orderId);
-        await cancelAllForOrder(orders.cancelled.orderId);
+        await deliveryService.cancelAllForOrder(orders.cancelled.orderId);
         const [heldFo] = await fulfillmentOrdersOf(orders.held.orderId);
-        await holdFulfillmentOrder(
+        await deliveryService.holdFulfillmentOrder(
             String(heldFo._id),
             { reason: 'other' },
             asAdmin(),
@@ -201,7 +198,7 @@ describe('the product summary', () => {
         expect(first.productIds[0]).not.toBe(second.productIds[0]);
         await arrive(first.productIds[0], 2);
 
-        const { items } = await summarizePreorders({}, asAdmin());
+        const { items } = await deliveryService.summarizePreorders({}, asAdmin());
 
         const mine = items.find(({ productId }) => productId === first.productIds[0]);
         expect(mine).toMatchObject({ paid: 3, allocated: 2, waiting: 1, shipped: 0, cancelled: 0 });
@@ -213,9 +210,9 @@ describe('the product summary', () => {
 
     it('counts units waiting on an answer apart, and the late ones as a subset', async () => {
         const order = await placed(2, 5, 'asked@example.com');
-        await runPreorderSweep(inDays(6));
+        await deliveryService.runPreorderSweep(inDays(6));
 
-        const { items } = await summarizePreorders({}, asAdmin(), inDays(7));
+        const { items } = await deliveryService.summarizePreorders({}, asAdmin(), inDays(7));
 
         expect(items).toMatchObject([
             { productId: order.productIds[0], paid: 2, waiting: 0, awaitingYes: 2, late: 2 }
@@ -228,9 +225,15 @@ describe('who may read which rows', () => {
         const mine = await placed(1, 30, 'mine@example.com');
         const theirs = await placed(1, 30, 'theirs@example.com');
 
-        const asBuyer = await listPreorderFulfillmentOrders({}, asCustomer(String(mine.user._id)));
-        const summaryAsBuyer = await summarizePreorders({}, asCustomer(String(mine.user._id)));
-        const asStaff = await listPreorderFulfillmentOrders({}, asAdmin());
+        const asBuyer = await deliveryService.listPreorderFulfillmentOrders(
+            {},
+            asCustomer(String(mine.user._id))
+        );
+        const summaryAsBuyer = await deliveryService.summarizePreorders(
+            {},
+            asCustomer(String(mine.user._id))
+        );
+        const asStaff = await deliveryService.listPreorderFulfillmentOrders({}, asAdmin());
 
         expect(orderIdsOf(asBuyer.items)).toEqual([mine.orderId]);
         expect(summaryAsBuyer.items.map(({ productId }) => productId)).toEqual(mine.productIds);
@@ -240,7 +243,7 @@ describe('who may read which rows', () => {
     it("shows nobody's rows to a caller with no session", async () => {
         await placed(1, 30);
 
-        const { items } = await listPreorderFulfillmentOrders({}, undefined);
+        const { items } = await deliveryService.listPreorderFulfillmentOrders({}, undefined);
 
         expect(items).toEqual([]);
     });

@@ -7,7 +7,7 @@
  */
 
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { mailBuyer } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { returnNoticeEmail, type ReturnNoticeInput, type ReturnNoticeKind } from '../emails';
 
@@ -24,7 +24,7 @@ export const mailReturnNotice = (
     order: OrderDocument,
     input: Omit<ReturnNoticeInput, 'orderRef'>
 ): Promise<void> =>
-    mailBuyer(order, (locale, name) => {
+    orderService.mailBuyer(order, (locale, name) => {
         const mail = returnNoticeEmail(kind, locale, name, {
             ...input,
             orderRef: order.orderNumber

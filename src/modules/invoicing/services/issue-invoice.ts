@@ -12,7 +12,7 @@
 
 import { Types } from 'mongoose';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { orderService, orderTaxBreakdown, orderTotal, billingAddressOf } from '@modules/orders';
+import { orderService, orderTaxBreakdown, orderTotal } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { invoicingRepository } from '../repository';
 import { encryptInvoiceParty } from '../pii';
@@ -74,7 +74,7 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
     // One instant for the number's year and the stored date; fixed here so a retry keeps it.
     const issuedAt = new Date();
     // The order stores its address under ITS id; the invoice re-encrypts it under its own.
-    const billingAddress = billingAddressOf(order);
+    const billingAddress = orderService.billingAddressOf(order);
 
     return withTransaction((session) =>
         allocateInvoiceNumber(issuedAt, session).then((number) =>

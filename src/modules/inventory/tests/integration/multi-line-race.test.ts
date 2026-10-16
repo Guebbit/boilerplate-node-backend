@@ -19,7 +19,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
 import { StockMovementReason } from '@types';
-import { reserveForOrder } from '../../services';
+import { inventoryService } from '../../services';
 import { stockLevelRepository } from '../../repository';
 import { reservationModel } from '../../model';
 
@@ -69,11 +69,11 @@ describe('opposite-order multi-line holds, each taking its first line before the
         holdLaterReservesUntilFirstWritesLand(2);
 
         const outcomes = await Promise.all([
-            reserveForOrder('a'.repeat(24), [
+            inventoryService.reserveForOrder('a'.repeat(24), [
                 { productId: leftId, quantity: 3 },
                 { productId: rightId, quantity: 3 }
             ]),
-            reserveForOrder('b'.repeat(24), [
+            inventoryService.reserveForOrder('b'.repeat(24), [
                 { productId: rightId, quantity: 3 },
                 { productId: leftId, quantity: 3 }
             ])

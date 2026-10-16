@@ -8,14 +8,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factories';
-import {
-    reserveForOrder,
-    runReservationSweep,
-    receive,
-    adjust,
-    restockReturnedLines,
-    refreshStockCacheForProducts
-} from '../../services';
+import { inventoryService } from '../../services';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 
 /*
@@ -42,7 +35,7 @@ describe('the products cache tag, cleared where stock is written', () => {
     it('clears it when stock is received', async () => {
         const product = await createProduct({ onHand: 1 });
 
-        await receive(String(product._id), 4);
+        await inventoryService.receive(String(product._id), 4);
 
         expect(invalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
     });
@@ -50,7 +43,7 @@ describe('the products cache tag, cleared where stock is written', () => {
     it('clears it when stock is adjusted', async () => {
         const product = await createProduct({ onHand: 5 });
 
-        await adjust(String(product._id), -2);
+        await inventoryService.adjust(String(product._id), -2);
 
         expect(invalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
     });
@@ -59,11 +52,13 @@ describe('the products cache tag, cleared where stock is written', () => {
         const product = await createProduct({ onHand: 5 });
         // A zero-minute window: the hold is stale the moment it is taken.
         await withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', async () => {
-            await reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 1 }]);
+            await inventoryService.reserveForOrder(anOrderId(), [
+                { productId: String(product._id), quantity: 1 }
+            ]);
         });
         jest.mocked(invalidateCacheTagsLogged).mockClear();
 
-        await expect(runReservationSweep()).resolves.toBe(1);
+        await expect(inventoryService.runReservationSweep()).resolves.toBe(1);
 
         expect(invalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
     });
@@ -72,11 +67,11 @@ describe('the products cache tag, cleared where stock is written', () => {
         const product = await createProduct({ onHand: 5 });
         const productId = String(product._id);
 
-        await restockReturnedLines([{ productId, quantity: 1 }], {
+        await inventoryService.restockReturnedLines([{ productId, quantity: 1 }], {
             reference: anOrderId(),
             note: 'return'
         });
-        await refreshStockCacheForProducts([productId]);
+        await inventoryService.refreshStockCacheForProducts([productId]);
 
         expect(invalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
     });

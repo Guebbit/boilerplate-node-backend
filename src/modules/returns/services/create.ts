@@ -22,7 +22,7 @@ import type { ClientSession } from 'mongoose';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { nudgeOutbox } from '@kernel/outbox';
 import { orderService, isBeforeDispatch, isExcludedFromWithdrawal } from '@modules/orders';
-import { shippedQuantities } from '@modules/delivery';
+import { deliveryService } from '@modules/delivery';
 import type { OrderDocument } from '@modules/orders';
 import type { AuthContext, CallerContext } from '@types';
 import { returnRepository } from '../repository';
@@ -229,7 +229,7 @@ const openReturn = (
 
         // Past this point goods are on their way or arrived — or nothing has shipped and the
         // reason is not a withdrawal, so there is nothing to send back.
-        return shippedQuantities(input.orderId).then((shipped) => {
+        return deliveryService.shippedQuantities(input.orderId).then((shipped) => {
             if (shipped.length === 0) return notReturnable();
 
             if (input.lines?.some(({ productId }) => excluded.has(productId)))

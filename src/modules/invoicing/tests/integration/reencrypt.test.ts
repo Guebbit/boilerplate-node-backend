@@ -12,7 +12,7 @@ import productsModule from '@modules/products/module';
 import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
 import invoicingModule from '@modules/invoicing/module';
-import { markPaid } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
@@ -54,7 +54,7 @@ describe('invoicing reencrypt', () => {
                 country: 'GB'
             }
         });
-        await markPaid(String(order._id));
+        await orderService.markPaid(String(order._id));
         const invoice = await waitForInvoice(String(order._id));
         const rotation = 'v2:new-pii-key-material,v1:test-pii-encryption-key';
 

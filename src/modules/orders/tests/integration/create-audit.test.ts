@@ -8,7 +8,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { create } from '@modules/orders/services';
+import { orderService } from '@modules/orders/services';
 import { ordersAuditActions } from '../../audit';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
@@ -46,7 +46,7 @@ describe('create — the audit row records the real caller, never a forced label
         const buyer = await createUser();
         const product = await createProduct({ title: 'Keyboard', price: 25 });
 
-        await create(
+        await orderService.create(
             String(buyer._id),
             buyer.email,
             [{ productId: String(product._id), quantity: 1 }],
@@ -67,7 +67,7 @@ describe('create — the audit row records the real caller, never a forced label
         const buyer = await createUser();
         const product = await createProduct({ title: 'Mouse', price: 10 });
 
-        await create(
+        await orderService.create(
             String(buyer._id),
             buyer.email,
             [{ productId: String(product._id), quantity: 1 }],
