@@ -45,33 +45,13 @@ export const siblingRole = (role: RepoRole): RepoRole =>
 /**
  * The files that must be identical in both checkouts.
  *
- * The test is not "are these the same today" — a dozen more files happen to match, from favicons
- * to `.prettierrc` — but "does a fork cause a silent bug". Everything here fails quietly: the two
- * sides keep building, keep passing their own suites, and disagree only in production or in a
- * live-API run.
+ * Membership rule:  NECESSITY — a fork of the file would break something silently.
+ * Every entry:      PRODUCED in this repo and copied to the frontend, so "which side is right"
+ *                   has one answer, and `sync:frontend` applies it.
+ * Not members:      files both repos merely keep identical for convenience, and anything either
+ *                   repo can regenerate from a file already listed.
  *
- * EVERY ENTRY IS PRODUCED IN THIS REPO and copied to the frontend, which is what makes a fork
- * answerable: the frontend's copy is an OUTPUT, so "which side is right" has one answer, and
- * `sync:frontend` applies it. Editing the copy is the failure this list is worst at describing and
- * best at catching — the next regeneration reverts it, and the diff looks like the backend broke
- * something. `asyncapi.public.yaml` is the one whose name differs on arrival: it lands as the
- * frontend's `asyncapi.yaml`, because the shared subset is the whole of the async contract as far
- * as that repo is concerned.
- *
- * That is the whole membership rule: NECESSITY only. Files the two repos merely keep identical for
- * CONVENIENCE — the Spectral ruleset, three shared scripts — are deliberately not members. They
- * are hand-maintained on both sides, so a fork is a question no script can answer, and nothing
- * silently breaks when two repos lint under rulesets that have drifted apart or one holds a newer
- * test reporter.
- *
- * Also deliberately absent, for the same reason: `public/favicon/*`, `.prettierrc`,
- * `.dockerignore`, `.husky/*`, `docker/nginx.docs.conf` and `docs/.vitepress/theme/*`. Identical
- * by convention, and a gate that fails on an icon trains people to ignore it.
- *
- * Nothing either repo can REGENERATE from a file already here belongs here either. Such a copy
- * carries no fact the list does not already compare, and every entry costs a manual step per
- * contract change. The generated realtime types and the `contract.<tool>.*` collections are out for
- * that reason; each is guarded by a freshness check inside its own repo.
+ * The reasoning and the excluded files: docs/tools/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
  */
 export const SHARED_FILES: readonly SharedFile[] = [
     /* The contract itself. */

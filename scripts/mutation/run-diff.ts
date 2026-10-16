@@ -2,36 +2,12 @@
 /**
  * Mutation testing scoped to the files a branch changed — `npm run mutation`.
  *
- * ── WHAT IT IS ───────────────────────────────────────────────────────────────────────────────
- * The weekly full sweep measures everything and answers within the week. This measures only the
- * files in the diff and answers in minutes, which is the difference between a number in a report
- * and a number a reviewer can act on.
+ * Same Stryker run as `mutation:full`, with `--mutate` narrowed to the changed files (whole
+ * files, not lines), then the ordinary per-file ratchet (`scripts/mutation/check-baseline.ts`).
+ * It never records: `--update` is not forwarded, so a partial report cannot erase the baseline.
  *
- * It is the same Stryker run as `mutation:full`, with `--mutate` narrowed to the changed files,
- * followed by the ordinary per-file ratchet (`scripts/mutation/check-baseline.ts`). Nothing about
- * the scoring is special-cased.
- *
- * ── WHY WHOLE FILES, NOT CHANGED LINES ───────────────────────────────────────────────────────
- * Stryker can mutate a line range (`--mutate '<path>.ts:10-40'`), and Google's published practice
- * mutates diffs that way. This mutates the whole file on purpose: whole-file scores are what
- * `mutation-baseline.json` records, so they compare directly, whereas a line-range score is
- * comparable to nothing. The consequence is deliberate — touch a file and you own its debt not
- * getting worse.
- *
- * ── WHY IT CANNOT FAIL YOU FOR SOMEBODY ELSE'S DEBT ──────────────────────────────────────────
- * The ratchet compares each file against its RECORDED score, not against a threshold. A file that
- * was already weak stays weak without failing; only a drop below what it previously measured does.
- * This also disposes of equivalent mutants — one that cannot be killed by any test was already
- * surviving when the baseline was taken, so it is priced in and moves nothing.
- *
- * Stryker's own `thresholds.break` is bypassed for the same reason: a percentage over a handful of
- * mutants is noise. One survivor is 50% of two mutants and 10% of ten, and the diff's size is not
- * a fact about the code.
- *
- * ── NEVER RECORDS ────────────────────────────────────────────────────────────────────────────
- * `--update` is not forwarded. A partial report recorded as the baseline would erase every file the
- * run did not measure; `scripts/mutation/check-baseline.ts` refuses that explicitly, and this never asks.
- * The weekly full sweep owns the baseline.
+ * Why whole files, why it cannot fail you for old debt:
+ * docs/tools/mutation-testing.md#the-diff-run-and-why-it-can-fail-when-the-full-sweep-cannot
  *
  * Usage:
  *   npm run mutation                 # against origin/main

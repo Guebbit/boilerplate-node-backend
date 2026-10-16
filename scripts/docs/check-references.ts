@@ -1,35 +1,9 @@
 #!/usr/bin/env tsx
 /**
  * Every file path the docs CLAIM exists, checked against the files that do — `npm run
- * check:docs-references`.
+ * check:docs-references`. `docs:build` refuses a dead LINK; this refuses a dead FACT.
  *
- * `docs:build` already refuses a dead LINK between two pages. Nothing refuses a dead FACT, and a
- * page naming `src/routes/` in a repo that has been `src/modules/<name>/` for a year reads as
- * current to everyone who has not opened the tree. That class of rot is silent, cheap to write,
- * and this is the only thing that looks for it.
- *
- * WHAT IS SWEPT, and why each narrowing matters:
- *   - Inline code spans only. A fenced block is a code SAMPLE — its imports describe an example,
- *     not this repo's tree, and sweeping them buries the real findings in illustration.
- *   - `./`-relative tokens are skipped. VitePress resolves those against the page, not the repo,
- *     and `docs:build` already fails on a dead one.
- *   - Resolution is by SUFFIX, so `orders/model.ts` matches `src/modules/orders/model.ts` without
- *     every page having to spell a path from the root.
- *   - A `#anchor` riding on a path this repo tracks is checked too, against that page's own
- *     headings — a page renamed out from under a citation elsewhere still resolves as a FILE, so
- *     the anchor half needs its own check. Limited to a page in THIS repo: the peer's
- *     headings are its own tree to answer for, not ours to parse.
- *   - `@`-prefixed tokens are rewritten through `tsconfig`'s own path aliases, so `@modules/x`
- *     is checked and `@asyncapi/cli` — matching no alias — is read as the npm package it is.
- *   - Tokens starting with `/` are HTTP routes, not files. The contract owns those, and
- *     `lint:openapi` already refuses one that does not exist.
- *   - Directories count as targets, so `src/infrastructure/` resolves without naming a file.
- *   - A token starting with the paired repo's directory name is resolved over THERE. That is what
- *     makes citing it by its package name instead of its directory name a finding.
- *   - A line carrying `<!-- doc-paths:ignore -->` is skipped whole. Some prose has to NAME a path
- *     that is deliberately gone — a rename table's left column, a paragraph explaining why a file
- *     was merged away. The marker says "this line names an absent path on purpose", which is an
- *     argument a reader can check, unlike silence.
+ * What is swept and why each narrowing matters: docs/reference/documentation-style.md#what-check-docs-references-sweeps
  *
  * The floors below are the point. A sweep that silently reads zero pages reports a clean tree
  * forever, which is worse than no sweep — see `TierWallsTest`'s canary for the same guard.

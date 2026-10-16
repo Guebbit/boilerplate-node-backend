@@ -108,7 +108,6 @@ const results = CHECKS.map((check) => ({ check, passed: run(check) }));
 // The summary: a header, then one PASS/FAIL line per check.
 console.info('\n[scaffold-measure] summary — report-only, not a merge gate:');
 
-// One line per check.
 for (const { check, passed } of results)
     console.info(`  ${passed ? 'PASS' : 'FAIL'}  ${check.label}`);
 

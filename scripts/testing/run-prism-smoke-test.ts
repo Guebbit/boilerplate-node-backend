@@ -107,5 +107,4 @@ const main = async (): Promise<void> => {
     finish(0, `[prism] GET ${PROBE} answered ${response.status} from the spec's own examples.`);
 };
 
-// Entry point.
 void main();

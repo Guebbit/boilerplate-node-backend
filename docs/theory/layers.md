@@ -388,6 +388,32 @@ When something breaks, the log line gives you a `trace_id`, you paste it in [Gra
 
 Those are the three that leave the process. The application emits four more — audit, analytics, the SSE metrics feed and queue jobs — and [Events & Logging](../tools/events-and-logging.md) is the map of all seven and when to use which.
 
+## Why persistence stays behind the repository {#persistence-behind-the-repository}
+
+`local/no-persistence-imports` enforces it at the import, because that is where it stops being
+true. A collection has exactly one door, `repository.ts`, which owns the query shapes and the
+mapping from documents to plain data. A second door is why a field rename in `model.ts` turns into
+a hunt through callers, why a lean/hydrated mix-up survives review, and why `orderModel.updateOne`
+ends up running from a service with none of the repository's guards around it.
+
+The violations arrive by two routes, and neither one sees the other:
+
+1. **By name.** `import { userRepository } from '@modules/users'` comes through a barrel, so the
+   path is innocent and only the binding gives it away. The rule reads the IMPORTED name as well
+   as the local one, so `import { userModel as Users }` is the same import wearing a hat.
+2. **By path.** `import type { UserRecord } from '../model'` names nothing suspicious, but the file
+   it comes from is the schema. Only the specifier catches this one.
+
+`import type` counts. A type-only import erases at runtime, which is the argument for letting it
+through and the reason it is not: the type IS the schema. A layer naming `UserDocument` has the
+storage layout in its signatures and changes when the collection does. The coupling the rule is
+about is the one that survives erasure.
+
+The suffixes and the path check are options, because "too close to storage" is a per-layer
+verdict: a service holding a repository is the design, a controller holding one is a tier
+violation. The config states each layer's answer beside its reason, and the defaults are the
+strict reading.
+
 ## Related pages
 
 - [Architecture](./architecture.md)

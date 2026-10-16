@@ -3,29 +3,10 @@
  * Turns a runner's JSON report into the two things a raw log cannot tell you: which MODULE a
  * failure belongs to, and where the time went — `npm run test:report`.
  *
- * SHARED SCRIPT — started byte-identical in `boilerplate-node-backend` and
- * `boilerplate-vue-frontend`. Not in `SHARED_FILES` (`scripts/pairing/spec-identity.ts`), so
- * nothing enforces it — `diff` is the tool, by hand, when you change one copy. What makes sharing
- * it possible at all: Vitest's `json` reporter emits the same shape Jest's `--json` does, a
- * `testResults[]` of files, each with `assertionResults[]`. Verified rather than assumed: both
- * reporters' output was diffed key by key.
+ * SHARED SCRIPT: started byte-identical in `boilerplate-node-backend` and
+ * `boilerplate-vue-frontend`, kept in step by hand (`diff`), not enforced by `SHARED_FILES`.
  *
- * ── Why JSON and not JUnit ───────────────────────────────────────────────────────────────────
- * JUnit is the format CI dashboards read, and it would need `jest-junit` as a dependency on the
- * backend (Jest has no built-in emitter; Vitest does). JSON needs nothing on either side and
- * carries strictly more — per-assertion durations, ancestor titles, full failure messages. So the
- * artefact is JSON, and this file is the reader.
- *
- * If PR-line annotations are ever wanted, that is the moment to ADD a JUnit reporter alongside
- * this one, not to replace it: they answer different questions and the JSON is what this reads.
- *
- * ── Why per-module ───────────────────────────────────────────────────────────────────────────
- * Every other instrument in these repos is layer-shaped — `test:unit`, `test:contract`, the CI
- * jobs, the mutation baseline's flat file list. That is the right shape for
- * running things and the wrong shape for reading them: the codebase is organised so that a module
- * is deletable, and nothing in the toolchain could tell you what a module's tests cost, or which
- * module owned a red build. This bucket-by-path is the cheapest possible fix, and it needs no
- * change to how anything is run.
+ * Why JSON and not JUnit, why per module: docs/tools/testing-quickstart.md#why-the-report-reads-json
  *
  * Usage:
  *   npm run test:report                 # read the default report path

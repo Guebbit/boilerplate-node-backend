@@ -1,36 +1,14 @@
 /**
  * Persistence stays behind the repository — the import is where that stops being true.
  *
- * A collection has exactly one door: `repository.ts`, which owns the query shapes and the
- * mapping from documents to plain data. Every other file that reaches past it is a second
- * door, and a second door is why a field rename in `model.ts` turns into a hunt through
- * callers, why a lean/hydrated mix-up survives review, and why `orderModel.updateOne` ends up
- * running from a service with none of the repository's guards around it.
+ * A collection has exactly one door, `repository.ts`. Every other file that reaches past it is a
+ * second door.
  *
- * ── Why two checks and not one ────────────────────────────────────────────────────────────
- * The violations arrive by two different routes and neither one sees the other:
+ * Checks:       by NAME (the imported binding, even renamed) and by PATH (the specifier).
+ * `import type`: counts. The type IS the schema, and the coupling survives erasure.
+ * Options:      suffixes and the path check are per layer. Defaults are the strict reading.
  *
- *   1. **By name.** `import { userRepository } from '@modules/users'` comes through a module's
- *      barrel, so the specifier says `@modules/users` and nothing else — the path is innocent
- *      and only the binding gives it away. `import { userModel as Users }` is the same import
- *      wearing a hat, so the check reads the IMPORTED name as well as the local one; renaming
- *      the binding is not a way out of a rule about what was reached for.
- *   2. **By path.** `import type { UserRecord } from '../model'` names nothing suspicious —
- *      `UserRecord` matches no suffix — but the file it comes from is the schema. Only the
- *      specifier can catch this one.
- *
- * ── `import type` counts ──────────────────────────────────────────────────────────────────
- * A type-only import erases at runtime, which is exactly the argument for letting it through
- * and exactly why it is not made here. The type IS the schema: a layer that names
- * `UserDocument` has the storage layout in its signatures, changes when the collection
- * changes, and is no longer describable without mongoose. The coupling this rule is about is
- * the one that survives erasure.
- *
- * ── Configurable, because "too close to storage" is a per-layer verdict ───────────────────
- * A service holding a repository is the intended design; a controller holding one is a tier
- * violation. So the suffixes and the path check are options rather than constants, and the
- * config states each layer's answer next to the reason for it. Defaults are the strict
- * reading — a rule switched on with no options should not quietly be the lax one.
+ * Why two checks, why types count: docs/theory/layers.md#persistence-behind-the-repository
  */
 
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';

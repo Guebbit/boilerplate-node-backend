@@ -283,6 +283,33 @@ the reasoning is in [account-two-factor](../modules/account-two-factor.md#what-t
 
 ---
 
+## How the tier walls are enforced
+
+`eslint.config.ts` states which tier may depend on which as one graph, through
+`eslint-plugin-boundaries`, instead of as file globs repeated per tier. The built-in
+`no-restricted-imports` cannot express two things, and a test is the wrong place for either:
+
+1. **Coverage, at both levels.** `no-restricted-imports` is scoped by file glob, so a NEW
+   top-level directory under `src/` matches no block, is bound by no wall, and is reported by
+   nothing. Two settings close that, and they are the guarantee `deptrac --fail-on-uncovered`
+   gives the PHP twin:
+    - `boundaries/no-unknown-files` refuses a FILE no descriptor claims.
+    - `default: 'disallow'` refuses an EDGE no policy claims, so classifying a new tier is not
+      enough: its arrows have to be argued for before it can import anything.
+2. **Relation.** What a module's spec may import depends on WHICH module owns it, and a glob
+   cannot say "its own". `capture` reads the module name out of the path and
+   `{{ from.element.captured.module }}` compares the two sides, so one policy covers every
+   domain, including one added later.
+
+### The one door
+
+A module publishes `index.ts`, its runtime API, and nothing else. `fileInternalPath` names that
+file inside the target element, so the rule is about the door rather than about the path
+spelling that reaches it. A scenario's fixtures are `scenarios/`'s own tier, not a second door
+on the module.
+
+---
+
 ## What this does not give you
 
 Everything above is about **boundaries and vocabulary**. None of it makes an invalid `Order`

@@ -133,7 +133,6 @@ const results = CHECKS.map((check) => ({ check, passed: run(check) }));
 // The summary: a header, then one PASS/FAIL line per check.
 console.info(`\n[demo-strip] summary (${recipeName}):`);
 
-// One line per check.
 for (const { check, passed } of results)
     console.info(`  ${passed ? 'PASS' : 'FAIL'}  ${check.label}`);
 

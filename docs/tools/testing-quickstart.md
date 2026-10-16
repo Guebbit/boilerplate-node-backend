@@ -87,6 +87,23 @@ The same script exists in the paired frontend, sharing this machinery because Vi
 reporter emits the shape Jest's `--json` does — though the two copies have since picked up their
 own repo-specific differences, and nothing but `diff`, by hand, keeps them in step.
 
+### Why the report reads JSON, and why per module {#why-the-report-reads-json}
+
+`scripts/testing/report-results.ts` is shared with the paired frontend: Vitest's `json` reporter
+emits the same shape Jest's `--json` does, a `testResults[]` of files each with
+`assertionResults[]`, so one reader serves both. It is not in `SHARED_FILES`, so nothing enforces
+that the two copies match; `diff` is the tool, by hand, when you change one.
+
+**JSON, not JUnit.** JUnit is what CI dashboards read, and it would need `jest-junit` on the
+backend (Jest has no built-in emitter). JSON needs nothing on either side and carries more:
+per-assertion durations, ancestor titles, full failure messages. If PR-line annotations are ever
+wanted, ADD a JUnit reporter beside this one rather than replacing it.
+
+**Per module.** Every other instrument is layer-shaped (`test:unit`, `test:contract`, the CI jobs,
+the mutation baseline's file list), which suits running things and not reading them. A module is
+deletable, yet nothing could say what a module's tests cost or which module owned a red build.
+Bucketing by path is the cheapest fix and changes nothing about how tests run.
+
 ## The five test layers
 
 Each answers something the others structurally cannot:

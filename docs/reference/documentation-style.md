@@ -70,6 +70,27 @@ named in an inline code span.
 npm run check:docs-references
 ```
 
+### What `check:docs-references` sweeps {#what-check-docs-references-sweeps}
+
+`docs:build` already refuses a dead LINK between two pages. Nothing else refuses a dead FACT: a
+page naming a top-level routes folder in a repo that is organised by module reads as current
+to everyone who has not opened the tree. This is the only check that looks for it.
+
+| Rule                               | Why                                                                                           |
+| ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| Inline code spans only             | A fenced block is a code SAMPLE; sweeping it buries real findings in illustration.            |
+| `./`-relative tokens are skipped   | VitePress resolves those against the page, and `docs:build` already fails on a dead one.      |
+| Resolution is by suffix            | `orders/model.ts` matches `src/modules/orders/model.ts` without spelling the root path.       |
+| A `#anchor` is checked too         | Against that page's own headings, for a page in THIS repo only; the peer's are its own.       |
+| `@`-prefixed tokens use `tsconfig` | `@modules/orders` is checked; `@asyncapi/cli` matches no alias and is read as an npm package. |
+| Tokens starting with `/` skipped   | HTTP routes, not files. The contract owns those, and `lint:openapi` refuses a missing one.    |
+| Directories count as targets       | `src/infrastructure/` resolves without naming a file.                                         |
+| The paired repo's name resolves    | Over THERE, which makes citing it by package name instead of directory name a finding.        |
+| `<!-- doc-paths:ignore -->`        | Skips the whole line, for prose that names an absent path on purpose (a rename table).        |
+
+The sweep has floors: one that silently reads zero pages would report a clean tree forever, which
+is worse than no sweep.
+
 ## Bringing an old page up to this standard
 
 Over a hundred pages predate these rules, and a hundred-page rewrite is exactly the push this page

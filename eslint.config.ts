@@ -176,9 +176,8 @@ export default tseslint.config(
     pluginUnicorn.configs['flat/recommended'],
 
     /**
-     * Unicorn 76 arrived with about 190 new rules in `recommended` (63 had none of them). The ones
-     * below fired here and are turned OFF, in three groups, rather than exempted site by site.
-     * Every rule not listed either passes as-is or was fixed in the change that adopted 76.
+     * `unicorn/recommended` rules that are OFF here, in three groups, rather than exempted site
+     * by site. Every rule not listed either passes as-is or was fixed where it fired.
      *
      * Contradicts a rule this repo already has:
      *   prefer-await                     — CLAUDE.md prefers `.then` chains for one or two awaits.
@@ -848,37 +847,13 @@ export default tseslint.config(
     },
 
     /**
-     * ── THE TIER WALLS ────────────────────────────────────────────────────────────────────────
+     * THE TIER WALLS — which tier may depend on which, stated once as a graph instead of six
+     * times as file globs. Arrows point one way: `infrastructure` reaches nothing above it,
+     * `kernel` knows modules exist but never which, a `module` may not reach the tier that
+     * assembles the app, and `domain` reaches nothing at all.
      *
-     * Which tier may depend on which, stated once as a graph instead of six times as file globs.
-     *
-     * The arrows point one way and only one way: `infrastructure` is the bottom and reaches
-     * nothing above it — that inversion is what turned the old `src/utils/` into a dumping ground;
-     * `kernel` IS the module system, so it knows modules exist but never which ones; a `module`
-     * owns its domain and may not reach the tier that assembles the application; and `domain` is
-     * plain TypeScript over plain data, reaching nothing at all.
-     *
-     * ── Why a plugin rather than `no-restricted-imports` ──────────────────────────────────────
-     * Two properties the built-in rule cannot express, and a test is the wrong place for either:
-     *
-     *   1. **Coverage, at both levels.** `no-restricted-imports` is scoped by file glob, so a NEW
-     *      top-level directory under `src/` matches no block, is bound by no wall, and is reported
-     *      by nothing. It is not violating a rule — it is invisible. Two things close that here,
-     *      and they are the guarantee `deptrac --fail-on-uncovered` gives the PHP twin:
-     *      `boundaries/no-unknown-files` refuses a FILE no descriptor claims, and the
-     *      `default: 'disallow'` below refuses an EDGE no policy claims — so classifying a new
-     *      tier is not enough either, its arrows have to be argued for before it can import
-     *      anything.
-     *   2. **Relation.** What a module's spec may import depends on WHICH module owns it, and a
-     *      glob cannot say "its own". `capture` reads the module name out of the path and
-     *      `{{ from.element.captured.module }}` compares the two sides, so one policy covers every
-     *      domain — including the one added tomorrow.
-     *
-     * ── The one door, and why it is stated as a file ──────────────────────────────────────────
-     * A module publishes `index.ts` — its runtime API — and nothing else. `fileInternalPath`
-     * names that file inside the target element, so the rule is about the door rather than about
-     * the path spelling that reaches it. A scenario's fixtures are `scenarios/`'s own tier, not a
-     * second door on the module — see below.
+     * Why a plugin and not `no-restricted-imports`, and why the door is a file:
+     * docs/theory/strategic-ddd.md#how-the-tier-walls-are-enforced
      */
     {
         settings: {
