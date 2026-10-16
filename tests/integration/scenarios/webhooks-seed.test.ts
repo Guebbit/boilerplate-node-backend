@@ -9,6 +9,7 @@
  * `https://` URL passes here at all.
  */
 
+import tls from 'node:tls';
 import { UpdateWebhookSubscriptionBody } from '@api/schemas.zod';
 import { setupTestDb } from '@tests/setup-test-db';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -25,6 +26,9 @@ setupTestDb();
 /** The sink's address as the live recipe and `.env-example` give it. */
 const SINK_URL = 'https://127.0.0.1:3070';
 
+/** The roots this process trusted before the sink's CA was added to them. */
+const ORIGINAL_ROOTS = tls.getCACertificates('default');
+
 /** What a manager's edit request runs as, in the tenant the seeder writes into. */
 const context = {
     caller: { ...callerAs('manager'), tenantId: DEPLOYMENT_TENANT_ID },
@@ -40,6 +44,10 @@ beforeEach(() => {
 
 afterEach(() => {
     clearSsrfExemptOrigins();
+    // Node >= 24.5: puts the process-wide roots back, so the sink's CA never outlives this file
+    // in a runner that shares the process (`--runInBand`, Stryker).
+    // https://nodejs.org/api/tls.html#tlssetdefaultcacertificatescerts
+    tls.setDefaultCACertificates(ORIGINAL_ROOTS);
 });
 
 /** Seed, then read the one subscription it wrote. */
