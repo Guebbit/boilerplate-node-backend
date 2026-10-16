@@ -38,7 +38,7 @@ import { fulfillmentOrderRepository } from '@modules/delivery/repository';
 import { fulfillmentOrderModel } from '@modules/delivery/model';
 import { fulfillmentOrdersOf, shipmentsOf } from '@modules/delivery/tests/factories';
 import { asReject } from '@tests/response';
-import { asAdmin, asCustomer, callerContextAs } from '@tests/callers';
+import { asAdmin, asCustomer, asRole, callerContextAs } from '@tests/callers';
 import { inventoryService } from '@modules/inventory';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
@@ -526,6 +526,31 @@ describe('forced shipments', () => {
             data: { mode: 'forced', from: OrderStatus.paid, to: OrderStatus.shipped }
         });
         expect(await shipmentsOf(String(order._id)).then(([first]) => first.forced)).toBe(true);
+    });
+
+    // The twin of the forced-deliver refusal: a forced ship skips the lifecycle and moves stock, so
+    // the ship door asks for the override key itself, and for a reason, whatever the route let in.
+    it('refuses a forced ship from a warehouse login, and one with no reason, and writes no shipment', async () => {
+        const { order } = await processingOrderOf([1], { status: OrderStatus.paid });
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+        const forceShip = (input: Parameters<typeof shipFulfillmentOrder>[1], role: string) =>
+            shipFulfillmentOrder(
+                String(fulfillmentOrder._id),
+                input,
+                asRole(role),
+                callerContextAs(role)
+            );
+
+        const noKey = await forceShip({ forced: true, reason: 'because' }, 'warehouse');
+        const noReason = await forceShip({ forced: true }, 'admin');
+
+        expect(asReject(noKey).status).toBe(403);
+        expect(asReject(noReason).errors[0]).toMatchObject({
+            code: 'DELIVERY_OVERRIDE_REASON_REQUIRED',
+            details: { field: 'reason' }
+        });
+        expect(await shipmentsOf(String(order._id))).toEqual([]);
+        expect((await orderService.getById(String(order._id)))!.status).toBe(OrderStatus.paid);
     });
 
     it('records a forced partial shipment from `paid` as `processing`, still not shipped', async () => {

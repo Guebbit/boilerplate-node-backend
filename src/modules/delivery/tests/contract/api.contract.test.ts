@@ -143,6 +143,27 @@ describe('GET /delivery/order/{orderId}', () => {
         });
     });
 
+    it('keeps the hold note from the buyer, who still sees their order is held', async () => {
+        const { bearer: customer, user } = await authenticateAs('user');
+        const { bearer: admin } = await authenticateAs('admin');
+        const order = await createOrder(user, [toOrderItem(await createProduct(), 1)], {
+            status: OrderStatus.processing
+        });
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+        await api()
+            .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/hold`)
+            .set('Authorization', admin)
+            .send({ reason: 'high_risk', note: 'call first' });
+
+        const response = await api()
+            .get(`/delivery/order/${String(order._id)}`)
+            .set('Authorization', customer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.fulfillmentOrders[0].status).toBe('on_hold');
+        expect(response.body.data.fulfillmentOrders[0]).not.toHaveProperty('holdNote');
+    });
+
     it('answers 404 for another customer’s order', async () => {
         const { order } = await authenticateWithShipment();
         const { bearer } = await authenticateAsRole('customer');
@@ -183,6 +204,7 @@ describe('POST /delivery/order/{orderId}/start', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('ORDER_NOT_PAID');
     });
 
     it('matches the error contract for a customer, who holds no start:Shipment', async () => {
@@ -280,24 +302,6 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('DELIVERY_NOT_PHYSICAL');
-    });
-
-    it('refuses a forced ship of a pending order, which has no fulfillment order to ship from', async () => {
-        const { user, bearer } = await authenticateAs('admin');
-        const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 1)], {
-            status: OrderStatus.pending
-        });
-
-        const response = await api()
-            .post(`/delivery/fulfillment-orders/${MISSING_ID}/shipments`)
-            .set('Authorization', bearer)
-            .send({ forced: true, reason: 'skipping the payment' });
-
-        expect(response.status).toBe(404);
-        expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
-            OrderStatus.pending
-        );
     });
 
     it('answers 403 to a customer, and 404 to an id that is not a fulfillment order', async () => {
