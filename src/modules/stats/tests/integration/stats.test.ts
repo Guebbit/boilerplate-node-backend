@@ -61,18 +61,24 @@ const customer = () => {
 
 /**
  * A paid order and its invoice, both dated `paidAt`. A 122.00 unit is 100.00 net and 22.00 VAT.
- * @param options - who, how many units of which product, and when it was paid
+ * @param options - who, how many units of which product, when it was paid, and optionally the currency
  */
 const paidOrder = async (options: {
     user: Awaited<ReturnType<typeof customer>>;
     product: Awaited<ReturnType<typeof createProduct>>;
     quantity: number;
     paidAt: string;
+    currency?: string;
 }): Promise<OrderDocument> => {
     const order = await createOrder(
         options.user,
         [toOrderItem(options.product, options.quantity)],
-        { status: OrderStatus.paid, paidAt: options.paidAt, createdAt: options.paidAt }
+        {
+            status: OrderStatus.paid,
+            paidAt: options.paidAt,
+            createdAt: options.paidAt,
+            ...(options.currency ? { currency: options.currency } : {})
+        }
     );
     await issuedAt(options.paidAt, () => issueInvoice(order));
     return order;
@@ -145,6 +151,61 @@ describe('getSalesStats', () => {
             '2026-03-11T23:00:00.000Z': 0,
             '2026-03-12T23:00:00.000Z': 0
         });
+    });
+
+    // Summing 122 EUR and 122 USD into one figure would be a wrong number on the money dashboard.
+    it('keeps each currency in its own group, never adding one to another', async () => {
+        const product = await createProduct({ price: 122 });
+        await paidOrder({
+            user: await customer(),
+            product,
+            quantity: 1,
+            paidAt: '2026-03-10T10:00:00Z'
+        });
+        await paidOrder({
+            user: await customer(),
+            product,
+            quantity: 2,
+            paidAt: '2026-03-10T11:00:00Z',
+            currency: 'USD'
+        });
+
+        const { currencies } = await statsService.getSalesStats(
+            periodOf('2026-03-09', '2026-03-13')
+        );
+
+        expect(
+            Object.fromEntries(
+                currencies.map(({ currency, totals }) => [
+                    currency,
+                    [totals.orders, totals.netSales]
+                ])
+            )
+        ).toEqual({ EUR: [1, 100], USD: [1, 200] });
+    });
+
+    // The invoice stays, which is right for accounting; the order count and the product tables lose it.
+    it('keeps a deleted order’s money in net sales while its count leaves', async () => {
+        const product = await createProduct({ price: 122 });
+        await paidOrder({
+            user: await customer(),
+            product,
+            quantity: 1,
+            paidAt: '2026-03-10T10:00:00Z'
+        });
+        const gone = await createOrder(await customer(), [toOrderItem(product, 1)], {
+            status: OrderStatus.paid,
+            paidAt: '2026-03-10T11:00:00Z',
+            createdAt: '2026-03-10T11:00:00Z',
+            deletedAt: '2026-03-11T12:00:00Z'
+        });
+        await issuedAt('2026-03-10T11:00:00Z', () => issueInvoice(gone));
+
+        const { currencies } = await statsService.getSalesStats(
+            periodOf('2026-03-09', '2026-03-13')
+        );
+
+        expect(currencies[0].totals).toMatchObject({ orders: 1, netSales: 200 });
     });
 
     it('totals the period: gross, reversals on their own day, net, VAT, refunds, average', async () => {
