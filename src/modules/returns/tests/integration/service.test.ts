@@ -7,7 +7,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironment, setEnvironment } from '@tests/environment';
 import { assignRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { createUser } from '@modules/users/tests/factories';
@@ -883,6 +883,44 @@ describe('what a new return leaves behind', () => {
                 metadata: { orderId: early.orderId, reason: 'withdrawal' }
             })
         ]);
+    });
+
+    // The postage rule in force on the day the return opens is the one it keeps: a config change
+    // later must not move who pays for an open return.
+    it('freezes who pays the return postage when the return opens', async () => {
+        const { user, orderId } = await deliveredOrder();
+
+        setEnvironment({ NODE_RETURN_POSTAGE_PAYER: 'shop' });
+        const outcome = await createReturn(
+            { orderId, reason: 'defective' },
+            buyer(user),
+            testCallerContext
+        );
+        // The shop changes its mind afterwards: the open return keeps what it was opened under.
+        setEnvironment({ NODE_RETURN_POSTAGE_PAYER: 'consumer' });
+
+        if (!outcome.success) throw new Error('expected a return');
+        expect(outcome.data.returnPostage).toBe('shop');
+        const [stored] = await returnRepository.findByOrderId(orderId);
+        expect(stored.returnPostage).toBe('shop');
+    });
+
+    // The order's return status is a report of a fact already decided: failing to write it never
+    // takes the return back, and the next move stamps it.
+    it('keeps the return when the report to the order fails', async () => {
+        const { user, orderId } = await deliveredOrder();
+        jest.spyOn(orderService, 'markReturnStatus').mockRejectedValueOnce(
+            new Error('write failed')
+        );
+
+        const outcome = await createReturn(
+            { orderId, reason: 'defective' },
+            buyer(user),
+            testCallerContext
+        );
+
+        expect(outcome.success).toBe(true);
+        expect(await returnRepository.findByOrderId(orderId)).toHaveLength(1);
     });
 
     it('mails a request without an address to send to, and a shipped withdrawal with one', async () => {
