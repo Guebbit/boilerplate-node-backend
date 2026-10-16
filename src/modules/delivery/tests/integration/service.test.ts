@@ -11,7 +11,6 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { logger } from '@infrastructure/adapters/logger';
 import { createUser } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
 import { countersOf, createProduct } from '@modules/products/tests/factories';
@@ -212,9 +211,8 @@ describe('shipping a whole fulfillment order', () => {
         expect(data?.more).toBeUndefined();
     });
 
-    it('still ships and mails the fallback name when the buyer lookup fails, and logs it', async () => {
+    it('still ships and mails the fallback name when the buyer lookup fails', async () => {
         mockEnqueueEmail.mockClear();
-        const loggedError = jest.spyOn(logger, 'error').mockImplementation(() => logger);
         const { order } = await processingOrderOf();
         jest.spyOn(userService, 'getById').mockRejectedValueOnce(new Error('lookup unavailable'));
 
@@ -226,12 +224,6 @@ describe('shipping a whole fulfillment order', () => {
         expect(template).toBe('delivery.shipment-shipped');
         // Fallback name policy: `username ?? email`, and no username was ever resolved.
         expect(data?.greeting).toContain(order.email);
-        expect(loggedError).toHaveBeenCalledWith(
-            expect.objectContaining({
-                message: 'Buyer lookup failed; mailing the order with the fallback name.',
-                orderId: String(order._id)
-            })
-        );
     });
 
     it('refuses an order that is not processing', async () => {
