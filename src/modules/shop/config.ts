@@ -14,7 +14,7 @@
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { choice, csv, email, text, timeZone } from '@infrastructure/config/fields';
+import { choice, csv, currency, email, text, timeZone } from '@infrastructure/config/fields';
 import { RETURN_POSTAGE_PAYERS } from './domain';
 
 /**
@@ -43,6 +43,6 @@ export const shopConfig = defineConfig({
         NODE_RETURN_ADDRESS_COUNTRY: text({ case: 'upper' }),
         NODE_RETURN_POSTAGE_PAYER: choice(RETURN_POSTAGE_PAYERS, { default: 'consumer' }),
         NODE_SHIP_TO_COUNTRIES: csv({ case: 'upper' }),
-        NODE_DEFAULT_CURRENCY: text({ default: 'EUR' })
+        NODE_DEFAULT_CURRENCY: currency({ default: 'EUR' })
     }
 });

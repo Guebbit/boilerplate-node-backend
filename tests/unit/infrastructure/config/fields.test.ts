@@ -8,6 +8,7 @@
 import {
     choice,
     csv,
+    currency,
     decimal,
     email,
     flag,
@@ -200,5 +201,21 @@ describe('timeZone', () => {
     it('is unset when blank, and takes a default when it has one', () => {
         expect(field.schema.parse('  ')).toBeUndefined();
         expect(timeZone({ default: 'UTC' }).schema.parse(undefined)).toBe('UTC');
+    });
+});
+
+describe('currency', () => {
+    it('stores the upper-case code, whatever the case it was written in', () => {
+        expect(currency().schema.parse('eur')).toBe('EUR');
+        expect(currency().schema.parse(' JPY ')).toBe('JPY');
+    });
+
+    it.each(['EURO', 'E1R', 'XYZ', '€'])('refuses %s', (raw) => {
+        expect(currency().schema.safeParse(raw).success).toBe(false);
+    });
+
+    it('is unset when blank, and takes a default when it has one', () => {
+        expect(currency().schema.parse('  ')).toBeUndefined();
+        expect(currency({ default: 'EUR' }).schema.parse(undefined)).toBe('EUR');
     });
 });

@@ -1,7 +1,7 @@
 /**
  * @module
  * The field builders a configuration slice is written with: `int`, `decimal`, `flag`, `choice`,
- * `text`, `email`, `timeZone`, `secret`, `csv`, `keyRing`, `versionedKeyRing`.
+ * `text`, `email`, `timeZone`, `currency`, `secret`, `csv`, `keyRing`, `versionedKeyRing`.
  *
  * One rule for all of them: a value is trimmed, and a blank one counts as unset (the same
  * "empty string is not a value" rule t3-env calls `emptyStringAsUndefined`). A value that is set
@@ -380,6 +380,30 @@ export function timeZone(
             const zone = canonicalZone(value);
             if (zone) return zone;
             context.addIssue({ code: 'custom', message: 'IANA time zone name, e.g. Europe/Rome' });
+            return z.NEVER;
+        }),
+        options
+    );
+}
+
+/**
+ * An ISO-4217 currency code, upper-cased. A well-formed but unknown code (`XYZ`) is refused too:
+ * `Intl.NumberFormat` accepts it and prints it, so only the supported list catches it.
+ *
+ * @param options - `default` for an unset value; `required` for a boot-time presence rule
+ */
+export function currency(options: CommonOptions & { default: string }): Field<string>;
+export function currency(options?: CommonOptions): Field<string | undefined>;
+export function currency(
+    options: CommonOptions & { default?: string } = {}
+): Field<string | undefined> {
+    return build(
+        z.string().transform((value, context) => {
+            // Intl: the codes the runtime has currency data for, upper-case.
+            // https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/supportedValuesOf
+            const code = value.toUpperCase();
+            if (Intl.supportedValuesOf('currency').includes(code)) return code;
+            context.addIssue({ code: 'custom', message: 'ISO-4217 currency code, e.g. EUR' });
             return z.NEVER;
         }),
         options

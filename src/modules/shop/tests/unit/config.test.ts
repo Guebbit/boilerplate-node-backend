@@ -251,4 +251,17 @@ describe('shopCurrency', () => {
 
         expect(shopCurrency()).toBe('GBP');
     });
+
+    it('upper-cases a lower-case code, so every order and payment freezes the same spelling', () => {
+        setEnvironment({ NODE_DEFAULT_CURRENCY: 'eur' });
+
+        expect(shopCurrency()).toBe('EUR');
+    });
+
+    it.each(['EURO', 'XYZ'])('refuses %s at boot, the code no provider would ever echo', (code) => {
+        configure();
+        setEnvironment({ NODE_DEFAULT_CURRENCY: code });
+
+        expect(() => assertModuleConfig([shopModule], [])).toThrow(/NODE_DEFAULT_CURRENCY/);
+    });
 });

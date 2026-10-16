@@ -78,13 +78,13 @@ the same variable.
 
 ## Configuration
 
-| Variable                                             | Meaning                                                                |
-| ---------------------------------------------------- | ---------------------------------------------------------------------- |
-| `NODE_SHOP_LEGAL_NAME`, `_STREET`, `_CITY`, `_ZIP`   | The seller's name and address (required)                               |
-| `NODE_SHOP_COUNTRY`                                  | The country VAT is charged in (required)                               |
-| `NODE_SHOP_EMAIL`, `NODE_SHOP_PHONE`                 | How a customer reaches the shop (required)                             |
-| `NODE_SHOP_VAT_NUMBER`                               | VAT identification number; absent below the registration threshold     |
-| `NODE_SHOP_TIMEZONE`                                 | The IANA zone whose calendar numbering series and reports follow       |
-| `NODE_RETURN_ADDRESS_*`, `NODE_RETURN_POSTAGE_PAYER` | Where returns go (default: the legal address) and who pays the postage |
-| `NODE_SHIP_TO_COUNTRIES`                             | Countries a physical order ships to (default: the shop's own country)  |
-| `NODE_DEFAULT_CURRENCY`                              | The one ISO-4217 currency, `EUR` by default                            |
+| Variable                                             | Meaning                                                                 |
+| ---------------------------------------------------- | ----------------------------------------------------------------------- |
+| `NODE_SHOP_LEGAL_NAME`, `_STREET`, `_CITY`, `_ZIP`   | The seller's name and address (required)                                |
+| `NODE_SHOP_COUNTRY`                                  | The country VAT is charged in (required)                                |
+| `NODE_SHOP_EMAIL`, `NODE_SHOP_PHONE`                 | How a customer reaches the shop (required)                              |
+| `NODE_SHOP_VAT_NUMBER`                               | VAT identification number; absent below the registration threshold      |
+| `NODE_SHOP_TIMEZONE`                                 | The IANA zone whose calendar numbering series and reports follow        |
+| `NODE_RETURN_ADDRESS_*`, `NODE_RETURN_POSTAGE_PAYER` | Where returns go (default: the legal address) and who pays the postage  |
+| `NODE_SHIP_TO_COUNTRIES`                             | Countries a physical order ships to (default: the shop's own country)   |
+| `NODE_DEFAULT_CURRENCY`                              | The one ISO-4217 currency, `EUR` by default; an unknown code is refused |
