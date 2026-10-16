@@ -15,6 +15,8 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { orderService } from '@modules/orders/services';
 import { OrderStatus } from '@types';
+import { outboxEventModel } from '@kernel/outbox';
+import { ORDER_CANCELLED } from '../../events';
 import { orderRepository } from '../../repository';
 
 setupTestDb();
@@ -65,6 +67,8 @@ describe('cancelOnRequestById — the write’s own scope', () => {
 
         expect(result.success).toBe(false);
         expect(await statusOf(String(order._id))).toBe(OrderStatus.paid);
+        // The refund rides the cancel's own outbox row: a refused cancel writes none.
+        expect(await outboxEventModel.countDocuments({ name: ORDER_CANCELLED })).toBe(0);
     });
 
     it('still lets a customer cancel their own order', async () => {

@@ -114,6 +114,23 @@ describe('GET /orders', () => {
         expect(response.body.data.meta.totalItems).toBe(1);
     });
 
+    // `deleted=true` is a staff view: if the flag outlived the caller's scope, a customer would be
+    // listing soft-deleted orders, which hold other people's personal data.
+    it('ignores deleted=true for a customer, whose scope has no soft-deleted rows to show', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
+        const product = await createProduct();
+        await createOrder(user, [toOrderItem(product, 1)], { deletedAt: new Date().toISOString() });
+        await createOrder(stranger, [toOrderItem(product, 1)], {
+            deletedAt: new Date().toISOString()
+        });
+
+        const response = await api().get('/orders?deleted=true').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toEqual([]);
+    });
+
     it('reports the three order totals rather than a single collapsed total', async () => {
         const { bearer, user } = await authenticateAs('admin');
         await seedOrderFor(user);

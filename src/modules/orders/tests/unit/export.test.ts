@@ -27,6 +27,22 @@ describe('toOrderCsvRow', () => {
         const row = toOrderCsvRow(order);
 
         expect(Object.keys(row)).toEqual([...ORDER_CSV_COLUMNS]);
+        // Key order is not compared by `toEqual` below, so the file's column order is pinned here.
+        expect(ORDER_CSV_COLUMNS).toEqual([
+            'createdAt',
+            'orderNumber',
+            'status',
+            'paymentStatus',
+            'fulfillmentStatus',
+            'returnStatus',
+            'email',
+            'lines',
+            'units',
+            'total',
+            'currency',
+            'paymentMethod',
+            'paidAt'
+        ]);
         expect(row).toEqual({
             createdAt: '2026-05-01T09:30:00.000Z',
             orderNumber: '2026-000042',

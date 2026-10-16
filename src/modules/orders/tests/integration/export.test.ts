@@ -16,7 +16,6 @@ import { observePort } from '@tests/ports';
 import * as auditPort from '@infrastructure/observability/audit';
 import { OrderStatus } from '@types';
 import { ordersAuditActions } from '../../audit';
-import { ORDER_CSV_COLUMNS } from '../../domain';
 import { orderService } from '../../services';
 
 /*
@@ -67,7 +66,11 @@ describe('the file', () => {
         );
 
         const [header, ...lines] = file.trim().split('\n');
-        expect(header).toBe(ORDER_CSV_COLUMNS.join(','));
+        // The contract's own order (`orders/openapi.yaml`), written out: a column swapped in the
+        // code's constant would otherwise move the file and this check together.
+        expect(header).toBe(
+            'createdAt,orderNumber,status,paymentStatus,fulfillmentStatus,returnStatus,email,lines,units,total,currency,paymentMethod,paidAt'
+        );
         expect(lines).toHaveLength(2);
         expect(lines[0]).toContain('older@example.com');
         expect(lines[1]).toContain('newer@example.com');
