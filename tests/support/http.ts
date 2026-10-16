@@ -13,7 +13,9 @@
  */
 import request from 'supertest';
 import { createApp } from '../../src/app';
-import { cookieValue } from './cookies';
+import { cookieValue, setCookie } from './cookies';
+import { freezeDate, advanceDate } from './clock';
+import { reauthWindowSeconds } from '@kernel/config';
 import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
 
@@ -124,6 +126,34 @@ export const bearerForCookie = async (cookie: string): Promise<`Bearer ${string}
 
     const refreshed = await api().post('/account/refresh').set('Cookie', cookie);
     return `Bearer ${refreshed.body.data.token as string}`;
+};
+
+/**
+ * A bearer that is past a step-up tier's window yet still usable: what a stolen-but-stale session
+ * looks like. Logs the account in on a frozen clock, moves the clock one second beyond the tier,
+ * and refreshes the access token — `auth_time` is copied forward on a refresh, never re-stamped,
+ * so the token keeps its original age. `remember: 'short'` so the refresh cookie outlives the
+ * advance.
+ *
+ * Freezes the clock: the caller restores it with `jest.useRealTimers()` in an `afterEach`.
+ *
+ * @param user - the account to log in
+ * @param tier - the step-up tier whose window is exceeded
+ * @throws {Error} when the login sets no session cookie
+ */
+export const staleBearerFor = async (
+    user: Pick<UserDocument, 'email'>,
+    tier: 'sensitive' | 'critical'
+): Promise<`Bearer ${string}`> => {
+    freezeDate();
+    const response = await api()
+        .post('/account/login')
+        .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'short' });
+    const cookie = setCookie(response, '__Host-session');
+    if (!cookie) throw new Error('staleBearerFor: the login set no session cookie');
+
+    advanceDate((reauthWindowSeconds(tier) + 1) * 1000);
+    return bearerForCookie(cookie);
 };
 
 /** Shared by {@link authenticateAs} and {@link authenticateAsRole} — the login round trip itself. */

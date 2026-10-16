@@ -12,7 +12,8 @@
  *                complete.
  * Fresh session: every route that moves money requires `requireFreshAuth('critical')` —
  *                a stolen access token proves nothing about how recently the holder typed their
- *                password.
+ *                password. Asked AFTER the key it sits beside, so a caller who can never pass is
+ *                refused, not challenged.
  * Verified:      the three routes the customer drives directly also require the `checkout:Cart`
  *                key — an unproven address must not be able to pay and start receiving payment
  *                mail at an inbox nobody confirmed. `cart` owns the key; `payments` mounts it, the
@@ -87,8 +88,8 @@ router.get(
 // `clientSecret` included. `paymentIntentLimiter` is shared with `/sync` below.
 router.post(
     '/intent',
-    requireFreshAuth('critical'),
     requirePermission('checkout', 'Cart'),
+    requireFreshAuth('critical'),
     paymentIntentLimiter,
     postPaymentIntent
 );
@@ -129,8 +130,8 @@ router.post(
 // `credentialLimiters`/`loginChallengeGate` sit on `POST /account/login`.
 router.post(
     '/:id/confirm',
-    requireFreshAuth('critical'),
     requirePermission('checkout', 'Cart'),
+    requireFreshAuth('critical'),
     paymentConfirmAttemptLimiter,
     paymentConfirmDeclineLimiter,
     paymentConfirmDeclineBlockLimiter,
@@ -145,8 +146,8 @@ router.post(
 // second one. It spends the same per-account budget as `/intent`: both end in a provider call.
 router.post(
     '/:id/sync',
-    requireFreshAuth('critical'),
     requirePermission('checkout', 'Cart'),
+    requireFreshAuth('critical'),
     paymentIntentLimiter,
     postPaymentSync
 );

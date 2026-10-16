@@ -121,13 +121,13 @@ describe('payment routes', () => {
             'paymentDeclineChallengeGate',
             'idempotencyKey'
         ]);
-        // And that shared prefix is not trivially empty — the fresh-session closure and the
-        // checkout-key check are all in there, and the pooled intent/sync budget closes it.
+        // And that shared prefix is not trivially empty — the checkout-key check (asked first, so a
+        // caller who can never pass is refused, not challenged) and the fresh-session closure are all in there, and the pooled intent/sync budget closes it.
         expect(withoutHandler('POST /:id/sync')).toEqual([
             'getAuth',
             'isAuth',
-            '(anonymous)',
             'requirePermissionGuard',
+            '(anonymous)',
             INTENT_BUDGET
         ]);
     });

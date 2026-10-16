@@ -11,7 +11,8 @@ import { randomUUID } from 'node:crypto';
 import { Types } from 'mongoose';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs, authenticateAsRole } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole, staleBearerFor } from '@tests/http';
+import { createUser, createAdminUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
@@ -385,6 +386,24 @@ describe('the card steps — who may pay', () => {
         expect(response.status).toBe(403);
         expect(response.body.errors[0].code).toBe('EMAIL_NOT_VERIFIED');
     });
+
+    // Refused first, challenged second: a caller who can never pass is not asked for a password.
+    describe('with a session past the critical window', () => {
+        afterEach(() => jest.useRealTimers());
+
+        it.each([
+            ['POST /payments/intent', '/payments/intent'],
+            ['POST /payments/{id}/confirm', `/payments/${MISSING_ID}/confirm`],
+            ['POST /payments/{id}/sync', `/payments/${MISSING_ID}/sync`]
+        ])('%s still answers an unverified account 403 EMAIL_NOT_VERIFIED', async (_step, url) => {
+            const bearer = await staleBearerFor(await createUser(), 'critical');
+
+            const response = await api().post(url).set('Authorization', bearer).send({});
+
+            expect(response.status).toBe(403);
+            expect(response.body.errors[0].code).toBe('EMAIL_NOT_VERIFIED');
+        });
+    });
 });
 
 describe('POST /payments/webhook', () => {
@@ -518,7 +537,7 @@ describe('GET /payments/order/{orderId}', () => {
 const freshKey = (): string => randomUUID();
 
 describe('POST /payments/order/{orderId}/refund', () => {
-    it('refuses the order`s own owner — the refund is admin-only', async () => {
+    it('refuses the order`s own owner — the refund is staff-only', async () => {
         // "Own order" matters here specifically: a mis-ordered guard that checked ownership before
         // admin status would let exactly this caller through, and a stranger's order would not
         // have caught it.
@@ -529,8 +548,10 @@ describe('POST /payments/order/{orderId}/refund', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(403);
+        // A refund never moves `status`, so the money is read from the fields that do move.
         const payment = await paymentRepository.findById(paymentId);
-        expect(payment!.status).toBe('succeeded');
+        expect(payment!.refunds).toHaveLength(0);
+        expect(payment!.amountRefunded).toBe(0);
     });
 });
 
@@ -545,9 +566,12 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
             .set('Idempotency-Key', freshKey());
 
         expect(response.status).toBe(200);
+        // `status` stays `succeeded` after a refund; `displayStatus` and `amountRefunded` say it.
         expect(response.body.data.status).toBe('succeeded');
+        expect(response.body.data.displayStatus).toBe('refunded');
         const payment = await paymentRepository.findById(paymentId);
-        expect(payment!.status).toBe('succeeded');
+        expect(payment!.amountRefunded).toBe(payment!.amount);
+        expect(payment!.refunds).toHaveLength(1);
     });
 
     it('matches the error contract for a second refund — money comes back once', async () => {
@@ -588,7 +612,8 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
         expect(response.status).toBe(400);
         expect(response.body.errors[0].code).toBe('IDEMPOTENCY_KEY_REQUIRED');
         const payment = await paymentRepository.findById(paymentId);
-        expect(payment!.status).toBe('succeeded');
+        expect(payment!.refunds).toHaveLength(0);
+        expect(payment!.amountRefunded).toBe(0);
     });
 
     it('replays the first answer for the same key instead of refunding twice', async () => {
@@ -611,6 +636,50 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
         const payment = await paymentRepository.findById(paymentId);
         expect(payment!.refunds).toHaveLength(1);
         expect(payment!.amountRefunded).toBe(5);
+    });
+});
+
+/**
+ * `create:Refund` and `create:Payment` carry `stepUp: critical` on the key, so the demand is the
+ * kernel's, not the route's: it is only seen by sending a stale-but-usable session through the
+ * real mount. A stolen access token is what this stops.
+ */
+describe('the money doors ask a fresh session of an operator', () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('answers a stale refund 401 REAUTH_REQUIRED and returns nothing', async () => {
+        const { order, paymentId } = await paidOrder();
+        const bearer = await staleBearerFor(
+            await createAdminUser({ verifiedAt: new Date() }),
+            'critical'
+        );
+
+        const response = await api()
+            .post(`/payments/order/${String(order._id)}/refund`)
+            .set('Authorization', bearer)
+            .set('Idempotency-Key', freshKey());
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+        const payment = await paymentRepository.findById(paymentId);
+        expect(payment!.refunds).toHaveLength(0);
+    });
+
+    it('answers a stale hand-recorded payment 401 REAUTH_REQUIRED and records nothing', async () => {
+        const { order } = await authenticateWithOrder();
+        const bearer = await staleBearerFor(
+            await createAdminUser({ verifiedAt: new Date() }),
+            'critical'
+        );
+
+        const response = await api()
+            .post(`/payments/order/${String(order._id)}/offline`)
+            .set('Authorization', bearer)
+            .send({ method: 'cash', reference: 'stale-till' });
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+        expect(await paymentRepository.findByOrderId(String(order._id))).toBeNull();
     });
 });
 
@@ -651,7 +720,7 @@ describe('POST /payments/order/{orderId}/offline', () => {
         expect(response.body.data.provider).toBe('manual');
     });
 
-    it('refuses the order`s own owner — recording by hand is admin-only', async () => {
+    it('refuses the order`s own owner — recording by hand is staff-only', async () => {
         const { bearer, order } = await authenticateWithOrder();
 
         const response = await api()

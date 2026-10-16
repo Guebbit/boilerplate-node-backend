@@ -10,7 +10,7 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs, authenticateAsRole } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole, staleBearerFor } from '@tests/http';
 import { checkoutAs, shownTotal } from '@tests/checkout-as';
 import { withEnvironment, withoutEnvironment } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
@@ -1048,5 +1048,18 @@ describe('POST /cart/reorder/{orderId}', () => {
         const response = await api().post('/cart/reorder/not-an-id').set('Authorization', bearer);
 
         expect(response.status).toBe(404);
+    });
+});
+
+describe('POST /cart/checkout — refused first, challenged second', () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('answers an unverified account with a stale session 403 EMAIL_NOT_VERIFIED, not a password prompt', async () => {
+        const bearer = await staleBearerFor(await createUser(), 'critical');
+
+        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
+
+        expect(response.status).toBe(403);
+        expect(response.body.errors[0].code).toBe('EMAIL_NOT_VERIFIED');
     });
 });
