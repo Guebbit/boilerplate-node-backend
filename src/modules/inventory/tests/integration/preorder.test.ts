@@ -16,6 +16,7 @@ import { StockMovementReason } from '@types';
 import {
     availableFor,
     commitForOrder,
+    listMovements,
     listPreorders,
     lowStockCount,
     receive,
@@ -33,6 +34,15 @@ import {
     stockMovementRepository
 } from '../../repository';
 import { PREORDER_ALLOCATED } from '../../events';
+import { inventoryAuditActions } from '../../audit';
+import { observePort } from '@tests/ports';
+import { callerContextAs } from '@tests/callers';
+import * as auditPort from '@infrastructure/observability/audit';
+
+/* The audit port is replaced, not spied on — see `tests/support/ports.ts`. */
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
 
 setupTestDb();
 
@@ -333,6 +343,28 @@ describe('a receipt serving the queue', () => {
     });
 });
 
+// A preorder claim is an allowance, not units: shipping one before any receipt allocated a unit
+// would take real stock from other buyers and leave `onHand` and `reserved` out of step.
+describe('shipping a preorder claim nothing was allocated to', () => {
+    it('is refused, and moves no counter and leaves the hold as it was', async () => {
+        const productId = await preorderProduct(10);
+        const orderId = anOrderId();
+        await reserveForOrder(orderId, [claim(productId, 3)]);
+        await commitForOrder(orderId);
+        const levelBefore = await levelOf(productId);
+        const holdBefore = await reservationRepository.findByOrderId(orderId);
+
+        await expect(
+            withTransaction((session) => shipLinesForOrder(orderId, [claim(productId, 3)], session))
+        ).rejects.toThrow(/still a preorder claim/);
+
+        expect(await levelOf(productId)).toEqual(levelBefore);
+        const holdAfter = await reservationRepository.findByOrderId(orderId);
+        expect(holdAfter?.status).toBe(holdBefore?.status);
+        expect(holdAfter?.items).toMatchObject([{ quantity: 3, kind: 'preorder' }]);
+    });
+});
+
 describe('what a shopper may buy', () => {
     it('reads the allowance, not the shelf, for a product named as a preorder', async () => {
         const product = await createProduct({ onHand: 50 });
@@ -387,6 +419,25 @@ describe('setPreorderLimit', () => {
         const result = await setPreorderLimit('f'.repeat(24), 3);
 
         expect(result).toMatchObject({ success: false, status: 404 });
+    });
+
+    // A limit is not a movement of stock: booking it as one would corrupt the ledger replay.
+    it('audits the change and writes no ledger row', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const productId = await preorderProduct(5);
+        auditSpy.mockClear();
+
+        await setPreorderLimit(productId, 8, callerContextAs('admin'));
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: inventoryAuditActions.ADMIN_PREORDER_LIMIT_SET,
+                targetId: productId,
+                metadata: { preorderLimit: 8 }
+            })
+        );
+        const ledger = await listMovements({ productId });
+        expect(ledger.items).toEqual([]);
     });
 
     it('lets the limit drop below what is outstanding: those orders stand, new ones are refused', async () => {

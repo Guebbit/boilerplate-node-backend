@@ -333,18 +333,16 @@ describe('reserveForOrder', () => {
 });
 
 describe('commitForOrder', () => {
-    it('drops both counters together', async () => {
+    it('moves no counter', async () => {
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
         await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
 
         expect(await commitForOrder(orderId)).toBe(true);
-        // Paying moves nothing: the units are still on the shelf, still spoken for.
-        expect(await countersOf(String(product._id))).toEqual({
-            onHand: 10,
-            reserved: 3,
-            available: 7
-        });
+        // Paying moves nothing: the units are still on the shelf, still spoken for. Read from
+        // `stocklevels`, the source of truth: the catalogue's copy is refreshed only when units
+        // were allocated, so it would keep reading the old numbers even if the commit moved them.
+        expect(await levelOf(String(product._id))).toEqual({ onHand: 10, reserved: 3 });
     });
 
     it('still answers true when the hold cannot be read for the cache refresh afterwards', async () => {
@@ -386,11 +384,7 @@ describe('commitForOrder', () => {
         expect(await commitForOrder(orderId)).toBe(false);
 
         // Still one claim, not two: the reservation's status claim is what refuses the replay.
-        expect(await countersOf(String(product._id))).toEqual({
-            onHand: 10,
-            reserved: 3,
-            available: 7
-        });
+        expect(await levelOf(String(product._id))).toEqual({ onHand: 10, reserved: 3 });
         // A redelivered settlement finding its own sale already on record is not an incident.
         expect(auditSpy).not.toHaveBeenCalled();
     });
