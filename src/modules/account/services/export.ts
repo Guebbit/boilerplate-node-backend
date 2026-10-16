@@ -58,17 +58,19 @@ export interface AccountExportRequestResult {
     status: AccountExportRow['status'];
 }
 
-/** Builds running in this process because no broker took the job — awaited at shutdown and by tests. */
+/**
+ * Builds running in this process because no broker took the job. Only tests wait for them: a
+ * deploy that cuts one off leaves its row `building` until {@link EXPORT_BUILD_LIMIT_MS} calls it
+ * failed, and the person may then ask again.
+ */
 const inlineBuilds = new Set<Promise<unknown>>();
 
-/**
- * Wait for the builds running in this process, up to a ceiling. For graceful shutdown and for
- * tests that must see a build finish before they assert.
- *
- * @param timeoutMs - the most to wait
- */
-export const settleInlineExports = (timeoutMs = 30_000): Promise<void> =>
-    settleWithin(inlineBuilds, timeoutMs);
+/** The longest {@link settleInlineExports} waits for the builds still running. */
+const SETTLE_CEILING_MS = 30_000;
+
+/** Wait for the builds running in this process, for a test that must see one finish. */
+export const settleInlineExports = (): Promise<void> =>
+    settleWithin(inlineBuilds, SETTLE_CEILING_MS);
 
 /**
  * Whether a `building` row has waited past {@link EXPORT_BUILD_LIMIT_MS}.
