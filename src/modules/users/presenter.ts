@@ -40,7 +40,7 @@ export const presentUser = (document: UserWire, role: string | null, actions?: U
         ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
         ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
         ...(document.locale === undefined ? {} : { locale: document.locale }),
-        // Stored encrypted (`./service`'s `update`, under `NODE_PII_ENCRYPTION_KEY`) — this is the
+        // Stored encrypted (`./services/update`, under `NODE_PII_ENCRYPTION_KEY`) — this is the
         // one place a document's `phone` reaches the wire, hydrated or lean/searched alike, so it's
         // the one place that decrypts it.
         ...(document.phone === undefined

@@ -78,7 +78,7 @@ export interface ProductDocument extends ProductRecord, Document {
 
 /**
  * Product Document model type.
- * Business logic (search, remove, validate) lives in the service (`./service`); queries live in
+ * Business logic (search, remove, validate) lives in the services (`./services`); queries live in
  * the repository (`./repository`).
  */
 export type ProductModel = Model<ProductDocument, Record<string, never>, unknown>;
@@ -419,7 +419,7 @@ const applyProductAvailability = (serialized: Record<string, unknown>) => {
 /**
  * Normalizes a serialized product: shared `_id`→`id` and `__v` removal, plus deriving
  * `available`. Exported so lean/aggregate results (which bypass `toJSON`) can reuse it —
- * see `./service` `search()`.
+ * see `./repository`.
  */
 export const applyProductTransform = applySerialization(productSchema, {
     // Document-only bookkeeping for the image digest pipeline, never part of the `Product`

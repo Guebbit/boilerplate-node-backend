@@ -132,7 +132,7 @@ const webhookSecretRing = (value: string): string[] =>
  * `NODE_PAYMENT_PROVIDER` has no default: unset means no card provider, so card payments are off.
  * `NODE_PAYMENT_WEBHOOK_SECRET` is therefore not required either — with no provider there is
  * nothing to sign; the provider that is named reads it when it verifies a delivery.
- * `NODE_PAYMENT_PROVIDER`'s own probe lives in `./module` (the resolver imports this file, so it
+ * `NODE_PAYMENT_PROVIDER`'s own probe lives in `./providers` (the resolver imports this file, so it
  * cannot be probed from here).
  */
 export const paymentsConfig = defineConfig({

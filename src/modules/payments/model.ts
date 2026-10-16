@@ -149,7 +149,7 @@ export interface PaymentDocument extends Document {
     updatedAt?: Date;
 }
 
-/** Payment Document model type. Queries live in `./repository`, rules in `./service`. */
+/** Payment Document model type. Queries live in `./repository`, rules in `./services`. */
 export type PaymentModel = Model<PaymentDocument>;
 
 /** One refund attempt, embedded. Addressed by its own `_id` — the settle and fail writes match on it. */

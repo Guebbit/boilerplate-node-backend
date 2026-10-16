@@ -35,7 +35,7 @@ export interface StockMovementDocument
     updatedAt?: Date;
 }
 
-/** Stock Movement model type. Queries live in `./repository`, rules in `./service`. */
+/** Stock Movement model type. Queries live in `./repository`, rules in `./services`. */
 export type StockMovementModel = Model<StockMovementDocument>;
 
 /** Mongoose Schema for the ledger. Append-only — see `./repository` for why. */
@@ -138,7 +138,7 @@ export interface StockLevelDocument extends Document {
     updatedAt?: Date;
 }
 
-/** Stock level model type. Queries live in `./repository`, rules in `./service`. */
+/** Stock level model type. Queries live in `./repository`, rules in `./services`. */
 export type StockLevelModel = Model<StockLevelDocument>;
 
 /**
@@ -241,7 +241,7 @@ export interface ReservationDocument extends Document {
     updatedAt?: Date;
 }
 
-/** Reservation model type. Queries live in `./repository`, rules in `./service`. */
+/** Reservation model type. Queries live in `./repository`, rules in `./services`. */
 export type ReservationModel = Model<ReservationDocument>;
 
 /** Sub-schema for one claimed line, embedded on the hold rather than referenced. */

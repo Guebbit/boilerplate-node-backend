@@ -1,6 +1,6 @@
 /**
  * @module
- * The three collections this module owns. Rules live in `./service`. Every exported type is
+ * The three collections this module owns. Rules live in `./services`. Every exported type is
  * written out because Mongoose's generics are too large for TypeScript to serialize an inferred
  * one at an export boundary (TS7056) — the same reason `Repository` exists.
  *

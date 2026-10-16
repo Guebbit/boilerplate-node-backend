@@ -671,8 +671,7 @@ export type UserWire = Omit<
  * Normalizes a serialized user into the OpenAPI `User` contract: `id` from `_id`, `_id`/`__v`
  * stripped, plus `password` — a credential that must never leave the server. It is
  * also `select: false` on the schema; this is defense in depth, not the only guard. Exported so
- * lean results (which bypass `toJSON`) can be mapped through the same logic — see `./service`
- * `search()`. `active` and `deletedAt` pass through untouched: both are in the `User` contract,
+ * lean results (which bypass `toJSON`) can be mapped through the same logic — see `./repository`. `active` and `deletedAt` pass through untouched: both are in the `User` contract,
  * and every route serving a `User` list requires `read:User`.
  *
  * This is schema plumbing (a Mongoose-level omit), not the `User` contract itself — `./presenter`
