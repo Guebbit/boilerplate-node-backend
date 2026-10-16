@@ -81,18 +81,6 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
 
         expect(response.status).toBe(422);
     });
-
-    it('401s without a token, matching the spec', async () => {
-        const product = await createProduct();
-
-        const response = await api()
-            .patch(`/locales/translations/product/${String(product._id)}`)
-            .send({
-                en: { fields: { title: 'Cozy Bed' } }
-            });
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('PUT /locales/translations/:entityType/:id', () => {

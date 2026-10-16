@@ -340,22 +340,3 @@ describe('GET /observability/metrics', () => {
         expect(response.status).toBe(401);
     });
 });
-
-describe.each(['/observability/health', '/observability/metrics/overview', '/observability/audit'])(
-    'GET %s — the refusals',
-    (path) => {
-        it('matches the error contract with no credentials', async () => {
-            const response = await api().get(path);
-
-            expect(response.status).toBe(401);
-        });
-
-        it('matches the error contract for a customer', async () => {
-            const { bearer } = await authenticateAs('user');
-
-            const response = await api().get(path).set('Authorization', bearer);
-
-            expect(response.status).toBe(403);
-        });
-    }
-);

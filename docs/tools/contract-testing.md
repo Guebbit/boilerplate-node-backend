@@ -68,7 +68,18 @@ Two recurring shapes across the per-module `api.contract.test.ts` files:
 - **Role branches, both sides.** `orders`' suite asserts `GET /orders/{id}` for both an unrestricted caller and a scoped one — the suite exists specifically because those two branches once returned _different shapes_ (the scoped path aggregated computed totals in, the unscoped path did a plain `findById` and didn't), and nothing before this layer crossed HTTP to notice. `authenticateAs('admin' | 'user')` covers those two; `authenticateAsRole('editor')` and friends drive any other preset role through the same HTTP surface.
 - **Credential-leak guards as explicit assertions, backed by the contract as the general case.** `users`' suite keeps a hand-written `assertNoCredentials()` (checks the serialized JSON for `password` and a password hash prefix) alongside the automatic contract check. The explicit check is a readable statement of intent; the contract check is what makes it general — `openapi.yaml`'s `User` schema declares `additionalProperties: false`, so _any_ undeclared field fails, not just the two named here.
 
-Every file also drives the 401/403/404/422 branches through the real route: the automatic check judges those against their OWN documented schema (`GetUsers401Response`, not the success one), so a `ValidationErrorResponse` that drifts from what's declared is exactly as much a contract break as a success response would be. A response that is a genuine, deliberate deviation — not a bug — opts out per call site with `excludeFromSpecCheck`, from `tests/support/contract.ts`.
+Who is refused is not a module file's job. The authorization sweep (`tests/contract/authorization-contract.test.ts`) sends every route that mounts an identity guard a callerless request, and every guarded route a request as each tenant persona (the two audiences with no stored role, and every preset role, the administrator included), and holds the answer to the role file. `tests/cross-cutting/identity-guards-follow-the-spec.test.ts` holds the other half: that no route is missing the guard its `security` names, and no route locks what the spec calls open. A module's contract file therefore asserts a 401 or a 403 only when it checks more than the status: an error `code`, a row left untouched, a refusal that depends on the row (an owner is still refused, a stale session is asked to re-authenticate).
+
+Every file still drives the 404 and 422 branches through the real route: the automatic check judges those against their OWN documented schema (`GetUsers404Response`, not the success one), so a `ValidationErrorResponse` that drifts from what's declared is exactly as much a contract break as a success response would be. A response that is a genuine, deliberate deviation — not a bug — opts out per call site with `excludeFromSpecCheck`, from `tests/support/contract.ts`.
+
+```mermaid
+flowchart LR
+    spec["openapi.yaml: security per operation"] --> guards["identity-guards-follow-the-spec: the route mounts what the spec names"]
+    routes["route table: guards and permission keys"] --> sweep["authorization-contract: every guard answers right over HTTP, per role"]
+    routes --> guards
+    roles["authorization-roles.yaml"] --> sweep
+    sweep --> module["module contract file: only what checks more than the status"]
+```
 
 ## File map
 

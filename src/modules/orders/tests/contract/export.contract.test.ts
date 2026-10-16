@@ -53,23 +53,6 @@ describe('GET /orders/export', () => {
         expect(response.status).toBe(200);
     });
 
-    it.each(['customer', 'support', 'warehouse', 'moderator'])(
-        'refuses %s, who may read orders but not take them out',
-        async (role) => {
-            const { bearer } = await authenticateAsRole(role);
-
-            const response = await api().get('/orders/export').set('Authorization', bearer);
-
-            expect(response.status).toBe(403);
-        }
-    );
-
-    it('refuses an anonymous caller', async () => {
-        const response = await api().get('/orders/export');
-
-        expect(response.status).toBe(401);
-    });
-
     it('refuses an admin whose session is older than the sensitive window', async () => {
         freezeDate();
         const user = await createAdminUser({ verifiedAt: new Date() });

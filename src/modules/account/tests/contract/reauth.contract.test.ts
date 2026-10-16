@@ -108,12 +108,6 @@ describe('GET /account/reauth', () => {
 
         expect(response.body.data).toEqual({ methods: [] });
     });
-
-    it('matches the error contract with no session', async () => {
-        const response = await api().get('/account/reauth');
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('POST /account/reauth/methods/email/send', () => {

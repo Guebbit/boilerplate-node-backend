@@ -729,17 +729,6 @@ describe('POST /payments/order/{orderId}/offline', () => {
         expect(response.body.data.provider).toBe('manual');
     });
 
-    it('refuses the order`s own owner — recording by hand is staff-only', async () => {
-        const { bearer, order } = await authenticateWithOrder();
-
-        const response = await api()
-            .post(`/payments/order/${String(order._id)}/offline`)
-            .set('Authorization', bearer)
-            .send({ method: 'cash' });
-
-        expect(response.status).toBe(403);
-    });
-
     it('matches the error contract for an order that does not exist', async () => {
         const { bearer } = await authenticateAs('admin');
 
@@ -807,17 +796,6 @@ describe('GET /payments/order-by-reference', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-    });
-
-    it('refuses the order`s own owner — matching a transfer is staff-only', async () => {
-        const { customerBearer, reference } = await transferOrderOf();
-
-        const response = await api()
-            .get('/payments/order-by-reference')
-            .query({ ref: reference })
-            .set('Authorization', customerBearer);
-
-        expect(response.status).toBe(403);
     });
 
     it('matches the error contract for a request that names no reference at all', async () => {

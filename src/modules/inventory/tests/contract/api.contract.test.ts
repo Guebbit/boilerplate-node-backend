@@ -259,14 +259,6 @@ describe('GET /inventory/preorders', () => {
         ]);
         expect(response.body.data.meta).toMatchObject({ totalItems: 1 });
     });
-
-    it("is a stock reader's, not a shopper's", async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api().get('/inventory/preorders').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
 });
 
 describe('PUT /inventory/levels/:productId/preorder-limit', () => {
@@ -308,16 +300,4 @@ describe('PUT /inventory/levels/:productId/preorder-limit', () => {
             expect(response.status).toBe(422);
         }
     );
-
-    it('is refused to a caller without the warehouse key', async () => {
-        const { bearer } = await authenticateAs('user');
-        const product = await createProduct();
-
-        const response = await api()
-            .put(`/inventory/levels/${String(product._id)}/preorder-limit`)
-            .set('Authorization', bearer)
-            .send({ preorderLimit: 8 });
-
-        expect(response.status).toBe(403);
-    });
 });

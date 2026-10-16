@@ -33,20 +33,6 @@ beforeEach(async () => {
 });
 
 describe('GET /api-keys', () => {
-    it('401s an unauthenticated request', async () => {
-        const response = await api().get('/api-keys');
-
-        expect(response.status).toBe(401);
-    });
-
-    it('403s a role holding no apikeys key at all', async () => {
-        const { bearer } = await authenticateAsRole('customer');
-
-        const response = await api().get('/api-keys').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
-
     it('lists an owner’s own credentials, never a secret', async () => {
         const { bearer } = await authenticateAsRole('admin');
         await api()
@@ -180,21 +166,6 @@ describe('POST /api-keys', () => {
             details: { field: 'expiresAt' }
         });
         expect(fine.status).toBe(201);
-    });
-
-    it('403s a role holding no apikeys key at all', async () => {
-        const { bearer } = await authenticateAsRole('customer');
-
-        const response = await api()
-            .post('/api-keys')
-            .set('Authorization', bearer)
-            .send({
-                name: 'partner integration',
-                permissions: ['read:WebhookSubscription'],
-                expiresAt: IN_A_WEEK()
-            });
-
-        expect(response.status).toBe(403);
     });
 });
 

@@ -206,19 +206,6 @@ describe('POST /delivery/order/{orderId}/start', () => {
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('ORDER_NOT_PAID');
     });
-
-    it('matches the error contract for a customer, who holds no start:Shipment', async () => {
-        const { bearer, user } = await authenticateAs('user');
-        const order = await createOrder(user, [toOrderItem(await createProduct(), 1)], {
-            status: OrderStatus.paid
-        });
-
-        const response = await api()
-            .post(`/delivery/order/${String(order._id)}/start`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
 });
 
 describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
@@ -304,20 +291,14 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
         expect(response.body.errors[0].code).toBe('DELIVERY_NOT_PHYSICAL');
     });
 
-    it('answers 403 to a customer, and 404 to an id that is not a fulfillment order', async () => {
-        const { bearer: customer } = await authenticateAs('user');
-        const { bearer: admin } = await authenticateAs('admin');
+    it('answers 404 to an id that is not a fulfillment order', async () => {
+        const { bearer } = await authenticateAs('admin');
 
-        const forbidden = await api()
-            .post(`/delivery/fulfillment-orders/${MISSING_ID}/shipments`)
-            .set('Authorization', customer)
-            .send({});
         const missing = await api()
             .post(`/delivery/fulfillment-orders/${MISSING_ID}/shipments`)
-            .set('Authorization', admin)
+            .set('Authorization', bearer)
             .send({});
 
-        expect(forbidden.status).toBe(403);
         expect(missing.status).toBe(404);
     });
 });
@@ -371,21 +352,6 @@ describe('POST /delivery/fulfillment-orders/{id}/fulfill', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('ORDER_NOT_PROCESSING');
-    });
-
-    it('matches the error contract for a customer, who holds no update:Shipment', async () => {
-        const { bearer, user } = await authenticateAs('user');
-        const digital = await createProduct({ requiresShipping: false });
-        const order = await createOrder(user, [toOrderItem(digital, 1)], {
-            status: OrderStatus.processing
-        });
-        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
-
-        const response = await api()
-            .post(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/fulfill`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
     });
 });
 
@@ -513,17 +479,6 @@ describe('POST /delivery/shipments/{id}/deliver', () => {
         expect(again.status).toBe(409);
         expect(again.body.errors[0].code).toBe('DELIVERY_NOT_DELIVERABLE');
         expect(missing.status).toBe(404);
-    });
-
-    it('answers 403 to a customer', async () => {
-        const { order, bearer } = await authenticateWithShipment();
-        const [shipment] = await shipmentsOf(String(order._id));
-
-        const response = await api()
-            .post(`/delivery/shipments/${String(shipment._id)}/deliver`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
     });
 });
 
@@ -692,12 +647,6 @@ describe('GET /delivery/fulfillment-orders — the preorder board', () => {
 
         expect(mine.body.data.items).toHaveLength(1);
         expect(all.body.data.items).toHaveLength(2);
-    });
-
-    it('requires a session', async () => {
-        const response = await api().get('/delivery/fulfillment-orders');
-
-        expect(response.status).toBe(401);
     });
 });
 

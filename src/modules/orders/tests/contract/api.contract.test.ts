@@ -389,12 +389,6 @@ describe('POST /orders/search', () => {
             String(own._id)
         ]);
     });
-
-    it('matches the error contract with no credentials', async () => {
-        const response = await api().post('/orders/search').send({});
-
-        expect(response.status).toBe(401);
-    });
 });
 
 /*
@@ -413,18 +407,6 @@ describe('PUT /orders/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.email).toBe('billing@example.com');
-    });
-
-    it('matches the error contract for a customer', async () => {
-        const { bearer, user } = await authenticateAs('user');
-        const order = await seedOrderFor(user);
-
-        const response = await api()
-            .put(`/orders/${String(order._id)}`)
-            .set('Authorization', bearer)
-            .send({ email: 'billing@example.com' });
-
-        expect(response.status).toBe(403);
     });
 
     // `items`/`userId` are legal on `POST /orders` (create) but not here — rewriting frozen,
@@ -494,18 +476,6 @@ describe('PATCH /orders/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.email).toBe(order.email);
-    });
-
-    it('matches the error contract for a customer', async () => {
-        const { bearer, user } = await authenticateAs('user');
-        const order = await seedOrderFor(user);
-
-        const response = await api()
-            .patch(`/orders/${String(order._id)}`)
-            .set('Authorization', bearer)
-            .send({ email: 'billing@example.com' });
-
-        expect(response.status).toBe(403);
     });
 
     it.each(['items', 'userId', 'status'])('rejects a body carrying `%s`', async (field) => {

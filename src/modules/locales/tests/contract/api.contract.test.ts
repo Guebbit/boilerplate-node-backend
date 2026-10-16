@@ -317,25 +317,6 @@ describe('POST /locales', () => {
 
         expect(response.body.data.nativeName).toBe('Português');
     });
-
-    it('401s unauthenticated', async () => {
-        const response = await api()
-            .post('/locales')
-            .send({ tag: 'pt', name: 'Portuguese', nativeName: 'Português' });
-
-        expect(response.status).toBe(401);
-    });
-
-    it('403s for a non-admin caller', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api()
-            .post('/locales')
-            .set('Authorization', bearer)
-            .send({ tag: 'pt', name: 'Portuguese', nativeName: 'Português' });
-
-        expect(response.status).toBe(403);
-    });
 });
 
 describe('PUT /locales/:locale', () => {
@@ -393,17 +374,6 @@ describe('PUT /locales/:locale', () => {
 
         expect(response.status).toBe(422);
     });
-
-    it('403s for a non-admin caller', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api()
-            .put('/locales/pt')
-            .set('Authorization', bearer)
-            .send({ name: 'X', nativeName: 'X', direction: 'ltr', active: false });
-
-        expect(response.status).toBe(403);
-    });
 });
 
 describe('PATCH /locales/:locale', () => {
@@ -444,17 +414,6 @@ describe('PATCH /locales/:locale', () => {
 
         expect(response.status).toBe(422);
     });
-
-    it('403s for a non-admin caller', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api()
-            .patch('/locales/pt')
-            .set('Authorization', bearer)
-            .send({ active: false });
-
-        expect(response.status).toBe(403);
-    });
 });
 
 describe('DELETE /locales/:locale', () => {
@@ -487,12 +446,6 @@ describe('DELETE /locales/:locale', () => {
         const response = await api().delete('/locales/zz').set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-    });
-
-    it('401s unauthenticated', async () => {
-        const response = await api().delete('/locales/pt');
-
-        expect(response.status).toBe(401);
     });
 });
 
@@ -532,20 +485,6 @@ describe('GET /locales/:locale/entries', () => {
             expect(response.status).toBe(422);
         }
     );
-
-    it('401s unauthenticated — the rows are an admin screen, unlike the dictionary', async () => {
-        const response = await api().get('/locales/pt/entries');
-
-        expect(response.status).toBe(401);
-    });
-
-    it('403s for a non-admin caller', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api().get('/locales/pt/entries').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
 
     it('422s a stale ?app= filter, instead of widening it to every app', async () => {
         const { bearer } = await authenticateAs('admin');
@@ -766,16 +705,6 @@ describe('PUT and DELETE /locales/:locale/apps/:app/entries/:entryId', () => {
 
         expect(response.status).toBe(404);
     });
-
-    it('403s for a non-admin caller', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api()
-            .delete(`/locales/pt/apps/demo-fe/entries/${MISSING_ID}`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
 });
 
 /** A language with two keys — the starting state both bulk routes are asserted against. */
@@ -927,12 +856,6 @@ describe('PUT vs PATCH /locales/:locale/apps/:app/entries', () => {
             .send({ entries: [{ key: 'cart.title' }] });
 
         expect(response.status).toBe(422);
-    });
-
-    it('401s unauthenticated', async () => {
-        const response = await api().put('/locales/pt/apps/demo-fe/entries').send({ entries: [] });
-
-        expect(response.status).toBe(401);
     });
 });
 

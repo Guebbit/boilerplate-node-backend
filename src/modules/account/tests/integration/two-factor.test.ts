@@ -142,12 +142,6 @@ const mintChallenge = (userId: string): Promise<string> =>
         .then(({ challenge }) => challenge);
 
 describe('status', () => {
-    it('requires a live session', async () => {
-        const response = await api().get('/account/2fa').send();
-
-        expect(response.status).toBe(401);
-    });
-
     it('reports nothing armed, and both methods available, on a fresh verified account', async () => {
         const { bearer } = await authenticateVerified();
 
@@ -342,12 +336,6 @@ describe('changing factors once one is armed', () => {
 });
 
 describe('sending a code to a signed-in account', () => {
-    it('requires a live session', async () => {
-        const response = await api().post('/account/2fa/methods/email/send').send();
-
-        expect(response.status).toBe(401);
-    });
-
     it('answers 404 for a method this deployment does not run', async () => {
         const { bearer } = await authenticateVerified();
 
@@ -490,12 +478,6 @@ describe('telling the account holder their factors changed', () => {
 });
 
 describe('enrolling the device factor', () => {
-    it('requires a live session', async () => {
-        const response = await api().post('/account/2fa/methods/totp/setup').send();
-
-        expect(response.status).toBe(401);
-    });
-
     it('answers 404 for a method this deployment does not run', async () => {
         const { bearer } = await authenticateVerified();
 

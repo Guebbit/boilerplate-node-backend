@@ -42,14 +42,6 @@ describe('GET /stats/*', () => {
         expect(response.status).toBe(200);
     });
 
-    it.each(READS)('refuses a customer on %s', async (url) => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api().get(url).set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
-
     it('answers 404 for a product id that is not an id', async () => {
         const { bearer } = await authenticateAs('admin');
 
@@ -58,12 +50,6 @@ describe('GET /stats/*', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-    });
-
-    it('refuses an anonymous caller', async () => {
-        const response = await api().get(`/stats/sales?${PERIOD}`);
-
-        expect(response.status).toBe(401);
     });
 
     it('never lets a shared cache keep a sales figure', async () => {

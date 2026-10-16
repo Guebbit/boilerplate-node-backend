@@ -78,12 +78,6 @@ describe('DELETE /account and DELETE /account/delete-confirm', () => {
 
         expect(response.status).toBe(422);
     });
-
-    it('matches the error contract for a delete request with no session', async () => {
-        const response = await api().delete('/account');
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('POST /account/reset', () => {

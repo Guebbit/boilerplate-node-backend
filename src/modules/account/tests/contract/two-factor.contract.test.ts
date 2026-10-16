@@ -123,12 +123,6 @@ describe('GET /account/2fa', () => {
             'totp'
         ]);
     });
-
-    it('matches the error contract with no session', async () => {
-        const response = await api().get('/account/2fa');
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('POST /account/2fa/backup-codes', () => {
@@ -201,12 +195,6 @@ describe('DELETE /account/2fa', () => {
         const status = await api().get('/account/2fa').set('Authorization', session.bearer);
         expect(status.body.data.methods).toEqual([]);
     });
-
-    it('matches the error contract with no session', async () => {
-        const response = await api().delete('/account/2fa').send({ code: '123456' });
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('POST /account/login/2fa/send', () => {
@@ -257,12 +245,6 @@ describe('POST /account/2fa/methods/{method}/send', () => {
             .send();
 
         expect(response.status).toBe(422);
-    });
-
-    it('matches the error contract for an anonymous caller', async () => {
-        const response = await api().post('/account/2fa/methods/email/send').send();
-
-        expect(response.status).toBe(401);
     });
 });
 

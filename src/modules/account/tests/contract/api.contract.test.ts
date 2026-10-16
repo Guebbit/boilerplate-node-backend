@@ -701,12 +701,6 @@ describe('POST /account/pending-email/resend', () => {
         expect(response.body.data).toEqual({ resendAfter: 0 });
         expect(enqueueEmail).not.toHaveBeenCalled();
     });
-
-    it('demands a session', async () => {
-        const response = await api().post('/account/pending-email/resend');
-
-        expect(response.status).toBe(401);
-    });
 });
 
 /** The Italian "password too short" sentence for a given contract floor, rendered by the same `t`. */
@@ -951,13 +945,7 @@ describe('POST /account/export for an account that is gone', () => {
     });
 });
 
-describe('POST /account/export without a session', () => {
-    it('answers 401', async () => {
-        const response = await api().post('/account/export').send();
-
-        expect(response.status).toBe(401);
-    });
-});
+describe('POST /account/export without a session', () => {});
 
 describe('GET /account/export/{id}', () => {
     it('streams the export as a JSON attachment, never cached', async () => {
@@ -974,12 +962,6 @@ describe('GET /account/export/{id}', () => {
             'attachment; filename="account-export.json"'
         );
         expect(response.headers['cache-control']).toBe('private, no-store');
-    });
-
-    it('answers 401 with no session', async () => {
-        const response = await api().get(`/account/export/${MISSING_ID}`);
-
-        expect(response.status).toBe(401);
     });
 
     it('answers 404 for an export that does not exist', async () => {

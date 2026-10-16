@@ -488,21 +488,6 @@ describe('DELETE /users/{id}/2fa', () => {
     });
 });
 
-describe.each([
-    ['GET', '/users'],
-    ['POST', '/users/search'],
-    ['GET', '/users/65dc8a99604c307b702b5ccc'],
-    ['DELETE', '/users/65dc8a99604c307b702b5ccc'],
-    ['DELETE', '/users/65dc8a99604c307b702b5ccc/hard']
-] as const)('%s %s with no credentials', (method, path) => {
-    it('matches the error contract', async () => {
-        const response =
-            await api()[method === 'GET' ? 'get' : method === 'POST' ? 'post' : 'delete'](path);
-
-        expect(response.status).toBe(401);
-    });
-});
-
 describe('an id nobody holds', () => {
     it.each([['DELETE', '/users/65dc8a99604c307b702b5ccc/hard']] as const)(
         '%s %s matches the 404 contract',

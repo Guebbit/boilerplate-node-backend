@@ -155,12 +155,6 @@ describe('POST /returns', () => {
 
         expect(response.status).toBe(422);
     });
-
-    it('requires a session', async () => {
-        const response = await api().post('/returns').send({});
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('GET /returns and GET /returns/{id}', () => {
@@ -258,14 +252,6 @@ describe('POST /returns/{id}/approve and /decline', () => {
         expect(response.status).toBe(422);
     });
 
-    it('is forbidden to the customer', async () => {
-        const { customer, id } = await requested();
-
-        const response = await api().post(`/returns/${id}/approve`).set('Authorization', customer);
-
-        expect(response.status).toBe(403);
-    });
-
     it('answers 404 for a return that does not exist', async () => {
         const { bearer } = await authenticateAsRole('manager');
 
@@ -352,19 +338,6 @@ describe('POST /returns/{id}/receive', () => {
             code: 'RETURN_DEDUCTION_INVALID',
             details: { field: 'handlingDeduction' }
         });
-    });
-
-    it('is forbidden to the customer and to a role that only decides', async () => {
-        const { customer, id } = await withdrawn();
-        const { bearer: support } = await authenticateAsRole('support');
-
-        const asCustomer = await api()
-            .post(`/returns/${id}/receive`)
-            .set('Authorization', customer);
-        const asSupport = await api().post(`/returns/${id}/receive`).set('Authorization', support);
-
-        expect(asCustomer.status).toBe(403);
-        expect(asSupport.status).toBe(403);
     });
 
     it('answers 404 for a return that does not exist', async () => {

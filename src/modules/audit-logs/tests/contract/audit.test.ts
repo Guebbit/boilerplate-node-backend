@@ -23,20 +23,6 @@ const authenticateInRole = async (role: string) => {
 };
 
 describe('GET /audit', () => {
-    it('401s an unauthenticated request', async () => {
-        const response = await api().get('/audit');
-
-        expect(response.status).toBe(401);
-    });
-
-    it('403s a role that holds no read:AuditLog, an editor included', async () => {
-        const { bearer } = await authenticateInRole('editor');
-
-        const response = await api().get('/audit').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
-
     it('matches the contract for a moderator, filtered by actor and target', async () => {
         const { user, bearer } = await authenticateInRole('moderator');
         await auditLogRepository.create({

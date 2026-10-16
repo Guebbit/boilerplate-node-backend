@@ -589,14 +589,6 @@ describe('GET /products/{id}/admin', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.translations.en.title).toBe('Memory Foam Bed');
     });
-
-    it('is refused to a caller with no permission at all', async () => {
-        const product = await createProduct();
-
-        const response = await api().get(`/products/${String(product._id)}/admin`);
-
-        expect(response.status).toBe(401);
-    });
 });
 
 /** A create body titled in the fallback language. */

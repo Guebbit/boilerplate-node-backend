@@ -75,12 +75,6 @@ const authenticate = async () => {
 };
 
 describe('DELETE /account — deleteAccountRequest', () => {
-    it('requires a live session', async () => {
-        const response = await api().delete('/account').send();
-
-        expect(response.status).toBe(401);
-    });
-
     it("mails a deletion link and returns 200 for the caller's own account", async () => {
         const { bearer } = await authenticate();
 

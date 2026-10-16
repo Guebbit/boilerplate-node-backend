@@ -27,20 +27,6 @@ const subscriptionBody = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('GET /webhooks/subscriptions', () => {
-    it('401s an unauthenticated request', async () => {
-        const response = await api().get('/webhooks/subscriptions');
-
-        expect(response.status).toBe(401);
-    });
-
-    it('403s a role holding no webhooks key at all', async () => {
-        const { bearer } = await authenticateAsRole('customer');
-
-        const response = await api().get('/webhooks/subscriptions').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
-
     it('lists a manager’s own subscriptions, never a secret', async () => {
         const { bearer } = await authenticateAsRole('manager');
         await api()
@@ -97,19 +83,6 @@ describe('POST /webhooks/subscriptions', () => {
             .send(subscriptionBody({ eventTypes: [] }));
 
         expect(response.status).toBe(422);
-    });
-
-    it('403s a role holding only read:WebhookSubscription', async () => {
-        // No preset role holds read:WebhookSubscription without also holding the write keys today, so
-        // this asserts the negative the other way: a role with NEITHER key is refused too.
-        const { bearer } = await authenticateAsRole('customer');
-
-        const response = await api()
-            .post('/webhooks/subscriptions')
-            .set('Authorization', bearer)
-            .send(subscriptionBody());
-
-        expect(response.status).toBe(403);
     });
 
     it('422s once the subscription cap is reached', async () => {
@@ -382,12 +355,6 @@ describe('DELETE /webhooks/subscriptions/:id', () => {
 });
 
 describe('GET /webhooks/deliveries', () => {
-    it('401s an unauthenticated request', async () => {
-        const response = await api().get('/webhooks/deliveries');
-
-        expect(response.status).toBe(401);
-    });
-
     it('answers an empty page when nothing has been delivered yet', async () => {
         const { bearer } = await authenticateAsRole('manager');
 
@@ -465,12 +432,6 @@ describe('GET /webhooks/events', () => {
         expect(
             (response.body.data as { name: string }[]).map((event) => event.name).toSorted()
         ).toEqual(declaredWebhookEvents());
-    });
-
-    it('401s an unauthenticated request', async () => {
-        const response = await api().get('/webhooks/events');
-
-        expect(response.status).toBe(401);
     });
 });
 

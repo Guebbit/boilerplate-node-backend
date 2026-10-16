@@ -4,11 +4,16 @@
  * route (a published example), the rest signed-in and narrowed by who is asking — someone else's
  * example is a 404, never a 403, so an id says nothing about who owns it. Behavioural rules live
  * in the integration suite; these make sure each declared response is actually reached.
+ *
+ * No bare 401 or 403 case here: the authorization sweep (`tests/contract/authorization-contract.test.ts`)
+ * asks every guarded route for both, as every role, and a case that checks more than the status
+ * (an error `code`, a row left untouched) is the only one a contract file adds. A module copied
+ * from this one should not add them back.
  */
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs, authenticateAsRole, loginBearer } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { requestAndDownloadExport } from '@tests/account-export';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { MISSING_ID } from '@tests/ids';
@@ -59,12 +64,6 @@ const statusOf = (request: PromiseLike<{ status: number }>): Promise<number> =>
  */
 const etagOf = (request: PromiseLike<{ headers: Record<string, string> }>): Promise<string> =>
     Promise.resolve(request).then((response) => response.headers.etag);
-
-/** A signed-in account that holds no membership at all, so no `examples.*` key. */
-const authenticateWithoutRole = async () => {
-    const user = await createUser({ email: 'norole@example.com', verifiedAt: new Date() });
-    return loginBearer(user.email);
-};
 
 describe('GET /examples/published/{id}', () => {
     it('answers anyone, with no credentials, for a published example', async () => {
@@ -130,21 +129,6 @@ describe('POST /examples', () => {
             .send({ title: '' });
 
         expect(response.status).toBe(422);
-    });
-
-    it('answers 401 with no credentials', async () => {
-        expect(await statusOf(api().post('/examples').send({ title: 'T', body: 'B' }))).toBe(401);
-    });
-
-    it('answers 403 for an account that holds no examples key', async () => {
-        const bearer = await authenticateWithoutRole();
-
-        const response = await api()
-            .post('/examples')
-            .set('Authorization', bearer)
-            .send({ title: 'T', body: 'B' });
-
-        expect(response.status).toBe(403);
     });
 });
 
@@ -219,16 +203,6 @@ describe('GET /examples and POST /examples/search', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(1);
     });
-
-    it('answers 401 with no credentials', async () => {
-        expect(await statusOf(api().get('/examples'))).toBe(401);
-    });
-
-    it('answers 403 for an account that holds no examples key', async () => {
-        const bearer = await authenticateWithoutRole();
-
-        expect(await statusOf(api().get('/examples').set('Authorization', bearer))).toBe(403);
-    });
 });
 
 describe('GET /examples/{id}', () => {
@@ -252,18 +226,6 @@ describe('GET /examples/{id}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-    });
-
-    it('answers 401 with no credentials', async () => {
-        expect(await statusOf(api().get(`/examples/${MISSING_ID}`))).toBe(401);
-    });
-
-    it('answers 403 for an account that holds no examples key', async () => {
-        const bearer = await authenticateWithoutRole();
-
-        expect(
-            await statusOf(api().get(`/examples/${MISSING_ID}`).set('Authorization', bearer))
-        ).toBe(403);
     });
 });
 
@@ -392,22 +354,6 @@ describe('PUT and PATCH /examples/{id}', () => {
 
         expect(response.status).toBe(404);
     });
-
-    it('answers 401 with no credentials, and 403 without a key', async () => {
-        const bearer = await authenticateWithoutRole();
-
-        expect(await statusOf(api().patch(`/examples/${MISSING_ID}`).send({ title: 'x' }))).toBe(
-            401
-        );
-        expect(
-            await statusOf(
-                api()
-                    .patch(`/examples/${MISSING_ID}`)
-                    .set('Authorization', bearer)
-                    .send({ title: 'x' })
-            )
-        ).toBe(403);
-    });
 });
 
 describe('DELETE /examples/{id}', () => {
@@ -431,15 +377,6 @@ describe('DELETE /examples/{id}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-    });
-
-    it('answers 401 with no credentials, and 403 without a key', async () => {
-        const bearer = await authenticateWithoutRole();
-
-        expect(await statusOf(api().delete(`/examples/${MISSING_ID}`))).toBe(401);
-        expect(
-            await statusOf(api().delete(`/examples/${MISSING_ID}`).set('Authorization', bearer))
-        ).toBe(403);
     });
 });
 
@@ -490,18 +427,6 @@ describe('PUT /examples/{id}/cover', () => {
             .attach('imageUpload', PNG_BYTES, { filename: 'cover.png', contentType: 'image/png' });
 
         expect(response.status).toBe(404);
-    });
-
-    it('answers 401 with no credentials', async () => {
-        expect(await statusOf(api().put(`/examples/${MISSING_ID}/cover`))).toBe(401);
-    });
-
-    it('answers 403 for an account that holds no examples key', async () => {
-        const bearer = await authenticateWithoutRole();
-
-        expect(
-            await statusOf(api().put(`/examples/${MISSING_ID}/cover`).set('Authorization', bearer))
-        ).toBe(403);
     });
 });
 

@@ -490,17 +490,6 @@ describe('POST /products/{id}/restore', () => {
 
         expect(response.status).toBe(409);
     });
-
-    it('is refused to a caller who may not delete products', async () => {
-        const { bearer } = await authenticateAs('user');
-        const product = await createProduct({ deletedAt: new Date() });
-
-        const response = await api()
-            .post(`/products/${String(product._id)}/restore`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-    });
 });
 
 describe('DELETE /products/{id} repeated', () => {
@@ -571,32 +560,5 @@ describe('DELETE /products — the id in the body', () => {
             .send({ id: '65dc8a99604c307b702b5ccc' });
 
         expect(response.status).toBe(404);
-    });
-});
-
-/*
- * The catalogue reads are public; every write owes an anonymous caller the 401 the spec declares,
- * and a customer the 403.
- */
-describe.each([
-    ['post', '/products'],
-    ['delete', '/products/65dc8a99604c307b702b5ccc'],
-    ['patch', '/products/65dc8a99604c307b702b5ccc'],
-    ['post', '/products/65dc8a99604c307b702b5ccc/restore'],
-    ['delete', '/products/65dc8a99604c307b702b5ccc/hard'],
-    ['get', '/products/65dc8a99604c307b702b5ccc/admin']
-] as const)('%s %s — the refusals', (method, path) => {
-    it('matches the error contract with no credentials', async () => {
-        const response = await api()[method](path);
-
-        expect(response.status).toBe(401);
-    });
-
-    it('matches the error contract for a customer', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api()[method](path).set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
     });
 });

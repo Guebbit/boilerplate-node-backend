@@ -366,12 +366,6 @@ describe('POST /cart/merge', () => {
         expect(response.status).toBe(422);
     });
 
-    it('matches the error contract with no session', async () => {
-        const response = await api().post('/cart/merge').send({ lines: [] });
-
-        expect(response.status).toBe(401);
-    });
-
     it.each(['manager', 'admin'])('merges a guest basket into a %s’s own', async (role) => {
         const { bearer } = await authenticateAsRole(role);
         const product = await createProduct();

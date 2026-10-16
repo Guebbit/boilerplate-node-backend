@@ -67,12 +67,6 @@ describe('GET /notifications', () => {
             response.body.data.items.map(({ code }: { code: string }) => code).toSorted()
         ).toEqual(['notifications.cart-merge-refused', 'notifications.wishlist-item-removed']);
     });
-
-    it('matches the error contract with no session', async () => {
-        const response = await api().get('/notifications');
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('POST /notifications/read-all', () => {
@@ -85,12 +79,6 @@ describe('POST /notifications/read-all', () => {
 
         expect(response.status).toBe(200);
         expect(inbox.body.data.items[0].readAt).toEqual(expect.any(String));
-    });
-
-    it('matches the error contract with no session', async () => {
-        const response = await api().post('/notifications/read-all');
-
-        expect(response.status).toBe(401);
     });
 });
 
@@ -106,12 +94,6 @@ describe('POST /notifications/dismiss-all', () => {
 
         expect(response.status).toBe(200);
         expect(inbox.body.data.items).toEqual([]);
-    });
-
-    it('matches the error contract with no session', async () => {
-        const response = await api().post('/notifications/dismiss-all');
-
-        expect(response.status).toBe(401);
     });
 });
 
@@ -157,12 +139,6 @@ describe('DELETE /notifications/{id}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-    });
-
-    it('matches the error contract with no session', async () => {
-        const response = await api().delete(`/notifications/${MISSING_ID}`);
-
-        expect(response.status).toBe(401);
     });
 });
 
