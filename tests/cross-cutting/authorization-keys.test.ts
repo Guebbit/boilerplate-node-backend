@@ -151,6 +151,6 @@ describe('assertDeclared', () => {
     });
 
     it('returns the declared rule for one that exists', () => {
-        expect(assertDeclared('display', 'Order').id).toBe(ruleId('display', 'Order'));
+        expect(assertDeclared('read', 'User').id).toBe(ruleId('read', 'User'));
     });
 });
