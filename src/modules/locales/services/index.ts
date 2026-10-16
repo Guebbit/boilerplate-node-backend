@@ -1,7 +1,7 @@
 /**
  * @module
  * Locale service — the override tier: what it can be asked, and the rules that make it safe to ask.
- * A folder rather than one file because it passed ~300 lines (see `docs/theory/layers.md`).
+ * One file per flow (see `docs/theory/layers.md`).
  * Nothing here is ever AWAITED by `t()` or the locale middleware — the overrides these functions
  * write reach `t()` only through an overlay rebuilt off the request path.
  */

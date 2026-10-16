@@ -4,8 +4,8 @@
  *
  * A cart is somebody's, so the whole router is authenticated and needs `update:Cart`, which
  * every signed-in account holds. `POST /checkout` is the one route that also invalidates the
- * `orders` and `products` response caches — the endpoints those caches serve read differently once
- * a checkout has spent stock and created an order — and requires a FRESH session holding
+ * `products` response cache — the endpoints it serves read differently once a checkout has
+ * spent stock — and requires a FRESH session holding
  * `checkout:Cart` on top of `isAuth` (`requireFreshAuth`,
  * `requirePermission('checkout', 'Cart')`): it is where this app's money actually moves. The
  * two keys are the only ones this module declares — see `shared/authorization-keys.yaml`.

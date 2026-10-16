@@ -897,8 +897,8 @@ const handleDelivery = <TPayload>(
     }
 
     /*
-     * The handler gets `verdict.data`, the schema's output: the assertion that used to cast the raw
-     * JSON to `TPayload` is gone, because the schema is what makes the type true.
+     * The handler gets `verdict.data`, the schema's output: no cast of the raw JSON to `TPayload`,
+     * because the schema is what makes the type true.
      */
     // The handler's boolean *is* the ack decision — see the policy above. Started inside a
     // `.then` so a handler that throws synchronously lands in the `.catch` below instead of

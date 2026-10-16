@@ -220,7 +220,7 @@ const isScalar = (value: unknown): value is string | number | boolean | null =>
  * One value's spelling inside a key, or `undefined` when it cannot be part of one.
  *
  * Only scalars, or arrays of scalars, qualify: a nested array or object is something no endpoint
- * here keys on, and walking one is how a 100 kB body of `[[[…]]]` once threw a `RangeError` out
+ * here keys on, and walking one is how a 100 kB body of `[[[…]]]` throws a `RangeError` out
  * of the key builder. A query string has no types (`?page=1` is the string `'1'`) while a JSON
  * body keeps its own, so scalars are stringified: `{page: 1}` and `?page=1` share one entry.
  *

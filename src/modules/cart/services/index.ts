@@ -1,9 +1,7 @@
 /**
  * @module
- * Cart service — shopping cart operations, identified by userId. A folder rather than one file
- * because it passed ~300 lines; see `docs/theory/layers.md`. `view.ts` joins lines to products,
- * `items.ts` reads/writes the cart, `checkout.ts` turns it into an order, `reorder.ts` refills it
- * from an old order, and `cleanup.ts` tears down carts on user/product deletion.
+ * Cart service — shopping cart operations, identified by userId. One file per flow, not one
+ * big file; see `docs/theory/layers.md`.
  */
 
 import * as items from './items';

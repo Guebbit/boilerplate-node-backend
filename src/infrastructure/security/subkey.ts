@@ -5,7 +5,6 @@
  * Scheme:   HKDF-SHA256 (RFC 5869), empty salt (the roots are already high-entropy), `info` as
  *           the purpose label, 32 bytes out.
  * Why:      one root never serves two purposes (NIST SP 800-57 §5.2); `info` is the separation.
- * Callers:  `pseudonymise.ts`, `versioned-secret.ts`, `account/two-factor/delivered-codes.ts`.
  *
  * Relative imports only: `pseudonymise.ts` imports this, and it sits on jest `globalSetup`'s chain.
  */

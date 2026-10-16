@@ -278,7 +278,7 @@ export const enqueueEmail = (
         // Stryker restore all
     });
 
-    // Every one of this function's 13+ call sites writes `void enqueueEmail(...)` — a rejection
+    // Callers write `void enqueueEmail(...)` — a rejection
     // here has nobody left to catch it, and would otherwise surface as an unhandled rejection with
     // no request id and no idea which email was lost. Logged with the two facts needed to find it
     // (which template, which recipient), then resolved: a lost email is never worth failing the

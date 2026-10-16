@@ -60,7 +60,7 @@ const KEEPALIVE_PING_MS = 500;
  * - `commandOptions.timeout`: fail a command still waiting to be written after 1s (node-redis 6
  *   would otherwise apply 5s). It does NOT cover a reply that never comes: node-redis drops the
  *   timer once the command is on the wire (`commands-queue.js#commandsToWrite`), so a half-open
- *   connection — the socket reports open, nothing is coming back — used to hang on the kernel
+ *   connection — the socket reports open, nothing is coming back — would hang on the kernel
  *   with no ceiling at all.
  * - `socket.timeout` (node-redis' own name for `net.Socket#setTimeout`): closes the SOCKET after
  *   1s of no traffic either way, independent of command bookkeeping — the half-open case above.

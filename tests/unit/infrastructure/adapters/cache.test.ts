@@ -261,8 +261,8 @@ describe('setCacheValue tag index', () => {
         });
     });
 
-    // The index used to be a plain set: a member stayed after its entry expired, so a flood of
-    // distinct keys grew it until the next invalidation.
+    // A plain set would keep a member after its entry expired, so a flood of distinct keys
+    // would grow it until the next invalidation.
     it('scores each member with its own expiry and prunes the ones already past it', async () => {
         const before = Date.now();
         await freshCache().setCacheValue('GET:/products', '{}', 60, ['products']);

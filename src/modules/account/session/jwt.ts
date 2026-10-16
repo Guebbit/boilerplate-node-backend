@@ -1,9 +1,8 @@
 /**
  * @module
  * JWT creation and verification, on `jose`. Secrets and TTLs come from `./config`, which owns the policy.
- * This was app-level middleware until the domains became modules — issuing and verifying this
- * application's tokens is what `account` IS, and it reaches `users` for the stored refresh
- * tokens, exactly the dependency the manifest already declares. See
+ * Issuing and verifying this application's tokens is what `account` IS, and it reaches `users`
+ * for the stored refresh tokens, exactly the dependency the manifest already declares. See
  * docs/modules/account-sessions.md.
  */
 

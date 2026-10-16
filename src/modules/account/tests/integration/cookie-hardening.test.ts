@@ -73,7 +73,7 @@ describe('POST /account/refresh', () => {
         expect(after.some((row) => row.supersededAt)).toBe(false);
     });
 
-    it('is no longer a GET: a GET reaches no route', async () => {
+    it('is not a GET: a GET reaches no route', async () => {
         const { cookie } = await login();
 
         const response = await api().get('/account/refresh').set('Cookie', cookie);

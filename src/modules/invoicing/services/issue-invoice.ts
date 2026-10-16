@@ -52,8 +52,7 @@ const frozenLines = (order: OrderDocument): InvoiceLine[] =>
  * listener delegates here. Reads the order's OWN frozen `billingAddress` as the Art. 226 buyer
  * address — the one the checkout asked for, never the ship-to address by assumption: a
  * digital-only order has no ship-to at all. The render locale is the order's own frozen locale
- * (`items[0].locale`) — the language its product titles were resolved into at checkout — same
- * reasoning the old receipt render followed.
+ * (`items[0].locale`) — the language its product titles were resolved into at checkout.
  *
  * @param order - the order that just moved to `paid`, as `orderService.getById` hands it back
  * @returns the invoice for this order — freshly issued, or the one that already existed when a

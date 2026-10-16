@@ -5,8 +5,8 @@
  *
  * One rule for all of them: a value is trimmed, and a blank one counts as unset (the same
  * "empty string is not a value" rule t3-env calls `emptyStringAsUndefined`). A value that is set
- * and wrong is an ISSUE, never a silent fallback — that is the whole point of moving off the old
- * `environmentNumber(key, fallback)` readers.
+ * and wrong is an ISSUE, never a silent fallback — that is the whole point of reading every field
+ * through one parser.
  *
  * Presence rules (length, placeholder, production-only) are data on the field, not parse rules:
  * a developer machine legitimately leaves a secret unset, so they are checked at boot only.

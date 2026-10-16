@@ -327,11 +327,14 @@ const afterSettlement = (
  * only one.
  *
  * Every write is conditional, so a delivery that arrives twice, or races the browser's own call,
- * settles once. The PAYMENT write is what gates it — the settleable sets exclude `succeeded`, and
- * the non-success ones `cancelled`, so exactly one caller ever sees its own write succeed — not the order's own
- * `pending → paid` move: a webhook retried after {@link applyWebhookDelivery} released its claim
- * re-enters here and can legitimately lose that race (the order already got there on the failed
- * first attempt) while still being the one call that must finish the job.
+ * settles once.
+ *
+ * The gate:     the PAYMENT write. The settleable sets exclude `succeeded`, and the non-success
+ *               ones `cancelled`, so exactly one caller ever sees its own write succeed.
+ * Not the gate: the order's own `pending → paid` move. A webhook retried after
+ *               {@link applyWebhookDelivery} released its claim re-enters here and can lose that
+ *               race (the order got there on the failed first attempt) while still being the one
+ *               call that must finish the job.
  *
  * @param payment - the payment the provider named
  * @param state - what the provider reported

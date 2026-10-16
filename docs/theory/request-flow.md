@@ -326,7 +326,7 @@ correctness one.
 
 ### Why `ValidationError` is not already impossible
 
-Request bodies are validated by Zod schemas generated from `openapi.yaml` before a controller runs,
+Request bodies are validated by Zod schemas generated from `openapi.yaml`, inside the controller (`parseBody`), before any service runs,
 so a Mongoose validator firing means the model is enforcing something the contract does not.
 For example, a display name of one space satisfies `minLength: 1`, then the schema's `trim`
 reduces it to `''` and `required` refuses it — a 500 for a stray space, which

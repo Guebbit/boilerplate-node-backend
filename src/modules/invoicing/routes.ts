@@ -1,6 +1,6 @@
 /**
  * @module
- * Express router for invoicing's two download routes — mounted at `/orders`, shared with `orders`'
+ * Express router for invoicing's three download routes — mounted at `/orders`, shared with `orders`'
  * own router (see `./module.ts` and `docs/api/contract-fragmentation.md`'s `account`/`addresses`
  * precedent). `getAuth` returns early when a request already carries a resolved auth context, so
  * mounting it here too costs nothing beyond the first router that ran.
@@ -23,9 +23,9 @@ export const router = Router();
 // Everything below needs a signed-in user: `getAuth` resolves the session, `isAuth` refuses none.
 router.use(getAuth, isAuth);
 
-// GET /orders/:id/invoice — not cached: every hit renders fresh, and caching PDF bytes as a
-// JSON-cache value would only ever hold the first byte range express actually flushed.
-// `invoicingLimiter` guards the Chromium launch every render spawns.
+// GET /orders/:id/invoice — not in the JSON cache: caching PDF bytes there would only ever
+// hold the first byte range express actually flushed. The PDF store (`services/render.ts`)
+// keeps the bytes instead. `invoicingLimiter` guards the Chromium launch a render spawns.
 router.get('/:id/invoice', invoicingLimiter, getOrderInvoice);
 
 // GET /orders/:id/credit-notes — the list; a plain read, so no PDF limiter.

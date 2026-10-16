@@ -1,8 +1,8 @@
 /**
  * @module
  * Where the password hash meets the account flows: an unknown address still pays for one hash
- * (the decoy), a long password is compared whole rather than truncated, and a password that the
- * old composition rule refused is now a fine one.
+ * (the decoy), a long password is compared whole rather than truncated, and a password that a
+ * composition rule would refuse is a fine one.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

@@ -2,10 +2,12 @@
  * @module
  * Inventory — the only place stock changes. A counter never moves without a ledger row, and
  * never the reverse; both halves happen inside `applyTransition`, which every function here goes
- * through. A folder rather than one file because it passed ~800 lines; see `docs/theory/layers.md`.
+ * through. One file per flow, not one big file; see `docs/theory/layers.md`.
  *
- * No Mongo transactions, matching the rest of the repo — gaps are noted at the call sites that
- * own them. See: docs/modules/inventory.md
+ * Transactions: only where a half-done write would be wrong — a hold's claim and commit
+ *               (`holds.ts`), a delivery with its preorder allocation (`admin.ts`), a hold's
+ *               release with its announcement (`sweep.ts`). The rest are conditional
+ *               single-document writes; gaps are noted at the call sites that own them. See: docs/modules/inventory.md
  */
 
 import { reserveForOrder } from './reserve';

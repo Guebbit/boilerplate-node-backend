@@ -1,26 +1,17 @@
 /**
  * @module
- * Payments — how an order's money moves, behind the provider port. A folder rather than one file
- * because it passed ~700 lines; see `docs/theory/layers.md`.
+ * Payments — how an order's money moves, behind the provider port. One file per flow, not one
+ * big file; see `docs/theory/layers.md`.
  *
- * Rules: only a `pending` order's owner can start paying; the order's move to `paid` is the
- *        gate, not the charge — the provider answers first, and a slipped-away order is refunded
- *        on the spot, so money moved iff the order says `paid`; a refund is the
- *        `order.cancelled` listener, made at-most-once by `addRefund`'s conditional
- *        write on `amountRefunded`; the provider's own word, arriving by webhook, is the authority — the
- *        browser's is a hint that lets the happy path feel synchronous.
+ * Starts:    only a `pending` order's owner can start paying.
+ * The gate:   the order's move to `paid`, not the charge. The provider answers first, and a
+ *             slipped-away order is refunded on the spot, so money moved iff the order says `paid`.
+ * Refunds:    the `order.cancelled` listener, `refundByOrder` and `refundForReturn` are each made
+ *             at-most-once by `addRefund`'s conditional write on `amountRefunded`.
+ * Authority:  the provider's own word, arriving by webhook. The browser's is a hint that lets the
+ *             happy path feel synchronous.
  *
- * Files: `intent.ts` starts a payment. `settlement.ts` is `settlePayment` — the whole
- *        choreography, reached from the webhook AND the browser-driven paths, since two copies
- *        would drift and drifted copies commit inventory twice. `refunds.ts` is the one place
- *        money moves back out. `effects.ts` retries the stock commit (or the refund) a settlement
- *        set out to do but died before finishing. `offline.ts` records money the provider never
- *        saw and settles it through the same choreography. `view.ts` reads a payment back with
- *        its `actions`. `retention.ts` is erasure/export/the abandoned sweep. `scope.ts` decides
- *        who may see what. `lookup.ts` matches an admin-pasted RF reference back to the order it
- *        pays, the step before `recordOfflinePayment` settles it.
- *        `list.ts` is the staff Payments page's three reads: the list, the refunds, and what
- *        needs attention.
+ * Files:      one per flow, listed in docs/modules/payments.md.
  */
 
 import { createIntent, cancelOpenIntentForOrder } from './intent';

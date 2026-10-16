@@ -34,8 +34,8 @@ import { enqueueIfPending } from './image';
 /**
  * Update an existing user document. Returns a result envelope instead of throwing, the protocol
  * every service here follows. Typed off `UpdateUserByIdRequest` rather than a hand-picked `Pick`:
- * the old hand-picked list was missing `active`, so `active: false` fired `USER_DEACTIVATED`
- * without ever writing the field.
+ * a hand-picked list can miss `active`, which would fire `USER_DEACTIVATED` without ever
+ * writing the field.
  */
 export const update = (
     user: UserDocument,

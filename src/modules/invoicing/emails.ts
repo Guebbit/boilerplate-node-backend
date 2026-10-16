@@ -70,7 +70,7 @@ export interface DocumentVatBlock {
         net: string;
         rate: string;
         /** Header for {@link DocumentVatRow.categoryCode} — the per-LINE table only; the
-         *  rate-grouped summary tables stay grouped by rate alone, same as before. */
+         *  rate-grouped summary tables stay grouped by rate alone. */
         category: string;
         tax: string;
         gross: string;
@@ -117,7 +117,7 @@ const buildBilling = (document: EInvoicingDocument) => {
  * Builds the document's VAT table and the seller's own legal identity, recomputing nothing: every
  * figure was already reconciled by `orders/domain/tax.ts#orderTaxBreakdown` at issue time and
  * frozen onto the document — this only formats what is already there.
- * @param locale - the document's language, for `Intl.NumberFormat`/`Intl.NumberFormat` — every
+ * @param locale - the document's language, for `Intl.NumberFormat` — every
  *   amount below goes through it, in the document's OWN frozen currency
  */
 const buildVatBlock = (
@@ -240,7 +240,7 @@ const buildVatBlock = (
 
 /**
  * Render context for an invoice or credit-note PDF — the same shape either way, since a credit
- * note is a full reversal of the invoice it corrects (today's refund model) rather than a
+ * note, full or partial, is the invoice's own shape over fewer or smaller lines rather than a
  * differently-structured document.
  * @param locale - the document's own frozen language
  * @param document - every frozen field the provider was handed

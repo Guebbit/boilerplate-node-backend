@@ -315,7 +315,7 @@ describe('POST /account/reauth with a password', () => {
         expect(await claimedAmr(response, user.id)).toEqual(['pwd']);
     });
 
-    it('rejects the untagged body the endpoint used to take', async () => {
+    it('rejects an untagged body', async () => {
         const { bearer } = await sessionFor(['pwd'], true);
 
         const response = await api()

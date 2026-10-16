@@ -32,7 +32,7 @@ import { enqueueIfPending } from './image';
  *   transaction as the account) mails the owner a link to choose
  *   their own (`POST /account/reset-confirm`).
  * - Typed off `CreateUserRequest`, not a hand-picked `Pick`: a hand-copied list is what silently
- *   dropped `active` from `update()` below.
+ *   dropped `active` from `update()`.
  * - No `role` means a plain customer: the account holds no staff role and is a `customer` because
  *   `verifiedAt` is set, which nothing has to grant.
  * - The account and its role grant (when there is one) are ONE transaction, the grant checked (and
@@ -43,7 +43,7 @@ export const create = (
     data: WithServerImage<CreateUserRequest>,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    // 32 random bytes as hex, same as `tokenAdd` below uses for a reset token: unguessable and
+    // 32 random bytes as hex, same size as an `account` reset token: unguessable and
     // never surfaced anywhere, so "unusable until the owner sets one" is enforced by nobody
     // knowing it.
     const password = randomBytes(32).toString('hex');

@@ -35,9 +35,9 @@ const markResetCompleted = (user: UserDocument): void => {
 };
 
 /**
- * What follows a finished reset: on success, the audit row, the confirmation mail and the
- * audit row and the confirmation mail (the `account.sessions-revoked` event already left with the
- * password write). `resetWith` is the one caller.
+ * What follows a finished reset: on success, the audit row and the confirmation mail (the
+ * `account.sessions-revoked` event already left with the password write). `resetWith` is the one
+ * caller.
  *
  * @param result - what writing the password answered
  * @param user - the account
@@ -50,14 +50,15 @@ const afterReset = (
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (!result.success) return Promise.resolve(result);
 
-    // Same fire-and-forget shape as the mail below: the password change already succeeded, so a lookup hiccup here must not
-    // turn a successful reset into an error — worst case, this one audit row is missing.
+    // Same fire-and-forget shape as the mail below: the password change already succeeded, so a
+    // lookup hiccup here must not turn a successful reset into an error — worst case, this one
+    // audit row is missing.
     void recordAccountAudit(context, String(user._id), {
         action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
         outcome: 'success'
     }).catch((error: unknown) => {
         // Still just a missing audit row, not a reset failure — see the comment
-        // above — but a swallowed lookup failure had no trail at all before this.
+        // above — but a swallowed lookup failure still leaves a trail here.
         logger.warn({
             message: 'Could not audit a completed password reset.',
             userId: String(user._id),

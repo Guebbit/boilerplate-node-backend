@@ -97,7 +97,7 @@ export const onDomainEvent = <TEventName extends DomainEventName>(
  *
  * The return says whether they all got through, which is a different question from whether the
  * emit was allowed to proceed. The outbox relay needs it to know whether to deliver a row again;
- * every other caller ignores it and keeps the old fire-and-continue behaviour.
+ * every other caller ignores it and keeps the fire-and-continue behaviour.
  *
  * @param name - the event name
  * @param payload - the event payload

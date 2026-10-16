@@ -1,7 +1,7 @@
 /**
  * @module
  * Delivery service — every operation a controller may call into, and the narrow reads and doors a
- * sibling may use. A folder rather than one file because the module passed ~1000 lines; see
+ * sibling may use. One file per flow, not one big file; see
  * `docs/theory/layers.md`.
  *
  * Every act (`ship`, `deliver`, `fulfill`, `holds`, `cancel-remainder`) is one transaction —

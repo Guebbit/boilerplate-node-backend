@@ -147,7 +147,7 @@ export interface PaymentProvider {
      * stand against the same charge until they add up to it.
      *
      * `idempotencyKey` is what makes a RETRY of this call safe at the provider, not just at this
-     * application: two calls carrying the same key (`refund:{paymentId}`) return the same refund
+     * application: two calls carrying the same key (`refund:{paymentId}:{refundId}`, one per refund record) return the same refund
      * rather than returning the money twice — Stripe's own idempotency keys work this way. The
      * caller's own conditional `addRefund` write on `amountRefunded` is the other half, for the case where
      * this application's two callers never reach the provider at the same time to begin with.

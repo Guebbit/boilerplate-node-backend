@@ -193,7 +193,7 @@ export const setCacheValue = (
  * Add `cacheKey` to one tag's index, and keep the index alive at least as long as its newest member.
  *
  * The index is a sorted set scored by each member's own expiry (epoch ms), so a member leaves with
- * its entry: every write first prunes the members whose score has passed. A plain set kept a member
+ * its entry: every write first prunes the members whose score has passed. A plain set would keep a member
  * forever once its entry expired, growing by one per distinct key until the next invalidation.
  * https://redis.io/docs/latest/commands/zadd/ · https://redis.io/docs/latest/commands/zremrangebyscore/
  *

@@ -41,7 +41,7 @@ const onRegistered = (modules: readonly AppModule[]): void => {
     // decorator batches a page against, `removeAll` is what a product's HARD delete calls to take
     // its translations with it in the same operation, `search` is what a free-text search unions
     // with an entity's own (fallback-language) match, `plan`/`write` are what a caller with its
-    // own entity to write (`productService.write`) validates and applies the translations half of
+    // own entity to write (`productService.writeCreate`/`writeUpdate`) validates and applies the translations half of
     // its request through, and `readAll` is what that same caller's admin read populates its
     // language tabs from.
     registerTranslationPort({

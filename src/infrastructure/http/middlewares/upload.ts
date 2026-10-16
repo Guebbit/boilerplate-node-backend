@@ -48,7 +48,7 @@ export const uploadStagingPath = () => uploadConfig().NODE_UPLOAD_STAGING_PATH;
 
 /**
  * The one field name every image upload route accepts — every mount point wants the same field,
- * so it lives here once rather than as a repeated literal at each of the 7 call sites.
+ * so it lives here once rather than as a repeated literal at each call site.
  */
 const IMAGE_UPLOAD_FIELD = 'imageUpload';
 

@@ -1,6 +1,6 @@
 /**
  * @module
- * Account's own rate-limit budgets: the three credential-guess dimensions
+ * Account's own rate-limit budgets: the four credential-guess dimensions
  * (`credentialLimiters`), the two Sybil-shaped budgets spent by SUCCESS rather than failure
  * (`signupLimiters`, `resetRequestLimiters`), the password-strength advisory
  * (`passwordCheckLimiter`), and the two MFA challenge budgets (`mfaChallengeLimiter`,
@@ -43,7 +43,7 @@ const CREDENTIAL_WINDOW_MS = 15 * 60_000;
 
 /**
  * Where express-rate-limit stores the identity limiter's counter on `request` — a distinct name
- * because `credentialLimiters` chains three limiters and, by default, each one's info overwrites
+ * because `credentialLimiters` chains four limiters and, by default, each one's info overwrites
  * the last. `loginChallengeGate` is the only reader.
  * https://express-rate-limit.mintlify.app/reference/configuration#requestpropertyname
  */

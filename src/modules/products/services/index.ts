@@ -1,7 +1,7 @@
 /**
  * @module
  * Product service — all business logic for the catalogue entity, and the one place a controller
- * may call into. A folder rather than one file because it passed ~800 lines; see
+ * may call into. One file per flow, not one big file; see
  * `docs/theory/layers.md`.
  *
  * `search.ts`/`read.ts` read the catalogue, `crud.ts` writes a product, `translated-write.ts`

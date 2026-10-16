@@ -5,7 +5,7 @@
  * than a merged one — `/account` and `/users` are different mounts.
  *
  * Owns:        `accountexports` (one row per account that asked for its data), `sessions` and
- *              `verificationtokens`. The address book moved to `addresses`; the User record stays
+ *              `verificationtokens`. The address book lives in `addresses`; the User record stays
  *              with `users`, kept replaceable for a future identity provider.
  * Shares:      the User document with `users` — the repo's one shared kernel, invisible to the
  *              import graph. Both read and write it, so a schema change there is agreed twice.

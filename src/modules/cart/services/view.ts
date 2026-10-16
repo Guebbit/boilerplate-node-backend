@@ -67,7 +67,7 @@ export const isJoined = (line: CartLine): line is JoinedCartLine => line.product
 /**
  * Join a cart's lines to their products, in one query.
  *
- * `productService.findManyByIds` is unscoped, the same as the `populate()` it replaces: a
+ * `productService.findManyByIds` is unscoped: a
  * soft-deleted or hidden product still joins, `active`/`deletedAt` included, which is what
  * lets checkout tell "gone" (hard-deleted, absent from the lookup) from "here, but not sellable"
  * apart. One `$in` query for however many lines the cart holds, same shape as

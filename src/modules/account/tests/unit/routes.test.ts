@@ -2,7 +2,7 @@
  * @module
  * The account route table — where getting the router wrong is an account takeover. Three
  * arrangements are load-bearing and invisible to a type checker: `router.use(noStore)` must cover
- * every route (a past regression let `setCache` override it on `GET /account`); credential routes
+ * every route (`setCache` must not override it on `GET /account`); credential routes
  * must carry BOTH rate-limit budgets; token-bearing routes are deliberately public — the token IS
  * the credential.
  */
@@ -170,8 +170,8 @@ describe('account routes — authorization', () => {
     );
 
     it('keys no route at all: what you may do to your own record follows from being signed in', () => {
-        // The one exception used to be `DELETE /tokens/expired`, an operational lever across every
-        // account. That sweep is a nightly job now (`reap:expired-tokens`), not a route.
+        // An operational lever across every account, such as the expired-token sweep, is a nightly
+        // job (`reap:expired-tokens`), never a route here.
         const keyed = routeSignatures(router).filter((signature) =>
             guardsOn(router, signature).includes('requirePermissionGuard')
         );

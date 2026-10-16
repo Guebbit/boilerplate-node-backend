@@ -1,9 +1,10 @@
 /**
  * @module
- * PDF invoice controller. Renders synchronously on the request thread and streams the bytes back:
+ * PDF invoice controller. Serves the stored PDF, or renders it on the request thread when none
+ * is stored, and streams the bytes back:
  * `200` once the order has been invoiced, `404` for an order that has none yet (never paid, or a
- * failed freeze, which never rolls back the payment) or does not exist at
- * all, `500` on a render failure (an `INSTALL_CHROMIUM=false` deployment, for one).
+ * failed freeze, which never rolls back the payment) or does not exist at all, `500` on a render
+ * failure (an `INSTALL_CHROMIUM=false` deployment, for one).
  */
 
 import type { Request, Response } from 'express';

@@ -119,19 +119,18 @@ const resolveAddMiss = (
  *
  * CONCURRENCY. Each write's condition lives IN THE FILTER, not a preceding read, so mongod
  * evaluates it while holding the document — two requests adding the same product cannot both
- * conclude "absent" and both append. The loser instead hits the unique `userId` index (a second
- * cart insert, or a duplicate line), so a duplicate key is retried rather than surfaced, per
- * MongoDB's own guidance for a contended upsert — it converges next pass. `attemptsLeft` only
- * bounds a pathological loop.
+ * conclude "absent" and both append.
  *
- * `'add'` mode carries a second condition IN THE SAME FILTER — `quantity <= cartLineMax() -
- * quantity` — so a line actually AT the cap can never pass it: that comparison is what the
- * document lock the increment already takes makes atomic, not a read beforehand two concurrent
- * adds could both act on. A filter miss is then ambiguous — no such line yet, or one that no
- * longer matches because a concurrent write already changed it — so it costs one more read to
- * settle: still no line, push it; room reappeared since the first attempt, retry the whole call
- * (the same convergence the duplicate-key branch below uses); genuinely no room, QUANTITY_LIMIT.
- * A line that does not exist yet is refused the same way when `quantity` alone exceeds the ceiling.
+ * Duplicates:  the loser hits the unique `userId` index (a second cart insert, or a duplicate
+ *              line). That duplicate key is retried, not surfaced, per MongoDB's own guidance
+ *              for a contended upsert. `attemptsLeft` only bounds a pathological loop.
+ * `'add'` cap: a second condition IN THE SAME FILTER, `quantity <= cartLineMax() - quantity`,
+ *              so a line AT the cap never passes. The document lock the increment already takes
+ *              makes that comparison atomic.
+ * Filter miss: ambiguous (no such line yet, or a concurrent write changed it), so one more read
+ *              settles it. No line: push it. Room reappeared: retry the whole call. No room:
+ *              QUANTITY_LIMIT.
+ * New line:    refused the same way when `quantity` alone exceeds the ceiling.
  */
 const upsertLine = (
     userId: string,

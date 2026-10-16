@@ -94,8 +94,8 @@ const expireBatch = async (stale: readonly { orderId: unknown }[]): Promise<numb
  * already released, so neither path can double-release.
  *
  * It DRAINS: batches of {@link SWEEP_BATCH_SIZE} until one comes back short, up to
- * {@link SWEEP_MAX_BATCHES}. One batch per five-minute tick was about 40 holds a minute, so an
- * attacker minting holds faster than that kept stock locked past its window. A released hold
+ * {@link SWEEP_MAX_BATCHES}. One batch per five-minute tick would be about 40 holds a minute, so an
+ * attacker minting holds faster than that would keep stock locked past its window. A released hold
  * leaves the `held` set, so a repeated read cannot see it twice.
  *
  * @param context - audit context for `ADMIN_RESERVATIONS_SWEPT`; the HTTP route always passes

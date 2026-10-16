@@ -1,8 +1,9 @@
 /**
  * @module
  * Domain events this module emits, added by augmenting the kernel's payload map — see
- * `modules/orders/events.ts` for why augmentation rather than a central list. Both events are
- * emitted from `settlePayment`, the one place a payment is reconciled (`./services/settlement`).
+ * `modules/orders/events.ts` for why augmentation rather than a central list. `payment.succeeded` and
+ * `payment.failed` are emitted from `settlePayment`, the one place a payment is reconciled
+ * (`./services/settlement`); `payment.refunded` comes from `./services/refunds.ts`.
  */
 
 /** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */

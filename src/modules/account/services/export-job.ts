@@ -6,7 +6,7 @@
  *
  * Every registered {@link PersonalDataSection} is collected ONE AT A TIME and appended to the file
  * as it arrives, so peak memory is the largest single section, not the whole export. That is the
- * point of the job: the request used to hold all fifteen sections in one object, per call.
+ * point of the job: holding every section in one object would cost the whole export's memory per call.
  *
  * Failure is a state, not an exception to hide: a build that throws marks its row `failed`, logs the
  * error, counts it, and mails the requester a short notice (no link); asking again replaces it.

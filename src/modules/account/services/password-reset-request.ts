@@ -88,14 +88,18 @@ const mailResetLink = (user: UserDocument, context: CallerContext): Promise<bool
 /**
  * Issue a password-reset token and deliver it — or silently do nothing for an unregistered
  * address. The silence is the feature: `POST /account/reset-request` always answers 200, so the
- * response can't be used to enumerate registered addresses. `AUTH_PASSWORD_RESET_REQUESTED` fires
- * unconditionally for the same reason — an audit row present only for a real address would leak
- * the same fact the response is built to hide, and a DB failure below still counts as an attempt.
- * A request within {@link RESET_REQUEST_SECONDS} of the last mail to the same account is skipped
- * the same way: same 200, no mail, no new token (and `false` for the metric).
- * The metric is counted here, since the controller no longer waits for the outcome; the boolean
- * return serves tests and is never a client-visible refusal.
- * Like `requestAccountDeletion` (`./deletion-request.ts`), the token value never leaves its own file.
+ * response can't be used to enumerate registered addresses.
+ *
+ * Audit:    `AUTH_PASSWORD_RESET_REQUESTED` fires unconditionally, for the same reason. A row
+ *           present only for a real address would leak what the response hides, and a DB
+ *           failure below still counts as an attempt.
+ * Paced:    a request within {@link RESET_REQUEST_SECONDS} of the last mail to the same account
+ *           is skipped the same way: same 200, no mail, no new token, `false` for the metric.
+ * Metric:   counted here, because the controller does not wait for the outcome. The boolean
+ *           return serves tests and is never a client-visible refusal.
+ * Token:    like `requestAccountDeletion` (`./deletion-request.ts`), its value never leaves
+ *           its own file.
+ *
  * @returns `true` when a mail was queued, `false` when the address has no account or the lookup failed
  */
 export const requestPasswordReset = (

@@ -1,11 +1,10 @@
 /**
  * @module
  * Order service — all business logic for the Order entity, and the one place a controller may call
- * into. A folder rather than one file because it passed ~300 lines; see `docs/theory/layers.md`.
+ * into. One file per flow, not one big file; see `docs/theory/layers.md`.
  *
- * `place.ts` is the one function that writes a new order; `read.ts`, `crud.ts` and `remove.ts`
- * read, amend and delete one; `notify.ts` sends the placed-order email. `cancel.ts` runs the cancellation,
- * `retention.ts` answers an erased account, `scope.ts` decides who may see what,
+ * Write door:  `place.ts` is the one function that writes a new order.
+ * Visibility:  `scope.ts` decides who may see what; every read goes through it.
  */
 
 import {

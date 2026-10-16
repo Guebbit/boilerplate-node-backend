@@ -1,7 +1,7 @@
 /**
  * @module
- * Account service — authentication, the profile a person manages, and two-factor. A folder rather
- * than one file because it passed ~300 lines, one file per flow — see `docs/theory/layers.md`.
+ * Account service — authentication, the profile a person manages, and two-factor. One file per
+ * flow, not one big file — see `docs/theory/layers.md`.
  *
  * `accountService`:   login, signup, profile, verification, tokens, OAuth.
  * `twoFactorService`: enrollment, removal, backup codes, the login challenge.
@@ -13,12 +13,12 @@
  * Below this:      `../session/` — JWT signing, the refresh cookie, shared expiry. Nothing
  *                  outside this module imports it directly; see `../index`.
  *
- * `./export` and `./export-job` are NOT imported here, on purpose: they are this module's own
- * wiring (queue, file store, mail budget), and no sibling has a use for them. The export reaches
- * no sibling's data either — every module declares its own `personalData` section, and
- * `../module.ts` hands the resolved list in. The export controllers and `../module.ts` import the
- * two files directly. `./export-rows` (the reaper) reaches nothing but this module's own store,
- * so it is published.
+ * Not here:       `./export` and `./export-job`. They are this module's own wiring (queue, file
+ *                  store, mail budget), so only the export controllers and `../module.ts`
+ *                  import them, directly.
+ * Export data:     no sibling's data is reached. Every module declares its own `personalData`
+ *                  section, and `../module.ts` hands the resolved list in.
+ * Published:       `./export-rows` (the reaper). It reaches nothing but this module's own store.
  */
 
 import * as signup from './signup';

@@ -63,7 +63,7 @@ const listEntries = (
         .then((result) => {
             if (refused(response, result)) return;
             // `search()`'s `TWire` is `LocaleEntry` itself, so `result.data.items` is already the
-            // wire shape this response needs — no cast, unlike before `createRepository` carried it.
+            // wire shape this response needs — no cast.
             return successResponse<LocaleEntriesResponse>(response, result.data);
         })
         .catch(catchAs(response, 'getLocaleEntries'));

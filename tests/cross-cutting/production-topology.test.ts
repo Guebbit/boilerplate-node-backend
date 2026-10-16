@@ -345,7 +345,7 @@ describe('each service gets only its own secrets', () => {
     /*
      * The Mongo root account is for creating the app's own user and for starting the replica set.
      * Code execution in the app must not be able to read it, so only the two containers that do
-     * those jobs mount it. This is the property a shared `env_file:` used to break.
+     * those jobs mount it. This is the property a shared `env_file:` would break.
      */
     it('mounts the Mongo root password only in database and mongo-rs-init', () => {
         const holders = Object.entries(mountedSecrets())

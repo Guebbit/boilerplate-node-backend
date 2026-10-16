@@ -3,7 +3,7 @@
  * Step-up re-authentication: which ways an account has to prove "it is still me", the mailed code
  * for an account with no password, and the check behind `POST /account/reauth`.
  *
- * Password account:    proves the password, as before.
+ * Password account:    proves the password.
  * OAuth-only account:  has no password, so it proves control of its verified mailbox instead.
  * Why that is enough:  forgot-password already hands that mailbox a way in, so a mailed code adds no
  *                      new trust. See docs/modules/account-sessions.md.
@@ -48,8 +48,8 @@ const AMR_OF_METHOD: Record<ReauthMethod, string> = { password: AMR.password, em
 /**
  * The session's `amr` after a re-authentication: ONLY what this re-authentication proved. Proofs
  * from the login are not carried over: `auth_time` is refreshed, and a refreshed `auth_time` must
- * not vouch for a second factor nobody typed this time (a password-only re-auth used to keep `otp`
- * and so passed a route that demands one).
+ * not vouch for a second factor nobody typed this time (a password-only re-auth that kept `otp`
+ * would pass a route that demands one).
  *
  * @param method - the method just proved
  * @param otpProven - whether a second-factor code was verified in the same call
