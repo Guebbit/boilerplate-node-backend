@@ -8,7 +8,7 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { auditLogRepository, AUDIT_SORT } from '@modules/audit-logs/repository';
-import { findOwnAuditEntries, OWN_ENTRIES_PAGE } from '@modules/audit-logs/service';
+import { auditLogService, OWN_ENTRIES_PAGE } from '@modules/audit-logs/service';
 import { coreAuditActions, type AuditEntry } from '@infrastructure/observability/audit';
 import type { AuditLogDocument } from '@modules/audit-logs/model';
 
@@ -354,7 +354,7 @@ describe('reading an actor’s own trail by cursor', () => {
         await Promise.all(tied('ada', total, 'e').map((entry) => auditLogRepository.create(entry)));
         await auditLogRepository.create(makeEntry({ actorUserId: 'grace' }));
 
-        const entries = await findOwnAuditEntries('ada');
+        const entries = await auditLogService.findOwnAuditEntries('ada');
 
         expect(entries).toHaveLength(total);
         expect(entries.every((entry) => entry.actorUserId === 'ada')).toBe(true);

@@ -20,12 +20,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { isQueueEnabled } from '@infrastructure/adapters/queue';
 import { WORKER_CHANNELS, WebhookDeliverJobPayloadSchema } from '@types';
 import { router } from './routes';
-import {
-    subscribeToWebhookEvents,
-    processDeliveryJob,
-    registerWebhookCatalogue,
-    reencryptWebhookSecrets
-} from './services';
+import { webhooksService } from './services';
 import { webhooksConfig } from './config';
 import { webhooksJobs } from './jobs';
 
@@ -38,8 +33,8 @@ import { webhooksJobs } from './jobs';
  * @param modules - every enabled module, in registration order
  */
 const onRegistered = (modules: readonly AppModule[]): void => {
-    subscribeToWebhookEvents(resolvePublicEvents(modules));
-    registerWebhookCatalogue(modules.map((appModule) => appModule.name));
+    webhooksService.subscribeToWebhookEvents(resolvePublicEvents(modules));
+    webhooksService.registerWebhookCatalogue(modules.map((appModule) => appModule.name));
     if (!isQueueEnabled())
         logger.warn({
             message:
@@ -68,7 +63,7 @@ export default {
     consumers: [
         {
             queue: WORKER_CHANNELS.WEBHOOK_DELIVER,
-            handler: processDeliveryJob,
+            handler: webhooksService.processDeliveryJob,
             schema: WebhookDeliverJobPayloadSchema,
             prefetch: 5
         }
@@ -76,7 +71,7 @@ export default {
     // The secret-ring key, retention and the demo-sink gate: see `./config`.
     config: [webhooksConfig.slice],
     // Every subscription's signing-secret ring is encrypted at rest.
-    reencrypt: reencryptWebhookSecrets,
+    reencrypt: webhooksService.reencryptWebhookSecrets,
     // `ownerUserId` on a subscription points at whoever configured the shop's integration — an
     // operator, not a `POST /account/export` subject. A pointer, never a copy: nothing here
     // duplicates personal data that `users` already owns, and no email is stored at all.

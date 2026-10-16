@@ -6,7 +6,7 @@ can be identical in every field and still be different entries).
 **Depends on** — nothing. [`users`](./users.md) reaches it only through the `personalData.erase`
 hook its hard delete runs, never a service call.
 **Breaks if you change** — [`cart`](./cart.md)'s checkout, the only sibling consumer of
-`addressForCheckout`, for both the shipping and the billing address.
+`addressService.forCheckout`, for both the shipping and the billing address.
 :::
 
 ## Its neighbourhood
@@ -37,7 +37,7 @@ flowchart LR
 ## The story
 
 The address book is its own module, not part of [`account`](./account.md), so that it is a leaf.
-`cart`'s checkout needs exactly one function from it, `addressForCheckout`. Had the book lived in
+`cart`'s checkout needs exactly one function from it, `addressService.forCheckout`. Had the book lived in
 `account`, that arrow would close an `account ↔ cart` import cycle: `account`'s data export reads
 `cart` for the shopping-basket section, and `cart` would read `account` back for the delivery
 address.
@@ -74,7 +74,7 @@ flowchart LR
     PA["PATCH /account/addresses/:id"] --> B
     DF["PUT /account/addresses/:id/default"] --> B
     D["DELETE /account/addresses/:id"] --> B
-    B -->|"addressForCheckout"| C["cart's checkout"]
+    B -->|"addressService.forCheckout"| C["cart's checkout"]
     US["users"] -. "personalData.erase / minimise" .-> X["book deleted"]
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -101,7 +101,7 @@ so a burst of concurrent adds cannot all see room: exactly the cap is stored and
 `409 ADDRESS_BOOK_FULL`. The entry's text goes into the pipeline inside `$literal`, since a string
 starting with `$` is a field path there.
 
-`addressForCheckout(userId, addressId?)` answers three ways (an entry — the named one, or the
+`addressService.forCheckout(userId, addressId?)` answers three ways (an entry — the named one, or the
 default — `undefined`, or `null`), and the distinction between the last two is deliberate: `undefined` means the caller keeps no addresses and named none (not required to
 buy); `null` means they named an entry that is not theirs or does not exist. Checkout must refuse
 the second case, not silently ship nowhere — collapsing the two would let a stale id downgrade to

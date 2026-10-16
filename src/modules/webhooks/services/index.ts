@@ -9,12 +9,12 @@
 
 import * as subscriptions from './subscriptions';
 import * as deliveries from './deliveries';
+import { subscribeToWebhookEvents } from './publish';
+import { sweepDueWebhookDeliveries } from './sweep';
+import { reencryptWebhookSecrets } from './reencrypt';
+import { processDeliveryJob } from './attempt';
+import { listWebhookEventCatalogue, registerWebhookCatalogue } from './catalogue';
 
-export { subscribeToWebhookEvents } from './publish';
-export { sweepDueWebhookDeliveries } from './sweep';
-export { reencryptWebhookSecrets } from './reencrypt';
-export { processDeliveryJob } from './attempt';
-export { listWebhookEventCatalogue, registerWebhookCatalogue } from './catalogue';
 export type { WebhookEventCatalogueEntry } from '@types';
 export type { SubscriptionWithMintedSecrets } from './subscriptions';
 export type { DeliveryListFilters } from './deliveries';
@@ -28,5 +28,11 @@ export const webhooksService = {
     removeSubscriptionSecret: subscriptions.removeSecret,
     removeSubscription: subscriptions.remove,
     listDeliveries: deliveries.list,
-    replayDelivery: deliveries.replay
+    replayDelivery: deliveries.replay,
+    subscribeToWebhookEvents,
+    sweepDueWebhookDeliveries,
+    reencryptWebhookSecrets,
+    processDeliveryJob,
+    listWebhookEventCatalogue,
+    registerWebhookCatalogue
 };

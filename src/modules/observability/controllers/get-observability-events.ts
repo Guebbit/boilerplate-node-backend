@@ -8,7 +8,7 @@
 
 import type { Request, Response } from 'express';
 import { stillHoldsRuleViaCookie } from '@kernel/middlewares/authorizations';
-import { streamObservabilityMetrics } from '../services/stream';
+import { observabilityService } from '../services';
 
 /**
  * GET /observability/events
@@ -21,7 +21,7 @@ import { streamObservabilityMetrics } from '../services/stream';
 export const getObservabilityEvents = (request: Request, response: Response) => {
     // `requirePermissionViaCookie` already resolved a rule-holding caller and left its recheck on
     // the request, or this handler would never run.
-    streamObservabilityMetrics(response, () =>
+    observabilityService.streamObservabilityMetrics(response, () =>
         stillHoldsRuleViaCookie(request, 'read', 'ObservabilitySnapshot')
     );
 };

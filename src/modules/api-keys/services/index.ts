@@ -5,13 +5,14 @@
  */
 
 import * as apiKeys from './api-keys';
+import { fromBearerToken } from './resolver';
 
-/** The module's barrel export — controllers call through this, never the bare functions. */
+/** The module's one door — controllers and siblings call through this, never the bare functions. */
 export const apiKeysService = {
     listApiKeys: apiKeys.list,
     mintApiKey: apiKeys.mint,
-    revokeApiKey: apiKeys.revoke
+    revokeApiKey: apiKeys.revoke,
+    findOwnApiKeys: apiKeys.findOwnApiKeys,
+    revokeAllMintedBy: apiKeys.revokeAllMintedBy,
+    resolveApiKeyCredential: fromBearerToken
 };
-
-export { fromBearerToken as resolveApiKeyCredential } from './resolver';
-export { findOwnApiKeys, revokeAllMintedBy } from './api-keys';

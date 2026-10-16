@@ -17,7 +17,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { registerAuditSink } from '@infrastructure/observability/audit';
-import { auditLogService, findOwnAuditEntries } from './service';
+import { auditLogService } from './service';
 import { router } from './routes';
 import { auditLogsConfig } from './config';
 
@@ -41,7 +41,7 @@ export default {
     personalData: [
         {
             section: 'auditLog',
-            collect: (subject) => findOwnAuditEntries(subject.userId)
+            collect: (subject) => auditLogService.findOwnAuditEntries(subject.userId)
         }
     ]
 } satisfies AppModule;

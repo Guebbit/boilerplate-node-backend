@@ -6,14 +6,24 @@
  * side), and the one process reader every payload here shares (`process-snapshot.ts`).
  */
 
-export * from './stream';
+import { buildObservabilityPayload, streamObservabilityMetrics } from './stream';
+import { buildObservabilityHealth } from './health';
+import { jobHealth } from './job-health';
+import { dependencyHealth, overallStatus } from './dependency-health';
+import { processSnapshot } from './process-snapshot';
+import { queueHealth } from './parked-jobs';
 
-export * from './health';
+export type { DependencyHealth } from './dependency-health';
+export type { ProcessMemorySnapshot, ProcessSnapshot } from './process-snapshot';
 
-export * from './job-health';
-
-export * from './dependency-health';
-
-export * from './process-snapshot';
-
-export * from './parked-jobs';
+/** The module's one door — every payload and probe the readiness and telemetry routes serve. */
+export const observabilityService = {
+    buildObservabilityPayload,
+    streamObservabilityMetrics,
+    buildObservabilityHealth,
+    jobHealth,
+    dependencyHealth,
+    overallStatus,
+    processSnapshot,
+    queueHealth
+};

@@ -11,7 +11,7 @@ import { resetDomainEvents } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
 import addressesModule from '@modules/addresses/module';
 import { giveAddress } from '@modules/addresses/tests/factories';
-import { addressesGet } from '@modules/addresses';
+import { addressService } from '@modules/addresses';
 import { createProduct } from '@modules/products/tests/factories';
 import {
     createOrder,
@@ -43,7 +43,7 @@ const makeInactive = (id: string, extra: Record<string, unknown> = {}) =>
         .exec();
 
 /** The caller's saved addresses. */
-const addressesOf = (userId: string) => addressesGet(userId).then((view) => view.addresses);
+const addressesOf = (userId: string) => addressService.list(userId).then((view) => view.addresses);
 
 /** The PII clock on one order. */
 const clockOf = (orderId: string) =>

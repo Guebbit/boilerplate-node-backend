@@ -8,13 +8,8 @@
 import type { Request, Response } from 'express';
 import { asStub } from '@tests/stub';
 import { getObservabilityEvents } from '@modules/observability/controllers/get-observability-events';
-import { streamObservabilityMetrics } from '@modules/observability/services/stream';
+import { observabilityService } from '@modules/observability/services';
 import { stillHoldsRuleViaCookie } from '@kernel/middlewares/authorizations';
-
-jest.mock('@modules/observability/services/stream', () => ({
-    __esModule: true,
-    streamObservabilityMetrics: jest.fn()
-}));
 
 // Only `stillHoldsRuleViaCookie` is replaced — the module's other guards are untouched here.
 jest.mock('@kernel/middlewares/authorizations', () => ({
@@ -26,7 +21,13 @@ jest.mock('@kernel/middlewares/authorizations', () => ({
 /** What `requirePermissionViaCookie` leaves behind once it admitted the caller. */
 const cookieRequest = () => asStub<Request>({ sessionRecheck: jest.fn() });
 
-beforeEach(() => jest.clearAllMocks());
+const streamObservabilityMetrics = jest.spyOn(observabilityService, 'streamObservabilityMetrics');
+
+beforeEach(() => {
+    jest.clearAllMocks();
+    // The streamer owns the response for its lifetime; here only its arguments matter.
+    streamObservabilityMetrics.mockImplementation(() => undefined);
+});
 
 describe('GET /observability/events', () => {
     it('hands the raw response and a recheck to the streamer, and writes nothing itself', () => {
@@ -45,7 +46,7 @@ describe('GET /observability/events', () => {
         jest.mocked(stillHoldsRuleViaCookie).mockResolvedValueOnce(true);
 
         getObservabilityEvents(request, response);
-        const [, recheck] = jest.mocked(streamObservabilityMetrics).mock.calls[0] as [
+        const [, recheck] = streamObservabilityMetrics.mock.calls[0] as [
             Response,
             () => Promise<boolean>
         ];

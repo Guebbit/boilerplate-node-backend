@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import type { AddressesResponse } from '@types';
 import { requireId } from '@infrastructure/http/ids';
-import { addressRemove } from '../service';
+import { addressService } from '../service';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
@@ -24,7 +24,8 @@ export const deleteAddress = (request: Request<{ addressId: string }>, response:
     });
     if (!addressId) return;
 
-    return addressRemove(id, addressId)
+    return addressService
+        .remove(id, addressId)
         .then((result) => {
             if (refused(response, result)) return;
 

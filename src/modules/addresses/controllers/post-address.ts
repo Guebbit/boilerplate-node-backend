@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { AddAddressBody } from '@api/schemas.zod';
 import { createdResponse } from '@infrastructure/http/response';
 import type { Address, AddressInput } from '@types';
-import { addressAdd } from '../service';
+import { addressService } from '../service';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
@@ -27,7 +27,8 @@ export const postAddress = (
     const body = parseBody(AddAddressBody, request.body, response);
     if (!body) return;
 
-    return addressAdd(id, body)
+    return addressService
+        .create(id, body)
         .then((result) => {
             if (refused(response, result)) return;
             const { data, message } = result;

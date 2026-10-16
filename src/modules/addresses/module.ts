@@ -16,12 +16,7 @@
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
-import {
-    addressesDeleteByUserId,
-    addressesGet,
-    addressesMinimise,
-    reencryptAddressBooks
-} from './service';
+import { addressService } from './service';
 import { router } from './routes';
 import { addressesConfig } from './config';
 
@@ -34,15 +29,16 @@ export default {
     personalData: [
         {
             section: 'addresses',
-            collect: (subject) => addressesGet(subject.userId).then((view) => view.addresses),
+            collect: (subject) =>
+                addressService.list(subject.userId).then((view) => view.addresses),
             // A destroyed account takes its address book with it, inside the same
             // transaction — see `addressesDeleteByUserId`.
-            erase: addressesDeleteByUserId,
+            erase: addressService.removeByUserId,
             // The book is re-enterable convenience data, the first thing an idle account drops.
-            minimise: addressesMinimise
+            minimise: addressService.minimise
         }
     ],
     // Every entry's name, street, city, zip, country and phone are PII-encrypted.
-    reencrypt: reencryptAddressBooks,
+    reencrypt: addressService.reencrypt,
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

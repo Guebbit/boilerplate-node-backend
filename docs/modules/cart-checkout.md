@@ -28,9 +28,9 @@ flowchart TD
     A["1 · load the account<br/><i>users</i>"] --> P["2 · validate the payment method<br/><i>payments — listPaymentMethods</i>"]
     P --> Q["3 · the open-order cap<br/><i>orders — openUnpaidOrderIds</i>"]
     Q --> B["4 · resolve the shipping method<br/>a stored choice the basket no longer fits counts as none<br/><i>cart — effectiveShippingChoice</i>"]
-    B --> C["5 · resolve the shipping address,<br/>only when a line ships to one<br/><i>addresses — addressForCheckout</i>"]
+    B --> C["5 · resolve the shipping address,<br/>only when a line ships to one<br/><i>addresses — addressService.forCheckout</i>"]
     C --> D["6 · join the lines against the catalogue and the stock ledger<br/><i>products; inventory — availableFor</i>"]
-    D --> E["7 · evaluate the rules, the method/address<br/>requirement, then resolve the billing address<br/><i>cart/domain — evaluateShippingRequirement;<br/>addresses — addressForCheckout</i>"]
+    D --> E["7 · evaluate the rules, the method/address<br/>requirement, then resolve the billing address<br/><i>cart/domain — evaluateShippingRequirement;<br/>addresses — addressService.forCheckout</i>"]
     E --> T["8 · the price check<br/>the total named in the request is the total now<br/><i>cart — expectedTotal</i>"]
     T --> F["9 · placeOrder<br/><i>orders — freeze lines, hold stock,<br/>invoice number, mint transfer reference, write</i>"]
     F --> H["10 · empty the cart, conditionally<br/><i>cart — on the __v it was read at</i>"]
@@ -95,7 +95,7 @@ possible, and only checkout knows which basket it was clearing.
 | [`users`](./users.md)         | `conformist`         | The account record. An order records the address it was placed from, so a checkout for an account that no longer exists is the one cart operation that can still 404. |
 | [`payments`](./payments.md)   | `customer-supplier`  | `listPaymentMethods` — the same list `GET /payments/methods` answers, so checkout and that endpoint can never disagree about what this deployment offers.             |
 | [`delivery`](./delivery.md)   | `published-language` | `findShippingMethod` and `priceShipping` — pure functions. The cart never learns that a shipment record exists.                                                       |
-| [`addresses`](./addresses.md) | `customer-supplier`  | `addressForCheckout` — the addresses this order ships to and is invoiced to. The address CRUD stays behind that module's routes.                                      |
+| [`addresses`](./addresses.md) | `customer-supplier`  | `addressService.forCheckout` — the addresses this order ships to and is invoiced to. The address CRUD stays behind that module's routes.                              |
 | [`products`](./products.md)   | `conformist`         | Catalogue documents, read as they are, to price lines.                                                                                                                |
 | [`inventory`](./inventory.md) | `published-language` | `availableFor` — how much can be sold, read from the ledger rather than the catalogue's cached copy, to pre-flight availability.                                      |
 | [`orders`](./orders.md)       | `customer-supplier`  | `placeOrder` — the one function every order is written through, admin's own `POST /orders` included — and `openUnpaidOrderIds` for the open-order cap.                |

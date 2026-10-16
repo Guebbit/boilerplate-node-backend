@@ -8,7 +8,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
-import * as addressService from '../../service';
+import { addressService } from '../../service';
 import { cartService } from '@modules/cart';
 import { countOrders } from '@modules/orders/tests/factories';
 import { createProduct, readProduct } from '@modules/products/tests/factories';
@@ -26,7 +26,7 @@ const cartWith = async (userId: string) => {
 describe('checkout and the address', () => {
     it('snapshots the default when no id is named', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
+        await addressService.create(user.id, HOME);
         await cartWith(user.id);
 
         // `standard` requires an address — this is the case that resolves it from the default.
@@ -42,10 +42,10 @@ describe('checkout and the address', () => {
 
     it('snapshots the NAMED entry over the default', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
-        await addressService.addressAdd(user.id, OFFICE);
+        await addressService.create(user.id, HOME);
+        await addressService.create(user.id, OFFICE);
         await cartWith(user.id);
-        const view = await addressService.addressesGet(user.id);
+        const view = await addressService.list(user.id);
         const office = view.addresses.find(({ label }) => label === 'office');
 
         await cartService.cartShippingMethodSet(user.id, 'standard');
@@ -61,7 +61,7 @@ describe('checkout and the address', () => {
 
     it('ships nothing rather than nowhere: a stale id refuses the checkout untouched', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
+        await addressService.create(user.id, HOME);
         const product = await cartWith(user.id);
         await cartService.cartShippingMethodSet(user.id, 'standard');
 
@@ -86,8 +86,8 @@ describe('checkout and the address', () => {
         // ownership, not merely existence, and the doc's split return type exists for exactly
         // this case: collapsing it would let a stale/foreign id silently downgrade to "no address".
         const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
-        await addressService.addressAdd(owner.id, HOME);
-        const ownerView = await addressService.addressesGet(owner.id);
+        await addressService.create(owner.id, HOME);
+        const ownerView = await addressService.list(owner.id);
         const ownersEntryId = ownerView.addresses[0].id;
 
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
@@ -109,7 +109,7 @@ describe('checkout and the address', () => {
 
     it('a pickup order ships to no address but is still invoiced to the default', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
+        await addressService.create(user.id, HOME);
         await cartWith(user.id);
 
         // `pickup` needs no address, so nothing is frozen as a shipping address.
@@ -142,7 +142,7 @@ describe('checkout and the address', () => {
 describe('checkout and the billing address', () => {
     it('is the shipping address when none is named — "same as shipping"', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
+        await addressService.create(user.id, HOME);
         await cartWith(user.id);
         await cartService.cartShippingMethodSet(user.id, 'standard');
 
@@ -159,10 +159,10 @@ describe('checkout and the billing address', () => {
 
     it('is the NAMED entry, leaving the shipping address on its own', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
-        await addressService.addressAdd(user.id, OFFICE);
+        await addressService.create(user.id, HOME);
+        await addressService.create(user.id, OFFICE);
         await cartWith(user.id);
-        const { addresses } = await addressService.addressesGet(user.id);
+        const { addresses } = await addressService.list(user.id);
         const office = addresses.find(({ label }) => label === 'office');
         await cartService.cartShippingMethodSet(user.id, 'standard');
 
@@ -176,7 +176,7 @@ describe('checkout and the billing address', () => {
 
     it('is asked alone for a digital-only basket: no shipping address is frozen', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
+        await addressService.create(user.id, HOME);
         const digital = await createProduct({ requiresShipping: false });
         await cartService.cartItemAddById(user.id, String(digital._id), 1);
 
@@ -191,11 +191,11 @@ describe('checkout and the billing address', () => {
 
     it('takes the named entry for a digital-only basket', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
-        await addressService.addressAdd(user.id, OFFICE);
+        await addressService.create(user.id, HOME);
+        await addressService.create(user.id, OFFICE);
         const digital = await createProduct({ requiresShipping: false });
         await cartService.cartItemAddById(user.id, String(digital._id), 1);
-        const { addresses } = await addressService.addressesGet(user.id);
+        const { addresses } = await addressService.list(user.id);
         const office = addresses.find(({ label }) => label === 'office');
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, {
@@ -218,8 +218,8 @@ describe('checkout and the billing address', () => {
 
     it('refuses a shipping addressId on a digital-only basket instead of freezing it', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
-        const { addresses } = await addressService.addressesGet(user.id);
+        await addressService.create(user.id, HOME);
+        const { addresses } = await addressService.list(user.id);
         const digital = await createProduct({ requiresShipping: false });
         await cartService.cartItemAddById(user.id, String(digital._id), 1);
 
@@ -234,11 +234,11 @@ describe('checkout and the billing address', () => {
 
     it("refuses another user's entry as billing, as it does for shipping", async () => {
         const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
-        await addressService.addressAdd(owner.id, HOME);
-        const ownersView = await addressService.addressesGet(owner.id);
+        await addressService.create(owner.id, HOME);
+        const ownersView = await addressService.list(owner.id);
         const ownersEntryId = ownersView.addresses[0].id;
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
-        await addressService.addressAdd(stranger.id, OFFICE);
+        await addressService.create(stranger.id, OFFICE);
         await cartWith(stranger.id);
         await cartService.cartShippingMethodSet(stranger.id, 'standard');
 
@@ -253,7 +253,7 @@ describe('checkout and the billing address', () => {
 
     it('is not held to the ship-to countries, unlike the shipping address', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, { ...HOME, country: 'JP' });
+        await addressService.create(user.id, { ...HOME, country: 'JP' });
         const digital = await createProduct({ requiresShipping: false });
         await cartService.cartItemAddById(user.id, String(digital._id), 1);
 

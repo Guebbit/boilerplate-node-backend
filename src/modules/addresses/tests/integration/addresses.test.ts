@@ -11,7 +11,7 @@ import { asReject } from '@tests/response';
 import { createUser } from '@modules/users/tests/factories';
 // Relative, not the barrel: a module's own tests may not import its own `index.ts` (CLAUDE.md's
 // barrel rules apply to tests too), so this reaches the sibling file directly.
-import * as addressService from '../../service';
+import { addressService } from '../../service';
 import { addressBookModel } from '../../model';
 import { HOME, OFFICE } from './fixtures';
 
@@ -19,13 +19,13 @@ setupTestDb();
 
 /** The labels of the caller's book, in stored order. */
 const labelsOf = (userId: string) =>
-    addressService.addressesGet(userId).then((view) => view.addresses.map(({ label }) => label));
+    addressService.list(userId).then((view) => view.addresses.map(({ label }) => label));
 
 /** Run `body` with the cap at 3, so a case does not write twenty entries. */
 const withCap = (body: () => Promise<void>) => withEnvironment('NODE_ADDRESS_BOOK_MAX', '3', body);
 
 const defaults = async (userId: string) => {
-    const view = await addressService.addressesGet(userId);
+    const view = await addressService.list(userId);
     return view.addresses.filter(({ default: isDefault }) => isDefault);
 };
 
@@ -33,7 +33,7 @@ describe('the one-default invariant', () => {
     it('the first entry becomes default whether or not it asked', async () => {
         const user = await createUser();
 
-        await addressService.addressAdd(user.id, HOME);
+        await addressService.create(user.id, HOME);
 
         const holders = await defaults(user.id);
         expect(holders.map(({ label }) => label)).toEqual(['home']);
@@ -41,14 +41,14 @@ describe('the one-default invariant', () => {
 
     it('a later entry claims the slot only by asking, and demotes the holder', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
-        await addressService.addressAdd(user.id, OFFICE);
+        await addressService.create(user.id, HOME);
+        await addressService.create(user.id, OFFICE);
         const before = await defaults(user.id);
         expect(before.map(({ label }) => label)).toEqual(['home']);
 
-        const view = await addressService.addressesGet(user.id);
+        const view = await addressService.list(user.id);
         const office = view.addresses.find(({ label }) => label === 'office');
-        const answer = await addressService.addressSetDefault(user.id, office!.id);
+        const answer = await addressService.setDefault(user.id, office!.id);
 
         const after = await defaults(user.id);
         expect(after.map(({ label }) => label)).toEqual(['office']);
@@ -57,13 +57,13 @@ describe('the one-default invariant', () => {
 
     it('setting the default twice is the same state as once', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
-        await addressService.addressAdd(user.id, OFFICE);
-        const view = await addressService.addressesGet(user.id);
+        await addressService.create(user.id, HOME);
+        await addressService.create(user.id, OFFICE);
+        const view = await addressService.list(user.id);
         const office = view.addresses.find(({ label }) => label === 'office');
 
-        await addressService.addressSetDefault(user.id, office!.id);
-        const again = await addressService.addressSetDefault(user.id, office!.id);
+        await addressService.setDefault(user.id, office!.id);
+        const again = await addressService.setDefault(user.id, office!.id);
 
         expect(again.success).toBe(true);
         const holders = await defaults(user.id);
@@ -76,19 +76,19 @@ describe('the one-default invariant', () => {
             email: 'stranger2@example.com',
             username: 'strangerb'
         });
-        await addressService.addressAdd(owner.id, HOME);
-        const view = await addressService.addressesGet(owner.id);
+        await addressService.create(owner.id, HOME);
+        const view = await addressService.list(owner.id);
 
-        const answer = await addressService.addressSetDefault(stranger.id, view.addresses[0].id);
+        const answer = await addressService.setDefault(stranger.id, view.addresses[0].id);
 
         expect(answer.status).toBe(404);
     });
 
     it('adding with `default: true` demotes the holder in the same write', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
+        await addressService.create(user.id, HOME);
 
-        await addressService.addressAdd(user.id, { ...OFFICE, default: true });
+        await addressService.create(user.id, { ...OFFICE, default: true });
 
         const holders = await defaults(user.id);
         expect(holders.map(({ label }) => label)).toEqual(['office']);
@@ -96,22 +96,22 @@ describe('the one-default invariant', () => {
 
     it('an ordinary edit leaves the assignment alone', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
-        const view = await addressService.addressesGet(user.id);
+        await addressService.create(user.id, HOME);
+        const view = await addressService.list(user.id);
 
-        await addressService.addressUpdate(user.id, view.addresses[0].id, { city: 'Bologna' });
+        await addressService.update(user.id, view.addresses[0].id, { city: 'Bologna' });
 
         expect(await defaults(user.id)).toHaveLength(1);
     });
 
     it('removing the default promotes the oldest remaining entry', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
-        await addressService.addressAdd(user.id, OFFICE);
-        const view = await addressService.addressesGet(user.id);
+        await addressService.create(user.id, HOME);
+        await addressService.create(user.id, OFFICE);
+        const view = await addressService.list(user.id);
         const home = view.addresses.find(({ label }) => label === 'home');
 
-        await addressService.addressRemove(user.id, home!.id);
+        await addressService.remove(user.id, home!.id);
 
         const promoted = await defaults(user.id);
         expect(promoted.map(({ label }) => label)).toEqual(['office']);
@@ -121,8 +121,8 @@ describe('the one-default invariant', () => {
 describe('adding an entry that claims the default', () => {
     it('demotes every existing entry in the same write, leaving exactly one default', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
-        await addressService.addressAdd(user.id, { ...OFFICE, default: true });
+        await addressService.create(user.id, HOME);
+        await addressService.create(user.id, { ...OFFICE, default: true });
 
         const holders = await defaults(user.id);
 
@@ -134,9 +134,9 @@ describe('adding an entry that claims the default', () => {
     // `$literal`, so user text is data: a label of `$items` stays the text `$items`.
     it('stores user text that looks like a pipeline field path as plain text', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
+        await addressService.create(user.id, HOME);
 
-        const result = await addressService.addressAdd(user.id, { ...OFFICE, label: '$items' });
+        const result = await addressService.create(user.id, { ...OFFICE, label: '$items' });
 
         expect(result.data).toMatchObject({ label: '$items' });
         expect(await labelsOf(user.id)).toEqual(['home', '$items']);
@@ -144,7 +144,7 @@ describe('adding an entry that claims the default', () => {
 
     it('stamps both timestamps on a book the first entry creates', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
+        await addressService.create(user.id, HOME);
 
         const book = await addressBookModel.findOne({ userId: user.id }).lean().exec();
 
@@ -163,9 +163,9 @@ describe('the address-book cap', () => {
         withCap(async () => {
             const user = await createUser();
             for (const label of ['a', 'b', 'c'])
-                await addressService.addressAdd(user.id, { ...HOME, label });
+                await addressService.create(user.id, { ...HOME, label });
 
-            const result = await addressService.addressAdd(user.id, { ...HOME, label: 'd' });
+            const result = await addressService.create(user.id, { ...HOME, label: 'd' });
 
             expect(asReject(result).status).toBe(409);
             expect(asReject(result).errors[0].code).toBe('ADDRESS_BOOK_FULL');
@@ -176,11 +176,11 @@ describe('the address-book cap', () => {
         withCap(async () => {
             const user = await createUser();
             for (const label of ['a', 'b', 'c'])
-                await addressService.addressAdd(user.id, { ...HOME, label });
-            const view = await addressService.addressesGet(user.id);
-            await addressService.addressRemove(user.id, view.addresses[0].id);
+                await addressService.create(user.id, { ...HOME, label });
+            const view = await addressService.list(user.id);
+            await addressService.remove(user.id, view.addresses[0].id);
 
-            const result = await addressService.addressAdd(user.id, { ...HOME, label: 'd' });
+            const result = await addressService.create(user.id, { ...HOME, label: 'd' });
 
             expect(result.success).toBe(true);
         }));
@@ -191,7 +191,7 @@ describe('the address-book cap', () => {
 
             const results = await Promise.all(
                 Array.from({ length: 12 }, (_, index) =>
-                    addressService.addressAdd(user.id, { ...HOME, label: `burst-${String(index)}` })
+                    addressService.create(user.id, { ...HOME, label: `burst-${String(index)}` })
                 )
             );
 
@@ -207,7 +207,7 @@ describe('the address-book cap', () => {
 
             await Promise.all(
                 Array.from({ length: 6 }, (_, index) =>
-                    addressService.addressAdd(user.id, {
+                    addressService.create(user.id, {
                         ...HOME,
                         label: `claim-${String(index)}`,
                         default: true
@@ -223,21 +223,21 @@ describe('ownership', () => {
     it("someone else's entry answers the same 404 as an invented one", async () => {
         const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
-        await addressService.addressAdd(owner.id, HOME);
-        const view = await addressService.addressesGet(owner.id);
+        await addressService.create(owner.id, HOME);
+        const view = await addressService.list(owner.id);
         const entryId = view.addresses[0].id;
 
-        const update = await addressService.addressUpdate(stranger.id, entryId, {
+        const update = await addressService.update(stranger.id, entryId, {
             city: 'Hacked'
         });
-        const remove = await addressService.addressRemove(stranger.id, entryId);
+        const remove = await addressService.remove(stranger.id, entryId);
 
         expect(update.success).toBe(false);
         expect(update.status).toBe(404);
         expect(remove.success).toBe(false);
         expect(remove.status).toBe(404);
         // And the owner's entry is untouched.
-        const after = await addressService.addressesGet(owner.id);
+        const after = await addressService.list(owner.id);
         expect(after.addresses[0]?.city).toBe('Modena');
     });
 });
@@ -245,7 +245,7 @@ describe('ownership', () => {
 describe('PII at rest', () => {
     it('stores fullName/street/city/zip/country/phone encrypted, never as the plaintext submitted', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, { ...HOME, phone: '+39 059 000001' });
+        await addressService.create(user.id, { ...HOME, phone: '+39 059 000001' });
 
         // Bypasses the repository's own decrypt on purpose — this is what a raw DB read, or a
         // stolen disk/backup, would actually see.
@@ -264,16 +264,16 @@ describe('PII at rest', () => {
 
     it('round-trips through the repository back to the plaintext submitted', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, { ...HOME, phone: '+39 059 000001' });
+        await addressService.create(user.id, { ...HOME, phone: '+39 059 000001' });
 
-        const view = await addressService.addressesGet(user.id);
+        const view = await addressService.list(user.id);
         expect(view.addresses[0]).toMatchObject({ ...HOME, phone: '+39 059 000001' });
     });
 
     it('refuses a field copied onto another entry or field: the entry id is in the AAD', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
-        await addressService.addressAdd(user.id, OFFICE);
+        await addressService.create(user.id, HOME);
+        await addressService.create(user.id, OFFICE);
 
         const stored = await addressBookModel.findOne({ userId: user._id });
         const [first, second] = stored?.items ?? [];
@@ -282,18 +282,18 @@ describe('PII at rest', () => {
         second.city = first.city;
         await stored?.save();
 
-        await expect(addressService.addressesGet(user.id)).rejects.toThrow();
+        await expect(addressService.list(user.id)).rejects.toThrow();
     });
 
     it('re-encrypts a PATCHed field under its own entry id, so it still reads back', async () => {
         const user = await createUser();
-        await addressService.addressAdd(user.id, HOME);
-        const { addresses } = await addressService.addressesGet(user.id);
+        await addressService.create(user.id, HOME);
+        const { addresses } = await addressService.list(user.id);
         const [entry] = addresses;
 
-        await addressService.addressUpdate(user.id, entry?.id ?? '', { city: 'Parma' });
+        await addressService.update(user.id, entry?.id ?? '', { city: 'Parma' });
 
-        const after = await addressService.addressesGet(user.id);
+        const after = await addressService.list(user.id);
         expect(after.addresses[0]?.city).toBe('Parma');
     });
 });

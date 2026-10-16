@@ -40,7 +40,7 @@ import {
     productRemoveFromCartsById
 } from '@modules/cart/services';
 import { cartRepository } from '@modules/cart/repository';
-import { addressAdd } from '@modules/addresses';
+import { addressService } from '@modules/addresses';
 import { userService } from '@modules/users';
 import { asCustomer, testCallerContext } from '@tests/callers';
 import { registerModules } from '@kernel/registry';
@@ -93,7 +93,7 @@ const atHardCap = (body: () => Promise<void>) => withEnvironment('NODE_CART_LINE
  * (both `requiresAddress`), which most of this file's cases have no reason to set up themselves.
  */
 const giveUserAnAddress = (userId: string) =>
-    addressAdd(userId, {
+    addressService.create(userId, {
         fullName: 'Ada Lovelace',
         street: 'Via Roma 1',
         city: 'Modena',
@@ -1081,7 +1081,7 @@ describe('orderConfirm', () => {
 
     it('refuses an explicit addressId for a method that ships to nobody', async () => {
         const user = await createUser();
-        const added = await addressAdd(user.id, {
+        const added = await addressService.create(user.id, {
             fullName: 'Ada Lovelace',
             street: 'Via Roma 1',
             city: 'Modena',

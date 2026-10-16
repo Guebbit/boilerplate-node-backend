@@ -11,7 +11,7 @@ import type { Request, Response } from 'express';
 import type { ObservabilityHealth } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
-import { buildObservabilityHealth } from '../services/health';
+import { observabilityService } from '../services';
 
 /**
  * GET /observability/health
@@ -22,7 +22,8 @@ import { buildObservabilityHealth } from '../services/health';
  * orchestrator restarts on liveness and restarting this process would not bring a downed Redis back.
  */
 export const getObservabilityHealth = (_request: Request, response: Response) =>
-    buildObservabilityHealth()
+    observabilityService
+        .buildObservabilityHealth()
         .then((health) => {
             successResponse<ObservabilityHealth>(response, health);
         })

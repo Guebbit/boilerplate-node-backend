@@ -27,7 +27,7 @@ import {
 } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { userService } from '@modules/users';
-import { addressForCheckout, type AddressItem } from '@modules/addresses';
+import { addressService, type AddressItem } from '@modules/addresses';
 import { findShippingMethod, type StaticShippingMethod } from '@modules/delivery';
 import { paymentService, type PaymentMethodInfo } from '@modules/payments';
 import type { CallerContext, CheckoutRequest, ExpectedTotal } from '@types';
@@ -198,7 +198,7 @@ const resolveShipping = async (
         return { ok: true, shippingMethod, address: undefined };
     }
 
-    const address = await addressForCheckout(userId, addressId);
+    const address = await addressService.forCheckout(userId, addressId);
     if (address === null)
         return {
             ok: false,
@@ -248,7 +248,7 @@ const resolveBilling = async (
     if (billingAddressId === undefined && shippingAddress)
         return { ok: true, billingAddress: shippingAddress };
 
-    const billingAddress = await addressForCheckout(userId, billingAddressId);
+    const billingAddress = await addressService.forCheckout(userId, billingAddressId);
     if (billingAddress === null)
         return {
             ok: false,

@@ -10,10 +10,10 @@
 
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
 import { ReplaceAddressBody, UpdateAddressBody } from '@api/schemas.zod';
-import { addressUpdate } from '../service';
+import { addressService } from '../service';
 
 /**
- * `PUT` and `PATCH /account/addresses/:addressId` — one handler pair over `addressUpdate`, which
+ * `PUT` and `PATCH /account/addresses/:addressId` — one handler pair over `addressService.update`, which
  * answers the entry it wrote.
  */
 export const { replace: replaceAddress, update: updateAddress } = createUpdateController({
@@ -24,6 +24,6 @@ export const { replace: replaceAddress, update: updateAddress } = createUpdateCo
     // The param is `:addressId`, not the `:id` the factory reads by default.
     notFoundKey: 'addresses.not-found',
     idParam: 'addressId',
-    update: (id, changes, request) => addressUpdate(request.authContext!.id, id, changes),
+    update: (id, changes, request) => addressService.update(request.authContext!.id, id, changes),
     present: (view) => view
 });

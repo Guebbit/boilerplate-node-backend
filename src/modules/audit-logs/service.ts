@@ -57,7 +57,7 @@ const record = (entry: AuditEntry): void => {
  * Rejections propagate, unlike in {@link record}: this one is answering an admin's explicit
  * request for the data, so a failed read is a failed request rather than something to hide.
  */
-export const search = (filters: AuditLogSearchFilters): Promise<PaginatedResult<AuditEntryItem>> =>
+const search = (filters: AuditLogSearchFilters): Promise<PaginatedResult<AuditEntryItem>> =>
     auditLogRepository.search(filters, auditLogRepository.sinceScope(filters.since), AUDIT_SORT);
 
 /** The attacks-on-a-credential and degraded-endpoint actions the operator sees. Typed, so a rename stops compiling. */
@@ -102,7 +102,7 @@ const INCIDENT_SCOPE: Record<string, unknown> = {
  *
  * @param filters - the operator's own filters, ANDed with the allow-list
  */
-export const searchIncidents = (
+const searchIncidents = (
     filters: AuditLogSearchFilters
 ): Promise<PaginatedResult<AuditEntryItem>> =>
     auditLogRepository
@@ -131,7 +131,7 @@ export const OWN_ENTRIES_PAGE = 500;
  *
  * @param userId - the caller's own id
  */
-export const findOwnAuditEntries = (userId: string): Promise<AuditEntryItem[]> => {
+const findOwnAuditEntries = (userId: string): Promise<AuditEntryItem[]> => {
     const entries: AuditEntryItem[] = [];
     const readFrom = (after: OwnEntriesCursor | undefined): Promise<AuditEntryItem[]> =>
         auditLogRepository.ownEntriesPage(userId, after, OWN_ENTRIES_PAGE).then((page) => {
@@ -143,11 +143,12 @@ export const findOwnAuditEntries = (userId: string): Promise<AuditEntryItem[]> =
 };
 
 /**
- * The module's barrel export — `record` is registered as the audit sink, `search` serves a
- * shop's own staff and `searchIncidents` the platform operator.
+ * The module's one door — `record` is registered as the audit sink, `search` serves a shop's own
+ * staff, `searchIncidents` the platform operator and `findOwnAuditEntries` an account's export.
  */
 export const auditLogService = {
     record,
     search,
-    searchIncidents
+    searchIncidents,
+    findOwnAuditEntries
 };

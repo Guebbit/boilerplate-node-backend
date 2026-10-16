@@ -16,16 +16,6 @@ import {
     getProductStats
 } from './breakdowns';
 
-export { getSalesStats } from './sales';
-export {
-    getCategoryStats,
-    getCustomerStats,
-    getOperationsStats,
-    getPaymentMix,
-    getPipelineStats,
-    getProductSeries,
-    getProductStats
-} from './breakdowns';
 export { resolvePeriod, type Period } from './range';
 
 /** The service's public surface — every controller goes through this. */

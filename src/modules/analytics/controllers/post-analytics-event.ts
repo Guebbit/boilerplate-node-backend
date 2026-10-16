@@ -12,7 +12,7 @@ import type { Request, Response } from 'express';
 import { CreateAnalyticsEventBody } from '@api/schemas.zod';
 import { catchAs, parseBody } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { relayEvent } from '../services/relay';
+import { analyticsService } from '../services';
 import type { AnalyticsEventRequest } from '@types';
 
 /**
@@ -28,7 +28,7 @@ export const postAnalyticsEvent = (
 
     return Promise.resolve()
         .then(() => {
-            relayEvent(body, callerContextOf(request));
+            analyticsService.relayEvent(body, callerContextOf(request));
             response.status(204).end();
         })
         .catch(catchAs(response, 'postAnalyticsEvent'));

@@ -15,7 +15,7 @@ import { catchAs } from '@infrastructure/http/controller';
 import { httpInflightRequests } from '@infrastructure/observability/metrics-http';
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 import { getHttpRequestCounters, getLatencyPercentiles, sumMetricValues } from '../http-readback';
-import { processSnapshot } from '../services/process-snapshot';
+import { observabilityService } from '../services';
 
 /** One sample of a prom-client counter. */
 interface MetricSample {
@@ -111,7 +111,7 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                 reservedValues,
                 databaseCommandValues
             ]) => {
-                const snapshot = processSnapshot();
+                const snapshot = observabilityService.processSnapshot();
                 const databaseCommands = histogramCounts(databaseCommandValues);
                 const inFlight = sumMetricValues(inflightMetric.values);
 

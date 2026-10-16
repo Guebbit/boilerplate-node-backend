@@ -17,7 +17,7 @@ import {
     webhookSubscriptionRepository,
     webhookDeliveryRepository
 } from '@modules/webhooks/repository';
-import { processDeliveryJob } from '@modules/webhooks/services';
+import { webhooksService } from '@modules/webhooks/services';
 import { replay as replayDelivery } from '@modules/webhooks/services/deliveries';
 import { mintRingSecret, activeRingSecrets } from '@modules/webhooks/secrets';
 import { verifyWebhookSignatureForTest } from '../verify-signature.fixture';
@@ -182,7 +182,7 @@ const backdateFailingStreak = async (subscriptionId: string): Promise<void> => {
  */
 const runChainToCompletion = async (deliveryId: string): Promise<void> => {
     for (let round = 0; round < WEBHOOK_MAX_ATTEMPTS; round++) {
-        await processDeliveryJob({ deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId });
 
         const delivery = await webhookDeliveryRepository.findById(deliveryId);
         if (delivery?.status !== 'pending') return;
@@ -211,7 +211,7 @@ describe('a successful delivery', () => {
             failure: await attemptsCounted('failure')
         };
 
-        await processDeliveryJob({ deliveryId: job.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: job.deliveryId });
 
         expect(await attemptsCounted('success')).toBe(before.success + 1);
         expect(await attemptsCounted('failure')).toBe(before.failure);
@@ -221,7 +221,7 @@ describe('a successful delivery', () => {
         const subscription = await createSubscription(`${server.url}/hook`);
         const job = await createPendingDelivery(subscription);
 
-        const acked = await processDeliveryJob({ deliveryId: job.deliveryId });
+        const acked = await webhooksService.processDeliveryJob({ deliveryId: job.deliveryId });
         expect(acked).toBe(true);
 
         const [received] = server.requests();
@@ -276,7 +276,7 @@ describe('a 500 response', () => {
             failure: await attemptsCounted('failure')
         };
 
-        await processDeliveryJob({ deliveryId: job.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: job.deliveryId });
 
         expect(await attemptsCounted('failure')).toBe(before.failure + 1);
         expect(await attemptsCounted('success')).toBe(before.success);
@@ -286,7 +286,7 @@ describe('a 500 response', () => {
         const subscription = await createSubscription(`${server.url}/hook`);
         const job = await createPendingDelivery(subscription);
 
-        await processDeliveryJob({ deliveryId: job.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: job.deliveryId });
 
         const delivery = await webhookDeliveryRepository.findById(job.deliveryId);
         expect(delivery?.status).toBe('pending');
@@ -307,8 +307,8 @@ describe('a 500 response', () => {
         const subscription = await createSubscription(`${server.url}/hook`);
         const job = await createPendingDelivery(subscription);
 
-        await processDeliveryJob({ deliveryId: job.deliveryId });
-        await processDeliveryJob({ deliveryId: job.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: job.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: job.deliveryId });
 
         const [first, second] = server.requests();
         expect(second).toBeDefined();
@@ -322,12 +322,12 @@ describe('a 500 response', () => {
     it('a retry that succeeds leaves no next attempt, and no error, from the failure before it', async () => {
         const subscription = await createSubscription(`${server.url}/hook`);
         const job = await createPendingDelivery(subscription);
-        await processDeliveryJob({ deliveryId: job.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: job.deliveryId });
 
         await server.close();
         server = await startHttpsTestServer((response) => response.writeHead(200).end('ok'));
         await repointSubscription(String(subscription._id), `${server.url}/hook`);
-        await processDeliveryJob({ deliveryId: job.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: job.deliveryId });
 
         const delivery = await webhookDeliveryRepository.findById(job.deliveryId);
         expect(delivery?.status).toBe('succeeded');
@@ -338,10 +338,10 @@ describe('a 500 response', () => {
     it('a retry with no subscription left to send to keeps nothing from the attempt before it', async () => {
         const subscription = await createSubscription(`${server.url}/hook`);
         const job = await createPendingDelivery(subscription);
-        await processDeliveryJob({ deliveryId: job.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: job.deliveryId });
 
         await webhookSubscriptionRepository.disable(String(subscription._id));
-        await processDeliveryJob({ deliveryId: job.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: job.deliveryId });
 
         const delivery = await webhookDeliveryRepository.findById(job.deliveryId);
         expect(delivery?.status).toBe('exhausted');
@@ -528,7 +528,7 @@ describe('sustained failure', () => {
         server = await startHttpsTestServer((response) => response.writeHead(200).end('ok'));
         await repointSubscription(String(subscription._id), `${server.url}/hook`);
         const succeeding = await createPendingDelivery(subscription, 'order.paid.recovered');
-        await processDeliveryJob({ deliveryId: succeeding.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: succeeding.deliveryId });
 
         const reloadedSubscription = await webhookSubscriptionRepository.findById(
             String(subscription._id)
@@ -544,7 +544,7 @@ describe('a delivery the SSRF guard refuses', () => {
         const subscription = await createSubscription('https://internal.example.test/hook');
         const job = await createPendingDelivery(subscription);
 
-        await processDeliveryJob({ deliveryId: job.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: job.deliveryId });
 
         const stored = await webhookDeliveryRepository.findById(job.deliveryId);
         expect(stored?.error).toBe('This URL cannot receive webhooks.');
@@ -594,7 +594,7 @@ describe('replay', () => {
         const server = await startHttpsTestServer((response) => response.writeHead(500).end());
         const subscription = await createSubscription(`${server.url}/hook`);
         const job = await createPendingDelivery(subscription);
-        await processDeliveryJob({ deliveryId: job.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: job.deliveryId });
         const afterServerError = await webhookDeliveryRepository.findById(job.deliveryId);
         expect(afterServerError?.responseCode).toBe(500);
 
@@ -614,16 +614,16 @@ describe('replay', () => {
         // same starting attempt (2) — one continues through the normal queue path, the other is
         // replayed instead, so their outcomes can be compared directly.
         const queuedJob = await createPendingDelivery(subscription, 'order.paid.queued');
-        await processDeliveryJob({ deliveryId: queuedJob.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: queuedJob.deliveryId });
         const replayedJob = await createPendingDelivery(subscription, 'order.paid.replayed');
-        await processDeliveryJob({ deliveryId: replayedJob.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: replayedJob.deliveryId });
 
         const beforeReplay = await webhookDeliveryRepository.findById(replayedJob.deliveryId);
         if (!beforeReplay) throw new Error('unreachable — asserted above');
         expect(beforeReplay.attempt).toBe(2);
 
         // The non-replayed sibling: one more real queued failure at the same starting attempt.
-        await processDeliveryJob({ deliveryId: queuedJob.deliveryId });
+        await webhooksService.processDeliveryJob({ deliveryId: queuedJob.deliveryId });
         const queuedAfter = await webhookDeliveryRepository.findById(queuedJob.deliveryId);
 
         const result = await replayDelivery(replayedJob.deliveryId, context);
@@ -655,7 +655,7 @@ describe('the delivery lease', () => {
         stranded.leaseExpiresAt = new Date(Date.now() - 1000);
         await webhookDeliveryRepository.save(stranded);
 
-        const acked = await processDeliveryJob({ deliveryId: job.deliveryId });
+        const acked = await webhooksService.processDeliveryJob({ deliveryId: job.deliveryId });
         await server.close();
 
         expect(acked).toBe(true);

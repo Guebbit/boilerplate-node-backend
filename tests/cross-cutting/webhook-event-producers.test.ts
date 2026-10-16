@@ -32,7 +32,7 @@ import {
 } from '@modules/webhooks/repository';
 import { mintRingSecret } from '@modules/webhooks/secrets';
 import webhooksModule from '@modules/webhooks/module';
-import { listWebhookEventCatalogue } from '@modules/webhooks/services';
+import { webhooksService } from '@modules/webhooks/services';
 
 setupTestDb();
 
@@ -132,7 +132,8 @@ describe('every public webhook event has exactly one producer, and no producer n
 
     it('GET /webhooks/events lists exactly what the registered modules declare', () => {
         expect(
-            listWebhookEventCatalogue()
+            webhooksService
+                .listWebhookEventCatalogue()
                 .map((event) => event.name)
                 .toSorted()
         ).toEqual(declaredCatalogue());

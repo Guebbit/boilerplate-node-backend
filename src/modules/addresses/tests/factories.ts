@@ -3,7 +3,7 @@
  * Address-book helpers for a sibling's tests that touch the database.
  */
 
-import { addressAdd } from '../service';
+import { addressService } from '../service';
 
 /**
  * Gives an account one address-book entry, which becomes its default.
@@ -16,11 +16,13 @@ import { addressAdd } from '../service';
  * @returns once the entry is saved
  */
 export const giveAddress = (userId: string): Promise<void> =>
-    addressAdd(userId, {
-        label: 'home',
-        fullName: 'Ada Lovelace',
-        street: 'Via Roma 1',
-        city: 'Modena',
-        zip: '41121',
-        country: 'IT'
-    }).then(() => undefined);
+    addressService
+        .create(userId, {
+            label: 'home',
+            fullName: 'Ada Lovelace',
+            street: 'Via Roma 1',
+            city: 'Modena',
+            zip: '41121',
+            country: 'IT'
+        })
+        .then(() => undefined);

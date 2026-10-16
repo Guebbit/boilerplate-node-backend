@@ -11,7 +11,7 @@
 
 import { resolveBrowserEvents, type AppModule } from '@kernel/registry';
 import { router } from './routes';
-import { registerBrowserEvents } from './services/relay';
+import { analyticsService } from './services';
 
 /**
  * Once every enabled module is known, collect the browser events they declare — the relay cannot
@@ -20,7 +20,7 @@ import { registerBrowserEvents } from './services/relay';
  * @param modules - every enabled module, in registration order
  */
 const onRegistered = (modules: readonly AppModule[]): void => {
-    registerBrowserEvents(resolveBrowserEvents(modules));
+    analyticsService.registerBrowserEvents(resolveBrowserEvents(modules));
 };
 
 /** This module's manifest entry: one public route, no persistence, no locales. */

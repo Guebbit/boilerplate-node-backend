@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import type { Address } from '@types';
 import { requireId } from '@infrastructure/http/ids';
-import { addressSetDefault } from '../service';
+import { addressService } from '../service';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
@@ -26,7 +26,8 @@ export const putAddressDefault = (request: Request<{ addressId: string }>, respo
     });
     if (!addressId) return;
 
-    return addressSetDefault(id, addressId)
+    return addressService
+        .setDefault(id, addressId)
         .then((result) => {
             if (refused(response, result)) return;
 
