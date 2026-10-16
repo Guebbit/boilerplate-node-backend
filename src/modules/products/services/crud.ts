@@ -178,13 +178,49 @@ export const create = (data: ProductCreateData, context: CallerContext): Promise
         finishCreate(product, context)
     );
 
+/** One field that moved: what it was and what it is now. `null` is "unset". */
+interface FieldChange<TValue> {
+    from: TValue | null;
+    to: TValue | null;
+}
+
+/** The money-affecting fields an update actually moved, for the audit row. */
+interface ProductChanges {
+    price?: FieldChange<number>;
+    taxClass?: FieldChange<TaxClass>;
+    rateType?: FieldChange<RateType>;
+}
+
 /** What a transactional update leaves for after the commit. */
 export interface ProductUpdateOutcome {
     /** The saved document. */
     updated: ProductDocument;
     /** The image url it replaced, to delete once the commit is durable. */
     oldImageUrl: string | undefined;
+    /** What the price, tax class and rate type moved from and to; empty when none did. */
+    changes: ProductChanges;
 }
+
+/**
+ * The price, tax class and rate type an update would move, with their old and new values. These
+ * three set what a buyer pays and what VAT is charged, so the audit row says what changed: a
+ * "lower, sell, restore" is otherwise rebuilt only by comparing frozen order lines.
+ *
+ * @param product - the fetched document, BEFORE the change is applied
+ * @param data - the changes
+ * @returns only the fields whose value actually differs
+ */
+const moneyChangesOf = (product: ProductDocument, data: ProductUpdateData): ProductChanges => ({
+    ...(data.price !== undefined && data.price !== product.price
+        ? { price: { from: product.price, to: data.price } }
+        : {}),
+    ...(data.taxClass !== undefined && data.taxClass !== (product.taxClass ?? null)
+        ? { taxClass: { from: product.taxClass ?? null, to: data.taxClass } }
+        : {}),
+    ...(data.rateType !== undefined && data.rateType !== (product.rateType ?? null)
+        ? { rateType: { from: product.rateType ?? null, to: data.rateType } }
+        : {})
+});
 
 /**
  * Move a product's `releaseDate` and say what moved.
@@ -223,6 +259,8 @@ export const applyUpdate = (
     data: ProductUpdateData,
     session: ClientSession
 ): Promise<ProductUpdateOutcome> => {
+    // Read before the fields below overwrite what it compares against.
+    const changes = moneyChangesOf(product, data);
     // Applying `updatedAt` itself is the timestamps hook's job; this only makes the save non-empty.
     if (data.touch) product.markModified('updatedAt');
     // Apply incoming field changes
@@ -274,7 +312,7 @@ export const applyUpdate = (
                   ).then(() => updated)
                 : updated
         )
-        .then((updated) => ({ updated, oldImageUrl }));
+        .then((updated) => ({ updated, oldImageUrl, changes }));
 };
 
 /**
@@ -349,7 +387,10 @@ export const finishUpdateById = (
                 action: productsAuditActions.ADMIN_PRODUCT_UPDATED,
                 outcome: 'success',
                 targetType: 'product',
-                targetId: id
+                targetId: id,
+                ...(Object.keys(outcome.changes).length > 0
+                    ? { metadata: { changes: outcome.changes } }
+                    : {})
             }),
         undefined,
         { productId: id }

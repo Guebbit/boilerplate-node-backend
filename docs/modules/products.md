@@ -79,6 +79,12 @@ movement, so it needs `create:StockMovement` on top of `create:Product`: an edit
 who may write the catalogue but holds no stock key is refused `403 FORBIDDEN` (audited like any
 missing key, `translated-write.ts#openingStockRefusal`) and nothing is written.
 
+**A money edit says what it changed.** `admin.product.updated` carries `metadata.changes` with
+`{ from, to }` for each of `price`, `taxClass` and `rateType` that an update (PUT or PATCH) actually
+moved, `null` meaning unset. The three set what a buyer pays and what VAT is charged, so a "lower,
+sell, restore" is readable from the audit trail instead of rebuilt from frozen order lines. An edit
+to other fields, or a value sent unchanged, writes no `changes`.
+
 Deletion is soft by default: it stamps `deletedAt` (and leaves `active` alone), with a restore route, because an order that
 embedded a product still has to render months later. An admin can still ask for a hard delete
 (`hardDelete: true`), which destroys the row outright — see
