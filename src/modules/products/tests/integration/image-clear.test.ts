@@ -12,7 +12,7 @@ import path from 'node:path';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/callers';
 import { createProduct } from '@modules/products/tests/factories';
-import * as productService from '../../services';
+import { productService } from '../../services';
 import { productModel } from '../../model';
 import { setEnvironment } from '@tests/environment';
 

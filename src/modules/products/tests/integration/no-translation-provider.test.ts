@@ -24,9 +24,9 @@ beforeEach(() => registerTranslationPort(undefined));
 /** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
 const FALLBACK = 'en';
 
-describe('productService.writeCreate — no translation provider', () => {
+describe('productService.create — no translation provider', () => {
     it('writes the fallback language alone', async () => {
-        const result = await productService.writeCreate(
+        const result = await productService.create(
             productService.zodProductCreateSchema.parse({
                 price: 12.5,
                 translations: { [FALLBACK]: { title: 'Standing Desk' } }
@@ -39,7 +39,7 @@ describe('productService.writeCreate — no translation provider', () => {
     });
 
     it('refuses a second language with a field-named 422, not a 500', async () => {
-        const result = await productService.writeCreate(
+        const result = await productService.create(
             productService.zodProductCreateSchema.parse({
                 price: 12.5,
                 translations: {
@@ -56,11 +56,11 @@ describe('productService.writeCreate — no translation provider', () => {
     });
 });
 
-describe('productService.writeUpdate — no translation provider', () => {
+describe('productService.updateById — no translation provider', () => {
     it('refuses a PATCH naming only a language that is not the fallback', async () => {
         const product = await createProduct({ title: 'Bookshelf' });
 
-        const result = await productService.writeUpdate(
+        const result = await productService.updateById(
             product.id,
             { translations: { it: { title: 'Libreria' } } },
             testCallerContext

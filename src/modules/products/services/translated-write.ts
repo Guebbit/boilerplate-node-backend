@@ -1,6 +1,8 @@
 /**
  * @module
- * The multilingual write door: a product and its translation rows in one operation.
+ * The product's write doors: `create` and `updateById` write a product and its translation rows in
+ * one operation. There is no door that writes the row alone, so a title can never move without
+ * its fallback-locale translation.
  */
 
 import type { z } from 'zod';
@@ -87,7 +89,7 @@ const prefixTranslationErrors = (rejection: ResponseReject): ResponseReject => (
  * `imageExtras` is server-derived, never part of the contract body, so it joins only once
  * validation has passed — the same order the controller keeps for its own merge.
  */
-export const writeCreate = async (
+export const create = async (
     data: z.infer<typeof zodProductCreateSchema>,
     context: CallerContext,
     imageExtras: ServerImageFields = {}
@@ -136,9 +138,9 @@ export const writeCreate = async (
  *
  * `data` arrives already validated: `update-product.ts` hands `createUpdateController` the same
  * `zodProductUpdateSchema`, so a bad price 422s with its field-named message at the factory.
- * `imageExtras` — see {@link writeCreate}.
+ * `imageExtras` — see {@link create}.
  */
-export const writeUpdate = async (
+export const updateById = async (
     id: string,
     data: z.infer<typeof zodProductUpdateSchema>,
     context: CallerContext,

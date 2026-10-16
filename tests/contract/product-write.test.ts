@@ -342,7 +342,7 @@ describe('PATCH /products/{id}', () => {
     });
 
     // The factory now validates PATCH against `zodProductUpdateSchema` directly, and
-    // `writeUpdate` no longer re-parses — this message has exactly one place left to come from.
+    // `updateById` no longer re-parses — this message has exactly one place left to come from.
     it('422s a negative price with the field-named message, not a generic one', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({ title: 'Bed', price: 10 });

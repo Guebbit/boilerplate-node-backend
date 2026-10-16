@@ -12,7 +12,7 @@ import { credentialHolding } from '@tests/credentials';
 import { createProduct } from '@modules/products/tests/factories';
 import { callerAs } from '@tests/callers';
 import { hasAnonymousReadScope } from '@kernel/access/query';
-import { callerScope } from '../../services';
+import { productService } from '../../services';
 
 setupTestDb();
 
@@ -87,10 +87,10 @@ describe('the cache scope of a key caller', () => {
      * more than a guest must make it false, or its wider answer would be stored under the guest's key.
      */
     it('is not the guest scope for a caller holding display:Product', () => {
-        expect(hasAnonymousReadScope(callerScope, callerAs('admin'))).toBe(false);
+        expect(hasAnonymousReadScope(productService.callerScope, callerAs('admin'))).toBe(false);
     });
 
     it('is the guest scope for a caller holding only the public baseline', () => {
-        expect(hasAnonymousReadScope(callerScope, callerAs('customer'))).toBe(true);
+        expect(hasAnonymousReadScope(productService.callerScope, callerAs('customer'))).toBe(true);
     });
 });

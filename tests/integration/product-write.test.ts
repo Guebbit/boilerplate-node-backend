@@ -1,8 +1,8 @@
 /**
- * `productService.writeCreate` / `writeUpdate` — the multilingual product write surface, driven
+ * `productService.create` / `updateById` — the multilingual product write surface, driven
  * against a real database and a real translation port. Cross-module by nature: the trigger is
- * `productService.write*`, the rows and the locale check live in `locales/repository.ts`, so this
- * lives at the top level rather than under either module's own `tests/`.
+ * `productService.create` / `updateById`, the rows and the locale check live in
+ * `locales/repository.ts`, so this lives at the top level rather than under either module's own `tests/`.
  *
  * The WIRING half (a write calls the port) and the STORAGE half (the port's own collection holds
  * up) are each proven with a fake stand-in for the other module instead — `products`' and
@@ -36,11 +36,11 @@ beforeEach(async () => {
     await givenLocale(FALLBACK);
 });
 
-describe('productService.writeCreate', () => {
+describe('productService.create', () => {
     it('writes the product and every translation row in one operation', async () => {
         await givenLocale('it');
 
-        const result = await productService.writeCreate(
+        const result = await productService.create(
             productService.zodProductCreateSchema.parse({
                 price: 24.9,
                 translations: {
@@ -63,7 +63,7 @@ describe('productService.writeCreate', () => {
     it('rejects, and writes nothing, when a translation locale does not exist', async () => {
         const before = await productService.search({}, undefined);
 
-        const result = await productService.writeCreate(
+        const result = await productService.create(
             productService.zodProductCreateSchema.parse({
                 price: 10,
                 translations: { en: { title: 'Valid title' }, xx: { title: 'Unregistered' } }
@@ -82,7 +82,7 @@ describe('productService.writeCreate', () => {
     });
 });
 
-describe('productService.writeUpdate', () => {
+describe('productService.updateById', () => {
     it('applies an edit and a deletion from the same PATCH, or neither', async () => {
         await givenLocale('it');
         const product = await createProduct({ title: 'Bed' });
@@ -106,7 +106,7 @@ describe('productService.writeUpdate', () => {
             'digest'
         );
 
-        const result = await productService.writeUpdate(
+        const result = await productService.updateById(
             id,
             { translations: { en: { title: 'Bed, revised' }, it: null } },
             testCallerContext
@@ -132,7 +132,7 @@ describe('productService.writeUpdate', () => {
             undefined
         );
 
-        const result = await productService.writeUpdate(
+        const result = await productService.updateById(
             id,
             { translations: { en: null } },
             testCallerContext
@@ -156,7 +156,7 @@ describe('productService.writeUpdate', () => {
             undefined
         );
 
-        const result = await productService.writeUpdate(id, { price: 25 }, testCallerContext);
+        const result = await productService.updateById(id, { price: 25 }, testCallerContext);
 
         expect(result.success).toBe(true);
         const rows = await translationRepository.findEntityTranslations('product', id);

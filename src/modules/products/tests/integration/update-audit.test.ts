@@ -76,7 +76,7 @@ describe('productService.updateById — the audit row of a money edit', () => {
 
         await productService.updateById(
             String(product._id),
-            { price: 10, title: 'Renamed' },
+            { price: 10, translations: { en: { title: 'Renamed' } } },
             callerContextAs('admin')
         );
 

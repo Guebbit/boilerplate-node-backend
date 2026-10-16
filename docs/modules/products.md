@@ -295,7 +295,7 @@ the product always keeps something to fall back to. On `PATCH` the fallback entr
 absent key leaves that locale untouched) but never `null` — deleting the one locale every other read
 falls back to would leave the product with nothing. Every other locale is optional, and `null` on an
 existing one (never the fallback) deletes its row.
-`src/modules/products/services/translated-write.ts`'s `writeCreate`/`writeUpdate` validate the whole batch
+`src/modules/products/services/translated-write.ts`'s `create`/`updateById` validate the whole batch
 (`planTranslations`, the `@kernel/translation` port) before writing anything, then write the
 product and its rows in the same operation; `getAdmin` backs `GET /products/{id}/admin`, the one
 read that returns every language at once rather than the caller's resolved one — what the editor's

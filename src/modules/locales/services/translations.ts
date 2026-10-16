@@ -144,7 +144,7 @@ const isRejection = (value: unknown): value is ResponseReject =>
  * against the `locales` collection, the registry's declared fields, and the fallback-locale delete
  * guard: the pre-flight half of a write, with no entity id at all. Every check here is about the
  * LOCALE and the FIELD NAMES, never about a specific row, so this runs the same whether the entity
- * already exists or is still being created in the same request (`productService.writeCreate`'s
+ * already exists or is still being created in the same request (`productService.create`'s
  * `POST /products`, notably).
  *
  * Returns the resolved `target` alongside the plan, so a caller that needs it afterwards — its

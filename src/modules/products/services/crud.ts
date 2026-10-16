@@ -1,6 +1,7 @@
 /**
  * @module
- * Product create, update and update-by-id: what the document holds and what each write announces.
+ * The transaction steps of a product write: what the document holds and what each write announces.
+ * `./translated-write` composes them into the create and update doors.
  */
 
 import { t } from '@infrastructure/i18n';
@@ -16,7 +17,6 @@ import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { rearmPrecondition } from '@infrastructure/persistence/versioning';
 import type { ClientSession } from 'mongoose';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
-import { withTransaction } from '@infrastructure/runtime/database';
 import { afterCommit } from '@infrastructure/runtime/after-commit';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { productsAuditActions } from '../audit';
@@ -26,7 +26,7 @@ import { productRepository } from '../repository';
 import { sanitizeStringArray } from './validation';
 import { enqueueIfPending } from './image';
 
-/** What `create` accepts: the product's fields, plus the pending-image placeholder's key. */
+/** What `insertProduct` accepts: the product's fields, plus the pending-image placeholder's key. */
 type ProductCreateData = Omit<
     Product,
     | 'id'
@@ -47,7 +47,7 @@ type ProductCreateData = Omit<
 };
 
 /**
- * What `update` accepts.
+ * What `applyUpdate` accepts.
  *
  * `imageUrl`/`weight`/`taxClass`/`rateType`/`sku`/`releaseDate` are widened to accept `null`, since the domain
  * type `Product` states them as a real value or absent-means-zero/standard/unset, never
@@ -168,15 +168,6 @@ export const finishCreate = (
     );
 };
 
-/**
- * Create a new product document in the database, in its own transaction.
- * See {@link insertProduct} for what the row and its event carry.
- */
-export const create = (data: ProductCreateData, context: CallerContext): Promise<ProductDocument> =>
-    withTransaction((session) => insertProduct(data, session)).then((product) =>
-        finishCreate(product, context)
-    );
-
 /** One field that moved: what it was and what it is now. `null` is "unset". */
 interface FieldChange<TValue> {
     from: TValue | null;
@@ -253,7 +244,7 @@ const applyReleaseDate = (
  * @param data - the changes
  * @param session - the transaction the save joins
  */
-export const applyUpdate = (
+const applyUpdate = (
     product: ProductDocument,
     data: ProductUpdateData,
     session: ClientSession
@@ -320,7 +311,7 @@ export const applyUpdate = (
  *
  * @param outcome - what the transaction saved
  */
-export const finishUpdate = (outcome: ProductUpdateOutcome): Promise<ProductDocument> => {
+const finishUpdate = (outcome: ProductUpdateOutcome): Promise<ProductDocument> => {
     nudgeOutbox();
     const { updated, oldImageUrl } = outcome;
 
@@ -329,16 +320,6 @@ export const finishUpdate = (outcome: ProductUpdateOutcome): Promise<ProductDocu
         enqueuePendingImage(updated)
     );
 };
-
-/**
- * Update an existing product document, in its own transaction.
- * If a new image URL differs from the old one, deletes the old image file after the commit.
- */
-export const update = (
-    product: ProductDocument,
-    data: ProductUpdateData
-): Promise<ProductDocument> =>
-    withTransaction((session) => applyUpdate(product, data, session)).then(finishUpdate);
 
 /**
  * Fetches a product by id and updates it — inside the caller's transaction; a miss is a 404.
@@ -396,17 +377,3 @@ export const finishUpdateById = (
     )
         .then(() => finishUpdate(outcome))
         .then((updated) => generateSuccess(updated));
-
-/**
- * Update an existing product by ID, in its own transaction.
- * Fetches the document then applies the changes — see {@link updateByIdInTransaction}.
- */
-export const updateById = (
-    id: string,
-    data: ProductUpdateData,
-    context: CallerContext
-): Promise<ResponseSuccess<ProductDocument> | ResponseReject> =>
-    withTransaction((session) => updateByIdInTransaction(id, data, session)).then(
-        (result): Promise<ResponseSuccess<ProductDocument> | ResponseReject> =>
-            'updated' in result ? finishUpdateById(id, result, context) : Promise.resolve(result)
-    );

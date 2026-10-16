@@ -496,7 +496,7 @@ const writeSeedTranslations = (productId: string): Promise<void> => {
  * `'created'`, so a re-run against an already-seeded database does not redo the translation write
  * for a row `insertIfAbsent` itself skipped.
  *
- * Goes through `planTranslations`/`writeTranslations` rather than `productService.writeCreate`:
+ * Goes through `planTranslations`/`writeTranslations` rather than `productService.create`:
  * that service validates its body against `zodProductCreateSchema` (generated from `POST
  * /products`), which has no `id` field and always mints a fresh one — this dataset needs the
  * factory's PINNED id, both for idempotent re-seeding and because `./wishlist` and the flow runner

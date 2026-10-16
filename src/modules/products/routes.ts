@@ -26,7 +26,7 @@ import { getCatalogueFacets } from './controllers/get-catalogue-facets';
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { hasAnonymousReadScope } from '@kernel/access/query';
-import { callerScope } from './services';
+import { productService } from './services';
 import { canSeeStock } from './services/stock-view';
 
 /** Express router for product catalogue endpoints (public read, admin write). */
@@ -49,7 +49,8 @@ router.use(getAuth);
  * makes this safe BY CONSTRUCTION — see its own docblock.
  */
 const cacheScopeKey = (request: Request): boolean =>
-    hasAnonymousReadScope(callerScope, request.caller) && !canSeeStock(request.caller);
+    hasAnonymousReadScope(productService.callerScope, request.caller) &&
+    !canSeeStock(request.caller);
 
 /**
  * Shared cache middleware for both search entry points, keyed on the query parameters that

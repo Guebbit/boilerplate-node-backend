@@ -1,7 +1,7 @@
 /**
  * @module
  * Admin create controller for the catalogue — decodes the upload and the body, then hands both to
- * `productService.writeCreate`, which writes the product together with every
+ * `productService.create`, which writes the product together with every
  * language it was created in, in one operation.
  */
 
@@ -68,7 +68,7 @@ export const createProduct = (
     // The helper reads the upload's server-decided image fields, so they never ride in the body
     // the schema validated, and claims the upload when the write succeeds.
     return writeWithUploadedImage(request, undefined, (image) =>
-        productService.writeCreate(body, callerContextOf(request), image)
+        productService.create(body, callerContextOf(request), image)
     )
         .then((result) => {
             // A refusal is left unclaimed: the upload middleware's close hook deletes the upload

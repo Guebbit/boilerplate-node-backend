@@ -98,7 +98,7 @@ const wireShape = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 let subjects: Readonly<Record<string, string>>;
 
 // `products.seed()` writes its rows' `translations` through the same write surface
-// `productService.writeCreate` does. `createApp()` below already registers every enabled
+// `productService.create` does. `createApp()` below already registers every enabled
 // module — including `products`' own `translatables` declaration — so nothing here builds that
 // lookup by hand.
 const { app } = createApp();

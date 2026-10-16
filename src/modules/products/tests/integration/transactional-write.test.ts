@@ -47,12 +47,12 @@ afterEach(() => {
 /** The outbox rows of one event name. */
 const rowsNamed = (name: string) => outboxEventModel.find({ name }).lean();
 
-describe('productService.writeCreate is one transaction', () => {
+describe('productService.create is one transaction', () => {
     it('leaves no product and no event when the translation write fails', async () => {
         write.mockRejectedValueOnce(new Error('translation store down'));
 
         await expect(
-            productService.writeCreate(
+            productService.create(
                 productService.zodProductCreateSchema.parse({
                     price: 12,
                     translations: { [FALLBACK]: { title: 'Standing Desk' } }
@@ -66,7 +66,7 @@ describe('productService.writeCreate is one transaction', () => {
     });
 
     it('commits the product, its translations and the event together', async () => {
-        const result = (await productService.writeCreate(
+        const result = (await productService.create(
             productService.zodProductCreateSchema.parse({
                 price: 12,
                 translations: { [FALLBACK]: { title: 'Standing Desk' } }
@@ -87,13 +87,13 @@ describe('productService.writeCreate is one transaction', () => {
     });
 });
 
-describe('productService.writeUpdate is one transaction', () => {
+describe('productService.updateById is one transaction', () => {
     it('keeps the old row when the translation write fails', async () => {
         const product = await createProduct({ title: 'Standing Desk', price: 10, active: true });
         write.mockRejectedValueOnce(new Error('translation store down'));
 
         await expect(
-            productService.writeUpdate(
+            productService.updateById(
                 String(product._id),
                 {
                     price: 99,

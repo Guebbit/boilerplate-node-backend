@@ -16,8 +16,7 @@ import { presentProduct } from '../presenter';
 import { canSeeStock, redactStock } from './stock-view';
 import { search, searchForCaller, facets } from './search';
 import { callerScope, getById, getByIdForCaller, getAdmin } from './read';
-import { create, update, updateById } from './crud';
-import { writeCreate, writeUpdate, clearOmittedLocales } from './translated-write';
+import { create, updateById, clearOmittedLocales } from './translated-write';
 import { remove, removeById, restoreById } from './remove';
 import {
     findByIdRaw,
@@ -28,16 +27,6 @@ import {
     titlesOf,
     titlesById
 } from './lookups';
-
-/*
- * Every operation is published by name as well as through the object below: the suites drive
- * them directly, and the barrel's surface must not shrink when a file moves.
- */
-export { search, searchForCaller } from './search';
-export { callerScope, getById, getByIdForCaller, getAdmin } from './read';
-export { create, update, updateById } from './crud';
-export { writeCreate, writeUpdate, clearOmittedLocales } from './translated-write';
-export { remove, removeById, restoreById } from './remove';
 
 /** Whether a caller may read exact stock — published so a sibling's refusal can say the same. */
 export { canSeeStock } from './stock-view';
@@ -52,7 +41,11 @@ export { canSeeStock } from './stock-view';
 const toProduct = (document: ProductDocument, caller?: Caller): Product =>
     redactStock(presentProduct(document), canSeeStock(caller));
 
-/** The service's public surface — every controller and cross-module caller goes through this. */
+/**
+ * The service's public surface — every controller and cross-module caller goes through this.
+ * `create` and `updateById` write the translation rows with the product, so there is no door
+ * that moves a title without its fallback-locale row.
+ */
 export const productService = {
     callerScope,
     search,
@@ -62,10 +55,7 @@ export const productService = {
     getByIdForCaller,
     getAdmin,
     create,
-    update,
     updateById,
-    writeCreate,
-    writeUpdate,
     clearOmittedLocales,
     remove,
     removeById,

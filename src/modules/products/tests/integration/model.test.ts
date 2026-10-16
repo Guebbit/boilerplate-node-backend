@@ -8,7 +8,7 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
-import * as productService from '@modules/products/services';
+import { productService } from '@modules/products/services';
 import { callerAs } from '@tests/callers';
 
 setupTestDb();

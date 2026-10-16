@@ -2,7 +2,7 @@
  * @module
  * Controllers for `PUT /products/:id` (replace) and `PATCH /products/:id` (merge), built on the
  * shared `createUpdateController` factory. Both verbs delegate the product write and the
- * translation rows to `productService.writeUpdate`, which already owns the 404 check and the
+ * translation rows to `productService.updateById`, which already owns the 404 check and the
  * audit emit. The verb difference is only what an omission means: a PUT clears an omitted
  * clearable field (`taxClass`/`rateType`/`sku`/`weight`) — never the image, which an upload owns — and deletes every stored
  * locale its `translations` leaves out; a PATCH leaves both alone.
@@ -14,11 +14,11 @@ import { writeWithUploadedImage } from '@infrastructure/http/uploads';
 import { productService } from '../services';
 
 /**
- * `PUT` and `PATCH /products/:id` — one handler pair over `productService.writeUpdate`.
+ * `PUT` and `PATCH /products/:id` — one handler pair over `productService.updateById`.
  * Validated against `zodProductReplaceSchema`/`zodProductUpdateSchema`, not the raw generated
  * schemas: they add the fallback-locale guard and the release-date rule on top of the generated
  * body, so a bad write 422s with its field-named message here, at the one place the body is
- * validated, rather than from a schema `writeUpdate` would otherwise have to re-check.
+ * validated, rather than from a schema `updateById` would otherwise have to re-check.
  */
 export const { replace: replaceProduct, update: updateProduct } = createUpdateController({
     versioned: true,
@@ -37,9 +37,9 @@ export const { replace: replaceProduct, update: updateProduct } = createUpdateCo
     },
     update: (id, changes, request) =>
         // The image fields are server-decided (the body's `imageUrl` can only be `null`) —
-        // carried PAST the factory's validation as `writeUpdate`'s own `imageExtras` parameter.
+        // carried PAST the factory's validation as `updateById`'s own `imageExtras` parameter.
         writeWithUploadedImage(request, changes.imageUrl, (image) =>
-            productService.writeUpdate(id, changes, callerContextOf(request), image)
+            productService.updateById(id, changes, callerContextOf(request), image)
         ),
     // A client cannot send the current image back, so a PUT that omits it keeps it.
     keptWhenOmitted: ['imageUrl'],

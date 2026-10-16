@@ -9,7 +9,7 @@ import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import * as productService from '@modules/products/services';
+import { productService } from '@modules/products/services';
 import { productRepository } from '../../repository';
 import type { ResponseReject } from '@infrastructure/http/response';
 import type { ProductDocument } from '../../model';
@@ -267,25 +267,6 @@ describe('productService.getById', () => {
     });
 });
 
-describe('productService.create', () => {
-    it('inserts a product and returns the Mongoose document', async () => {
-        const product = await productService.create(
-            {
-                title: 'New Product',
-                price: 29.99,
-                imageUrl: 'https://example.com/img.jpg',
-                active: false,
-                description: 'A brand-new product.'
-            },
-            testCallerContext
-        );
-
-        expect(product._id).toBeDefined();
-        expect(product.title).toBe('New Product');
-        expect(await productRepository.count()).toBe(1);
-    });
-});
-
 describe('productService.updateById', () => {
     it('updates title, price and description of an existing product', async () => {
         const product = await createProduct();
@@ -294,9 +275,8 @@ describe('productService.updateById', () => {
         const result = await productService.updateById(
             id,
             {
-                title: 'Updated Title',
                 price: 49.99,
-                description: 'New description'
+                translations: { en: { title: 'Updated Title', description: 'New description' } }
             },
             testCallerContext
         );
@@ -321,7 +301,9 @@ describe('productService.updateById', () => {
         const product = await createProduct({ imageUrl: '/images/old.jpg' });
         const id = product._id.toString();
 
-        await productService.updateById(id, { imageUrl: '/images/new.jpg' }, testCallerContext);
+        await productService.updateById(id, {}, testCallerContext, {
+            imageUrl: '/images/new.jpg'
+        });
 
         // The OLD image goes, and it goes by its stored url — the service must not construct a
         // path, because under a bucket backend there is none to construct.
@@ -336,7 +318,7 @@ describe('productService.updateById', () => {
 
         const result = await productService.updateById(
             id,
-            { title: 'Renamed Product' },
+            { translations: { en: { title: 'Renamed Product' } } },
             testCallerContext
         );
 
@@ -349,7 +331,9 @@ describe('productService.updateById', () => {
         const product = await createProduct({ imageUrl: '/images/same.jpg' });
         const id = product._id.toString();
 
-        await productService.updateById(id, { imageUrl: '/images/same.jpg' }, testCallerContext);
+        await productService.updateById(id, {}, testCallerContext, {
+            imageUrl: '/images/same.jpg'
+        });
 
         expect(imageStore.remove).not.toHaveBeenCalled();
     });
@@ -362,26 +346,12 @@ describe('productService.updateById', () => {
          */
         const result = await productService.updateById(
             '000000000000000000000000',
-            { title: 'X' },
+            { translations: { en: { title: 'X' } } },
             testCallerContext
         );
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
-    });
-});
-
-describe('productService.update', () => {
-    it('updates an existing product document directly', async () => {
-        const product = await createProduct();
-
-        const updated = await productService.update(product, {
-            title: 'Direct Update',
-            price: 99.99
-        });
-
-        expect(updated.title).toBe('Direct Update');
-        expect(updated.price).toBe(99.99);
     });
 });
 
@@ -579,9 +549,7 @@ describe('productService.remove', () => {
 });
 
 describe('productService.findManyByIds', () => {
-    // Reached through the object, not a bare import: `findManyByIds` is published only there —
-    // see `@modules/products`'s own barrel, which would otherwise gain a second door onto it.
-    const { findManyByIds } = productService.productService;
+    const { findManyByIds } = productService;
 
     it('reads back every product named, in one round trip', async () => {
         const keyboard = await createProduct({ title: 'Keyboard' });
