@@ -1,7 +1,7 @@
 /**
  * `src/infrastructure/http/frontend-link.ts` — one job: a template plus parameters becomes a link
  * into the paired frontend. `account` and `orders` own which KINDS exist, their own env vars and
- * default templates (D14) — this only covers what infrastructure itself is responsible for: the
+ * default templates — this only covers what infrastructure itself is responsible for: the
  * origin, the locale segment, and placeholder substitution.
  */
 

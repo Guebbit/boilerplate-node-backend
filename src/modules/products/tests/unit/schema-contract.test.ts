@@ -75,7 +75,7 @@ describe('productSchema — indexes', () => {
     it('declares exactly the three documented indexes, named', () => {
         // `products_createdAt` is newest-first for the listing; `products_active_deletedAt` is the
         // public visibility scope — the pair of conditions every anonymous read applies;
-        // `products_sku` (SH4) is the uniqueness guarantee on an optional field.
+        // `products_sku` is the uniqueness guarantee on an optional field.
         expect(indexSpecs(productSchema)).toEqual([
             'products_active_deletedAt: active+1, deletedAt+1',
             'products_createdAt: createdAt-1',
@@ -83,7 +83,7 @@ describe('productSchema — indexes', () => {
         ]);
     });
 
-    it('lets a sku repeat only by being absent — unique when set (SH4)', () => {
+    it('lets a sku repeat only by being absent — unique when set', () => {
         // Sparse: most products never carry a `sku` at all, and an unfiltered unique index would
         // index every absent value as an equal `null`, colliding on the second such product —
         // same reasoning as `orders`' `orders_transferReference`.

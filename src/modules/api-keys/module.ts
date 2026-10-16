@@ -22,7 +22,7 @@ import { onDomainEvent } from '@kernel/events';
 import { ACCOUNT_SESSIONS_REVOKED } from '@modules/account';
 
 /**
- * Installs the credential resolver once this module is known to be enabled (D15) — registering it
+ * Installs the credential resolver once this module is known to be enabled — registering it
  * at import time would let anything that merely imports this file (a type, a test) enable
  * `sk_...` authentication for the whole app.
  */

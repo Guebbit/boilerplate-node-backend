@@ -2,7 +2,7 @@
  * Script entry-point wrapper.
  *
  * The four behaviours a bare promise chain does not provide: a non-zero exit code, cleanup on
- * the failure path, a logged reason, and (D9) an outcome `GET /observability/health` and
+ * the failure path, a logged reason, and an outcome `GET /observability/health` and
  * `job_last_success_timestamp_seconds` can see. The cleanup one is load-bearing — without it
  * `scenario:apply` leaves its Mongo and Redis sockets open on a throw, and the process hangs
  * instead of exiting.
@@ -189,7 +189,7 @@ describe('runScript', () => {
     });
 });
 
-describe('runScript — D9 job-health recording', () => {
+describe('runScript — job-health recording', () => {
     it('records a success against the given name when the body resolves', async () => {
         await runScript(
             'reap:orders',

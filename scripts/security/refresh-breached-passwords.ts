@@ -98,5 +98,5 @@ const main = async (): Promise<void> => {
 };
 
 // `undefined`: run by hand, no scheduler (see this file's own docblock) — not a
-// `docker/crontab` job, so it takes no part in D9's job-health/metric tracking.
+// `docker/crontab` job, so it takes no part in the job-health/metric tracking.
 void runScript(undefined, main, () => Promise.resolve());

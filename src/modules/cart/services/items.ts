@@ -254,7 +254,7 @@ export const cartRemove = (userId: string, context: CallerContext): Promise<Cart
  * payment method and an address. Checkout re-validates from scratch regardless — this is a UX
  * courtesy, not the enforcement point.
  *
- * `null` clears the choice (this module's own "null clears" convention, D17c) and always
+ * `null` clears the choice (this module's own "null clears" convention) and always
  * succeeds — an empty choice can never mismatch the basket.
  */
 export const cartShippingMethodSet = (

@@ -504,7 +504,7 @@ const findConfirmable = (
 /**
  * Whether an order can still be charged into — the gate {@link confirmPayment} checks before
  * reaching the provider, so a cancelled order is refused up front instead of charged then
- * refunded, which loses the provider's fee on the refund (A1). `syncPayment` has no need for this:
+ * refunded, which loses the provider's fee on the refund. `syncPayment` has no need for this:
  * `retrieve` only re-reads what the provider already decided, it never asks it to take money.
  *
  * @param orderId - the order the payment being confirmed belongs to
@@ -575,7 +575,7 @@ const settleFound = (
  * `requires_action` and one that settles over days `processing`; both are successes on the wire,
  * and {@link syncPayment} is what resolves them once the browser is done.
  *
- * Refuses before ever reaching the provider (A1) when the order can no longer be paid into — a
+ * Refuses before ever reaching the provider when the order can no longer be paid into — a
  * cancel that raced the confirm otherwise still takes the card's money, only to refund it right
  * back and lose the provider's own fee on that refund.
  *

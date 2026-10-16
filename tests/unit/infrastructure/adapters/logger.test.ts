@@ -63,7 +63,7 @@ describe('redactSensitiveFields', () => {
     });
 
     it('redacts nested sensitive fields', () => {
-        // `username`, not `email` — `email` is a PERSONAL field since G6 and gets hashed, not
+        // `username`, not `email` — `email` is a PERSONAL field and gets hashed, not
         // left plain; this case is about SENSITIVE_FIELDS nesting specifically.
         const input = { user: { username: 'carol', password: 'secret' } };
         expect(redactSensitiveFields(input)).toEqual({
@@ -435,7 +435,7 @@ describe('the personal-data policy', () => {
     });
 
     it('hashes the SAME input to a DIFFERENT digest under a different NODE_PSEUDONYM_KEY', () => {
-        // The whole point of a KEYED hash (D7, GDPR pseudonymisation): a digest is only stable
+        // The whole point of a KEYED hash (GDPR pseudonymisation): a digest is only stable
         // for callers who share the key, not universally guessable like a bare sha256 would be.
         setEnvironment({ NODE_PSEUDONYM_KEY: 'the-first-key-of-the-pair' });
         const withFirstKey = redactSensitiveFields({ email: 'user@example.com' }) as Record<

@@ -246,7 +246,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             enum: Object.values(RateType)
         },
         /*
-         * SH4: an optional, deployment-chosen stock-keeping unit. Uniqueness is `products_sku`
+         * An optional, deployment-chosen stock-keeping unit. Uniqueness is `products_sku`
          * below (`unique: true, sparse: true`), not enforced here — the schema declares the
          * shape, the index is what makes a collision a database fact rather than a race two
          * concurrent writes could both slip past.
@@ -391,7 +391,7 @@ productSchema.index({ createdAt: -1 }, { name: 'products_createdAt' });
 /* Storefront filters: active + not soft-deleted (`publicScope` in `./repository`). */
 productSchema.index({ active: 1, deletedAt: 1 }, { name: 'products_active_deletedAt' });
 /*
- * SH4: unique when set. Sparse, same reasoning as `orders`' `orders_transferReference` — most
+ * Unique when set. Sparse, same reasoning as `orders`' `orders_transferReference` — most
  * products never carry a `sku` at all, and an unfiltered unique index would index every absent
  * value as an equal `null`, colliding on the second such product.
  */

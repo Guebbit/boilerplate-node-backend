@@ -178,7 +178,7 @@ describe('withLease', () => {
 });
 
 /**
- * `recordJobOutcome` — the D9 path every `docker/crontab` job now goes through via
+ * `recordJobOutcome` — the job-health path every `docker/crontab` job now goes through via
  * `scripts/run-script.ts`, not only the one job ({@link withLease}'s own single caller) that also
  * takes a mutual-exclusion lease.
  */

@@ -21,7 +21,7 @@ export const paymentsAuditActions = {
     PAYMENT_RECORDED_OFFLINE: 'payment.recorded_offline',
     /**
      * A cancel owed a refund on a hand-paid order, and the automatic listener left it alone
-     * (B1b) — only an operator's own `refundByOrder` may say the cash actually went back.
+     * — only an operator's own `refundByOrder` may say the cash actually went back.
      */
     PAYMENT_REFUND_OWED_BY_HAND: 'payment.refund_owed_by_hand',
     /**

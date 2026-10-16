@@ -284,10 +284,10 @@ describe('confirmPayment', () => {
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
     });
 
-    it('refuses to confirm once the order it was for is cancelled, before ever charging the card (A1)', async () => {
+    it('refuses to confirm once the order it was for is cancelled, before ever charging the card', async () => {
         // The order is cancelled in the window between opening the intent and confirming.
         // Charging the card and then refunding it would still work, but it loses the provider's
-        // own fee on that refund — A1 refuses up front instead, before the provider is ever asked.
+        // own fee on that refund — the confirm refuses up front instead, before the provider is ever asked.
         const { user, order } = await orderFor();
         const intent = await paymentService.createIntent(String(order._id), auth(user));
         const paymentId = String((intent as { data?: { id?: string } }).data?.id);
@@ -536,10 +536,10 @@ describe('refund on cancel', () => {
             const refundSpy = jest
                 .spyOn(fakePaymentProvider, 'refund')
                 .mockRejectedValueOnce(new Error('payment provider unreachable'));
-            // The order is cancelled DURING the provider round trip — after A1's own payable check
+            // The order is cancelled DURING the provider round trip — after the confirm's own payable check
             // already read it as still pending, before the settlement transaction sees it gone.
-            // That is settlement's own "order lost" branch, not a cancel's own refund (module
-            // docblock rule 2), and A1 only closes the window BEFORE the provider is asked.
+            // That is settlement's own "order lost" branch, not a cancel's own refund (not a
+            // cancel's own refund), and the payable check only closes the window BEFORE the provider is asked.
             const originalConfirm = fakePaymentProvider.confirm;
             const confirmSpy = jest
                 .spyOn(fakePaymentProvider, 'confirm')
@@ -829,7 +829,7 @@ describe('cancelling a paid order releases its claim', () => {
         expect(asReject(second).status).toBe(409);
     });
 
-    it('rolls the status, the hold and the counters back together when the release throws (D3)', async () => {
+    it('rolls the status, the hold and the counters back together when the release throws', async () => {
         const { user, product, order } = await placedOrder(10, 3);
         await payFor(String(order._id), user);
         const release = inventoryService.releaseCommittedForOrder;

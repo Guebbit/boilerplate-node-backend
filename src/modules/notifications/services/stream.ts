@@ -6,7 +6,7 @@
  * with a `Map` keyed by user where that one holds a flat `Set`.
  *
  * Per process, like it: a message written in another worker process arrives at the next
- * `GET /notifications` instead. No broker fan-out ("no multi-host for now").
+ * `GET /notifications` instead. No broker fan-out: the app runs as a single host.
  *
  * See: docs/modules/notifications.md
  */

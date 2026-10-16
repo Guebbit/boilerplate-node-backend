@@ -1,5 +1,5 @@
 /**
- * `accountFrontendLink` — this module's own D14 fix: `infrastructure/http/frontend-link.ts` only
+ * `accountFrontendLink` — this module's own link config: `infrastructure/http/frontend-link.ts` only
  * turns a resolved template into a URL, so the four kinds' env vars and default templates live
  * here, not in infrastructure.
  */

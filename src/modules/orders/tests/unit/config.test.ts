@@ -100,7 +100,7 @@ describe('the admin order limits', () => {
 });
 
 /**
- * `orderFrontendLink` — this module's own D14 fix: `infrastructure/http/frontend-link.ts` only
+ * `orderFrontendLink` — this module's own link config: `infrastructure/http/frontend-link.ts` only
  * turns a resolved template into a URL, so the default template and its env-var override live
  * here, not in infrastructure.
  */

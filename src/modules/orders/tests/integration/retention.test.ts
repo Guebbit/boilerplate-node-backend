@@ -131,7 +131,7 @@ describe('orders — detach on account erasure', () => {
     });
 });
 
-describe('orders — a never-paid order is due for anonymization AT ONCE (A1)', () => {
+describe('orders — a never-paid order is due for anonymization AT ONCE', () => {
     beforeEach(() => registerCheckoutModules());
 
     afterEach(() => {

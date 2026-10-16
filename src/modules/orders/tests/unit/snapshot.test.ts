@@ -146,7 +146,7 @@ describe('freezeOrderLines — the VAT rate', () => {
         });
     });
 
-    it('freezes the product’s sku onto the line, same as every other field (SH4)', () => {
+    it('freezes the product’s sku onto the line, same as every other field', () => {
         registerTranslationPort(fakePort());
 
         return freezeOrderLines(
@@ -158,7 +158,7 @@ describe('freezeOrderLines — the VAT rate', () => {
         });
     });
 
-    it('leaves sku absent when the product has none, rather than defaulting it (SH4)', () => {
+    it('leaves sku absent when the product has none, rather than defaulting it', () => {
         registerTranslationPort(fakePort());
 
         return freezeOrderLines(

@@ -213,7 +213,7 @@ describe('ValidationError branch', () => {
     });
 });
 
-describe('ConflictError branch (D14)', () => {
+describe('ConflictError branch', () => {
     it('answers 409 with the subclass message — a module raises its OWN subclass', () => {
         // `access`'s `AccessInvariantError` is today's one caller; a bare `ConflictError` fixture
         // here is the honest unit — `infrastructure` never imports `access` to build one.

@@ -52,7 +52,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 setupTestDb();
 
 // `onRegistered`'s `registerCredentialResolver` call is what makes `resolveCredential` answer
-// anything at all — running it here is what a real boot does once this module is enabled (D15).
+// anything at all — running it here is what a real boot does once this module is enabled.
 apiKeysModule.onRegistered?.();
 
 /** A valid expiry for a mint: a week out, well inside the one-year ceiling. */
@@ -399,7 +399,7 @@ describe('why a credential was refused', () => {
 });
 
 describe('a hard-deleted user takes their credentials with them', () => {
-    // `subscribe()` (this listener) and `onRegistered` (the credential resolver, D15) are both
+    // `subscribe()` (this listener) and `onRegistered` (the credential resolver) are both
     // manifest hooks that only run through `registerModules` — the top-level `import
     // '@modules/api-keys/module'` above installs neither by itself, same reasoning as
     // `wishlist/tests/integration/service.test.ts`.

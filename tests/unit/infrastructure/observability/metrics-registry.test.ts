@@ -28,7 +28,7 @@ describe('getPrometheusMetrics — standard families', () => {
     });
 });
 
-describe('job_last_success_timestamp_seconds — D9', () => {
+describe('job_last_success_timestamp_seconds', () => {
     afterEach(() => {
         mockedListLeaseSummaries.mockReset();
     });

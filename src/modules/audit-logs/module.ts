@@ -22,7 +22,7 @@ import { router } from './routes';
 import { auditLogsConfig } from './config';
 
 /**
- * Installs the persistence sink once this module is known to be enabled (D15) — see the module
+ * Installs the persistence sink once this module is known to be enabled — see the module
  * header for why here, not `app.ts`, and not at import time (a type or a test importing this file
  * would otherwise silently start persisting audit rows too).
  */

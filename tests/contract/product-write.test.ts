@@ -482,7 +482,7 @@ describe('the generic translator door follows the product rules (bug W9)', () =>
     });
 });
 
-describe('SKU (SH4)', () => {
+describe('SKU', () => {
     it('creates a product carrying a sku', async () => {
         const { bearer } = await authenticateAsRole('editor');
 
