@@ -11,7 +11,7 @@
  * identically, which is what enumeration prevention actually means.
  */
 
-import { api } from '@tests/http';
+import { api, staleBearerFor } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
@@ -89,6 +89,22 @@ describe('DELETE /account — deleteAccountRequest', () => {
         expect(response.status).toBe(200);
         expect(mockOutbox).toHaveLength(1);
         expect(mockOutbox[0].template).toBe('account.delete-request');
+    });
+
+    // No second factor here, so the unconditional critical guard is the only gate on this route.
+    describe('with a session past the critical window', () => {
+        afterEach(() => jest.useRealTimers());
+
+        it('answers 401 REAUTH_REQUIRED and mails nothing', async () => {
+            const user = await createUser({ email: 'stale@example.com' });
+            const bearer = await staleBearerFor(user, 'critical');
+
+            const response = await api().delete('/account').set('Authorization', bearer).send();
+
+            expect(response.status).toBe(401);
+            expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+            expect(mockOutbox).toEqual([]);
+        });
     });
 
     it('answers the same 200, and sends no mail, when the lookup misses (enumeration prevention)', async () => {

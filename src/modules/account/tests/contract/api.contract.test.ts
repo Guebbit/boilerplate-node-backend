@@ -479,6 +479,25 @@ describe("PUT /account's step-up depends on whether the email actually changes",
     });
 });
 
+describe("PATCH /account's step-up for an account with no second factor", () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('demands a fresh session for an email change, and writes nothing', async () => {
+        freezeDate();
+        const { user, jwtCookie } = await loginRemembered();
+        const bearer = await staleButRefreshedBearer(jwtCookie);
+
+        const response = await api()
+            .patch('/account')
+            .set('Authorization', bearer)
+            .send({ email: 'brand-new@example.com' });
+
+        expect(response.status).toBe(401);
+        const stored = await userRepository.findById(user.id);
+        expect(stored?.email).toBe(user.email);
+    });
+});
+
 describe('PATCH /account', () => {
     it('matches the contract when a plain user updates their own profile', async () => {
         const { bearer } = await authenticateAs('user');
