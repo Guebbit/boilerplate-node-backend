@@ -281,6 +281,15 @@ describe('audience roles', () => {
         expect(callerAs('unverified').permissions).toContain('update:Cart');
     });
 
+    it('lets every signed-in account keep examples of its own, and nobody else’s', () => {
+        for (const name of ['unverified', 'customer'] as const) {
+            expect(callerAs(name).permissions).toEqual(
+                expect.arrayContaining(['read:Example', 'create:Example'])
+            );
+            expect(callerAs(name).permissions).not.toContain('display:Example');
+        }
+    });
+
     it('gives a staff member the customer rules on top of the role’s own', () => {
         const manager = callerAs('manager').permissions;
 
