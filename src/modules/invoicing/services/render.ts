@@ -28,6 +28,7 @@ const sharedFields = (
 ): Omit<EInvoicingDocument, 'kind' | 'reversalOf'> => ({
     number: document.number,
     issuedAt: document.issuedAt,
+    timezone: document.timezone,
     currency: document.currency,
     locale: document.locale,
     orderNumber: document.orderNumber,

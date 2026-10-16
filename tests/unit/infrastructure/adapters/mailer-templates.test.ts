@@ -260,6 +260,7 @@ describe('email templates render in every supported locale', () => {
                 kind: 'invoice',
                 number: '2026-000001',
                 issuedAt: new Date('2026-01-15'),
+                timezone: 'Europe/Rome',
                 currency: 'EUR',
                 locale,
                 orderNumber: '2026-000007',

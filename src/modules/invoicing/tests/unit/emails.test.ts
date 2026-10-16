@@ -12,6 +12,7 @@ const DOCUMENT: EInvoicingDocument = {
     kind: 'invoice',
     number: '2026-000041',
     issuedAt: new Date('2026-03-01T00:00:00Z'),
+    timezone: 'Europe/Rome',
     currency: 'EUR',
     locale: 'en',
     orderNumber: '2026-000007',
@@ -307,5 +308,27 @@ describe('buildDocumentView — net unit price and once-per-rate VAT, worked exa
         }).vat as { rows: { unitPrice: string }[] };
 
         expect(vat.rows[0].unitPrice).toBe('¥100');
+    });
+});
+
+describe('buildDocumentView — the printed date', () => {
+    // 23:30 UTC on New Year's Eve is already 1 January in Rome: the zone the document froze at
+    // issue decides the day, whatever the shop is configured with when it is rendered.
+    const NEW_YEARS_EVE = new Date('2026-12-31T23:30:00Z');
+
+    it('reads the day in the zone the document was issued under', () => {
+        const rome = buildDocumentView('en', {
+            ...DOCUMENT,
+            issuedAt: NEW_YEARS_EVE,
+            timezone: 'Europe/Rome'
+        });
+        const utc = buildDocumentView('en', {
+            ...DOCUMENT,
+            issuedAt: NEW_YEARS_EVE,
+            timezone: 'UTC'
+        });
+
+        expect((rome.meta as { dateLabel: string }).dateLabel).toContain('January 1, 2027');
+        expect((utc.meta as { dateLabel: string }).dateLabel).toContain('December 31, 2026');
     });
 });

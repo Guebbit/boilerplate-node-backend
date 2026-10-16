@@ -7,6 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { freezeDate } from '@tests/clock';
+import { setEnvironment } from '@tests/environment';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { OrderStatus } from '@types';
@@ -273,6 +274,21 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         } finally {
             jest.useRealTimers();
         }
+    });
+
+    // The printed date reads in the zone frozen here, so a later config change cannot move a
+    // legal document's day; a credit note reads like the invoice it corrects.
+    it('freezes the shop’s time zone at issue, and keeps it when the setting changes later', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        const issued = await issueInvoice(order);
+
+        setEnvironment({ NODE_SHOP_TIMEZONE: 'Asia/Tokyo' });
+        const stored = await invoicingRepository.findInvoiceByOrderId(String(order._id));
+
+        expect(issued?.timezone).toBe('Europe/Rome');
+        expect(stored?.timezone).toBe('Europe/Rome');
     });
 
     it('issues nothing for an order with no lines', async () => {

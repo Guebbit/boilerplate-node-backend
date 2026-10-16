@@ -12,7 +12,6 @@ import { translator } from '@infrastructure/i18n';
 import { lineTaxFromRateTotals } from '@modules/orders';
 import type { EInvoicingDocument } from './providers';
 import type { InvoiceLine } from './model';
-import { shopTimezone } from '@modules/shop';
 import { asTaxItems } from './domain';
 
 /**
@@ -99,7 +98,7 @@ const buildMeta = (locale: string, t: TFunction, document: EInvoicingDocument) =
     dateLabel: t('invoicing.document.date', {
         date: new Intl.DateTimeFormat(locale, {
             dateStyle: 'long',
-            timeZone: shopTimezone()
+            timeZone: document.timezone
         }).format(document.issuedAt)
     })
 });

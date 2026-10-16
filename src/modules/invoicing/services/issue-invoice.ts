@@ -18,7 +18,7 @@ import { invoicingRepository } from '../repository';
 import { encryptInvoiceParty } from '../pii';
 import { allocateInvoiceNumber, readWinner } from './numbering';
 import type { InvoiceDocument, InvoiceLine, InvoiceSeller } from '../model';
-import { shopIdentity } from '@modules/shop';
+import { shopIdentity, shopTimezone } from '@modules/shop';
 
 /**
  * The seller's own identity, frozen fresh at every issue — never re-read once an invoice exists.
@@ -85,6 +85,7 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
                         orderId: order._id,
                         number,
                         issuedAt,
+                        timezone: shopTimezone(),
                         currency,
                         locale: order.items[0].locale,
                         orderNumber: order.orderNumber,

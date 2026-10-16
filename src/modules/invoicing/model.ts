@@ -72,6 +72,11 @@ export interface FrozenTaxDocument {
     number: string;
     /** The moment this document was issued: the listener's own clock, a moment after the payment or refund it records. */
     issuedAt: Date;
+    /**
+     * The shop's IANA time zone at issue. The printed date reads in THIS zone, never in today's
+     * `NODE_SHOP_TIMEZONE`: a document is a legal record and must read the same on every render.
+     */
+    timezone: string;
     /** ISO-4217, frozen from the ORDER's own `currency` — never re-read from config. */
     currency: string;
     /** The language every string on the rendered PDF is in — the order's own frozen locale. */
@@ -173,6 +178,7 @@ const frozenTaxDocumentFields = {
     orderId: { type: Schema.Types.ObjectId, required: true },
     number: { type: String, required: true },
     issuedAt: { type: Date, required: true },
+    timezone: { type: String, required: true },
     currency: { type: String, required: true },
     locale: { type: String, required: true },
     orderNumber: { type: String, required: true },

@@ -76,7 +76,7 @@ ever created. No route requests one into existence.
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     O["orders: pending → paid"] -. "order.status_changed" .-> I["issueInvoice"]
-    P["payments: succeeded → refunded"] -. "payment.refunded" .-> C["issueCreditNote"]
+    P["payments: a refund settles"] -. "payment.refunded" .-> C["issueCreditNote"]
     I --> ID[("Invoice")]
     C --> CD[("CreditNote")]
     ID -. "reversed by" .-> CD
@@ -111,8 +111,8 @@ smaller than its goods: the weights then split what was actually refunded. An or
 refunded in parts therefore has several credit notes; `refundId` is unique, which is what makes a
 redelivered event issue nothing twice.
 
-Both are idempotent the same way: a unique index on `orderId` (`model.ts`) is what actually
-guarantees "at most one", not the listener's own read-then-insert — a redelivered event, or two
+Both are idempotent the same way: a unique index (`model.ts`: invoices on `orderId`, credit notes on
+`refundId`) is what actually guarantees "at most one", not the listener's own read-then-insert — a redelivered event, or two
 writers racing the same order, both attempt the insert. The number is allocated and the document
 inserted in one transaction, so the loser's duplicate-key error aborts it, the number goes back to
 the counter, and the loser reads the row the winner wrote (`services/issue-invoice.ts`). The two
@@ -122,7 +122,9 @@ Art. 219), unlike `orderNumber`, which is a label (`orders/services/order-number
 The number's year is the year of the document's own `issuedAt` on the shop's calendar
 (`NODE_SHOP_TIMEZONE`, [orders](./orders.md#configuration)), taken from the very instant that is stored,
 so a sale at 00:30 on 1 January in Rome starts the new series instead of ending the old one. The
-date printed on the document uses the same zone.
+zone is frozen on the document as `timezone`, next to `issuedAt`, and the printed date is rendered
+from it, never from today's setting: a legal document reads the same day on every render, whatever
+`NODE_SHOP_TIMEZONE` says later. A credit note carries its invoice's zone.
 
 `invoicingService.moneyBuckets` sums invoices and credit notes per currency and shop-local bucket by
 `issuedAt` (indexed). It is where every money figure of [`stats`](./stats.md) comes from: the
@@ -270,9 +272,6 @@ since there is no numeric form for a reason code to become.
   above — left for later.
 - **A render cache.** The PDF store above already keeps the rendered file. The document is
   immutable once issued, so there is no correctness reason for a shorter-lived cache on top.
-- **Line-level credit notes for a return.** A partial credit note names the VAT rates it refunds,
-  not the returned products: the refund amount is all `payments` announces. A return's own lines
-  would need `returns` to hand this module more than an amount.
 
 ## Related pages
 

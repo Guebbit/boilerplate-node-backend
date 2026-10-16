@@ -138,6 +138,8 @@ export const issueCreditNote = (input: RefundedInput): Promise<CreditNoteDocumen
                             refundId: input.refundId,
                             number,
                             issuedAt,
+                            // The invoice's own zone: a note reads like the invoice it corrects.
+                            timezone: invoice.timezone,
                             currency: invoice.currency,
                             locale: invoice.locale,
                             orderNumber: invoice.orderNumber,
