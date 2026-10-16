@@ -15,15 +15,11 @@ import {
 } from '@modules/users/tests/factories';
 import {
     accountService,
-    passwordChangeWithCurrent,
-    updateProfile,
-    sendVerificationEmail,
     PASSWORD_RESET_TOKEN_TYPE,
     RESET_REQUEST_SECONDS,
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
-    VERIFY_RESEND_SECONDS,
-    completeEmailChange
+    VERIFY_RESEND_SECONDS
 } from '@modules/account/services';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { userRepository } from '@modules/users/tests/factories';
@@ -72,7 +68,11 @@ describe('updateProfile', () => {
         const user = await createUser({ email: 'own@example.com' });
 
         const response = asSuccess(
-            await updateProfile(user.id, { username: 'renamed', locale: 'it' }, testCallerContext)
+            await accountService.updateProfile(
+                user.id,
+                { username: 'renamed', locale: 'it' },
+                testCallerContext
+            )
         );
 
         expect(response.data.username).toBe('renamed');
@@ -89,7 +89,7 @@ describe('updateProfile', () => {
         });
 
         const response = asSuccess(
-            await updateProfile(user.id, { imageUrl: null }, testCallerContext)
+            await accountService.updateProfile(user.id, { imageUrl: null }, testCallerContext)
         );
 
         expect(response.data.imageUrl).toBeUndefined();
@@ -108,7 +108,7 @@ describe('updateProfile', () => {
         await userRepository.deleteOne(user);
 
         const response = asReject(
-            await updateProfile(user.id, { username: 'ghost' }, testCallerContext)
+            await accountService.updateProfile(user.id, { username: 'ghost' }, testCallerContext)
         );
 
         expect(response.status).toBe(401);
@@ -118,7 +118,11 @@ describe('updateProfile', () => {
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
 
         const response = asSuccess(
-            await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext)
+            await accountService.updateProfile(
+                user.id,
+                { email: 'after@example.com' },
+                testCallerContext
+            )
         );
 
         expect(response.data.email).toBe('before@example.com');
@@ -130,7 +134,11 @@ describe('updateProfile', () => {
         const user = await createUser({ email: 'same@example.com', verifiedAt: new Date() });
 
         const response = asSuccess(
-            await updateProfile(user.id, { email: 'same@example.com' }, testCallerContext)
+            await accountService.updateProfile(
+                user.id,
+                { email: 'same@example.com' },
+                testCallerContext
+            )
         );
 
         expect(response.data.verifiedAt).toEqual(user.verifiedAt);
@@ -141,7 +149,11 @@ describe('updateProfile', () => {
         const user = await createUser({ email: 'same@example.com', verifiedAt: new Date() });
 
         const response = asSuccess(
-            await updateProfile(user.id, { email: 'SAME@Example.com' }, testCallerContext)
+            await accountService.updateProfile(
+                user.id,
+                { email: 'SAME@Example.com' },
+                testCallerContext
+            )
         );
 
         expect(response.data.verifiedAt).toEqual(user.verifiedAt);
@@ -150,10 +162,18 @@ describe('updateProfile', () => {
 
     it('restating the CURRENT address is a no-op — a pending change survives it', async () => {
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
-        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'after@example.com' },
+            testCallerContext
+        );
 
         const response = asSuccess(
-            await updateProfile(user.id, { email: 'before@example.com' }, testCallerContext)
+            await accountService.updateProfile(
+                user.id,
+                { email: 'before@example.com' },
+                testCallerContext
+            )
         );
 
         expect(response.data.pendingEmail).toBe('after@example.com');
@@ -163,7 +183,11 @@ describe('updateProfile', () => {
 
     it('restating the PENDING address is a no-op — the link already mailed stays valid', async () => {
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
-        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'after@example.com' },
+            testCallerContext
+        );
         const emailChangeToken = () =>
             readTokens(user.id).then(
                 (tokens) =>
@@ -171,7 +195,11 @@ describe('updateProfile', () => {
             );
         const mailed = await emailChangeToken();
 
-        await updateProfile(user.id, { email: 'AFTER@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'AFTER@example.com' },
+            testCallerContext
+        );
 
         expect(mailed).toBeDefined();
         expect(await emailChangeToken()).toBe(mailed);
@@ -182,7 +210,11 @@ describe('updateProfile', () => {
         const user = await createUser({ email: 'second@example.com', username: 'second' });
 
         const response = asReject(
-            await updateProfile(user.id, { email: 'taken@example.com' }, testCallerContext)
+            await accountService.updateProfile(
+                user.id,
+                { email: 'taken@example.com' },
+                testCallerContext
+            )
         );
 
         expect(response.status).toBe(409);
@@ -190,11 +222,19 @@ describe('updateProfile', () => {
 
     it("answers 409 when the address is ALREADY someone else's pendingEmail", async () => {
         const first = await createUser({ email: 'first@example.com', username: 'first' });
-        await updateProfile(first.id, { email: 'contested@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            first.id,
+            { email: 'contested@example.com' },
+            testCallerContext
+        );
         const second = await createUser({ email: 'second@example.com', username: 'second' });
 
         const response = asReject(
-            await updateProfile(second.id, { email: 'contested@example.com' }, testCallerContext)
+            await accountService.updateProfile(
+                second.id,
+                { email: 'contested@example.com' },
+                testCallerContext
+            )
         );
 
         expect(response.status).toBe(409);
@@ -204,7 +244,11 @@ describe('updateProfile', () => {
 describe('cancelPendingEmailChange', () => {
     it('clears a pending change explicitly', async () => {
         const user = await createUser({ email: 'before@example.com' });
-        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'after@example.com' },
+            testCallerContext
+        );
 
         const response = asSuccess(
             await accountService.cancelPendingEmailChange(user.id, testCallerContext)
@@ -228,7 +272,11 @@ describe('cancelPendingEmailChange', () => {
 
     it('revokes the live email-change token, so the old link can no longer swap the address in', async () => {
         const user = await createUser({ email: 'before@example.com' });
-        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'after@example.com' },
+            testCallerContext
+        );
         const beforeCancel = await readTokens(user.id);
         expect(beforeCancel.some((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE)).toBe(true);
 
@@ -247,7 +295,11 @@ describe('cancelPendingEmailChange', () => {
             expect.objectContaining({ action: accountAuditActions.AUTH_EMAIL_CHANGE_CANCELLED })
         );
 
-        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'after@example.com' },
+            testCallerContext
+        );
         await accountService.cancelPendingEmailChange(user.id, testCallerContext);
 
         expect(auditSpy).toHaveBeenCalledWith(
@@ -264,10 +316,14 @@ describe('completeEmailChange', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
         await plantSession(user.id, 'live-session', { ttlMs: 60_000 });
-        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'after@example.com' },
+            testCallerContext
+        );
         const loaded = await userRepository.findByIdWithCredentials(user.id);
 
-        const saved = await completeEmailChange(loaded!, testCallerContext);
+        const saved = await accountService.completeEmailChange(loaded!, testCallerContext);
 
         expect(saved.email).toBe('after@example.com');
         expect(saved.verifiedAt).toBeInstanceOf(Date);
@@ -308,7 +364,11 @@ describe("`verify` and `email-change` tokens do not do each other's work", () =>
     it('sendVerificationEmail(..., EMAIL_CHANGE_TOKEN_TYPE) does nothing without a pendingEmail', async () => {
         const user = await createUser({ email: 'a@example.com' });
 
-        await sendVerificationEmail(user, testCallerContext, EMAIL_CHANGE_TOKEN_TYPE);
+        await accountService.sendVerificationEmail(
+            user,
+            testCallerContext,
+            EMAIL_CHANGE_TOKEN_TYPE
+        );
 
         const tokens = await readTokens(user.id);
         expect(tokens.some((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE)).toBe(false);
@@ -320,7 +380,7 @@ describe('passwordChangeWithCurrent', () => {
         const user = await createUser({ password: PASSPHRASE_PASSWORD });
 
         asSuccess(
-            await passwordChangeWithCurrent(
+            await accountService.passwordChangeWithCurrent(
                 user.id,
                 PASSPHRASE_PASSWORD,
                 REPLACEMENT_PASSWORD,
@@ -341,7 +401,7 @@ describe('passwordChangeWithCurrent', () => {
         const user = await createUser({ password: PASSPHRASE_PASSWORD });
 
         const response = asReject(
-            await passwordChangeWithCurrent(
+            await accountService.passwordChangeWithCurrent(
                 user.id,
                 'wrong-guess',
                 REPLACEMENT_PASSWORD,
@@ -360,7 +420,7 @@ describe('passwordChangeWithCurrent', () => {
         const user = await createUser({ password: PASSPHRASE_PASSWORD });
 
         const response = asReject(
-            await passwordChangeWithCurrent(
+            await accountService.passwordChangeWithCurrent(
                 user.id,
                 PASSPHRASE_PASSWORD,
                 REPLACEMENT_PASSWORD,
@@ -502,11 +562,11 @@ describe('sendVerificationEmail', () => {
     it('issues exactly one verify token, replacing any earlier one', async () => {
         const user = await createUser();
 
-        await sendVerificationEmail(user, testCallerContext);
+        await accountService.sendVerificationEmail(user, testCallerContext);
         const firstTokens = await readTokens(user.id);
         const first = firstTokens.find(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE);
 
-        await sendVerificationEmail(user, testCallerContext);
+        await accountService.sendVerificationEmail(user, testCallerContext);
         const secondTokens = await readTokens(user.id);
         const verifyTokens = secondTokens.filter(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE);
 
@@ -520,7 +580,7 @@ describe('sendVerificationEmail', () => {
         const user = await createUser();
         await plantSession(user.id, 'live-session', { ttlMs: 60_000 });
 
-        await sendVerificationEmail(user, testCallerContext);
+        await accountService.sendVerificationEmail(user, testCallerContext);
 
         const sessions = await sessionRowsOf(user.id);
         expect(
@@ -613,7 +673,11 @@ const ageEmailChangeSend = (userId: string): Promise<void> =>
 describe('resendPendingEmailVerificationFor', () => {
     it('answers 200 with the cooldown to count down and replaces the live link with a fresh one', async () => {
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
-        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'after@example.com' },
+            testCallerContext
+        );
         const emailChangeToken = () =>
             readTokens(user.id).then(
                 (tokens) =>
@@ -639,7 +703,11 @@ describe('resendPendingEmailVerificationFor', () => {
 
     it('leaves the pending address and the current one as they were', async () => {
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
-        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'after@example.com' },
+            testCallerContext
+        );
         await ageEmailChangeSend(user.id);
 
         await accountService.resendPendingEmailVerificationFor(user.id, testCallerContext);
@@ -668,7 +736,11 @@ describe('resendPendingEmailVerificationFor', () => {
     it('refuses a second send inside the cooldown, with the seconds to wait', async () => {
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
         // The request itself mailed the first link, so the cooldown is already running.
-        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'after@example.com' },
+            testCallerContext
+        );
 
         const response = asReject(
             await accountService.resendPendingEmailVerificationFor(user.id, testCallerContext)
@@ -687,7 +759,11 @@ describe('resendPendingEmailVerificationFor', () => {
         // do not share a clock.
         const user = await createUser({ email: 'before@example.com' }, 'unverified');
         await accountService.requestEmailVerificationFor(user.id, testCallerContext);
-        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'after@example.com' },
+            testCallerContext
+        );
         await ageEmailChangeSend(user.id);
 
         const response = asSuccess(
@@ -700,7 +776,11 @@ describe('resendPendingEmailVerificationFor', () => {
     it('audits AUTH_EMAIL_CHANGE_RESENT when a link was actually sent', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
-        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'after@example.com' },
+            testCallerContext
+        );
         await ageEmailChangeSend(user.id);
 
         await accountService.resendPendingEmailVerificationFor(user.id, testCallerContext);
@@ -934,10 +1014,18 @@ describe('the reset request is paced per account, silently', () => {
 describe('an email change is paced per account', () => {
     it('answers 429 EMAIL_CHANGE_TOO_SOON with the countdown, and saves nothing', async () => {
         const user = await createUser({ email: 'pace-change@example.com', verifiedAt: new Date() });
-        await updateProfile(user.id, { email: 'first-new@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'first-new@example.com' },
+            testCallerContext
+        );
 
         const refused = asReject(
-            await updateProfile(user.id, { email: 'second-new@example.com' }, testCallerContext)
+            await accountService.updateProfile(
+                user.id,
+                { email: 'second-new@example.com' },
+                testCallerContext
+            )
         );
 
         expect(refused.status).toBe(429);
@@ -951,10 +1039,14 @@ describe('an email change is paced per account', () => {
 
     it('allows another change once the window has passed', async () => {
         const user = await createUser({ email: 'pace-later@example.com', verifiedAt: new Date() });
-        await updateProfile(user.id, { email: 'one-new@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'one-new@example.com' },
+            testCallerContext
+        );
         await ageEmailChangeSend(user.id);
 
-        const result = await updateProfile(
+        const result = await accountService.updateProfile(
             user.id,
             { email: 'two-new@example.com' },
             testCallerContext
@@ -965,9 +1057,17 @@ describe('an email change is paced per account', () => {
 
     it('does not pace a save that changes no email', async () => {
         const user = await createUser({ email: 'pace-name@example.com', verifiedAt: new Date() });
-        await updateProfile(user.id, { email: 'pending-new@example.com' }, testCallerContext);
+        await accountService.updateProfile(
+            user.id,
+            { email: 'pending-new@example.com' },
+            testCallerContext
+        );
 
-        const result = await updateProfile(user.id, { username: 'renamed' }, testCallerContext);
+        const result = await accountService.updateProfile(
+            user.id,
+            { username: 'renamed' },
+            testCallerContext
+        );
 
         expect(result.success).toBe(true);
     });

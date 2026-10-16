@@ -12,7 +12,6 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { authSignupTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
 import { issueSession } from '../session/session';
-import { sendVerificationEmail } from '../services';
 import { userService } from '@modules/users';
 import { logAntibotRefusal } from '@infrastructure/http/middlewares/antibot-log';
 import { AMR } from '../domain/session-proof';
@@ -98,7 +97,7 @@ export const postSignup = (
              * informational), so this is fire-and-forget like every other account email and the
              * 201 does not wait on the queue.
              */
-            void sendVerificationEmail(data, callerContextOf(request));
+            void accountService.sendVerificationEmail(data, callerContextOf(request));
 
             /*
              * Signed in from here, as an `unverified` audience: the role model already lets an unproven

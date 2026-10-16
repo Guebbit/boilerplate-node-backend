@@ -8,8 +8,8 @@
  *
  * Two, not one:    neither group calls the other, so one object each keeps a caller of
  *                  `accountService.login` from being coupled, to TypeScript, to 2FA as well.
- * Prefer direct:   import the one function you need from its own file when a caller needs only a
- *                  name or two; the namespaces exist so the surface can still be browsed by name.
+ * One door:        every operation is on one of the two objects and nowhere by name; constants,
+ *                  error classes and pure helpers stay named exports.
  * Below this:      `../session/` — JWT signing, the refresh cookie, shared expiry. Nothing
  *                  outside this module imports it directly; see `../index`.
  *
@@ -41,13 +41,10 @@ import * as oauth from './oauth';
 import * as twoFactorEnrollment from './two-factor-enrollment';
 import * as twoFactorChallenge from './two-factor-challenge';
 import * as reauth from './reauth';
+import * as reapInactive from './reap-inactive';
+import * as reencrypt from './reencrypt';
+import * as mail from './mail';
 
-/*
- * Published by name as well as on the namespace, for the callers that import a single function
- * rather than the object — controllers, and the suites that pin one flow. Unused-by-name is
- * allowed on purpose, same as the module barrel itself (CLAUDE.md's "Module barrels"): a caller
- * reaching for a name not listed here copies the logic instead of adding the export it needed.
- */
 export {
     PASSWORD_RESET_TOKEN_TYPE,
     ACCOUNT_DELETE_TOKEN_TYPE,
@@ -57,22 +54,8 @@ export {
 } from '../token-types';
 export { RESET_REQUEST_SECONDS } from './password-reset-request';
 export { amrAfterReauth } from './reauth';
-export { passwordChangeWithCurrent } from './password';
-export { updateProfile } from './profile';
+export { VERIFY_RESEND_SECONDS } from './verification';
 export {
-    sendVerificationEmail,
-    VERIFY_RESEND_SECONDS,
-    completeEmailChange,
-    undoEmailChange
-} from './verification';
-export { reapLapsedPreviousEmails } from './previous-email-cleanup';
-export { reapExpiredExports } from './export-rows';
-export { reapInactiveAccounts } from './reap-inactive';
-export { reencryptTotpSecrets } from './reencrypt';
-export { sendAccountMail } from './mail';
-export {
-    loginOrCreateFromOAuth,
-    recordOAuthFailure,
     OAuthEmailUnverifiedError,
     OAuthAccountUnverifiedError,
     OAuthAccountUnavailableError
@@ -127,7 +110,10 @@ export const accountService = {
     loginOrCreateFromOAuth: oauth.loginOrCreateFromOAuth,
     recordOAuthFailure: oauth.recordOAuthFailure,
     listOAuthLinks: oauth.listOAuthLinks,
-    unlinkOAuthProvider: oauth.unlinkOAuthProvider
+    unlinkOAuthProvider: oauth.unlinkOAuthProvider,
+    reapInactiveAccounts: reapInactive.reapInactiveAccounts,
+    reencryptTotpSecrets: reencrypt.reencryptTotpSecrets,
+    sendAccountMail: mail.sendAccountMail
 };
 
 /**

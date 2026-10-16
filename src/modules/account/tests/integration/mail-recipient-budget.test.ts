@@ -14,7 +14,7 @@ import { withEnvironment } from '@tests/environment';
 import { testCallerContext } from '@tests/callers';
 import { asReject } from '@tests/response';
 import { createUser, userRepository } from '@modules/users/tests/factories';
-import { accountService, updateProfile } from '@modules/account/services';
+import { accountService } from '@modules/account/services';
 import { rateLimitRefusalsTotal } from '@infrastructure/observability/metrics-rate-limit';
 
 setupTestDb();
@@ -156,8 +156,16 @@ describe('the service doors — the recipient is chosen by the server', () => {
             const first = await createUser({ email: 'one@example.com', verifiedAt: new Date() });
             const second = await createUser({ email: 'two@example.com', verifiedAt: new Date() });
             // Each change request spends one mail to the victim mailbox; the resend would be the third.
-            await updateProfile(first.id, { email: 'pending+1@example.com' }, testCallerContext);
-            await updateProfile(second.id, { email: 'pending+2@example.com' }, testCallerContext);
+            await accountService.updateProfile(
+                first.id,
+                { email: 'pending+1@example.com' },
+                testCallerContext
+            );
+            await accountService.updateProfile(
+                second.id,
+                { email: 'pending+2@example.com' },
+                testCallerContext
+            );
 
             const refused = await accountService.resendPendingEmailVerificationFor(
                 first.id,
@@ -171,9 +179,13 @@ describe('the service doors — the recipient is chosen by the server', () => {
         withBudget(1, async () => {
             const first = await createUser({ email: 'one@example.com', verifiedAt: new Date() });
             const second = await createUser({ email: 'two@example.com', verifiedAt: new Date() });
-            await updateProfile(first.id, { email: 'change+1@example.com' }, testCallerContext);
+            await accountService.updateProfile(
+                first.id,
+                { email: 'change+1@example.com' },
+                testCallerContext
+            );
 
-            const refused = await updateProfile(
+            const refused = await accountService.updateProfile(
                 second.id,
                 { email: 'change+2@example.com' },
                 testCallerContext
@@ -187,14 +199,18 @@ describe('the service doors — the recipient is chosen by the server', () => {
     it('does not charge a change that is a no-op (the current or the already-pending address)', () =>
         withBudget(1, async () => {
             const user = await createUser({ email: 'one@example.com', verifiedAt: new Date() });
-            await updateProfile(user.id, { email: 'noop@example.com' }, testCallerContext);
-
-            const again = await updateProfile(
+            await accountService.updateProfile(
                 user.id,
                 { email: 'noop@example.com' },
                 testCallerContext
             );
-            const current = await updateProfile(
+
+            const again = await accountService.updateProfile(
+                user.id,
+                { email: 'noop@example.com' },
+                testCallerContext
+            );
+            const current = await accountService.updateProfile(
                 user.id,
                 { email: 'one@example.com' },
                 testCallerContext

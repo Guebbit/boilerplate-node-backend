@@ -6,7 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { reapLapsedPreviousEmails } from '@modules/account/services';
+import { accountService } from '@modules/account/services';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 import { plantToken } from '../factories';
 
@@ -38,7 +38,7 @@ describe('reapLapsedPreviousEmails', () => {
     it('forgets the previous email once the undo link has expired', async () => {
         const lapsed = await changedAccount('lapsed', -1000);
 
-        await expect(reapLapsedPreviousEmails()).resolves.toBe(1);
+        await expect(accountService.reapLapsedPreviousEmails()).resolves.toBe(1);
 
         await expect(previousEmailOf(lapsed.id)).resolves.toBeUndefined();
     });
@@ -46,7 +46,7 @@ describe('reapLapsedPreviousEmails', () => {
     it('forgets it when the link is gone altogether, spent or revoked', async () => {
         const unlinked = await changedAccount('unlinked');
 
-        await reapLapsedPreviousEmails();
+        await accountService.reapLapsedPreviousEmails();
 
         await expect(previousEmailOf(unlinked.id)).resolves.toBeUndefined();
     });
@@ -54,7 +54,7 @@ describe('reapLapsedPreviousEmails', () => {
     it('keeps it while the undo link is still live', async () => {
         const live = await changedAccount('live', 3_600_000);
 
-        await expect(reapLapsedPreviousEmails()).resolves.toBe(0);
+        await expect(accountService.reapLapsedPreviousEmails()).resolves.toBe(0);
 
         await expect(previousEmailOf(live.id)).resolves.toBe('live-old@example.com');
     });
@@ -63,7 +63,7 @@ describe('reapLapsedPreviousEmails', () => {
         const other = await changedAccount('other');
         await plantToken(other.id, 'email-change', 'other-confirm', { ttlMs: 3_600_000 });
 
-        await reapLapsedPreviousEmails();
+        await accountService.reapLapsedPreviousEmails();
 
         await expect(previousEmailOf(other.id)).resolves.toBeUndefined();
     });
@@ -75,7 +75,7 @@ describe('reapLapsedPreviousEmails', () => {
             { $set: { pendingEmail: 'pending-next@example.com' } }
         );
 
-        await reapLapsedPreviousEmails();
+        await accountService.reapLapsedPreviousEmails();
 
         const stored = await userRepository.findByIdWithCredentials(user.id);
         expect(stored?.email).toBe('pending@example.com');

@@ -34,8 +34,7 @@ import {
     oauthFrontendMfaCallbackUrl
 } from '../oauth/config';
 import {
-    loginOrCreateFromOAuth,
-    recordOAuthFailure,
+    accountService,
     twoFactorService,
     OAuthEmailUnverifiedError,
     OAuthAccountUnverifiedError,
@@ -86,7 +85,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
     /** Audit + metric for a failed attempt, then clear both single-attempt cookies — the tail
      * every failure path shares, whichever response follows. */
     const recordFailureAndClear = (reason: string) => {
-        recordOAuthFailure(context, providerName, reason);
+        accountService.recordOAuthFailure(context, providerName, reason);
         authOauthTotal.inc({ provider: providerName, status: 'failure' });
         clearOAuthCookies(response);
     };
@@ -138,7 +137,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
             state: String(cookieOf(request, OAUTH_STATE_COOKIE)),
             codeVerifier: verifier
         })
-        .then((identity) => loginOrCreateFromOAuth(provider.name, identity, context))
+        .then((identity) => accountService.loginOrCreateFromOAuth(provider.name, identity, context))
         .then(({ user, outcome }) => {
             /*
              * A factor armed on the password path applies here too — 2FA is a control on the
