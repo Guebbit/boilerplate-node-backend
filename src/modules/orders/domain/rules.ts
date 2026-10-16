@@ -29,6 +29,24 @@ export const checkOrderLines = (lines: readonly OrderLineCandidate[]): OrderLine
     return { ok: true };
 };
 
+/** The three facts about a product that decide whether it may be put on an order. */
+export interface SellableCandidate {
+    /** `false` hides the product from shoppers. */
+    active?: boolean;
+    /** `false` takes it off sale: listed, not buyable. */
+    purchasable?: boolean;
+    /** Set once the product is soft-deleted. */
+    deletedAt?: Date | null;
+}
+
+/**
+ * Whether a product may be sold: shown, on sale and not deleted. The same three facts checkout
+ * refuses a line on, so an operator raising an order sells exactly the shelf a shopper does.
+ * @param product - the product as stored, not as an order line froze it
+ */
+export const isSellable = (product: SellableCandidate): boolean =>
+    product.active !== false && product.purchasable !== false && !product.deletedAt;
+
 /** The buyer as an order carries it: an ObjectId on a stored order, a string on a hand-built one. */
 interface HasBuyer {
     userId?: string | { toString: () => string } | null;

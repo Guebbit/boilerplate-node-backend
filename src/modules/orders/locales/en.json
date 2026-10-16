@@ -84,6 +84,7 @@
             "refund-none": "No refund was issued with this cancellation. If you think that is a mistake, please contact us.",
             "refund-unpaid": "You had not paid for this order, so nothing was charged."
         },
+        "product-unavailable": "Some products on this order are hidden, off sale or removed and cannot be ordered — see `details.productIds`.",
         "insufficient-stock": "Some items on this order are no longer available in the quantity requested — see `details.lines`.",
         "line-limit-lines": "This order has more than {{limit}} lines.",
         "line-limit-quantity": "A line on this order asks for more than {{limit}} units.",

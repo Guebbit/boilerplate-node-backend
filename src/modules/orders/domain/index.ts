@@ -9,7 +9,14 @@
 
 export { sumLineItems, orderTotal } from './totals';
 
-export { buyerIdOf, checkOrderLines, isBuyer, isShippedItem, isDigitalOnlyOrder } from './rules';
+export {
+    buyerIdOf,
+    checkOrderLines,
+    isBuyer,
+    isSellable,
+    isShippedItem,
+    isDigitalOnlyOrder
+} from './rules';
 export type { ShippableLineCandidate } from './rules';
 
 // `ORDER_EVENTS` is the one place a service reads a move's `from` and `to`; the edge questions

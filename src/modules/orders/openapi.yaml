@@ -10,6 +10,7 @@ tags:
 
 x-error-codes:
     ORDER_INSUFFICIENT_STOCK: { status: 409, description: 'An admin-created order references a quantity beyond the product''s available stock. `errors[].details.lines` names each short line with its `productId`, `title` and `requested` quantity; `available` is added only for a caller who reads stock (`read:StockLevel`).' }
+    ORDER_PRODUCT_UNAVAILABLE: { status: 409, description: 'An admin-created order names a product that is hidden (`active: false`), off sale (`purchasable: false`) or soft-deleted: refused exactly as checkout refuses it. `errors[].details.productIds` names each one.' }
     ORDER_EXPORT_TOO_LARGE: { status: 422, description: 'The export would carry more orders than `NODE_ORDER_EXPORT_MAX_ROWS` allows. The message names the cap; narrow the filters and ask again.' }
     ORDER_INVOICED: { status: 409, description: 'This action is not allowed once an order has been invoiced.' }
     ORDER_LINE_LIMIT_EXCEEDED: { status: 422, description: 'An admin-created order has more lines, or a larger quantity on one line, than this deployment allows (`NODE_ADMIN_ORDER_MAX_LINES`, `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`). The message names the limit.' }
@@ -127,6 +128,10 @@ paths:
             description: >-
                 Creates a new order directly from the supplied payload, for the account named in
                 `userId`. Raising one for oneself is allowed.
+
+                It sells the shelf a shopper buys from: a hidden, off-sale or soft-deleted product is
+                refused with `409 ORDER_PRODUCT_UNAVAILABLE`, exactly as checkout refuses it, and
+                stock is held the same way (`409 ORDER_INSUFFICIENT_STOCK`).
 
                 A body is bounded twice. The schema caps it at 1000 lines of at most 999999 units
                 (what the contract promises); a deployment may set a lower limit in

@@ -155,6 +155,40 @@ describe('create', () => {
         expect(await countOrders()).toBe(2);
     });
 
+    // An operator sells the shelf a shopper buys from: what checkout refuses, this refuses too, and
+    // names every product it refused so the form can point at them.
+    it.each([
+        ['hidden', { active: false }],
+        ['off sale', { purchasable: false }],
+        ['soft-deleted', { deletedAt: new Date() }]
+    ])(
+        'refuses a %s product with 409 ORDER_PRODUCT_UNAVAILABLE, and writes nothing',
+        async (_name, flags) => {
+            const user = await createUser();
+            const fine = await createProduct({ title: 'Keyboard', price: 25, onHand: 5 });
+            const refused = await createProduct({ title: 'Mouse', price: 10, onHand: 5, ...flags });
+
+            const result = await create(
+                String(user._id),
+                user.email,
+                [
+                    { productId: String(fine._id), quantity: 1 },
+                    { productId: String(refused._id), quantity: 1 }
+                ],
+                callerContextAs('admin')
+            );
+
+            expect(asReject(result).status).toBe(409);
+            expect(asReject(result).errors[0]).toMatchObject({
+                code: 'ORDER_PRODUCT_UNAVAILABLE',
+                details: { productIds: [String(refused._id)] }
+            });
+            expect(await countOrders()).toBe(0);
+            // No hold was taken for the line that was fine.
+            expect(await countersOf(fine._id)).toMatchObject({ reserved: 0 });
+        }
+    );
+
     // The open-order cap is a checkout rule (`cart/services/checkout.ts`): an operator raising an
     // order for a customer is not the shopper the cap exists to stop.
     it('skips the open-order cap that guards checkout', () =>

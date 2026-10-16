@@ -24,6 +24,7 @@ import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { orderRepository } from '../repository';
 import { placeOrder } from './place';
+import { isSellable } from '../domain/rules';
 import { maxAdminOrderLineQuantity, maxAdminOrderLines } from '../config';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { ERROR_CODES } from '@api/error-codes';
@@ -137,6 +138,17 @@ export const create = async (
 
     // `Promise.all([])` settles without a query, so an empty basket still costs no round trip.
     const resolvedItems = await resolveItemProducts(items);
+
+    // Hidden, off-sale and deleted products are refused as checkout refuses them, every one named.
+    const unsellable = resolvedItems.filter(({ product }) => product && !isSellable(product));
+    if (unsellable.length > 0)
+        return generateReject(409, [
+            {
+                code: ERROR_CODES.ORDER_PRODUCT_UNAVAILABLE,
+                message: t('orders.product-unavailable'),
+                details: { productIds: unsellable.map(({ item }) => item.productId) }
+            }
+        ]);
 
     // The admin path sells the same shelf the storefront does — the same write, freeze, invoice
     // allocation and stock hold `placeOrder` runs for `@modules/cart`'s checkout, with no

@@ -84,6 +84,7 @@
             "refund-none": "Con questo annullamento non è stato effettuato alcun rimborso. Se pensi sia un errore, contattaci.",
             "refund-unpaid": "Non avevi pagato questo ordine, quindi non è stato addebitato nulla."
         },
+        "product-unavailable": "Alcuni prodotti di questo ordine sono nascosti, non in vendita o rimossi e non si possono ordinare — vedi `details.productIds`.",
         "insufficient-stock": "Alcuni articoli di questo ordine non sono più disponibili nella quantità richiesta — vedi `details.lines`.",
         "line-limit-lines": "Questo ordine ha più di {{limit}} righe.",
         "line-limit-quantity": "Una riga di questo ordine chiede più di {{limit}} unità.",

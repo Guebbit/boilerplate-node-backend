@@ -240,6 +240,9 @@ exists for manual corrections, not as a second sales channel:
 
 - it takes a buyer, an email and line items, and nothing else — no payment method, no address, no
   shipping method, and no frontend screen behind it;
+- it sells the shelf a shopper buys from: a hidden, off-sale or soft-deleted product is refused with
+  `409 ORDER_PRODUCT_UNAVAILABLE` (`isSellable`, the three facts checkout refuses on), every refused
+  product named in `details.productIds`;
 - it holds stock for the default reservation window like any other order, so an unpaid correction
   order is cancelled by the same reservation sweep as an abandoned checkout;
 - carrying no address or shipping, it cannot be fulfilled through the warehouse's normal
