@@ -7,6 +7,9 @@
  */
 
 import { asStub } from '@tests/stub';
+import { Types } from 'mongoose';
+import { logger } from '@infrastructure/adapters/logger';
+import { userService } from '@modules/users';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { mailBuyer, sendOrderPlacedEmail } from '../../services/notify';
 import { ANONYMIZED_EMAIL } from '../../domain/anonymization';
@@ -23,6 +26,7 @@ const orderFixture = (overrides: Partial<OrderDocument> = {}): OrderDocument =>
         _id: 'order-1',
         items: [{ product: { title: 'A product', price: 10 }, quantity: 1 }],
         shippingCost: 0,
+        currency: 'EUR',
         paymentMethod: 'card',
         ...overrides
     });
@@ -86,5 +90,26 @@ describe('mailBuyer — anonymised order', () => {
         await mailBuyer(orderFixture({ email: 'ada@example.com' }), build);
 
         expect(build).toHaveBeenCalledWith(expect.any(String), 'ada@example.com');
+    });
+});
+
+describe('mailBuyer — buyer lookup fails', () => {
+    it('builds with the order email as the name, and logs the failed lookup', async () => {
+        const loggedError = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        const lookupFailure = new Error('lookup unavailable');
+        jest.spyOn(userService, 'getById').mockRejectedValueOnce(lookupFailure);
+        const build = jest.fn();
+
+        await mailBuyer(
+            orderFixture({ email: 'ada@example.com', userId: new Types.ObjectId() }),
+            build
+        );
+
+        expect(build).toHaveBeenCalledWith(expect.any(String), 'ada@example.com');
+        expect(loggedError).toHaveBeenCalledWith({
+            message: 'Buyer lookup failed; mailing the order with the fallback name.',
+            orderId: 'order-1',
+            error: lookupFailure
+        });
     });
 });

@@ -58,6 +58,16 @@ export interface WithdrawalNotice {
 }
 
 /**
+ * An amount in a currency, spelled the way the recipient's locale writes money.
+ * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
+ * @param locale - the recipient's language
+ * @param amount - a decimal in `currency`
+ * @param currency - an ISO-4217 code
+ */
+const money = (locale: string, amount: number, currency: string): string =>
+    new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+
+/**
  * A postal address on one line, skipping whatever is absent.
  * @param address - the address to print
  */
@@ -189,6 +199,7 @@ export const withdrawalNotice = (
  * The bought lines are resolved here, one translated string each, since per-line copy interpolates
  * per-line values and can't be a single string decided up front. The total is `orderTotal`'s
  * arithmetic, not a fresh sum — the email quotes what the order stands for, shipping included.
+ * Every amount is spelled in the order's own currency and the recipient's locale, never a bare number.
  *
  * Sent immediately at order creation, never held for anything the receipt needs: it renders on
  * demand, the moment someone actually asks for it. `linkUrl` points at the order's page, where
@@ -214,10 +225,12 @@ export const orderConfirmEmail = (
                 t('orders.email-confirm.line', {
                     title: item.product.title,
                     quantity: item.quantity,
-                    price: item.product.price
+                    price: money(locale, item.product.price, order.currency)
                 })
             ),
-            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            total: t('orders.email-confirm.total', {
+                total: money(locale, orderTotal(order), order.currency)
+            }),
             linkLabel: t('orders.email-confirm.link-label'),
             linkUrl: orderFrontendLink({ locale, id: orderId }),
             withdrawalHeading: withdrawal.heading,
@@ -269,7 +282,9 @@ export const bankTransferInstructionsEmail = (
                     timeStyle: 'short'
                 }).format(payBy)
             }),
-            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            total: t('orders.email-confirm.total', {
+                total: money(locale, orderTotal(order), order.currency)
+            }),
             // Order-number allocation doesn't wait on payment (see `order-numbering.ts`), so the
             // same link, rendering the same receipt on demand, applies here as on the paid path.
             linkLabel: t('orders.email-transfer.link-label'),
@@ -299,7 +314,9 @@ export const bankTransferExpiredEmail = (locale: string, order: OrderLines): Ema
             pageMetaTitle: t('orders.email-transfer-expired.meta-title'),
             greeting: t('orders.email-transfer-expired.greeting'),
             body: t('orders.email-transfer-expired.body'),
-            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            total: t('orders.email-confirm.total', {
+                total: money(locale, orderTotal(order), order.currency)
+            }),
             footer: t('email.footer')
         }
     };
@@ -320,21 +337,13 @@ export const cardHoldExpiredEmail = (locale: string, order: OrderLines): EmailCo
             pageMetaTitle: t('orders.email-card-expired.meta-title'),
             greeting: t('orders.email-card-expired.greeting'),
             body: t('orders.email-card-expired.body'),
-            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            total: t('orders.email-confirm.total', {
+                total: money(locale, orderTotal(order), order.currency)
+            }),
             footer: t('email.footer')
         }
     };
 };
-
-/**
- * An amount in a currency, spelled the way the recipient's locale writes money.
- * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
- * @param locale - the recipient's language
- * @param amount - a decimal in `currency`
- * @param currency - an ISO-4217 code
- */
-const money = (locale: string, amount: number, currency: string): string =>
-    new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
 
 /**
  * What a cancellation did to the buyer's money, as the copy key that says it: money taken and

@@ -1185,8 +1185,8 @@ describe('orderConfirm', () => {
         expect(envelope.to).toBe(user.email);
         expect(template).toBe('orders.order-confirm');
         // The lines are the order's own snapshot, priced — not the cart's ids.
-        expect(data?.lines).toEqual(['Keyboard — 2 × 25']);
-        expect(data?.total).toBe('Total: 50');
+        expect(data?.lines).toEqual(['Keyboard — 2 × €25.00']);
+        expect(data?.total).toBe('Total: €50.00');
     });
 
     it('sends no email when the checkout is refused', async () => {

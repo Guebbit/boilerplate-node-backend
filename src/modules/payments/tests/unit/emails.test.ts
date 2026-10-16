@@ -33,7 +33,9 @@ describe('paymentReceivedEmail', () => {
     it("quotes the order's own total, shipping included, and links to the order", () => {
         const mail = paymentReceivedEmail('en', NAME, ORDER, ORDER_ID);
 
-        expect(mail.data.total).toContain(String(orderTotal(ORDER)));
+        expect(orderTotal(ORDER)).toBe(226.75);
+        expect(mail.data.total).toContain('€226.75');
+        expect((mail.data.lines as string[])[1]).toContain('€7.50');
         expect(mail.data.linkUrl).toBe(orderFrontendLink({ locale: 'en', id: ORDER_ID }));
     });
 

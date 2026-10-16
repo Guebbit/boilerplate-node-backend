@@ -48,10 +48,12 @@ export const paymentReceivedEmail = (
                 t('payments.email-received.line', {
                     title: item.product.title,
                     quantity: item.quantity,
-                    price: item.product.price
+                    price: money(locale, item.product.price, order.currency)
                 })
             ),
-            total: t('payments.email-received.total', { total: orderTotal(order) }),
+            total: t('payments.email-received.total', {
+                total: money(locale, orderTotal(order), order.currency)
+            }),
             linkLabel: t('payments.email-received.link-label'),
             linkUrl: orderFrontendLink({ locale, id: orderId }),
             footer: t('email.footer')

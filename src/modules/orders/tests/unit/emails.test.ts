@@ -8,7 +8,14 @@
  * The invoice document itself is `invoicing`'s own — see
  * `src/modules/invoicing/tests/unit/emails.test.ts`.
  */
-import { orderConfirmEmail, orderCancelledEmail, type OrderLines } from '@modules/orders/emails';
+import {
+    bankTransferExpiredEmail,
+    bankTransferInstructionsEmail,
+    cardHoldExpiredEmail,
+    orderConfirmEmail,
+    orderCancelledEmail,
+    type OrderLines
+} from '@modules/orders/emails';
 import { orderTotal } from '@modules/orders/domain';
 import { orderFrontendLink } from '@modules/orders/config';
 
@@ -47,10 +54,10 @@ describe('orderConfirmEmail', () => {
 
         expect(lines[0]).toContain('Grain-Free Dog Food');
         expect(lines[0]).toContain('2');
-        expect(lines[0]).toContain('100');
+        expect(lines[0]).toContain('€100.00');
         expect(lines[1]).toContain('Memory Foam Dog Bed');
         expect(lines[1]).toContain('3');
-        expect(lines[1]).toContain('7.5');
+        expect(lines[1]).toContain('€7.50');
     });
 
     it('states the same total the order itself computes, shipping included', () => {
@@ -58,7 +65,15 @@ describe('orderConfirmEmail', () => {
         // email and the charge cannot drift apart. `totals.property.test.ts` covers the sum.
         const { data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
 
-        expect(data.total).toContain(String(orderTotal(ORDER)));
+        expect(orderTotal(ORDER)).toBe(226.75);
+        expect(data.total).toContain('€226.75');
+    });
+
+    it('spells the total the way the recipient"s locale writes money', () => {
+        // U+00A0 between the number and the sign: `Intl` writes Italian money that way.
+        expect(orderConfirmEmail('it', NAME, ORDER, ORDER_ID).data.total).toContain(
+            '226,75\u00A0€'
+        );
     });
 
     it('includes the shipping cost in that total rather than quoting the goods alone', () => {
@@ -204,5 +219,30 @@ describe('orderCancelledEmail', () => {
         for (const mail of [english, italian])
             for (const value of [mail.subject, mail.data.body, mail.data.refundNote])
                 expect(value).not.toMatch(/^orders\./);
+    });
+});
+
+describe('every order mail prints money in the order"s own currency', () => {
+    // 1990 yen: no decimals, so a builder that formatted as euros would print `€1,990.00`.
+    const YEN: OrderLines = {
+        items: [{ quantity: 1, product: { title: 'Dog Bed', price: 1990 } }],
+        currency: 'JPY'
+    };
+    const TRANSFER = {
+        beneficiary: 'Shop',
+        iban: 'DE89 3704 0044 0532 0130 00',
+        reference: 'RF18'
+    };
+
+    it.each([
+        ['the confirmation', () => orderConfirmEmail('en', NAME, YEN, ORDER_ID)],
+        [
+            'the transfer instructions',
+            () => bankTransferInstructionsEmail('en', NAME, YEN, TRANSFER, new Date(0), ORDER_ID)
+        ],
+        ['the transfer expiry', () => bankTransferExpiredEmail('en', YEN)],
+        ['the card-hold expiry', () => cardHoldExpiredEmail('en', YEN)]
+    ])('%s', (_label, build) => {
+        expect(build().data.total).toContain('¥1,990');
     });
 });
