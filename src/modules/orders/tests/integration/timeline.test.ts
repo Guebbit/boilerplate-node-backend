@@ -12,7 +12,6 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, seedOrder, toOrderItem, timelineOf } from '@modules/orders/tests/factories';
 import { asAdmin, asCustomer, callerContextAs } from '@tests/callers';
-import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { resetDomainEvents } from '@kernel/events';
 import { userService } from '@modules/users';
@@ -124,8 +123,8 @@ describe('what each move writes', () => {
         const mine = await createOrder(user, [toOrderItem(product, 1)]);
         const swept = await orderOfBuyer(1, OrderStatus.pending);
 
-        await orderService.cancelById(String(mine._id), asCustomer(user.id));
-        await orderService.cancelById(String(swept._id), SYSTEM_ACTOR);
+        await orderService.cancelOnRequestById(String(mine._id), asCustomer(user.id));
+        await orderService.cancelForErasureById(String(swept._id));
 
         expect(await timelineOf(String(mine._id))).toMatchObject([
             { type: 'cancelled', actor: user.id, data: { by: 'customer' } }
@@ -239,7 +238,7 @@ describe('what the law lets go', () => {
 
     it('removes the timeline with an order that is hard-deleted', async () => {
         const order = await seedOrder(OrderStatus.pending);
-        await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
+        await orderService.cancelForErasureById(String(order._id));
         await settleOutboxNudges();
 
         await orderService.removeById(String(order._id), true);

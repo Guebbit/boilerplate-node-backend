@@ -289,7 +289,7 @@ describe('confirmPayment', () => {
         const { user, order } = await orderFor();
         const intent = await createIntent(String(order._id), auth(user));
         const paymentId = String((intent as { data?: { id?: string } }).data?.id);
-        await orderService.cancelById(String(order._id), auth(user));
+        await orderService.cancelOnRequestById(String(order._id), auth(user));
 
         const confirmSpy = jest.spyOn(fakePaymentProvider, 'confirm');
         const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
@@ -415,7 +415,7 @@ describe('refund on cancel', () => {
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
         await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
 
-        const cancelled = await orderService.cancelById(String(order._id), auth(user));
+        const cancelled = await orderService.cancelOnRequestById(String(order._id), auth(user));
         await settleOutboxNudges();
 
         expect(cancelled.success).toBe(true);
@@ -432,7 +432,7 @@ describe('refund on cancel', () => {
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
         await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
 
-        const cancelled = await orderService.cancelById(
+        const cancelled = await orderService.cancelOnRequestById(
             String(order._id),
             asAdmin(),
             { refund: false },
@@ -449,7 +449,7 @@ describe('refund on cancel', () => {
         const { user, order } = await orderFor();
         await createIntent(String(order._id), auth(user));
 
-        const cancelled = await orderService.cancelById(String(order._id), auth(user));
+        const cancelled = await orderService.cancelOnRequestById(String(order._id), auth(user));
 
         expect(cancelled.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -493,7 +493,7 @@ describe('refund on cancel', () => {
                 .spyOn(fakePaymentProvider, 'refund')
                 .mockRejectedValueOnce(new Error('payment provider unreachable'));
 
-            await orderService.cancelById(String(order._id), auth(user));
+            await orderService.cancelOnRequestById(String(order._id), auth(user));
             await settleOutboxNudges();
 
             const stuck = await paymentRepository.findByOrderId(String(order._id));
@@ -528,7 +528,7 @@ describe('refund on cancel', () => {
             const confirmSpy = jest
                 .spyOn(fakePaymentProvider, 'confirm')
                 .mockImplementationOnce(async (providerRef, methodRef) => {
-                    await orderService.cancelById(String(order._id), auth(user));
+                    await orderService.cancelOnRequestById(String(order._id), auth(user));
                     // The cancel's own listeners finish before the charge lands: the other order
                     // (charge first, then the listener) is the cancel path's reconciliation.
                     await settleOutboxNudges();
@@ -584,7 +584,7 @@ describe('refund on cancel', () => {
             );
 
             const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
-            await orderService.cancelById(String(order._id), auth(user));
+            await orderService.cancelOnRequestById(String(order._id), auth(user));
             await settleOutboxNudges();
 
             expect(refundSpy).not.toHaveBeenCalled();
@@ -603,7 +603,7 @@ describe('refund on cancel', () => {
         );
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
         await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
-        await orderService.cancelById(String(order._id), auth(user));
+        await orderService.cancelOnRequestById(String(order._id), auth(user));
 
         // The setup this test actually cares about: cancelling really did refund it already.
         expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
@@ -633,7 +633,7 @@ describe('refund on cancel', () => {
         const originalConfirm = fakePaymentProvider.confirm;
         jest.spyOn(fakePaymentProvider, 'confirm').mockImplementationOnce(
             async (providerRef, methodRef) => {
-                await orderService.cancelById(orderId, auth(user));
+                await orderService.cancelOnRequestById(orderId, auth(user));
                 return originalConfirm(providerRef, methodRef);
             }
         );
@@ -795,7 +795,7 @@ describe('cancelling a paid order releases its claim', () => {
         await payFor(String(order._id), user);
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
 
-        const cancelled = await orderService.cancelById(String(order._id), auth(user));
+        const cancelled = await orderService.cancelOnRequestById(String(order._id), auth(user));
 
         expect(cancelled.success).toBe(true);
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
@@ -803,7 +803,7 @@ describe('cancelling a paid order releases its claim', () => {
         expect(movements.items.filter((row) => row.reason === 'release')).toHaveLength(1);
         expect(movements.items.filter((row) => row.reason === 'restock')).toHaveLength(0);
 
-        const second = await orderService.cancelById(String(order._id), auth(user));
+        const second = await orderService.cancelOnRequestById(String(order._id), auth(user));
         expect(second.success).toBe(false);
         expect(asReject(second).status).toBe(409);
     });
@@ -821,9 +821,9 @@ describe('cancelling a paid order releases its claim', () => {
             }
         );
 
-        await expect(orderService.cancelById(String(order._id), auth(user))).rejects.toThrow(
-            'connection reset'
-        );
+        await expect(
+            orderService.cancelOnRequestById(String(order._id), auth(user))
+        ).rejects.toThrow('connection reset');
 
         const stored = await readOrder(String(order._id));
         expect(stored?.status).toBe('paid');
@@ -832,7 +832,7 @@ describe('cancelling a paid order releases its claim', () => {
         expect(movements.items.filter((row) => row.reason === 'release')).toHaveLength(0);
 
         // Nothing was half-done, so the same cancel simply works when retried.
-        const retried = await orderService.cancelById(String(order._id), auth(user));
+        const retried = await orderService.cancelOnRequestById(String(order._id), auth(user));
         expect(retried.success).toBe(true);
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
     });
@@ -1581,7 +1581,7 @@ describe('recordOfflinePayment — refunding it back', () => {
         const { user, order } = await orderFor();
         await recordOfflinePayment(String(order._id), { method: 'cash' }, callerContextAs('admin'));
 
-        const cancelled = await orderService.cancelById(String(order._id), auth(user));
+        const cancelled = await orderService.cancelOnRequestById(String(order._id), auth(user));
 
         expect(cancelled.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -1593,7 +1593,7 @@ describe('recordOfflinePayment — refunding it back', () => {
     it('only the admin refund endpoint can set refundedByHand, after that', async () => {
         const { user, order } = await orderFor();
         await recordOfflinePayment(String(order._id), { method: 'cash' }, callerContextAs('admin'));
-        await orderService.cancelById(String(order._id), auth(user));
+        await orderService.cancelOnRequestById(String(order._id), auth(user));
 
         const refunded = await refundByOrder(
             String(order._id),
@@ -1622,7 +1622,7 @@ describe('order.cancelled — closing a still-open intent at the provider', () =
         const prepared = await paymentRepository.findByOrderId(String(order._id));
 
         const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
-        const cancelled = await orderService.cancelById(String(order._id), auth(user));
+        const cancelled = await orderService.cancelOnRequestById(String(order._id), auth(user));
 
         expect(cancelled.success).toBe(true);
         // The listener runs off the outbox, after the cancel's own response.
@@ -1642,7 +1642,7 @@ describe('order.cancelled — closing a still-open intent at the provider', () =
         const cancelSpy = jest
             .spyOn(fakePaymentProvider, 'cancel')
             .mockRejectedValueOnce(new Error('provider unreachable'));
-        const cancelled = await orderService.cancelById(String(order._id), auth(user));
+        const cancelled = await orderService.cancelOnRequestById(String(order._id), auth(user));
 
         expect(cancelled.success).toBe(true);
         // The listener runs off the outbox, after the cancel's own response.
@@ -1660,7 +1660,7 @@ describe('order.cancelled — closing a still-open intent at the provider', () =
         await payFor(String(order._id), user);
 
         const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
-        const cancelled = await orderService.cancelById(String(order._id), auth(user));
+        const cancelled = await orderService.cancelOnRequestById(String(order._id), auth(user));
 
         expect(cancelled.success).toBe(true);
         // The listener runs off the outbox, after the cancel's own response.
@@ -1727,7 +1727,7 @@ describe('getForOrder — what the caller may do', () => {
         // `paid` is not a payment anyone may complete.
         const { user, order } = await orderFor();
         await createIntent(String(order._id), auth(user));
-        await orderService.cancelById(String(order._id), auth(user));
+        await orderService.cancelOnRequestById(String(order._id), auth(user));
 
         // Read as the payer: any other reader is refused `pay` for the caller's half alone.
         const result = await getForOrder(String(order._id), auth(user));

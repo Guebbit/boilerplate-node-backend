@@ -101,17 +101,15 @@ export const withdrawBeforeDispatch = (
     context: CallerContext,
     openAsReturn: () => Promise<CreateReturnOutcome>
 ): Promise<CreateReturnOutcome> =>
-    orderService
-        .cancelById(String(order._id), authContext, { withdrawal: true }, context)
-        .then((cancelled) => {
-            if (!cancelled.success)
-                return ownOrder(input.orderId, authContext).then((fresh) =>
-                    fresh && !isBeforeDispatch(fresh) ? openAsReturn() : cancelled
-                );
-
-            return writeWithdrawalRecord(order, context).then((created) =>
-                mailReturnNotice('withdrawal-acknowledged', order, {
-                    at: created.createdAt ?? new Date()
-                }).then((): CreateReturnOutcome => opened(created))
+    orderService.withdrawById(String(order._id), authContext, context).then((cancelled) => {
+        if (!cancelled.success)
+            return ownOrder(input.orderId, authContext).then((fresh) =>
+                fresh && !isBeforeDispatch(fresh) ? openAsReturn() : cancelled
             );
-        });
+
+        return writeWithdrawalRecord(order, context).then((created) =>
+            mailReturnNotice('withdrawal-acknowledged', order, {
+                at: created.createdAt ?? new Date()
+            }).then((): CreateReturnOutcome => opened(created))
+        );
+    });

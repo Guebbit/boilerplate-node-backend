@@ -245,7 +245,9 @@ describe('a crash after the mismatch was recorded', () => {
         const { user, orderId, paymentId, providerRef } = await openIntent();
         setFakeReceipt(providerRef, { amountReceived: 1 });
         // The process dies between the payment write and the cancel: the cancel never runs.
-        jest.spyOn(orderService, 'cancelById').mockRejectedValueOnce(new Error('process died'));
+        jest.spyOn(orderService, 'cancelForPaymentMismatchById').mockRejectedValueOnce(
+            new Error('process died')
+        );
 
         const result = await confirmPayment(
             paymentId,
@@ -256,11 +258,15 @@ describe('a crash after the mismatch was recorded', () => {
 
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
         expect((await orderService.getById(orderId))!.status).toBe('pending');
-        expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('succeeded');
+        const recorded = await paymentRepository.findByOrderId(orderId);
+        expect(recorded!.status).toBe('succeeded');
+        // The way back was opened with the `succeeded` mark, so the money is never durable
+        // without a record that returns it, whatever happens to the cancel.
+        expect(recorded!.refunds).toHaveLength(1);
 
         // The expiry sweep cancels the still-pending order exactly as it does for any hold.
         jest.restoreAllMocks();
-        await orderService.cancelById(orderId, SYSTEM_ACTOR, {}, undefined, true);
+        await orderService.expireReservationById(orderId);
 
         expect((await orderService.getById(orderId))!.status).toBe('cancelled');
         expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('succeeded');
@@ -271,7 +277,7 @@ describe('a crash after the mismatch was recorded', () => {
         const { user, orderId, paymentId, providerRef } = await openIntent();
         setFakeReceipt(providerRef, { amountReceived: 1 });
         // The order moved on by itself an instant before: the cancel finds nothing to cancel.
-        jest.spyOn(orderService, 'cancelById').mockResolvedValueOnce(
+        jest.spyOn(orderService, 'cancelForPaymentMismatchById').mockResolvedValueOnce(
             generateReject(409, [
                 { code: 'ORDER_NOT_CANCELLABLE', message: t('orders.cancel.not-cancellable') }
             ])

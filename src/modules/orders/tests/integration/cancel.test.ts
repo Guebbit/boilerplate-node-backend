@@ -1,7 +1,7 @@
 /**
  * @module
- * `orderService.cancelById` — the customer's one order write, and the invariants that make it
- * safe to expose: the status gate and the write are one statement, so no interleaving can cancel
+ * The cancel doors (`cancelOnRequestById` and the system's own) — the customer's one order write,
+ * and the invariants that make it safe to expose: the status gate and the write are one statement, so no interleaving can cancel
  * a shipped order; the caller's scope rides in the same statement, so "someone else's order" and
  * "no such order" are the same 404; and the refusal reasons map to different statuses (404 vs
  * 409) because a client can act on that difference.
@@ -37,7 +37,6 @@ import {
     callerContextAs,
     testCallerContext
 } from '@tests/callers';
-import { SYSTEM_ACTOR } from '@kernel/permissions';
 
 // The queue, not the copy: `mail-copy.test.ts` pins what the email says.
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -73,12 +72,12 @@ const seedOrder = async (user: Awaited<ReturnType<typeof createUser>>) => {
 
 const asUser = (user: { id: string }) => asCustomer(user.id);
 
-describe('cancelById', () => {
+describe('cancelOnRequestById', () => {
     it('cancels a pending order for its owner', async () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        const result = await orderService.cancelById(String(order._id), asUser(user));
+        const result = await orderService.cancelOnRequestById(String(order._id), asUser(user));
 
         expect(result.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
@@ -90,7 +89,7 @@ describe('cancelById', () => {
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
         const order = await seedOrder(owner);
 
-        const result = await orderService.cancelById(String(order._id), asUser(stranger));
+        const result = await orderService.cancelOnRequestById(String(order._id), asUser(stranger));
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -104,7 +103,7 @@ describe('cancelById', () => {
         const order = await seedOrder(user);
         await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'shipped');
 
-        const result = await orderService.cancelById(String(order._id), asUser(user));
+        const result = await orderService.cancelOnRequestById(String(order._id), asUser(user));
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
@@ -126,7 +125,7 @@ describe('cancelById', () => {
         );
         const order = await seedOrder(owner);
 
-        const result = await orderService.cancelById(String(order._id), asAdmin(admin.id));
+        const result = await orderService.cancelOnRequestById(String(order._id), asAdmin(admin.id));
 
         expect(result.success).toBe(true);
     });
@@ -141,11 +140,11 @@ describe('cancelById', () => {
         const order = await seedOrder(owner);
         await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'processing');
 
-        const refused = await orderService.cancelById(String(order._id), asUser(owner));
+        const refused = await orderService.cancelOnRequestById(String(order._id), asUser(owner));
         expect(refused.success).toBe(false);
         expect(refused.status).toBe(409);
 
-        const allowed = await orderService.cancelById(String(order._id), asAdmin());
+        const allowed = await orderService.cancelOnRequestById(String(order._id), asAdmin());
 
         expect(allowed.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
@@ -162,7 +161,7 @@ describe('cancelById', () => {
         const order = await seedOrder(owner);
         await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
 
-        const refused = await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
+        const refused = await orderService.cancelForErasureById(String(order._id));
 
         expect(refused.success).toBe(false);
         expect(refused.status).toBe(409);
@@ -176,14 +175,14 @@ describe('cancelById', () => {
         order.deletedAt = new Date();
         await orderRepository.save(order);
 
-        const result = await orderService.cancelById(String(order._id), asUser(user));
+        const result = await orderService.cancelOnRequestById(String(order._id), asUser(user));
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
     });
 });
 
-describe('cancelById — who gets their money back', () => {
+describe('cancelOnRequestById — who gets their money back', () => {
     /** The cancellation event, captured rather than acted on. */
     const cancellations: { orderId: string; refund: boolean }[] = [];
 
@@ -206,7 +205,7 @@ describe('cancelById — who gets their money back', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        await orderService.cancelById(String(order._id), asUser(user), { refund: false });
+        await orderService.cancelOnRequestById(String(order._id), asUser(user), { refund: false });
 
         await settleOutboxNudges();
 
@@ -217,7 +216,7 @@ describe('cancelById — who gets their money back', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        await orderService.cancelById(String(order._id), asAdmin(), { refund: false });
+        await orderService.cancelOnRequestById(String(order._id), asAdmin(), { refund: false });
 
         await settleOutboxNudges();
 
@@ -228,7 +227,7 @@ describe('cancelById — who gets their money back', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        await orderService.cancelById(String(order._id), asAdmin());
+        await orderService.cancelOnRequestById(String(order._id), asAdmin());
 
         await settleOutboxNudges();
 
@@ -242,7 +241,7 @@ describe('cancelById — who gets their money back', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        await orderService.cancelById(String(order._id), asModerator(), { refund: false });
+        await orderService.cancelOnRequestById(String(order._id), asModerator(), { refund: false });
 
         await settleOutboxNudges();
 
@@ -255,7 +254,7 @@ describe('cancelById — who gets their money back', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        await orderService.cancelById(String(order._id), asAdmin(), { refund: false });
+        await orderService.cancelOnRequestById(String(order._id), asAdmin(), { refund: false });
 
         await settleOutboxNudges();
 
@@ -263,14 +262,19 @@ describe('cancelById — who gets their money back', () => {
     });
 });
 
-describe('cancelById — audit and analytics', () => {
+describe('cancelOnRequestById — audit and analytics', () => {
     it('a customer cancel reports order_cancelled, audited as the customer', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUser();
         const order = await seedOrder(user);
 
-        await orderService.cancelById(String(order._id), asUser(user), {}, testCallerContext);
+        await orderService.cancelOnRequestById(
+            String(order._id),
+            asUser(user),
+            {},
+            testCallerContext
+        );
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -291,7 +295,7 @@ describe('cancelById — audit and analytics', () => {
 
         // Mirrors module.ts's RESERVATION_EXPIRED handler: no CallerContext — `afterCancel` builds
         // its own system-actor context regardless of the `authContext` passed here.
-        await orderService.cancelById(String(order._id), asAdmin());
+        await orderService.cancelOnRequestById(String(order._id), asAdmin());
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -311,7 +315,7 @@ describe('cancelById — audit and analytics', () => {
         const order = await seedOrder(user);
 
         // Mirrors module.ts's RESERVATION_EXPIRED handler: the flag, not the missing context, says expiry.
-        await orderService.cancelById(String(order._id), asAdmin(), {}, undefined, true);
+        await orderService.expireReservationById(String(order._id));
 
         expect(analyticsSpy).toHaveBeenCalledWith(
             expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_RESERVATION_EXPIRED })
@@ -322,7 +326,7 @@ describe('cancelById — audit and analytics', () => {
     });
 });
 
-describe('cancelById — the payment-window-expired email', () => {
+describe('cancelOnRequestById — the payment-window-expired email', () => {
     it('sends the transfer-expired email when a bank_transfer order times out with no context', async () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
@@ -333,7 +337,7 @@ describe('cancelById — the payment-window-expired email', () => {
 
         // Mirrors module.ts's RESERVATION_EXPIRED handler: the real system actor, no CallerContext,
         // and the flag only that handler sets.
-        await orderService.cancelById(String(order._id), SYSTEM_ACTOR, {}, undefined, true);
+        await orderService.expireReservationById(String(order._id));
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
@@ -351,7 +355,7 @@ describe('cancelById — the payment-window-expired email', () => {
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], { paymentMethod: 'card' });
 
-        await orderService.cancelById(String(order._id), SYSTEM_ACTOR, {}, undefined, true);
+        await orderService.expireReservationById(String(order._id));
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
@@ -367,7 +371,12 @@ describe('cancelById — the payment-window-expired email', () => {
             paymentMethod: 'bank_transfer'
         });
 
-        await orderService.cancelById(String(order._id), asUser(user), {}, testCallerContext);
+        await orderService.cancelOnRequestById(
+            String(order._id),
+            asUser(user),
+            {},
+            testCallerContext
+        );
 
         // The cancelled notice is the answer to a person's cancel; the expiry one is not.
         const templates = mockEnqueueEmail.mock.calls.map(([, template]) => template);
@@ -386,13 +395,7 @@ describe('cancelById — the payment-window-expired email', () => {
         // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext, and the
         // flag only that handler sets. Before the fix, this `await` threw straight out of
         // `afterCancel` — the cancel itself never committed.
-        const result = await orderService.cancelById(
-            String(order._id),
-            asAdmin(),
-            {},
-            undefined,
-            true
-        );
+        const result = await orderService.expireReservationById(String(order._id));
 
         expect(result.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
@@ -412,7 +415,7 @@ describe('cancelById — the payment-window-expired email', () => {
         });
 
         // A system actor with no context and no reservation flag: not the sweep, so no expiry notice.
-        await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
+        await orderService.cancelForErasureById(String(order._id));
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
@@ -439,14 +442,19 @@ const mailsFor = async (
     };
 };
 
-describe('cancelById — the cancelled notice', () => {
+describe('cancelOnRequestById — the cancelled notice', () => {
     it('mails the buyer when the customer cancels, saying nothing was charged for an unpaid order', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         mockEnqueueEmail.mockClear();
 
-        await orderService.cancelById(String(order._id), asUser(user), {}, testCallerContext);
+        await orderService.cancelOnRequestById(
+            String(order._id),
+            asUser(user),
+            {},
+            testCallerContext
+        );
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
@@ -464,7 +472,12 @@ describe('cancelById — the cancelled notice', () => {
         await markOrderPaidAt(String(order._id), new Date());
         mockEnqueueEmail.mockClear();
 
-        await orderService.cancelById(String(order._id), asUser(user), {}, testCallerContext);
+        await orderService.cancelOnRequestById(
+            String(order._id),
+            asUser(user),
+            {},
+            testCallerContext
+        );
 
         const [, template, data] = mockEnqueueEmail.mock.calls[0];
         expect(template).toBe('orders.order-cancelled');
@@ -480,7 +493,7 @@ describe('cancelById — the cancelled notice', () => {
         await markOrderPaidAt(String(order._id), new Date());
         mockEnqueueEmail.mockClear();
 
-        await orderService.cancelById(
+        await orderService.cancelOnRequestById(
             String(order._id),
             asAdmin(),
             { refund: false },
@@ -500,10 +513,9 @@ describe('cancelById — the cancelled notice', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         mockEnqueueEmail.mockClear();
 
-        const result = await orderService.cancelById(
+        const result = await orderService.withdrawById(
             String(order._id),
             asUser(user),
-            { withdrawal: true },
             testCallerContext
         );
 
@@ -511,17 +523,25 @@ describe('cancelById — the cancelled notice', () => {
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
 
-    it('does not mail for the system’s own cancels (the sweep, a removed product, an erasure)', async () => {
-        const { mails } = await mailsFor((orderId) =>
-            orderService.cancelById(orderId, SYSTEM_ACTOR)
-        );
+    it.each([
+        ['an erasure', (orderId: string) => orderService.cancelForErasureById(orderId)],
+        [
+            'a payment mismatch',
+            (orderId: string) => orderService.cancelForPaymentMismatchById(orderId)
+        ]
+    ])('does not mail for the system’s own cancel for %s', async (_cause, cancel) => {
+        const { mails, order } = await mailsFor(cancel);
 
         expect(mails).toEqual([]);
+        // Still a cancel: the status moved and the order says the system did it.
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored?.status).toBe(OrderStatus.cancelled);
     });
 
     it('mails nothing when the cancel is refused', async () => {
         const { mails } = await mailsFor(
-            (orderId) => orderService.cancelById(orderId, asAdmin(), {}, testCallerContext),
+            (orderId) =>
+                orderService.cancelOnRequestById(orderId, asAdmin(), {}, testCallerContext),
             { status: OrderStatus.shipped }
         );
 
@@ -570,7 +590,7 @@ describe('withActions — withdraw', () => {
     it('is never offered on a cancelled order', async () => {
         const user = await createUser();
         const order = await seedOrder(user);
-        await orderService.cancelById(String(order._id), asUser(user));
+        await orderService.cancelOnRequestById(String(order._id), asUser(user));
         const cancelled = await orderRepository.findById(String(order._id));
 
         const body = await orderService.withActions(cancelled!, asUser(user));
@@ -601,7 +621,7 @@ describe('withActions', () => {
     it('offers an operator nothing on a terminal order', async () => {
         const user = await createUser();
         const order = await seedOrder(user);
-        await orderService.cancelById(String(order._id), asAdmin());
+        await orderService.cancelOnRequestById(String(order._id), asAdmin());
         const cancelled = await orderRepository.findById(String(order._id));
 
         const body = await orderService.withActions(cancelled!, asAdmin());

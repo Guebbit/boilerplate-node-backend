@@ -120,7 +120,7 @@ describe('a settlement that dies after charging', () => {
         const originalConfirm = fakePaymentProvider.confirm;
         jest.spyOn(fakePaymentProvider, 'confirm').mockImplementationOnce(
             async (providerRef, methodRef) => {
-                await orderService.cancelById(orderId, asCustomer(user.id));
+                await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
                 return originalConfirm(providerRef, methodRef);
             }
         );

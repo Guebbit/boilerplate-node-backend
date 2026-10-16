@@ -132,7 +132,7 @@ describe('a refund outside a return mails the buyer', () => {
         const { user, orderId } = await paidOrder();
         mockEnqueueEmail.mockClear();
 
-        await orderService.cancelById(orderId, asCustomer(user.id), {}, testCallerContext);
+        await orderService.cancelOnRequestById(orderId, asCustomer(user.id), {}, testCallerContext);
         await waitUntil(() => mailsOf('payments.refund-issued').length > 0);
 
         expect(mailsOf('orders.order-cancelled')).toHaveLength(1);

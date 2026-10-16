@@ -705,7 +705,7 @@ describe('an order that is cancelled', () => {
         const orderId = String(order._id);
         await fulfillmentOrdersOf(orderId);
 
-        await orderService.cancelById(orderId, asAdmin(), {}, admin);
+        await orderService.cancelOnRequestById(orderId, asAdmin(), {}, admin);
         await settleOutboxNudges();
         await cancelAllForOrder(orderId);
 
@@ -719,7 +719,7 @@ describe('an order that is cancelled', () => {
         const orderId = String(order._id);
         await shipFrom(orderId, { lines: [{ productId: String(products[0]._id), quantity: 1 }] });
 
-        const cancelled = await orderService.cancelById(orderId, asAdmin(), {}, admin);
+        const cancelled = await orderService.cancelOnRequestById(orderId, asAdmin(), {}, admin);
 
         expect(asReject(cancelled).status).toBe(409);
         const stored = await orderService.getById(orderId);
@@ -728,7 +728,7 @@ describe('an order that is cancelled', () => {
         const other = await processingOrderOf([1], {}, 'other-buyer@example.com');
         const otherId = String(other.order._id);
         const [fulfillmentOrder] = await fulfillmentOrdersOf(otherId);
-        await orderService.cancelById(otherId, asAdmin(), {}, admin);
+        await orderService.cancelOnRequestById(otherId, asAdmin(), {}, admin);
         const late = await shipFulfillmentOrder(String(fulfillmentOrder._id), {}, asAdmin(), admin);
         expect(asReject(late).errors[0].code).toBe('DELIVERY_NOT_SHIPPABLE');
     });
@@ -812,7 +812,7 @@ describe('a short stock delivery', () => {
 
     it('does nothing for a cancelled order', async () => {
         const { orderId, fulfillmentOrderId, productId } = await awaitingStock(2);
-        await orderService.cancelById(orderId, asAdmin(), {}, admin);
+        await orderService.cancelOnRequestById(orderId, asAdmin(), {}, admin);
 
         const split = await splitForAllocation(fulfillmentOrderId, [{ productId, quantity: 1 }]);
 

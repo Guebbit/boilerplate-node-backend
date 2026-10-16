@@ -99,7 +99,7 @@ describe('order routes — authorization', () => {
 
     it('leaves POST /:id/cancel open to the owner, not just admins', () => {
         // Not an oversight: the customer cancel. Its authorization is the caller scope inside
-        // `orderService.cancelById`, covered by `service-scope.test.ts` and `cancel.test.ts`.
+        // `orderService.cancelOnRequestById`, covered by `service-scope.test.ts` and `cancel.test.ts`.
         // Adding `requirePermission` here would silently remove the feature.
         expect(guardsOn(router, 'POST /:id/cancel')).not.toContain('requirePermissionGuard');
     });

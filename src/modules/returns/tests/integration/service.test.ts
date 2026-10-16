@@ -909,8 +909,8 @@ describe('what a new return leaves behind', () => {
 
     it('answers a withdrawal before dispatch with the cancel refusal untouched when the order cannot be cancelled', async () => {
         const { user, orderId } = await orderIn(OrderStatus.paid);
-        jest.spyOn(orderService, 'cancelById').mockResolvedValue(
-            asStub<Awaited<ReturnType<typeof orderService.cancelById>>>({
+        jest.spyOn(orderService, 'withdrawById').mockResolvedValue(
+            asStub<Awaited<ReturnType<typeof orderService.withdrawById>>>({
                 success: false,
                 status: 409,
                 message: 'nope',

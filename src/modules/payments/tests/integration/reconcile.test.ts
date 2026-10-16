@@ -81,7 +81,7 @@ describe('cancelling an order whose intent already succeeded at the provider', (
     it('returns the money that landed in the last minutes before the cancel', async () => {
         const { user, orderId } = await chargedAtProvider();
 
-        const cancelled = await orderService.cancelById(orderId, asCustomer(user.id));
+        const cancelled = await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
 
         expect(cancelled.success).toBe(true);
         // `order.cancelled` reaches the listener through the outbox, not inline.

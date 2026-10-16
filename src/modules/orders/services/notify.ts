@@ -64,7 +64,7 @@ export const sendOrderPlacedEmail = (
 };
 
 /**
- * The one buyer-mail policy `create`'s admin confirmation, `cancelById`'s bank-transfer-expired
+ * The one buyer-mail policy `create`'s admin confirmation, `expireReservationById`'s bank-transfer-expired
  * notice and delivery's shipped notice all follow — see `docs/modules/orders.md`. Looks the buyer
  * up, then hands `build` the resolved locale and display name; `build` does the actual send
  * ({@link sendOrderPlacedEmail}, or a bare `enqueueEmail` call for a mail with no attachment).

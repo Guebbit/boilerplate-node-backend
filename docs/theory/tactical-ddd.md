@@ -187,12 +187,12 @@ lifecycle edge of its own, they all ask.
 
 | Call site                                                                               | Question asked                                                                                                                                  |
 | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `orders/services/cancel.ts` — `cancelById`                                              | `statusesLeadingTo(cancelled, actorOf(caller))`                                                                                                 |
+| `orders/services/cancel.ts` — the cancel doors                                          | `statusesLeadingTo(cancelled, cause.by)`                                                                                                        |
 | `orders/services/status.ts` — `markPaid`/`markProcessing`/`markShipped`/`markDelivered` | the named event's own `from` and `to` (`ORDER_EVENTS.ship`, ...), read off the table rather than restated as a literal                          |
 | `payments/services/intent.ts`/`offline.ts`/`settlement.ts`/`view.ts`                    | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below) |
 | `orders/services/override.ts`                                                           | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces     |
 
-`cancelById` asks as the CALLER's actor, because the table answers differently for each: a customer
+Every cancel door asks as its cause's actor, because the table answers differently for each: a customer
 may cancel from `pending` and `paid`, an operator also from `processing`.
 
 ### Action endpoints execute; `update` does not decide
@@ -236,7 +236,7 @@ flowchart LR
 ```
 
 A refusal to a move the table does not have answers **409**: `ORDER_NOT_CANCELLABLE` from
-`cancelById` with no further detail, `ORDER_OVERRIDE_NOT_ALLOWED` from `overrideStatus` carrying
+a cancel door with no further detail, `ORDER_OVERRIDE_NOT_ALLOWED` from `overrideStatus` carrying
 `details: { from, to }`. Neither lists which moves ARE still open — a client wanting that reads
 `orderActionsFor`'s own `transitions` field on the order instead. Every guard runs before any field
 is assigned, so a refused request is never a partial write.
@@ -287,7 +287,7 @@ reaching back for a refund would close a cycle `check:dependencies` refuses.
 
 ### What is still NOT modelled
 
-The three effects have one owner: `cancelById` moves the status, releases the hold and announces the
+The three effects have one owner: the cancel doors move the status, releases the hold and announces the
 refund policy, and no caller can reach the state while skipping the consequences — `update` refuses a
 plain move to `cancelled` for exactly that reason. What the conditional write buys is that **at most
 one caller runs the sequence**; a double-click and the reservation sweep cannot both proceed.

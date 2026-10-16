@@ -100,6 +100,44 @@ can refund or keep a paid order's money (`401 REAUTH_REQUIRED` on a stale one); 
 cancel is never prompted. Holding the key is the whole rule: there is no rank, so an operator
 cancels a staff member's order, or their own, like anyone's.
 
+### The cancel doors
+
+Cancelling has one door per reason, over one private `cancel` and one table of causes
+(`CANCEL_CAUSES` in `services/cancel.ts`). The reason is a value the caller states by choosing a
+door, never inferred from which argument was left out. The table decides the lifecycle column the
+move is read from, the mail, the analytics event name and whether the caller picks the refund.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 25, 'rankSpacing': 40}}}%%
+flowchart LR
+    R["POST /orders/{id}/cancel"] --> D1["cancelOnRequestById"]
+    W["returns: a withdrawal"] --> D2["withdrawById"]
+    X["inventory: a hold timed out"] --> D3["expireReservationById"]
+    E["users: an account erased"] --> D4["cancelForErasureById"]
+    P["payments: a payment mismatch"] --> D5["cancelForPaymentMismatchById"]
+    D1 -->|"update:Order held?"| C["private cancel(id, cause)"]
+    D2 --> C
+    D3 --> C
+    D4 --> C
+    D5 --> C
+    C --> T["CANCEL_CAUSES<br/><i>column, mail, analytics, refund rule</i>"]
+    T --> M["one transaction: status, stock,<br/>order.cancelled { refund }"]
+```
+
+| Door                           | Cause                 | Column     | Buyer is mailed        | Refund                                |
+| ------------------------------ | --------------------- | ---------- | ---------------------- | ------------------------------------- |
+| `cancelOnRequestById`          | `customer`            | customer   | the cancelled notice   | always                                |
+| `cancelOnRequestById`          | `operator`            | admin      | the cancelled notice   | the operator's `refund`, default true |
+| `withdrawById`                 | `withdrawal`          | withdrawal | `returns` acknowledges | always                                |
+| `expireReservationById`        | `reservation_expired` | system     | the expiry notice      | whatever was paid                     |
+| `cancelForErasureById`         | `erasure`             | system     | nobody                 | whatever was paid                     |
+| `cancelForPaymentMismatchById` | `payment_mismatch`    | system     | nobody                 | whatever was paid                     |
+| `cancelUnanswered`             | `wait_unanswered`     | fulfilment | the cancelled notice   | always (its own `from` set)           |
+
+The one door that serves two actors, `cancelOnRequestById`, resolves which inside the service: a
+caller holding `update:Order` is the operator. The controller never makes that decision. A new
+reason is a new row and a new door.
+
 Any of these except `paid` (`system`-only, absolute) can also be reached by an admin override with
 a reason — see [Who writes the status](#who-writes-the-status) below.
 
@@ -143,7 +181,7 @@ transaction. Two things happen to the account's orders, by whether the buyer eve
 sequenceDiagram
     participant U as users (hard delete)
     participant O as orders (erase hook)
-    participant S as cancelById (the sweep's path)
+    participant S as cancelForErasureById
     U->>O: erase(userId, session)
     O->>O: read the never-paid pending ids, then detach
     O-->>U: a cancel to run after the commit
@@ -153,8 +191,9 @@ sequenceDiagram
     S->>S: order.cancelled, so payments cancels the open intent
 ```
 
-The cancel is the one the reservation sweep takes when a hold times out, so it releases the hold
-and, through `order.cancelled`, cancels the payment intent. It runs after the commit because it
+The cancel is the system's own (`cancelForErasureById`, the lifecycle column the reservation
+sweep's expiry uses), so it releases the hold and, through `order.cancelled`, cancels the payment
+intent. It runs after the commit because it
 moves stock and talks to a provider, neither of which a rolled-back erasure could undo. It sends
 no mail: the address belongs to an account that no longer exists. A failed cancel is logged and
 never undoes the erasure; the sweep still cancels it when the hold times out (up to 168 hours for
@@ -558,7 +597,7 @@ any mail to it would only bounce.
 
 ```mermaid
 flowchart TD
-    cancel["cancelById succeeds"] --> person{"a person cancelled,<br/>not a withdrawal?"}
+    cancel["a cancel door succeeds"] --> person{"a person cancelled,<br/>not a withdrawal?"}
     person -- yes --> cancelled["orders.order-cancelled"]
     person -- no --> own["its own mail, or none"]
     cancel --> owed{"refund owed?"}

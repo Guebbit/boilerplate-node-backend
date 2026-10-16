@@ -85,7 +85,7 @@ it('writes one outbox row with the cancel, and the refund lands once the relay h
     const { user, order } = await paidOrder();
     const orderId = String(order._id);
 
-    await orderService.cancelById(orderId, asCustomer(user.id));
+    await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
 
     expect(await cancelledRows(orderId)).toHaveLength(1);
     await settleOutboxNudges();
@@ -102,7 +102,7 @@ it('refunds nothing twice and sends no second webhook when the row is delivered 
     const orderId = String(order._id);
     const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
 
-    await orderService.cancelById(orderId, asCustomer(user.id));
+    await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
     await settleOutboxNudges();
     const [delivered] = await cancelledRows(orderId);
 
@@ -127,7 +127,7 @@ it('leaves a refund the provider refused open for the sweep, and answers the eve
             new Error('payment provider unreachable')
         );
 
-        await orderService.cancelById(orderId, asCustomer(user.id));
+        await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
         await settleOutboxNudges();
 
         const stuck = await paymentRepository.findByOrderId(orderId);

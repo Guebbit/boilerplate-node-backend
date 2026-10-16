@@ -65,7 +65,7 @@ const cancelledOrder = async () => {
     const orderId = String(order._id);
     await createIntent(orderId, asCustomer(user.id));
     const providerRef = String(await providerRefOf(orderId));
-    await orderService.cancelById(orderId, asCustomer(user.id));
+    await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
     // `order.cancelled` reaches the listener through the outbox, not inline.
     await settleOutboxNudges();
     return { user, orderId, providerRef };
@@ -98,7 +98,7 @@ describe('cancelling an order with an open intent', () => {
             refunds: []
         });
 
-        await orderService.cancelById(orderId, asCustomer(user.id));
+        await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
         await settleOutboxNudges();
 
         expect(await statusOf(orderId)).toBe('cancelled');
@@ -112,7 +112,7 @@ describe('cancelling an order with an open intent', () => {
         await createIntent(orderId, asCustomer(user.id));
         jest.spyOn(fakePaymentProvider, 'cancel').mockRejectedValueOnce(new Error('down'));
 
-        await orderService.cancelById(orderId, asCustomer(user.id));
+        await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
         await settleOutboxNudges();
 
         expect(await statusOf(orderId)).toBe('requires_confirmation');

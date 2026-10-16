@@ -18,7 +18,7 @@ jest.mock('@modules/orders/services/cancel', () => ({
     ...jest.requireActual<typeof import('@modules/orders/services/cancel')>(
         '@modules/orders/services/cancel'
     ),
-    cancelById: () => Promise.reject(new Error('the write conflicted'))
+    cancelForErasureById: () => Promise.reject(new Error('the write conflicted'))
 }));
 
 setupTestDb();

@@ -15,7 +15,6 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { orderService } from '@modules/orders/services';
 import { OrderStatus } from '@types';
-import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { orderRepository } from '../../repository';
 
 setupTestDb();
@@ -34,14 +33,14 @@ const orderOf = async (role: string, status: OrderStatus = OrderStatus.pending) 
 /** The stored status of an order — a refusal must leave it as it was. */
 const statusOf = (id: string) => orderRepository.findById(id).then((order) => order?.status);
 
-describe('cancelById — the write’s own scope', () => {
+describe('cancelOnRequestById — the write’s own scope', () => {
     // A warehouse and a support agent both hold `display:Order`: that is a read, not a cancel.
     it.each(['warehouse', 'support'])(
         'refuses a %s a customer’s pending order, which it can read',
         async (role) => {
             const order = await orderOf('customer');
 
-            const result = await orderService.cancelById(
+            const result = await orderService.cancelOnRequestById(
                 String(order._id),
                 asRole(role, STAFF_ID),
                 {},
@@ -57,7 +56,7 @@ describe('cancelById — the write’s own scope', () => {
     it('refuses a warehouse a customer’s PAID order too, and forces no refund', async () => {
         const order = await orderOf('customer', OrderStatus.paid);
 
-        const result = await orderService.cancelById(
+        const result = await orderService.cancelOnRequestById(
             String(order._id),
             asRole('warehouse', STAFF_ID),
             {},
@@ -73,7 +72,7 @@ describe('cancelById — the write’s own scope', () => {
         const product = await createProduct();
         const order = await createOrder(buyer, [toOrderItem(product, 1)]);
 
-        const result = await orderService.cancelById(
+        const result = await orderService.cancelOnRequestById(
             String(order._id),
             asRole('customer', buyer.id),
             {},
@@ -88,7 +87,7 @@ describe('cancelById — the write’s own scope', () => {
         async (role) => {
             const order = await orderOf('customer');
 
-            const result = await orderService.cancelById(
+            const result = await orderService.cancelOnRequestById(
                 String(order._id),
                 asRole(role, STAFF_ID),
                 {},
@@ -226,7 +225,7 @@ describe('no rank on an order', () => {
     ])('%s cancelling a %s’s order succeeds', async (callerRole, buyerRole) => {
         const order = await orderOf(buyerRole);
 
-        const result = await orderService.cancelById(
+        const result = await orderService.cancelOnRequestById(
             String(order._id),
             asRole(callerRole, STAFF_ID),
             {},
@@ -267,7 +266,7 @@ describe('no rank on an order', () => {
     it('lets the system actor cancel any order, as its sweep does', async () => {
         const order = await orderOf('admin');
 
-        const result = await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
+        const result = await orderService.cancelForErasureById(String(order._id));
 
         expect(result.success).toBe(true);
     });

@@ -18,12 +18,11 @@
 
 import path from 'node:path';
 import type { AppModule, PublicEventTarget } from '@kernel/registry';
-import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { router } from './routes';
 import {
-    cancelById,
+    expireReservationById,
     collectTimelineOf,
     eraseUserOrders,
     findOwnOrders,
@@ -103,14 +102,12 @@ export default {
      * A hold that timed out takes its order with it — the units are already released by the
      * time this fires; what `inventory` cannot do is cancel an order without importing this
      * module. The SHOP is cancelling, not the customer, so the sweep acts as `SYSTEM_ACTOR`:
-     * `cancelById` calls
+     * `expireReservationById` calls
      * back into `releaseForOrder`, which finds the hold already released, so the two paths
      * converge and neither can double-release.
      */
     subscribe: () => {
-        onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) =>
-            cancelById(orderId, SYSTEM_ACTOR, {}, undefined, true)
-        );
+        onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) => expireReservationById(orderId));
     },
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates'),

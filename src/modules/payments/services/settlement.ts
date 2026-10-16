@@ -26,7 +26,7 @@ import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { paymentsAnalyticsEvents } from '../analytics';
 import { paymentsAuditActions } from '../audit';
 import { paymentAmountMismatchTotal } from '../metrics';
-import { SYSTEM_ACTOR, systemCallerContext } from '@kernel/permissions';
+import { systemCallerContext } from '@kernel/permissions';
 import { providerNamed, type ProviderPaymentState, type ProviderWebhookEvent } from '../providers';
 import { paymentRepository } from '../repository';
 import {
@@ -98,7 +98,7 @@ const receiptMismatch = (payment: PaymentDocument, state: ProviderPaymentState):
  */
 const returnMismatchedMoney = (orderId: string): Promise<void> =>
     orderService
-        .cancelById(orderId, SYSTEM_ACTOR, {}, systemCallerContext('Order'))
+        .cancelForPaymentMismatchById(orderId)
         .catch((error: unknown) => {
             // Stryker disable all
             logger.error({

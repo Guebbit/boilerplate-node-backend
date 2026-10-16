@@ -91,7 +91,7 @@ export const ownLiveScope = (userId: string): Record<string, unknown> => ({
  * a plain admin and hand the sweep's expiry the admin column's wider `cancelled` rule, exactly the
  * race this rule closes (see `../domain/lifecycle.ts`'s own comment on `pending.cancelled`).
  *
- * Otherwise gated on `update:Order` by name, the same key `cancelById` asks for its own
+ * Otherwise gated on `update:Order` by name, the same key `cancelOnRequestById` asks for its own
  * operator/customer split — a broader check would have missed a moderator or manager and
  * silently reduced them to the customer's lifecycle column.
  * @returns the actor whose permissions apply

@@ -364,7 +364,7 @@ describe('cancel releases the hold', () => {
         expect(await countersOf(product._id)).toMatchObject({ reserved: 4, available: 6 });
 
         const orderId = String(checkout.success && checkout.data?._id);
-        const cancelled = await orderService.cancelById(orderId, asCustomer(user.id));
+        const cancelled = await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
 
         expect(cancelled.success).toBe(true);
         expect(await countersOf(product._id)).toEqual({
@@ -383,8 +383,8 @@ describe('cancel releases the hold', () => {
         const checkout = await cartService.orderConfirm(user.id, testCallerContext, undefined);
         const orderId = String(checkout.success && checkout.data?._id);
 
-        await orderService.cancelById(orderId, asCustomer(user.id));
-        const again = await orderService.cancelById(orderId, asCustomer(user.id));
+        await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
+        const again = await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
 
         expect(again.success).toBe(false);
         // Not 14, which is what an unconditional put-back would have produced.
@@ -405,7 +405,7 @@ describe('cancel releases the hold', () => {
         const checkout = await cartService.orderConfirm(user.id, testCallerContext, undefined);
         const orderId = String(checkout.success && checkout.data?._id);
 
-        await orderService.cancelById(orderId, asCustomer(user.id));
+        await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
 
         expect(await countersOf(bought._id)).toMatchObject({ onHand: 10, reserved: 0 });
         expect(await countersOf(untouched._id)).toMatchObject({ onHand: 5, reserved: 0 });
@@ -425,15 +425,15 @@ describe('cancel releases the hold', () => {
             const orderId = String(checkout.success && checkout.data?._id);
 
             /*
-             * Both paths call `cancelById` on the SAME order — the sweep's own admin-scoped
-             * cancel fires from inside `runReservationSweep` via the `RESERVATION_EXPIRED`
+             * Both paths cancel the SAME order — the sweep's own system cancel
+             * (`expireReservationById`) fires from inside `runReservationSweep` via the `RESERVATION_EXPIRED`
              * subscription. Whichever wins `updateStatusIfIn` cancels the order; the loser
              * no-ops on a status that has already moved. `claimStatus('held', 'released')`
              * guards the reservation the same way, independent of which side wins the order
              * race — so the units come back exactly once either way.
              */
             await Promise.all([
-                orderService.cancelById(orderId, asCustomer(user.id)),
+                orderService.cancelOnRequestById(orderId, asCustomer(user.id)),
                 inventoryService.runReservationSweep()
             ]);
 

@@ -176,7 +176,7 @@ describe('cancelling an order', () => {
     it('writes order.cancelled with the cancel, carrying whether a refund is owed', async () => {
         const { user, order } = await pendingOrderOfBuyer();
 
-        await orderService.cancelById(String(order._id), asCustomer(user.id));
+        await orderService.cancelOnRequestById(String(order._id), asCustomer(user.id));
         await settleOutboxNudges();
 
         const rows = await rowsNamed(ORDER_CANCELLED);
@@ -189,7 +189,7 @@ describe('cancelling an order', () => {
         failNextOutboxWrite();
 
         await expect(
-            orderService.cancelById(String(order._id), asCustomer(user.id))
+            orderService.cancelOnRequestById(String(order._id), asCustomer(user.id))
         ).rejects.toThrow('disk full');
 
         const stored = await readOrder(String(order._id));

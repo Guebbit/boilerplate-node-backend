@@ -6,12 +6,11 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { SYSTEM_ACTOR } from '@kernel/permissions';
 import type { AfterErase } from '@kernel/registry';
 import { logger } from '@infrastructure/adapters/logger';
 import { orderRepository } from '../repository';
 import { orderPiiRetentionDays } from '../config';
-import { cancelById } from './cancel';
+import { cancelForErasureById } from './cancel';
 import { clearTimelineActor } from './timeline';
 
 /**
@@ -70,7 +69,7 @@ export const anonymizeDueOrders = (): Promise<number> =>
     });
 
 /**
- * Cancels each order through the reservation sweep's own path — `cancelById` as the system, which
+ * Cancels each order through the reservation sweep's own path — `cancelForErasureById`, which
  * releases the stock hold and, through `ORDER_CANCELLED`, cancels the open payment intent.
  *
  * Not the expiry mail: the address belongs to an account that no longer exists. Never rejects:
@@ -82,7 +81,7 @@ export const anonymizeDueOrders = (): Promise<number> =>
 const cancelUnpaidOrders = (orderIds: readonly string[]): Promise<void> =>
     Promise.all(
         orderIds.map((orderId) =>
-            cancelById(orderId, SYSTEM_ACTOR)
+            cancelForErasureById(orderId)
                 .then((result) => {
                     if (!result.success)
                         // Stryker disable next-line all

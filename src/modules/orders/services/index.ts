@@ -22,7 +22,14 @@ import { placeOrder } from './place';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
 import { callerScope, ownerScope, ownLiveScope, withActions } from './scope';
-import { cancelById, cancelUnanswered } from './cancel';
+import {
+    cancelOnRequestById,
+    withdrawById,
+    expireReservationById,
+    cancelForErasureById,
+    cancelForPaymentMismatchById,
+    cancelUnanswered
+} from './cancel';
 import {
     markPaid,
     markProcessing,
@@ -61,7 +68,7 @@ import {
 
 /*
  * Every operation is published by name as well as through the object below: `module.ts` wires
- * `cancelById` and `detachUserId` into the events that trigger them, `orders/index.ts` publishes
+ * `expireReservationById` and `detachUserId` into the events that trigger them, `orders/index.ts` publishes
  * `placeOrder` to `cart`, and the suites drive the operations directly. Publishing fewer names
  * here would break each of those callers.
  */
@@ -82,7 +89,15 @@ export { create, recordCreated, update, updateById } from './crud';
 export { remove, removeById, restoreById } from './remove';
 export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './place';
 export { sendOrderPlacedEmail, mailBuyer } from './notify';
-export { cancelById, cancelUnanswered } from './cancel';
+export {
+    cancelOnRequestById,
+    withdrawById,
+    expireReservationById,
+    cancelForErasureById,
+    cancelForPaymentMismatchById,
+    cancelUnanswered,
+    type CancelCause
+} from './cancel';
 export {
     markPaid,
     markProcessing,
@@ -187,7 +202,11 @@ export const orderService = {
     eraseUserOrders,
     startOrderPiiClock,
     anonymizeDueOrders,
-    cancelById,
+    cancelOnRequestById,
+    withdrawById,
+    expireReservationById,
+    cancelForErasureById,
+    cancelForPaymentMismatchById,
     cancelUnanswered,
     withActions
 };

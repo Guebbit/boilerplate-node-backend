@@ -1,7 +1,7 @@
 /**
  * @module
  * Order cancellation controller — the one order write a customer can make; thin wiring onto
- * `orderService.cancelById`, which carries the caller's scope down into the write itself.
+ * `orderService.cancelOnRequestById`, which carries the caller's scope down into the write itself.
  */
 
 import type { Request, Response } from 'express';
@@ -36,15 +36,18 @@ export const postCancelOrder = (
     const body = parseBody(CancelOrderByIdBody, request.body ?? {}, response);
     if (!body) return Promise.resolve();
 
+    /* Auth context is guaranteed by isAuth middleware */
+    const authContext = request.authContext!;
+
     return orderService
-        .cancelById(id, request.authContext, { refund: body.refund }, callerContextOf(request))
+        .cancelOnRequestById(id, authContext, { refund: body.refund }, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 
             return respondWithOrder(
                 response,
                 result.data,
-                request.authContext,
+                authContext,
                 'postCancelOrder',
                 200,
                 result.message
