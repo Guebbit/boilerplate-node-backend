@@ -7,7 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
-import { createProduct } from '@modules/products/tests/factories';
+import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { createOrder, setWithdrawUntil, toOrderItem } from '@modules/orders/tests/factories';
 import { carryOrderTo } from '@modules/delivery/tests/factories';
 import { onDomainEvent } from '@kernel/events';
@@ -66,7 +66,7 @@ const returnRows = () =>
 
 /** Opens a defective-goods return on a delivered order, approved and ready to receive. */
 const approvedReturn = async () => {
-    const { user, orderId } = await orderIn(OrderStatus.delivered);
+    const { user, shirt, orderId } = await orderIn(OrderStatus.delivered);
     const outcome = await createReturn(
         { orderId, reason: 'defective' },
         asCustomer(user.id),
@@ -75,7 +75,7 @@ const approvedReturn = async () => {
     if (!outcome.success) throw new Error('expected a return');
     const id = String(outcome.data._id);
     await approveReturn(id, callerContextAs('admin'));
-    return { id, orderId };
+    return { id, orderId, shirt };
 };
 
 describe('return.requested', () => {
@@ -144,12 +144,14 @@ describe('a withdrawal before dispatch', () => {
 
 describe('return.received and return.closed', () => {
     it('receiving writes received with the restock, then closed once the money is settled', async () => {
-        const { id, orderId } = await approvedReturn();
+        const { id, orderId, shirt } = await approvedReturn();
+        const shelfBefore = await countersOf(shirt._id);
 
         const result = await receiveReturn(id, {}, callerContextAs('admin'));
         await settleOutboxNudges();
 
         expect(result.success).toBe(true);
+        expect(await countersOf(shirt._id)).not.toEqual(shelfBefore);
         const rows = await returnRows();
         expect(rows.map((row) => [row.name, row.aggregateId])).toEqual([
             [RETURN_REQUESTED, orderId],
@@ -159,15 +161,18 @@ describe('return.received and return.closed', () => {
         expect(rows.every((row) => row.status === 'published')).toBe(true);
     });
 
-    it('leaves the return approved and writes no received row when the event cannot be written', async () => {
-        const { id } = await approvedReturn();
+    it('leaves the return approved, the stock unmoved and no received row when the event cannot be written', async () => {
+        const { id, shirt } = await approvedReturn();
         await settleOutboxNudges();
+        const shelfBefore = await countersOf(shirt._id);
         jest.spyOn(outboxEventModel, 'create').mockRejectedValueOnce(new Error('disk full'));
 
         await expect(receiveReturn(id, {}, callerContextAs('admin'))).rejects.toThrow('disk full');
 
         const stored = await returnRepository.findById(id);
         expect(stored?.status).toBe('approved');
+        // The restock shares the receipt's transaction: a rolled-back receipt sells no unit twice.
+        expect(await countersOf(shirt._id)).toEqual(shelfBefore);
         expect(await outboxEventModel.countDocuments({ name: RETURN_RECEIVED }).exec()).toBe(0);
     });
 

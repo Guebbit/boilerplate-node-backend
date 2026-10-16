@@ -8,13 +8,16 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs, authenticateAsRole } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole, loginBearer, staleBearerFor } from '@tests/http';
+import { createUser } from '@modules/users/tests/factories';
+import type { UserDocument } from '@modules/users';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { carryOrderTo, fulfillmentOrdersOf } from '@modules/delivery/tests/factories';
 import { shipFulfillmentOrder } from '@modules/delivery';
 import { asAdmin, callerContextAs } from '@tests/callers';
 import { OrderStatus } from '@types';
+import { returnRepository } from '../../repository';
 
 setupTestDb();
 
@@ -195,6 +198,16 @@ describe('GET /returns and GET /returns/{id}', () => {
     });
 });
 
+/** A staff account with a verified address, distinct per call, whose session a test can age. */
+let staffAccounts = 0;
+const staffUser = (role: string) => {
+    staffAccounts += 1;
+    return createUser(
+        { email: `${role}-${staffAccounts}@example.com`, verifiedAt: new Date() },
+        role
+    );
+};
+
 /** A `requested` return, and a manager to decide it. */
 const requested = async () => {
     const { bearer, orderId } = await customerWithOrder(OrderStatus.delivered);
@@ -290,6 +303,24 @@ describe('POST /returns/{id}/receive', () => {
         expect(response.body.data.receivedAt).toEqual(expect.any(String));
     });
 
+    // `receive:Return` carries `stepUp: critical` on the key: receiving pays the customer back.
+    describe('with a session past the critical window', () => {
+        afterEach(() => jest.useRealTimers());
+
+        it('answers 401 REAUTH_REQUIRED and leaves the return awaiting its goods', async () => {
+            const { id } = await withdrawn();
+            const stale = await staleBearerFor(await staffUser('warehouse'), 'critical');
+
+            const response = await api().post(`/returns/${id}/receive`).set('Authorization', stale);
+
+            expect(response.status).toBe(401);
+            expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+            const stored = await returnRepository.findById(id);
+            expect(stored?.status).toBe('approved');
+            expect(stored?.receivedAt).toBeUndefined();
+        });
+    });
+
     it('takes no body at all', async () => {
         const { warehouse, id } = await withdrawn();
 
@@ -353,6 +384,11 @@ describe('POST /returns/{id}/receive', () => {
  */
 const customerWithPartlyShippedOrder = async () => {
     const { user, bearer } = await authenticateAs('user');
+    return { bearer, ...(await partlyShippedFor(user)) };
+};
+
+/** The same order for an account that already exists — a staff member shopping as a customer. */
+const partlyShippedFor = async (user: UserDocument) => {
     const shipped = await createProduct({ price: 20 });
     const waiting = await createProduct({ price: 5 });
     const order = await createOrder(user, [toOrderItem(shipped, 1), toOrderItem(waiting, 2)], {
@@ -366,7 +402,6 @@ const customerWithPartlyShippedOrder = async () => {
         callerContextAs('admin')
     );
     return {
-        bearer,
         orderId: String(order._id),
         fulfillmentOrderId: String(fulfillmentOrder._id),
         waitingId: String(waiting._id)
@@ -478,5 +513,100 @@ describe('POST /returns — kind: cancellation', () => {
         expect(refused.status).toBe(403);
         expect(allowed.status).toBe(201);
         expect(allowed.body.data).toMatchObject({ kind: 'cancellation', reason: 'other' });
+    });
+});
+
+/** A moderator account (holds the refund key), and what the order it may cancel looks like. */
+const staleModerator = async () => {
+    const moderator = await staffUser('moderator');
+    return { moderator, bearer: await staleBearerFor(moderator, 'critical') };
+};
+
+/** Whether the remainder is still waiting: nothing cancelled, nothing refunded. */
+const stillWaiting = (orderId: string) =>
+    fulfillmentOrdersOf(orderId).then(([first]) => first.status === 'in_progress');
+
+describe('POST /returns — a staff cancellation asks a fresh session, the buyer’s withdrawal never does', () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('answers a stale staff cancellation 401 REAUTH_REQUIRED, and cancels nothing', async () => {
+        const { orderId, fulfillmentOrderId } = await customerWithPartlyShippedOrder();
+        const { bearer } = await staleModerator();
+
+        const response = await api()
+            .post('/returns')
+            .set('Authorization', bearer)
+            .send({ orderId, reason: 'other', kind: 'cancellation', fulfillmentOrderId });
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+        expect(await stillWaiting(orderId)).toBe(true);
+    });
+
+    // The ledger records any JSON answer: the 401 must be refused before it, or the same key would
+    // replay it after the staff member has re-authenticated.
+    it('lets the same Idempotency-Key through once the staff member has re-authenticated', async () => {
+        const { orderId, fulfillmentOrderId } = await customerWithPartlyShippedOrder();
+        const { moderator, bearer: stale } = await staleModerator();
+        const send = (bearer: string) =>
+            api()
+                .post('/returns')
+                .set('Authorization', bearer)
+                .set('Idempotency-Key', 'staff-cancel-key-1')
+                .send({ orderId, reason: 'other', kind: 'cancellation', fulfillmentOrderId });
+
+        const challenged = await send(stale);
+        const retried = await send(await loginBearer(moderator.email));
+
+        expect(challenged.status).toBe(401);
+        expect(retried.status).toBe(201);
+        expect(retried.headers['idempotent-replay']).toBeUndefined();
+    });
+
+    it('refuses staff naming withdrawal on a stranger’s order with 422, never 201', async () => {
+        const { orderId, fulfillmentOrderId } = await customerWithPartlyShippedOrder();
+        const { bearer } = await staleModerator();
+
+        const response = await api()
+            .post('/returns')
+            .set('Authorization', bearer)
+            .send({ orderId, reason: 'withdrawal', kind: 'cancellation', fulfillmentOrderId });
+
+        // The exemption from the step-up buys nothing: the reason is the buyer's own right.
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].code).toBe('RETURN_CANCELLATION_INVALID');
+        expect(await stillWaiting(orderId)).toBe(true);
+    });
+
+    it('never prompts a staff member withdrawing from their own order', async () => {
+        const moderator = await staffUser('moderator');
+        const bearer = await staleBearerFor(moderator, 'critical');
+        const { orderId, fulfillmentOrderId } = await partlyShippedFor(moderator);
+
+        const response = await api()
+            .post('/returns')
+            .set('Authorization', bearer)
+            .send({ orderId, reason: 'withdrawal', kind: 'cancellation', fulfillmentOrderId });
+
+        expect(response.status).toBe(201);
+        expect(response.body.data).toMatchObject({ reason: 'withdrawal', kind: 'cancellation' });
+    });
+
+    it.each([
+        ['an array reason', { reason: ['withdrawal'] }],
+        ['no reason', {}],
+        ['a reason in the wrong case', { reason: 'WITHDRAWAL' }],
+        ['a kind in the wrong case', { reason: 'other', kind: 'Cancellation' }]
+    ])('never lets %s from a stale staff session cancel anything', async (_name, overrides) => {
+        const { orderId, fulfillmentOrderId } = await customerWithPartlyShippedOrder();
+        const { bearer } = await staleModerator();
+
+        const response = await api()
+            .post('/returns')
+            .set('Authorization', bearer)
+            .send({ orderId, kind: 'cancellation', fulfillmentOrderId, ...overrides });
+
+        expect(response.status).not.toBe(201);
+        expect(await stillWaiting(orderId)).toBe(true);
     });
 });

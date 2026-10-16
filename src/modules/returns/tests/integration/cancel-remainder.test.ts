@@ -17,6 +17,7 @@ import {
     asAdmin,
     asCustomer,
     asModerator,
+    asRole,
     asWarehouse,
     callerContextAs,
     testCallerContext
@@ -80,11 +81,11 @@ let customers = 0;
  * Two shirts (30.00) and a mug (10.00) with 5.00 of delivery on top — 75.00, paid by card, the
  * units held and sold for real — and only the shirts shipped. The mug is the remainder.
  */
-const partlyShipped = async () => {
+const partlyShipped = async (mugOverrides: Parameters<typeof createProduct>[0] = {}) => {
     customers += 1;
     const user = await createUser({ email: `cancel-${customers}@example.com` });
     const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
-    const mug = await createProduct({ title: 'Mug', price: 10, onHand: 10 });
+    const mug = await createProduct({ title: 'Mug', price: 10, onHand: 10, ...mugOverrides });
     const order = await createOrder(user, [toOrderItem(shirt, 2), toOrderItem(mug, 1)], {
         shippingMethod: 'standard',
         shippingCost: 5
@@ -333,7 +334,32 @@ describe('the buyer cancelling what has not shipped', () => {
             testCallerContext
         );
 
-        expect(outcome.success).toBe(false);
+        // Scoped to what the caller may read: a stranger is told the order does not exist.
+        expect(asReject(outcome).status).toBe(404);
+        expect(await refundsOf(fixture.orderId)).toEqual([]);
+    });
+
+    it('refuses goods Art. 16 excludes — an engraved mug that has not shipped is the shop’s to keep', async () => {
+        const fixture = await partlyShipped({ noWithdrawal: true });
+
+        const outcome = await buyerCancels(fixture);
+
+        expect(!outcome.success && outcome.errors[0].code).toBe('RETURN_LINES_INVALID');
+        expect(await refundsOf(fixture.orderId)).toEqual([]);
+        expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
+        expect(await countersOf(fixture.mug._id)).toMatchObject({ reserved: 1 });
+    });
+
+    it('rolls the lines, the units and the Return back together when the write fails', async () => {
+        const fixture = await partlyShipped();
+        jest.spyOn(returnRepository, 'create').mockRejectedValueOnce(new Error('disk full'));
+
+        await expect(buyerCancels(fixture)).rejects.toThrow('disk full');
+
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(fixture.orderId);
+        expect(fulfillmentOrder.status).toBe('in_progress');
+        expect(await countersOf(fixture.mug._id)).toMatchObject({ reserved: 1 });
+        expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
         expect(await refundsOf(fixture.orderId)).toEqual([]);
     });
 });
@@ -401,6 +427,92 @@ describe('staff cancelling what has not shipped', () => {
         expect(await fulfillmentOrdersOf(fixture.orderId).then(([first]) => first.status)).toBe(
             'in_progress'
         );
+    });
+
+    // The reason is the buyer's own right: written by staff on someone else's order it would falsify
+    // a legal record, so the request is refused whatever the staff member could otherwise do.
+    it('refuses staff naming withdrawal on a stranger’s order, and writes nothing', async () => {
+        const fixture = await partlyShipped();
+
+        const outcome = await createReturn(
+            {
+                orderId: fixture.orderId,
+                reason: 'withdrawal',
+                kind: 'cancellation',
+                fulfillmentOrderId: fixture.fulfillmentOrderId
+            },
+            asModerator(),
+            callerContextAs('moderator')
+        );
+
+        expect(asReject(outcome)).toMatchObject({ status: 422 });
+        expect(asReject(outcome).errors[0].code).toBe('RETURN_CANCELLATION_INVALID');
+        expect(await fulfillmentOrdersOf(fixture.orderId).then(([first]) => first.status)).toBe(
+            'in_progress'
+        );
+        expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
+        expect(await refundsOf(fixture.orderId)).toEqual([]);
+    });
+
+    it('asks the key before the reason: a warehouse naming withdrawal is told 403, not 422', async () => {
+        const fixture = await partlyShipped();
+
+        const outcome = await createReturn(
+            {
+                orderId: fixture.orderId,
+                reason: 'withdrawal',
+                kind: 'cancellation',
+                fulfillmentOrderId: fixture.fulfillmentOrderId
+            },
+            asWarehouse(),
+            callerContextAs('warehouse')
+        );
+
+        expect(asReject(outcome).status).toBe(403);
+    });
+
+    it('answers a staff member’s own order as its buyer: withdrawal works, any other reason is refused', async () => {
+        const fixture = await partlyShipped();
+        const asBuyingModerator = asRole('moderator', fixture.user.id);
+        const base = {
+            orderId: fixture.orderId,
+            kind: 'cancellation' as const,
+            fulfillmentOrderId: fixture.fulfillmentOrderId
+        };
+
+        const other = await createReturn(
+            { ...base, reason: 'other' },
+            asBuyingModerator,
+            callerContextAs('moderator')
+        );
+        const withdrawal = await createReturn(
+            { ...base, reason: 'withdrawal' },
+            asBuyingModerator,
+            callerContextAs('moderator')
+        );
+
+        expect(asReject(other).errors[0].code).toBe('RETURN_CANCELLATION_INVALID');
+        expect(created(withdrawal)).toMatchObject({ reason: 'withdrawal', status: 'closed' });
+        expect(
+            await fulfillmentOrdersOf(fixture.orderId).then(([first]) => first.cancelReason)
+        ).toBe('buyer');
+    });
+
+    it('answers a stranger’s order 404 to staff who cannot read orders, not 409 or 403', async () => {
+        const fixture = await partlyShipped();
+
+        const outcome = await createReturn(
+            {
+                orderId: fixture.orderId,
+                reason: 'other',
+                kind: 'cancellation',
+                fulfillmentOrderId: fixture.fulfillmentOrderId
+            },
+            asRole('customer', 'someone-else'),
+            testCallerContext
+        );
+
+        expect(asReject(outcome).status).toBe(404);
     });
 
     it('is allowed on an administrator’s order too: nothing ranks, the refund key is the whole rule', async () => {
@@ -550,6 +662,31 @@ describe('GET /returns/options', () => {
         expect(asReject(other).status).toBe(404);
     });
 
+    // `cancel` is the door's own rule, asked for this caller: the button never offers a refusal.
+    it('says per caller whether the cancel is theirs: the buyer, staff with the key, and not staff without it', async () => {
+        const fixture = await partlyShipped();
+        const cancelFor = async (caller: Parameters<typeof getReturnOptions>[1]) => {
+            const options = await getReturnOptions(fixture.orderId, caller);
+            return options.success ? options.data.cancellable.map(({ cancel }) => cancel) : [];
+        };
+
+        expect(await cancelFor(asCustomer(fixture.user.id))).toEqual([true]);
+        expect(await cancelFor(asModerator())).toEqual([true]);
+        expect(await cancelFor(asWarehouse())).toEqual([false]);
+    });
+
+    it('says the buyer may not cancel once the window has closed, or when the goods are excluded', async () => {
+        const closed = await partlyShipped();
+        await setWithdrawUntil(closed.orderId, new Date(Date.now() - 1000));
+        const excluded = await partlyShipped({ noWithdrawal: true });
+
+        const afterWindow = await getReturnOptions(closed.orderId, asCustomer(closed.user.id));
+        const engraved = await getReturnOptions(excluded.orderId, asCustomer(excluded.user.id));
+
+        expect(afterWindow.success && afterWindow.data.cancellable[0].cancel).toBe(false);
+        expect(engraved.success && engraved.data.cancellable[0].cancel).toBe(false);
+    });
+
     it('lets staff who read returns see any order’s', async () => {
         const fixture = await partlyShipped();
 
@@ -650,9 +787,10 @@ describe('returning goods that shipped in part', () => {
 
 /**
  * A paid, partly shipped order: a shirt in stock (shipped) and a preorder product whose paid
- * fulfillment order waits `on_hold` for stock. The preorder is the remainder.
+ * fulfillment order waits `on_hold` for stock. The preorder is the remainder. With
+ * `shipShirt: false` nothing ships: the shirt's fulfillment order stays open beside the waiting one.
  */
-const shirtShippedPreorderWaiting = async () => {
+const shirtShippedPreorderWaiting = async ({ shipShirt = true } = {}) => {
     customers += 1;
     const user = await createUser({ email: `preorder-cancel-${customers}@example.com` });
     const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
@@ -681,13 +819,15 @@ const shirtShippedPreorderWaiting = async () => {
     const ordinary = all.find(({ status }) => status === 'open');
     const waiting = all.find(({ status }) => status === 'on_hold');
     if (!ordinary || !waiting) throw new Error('the order did not split');
-    const shipped = await shipFulfillmentOrder(
-        String(ordinary._id),
-        {},
-        asAdmin(),
-        callerContextAs('admin')
-    );
-    if (!shipped.success) throw new Error('ship refused');
+    if (shipShirt) {
+        const shipped = await shipFulfillmentOrder(
+            String(ordinary._id),
+            {},
+            asAdmin(),
+            callerContextAs('admin')
+        );
+        if (!shipped.success) throw new Error('ship refused');
+    }
     return { user, game, orderId, fulfillmentOrderId: String(waiting._id) };
 };
 
@@ -745,6 +885,31 @@ describe('a preorder wait nobody answered', () => {
         expect(board.items).toMatchObject([{ preordered: 0, left: 5 }]);
         const [, waiting] = await fulfillmentOrdersOf(fixture.orderId);
         expect([waiting.status, waiting.cancelReason]).toEqual(['cancelled', 'no_answer']);
+    });
+
+    // `delivery` announces the expiry again every day until a cancel lands, so a replay is routine.
+    it('cancels once however often the expiry is announced: one return, one refund', async () => {
+        const fixture = await shirtShippedPreorderWaiting();
+        await letSilenceRunOut();
+
+        await cancelUnanswered(fixture.orderId, fixture.fulfillmentOrderId, lateEnough);
+        await cancelUnanswered(fixture.orderId, fixture.fulfillmentOrderId, lateEnough);
+
+        expect(await returnRepository.findByOrderId(fixture.orderId)).toHaveLength(1);
+        expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: 20 }]);
+    });
+
+    it('cancels nothing while another fulfillment order is alive and its goods are on the shelf', async () => {
+        const fixture = await shirtShippedPreorderWaiting({ shipShirt: false });
+        await letSilenceRunOut();
+
+        await cancelUnanswered(fixture.orderId, fixture.fulfillmentOrderId, lateEnough);
+        await settleOutboxNudges();
+
+        const stored = await readOrder(fixture.orderId);
+        expect(stored?.status).not.toBe(OrderStatus.cancelled);
+        expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
+        expect(await refundsOf(fixture.orderId)).toEqual([]);
     });
 
     it('does nothing while the window is still open, so a "keep waiting" that came first wins', async () => {

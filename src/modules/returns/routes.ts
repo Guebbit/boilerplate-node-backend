@@ -34,14 +34,25 @@ import { postReturnApprove, postReturnDecline } from './controllers/post-return-
 import { postReturnReceive } from './controllers/post-return-receive';
 
 /**
- * Whether this request is a remainder cancel by someone who holds the refund key — the one shape of
- * `POST /returns` that is staff's money-out door and so needs a fresh session. Read from the body, so
- * this guard must come after the body parser (it does: the app mounts it globally).
+ * Whether this request is a staff remainder cancel — `kind: cancellation`, any reason but the one
+ * exempt value `withdrawal`, by a caller holding the refund key. That is the money-out door, so it
+ * needs a fresh session. The buyer's own withdrawal is never prompted.
+ *
+ * Written as a deny on the one exempt value: a missing reason, an array or a wrong case is
+ * prompted (fails closed), then refused by the body schema. Safe on the raw body — only
+ * `express.json` parses it, nothing rewrites it before the controller, and `CreateReturnBody` is an
+ * exact-enum `strictObject` with no coercion. A staff member naming `withdrawal` on someone else's
+ * order is refused by the service (422), so the exemption buys them nothing.
  */
-const isStaffCancellation = (request: Request): boolean =>
-    (request.body as { kind?: string } | undefined)?.kind === 'cancellation' &&
-    request.authContext !== undefined &&
-    holds(callerForSubject(request.authContext, 'Return'), 'create', 'Refund');
+const isStaffCancellation = (request: Request): boolean => {
+    const body = request.body as { kind?: unknown; reason?: unknown } | undefined;
+    return (
+        body?.kind === 'cancellation' &&
+        body.reason !== 'withdrawal' &&
+        request.authContext !== undefined &&
+        holds(callerForSubject(request.authContext, 'Return'), 'create', 'Refund')
+    );
+};
 
 /** Express router for returns. */
 export const router = Router();
@@ -53,14 +64,14 @@ router.use(getAuth, isAuth);
 router.get('/', privateNoCache, getReturns);
 
 // POST /returns — open a return, or withdraw. The budget comes first: a spent one should not cost a write.
-// A `cancellation` by a caller holding the refund key is a staff refund: it needs a fresh session,
-// at that key's own tier. The buyer's own withdrawal is never prompted — the guard asks the key, and
-// a buyer without it passes through; the service refuses a staff member who is also the buyer.
+// A staff `cancellation` is a refund: it needs a fresh session, at that key's own tier. The step-up
+// sits BEFORE `idempotencyKey`: the ledger records any JSON answer, so a 401 challenge placed behind
+// it would be replayed as the answer to the same key after the staff member re-authenticated.
 router.post(
     '/',
     returnsWriteLimiter,
-    idempotencyKey,
     requireFreshAuthWhen(isStaffCancellation, 'critical'),
+    idempotencyKey,
     postReturn
 );
 

@@ -12,6 +12,7 @@
         "not-receivable": "Questo reso non sta aspettando la merce.",
         "requested": "Reso richiesto.",
         "cancellation-invalid": "Un annullamento deve indicare l'ordine di evasione da annullare e non inviare righe: si annulla tutto il resto.",
+        "cancellation-withdrawal-buyer-only": "Solo l'acquirente dell'ordine può annullare come recesso: il personale annulla con un altro motivo.",
         "nothing-to-cancel": "Qui non resta nulla da annullare. Se non è ancora partito nulla, annulla l'intero ordine.",
         "remainder-cancelled": "Ciò che non era ancora partito è annullato — i tuoi soldi stanno tornando.",
         "withdrawn": "Recesso ricevuto — l'ordine è annullato e il tuo denaro sta tornando.",

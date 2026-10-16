@@ -98,6 +98,18 @@ export const badCancellation = (): CreateReturnOutcome =>
         }
     ]);
 
+/**
+ * The 422 for staff naming `withdrawal`: that reason is the buyer's own right, so it is never
+ * written on someone else's behalf. The caller may cancel; only the body is wrong for their role.
+ */
+export const withdrawalIsTheBuyers = (): CreateReturnOutcome =>
+    generateReject(422, [
+        {
+            code: ERROR_CODES.RETURN_CANCELLATION_INVALID,
+            message: t('returns.cancellation-withdrawal-buyer-only')
+        }
+    ]);
+
 /** The 409 for a remainder with nothing left to cancel, or an order with nothing shipped yet. */
 export const nothingToCancel = (): CreateReturnOutcome =>
     generateReject(409, [

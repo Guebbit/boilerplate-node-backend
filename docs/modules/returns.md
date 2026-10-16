@@ -324,16 +324,30 @@ sequenceDiagram
 ```
 
 **Who may.** The buyer, as part of their withdrawal (`reason: withdrawal`; never on goods Art. 16
-excludes, and inside the window). **Staff** (out of stock for good, a sweep that got no answer) need
+excludes, and inside the window). **Staff** (out of stock for good) need
 the **refund key**, `create:Refund` — `stepUp: critical`, so the route asks for a fresh session —
 held by moderator and admin; the manager and the warehouse do not hold it. Holding the key is the
 whole rule, as on every door that sends money out: a refund of one's own order is allowed and its
 audit row is flagged `ownOrder` ([your own money](../theory/authorization.md#your-own-money)). No
 new key and no new verb: it is one more thing the refund permission already means.
 
-Refused: `RETURN_CANCELLATION_INVALID` (422) — no `fulfillmentOrderId`, `lines` sent, or a return that
-names one; `RETURN_NOTHING_TO_CANCEL` (409) — nothing has shipped (cancel the order instead), or
-nothing is left on that fulfillment order.
+`reason: withdrawal` is the buyer's own right, so it is never written on someone else's behalf: staff
+who are not the order's buyer name another reason, and are refused `withdrawal`. A staff member who
+IS the buyer is answered as the buyer, and is never prompted for a fresh session.
+
+| Caller                                   | `withdrawal`                        | Any other reason                    |
+| ---------------------------------------- | ----------------------------------- | ----------------------------------- |
+| the order's buyer (staff or not)         | allowed, no step-up                 | `RETURN_CANCELLATION_INVALID` (422) |
+| staff with the refund key, not the buyer | `RETURN_CANCELLATION_INVALID` (422) | allowed, after a fresh session      |
+| anyone else                              | 403 (the key is asked first)        | 403                                 |
+
+The route asks for the fresh session BEFORE the idempotency ledger: the ledger stores any JSON
+answer, so a 401 challenge placed behind it would be replayed to the same key after the staff member
+re-authenticated. The order is read as the caller may read it: a stranger's order is a 404.
+
+Refused: `RETURN_CANCELLATION_INVALID` (422) — no `fulfillmentOrderId`, `lines` sent, a return that
+names one, or a reason that does not fit the caller (above); `RETURN_NOTHING_TO_CANCEL` (409) —
+nothing has shipped (cancel the order instead), or nothing is left on that fulfillment order.
 
 ### A wait nobody answered
 
@@ -384,7 +398,10 @@ delivery's `remainder_cancelled` already say it.
 still cancel?", so the frontend shows and never counts: `returnable` is the quantity per product that
 has **shipped** and is not already coming back; `cancellable` lists each fulfillment order with a
 remainder and the exact refund cancelling it would owe (the delivery included when it takes the last
-unit). The owner reads their own order's, staff holding `read:Return` any. The cancel recomputes
+unit), each with `cancel`: whether THIS caller may cancel it. The buyer may inside the window and
+when the remainder holds no excluded goods; anyone else when they hold the refund key. It is the
+door's own rule (`cancelRefusalOf`), so a button is never offered that the door then refuses. The
+owner reads their own order's, staff holding `read:Return` any. The cancel recomputes
 under the lock, so what was quoted is what is refunded unless something moved in between.
 
 ## GDPR

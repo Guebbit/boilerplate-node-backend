@@ -24,11 +24,10 @@ import { generateReject } from '@infrastructure/http/response';
 import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { nudgeOutbox } from '@kernel/outbox';
-import { callerForSubject, systemCallerContext } from '@kernel/permissions';
-import { holds } from '@kernel/ability';
+import { systemCallerContext } from '@kernel/permissions';
 import { cancelRemainder, remainderOptions, waitHasExpired, ActRefusal } from '@modules/delivery';
 import { inventoryService } from '@modules/inventory';
-import { isBuyer, orderService, isExcludedFromWithdrawal } from '@modules/orders';
+import { isBuyer, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import { FulfillmentCancelReason } from '@types';
@@ -37,6 +36,7 @@ import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import type { ProductQuantity } from '../domain';
+import { cancelRefusalOf } from './cancel-right';
 import { cancellationRefundOn } from './cancellation-refund';
 import { mailReturnNotice } from './notify';
 import { syncReturnStatus } from './projection';
@@ -49,6 +49,7 @@ import {
     recordOpened,
     opened,
     windowClosed,
+    withdrawalIsTheBuyers,
     type CreateReturnInput,
     type CreateReturnOutcome
 } from './outcome';
@@ -231,8 +232,10 @@ const announceCancelled = (
 };
 
 /**
- * What the caller may do here, before anything is written: the buyer exercises their withdrawal
- * (within its window, never on goods Art. 16 excludes); anyone else needs the refund key.
+ * What the caller may do here, before anything is written. The rule itself is `cancelRefusalOf`;
+ * this adds what only the request knows — the reason it names. The buyer names `withdrawal`, their
+ * own right; staff name anything else, and are refused `withdrawal` (422, after the key check, so a
+ * caller without the key still gets the 403).
  *
  * @param order - the order
  * @param input - the request
@@ -248,23 +251,15 @@ const refuseCaller = (
     context: CallerContext,
     remainder: readonly ProductQuantity[]
 ): CreateReturnOutcome | undefined => {
-    if (isBuyer(order, authContext)) {
-        if (input.reason !== 'withdrawal') return badCancellation();
-        if (order.withdrawUntil && Date.now() > order.withdrawUntil.getTime())
-            return windowClosed();
-        const excluded = new Set(
-            order.items
-                .filter((item) => isExcludedFromWithdrawal(item))
-                .map((item) => String(item.product._id))
-        );
-        return remainder.some(({ productId }) => excluded.has(productId))
-            ? badLines('excluded')
-            : undefined;
-    }
+    const buyer = isBuyer(order, authContext);
+    if (buyer && input.reason !== 'withdrawal') return badCancellation();
 
-    return holds(callerForSubject(authContext, 'Return'), 'create', 'Refund')
-        ? undefined
-        : forbidden(order, context);
+    const refusal = cancelRefusalOf(order, authContext, remainder);
+    if (refusal === 'no-key') return forbidden(order, context);
+    if (refusal === 'window-closed') return windowClosed();
+    if (refusal === 'excluded') return badLines('excluded');
+
+    return !buyer && input.reason === 'withdrawal' ? withdrawalIsTheBuyers() : undefined;
 };
 
 /**
@@ -283,7 +278,8 @@ export const createCancellation = (
     const { fulfillmentOrderId } = input;
     if (!fulfillmentOrderId || input.lines !== undefined) return Promise.resolve(badCancellation());
 
-    return orderService.getById(input.orderId).then((order) => {
+    // Scoped to what the caller may read: a stranger's order is a 404, not an answer that says it exists.
+    return orderService.getForCaller(input.orderId, authContext).then((order) => {
         if (!order) return generateReject(404, [t('returns.order-not-found')]);
 
         return remainderOptions(input.orderId, order.fulfillment?.shipped === true).then(

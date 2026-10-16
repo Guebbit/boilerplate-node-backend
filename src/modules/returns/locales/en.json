@@ -12,6 +12,7 @@
         "not-receivable": "This return is not awaiting its goods.",
         "requested": "Return requested.",
         "cancellation-invalid": "A cancellation must name the fulfillment order to cancel, and send no lines — the whole remainder is cancelled.",
+        "cancellation-withdrawal-buyer-only": "Only the order's own buyer can cancel as a withdrawal; staff cancel with another reason.",
         "nothing-to-cancel": "There is nothing left to cancel here. If nothing has shipped yet, cancel the whole order instead.",
         "remainder-cancelled": "What had not shipped is cancelled — your money is on its way back.",
         "withdrawn": "Withdrawal received — the order is cancelled and your money is on its way back.",

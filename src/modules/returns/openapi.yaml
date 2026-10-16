@@ -14,7 +14,7 @@ x-error-codes:
     RETURN_NOT_RECEIVABLE: { status: 409, description: 'The return is not an approved one awaiting its goods.' }
     RETURN_NOT_DECIDABLE: { status: 409, description: 'The return has already been decided.' }
     RETURN_ORDER_NOT_RETURNABLE: { status: 409, description: 'The order is not in a state a return can be opened on — cancelled, or (for a reason other than withdrawal) still in the shop''s hands.' }
-    RETURN_CANCELLATION_INVALID: { status: 422, description: 'A cancellation names no fulfillment order of this order, or sends `lines` (the remainder is its lines), or a return names a fulfillment order.' }
+    RETURN_CANCELLATION_INVALID: { status: 422, description: 'A cancellation names no fulfillment order of this order, or sends `lines` (the remainder is its lines), or a return names a fulfillment order. Also the reason does not fit the caller: the order''s buyer cancels only as a `withdrawal`; anyone else (staff) may name any reason but `withdrawal`, which is the buyer''s own right.' }
     RETURN_NOTHING_TO_CANCEL: { status: 409, description: 'The fulfillment order has nothing left to cancel, or nothing has shipped from the order yet (cancel the whole order instead).' }
     RETURN_WINDOW_CLOSED: { status: 409, description: 'The withdrawal period for this order has ended.' }
 
@@ -89,9 +89,13 @@ paths:
                 order (`fulfillmentOrderId`) once something has shipped from the order. It is born
                 `closed`, its `lines` are the remainder, and the refund of those lines follows (plus
                 the delivery when it takes the last unit of the order). The buyer uses it as part of
-                their withdrawal; staff may use it too (out of stock for good), and then need
-                `create:Refund` — the refund key, `stepUp: critical`. `GET /returns/options` says what each door would
-                take and refund.
+                their withdrawal, and names `reason: withdrawal`; staff may use it too (out of stock
+                for good), name any other reason, and need `create:Refund` — the refund key,
+                `stepUp: critical`. Staff naming `withdrawal` on someone else's order are refused
+                (`RETURN_CANCELLATION_INVALID`): that reason is the buyer's right, and writing it for
+                them would falsify a legal record. A staff cancellation asks a fresh session; the
+                buyer's own withdrawal never does. `GET /returns/options` says what each door would
+                take and refund, and whether this caller may use it (`cancel`).
 
                 A return answers for goods that left (`kind: return`, the default); only the order's
                 own buyer opens one, an operator included. Sending `Idempotency-Key` makes a retry safe.
@@ -115,15 +119,16 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ReturnEnvelope'
+                # Also `REAUTH_REQUIRED`: a staff `cancellation` from a session past the critical window.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # A staff `cancellation` by a caller without the refund key (`create:Refund`).
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # Not the caller's order, or no such order.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `RETURN_ORDER_NOT_RETURNABLE`, `RETURN_WINDOW_CLOSED` — or `Idempotency-Key` names a
-                # request still in flight.
+                # `RETURN_ORDER_NOT_RETURNABLE`, `RETURN_WINDOW_CLOSED`, `RETURN_NOTHING_TO_CANCEL` — or
+                # `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                # `RETURN_LINES_INVALID`, or a malformed body.
+                # `RETURN_LINES_INVALID`, `RETURN_CANCELLATION_INVALID`, or a malformed body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -515,7 +520,7 @@ components:
         CancellableFulfillmentOrder:
             type: object
             additionalProperties: false
-            required: [fulfillmentOrderId, number, lines, refundAmount, shippingRefund]
+            required: [fulfillmentOrderId, number, lines, refundAmount, shippingRefund, cancel]
             description: A fulfillment order with a remainder that can still be cancelled, and what cancelling it would refund.
             properties:
                 fulfillmentOrderId:
@@ -537,6 +542,12 @@ components:
                     format: double
                     minimum: 0
                     description: The delivery inside `refundAmount` — non-zero only when this cancel takes the last unit of the order.
+                cancel:
+                    type: boolean
+                    description: >-
+                        Whether THIS caller may cancel this remainder, so a client offers only a door that
+                        opens. The order's buyer: within the withdrawal window, and only when the remainder
+                        holds no goods excluded from withdrawal (Art. 16). Anyone else: holding `create:Refund`.
 
         ReturnOptions:
             type: object

@@ -9,6 +9,10 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').securityMock()
 );
 
+jest.mock('@kernel/middlewares/authorizations', () =>
+    jest.requireActual<typeof import('@tests/routes')>('@tests/routes').authGuardsMock()
+);
+
 import { router } from '@modules/returns/routes';
 
 describe('returns routes — what is mounted', () => {
@@ -73,4 +77,19 @@ describe('returns routes — rate limiting and idempotency', () => {
             expect(chainOf(router, signature)).toContain('idempotencyKey');
         }
     );
+});
+
+describe('returns routes — guard order on POST /returns', () => {
+    // The ledger records any JSON answer: a step-up challenge placed after it would be replayed as
+    // the answer to the same key once the staff member has re-authenticated.
+    it('spends the budget, then asks the step-up, then opens the idempotency ledger', () => {
+        const chain = chainOf(router, 'POST /');
+        const budget = chain.indexOf('returns-write');
+        const stepUp = chain.indexOf('requireFreshAuthWhen(critical)');
+        const ledger = chain.indexOf('idempotencyKey');
+
+        expect(budget).toBeGreaterThanOrEqual(0);
+        expect(stepUp).toBeGreaterThan(budget);
+        expect(ledger).toBeGreaterThan(stepUp);
+    });
 });

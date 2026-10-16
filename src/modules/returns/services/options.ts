@@ -25,6 +25,7 @@ import { returnRepository } from '../repository';
 import { holdsReturnedGoods, returnableQuantities, wireLines } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { cancellationRefundOn } from './cancellation-refund';
+import { cancelRefusalOf } from './cancel-right';
 import { ownOrder } from './ownership';
 
 /**
@@ -100,7 +101,9 @@ export const getReturnOptions = (
                         number: remainder.number,
                         lines: remainder.lines,
                         refundAmount: refund.total,
-                        shippingRefund: refund.shipping
+                        shippingRefund: refund.shipping,
+                        // The same rule the door applies, so the button never offers a refusal.
+                        cancel: cancelRefusalOf(order, authContext, remainder.lines) === undefined
                     };
                 })
             });
