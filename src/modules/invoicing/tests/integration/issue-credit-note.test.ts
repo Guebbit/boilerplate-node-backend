@@ -26,6 +26,7 @@ import { decryptInvoiceParty } from '../../pii';
 import { invoicingRepository } from '../../repository';
 import { issueCreditNote } from '../../services';
 import { shopTimezone } from '@modules/shop';
+import { OrderStatus } from '@types';
 
 /** The fake PSP's "always succeeds" reference (`scenarios/support/doubles/payments/fake.ts`). */
 const FAKE_SUCCESS_METHOD = 'pm_card_visa';
@@ -240,18 +241,26 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         expect(await creditNoteNumberCounterModel.findById(year).lean().exec()).toBeNull();
     });
 
-    it('issues nothing when there is no invoice to reverse', async () => {
+    // A paid order whose invoice was never frozen (a race with the refund, or data older than the
+    // module): a note would reference nothing, and would burn a number in a gap-free series.
+    it('issues nothing, and burns no number, when a paid order has no invoice to reverse', async () => {
         const user = await createUser();
         const product = await createProduct({ price: 25 });
-        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.paid
+        });
+        const orderId = String(order._id);
+        const year = yearInZone(new Date(), shopTimezone());
 
-        // No payment was ever taken on this order — `refundForOrder` finds nothing `succeeded`
-        // and never fires `PAYMENT_REFUNDED`, so there is nothing for a credit note to correct.
-        await refundForOrder(String(order._id));
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        const note = await issueCreditNote({
+            orderId,
+            refundId: 'refund-uninvoiced',
+            amount: 25,
+            full: true
+        });
 
-        await expect(
-            invoicingRepository.findCreditNotesByOrderId(String(order._id))
-        ).resolves.toEqual([]);
+        expect(note).toBeUndefined();
+        await expect(invoicingRepository.findCreditNotesByOrderId(orderId)).resolves.toEqual([]);
+        expect(await creditNoteNumberCounterModel.findById(year).lean().exec()).toBeNull();
     });
 });

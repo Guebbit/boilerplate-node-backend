@@ -281,7 +281,7 @@ const refundedOrder = async () => {
         amount: 1,
         full: true
     });
-    return { orderId, creditNoteId: String(creditNote?._id) };
+    return { orderId, creditNoteId: String(creditNote?._id), owner };
 };
 
 describe('the credit notes of an order the caller may read but not its money', () => {
@@ -319,6 +319,47 @@ describe('the credit notes of an order the caller may read but not its money', (
 
         expect(response.status).toBe(200);
         expect(response.body.data).toHaveLength(1);
+    });
+});
+
+describe('GET /orders/{id}/credit-notes/{creditNoteId} — who may download', () => {
+    it('serves the owner a private, uncached PDF', async () => {
+        const { orderId, creditNoteId, owner } = await refundedOrder();
+
+        const response = await api()
+            .get(`/orders/${orderId}/credit-notes/${creditNoteId}`)
+            .set('Authorization', owner.bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toMatch(/application\/pdf/);
+        expect(response.headers['cache-control']).toMatch(/private/);
+        expect(response.headers['cache-control']).toMatch(/no-store/);
+    });
+
+    it('answers a stranger 404 ORDER_NOT_FOUND, and sends no document', async () => {
+        const { orderId, creditNoteId } = await refundedOrder();
+        const { bearer: strangerBearer } = await authenticateAnotherUser();
+
+        const response = await api()
+            .get(`/orders/${orderId}/credit-notes/${creditNoteId}`)
+            .set('Authorization', strangerBearer);
+
+        expect(response.status).toBe(404);
+        expect(response.headers['content-type']).not.toMatch(/pdf/);
+    });
+
+    // The note belongs to order A; the owner names it under their own order B. Dropping the order
+    // match from the lookup would hand over a document of another order.
+    it('answers the owner 404 ORDER_CREDIT_NOTE_NOT_ISSUED for a note that is on another of their orders', async () => {
+        const { creditNoteId, owner } = await refundedOrder();
+        const other = await createOrder(owner.user, [toOrderItem(await createProduct(), 1)]);
+
+        const response = await api()
+            .get(`/orders/${String(other._id)}/credit-notes/${creditNoteId}`)
+            .set('Authorization', owner.bearer);
+
+        expect(response.status).toBe(404);
+        expect(response.body.errors[0].code).toBe('ORDER_CREDIT_NOTE_NOT_ISSUED');
     });
 });
 
