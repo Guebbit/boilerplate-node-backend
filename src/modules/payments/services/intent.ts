@@ -23,8 +23,8 @@ import {
 import type { PaymentDocument } from '../model';
 import { presentPayment } from '../presenter';
 import { paymentRepository } from '../repository';
-import { cardNotAvailable, notPayable } from './errors';
-import { SETTLEABLE_PAYMENT_STATUSES } from '../domain';
+import { cardNotAvailable, notPayable, orderNotFound } from './errors';
+import { isHandRecorded, SETTLEABLE_PAYMENT_STATUSES } from '../domain';
 import { settleFromProvider } from './settlement';
 import { buyerOrderScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
@@ -97,7 +97,7 @@ export const createIntent = async (
     authContext?: AuthContext
 ): Promise<ResponseSuccess<Payment> | ResponseReject> => {
     const order = await orderService.getById(orderId, buyerOrderScope(authContext));
-    if (!order) return generateReject(404, [t('payments.order-not-found')]);
+    if (!order) return orderNotFound();
     // Payable is asked of the order lifecycle rather than compared against a literal here, so
     // this module cannot drift from the owner of the rule — and, unlike a bare `canTransition`
     // check, correctly refuses a second intent on an order that is already `paid`.
@@ -154,7 +154,7 @@ export const createIntent = async (
  *   mid-flight — there is money to refund instead, not an intent left to cancel
  */
 export const cancelOpenIntent = (payment: PaymentDocument, reason: string): Promise<void> => {
-    if (!payment.providerRef || payment.provider === 'manual') return Promise.resolve();
+    if (!payment.providerRef || isHandRecorded(payment)) return Promise.resolve();
     return providerNamed(payment.provider).cancel(payment.providerRef, { reason });
 };
 

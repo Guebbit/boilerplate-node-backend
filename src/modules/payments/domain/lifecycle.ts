@@ -62,6 +62,18 @@ export const REAPABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
     'cancelled'
 ];
 
+/** The `provider` of a payment an operator recorded by hand: no PSP is behind it. */
+export const MANUAL_PROVIDER = 'manual';
+
+/**
+ * Whether a payment was recorded by hand. Such money has no provider to report figures, to refund
+ * through or to close an intent at: the amount is the order's own, and returning it is an
+ * operator's act.
+ * @param payment - anything carrying the payment's `provider`
+ */
+export const isHandRecorded = (payment: { provider: string }): boolean =>
+    payment.provider === MANUAL_PROVIDER;
+
 /** The only status money can come back from: it has to have arrived first. */
 export const REFUNDABLE_PAYMENT_STATUS: PaymentStatus = 'succeeded';
 

@@ -21,7 +21,8 @@ const SWEEP_BATCH_SIZE = 200;
  * batch was full so a truncated run is not read as done.
  *
  * @param find - reads one batch of payments untouched since the cutoff
- * @param handle - settles one payment; resolves whether it did, and never rejects
+ * @param handle - settles one payment and resolves whether it did; a rejection is logged here and
+ *   leaves the payment for the next sweep
  * @param label - which sweep this is, for its log lines
  * @param graceMinutes - how long a payment sits untouched before this sweep may act on it
  * @returns how many payments were settled
@@ -37,7 +38,16 @@ const sweepDue = async (
 
     let settled = 0;
     for (const payment of due) {
-        if (await handle(payment)) settled += 1;
+        const done = await handle(payment).catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: the ${label} sweep could not settle order ${String(payment.orderId)}'s payment — it stays as it is, and the next sweep tries again`,
+                error
+            });
+            // Stryker restore all
+            return false;
+        });
+        if (done) settled += 1;
     }
 
     // A full batch means more is waiting. Said out loud, so a truncated run is not read as done.
@@ -56,23 +66,13 @@ const sweepDue = async (
 };
 
 /**
- * Retry one payment's open refunds; a failure is logged and leaves them open for the next sweep.
+ * Retry one payment's open refunds.
  *
  * @param payment - a payment with at least one refund still open
  * @returns whether at least one refund settled
  */
 const retryOneRefund = (payment: PaymentDocument): Promise<boolean> =>
-    settleOpenRefunds(payment)
-        .then((outcome) => outcome.settled)
-        .catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Payments: could not retry the open refund for order ${String(payment.orderId)} — it stays open, and the next sweep tries again`,
-                error
-            });
-            // Stryker restore all
-            return false;
-        });
+    settleOpenRefunds(payment).then((outcome) => outcome.settled);
 
 /**
  * Retry every refund the provider refused, or that died before it was answered — the refund half
@@ -92,28 +92,17 @@ export const retryOpenRefunds = (): Promise<number> =>
     );
 
 /**
- * Ask the provider about one stale payment and settle the answer; a failure is logged and leaves
- * the payment for the next sweep.
+ * Ask the provider about one stale payment and settle the answer.
  *
  * @param payment - an unsettled payment holding a provider intent
  * @returns whether this call's own write moved the payment (a call that lost a race, or found the
  *   provider still undecided, did not)
  */
 const reconcileOne = (payment: PaymentDocument): Promise<boolean> =>
-    settleFromProvider(payment)
-        .then(
-            (settlement) =>
-                settlement?.transitioned === true && payment.status !== settlement.payment.status
-        )
-        .catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Payments: could not reconcile order ${String(payment.orderId)}'s payment with the provider — it stays as it is, and the next sweep asks again`,
-                error
-            });
-            // Stryker restore all
-            return false;
-        });
+    settleFromProvider(payment).then(
+        (settlement) =>
+            settlement?.transitioned === true && payment.status !== settlement.payment.status
+    );
 
 /**
  * Reconcile every unsettled payment the provider may have decided without telling us — the net

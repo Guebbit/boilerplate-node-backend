@@ -29,3 +29,10 @@ export const cardNotAvailable = (): ResponseReject =>
     generateReject(409, [
         { code: ERROR_CODES.PAYMENT_CARD_NOT_AVAILABLE, message: t('payments.card-not-available') }
     ]);
+
+/** The 404 for a payment that does not exist, or that the caller may not see. */
+export const paymentNotFound = (): ResponseReject => generateReject(404, [t('payments.not-found')]);
+
+/** The 404 for an order a payment act names that does not exist, or that the caller may not see. */
+export const orderNotFound = (): ResponseReject =>
+    generateReject(404, [t('payments.order-not-found')]);

@@ -8,6 +8,7 @@
  * a next step, and a 4xx would tell it to stop.
  */
 
+import { ERROR_CODES } from '@api/error-codes';
 import type { Request, Response } from 'express';
 import type { Payment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
@@ -36,7 +37,8 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
         )
         .then((result) => {
             const declined =
-                !result.success && result.errors.some(({ code }) => code === 'PAYMENT_DECLINED');
+                !result.success &&
+                result.errors.some(({ code }) => code === ERROR_CODES.PAYMENT_DECLINED);
             // Read by the decline-budget limiter's `requestWasSuccessful` (rate-limits.ts) so it
             // spends its budget on a genuine decline only, never on the route's other 409.
             request.paymentConfirmDeclined = declined;

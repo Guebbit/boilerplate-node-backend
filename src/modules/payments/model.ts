@@ -77,6 +77,15 @@ export interface RefundRecord {
 }
 
 /**
+ * What settling a refund records beyond the status: the provider's own refund id when it answered,
+ * or that an operator returned the money outside the application.
+ */
+export interface RefundSettlement {
+    providerRefundRef?: string;
+    refundedByHand?: true;
+}
+
+/**
  * Payment Document interface.
  */
 export interface PaymentDocument extends Document {

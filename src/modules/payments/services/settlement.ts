@@ -31,6 +31,7 @@ import { providerNamed, type ProviderPaymentState, type ProviderWebhookEvent } f
 import { paymentRepository } from '../repository';
 import {
     CONFIRMABLE_PAYMENT_STATUSES,
+    isHandRecorded,
     SETTLEABLE_PAYMENT_STATUSES,
     SUCCESS_SETTLEABLE_PAYMENT_STATUSES
 } from '../domain';
@@ -39,7 +40,7 @@ import { payerScope } from './scope';
 import { CANCELLATION_REQUEST, openRefund, performRefund } from './refunds';
 import { recordDecline } from './announce';
 import { PAYMENT_SUCCEEDED } from '../events';
-import { notPayable } from './errors';
+import { notPayable, paymentNotFound } from './errors';
 import { ERROR_CODES } from '@api/error-codes';
 
 /** What a settlement did, for a caller that has to turn it into an HTTP answer. */
@@ -402,7 +403,7 @@ export const settlePayment = (
 
     // The money must be the money we asked for, checked before anything is paid. A hand-recorded
     // payment (`manual`) has no provider reporting figures: its amount IS the order's own.
-    const mismatched = payment.provider === 'manual' ? [] : receiptMismatch(payment, state);
+    const mismatched = isHandRecorded(payment) ? [] : receiptMismatch(payment, state);
     if (mismatched.length > 0) return settleMismatch(payment, state, mismatched);
 
     // A card settling the order is how it was paid, whatever checkout chose: the order page shows
@@ -463,7 +464,7 @@ const reportAttempt = (
 ): ResponseSuccess<PaymentDocument> | ResponseReject => {
     if (!settlement.transitioned) return result;
     const declined =
-        !result.success && result.errors.some(({ code }) => code === 'PAYMENT_DECLINED');
+        !result.success && result.errors.some(({ code }) => code === ERROR_CODES.PAYMENT_DECLINED);
     const settled = result.success && result.data.status === 'succeeded';
     if (!settled && !declined) return result;
 
@@ -484,6 +485,9 @@ const reportAttempt = (
     return result;
 };
 
+/** A payment the provider was asked for an intent on, so `providerRef` is present. */
+type ConfirmablePayment = PaymentDocument & { providerRef: string };
+
 /**
  * Whether an already-fetched payment is in one of the given states, or say which refusal it was —
  * the check both browser-driven endpoints share, over a document each has already read for its own
@@ -495,7 +499,7 @@ const reportAttempt = (
 const findConfirmable = (
     payment: PaymentDocument,
     allowed: readonly PaymentStatus[]
-): (PaymentDocument & { providerRef: string }) | ResponseReject => {
+): ConfirmablePayment | ResponseReject => {
     // No reference means the provider was never asked for an intent, so there is nothing at
     // the far end to confirm or re-read. Same refusal as a wrong status: the client's move is
     // to create the intent again either way.
@@ -505,7 +509,7 @@ const findConfirmable = (
         ]);
     // The guard above proves `providerRef` is present, but narrowing a property does not narrow
     // the object it lives on — TS has no way to fold that back into `payment`'s own type here.
-    return payment as PaymentDocument & { providerRef: string };
+    return payment as ConfirmablePayment;
 };
 
 /**
@@ -533,7 +537,7 @@ const confirmableOrder = (orderId: string): Promise<ResponseReject | null> =>
 /**
  * Settle an already-fetched, already-scoped payment via the provider, gated on it currently
  * sitting in one of `allowed` — the part {@link confirmPayment} and {@link syncPayment} do
- * identically once each has decided the call may proceed at all. Split from {@link settleVia} so
+ * identically once each has decided the call may proceed at all. Split from the read so
  * {@link syncPayment}'s own idempotent-terminal shortcut can run on the SAME read rather than a
  * second one.
  * @param payment - the payment, already read for this caller
@@ -550,14 +554,10 @@ const confirmableOrder = (orderId: string): Promise<ResponseReject | null> =>
 const settleFound = (
     payment: PaymentDocument,
     allowed: readonly PaymentStatus[],
-    providerCall: (
-        payment: PaymentDocument & { providerRef: string }
-    ) => Promise<ProviderPaymentState>,
+    providerCall: (payment: ConfirmablePayment) => Promise<ProviderPaymentState>,
     context: CallerContext,
     options: {
-        precheck?: (
-            payment: PaymentDocument & { providerRef: string }
-        ) => Promise<ResponseReject | null>;
+        precheck?: (payment: ConfirmablePayment) => Promise<ResponseReject | null>;
         newAttempt?: boolean;
     } = {}
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> => {
@@ -580,39 +580,6 @@ const settleFound = (
 };
 
 /**
- * Settle one payment via the provider — {@link confirmPayment}'s whole body: read the payment
- * scoped to its caller, refuse a status this action does not run from, hand the provider's own
- * account of it to {@link settlePayment}, and audit/analyse the outcome.
- * @param paymentId - the payment to settle
- * @param authContext - the caller; the payment must be theirs
- * @param context - the caller context to audit/analyse the attempt against
- * @param allowed - the statuses this action may run from
- * @param providerCall - the provider-specific action (confirm or re-read) — see {@link settleFound}
- * @param precheck - see {@link settleFound}
- */
-const settleVia = (
-    paymentId: string,
-    authContext: AuthContext | undefined,
-    context: CallerContext,
-    allowed: readonly PaymentStatus[],
-    providerCall: (
-        payment: PaymentDocument & { providerRef: string }
-    ) => Promise<ProviderPaymentState>,
-    precheck?: (
-        payment: PaymentDocument & { providerRef: string }
-    ) => Promise<ResponseReject | null>
-): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    paymentRepository.findByIdScoped(paymentId, payerScope(authContext)).then((payment) => {
-        if (!payment) return generateReject(404, [t('payments.not-found')]);
-        // Confirming IS an attempt at paying, so a decline here is a new one even when the
-        // payment is already `declined` from the card before.
-        return settleFound(payment, allowed, providerCall, context, {
-            precheck,
-            newAttempt: true
-        });
-    });
-
-/**
  * Confirm a payment — the browser handing over the method its provider widget tokenised.
  *
  * The answer is not always final. A card the bank wants a challenge for comes back
@@ -633,14 +600,27 @@ export const confirmPayment = (
     authContext: AuthContext | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    settleVia(
-        paymentId,
-        authContext,
-        context,
-        CONFIRMABLE_PAYMENT_STATUSES,
-        (payment) => providerNamed(payment.provider).confirm(payment.providerRef, paymentMethodRef),
-        (payment) => confirmableOrder(String(payment.orderId))
-    );
+    paymentRepository.findByIdScoped(paymentId, payerScope(authContext)).then((payment) => {
+        if (!payment) return paymentNotFound();
+        // Confirming IS an attempt at paying, so a decline here is a new one even when the
+        // payment is already `declined` from the card before.
+        return settleFound(
+            payment,
+            CONFIRMABLE_PAYMENT_STATUSES,
+            // The payment itself, narrowed to prove `providerRef`, so the call reaches the provider
+            // named on THIS payment rather than the deployment's currently configured one.
+            (confirmable) =>
+                providerNamed(confirmable.provider).confirm(
+                    confirmable.providerRef,
+                    paymentMethodRef
+                ),
+            context,
+            {
+                precheck: (confirmable) => confirmableOrder(String(confirmable.orderId)),
+                newAttempt: true
+            }
+        );
+    });
 
 /**
  * Re-read a payment from the provider and apply whatever it says — the browser reporting that it
@@ -658,7 +638,7 @@ export const syncPayment = (
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository.findByIdScoped(paymentId, payerScope(authContext)).then((payment) => {
-        if (!payment) return generateReject(404, [t('payments.not-found')]);
+        if (!payment) return paymentNotFound();
         // Terminal already: there is nothing the provider could say that this module would
         // act on, and asking would spend a call to be told so.
         if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status))

@@ -12,10 +12,12 @@ import { PaymentStatus, PaymentMethod } from '@types';
 import { reviveDecimals } from '@infrastructure/persistence/money-field';
 import type { ReportWindow } from '@infrastructure/persistence/report';
 import type { RefundFailureReason, RefundReason, RefundStatus } from '@types';
-import type { PaymentDocument, RefundRecord } from './model';
+import type { PaymentDocument, RefundRecord, RefundSettlement } from './model';
 import {
     CONFIRMABLE_PAYMENT_STATUSES,
+    MANUAL_PROVIDER,
     OPEN_REFUND_STATUSES,
+    REFUNDABLE_PAYMENT_STATUS,
     SETTLEABLE_PAYMENT_STATUSES,
     REAPABLE_PAYMENT_STATUSES
 } from './domain';
@@ -227,16 +229,16 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         paymentId: string,
         expectedRefunded: number,
         newRefunded: number,
-        refund: Pick<
+        refund: Omit<
             RefundRecord,
-            '_id' | 'amount' | 'currency' | 'reason' | 'idempotencyKey' | 'status'
+            'createdAt' | 'providerRefundRef' | 'failureReason' | 'settledAt'
         >,
         session?: ClientSession
     ) => Promise<PaymentDocument | null>;
     settleRefund: (
         paymentId: string,
         refundId: string,
-        fields: { providerRefundRef?: string; refundedByHand?: true },
+        fields: RefundSettlement,
         session?: ClientSession
     ) => Promise<PaymentDocument | null>;
     failRefund: (
@@ -347,7 +349,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     upsertOffline: (orderId, userId, data) =>
         upsertConfirmable(orderId, userId, {
             ...data,
-            provider: 'manual',
+            provider: MANUAL_PROVIDER,
             status: 'requires_confirmation',
             // A card attempt's leftovers: this row is now the hand-paid one.
             providerRef: undefined,
@@ -428,7 +430,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             .findOneAndUpdate(
                 {
                     _id: toObjectId(paymentId),
-                    status: 'succeeded',
+                    status: REFUNDABLE_PAYMENT_STATUS,
                     amountRefunded: expectedRefunded
                 },
                 { $set: { amountRefunded: newRefunded }, $push: { refunds: refund } },
@@ -595,7 +597,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         aggregateRefundRows([
             {
                 $match: {
-                    provider: manual ? 'manual' : { $ne: 'manual' },
+                    provider: manual ? MANUAL_PROVIDER : { $ne: MANUAL_PROVIDER },
                     'refunds.status': { $in: [...OPEN_REFUND_STATUSES] }
                 }
             },
@@ -644,7 +646,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             .find({
                 status: { $in: [...SETTLEABLE_PAYMENT_STATUSES] },
                 providerRef: { $exists: true, $ne: null },
-                provider: { $ne: 'manual' },
+                provider: { $ne: MANUAL_PROVIDER },
                 updatedAt: { $lte: updatedBefore }
             })
             .sort({ updatedAt: 1 })

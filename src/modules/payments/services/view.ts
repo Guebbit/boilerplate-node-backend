@@ -6,10 +6,8 @@
 
 import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
-import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
-    generateReject,
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
@@ -22,6 +20,7 @@ import { CONFIRMABLE_PAYMENT_STATUSES, REFUNDABLE_PAYMENT_STATUS } from '../doma
 import { presentPayment } from '../presenter';
 import { remainingOf } from './refunds';
 import { callerScope, readsAllPayments } from './scope';
+import { paymentNotFound } from './errors';
 
 /**
  * The payment behind an order, for the order page's payment panel.
@@ -34,7 +33,7 @@ export const getForOrder = (
     authContext?: AuthContext
 ): Promise<ResponseSuccess<Payment> | ResponseReject> =>
     paymentRepository.findByOrderId(orderId, callerScope(authContext)).then((payment) => {
-        if (!payment) return generateReject(404, [t('payments.not-found')]);
+        if (!payment) return paymentNotFound();
 
         // The order is read for `pay` alone: payability is half a payment's status and half the
         // order's, and answering it here is what stops a client deciding it from two fields.

@@ -47,5 +47,5 @@ export const lazyFakePaymentProvider: PaymentProvider = {
 
 /** Puts the fake PSP into the payments registry, under `fake`. */
 export const registerDouble = (): void => {
-    registerPaymentProvider('fake', lazyFakePaymentProvider);
+    registerPaymentProvider(lazyFakePaymentProvider);
 };

@@ -6,14 +6,13 @@
  * new settlement code: this file is the one step in front of that endpoint.
  */
 
-import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
-    generateReject,
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
 import { orderService, parseReference, type OrderDocument } from '@modules/orders';
+import { orderNotFound } from './errors';
 
 /**
  * The order behind an RF reference — the admin's lookup before `recordOfflinePayment` settles it.
@@ -28,11 +27,9 @@ export const getOrderByReference = (
     ref: string
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     const parsed = parseReference(ref);
-    if (!parsed) return Promise.resolve(generateReject(404, [t('payments.order-not-found')]));
+    if (!parsed) return Promise.resolve(orderNotFound());
 
     return orderService
         .getByTransferReference(parsed)
-        .then((order) =>
-            order ? generateSuccess(order) : generateReject(404, [t('payments.order-not-found')])
-        );
+        .then((order) => (order ? generateSuccess(order) : orderNotFound()));
 };

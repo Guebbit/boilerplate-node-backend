@@ -132,7 +132,8 @@ Nothing here ships a PSP adapter; Stripe is the worked example.
 1. Write `stripe.ts` in `providers/`, implementing `PaymentProvider`. Its `parseWebhook` calls the <!-- doc-paths:ignore -->
    vendor's own verifier (`stripe.webhooks.constructEvent`) and maps any `payment_intent.*` event
    onto `{ id, providerRef }`: the state is then read back through `retrieve`.
-2. Call `registerPaymentProvider('stripe', …)` (from `providers/registry.ts`) where the module loads.
+2. Call `registerPaymentProvider(stripeProvider)` (from `providers/registry.ts`) where the module loads;
+   it is registered under its own `name`.
 3. Set `NODE_PAYMENT_PROVIDER`, and `NODE_PAYMENT_WEBHOOK_SECRET` to the vendor's webhook signing secret.
    Your adapter reads its own secret key, and refuses its vendor's test key outside development
    (Stripe's is `sk_test_`).

@@ -18,10 +18,11 @@ import type { PaymentProvider } from './index';
 export const paymentProviderRegistry = createSharedProviderRegistry<PaymentProvider>('payments');
 
 /**
- * Add (or, in a test, override) one implementation without editing any module file.
+ * Add (or, in a test, override) one implementation without editing any module file. It is
+ * registered under its own `name`, the value `NODE_PAYMENT_PROVIDER` selects it by and the one
+ * persisted on each payment, so the two can never disagree.
  *
- * @param name - the value `NODE_PAYMENT_PROVIDER` selects it by; persisted on each payment
  * @param provider - the implementation
  */
-export const registerPaymentProvider = (name: string, provider: PaymentProvider): void =>
-    paymentProviderRegistry.register(name, provider);
+export const registerPaymentProvider = (provider: PaymentProvider): void =>
+    paymentProviderRegistry.register(provider.name, provider);

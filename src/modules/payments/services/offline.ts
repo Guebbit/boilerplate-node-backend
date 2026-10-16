@@ -28,7 +28,7 @@ import type { PaymentDocument } from '../model';
 import { PaymentInFlightError } from '../providers';
 import { cancelOpenIntent } from './intent';
 import { settlePayment, settlementResponse } from './settlement';
-import { notPayable } from './errors';
+import { notPayable, orderNotFound } from './errors';
 import { ERROR_CODES } from '@api/error-codes';
 
 /** What the admin sent, once the request body has been parsed against the contract. */
@@ -62,7 +62,7 @@ export const recordOfflinePayment = async (
         return generateReject(422, [fieldError('receivedAt', t('payments.received-at-future'))]);
 
     const order = await orderService.getById(orderId);
-    if (!order) return generateReject(404, [t('payments.order-not-found')]);
+    if (!order) return orderNotFound();
     // Asked of the order lifecycle rather than compared against a literal here, so this
     // module cannot drift from the owner of the rule.
     if (!isPayable(order.status)) return notPayable();

@@ -50,10 +50,11 @@ import { paymentsAuditActions } from '../audit';
 import { PaymentProviderError, providerNamed } from '../providers';
 import { paymentRepository } from '../repository';
 import { PAYMENT_REFUNDED } from '../events';
-import type { PaymentDocument, RefundLine, RefundRecord } from '../model';
-import { REFUNDABLE_PAYMENT_STATUS } from '../domain';
+import type { PaymentDocument, RefundLine, RefundRecord, RefundSettlement } from '../model';
+import { isHandRecorded, REFUNDABLE_PAYMENT_STATUS } from '../domain';
 import { callerScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
+import { paymentNotFound } from './errors';
 
 /** What one refund is asked to do. */
 export interface RefundRequest {
@@ -342,7 +343,7 @@ const stampOrder = (payment: PaymentDocument, session: ClientSession): Promise<b
 const writeSettlement = (
     payment: PaymentDocument,
     refund: RefundRecord,
-    fields: { providerRefundRef?: string; refundedByHand?: true },
+    fields: RefundSettlement,
     session: ClientSession,
     actor?: string | null
 ): Promise<PaymentDocument | null> =>
@@ -378,7 +379,7 @@ const writeSettlement = (
 const settleRefund = (
     payment: PaymentDocument,
     refund: RefundRecord,
-    fields: { providerRefundRef?: string; refundedByHand?: true },
+    fields: RefundSettlement,
     context: CallerContext | undefined,
     outcome: 'success' | 'failure' = 'success'
 ): Promise<PaymentDocument | null> =>
@@ -471,7 +472,7 @@ const attemptRefund = (
     context: CallerContext | undefined
 ): Promise<PaymentDocument | null> => {
     // Money recorded by hand has no provider to ask.
-    if (payment.provider === 'manual')
+    if (isHandRecorded(payment))
         return context
             ? settleRefund(payment, refund, { refundedByHand: true }, context)
             : Promise.resolve(null);
@@ -570,7 +571,7 @@ export const performRefund = (
 
         // Only the operator's own call (`context` present) may say hand-paid cash went back; the
         // automatic listener leaves it standing.
-        if (payment.provider === 'manual' && !context) return leaveForOperator(orderId, payment);
+        if (isHandRecorded(payment) && !context) return leaveForOperator(orderId, payment);
 
         return settleOpenRefunds(payment, context).then(({ payment: current, settled }) => {
             if (remainingOf(current) <= 0) return settled ? current : null;
@@ -622,6 +623,36 @@ const refusalFor = (
 };
 
 /**
+ * The operator's refund of a payment that exists: refuse a body that cannot stand, otherwise
+ * refund and answer with the payment as it now stands.
+ * @param orderId - the order whose payment is refunded
+ * @param payment - the payment, read through the caller's scope
+ * @param body - the amount to return, or none for what is left
+ * @param context - the operator, audited on the refund
+ */
+const refundFoundPayment = (
+    orderId: string,
+    payment: PaymentDocument,
+    body: { amount?: number },
+    context: CallerContext
+): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> => {
+    const invalid = refusalFor(payment, body);
+    if (invalid) return Promise.resolve(invalid);
+
+    return performRefund(orderId, context, { amount: body.amount, reason: 'goodwill' }).then(
+        (refunded) =>
+            refunded
+                ? generateSuccess(refunded, 200, t('payments.refund-success'))
+                : generateReject(409, [
+                      {
+                          code: ERROR_CODES.PAYMENT_NOT_REFUNDABLE,
+                          message: t('payments.not-refundable')
+                      }
+                  ])
+    );
+};
+
+/**
  * `POST /payments/order/:orderId/refund` — the operator returning money on its own, separate
  * from cancelling. Admin-only at the route.
  *
@@ -637,26 +668,11 @@ export const refundByOrder = (
     context: CallerContext,
     body: { amount?: number; currency?: string } = {}
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    paymentRepository.findByOrderId(orderId, callerScope(authContext)).then((payment) => {
-        if (!payment) return generateReject(404, [t('payments.not-found')]);
-
-        const invalid = refusalFor(payment, body);
-        if (invalid) return invalid;
-
-        return performRefund(orderId, context, {
-            amount: body.amount,
-            reason: 'goodwill'
-        }).then((refunded) =>
-            refunded
-                ? generateSuccess(refunded, 200, t('payments.refund-success'))
-                : generateReject(409, [
-                      {
-                          code: ERROR_CODES.PAYMENT_NOT_REFUNDABLE,
-                          message: t('payments.not-refundable')
-                      }
-                  ])
+    paymentRepository
+        .findByOrderId(orderId, callerScope(authContext))
+        .then((payment) =>
+            payment ? refundFoundPayment(orderId, payment, body, context) : paymentNotFound()
         );
-    });
 
 /**
  * `ORDER_REFUND_OWED`'s listener: give the money back if any was taken.
