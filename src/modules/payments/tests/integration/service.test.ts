@@ -34,6 +34,9 @@ import {
     retryOpenRefunds
 } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
+import { paymentModel } from '@modules/payments/model';
+import { PAYMENT_SUCCEEDED } from '@modules/payments/events';
+import { ORDER_STATUS_CHANGED } from '@modules/orders';
 import { withEnvironment } from '@tests/environment';
 import { observePort } from '@tests/ports';
 import * as auditPort from '@infrastructure/observability/audit';
@@ -1387,6 +1390,29 @@ describe('recordOfflinePayment', () => {
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe('paid');
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
+    });
+
+    // The money booked is the order's own total, not whatever a card intent once froze: dropping
+    // the delivery, or keeping a stale amount when the row is converted, books the wrong money, and
+    // refunds and invoices are computed from it.
+    it('books the order total, delivery included, over a stale card intent, and announces the payment and the status change once', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 50 });
+        const order = await createOrder(user, [toOrderItem(product, 2)], {
+            shippingMethod: 'standard',
+            shippingCost: 5
+        });
+        const orderId = String(order._id);
+        await createIntent(orderId, auth(user));
+        await paymentModel.updateOne({ orderId }, { amount: 7 });
+
+        await recordOfflinePayment(orderId, { method: 'cash' }, callerContextAs('admin'));
+        await settleOutboxNudges();
+
+        const payment = await paymentRepository.findByOrderId(orderId);
+        expect(payment).toMatchObject({ amount: 105, provider: 'manual', status: 'succeeded' });
+        for (const name of [PAYMENT_SUCCEEDED, ORDER_STATUS_CHANGED])
+            expect(await outboxEventModel.countDocuments({ name, aggregateId: orderId })).toBe(1);
     });
 
     it('dates the receipt now when the request names no date', async () => {

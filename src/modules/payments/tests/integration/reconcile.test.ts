@@ -58,6 +58,17 @@ describe('reconcileStalePayments', () => {
             expect([payment?.status, order?.status]).toEqual(['succeeded', 'paid']);
         }));
 
+    // One pass is bounded so a backlog cannot hold the sweep's lease for ever; a full batch is
+    // said out loud and the next run continues.
+    it('asks for at most 200 payments per run', async () => {
+        const find = jest.spyOn(paymentRepository, 'findStaleInFlight').mockResolvedValue([]);
+
+        await reconcileStalePayments();
+
+        expect(find).toHaveBeenCalledWith(expect.any(Date), 200);
+        find.mockRestore();
+    });
+
     it('leaves a payment younger than the grace window alone', async () => {
         const { orderId } = await chargedAtProvider();
 
