@@ -16,7 +16,6 @@ import { returnedBuckets, returnedByProduct, returnedSeries } from './stats';
 export { createReturn, type CreateReturnInput, type CreateReturnOutcome } from './create';
 export { approveReturn, declineReturn } from './decide';
 export { receiveReturn, type ReceiveReturnInput } from './receive';
-export { closeReturn } from './close';
 export { cancelUnanswered } from './cancel-remainder';
 export { listReturns, getReturn, withActions, type ReturnFilters } from './read';
 export { getReturnOptions } from './options';

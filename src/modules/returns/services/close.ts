@@ -20,6 +20,8 @@ import { syncReturnStatus } from './projection';
  * back. `return.closed` goes through the outbox, written with the status move, so it exists
  * exactly when this call was the one that closed the return.
  *
+ * @internal The step beneath `receiveReturn` and the refund listener, which own the "money went
+ * back" fact: it checks the state, never that the refund settled, so it is not published.
  * @param id - the return
  * @returns the closed return, or `null` when it was not `received` — already closed, or never
  *   received; both mean there is nothing for this call to do
