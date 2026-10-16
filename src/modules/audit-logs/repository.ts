@@ -78,7 +78,7 @@ export interface OwnEntriesCursor {
 }
 
 /** One page of an actor's own entries, and where the one after it starts. */
-export interface OwnEntriesPage {
+interface OwnEntriesPage {
     items: AuditEntryItem[];
     /** `undefined` when this page was the last. */
     next: OwnEntriesCursor | undefined;

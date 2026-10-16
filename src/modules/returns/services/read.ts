@@ -43,7 +43,7 @@ const isStaff = (authContext: AuthContext): boolean =>
  * @param returned - the return
  * @param authContext - the caller
  */
-export const actionsFor = (returned: ReturnDocument, authContext: AuthContext): ReturnActions => {
+const actionsFor = (returned: ReturnDocument, authContext: AuthContext): ReturnActions => {
     const caller = callerForSubject(authContext, 'Return');
     const decidable =
         DECIDABLE_RETURN_STATUSES.includes(returned.status) && holds(caller, 'update', 'Return');

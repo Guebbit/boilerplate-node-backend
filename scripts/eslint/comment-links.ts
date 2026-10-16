@@ -64,7 +64,7 @@ const targets = (): { targets: Set<string>; roots: Set<string> } =>
  * `check-references.ts` checks a doc's citation: by suffix, against every file git tracks, minus
  * the same `ALLOWED` gitignored-but-real exceptions (a generated client, an asyncapi type file).
  */
-export const resolvesTsReference = (reference: string, filename: string): boolean => {
+const resolvesTsReference = (reference: string, filename: string): boolean => {
     if (reference.includes('<')) return true;
 
     if (reference.startsWith('./') || reference.startsWith('../'))

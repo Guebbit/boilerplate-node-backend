@@ -27,7 +27,7 @@ import { markServerDraining } from '@infrastructure/runtime/readiness';
  * `terminationGracePeriodSeconds`, default 30 s; Docker `stop_grace_period`, default 10 s),
  * otherwise the platform SIGKILLs the container mid-drain and the timeout never fires.
  */
-export const getShutdownTimeoutMs = () => serverConfig().NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS;
+const getShutdownTimeoutMs = () => serverConfig().NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS;
 
 /**
  * Bind `app` and resolve once it is actually listening; reject when the bind fails.

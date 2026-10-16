@@ -311,7 +311,7 @@ const removeSessionFamilyExcept = (
         .then(({ deletedCount }) => deletedCount);
 
 /** A live session family's clock: when it last saw a real request, and when that was last written down. */
-export interface FamilyActivity {
+interface FamilyActivity {
     /** The newest `lastUsedAt` of its live rows, else the sign-in — what the idle timeout reads. */
     lastActiveAt: Date;
     /** The newest `lastUsedAt` alone; absent until the family has been stamped as used once. */

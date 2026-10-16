@@ -24,9 +24,7 @@ export interface StaffFields {
  * The staff-only slice of a stored payment.
  * @param raw - the stored payment
  */
-export const staffFieldsOf = (
-    raw: Pick<PaymentDocument, 'providerRef' | 'refunds'>
-): StaffFields => ({
+const staffFieldsOf = (raw: Pick<PaymentDocument, 'providerRef' | 'refunds'>): StaffFields => ({
     ...(raw.providerRef ? { providerRef: raw.providerRef } : {}),
     refunds: raw.refunds.map(({ providerRefundRef, failureReason }) => ({
         ...(providerRefundRef ? { providerRefundRef } : {}),
@@ -40,7 +38,7 @@ export const staffFieldsOf = (
  * @param staff - what {@link staffFieldsOf} read off the stored row
  * @returns the staff view
  */
-export const withStaffFields = (wire: Payment, staff: StaffFields): Payment => ({
+const withStaffFields = (wire: Payment, staff: StaffFields): Payment => ({
     ...wire,
     ...(staff.providerRef ? { providerRef: staff.providerRef } : {}),
     refunds: wire.refunds.map((refund, index): Refund => ({ ...refund, ...staff.refunds[index] }))

@@ -62,7 +62,7 @@ const OOM_WINDOW_MS = 10 * 60 * 1000;
  * @returns `STRYKER_CONCURRENCY` when set, otherwise the lower of `logical CPUs - 1` and free
  *   memory (`MemAvailable`, not total) divided by one worker's peak RSS
  */
-export const resolveConcurrency = (): number => {
+const resolveConcurrency = (): number => {
     const configured = environmentKnob('STRYKER_CONCURRENCY');
     if (configured) return configured;
 

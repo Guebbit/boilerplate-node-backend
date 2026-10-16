@@ -51,8 +51,7 @@ const WEBHOOK_DEMO_SECRET_ID = '7f3b8e21-4a6d-4c9f-9e12-3d5a7b8c9f01';
  * `NODE_WEBHOOK_DEMO_SINK_URL`, so verifying a captured delivery's `webhook-signature` header
  * against it is a copy-paste, not a mystery.
  */
-export const WEBHOOK_DEMO_SECRET =
-    'whsec_ZGVtby13ZWJob29rLXNlY3JldC1kby1ub3QtdXNlLWluLXByb2R1Y3Rpb24=';
+const WEBHOOK_DEMO_SECRET = 'whsec_ZGVtby13ZWJob29rLXNlY3JldC1kby1ub3QtdXNlLWluLXByb2R1Y3Rpb24=';
 
 /**
  * Seed the scenario's webhook subscription. Declared in `./index`'s `shopModules`; walked by

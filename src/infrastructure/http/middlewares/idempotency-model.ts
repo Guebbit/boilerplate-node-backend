@@ -15,7 +15,7 @@ import type { Document, Model } from 'mongoose';
 import { idempotencyConfig } from '@infrastructure/http/config';
 
 /** Every state a record can be in — the schema's `enum`, and the source of {@link IdempotencyRecordState}. */
-export const IDEMPOTENCY_RECORD_STATES = ['in-flight', 'done'] as const;
+const IDEMPOTENCY_RECORD_STATES = ['in-flight', 'done'] as const;
 
 /** Where a record sits in its own lifecycle — see `idempotency.ts`'s three-way branch on it. */
 export type IdempotencyRecordState = (typeof IDEMPOTENCY_RECORD_STATES)[number];
@@ -50,10 +50,7 @@ export type IdempotencyRecordModel = Model<IdempotencyRecordDocument>;
 const retentionHours = idempotencyConfig().NODE_IDEMPOTENCY_RETENTION_HOURS;
 
 /** Idempotency ledger schema. */
-export const idempotencyRecordSchema = new Schema<
-    IdempotencyRecordDocument,
-    IdempotencyRecordModel
->(
+const idempotencyRecordSchema = new Schema<IdempotencyRecordDocument, IdempotencyRecordModel>(
     {
         key: {
             type: String,

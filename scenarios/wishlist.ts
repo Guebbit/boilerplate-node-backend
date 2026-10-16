@@ -16,7 +16,7 @@ import { wishlistRepository } from '@modules/wishlist/repository';
  *
  * No pinned `_id` — `insertIfAbsentForOwner` keys on `userId`, so an id would buy no idempotency.
  */
-export const wishlistFixtures = [
+const wishlistFixtures = [
     /* root — one saved product, enough for the owner account to show a non-empty page. */
     makeWishlist({
         userId: SEED_ADMIN_ID,

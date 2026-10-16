@@ -68,7 +68,7 @@ const internalSections = (): AsyncSectionName[] =>
     );
 
 /** The order sections are merged in, and therefore the order they appear in the output. */
-export const ASYNC_SECTION_ORDER: readonly AsyncSectionName[] = [
+const ASYNC_SECTION_ORDER: readonly AsyncSectionName[] = [
     ...resolveModuleAsyncSections(),
     ...internalSections(),
     'workers'

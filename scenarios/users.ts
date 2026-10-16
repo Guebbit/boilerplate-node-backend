@@ -165,7 +165,7 @@ const staffUsers = (
  * `blank` scenario ({@link seedNamedUsersCollection}) can seed exactly these and none of the
  * filler customer base below — `blank` has no shop for a customer to shop in.
  */
-export const namedUsers = [
+const namedUsers = [
     makeUser({
         id: SEED_ADMIN_ID,
         username: 'root',
@@ -265,7 +265,7 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
 );
 
 /** Every demo account: the named ones the e2e suite logs in as, then the customer base. */
-export const userFixtures = [...namedUsers, ...customerUsers];
+const userFixtures = [...namedUsers, ...customerUsers];
 
 /**
  * Seed this collection. The filler customers hold no role at all — a customer is computed from

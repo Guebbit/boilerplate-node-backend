@@ -9,7 +9,7 @@
  * Window:  24 hours, `NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX` (10): a per-minute window lets a slow
  *          drip through.
  * Doors:   {@link mailRecipientLimiter} for a route whose body names the address (signup, reset),
- *          {@link chargeMailRecipient} for a service that chose the recipient itself.
+ *          {@link mailRecipientRefusal} for a service that chose the recipient itself.
  *
  * See: docs/tools/security.md#the-rate-limit-budgets
  */
@@ -57,7 +57,7 @@ export const MAIL_RECIPIENT_BUDGET: RateLimitBudget = {
  * @param address - the mailbox about to be mailed, as stored or submitted
  * @returns whether the mail may be sent, and when the window resets
  */
-export const chargeMailRecipient = (address: string): Promise<BudgetCharge> =>
+const chargeMailRecipient = (address: string): Promise<BudgetCharge> =>
     chargeBudget(MAIL_RECIPIENT_BUDGET, pseudonymise('rate-limit', canonicalMailbox(address)));
 
 /**

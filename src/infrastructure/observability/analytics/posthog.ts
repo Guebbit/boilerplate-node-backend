@@ -22,7 +22,7 @@ const SHUTDOWN_TIMEOUT_MS = 3000;
  * Both key and host are required. The host is explicit because PostHog can be self-hosted or
  * EU/US cloud, and defaulting it would silently ship product data to the wrong region.
  */
-export const isPostHogConfigured = (): boolean =>
+const isPostHogConfigured = (): boolean =>
     Boolean(analyticsConfig().NODE_POSTHOG_API_KEY && analyticsConfig().NODE_POSTHOG_HOST);
 
 /**

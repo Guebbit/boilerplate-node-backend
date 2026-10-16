@@ -16,7 +16,7 @@ import { modulesWith } from '../modules-on-disk';
  * How a module's screen pairs with the paired frontend, when it is not simply "a frontend module of
  * the same name". Omitted for the ordinary case.
  */
-export const frontendPairingSchema = z
+const frontendPairingSchema = z
     .object({
         /** Frontend module names that cover this domain. Empty means nothing over there does. */
         counterparts: z.array(z.string()),

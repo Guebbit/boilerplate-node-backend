@@ -66,7 +66,7 @@ export interface OutboxEventDocument extends Document {
 export type OutboxEventModel = Model<OutboxEventDocument>;
 
 /** Outbox collection schema. */
-export const outboxEventSchema = new Schema<OutboxEventDocument, OutboxEventModel>(
+const outboxEventSchema = new Schema<OutboxEventDocument, OutboxEventModel>(
     {
         name: { type: String, required: true },
         payload: { type: Schema.Types.Mixed, required: true },

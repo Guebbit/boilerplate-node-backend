@@ -15,7 +15,7 @@ import { cookieOf } from '@infrastructure/http/cookies';
 import { secureCookieOptions } from '../session/cookies';
 
 /** The MFA challenge cookie — single-attempt, cleared once the challenge is spent. */
-export const MFA_CHALLENGE_COOKIE = 'oauth_mfa_challenge';
+const MFA_CHALLENGE_COOKIE = 'oauth_mfa_challenge';
 
 /**
  * Set the challenge cookie for one OAuth 2FA continuation. Its lifetime tracks the challenge's

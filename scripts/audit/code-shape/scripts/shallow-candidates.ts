@@ -14,13 +14,13 @@ import ts from 'typescript';
  * A function body spanning at most this many lines counts as small.
  * Lines, not statements: one statement can be a thirty-line promise chain.
  */
-export const SMALL_BODY_LINES = 3;
+const SMALL_BODY_LINES = 3;
 
 /** A function or a file with at most this many users counts as rarely used. */
-export const FEW_USERS = 2;
+const FEW_USERS = 2;
 
 /** A file with at most this many exports can be a lazy file. */
-export const FEW_EXPORTS = 2;
+const FEW_EXPORTS = 2;
 
 /** A module barrel — published surface, `CLAUDE.md` § Module barrels. */
 const BARREL = /^src\/modules\/[^/]+\/index\.ts$/;

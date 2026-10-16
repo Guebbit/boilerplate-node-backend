@@ -11,7 +11,7 @@
 import { productService } from '@modules/products';
 
 /** The live picture for one order line, or `null` when its product is gone. */
-export type OrderLineCurrent = { imageUrl?: string; thumbnailUrl?: string } | null;
+type OrderLineCurrent = { imageUrl?: string; thumbnailUrl?: string } | null;
 
 /** The one thing this needs from a serialized order line: the catalogue id it was bought from. */
 interface OrderLineShape {

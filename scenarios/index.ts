@@ -46,7 +46,7 @@ interface Scenario {
  * `support/demo.ts` both index this instead of a hand-rolled ternary, so a new scenario is added
  * in exactly one place.
  */
-export const SCENARIOS = {
+const SCENARIOS = {
     ...scenarioFixtures,
     blank: { seed: seedBlank, subjects: {} }
 } satisfies Record<string, Scenario>;

@@ -10,7 +10,7 @@
 export const BASELINE_ARTIFACT = 'mutation-baseline';
 
 /** The branch whose sweeps measure the code the baseline belongs to. */
-export const BASELINE_BRANCH = 'main';
+const BASELINE_BRANCH = 'main';
 
 /**
  * One artifact, as GitHub's "list artifacts for a repository" endpoint returns it — only the fields

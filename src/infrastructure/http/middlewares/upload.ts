@@ -115,7 +115,7 @@ export const resolveUploadFilename = (
  * directory) and `filename` (what to call it). The alternative, `multer.memoryStorage()`, keeps
  * uploads in a Buffer, which is faster but lets a large upload exhaust process memory.
  */
-export const fileStorage = multer.diskStorage({
+const fileStorage = multer.diskStorage({
     destination: resolveUploadDestination,
     filename: resolveUploadFilename
 });

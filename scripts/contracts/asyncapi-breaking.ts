@@ -12,7 +12,7 @@ import { diff, type DiffOutputItem, type OverrideObject } from '@asyncapi/diff';
  * calls an edit to it breaking, which would make every version bump fail its own gate.
  * Format: https://github.com/asyncapi/diff#overriding-the-standard
  */
-export const OVERRIDES: OverrideObject = {
+const OVERRIDES: OverrideObject = {
     '/info/version': { add: 'non-breaking', remove: 'non-breaking', edit: 'non-breaking' }
 };
 
@@ -29,7 +29,7 @@ export interface AcknowledgedBreak {
  * diff for that exact pointer only; delete it once the change has reached `origin/main`, where the
  * gate compares against it anyway.
  */
-export const ACKNOWLEDGED_BREAKS: readonly AcknowledgedBreak[] = [
+const ACKNOWLEDGED_BREAKS: readonly AcknowledgedBreak[] = [
     {
         path: '/channels/order.shipped',
         reason: 'An order ships in parts now: `shipment.shipped` fires once per shipment, and the order reaching `shipped` is its last one.'

@@ -36,7 +36,7 @@ export interface Attempt {
  * Carries the request as well as the response: a seed that dies three hundred requests into a
  * boot is useless if the message only says `409`.
  */
-export class ScenarioFlowError extends Error {
+class ScenarioFlowError extends Error {
     /**
      * @param who - the actor's email, to name them in the message
      * @param method - the HTTP method that failed

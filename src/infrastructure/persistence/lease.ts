@@ -46,7 +46,7 @@ export interface LeaseDocument extends Document<string> {
 export type LeaseModel = Model<LeaseDocument>;
 
 /** Lease collection schema. */
-export const leaseSchema: Schema<LeaseDocument, LeaseModel> = new Schema<LeaseDocument, LeaseModel>(
+const leaseSchema: Schema<LeaseDocument, LeaseModel> = new Schema<LeaseDocument, LeaseModel>(
     {
         _id: {
             type: String

@@ -14,7 +14,7 @@ import { makeExample, type PinnedExample } from '@modules/example/factories';
 import { exampleRepository } from '@modules/example/repository';
 
 /** The pinned ids, so a journey or a screenshot can name a row rather than search for it. */
-export const SEED_EXAMPLE_IDS = {
+const SEED_EXAMPLE_IDS = {
     customerPublished: '65e1a0000000000000000e01',
     customerDraft: '65e1a0000000000000000e02',
     customerArchived: '65e1a0000000000000000e03',
@@ -25,7 +25,7 @@ export const SEED_EXAMPLE_IDS = {
  * The seeded examples: the customer holds one per status (so a list shows all three), and the
  * admin one published, so the public door has something to read.
  */
-export const exampleFixtures: PinnedExample[] = [
+const exampleFixtures: PinnedExample[] = [
     {
         ...makeExample({
             userId: SEED_USER_ID,

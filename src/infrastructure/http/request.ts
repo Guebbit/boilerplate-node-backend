@@ -58,7 +58,7 @@ const parseFormNumber = (value: unknown): unknown => {
  * `parsed === undefined` rather than `??`: valid JSON can decode to `null`, `0` or `''`, and
  * `??` would treat those as failures and fall back to the raw string instead of the parsed value.
  */
-export const parseFormJson = (value: unknown): unknown => {
+const parseFormJson = (value: unknown): unknown => {
     if (typeof value !== 'string') return value;
     const parsed = getJson(value);
     return parsed === undefined ? value : parsed;

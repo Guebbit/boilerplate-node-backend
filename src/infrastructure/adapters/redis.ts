@@ -77,7 +77,7 @@ const KEEPALIVE_PING_MS = 500;
  *
  * @param url - the Redis URL to connect with
  */
-export const redisClientOptions = (url: string) => ({
+const redisClientOptions = (url: string) => ({
     url,
     RESP: 2 as const,
     maintNotifications: 'disabled' as const,

@@ -24,7 +24,7 @@ import { isMap, isSeq, parseDocument } from 'yaml';
 import { readModuleFragment } from './fragments';
 
 /** The module that owns the export endpoint, and with it the stub being completed. */
-export const EXPORT_OWNER = 'account';
+const EXPORT_OWNER = 'account';
 
 /** The schema the stub is called in the owner's `components.schemas`. */
 const EXPORT_SCHEMA = 'AccountExportResponse';

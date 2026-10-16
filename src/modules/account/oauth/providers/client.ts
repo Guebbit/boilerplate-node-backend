@@ -22,7 +22,7 @@ import type { OAuthExpectation } from './port';
  *
  * https://github.com/panva/openid-client/blob/main/docs/variables/customFetch.md
  */
-export const providerFetch: client.CustomFetch = (url, options) =>
+const providerFetch: client.CustomFetch = (url, options) =>
     fetch(url, {
         ...options,
         // `AbortSignal.any`: the library's own signal (when it sets one) and ours, whichever fires first.

@@ -23,7 +23,7 @@ import { addressBookRepository } from '@modules/addresses/repository';
  * idempotency. Each ENTRY needs one too — the contract requires it — but nothing looks one up by
  * value, so each is minted fresh rather than hand-picked.
  */
-export const addressBookFixtures = [
+const addressBookFixtures = [
     makeAddressBook({
         userId: SEED_ADMIN_ID,
         items: [

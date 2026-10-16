@@ -23,7 +23,7 @@ const loadFakePaymentProvider = (): Promise<PaymentProvider> =>
  * Forwarding reads the method off the loaded object at call time, so a test's
  * `jest.spyOn(fakePaymentProvider, 'refund')` on the real object still intercepts the call.
  */
-export const lazyFakePaymentProvider: PaymentProvider = {
+const lazyFakePaymentProvider: PaymentProvider = {
     name: 'fake',
     prepare: (charge, metadata, existingProviderRef) =>
         loadFakePaymentProvider().then((provider) =>

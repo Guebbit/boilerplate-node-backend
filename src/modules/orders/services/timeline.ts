@@ -59,7 +59,7 @@ export const appendTimeline = (
  * @param entries - what happened, oldest first
  * @param session - the caller's open transaction
  */
-export const appendTimelineAll = async (
+const appendTimelineAll = async (
     orderId: string,
     entries: readonly TimelineEntryInput[],
     session: ClientSession

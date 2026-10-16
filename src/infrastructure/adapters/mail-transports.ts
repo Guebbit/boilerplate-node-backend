@@ -73,7 +73,7 @@ const smtpTransport: MailTransportAdapter = {
  * Every transport this process knows, shared across module instances (see
  * `createSharedProviderRegistry`) so a double registered at preload survives a module reset.
  */
-export const mailTransportRegistry = createSharedProviderRegistry<MailTransportAdapter>(
+const mailTransportRegistry = createSharedProviderRegistry<MailTransportAdapter>(
     'mail-transports',
     { smtp: smtpTransport }
 );

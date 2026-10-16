@@ -91,7 +91,7 @@ export const positiveInteger = (value: string | undefined): number | undefined =
  * Subtracted before anything else is sized, so every number below is spending memory the rest of
  * the machine is not already using.
  */
-export const OS_RESERVE_MB = 2048;
+const OS_RESERVE_MB = 2048;
 
 /**
  * What one jest process costs before it has run a single test file: the runner itself plus the
