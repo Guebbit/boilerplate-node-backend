@@ -24,7 +24,7 @@ import { PRODUCT_CREATED, PRODUCT_RELEASE_DATE_CHANGED } from '../events';
 import type { ProductDocument } from '../model';
 import { productRepository } from '../repository';
 import { sanitizeStringArray } from './validation';
-import { enqueueIfPending } from './image';
+import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 
 /** What `insertProduct` accepts: the product's fields, plus the pending-image placeholder's key. */
 type ProductCreateData = Omit<
@@ -75,14 +75,19 @@ type ProductUpdateData = Partial<
 
 /**
  * Hand a pending image to the queue after the commit; a failure is logged and the saved product
- * answered.
+ * answered. `pendingImageKey` means the queue looked ready at upload time (the no-broker path
+ * resolves inline before saving, see `readUploadedImage`) — see {@link enqueueIfImagePending} for
+ * what happens with it.
  *
  * @param product - the saved product
  */
 const enqueuePendingImage = (product: ProductDocument): Promise<ProductDocument> =>
-    afterCommit('image enqueue', () => enqueueIfPending(product), product, {
-        productId: String(product._id)
-    });
+    afterCommit(
+        'image enqueue',
+        () => enqueueIfImagePending(product, 'products', productRepository.writebackImage),
+        product,
+        { productId: String(product._id) }
+    );
 
 /**
  * `data` without its `releaseDate`, which the write converts to a `Date` itself.

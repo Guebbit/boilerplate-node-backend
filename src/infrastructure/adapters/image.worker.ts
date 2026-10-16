@@ -313,8 +313,8 @@ export const enqueueImageDigest = (
 };
 
 /**
- * A module's own `enqueueIfPending`, shared by `users` and `products`, which need only the
- * collection name and writeback to differ.
+ * A module's own `enqueueIfPending`: `users` wraps it in one, `products` calls it where it needs
+ * it. They need only the collection name and writeback to differ.
  *
  * Behavior: checks the just-persisted document for a `pendingImageKey`, dispatches through
  *           {@link enqueueImageDigest} when there is one, and always hands back the same document
