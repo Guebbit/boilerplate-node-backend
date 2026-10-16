@@ -150,6 +150,37 @@ describe('PUT /products/{id}', () => {
         expect(response.body.data.title).toBe('Bed, replaced');
     });
 
+    // `releaseDate` is part of the replaced representation too: omitting it clears it, so a
+    // preorder ends and the product is on the shelf like any other.
+    it('clears a release date the PUT leaves out, which ends the preorder', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({
+            title: 'Bed',
+            price: 10,
+            releaseDate: new Date(Date.now() + 30 * 86_400_000).toISOString()
+        });
+        const before = await productRepository.findById(String(product._id));
+        expect(before?.releaseDate).toBeDefined();
+
+        const response = await api()
+            .put(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({
+                price: 10,
+                active: true,
+                purchasable: true,
+                requiresShipping: true,
+                categories: [],
+                tags: [],
+                translations: { en: { title: 'Bed, replaced' } }
+            });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.preorder).toBe(false);
+        const after = await productRepository.findById(String(product._id));
+        expect(after?.releaseDate).toBeUndefined();
+    });
+
     // A PUT body IS the new resource (RFC 9110 §9.3.4) — `active`/`requiresShipping`/`categories`/
     // `tags` have no legal "cleared" state, so all of them are required alongside price/translations.
     it('refuses a PUT body missing a required field', async () => {

@@ -490,6 +490,24 @@ describe('productService.restoreById', () => {
         expect((await productRepository.findById(id))!.deletedAt).toBeUndefined();
     });
 
+    // A restore that published a draft would put it on sale by accident.
+    it.each([true, false])(
+        'leaves `active` as it was through a soft delete and a restore (active: %s)',
+        async (active) => {
+            const product = await createProduct({ active });
+            const id = product._id.toString();
+
+            await productService.removeById(id, false);
+            const deleted = await productRepository.findById(id);
+            await productService.restoreById(id);
+            const restored = await productRepository.findById(id);
+
+            expect(deleted).toMatchObject({ active });
+            expect(restored).toMatchObject({ active });
+            expect(restored!.deletedAt).toBeUndefined();
+        }
+    );
+
     it('answers 409 for a product that is not deleted', async () => {
         const product = await createProduct();
 

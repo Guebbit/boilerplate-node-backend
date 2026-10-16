@@ -535,6 +535,17 @@ describe('GET /products?deleted=', () => {
     });
 });
 
+describe('GET /products?deleted= — for a caller who may not see deleted rows', () => {
+    it('shows a guest nothing of the soft-deleted product, whatever the flag says', async () => {
+        await createProduct({ deletedAt: new Date() });
+
+        const response = await api().get('/products?deleted=true');
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toEqual([]);
+    });
+});
+
 /** The body-addressed twin of `DELETE /products/{id}`. */
 describe('DELETE /products — the id in the body', () => {
     it('matches the contract for a soft delete', async () => {
