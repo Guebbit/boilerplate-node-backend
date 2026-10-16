@@ -12,6 +12,7 @@ import {
     checkRequestedLines,
     holdsReturnedGoods,
     initialStatusFor,
+    quantitiesByProduct,
     returnableLinesOf,
     returnableQuantities,
     takesLastUnit,
@@ -72,6 +73,25 @@ describe('returnableLinesOf', () => {
 
     it('keeps everything when nothing is excluded', () => {
         expect(returnableLinesOf(items, () => false)).toHaveLength(2);
+    });
+});
+
+describe('quantitiesByProduct', () => {
+    it('sums a product named on several lines, and keeps the others apart', () => {
+        const totals = quantitiesByProduct([
+            { productId: 'a', quantity: 2 },
+            { productId: 'b', quantity: 1 },
+            { productId: 'a', quantity: 3 }
+        ]);
+
+        expect([...totals]).toEqual([
+            ['a', 5],
+            ['b', 1]
+        ]);
+    });
+
+    it('is empty for no lines', () => {
+        expect(quantitiesByProduct([]).size).toBe(0);
     });
 });
 

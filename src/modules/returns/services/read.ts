@@ -101,10 +101,13 @@ export const getReturn = (
 ): Promise<ResponseSuccess<Return> | ResponseReject> =>
     returnRepository.findById(id).then((found) => {
         if (!found) return generateReject(404, [t('returns.not-found')]);
-        if (isStaff(authContext)) return generateSuccess(withActions(found, authContext));
 
-        return ownOrder(String(found.orderId), authContext).then((order) =>
-            order
+        // Visibility is decided first, so there is one answer for "not yours" and one `withActions`.
+        const visible = isStaff(authContext)
+            ? Promise.resolve(true)
+            : ownOrder(String(found.orderId), authContext).then(Boolean);
+        return visible.then((canSee) =>
+            canSee
                 ? generateSuccess(withActions(found, authContext))
                 : generateReject(404, [t('returns.not-found')])
         );

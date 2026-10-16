@@ -11,7 +11,7 @@ import { orderService } from '@modules/orders';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { CLOSABLE_RETURN_STATUSES } from '../domain';
-import { RETURN_CLOSED } from '../events';
+import { returnClosedEvent } from './outcome';
 import { mailReturnNotice } from './notify';
 import { syncReturnStatus } from './projection';
 
@@ -54,16 +54,7 @@ export const closeReturn = (id: string): Promise<ReturnDocument | null> =>
                               .then(() => closed)
                         : closed
                 ),
-        (closed) => ({
-            name: RETURN_CLOSED,
-            payload: {
-                returnId: id,
-                orderId: String(closed.orderId),
-                refundAmount: closed.refundAmount ?? 0,
-                currency: closed.currency
-            },
-            aggregateId: String(closed.orderId)
-        })
+        returnClosedEvent
     ).then((closed) => {
         if (!closed) return null;
 

@@ -72,8 +72,8 @@ const approvedReturn = async () => {
         asCustomer(user.id),
         testCallerContext
     );
-    if (outcome.kind !== 'created') throw new Error('expected a return');
-    const id = String(outcome.created._id);
+    if (!outcome.success) throw new Error('expected a return');
+    const id = String(outcome.data._id);
     await approveReturn(id, callerContextAs('admin'));
     return { id, orderId };
 };
@@ -94,7 +94,7 @@ describe('return.requested', () => {
         );
         await settleOutboxNudges();
 
-        if (outcome.kind !== 'created') throw new Error('expected a return');
+        if (!outcome.success) throw new Error('expected a return');
         const rows = await returnRows();
         expect(rows).toHaveLength(1);
         expect(rows[0]).toMatchObject({
@@ -104,7 +104,7 @@ describe('return.requested', () => {
         });
         expect(heard).toEqual([
             [
-                { returnId: String(outcome.created._id), orderId, reason: 'defective' },
+                { returnId: String(outcome.data._id), orderId, reason: 'defective' },
                 String(rows[0]?._id)
             ]
         ]);

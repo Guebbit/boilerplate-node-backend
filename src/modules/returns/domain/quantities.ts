@@ -27,6 +27,18 @@ export const wireLines = (
     lines.map(({ productId, quantity }) => ({ productId: String(productId), quantity }));
 
 /**
+ * Units per product: the same product on several lines counts once, summed.
+ * @param lines - any lines, in any number
+ * @returns product id → total units
+ */
+export const quantitiesByProduct = (lines: readonly ProductQuantity[]): Map<string, number> => {
+    const totals = new Map<string, number>();
+    for (const { productId, quantity } of lines)
+        totals.set(productId, (totals.get(productId) ?? 0) + quantity);
+    return totals;
+};
+
+/**
  * The lines of an order a return could ever take back: everything except goods the product marks
  * as excluded from withdrawal (Art. 16), which never come back.
  * @param items - the order's items
@@ -53,9 +65,7 @@ export const returnableQuantities = (
     ordered: readonly ProductQuantity[],
     alreadyReturned: readonly ProductQuantity[]
 ): Map<string, number> => {
-    const remaining = new Map<string, number>();
-    for (const { productId, quantity } of ordered)
-        remaining.set(productId, (remaining.get(productId) ?? 0) + quantity);
+    const remaining = quantitiesByProduct(ordered);
     for (const { productId, quantity } of alreadyReturned)
         remaining.set(productId, Math.max(0, (remaining.get(productId) ?? 0) - quantity));
     return remaining;
@@ -86,9 +96,7 @@ export const checkRequestedLines = (
         return lines.length > 0 ? { ok: true, lines } : { ok: false, reason: 'nothing-returnable' };
     }
 
-    const summed = new Map<string, number>();
-    for (const { productId, quantity } of requested)
-        summed.set(productId, (summed.get(productId) ?? 0) + quantity);
+    const summed = quantitiesByProduct(requested);
 
     for (const [productId, quantity] of summed) {
         if (!remaining.has(productId)) return { ok: false, reason: 'unknown-product' };
@@ -114,15 +122,9 @@ export const takesLastUnit = (
     ordered: readonly ProductQuantity[],
     accountedFor: readonly ProductQuantity[]
 ): boolean => {
-    const accounted = new Map<string, number>();
-    for (const { productId, quantity } of accountedFor)
-        accounted.set(productId, (accounted.get(productId) ?? 0) + quantity);
+    const accounted = quantitiesByProduct(accountedFor);
 
-    const needed = new Map<string, number>();
-    for (const { productId, quantity } of ordered)
-        needed.set(productId, (needed.get(productId) ?? 0) + quantity);
-
-    return [...needed].every(
+    return [...quantitiesByProduct(ordered)].every(
         ([productId, quantity]) => (accounted.get(productId) ?? 0) >= quantity
     );
 };

@@ -7,15 +7,20 @@
 
 import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
-import { generateReject, type ResponseReject } from '@infrastructure/http/response';
+import {
+    generateReject,
+    generateSuccess,
+    type ResponseReject,
+    type ResponseSuccess
+} from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { enqueueOutboxEvent } from '@kernel/outbox';
+import { enqueueOutboxEvent, type OutboxAnnouncement } from '@kernel/outbox';
 import type { OrderDocument } from '@modules/orders';
 import type { CallerContext, ReturnKind } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
-import { RETURN_REQUESTED } from '../events';
+import { RETURN_CLOSED, RETURN_REQUESTED } from '../events';
 import type { ReturnReason, ProductQuantity } from '../domain';
 
 /** What a customer sends to open a return or withdraw. */
@@ -31,35 +36,42 @@ export interface CreateReturnInput {
     lines?: ProductQuantity[];
 }
 
-/** What {@link createReturn} answers with: a refusal, or the return that was written. */
-export type CreateReturnOutcome =
-    | { kind: 'refused'; reject: ResponseReject }
-    | { kind: 'created'; created: ReturnDocument };
+/** What {@link createReturn} answers with: a refusal, or the return that was written (201). */
+export type CreateReturnOutcome = ResponseSuccess<ReturnDocument> | ResponseReject;
 
-/** A refusal, wrapped as an outcome. */
-export const refused = (reject: ResponseReject): CreateReturnOutcome => ({
-    kind: 'refused',
-    reject
-});
+/**
+ * The answer for a return just written: a 201 whose message says what happened. A cancellation
+ * gave back what had not shipped, a return closed at birth was a withdrawal that cancelled and
+ * refunded the order, anything else waits for its goods.
+ * @param created - the return that was written
+ */
+export const opened = (created: ReturnDocument): CreateReturnOutcome =>
+    generateSuccess(
+        created,
+        201,
+        t(
+            created.kind === 'cancellation'
+                ? 'returns.remainder-cancelled'
+                : created.status === 'closed'
+                  ? 'returns.withdrawn'
+                  : 'returns.requested'
+        )
+    );
 
 /** The 409 for an order a return cannot be opened on, with a stable code the client can act on. */
 export const notReturnable = (): CreateReturnOutcome =>
-    refused(
-        generateReject(409, [
-            {
-                code: ERROR_CODES.RETURN_ORDER_NOT_RETURNABLE,
-                message: t('returns.order-not-returnable')
-            }
-        ])
-    );
+    generateReject(409, [
+        {
+            code: ERROR_CODES.RETURN_ORDER_NOT_RETURNABLE,
+            message: t('returns.order-not-returnable')
+        }
+    ]);
 
 /** The 409 for a withdrawal after its window closed. */
 export const windowClosed = (): CreateReturnOutcome =>
-    refused(
-        generateReject(409, [
-            { code: ERROR_CODES.RETURN_WINDOW_CLOSED, message: t('returns.window-closed') }
-        ])
-    );
+    generateReject(409, [
+        { code: ERROR_CODES.RETURN_WINDOW_CLOSED, message: t('returns.window-closed') }
+    ]);
 
 /**
  * The 422 for a line that cannot be returned — one shape, with the reason picking the sentence.
@@ -74,30 +86,26 @@ export const badLines = (
         'too-many': t('returns.line-too-many'),
         excluded: t('returns.line-excluded')
     }[reason];
-    return refused(generateReject(422, [{ code: ERROR_CODES.RETURN_LINES_INVALID, message }]));
+    return generateReject(422, [{ code: ERROR_CODES.RETURN_LINES_INVALID, message }]);
 };
 
 /** The 422 for a cancellation that names no fulfillment order, sends lines, or a return that names one. */
 export const badCancellation = (): CreateReturnOutcome =>
-    refused(
-        generateReject(422, [
-            {
-                code: ERROR_CODES.RETURN_CANCELLATION_INVALID,
-                message: t('returns.cancellation-invalid')
-            }
-        ])
-    );
+    generateReject(422, [
+        {
+            code: ERROR_CODES.RETURN_CANCELLATION_INVALID,
+            message: t('returns.cancellation-invalid')
+        }
+    ]);
 
 /** The 409 for a remainder with nothing left to cancel, or an order with nothing shipped yet. */
 export const nothingToCancel = (): CreateReturnOutcome =>
-    refused(
-        generateReject(409, [
-            {
-                code: ERROR_CODES.RETURN_NOTHING_TO_CANCEL,
-                message: t('returns.nothing-to-cancel')
-            }
-        ])
-    );
+    generateReject(409, [
+        {
+            code: ERROR_CODES.RETURN_NOTHING_TO_CANCEL,
+            message: t('returns.nothing-to-cancel')
+        }
+    ]);
 
 /**
  * Writes `return.requested` for a return just created — in the creating transaction, so the
@@ -119,6 +127,39 @@ export const enqueueRequested = (
         String(created.orderId),
         session
     );
+
+/**
+ * The `return.closed` announcement for a return that just closed — one payload for the three ways
+ * a return closes (goods refunded, a withdrawal before dispatch, a remainder cancel). Keyed on the
+ * order, like every return event.
+ * @param closed - the return, closed
+ */
+export const returnClosedEvent = (
+    closed: ReturnDocument
+): OutboxAnnouncement<typeof RETURN_CLOSED> => ({
+    name: RETURN_CLOSED,
+    payload: {
+        returnId: String(closed._id),
+        orderId: String(closed.orderId),
+        refundAmount: closed.refundAmount ?? 0,
+        currency: closed.currency
+    },
+    aggregateId: String(closed.orderId)
+});
+
+/**
+ * Writes `return.closed` for a return born closed — in the creating transaction, like
+ * {@link enqueueRequested}.
+ * @param created - the return just written
+ * @param session - the transaction that wrote it
+ */
+export const enqueueClosed = (
+    created: ReturnDocument,
+    session: ClientSession
+): Promise<unknown> => {
+    const { name, payload, aggregateId } = returnClosedEvent(created);
+    return enqueueOutboxEvent(name, payload, aggregateId, session);
+};
 
 /**
  * The audit row a new return leaves behind, whatever shape it has. Its events were written with

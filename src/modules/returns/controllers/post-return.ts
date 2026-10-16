@@ -8,11 +8,10 @@
 
 import type { Request, Response } from 'express';
 import type { Return } from '@types';
-import { createdResponse, rejectResponse } from '@infrastructure/http/response';
-import { catchAs, parseBody } from '@infrastructure/http/controller';
+import { createdResponse } from '@infrastructure/http/response';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { CreateReturnBody } from '@api/schemas.zod';
-import { t } from '@infrastructure/i18n';
 import { returnService } from '../services';
 
 /** Handles `POST /returns`. */
@@ -25,26 +24,10 @@ export const postReturn = (request: Request, response: Response) => {
 
     return returnService
         .createReturn(body, authContext, callerContextOf(request))
-        .then((outcome) => {
-            if (outcome.kind === 'refused') {
-                rejectResponse(response, outcome.reject.status, outcome.reject.errors);
-                return;
-            }
-            const created = returnService.withActions(outcome.created, authContext);
-            createdResponse<Return>(
-                response,
-                created,
-                `/returns/${created.id}`,
-                // Closed at birth: either the withdrawal already cancelled and refunded the order,
-                // or a remainder cancel gave back what had not shipped.
-                t(
-                    created.kind === 'cancellation'
-                        ? 'returns.remainder-cancelled'
-                        : created.status === 'closed'
-                          ? 'returns.withdrawn'
-                          : 'returns.requested'
-                )
-            );
+        .then((result) => {
+            if (refused(response, result)) return;
+            const created = returnService.withActions(result.data, authContext);
+            createdResponse<Return>(response, created, `/returns/${created.id}`, result.message);
         })
         .catch(catchAs(response, 'postReturn'));
 };

@@ -23,7 +23,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { generateReject } from '@infrastructure/http/response';
 import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
+import { nudgeOutbox } from '@kernel/outbox';
 import { callerForSubject, systemCallerContext } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
 import { cancelRemainder, remainderOptions, waitHasExpired, ActRefusal } from '@modules/delivery';
@@ -36,7 +36,6 @@ import type { AuthContext, CallerContext } from '@types';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
-import { RETURN_CLOSED } from '../events';
 import type { ProductQuantity } from '../domain';
 import { cancellationRefundOn } from './cancellation-refund';
 import { mailReturnNotice } from './notify';
@@ -44,10 +43,11 @@ import { syncReturnStatus } from './projection';
 import {
     badCancellation,
     badLines,
+    enqueueClosed,
     enqueueRequested,
     nothingToCancel,
     recordOpened,
-    refused,
+    opened,
     windowClosed,
     type CreateReturnInput,
     type CreateReturnOutcome
@@ -75,7 +75,7 @@ const forbidden = (order: OrderDocument, context: CallerContext): CreateReturnOu
         metadata: { reason: 'missing_permission', permission: 'create:Refund' }
     });
 
-    return refused(generateReject(403, [t('generic.error-forbidden')]));
+    return generateReject(403, [t('generic.error-forbidden')]);
 };
 
 /**
@@ -159,17 +159,7 @@ const cancelUnderLock = (
             session
         );
         await enqueueRequested(created, session);
-        await enqueueOutboxEvent(
-            RETURN_CLOSED,
-            {
-                returnId: String(created._id),
-                orderId,
-                refundAmount: created.refundAmount ?? 0,
-                currency: created.currency
-            },
-            orderId,
-            session
-        );
+        await enqueueClosed(created, session);
         return { created, lines: cancelled.lines };
     });
 
@@ -237,7 +227,7 @@ const announceCancelled = (
                   })
                 : undefined
         )
-        .then((): CreateReturnOutcome => ({ kind: 'created', created: done.created }));
+        .then((): CreateReturnOutcome => opened(done.created));
 };
 
 /**
@@ -294,7 +284,7 @@ export const createCancellation = (
     if (!fulfillmentOrderId || input.lines !== undefined) return Promise.resolve(badCancellation());
 
     return orderService.getById(input.orderId).then((order) => {
-        if (!order) return refused(generateReject(404, [t('returns.order-not-found')]));
+        if (!order) return generateReject(404, [t('returns.order-not-found')]);
 
         return remainderOptions(input.orderId, order.fulfillment?.shipped === true).then(
             (options) => {
@@ -320,7 +310,7 @@ export const createCancellation = (
                             : announceCancelled(order, done, byBuyer, context)
                     )
                     .catch((error: unknown) => {
-                        if (error instanceof ActRefusal) return refused(error.reject);
+                        if (error instanceof ActRefusal) return error.reject;
                         throw error instanceof Error ? error : new Error(String(error));
                     });
             }

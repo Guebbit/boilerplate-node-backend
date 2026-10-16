@@ -60,24 +60,9 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 /* Replaced, not spied on — `recordAudit` closes over its own module's `emitAuditEvent`. */
-jest.mock('@infrastructure/observability/audit', () => {
-    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
-        '@infrastructure/observability/audit'
-    );
-    const emitAuditEvent = jest.fn();
-    return {
-        __esModule: true,
-        ...actual,
-        emitAuditEvent,
-        recordAudit: (
-            context: Parameters<typeof actual.recordAudit>[0],
-            fields: Parameters<typeof actual.recordAudit>[1]
-        ) => {
-            if (!context) return;
-            emitAuditEvent(actual.buildAuditEvent(context, fields));
-        }
-    };
-});
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
 const mockEmitAuditEvent = auditPort.emitAuditEvent as jest.MockedFunction<
     typeof auditPort.emitAuditEvent
 >;
@@ -139,7 +124,7 @@ describe('a withdrawal before dispatch', () => {
                 testCallerContext
             );
 
-            expect(outcome.kind).toBe('created');
+            expect(outcome.success).toBe(true);
             const stored = await readOrder(orderId);
             expect(stored?.status).toBe(OrderStatus.cancelled);
             const [written, ...others] = await returnRepository.findByOrderId(orderId);
@@ -207,7 +192,7 @@ describe('a withdrawal before dispatch', () => {
             testCallerContext
         );
 
-        expect(again.kind === 'refused' && again.reject.errors[0]).toMatchObject({
+        expect(!again.success && again.errors[0]).toMatchObject({
             code: 'RETURN_ORDER_NOT_RETURNABLE'
         });
         expect(await returnRepository.findByOrderId(orderId)).toHaveLength(1);
@@ -223,7 +208,7 @@ describe('a withdrawal before dispatch', () => {
             testCallerContext
         );
 
-        expect(outcome.kind === 'refused' && outcome.reject.status).toBe(404);
+        expect(!outcome.success && outcome.status).toBe(404);
         const stored = await readOrder(orderId);
         expect(stored?.status).toBe(OrderStatus.paid);
     });
@@ -237,7 +222,7 @@ describe('a withdrawal before dispatch', () => {
             testCallerContext
         );
 
-        expect(outcome.kind === 'refused' && outcome.reject.status).toBe(404);
+        expect(!outcome.success && outcome.status).toBe(404);
     });
 
     it('refuses any other reason before dispatch — nothing has left the shop to send back', async () => {
@@ -249,7 +234,7 @@ describe('a withdrawal before dispatch', () => {
             testCallerContext
         );
 
-        expect(outcome.kind === 'refused' && outcome.reject.errors[0]).toMatchObject({
+        expect(!outcome.success && outcome.errors[0]).toMatchObject({
             code: 'RETURN_ORDER_NOT_RETURNABLE'
         });
     });
@@ -285,8 +270,8 @@ describe('goods excluded from the right of withdrawal (Art. 16)', () => {
             testCallerContext
         );
 
-        if (outcome.kind !== 'created') throw new Error('expected a return');
-        expect(outcome.created.lines.map(({ productId }) => String(productId))).toEqual([
+        if (!outcome.success) throw new Error('expected a return');
+        expect(outcome.data.lines.map(({ productId }) => String(productId))).toEqual([
             String(shirt._id)
         ]);
     });
@@ -304,8 +289,8 @@ describe('goods excluded from the right of withdrawal (Art. 16)', () => {
             testCallerContext
         );
 
-        expect(outcome.kind === 'refused' && outcome.reject.status).toBe(422);
-        expect(outcome.kind === 'refused' && outcome.reject.errors[0]).toMatchObject({
+        expect(!outcome.success && outcome.status).toBe(422);
+        expect(!outcome.success && outcome.errors[0]).toMatchObject({
             code: 'RETURN_LINES_INVALID'
         });
     });
@@ -324,7 +309,7 @@ describe('goods excluded from the right of withdrawal (Art. 16)', () => {
             testCallerContext
         );
 
-        expect(outcome.kind === 'refused' && outcome.reject.status).toBe(422);
+        expect(!outcome.success && outcome.status).toBe(422);
         const stored = await readOrder(String(order._id));
         expect(stored?.status).toBe(OrderStatus.paid);
     });
@@ -345,16 +330,16 @@ describe('a return on goods that have shipped', () => {
             );
             await settleOutboxNudges();
 
-            if (outcome.kind !== 'created') throw new Error('expected a return');
-            expect(outcome.created).toMatchObject({
+            if (!outcome.success) throw new Error('expected a return');
+            expect(outcome.data).toMatchObject({
                 status: 'approved',
                 reason: 'withdrawal',
                 returnPostage: 'consumer',
                 currency: 'EUR'
             });
-            expect(outcome.created.decidedAt).toBeInstanceOf(Date);
+            expect(outcome.data.decidedAt).toBeInstanceOf(Date);
             expect(
-                outcome.created.lines.map(({ productId, quantity, title, unitPrice }) => ({
+                outcome.data.lines.map(({ productId, quantity, title, unitPrice }) => ({
                     productId: String(productId),
                     quantity,
                     title,
@@ -365,7 +350,7 @@ describe('a return on goods that have shipped', () => {
                 { productId: String(mug._id), quantity: 1, title: 'Mug', unitPrice: 10 }
             ]);
             expect(events).toEqual([
-                { returnId: String(outcome.created._id), orderId, reason: 'withdrawal' }
+                { returnId: String(outcome.data._id), orderId, reason: 'withdrawal' }
             ]);
             expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         }
@@ -381,10 +366,10 @@ describe('a return on goods that have shipped', () => {
                 testCallerContext
             );
 
-            if (outcome.kind !== 'created') throw new Error('expected a return');
-            expect(outcome.created.returnPostage).toBe('shop');
+            if (!outcome.success) throw new Error('expected a return');
+            expect(outcome.data.returnPostage).toBe('shop');
             // What the customer was told stays on the row, whatever the setting says later.
-            const stored = await returnRepository.findById(String(outcome.created._id));
+            const stored = await returnRepository.findById(String(outcome.data._id));
             expect(stored?.returnPostage).toBe('shop');
         }));
 
@@ -406,10 +391,10 @@ describe('a return on goods that have shipped', () => {
             testCallerContext
         );
 
-        if (outcome.kind !== 'created') throw new Error('expected a return');
-        expect(outcome.created.status).toBe('requested');
-        expect(outcome.created.decidedAt).toBeUndefined();
-        expect(outcome.created.note).toBe('Cracked handle');
+        if (!outcome.success) throw new Error('expected a return');
+        expect(outcome.data.status).toBe('requested');
+        expect(outcome.data.decidedAt).toBeUndefined();
+        expect(outcome.data.note).toBe('Cracked handle');
     });
 
     it('returns only the named lines, and only as many units as were bought', async () => {
@@ -421,8 +406,8 @@ describe('a return on goods that have shipped', () => {
             testCallerContext
         );
 
-        if (outcome.kind !== 'created') throw new Error('expected a return');
-        expect(outcome.created.lines).toHaveLength(1);
+        if (!outcome.success) throw new Error('expected a return');
+        expect(outcome.data.lines).toHaveLength(1);
     });
 
     it('refuses more units than the order held', async () => {
@@ -438,8 +423,8 @@ describe('a return on goods that have shipped', () => {
             testCallerContext
         );
 
-        expect(outcome.kind === 'refused' && outcome.reject.status).toBe(422);
-        expect(outcome.kind === 'refused' && outcome.reject.errors[0]).toMatchObject({
+        expect(!outcome.success && outcome.status).toBe(422);
+        expect(!outcome.success && outcome.errors[0]).toMatchObject({
             code: 'RETURN_LINES_INVALID'
         });
     });
@@ -458,7 +443,7 @@ describe('a return on goods that have shipped', () => {
             testCallerContext
         );
 
-        expect(outcome.kind === 'refused' && outcome.reject.status).toBe(422);
+        expect(!outcome.success && outcome.status).toBe(422);
     });
 
     it('counts what earlier returns took — the same units cannot come back twice', async () => {
@@ -481,7 +466,7 @@ describe('a return on goods that have shipped', () => {
             testCallerContext
         );
 
-        expect(third.kind === 'refused' && third.reject.status).toBe(422);
+        expect(!third.success && third.status).toBe(422);
     });
 
     it('lets exactly one of two parallel full returns through, and announces only that one', async () => {
@@ -497,9 +482,9 @@ describe('a return on goods that have shipped', () => {
         await settleOutboxNudges();
 
         // Snapshot isolation alone would let both read "nothing returned" and both commit.
-        expect(outcomes.filter(({ kind }) => kind === 'created')).toHaveLength(1);
-        const loser = outcomes.find(({ kind }) => kind === 'refused');
-        expect(loser?.kind === 'refused' && loser.reject.status).toBe(422);
+        expect(outcomes.filter(({ success }) => success)).toHaveLength(1);
+        const loser = outcomes.find(({ success }) => !success);
+        expect(loser && !loser.success && loser.status).toBe(422);
         expect(events).toHaveLength(1);
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
     });
@@ -512,8 +497,8 @@ describe('a return on goods that have shipped', () => {
             buyer(user),
             testCallerContext
         );
-        if (first.kind !== 'created') throw new Error('expected a return');
-        await declineReturn(String(first.created._id), 'Used', callerContextAs('admin'));
+        if (!first.success) throw new Error('expected a return');
+        await declineReturn(String(first.data._id), 'Used', callerContextAs('admin'));
 
         const again = await createReturn(
             { orderId, reason: 'defective', lines: twoShirts },
@@ -521,7 +506,7 @@ describe('a return on goods that have shipped', () => {
             testCallerContext
         );
 
-        expect(again.kind).toBe('created');
+        expect(again.success).toBe(true);
     });
 
     it('refuses once the window has closed', async () => {
@@ -534,7 +519,7 @@ describe('a return on goods that have shipped', () => {
             testCallerContext
         );
 
-        expect(outcome.kind === 'refused' && outcome.reject.errors[0]).toMatchObject({
+        expect(!outcome.success && outcome.errors[0]).toMatchObject({
             code: 'RETURN_WINDOW_CLOSED'
         });
     });
@@ -548,7 +533,7 @@ describe('a return on goods that have shipped', () => {
             testCallerContext
         );
 
-        expect(outcome.kind === 'refused' && outcome.reject.errors[0]).toMatchObject({
+        expect(!outcome.success && outcome.errors[0]).toMatchObject({
             code: 'RETURN_ORDER_NOT_RETURNABLE'
         });
     });
@@ -562,8 +547,8 @@ const requestedReturn = async () => {
         buyer(fixture.user),
         testCallerContext
     );
-    if (outcome.kind !== 'created') throw new Error('expected a return');
-    return { ...fixture, returnId: String(outcome.created._id) };
+    if (!outcome.success) throw new Error('expected a return');
+    return { ...fixture, returnId: String(outcome.data._id) };
 };
 
 describe('deciding a request', () => {
@@ -612,10 +597,10 @@ describe('deciding a request', () => {
             buyer(user),
             testCallerContext
         );
-        if (outcome.kind !== 'created') throw new Error('expected a return');
+        if (!outcome.success) throw new Error('expected a return');
 
         const result = await declineReturn(
-            String(outcome.created._id),
+            String(outcome.data._id),
             'No',
             callerContextAs('admin')
         );
@@ -800,7 +785,7 @@ describe('what a refusal says', () => {
             testCallerContext
         );
 
-        expect(outcome.kind === 'refused' && outcome.reject.errors[0]).toMatchObject({
+        expect(!outcome.success && outcome.errors[0]).toMatchObject({
             message: 'The order was not found'
         });
     });
@@ -813,9 +798,7 @@ describe('what a refusal says', () => {
                 { orderId, reason: 'defective', lines: [{ productId, quantity }] },
                 buyer(user),
                 testCallerContext
-            ).then((outcome) =>
-                outcome.kind === 'refused' ? outcome.reject.errors[0] : undefined
-            );
+            ).then((outcome) => (outcome.success ? undefined : outcome.errors[0]));
 
         expect(await refuse(String(other._id), 1)).toMatchObject({
             code: 'RETURN_LINES_INVALID',
@@ -837,7 +820,7 @@ describe('what a refusal says', () => {
             testCallerContext
         );
 
-        expect(again.kind === 'refused' && again.reject.errors[0]).toMatchObject({
+        expect(!again.success && again.errors[0]).toMatchObject({
             code: 'RETURN_LINES_INVALID',
             message: 'Nothing on this order is left to return.'
         });
@@ -864,10 +847,8 @@ describe('what a refusal says', () => {
             testCallerContext
         );
 
-        expect(byLine.kind === 'refused' && byLine.reject.errors[0].message).toBe(excludedMessage);
-        expect(beforeDispatch.kind === 'refused' && beforeDispatch.reject.errors[0].message).toBe(
-            excludedMessage
-        );
+        expect(!byLine.success && byLine.errors[0].message).toBe(excludedMessage);
+        expect(!beforeDispatch.success && beforeDispatch.errors[0].message).toBe(excludedMessage);
     });
 });
 
@@ -887,19 +868,18 @@ describe('what a new return leaves behind', () => {
             testCallerContext
         );
 
-        if (shipped.kind !== 'created' || withdrawn.kind !== 'created')
-            throw new Error('expected two returns');
+        if (!shipped.success || !withdrawn.success) throw new Error('expected two returns');
         expect(auditedAs(returnsAuditActions.RETURN_REQUESTED)).toEqual([
             expect.objectContaining({
                 outcome: 'success',
                 targetType: 'return',
-                targetId: String(shipped.created._id),
+                targetId: String(shipped.data._id),
                 metadata: { orderId, reason: 'defective' }
             }),
             expect.objectContaining({
                 outcome: 'success',
                 targetType: 'return',
-                targetId: String(withdrawn.created._id),
+                targetId: String(withdrawn.data._id),
                 metadata: { orderId: early.orderId, reason: 'withdrawal' }
             })
         ]);
@@ -944,7 +924,7 @@ describe('what a new return leaves behind', () => {
             testCallerContext
         );
 
-        expect(outcome.kind === 'refused' && outcome.reject.status).toBe(409);
+        expect(!outcome.success && outcome.status).toBe(409);
         expect(await returnRepository.findByOrderId(orderId)).toHaveLength(0);
     });
 });

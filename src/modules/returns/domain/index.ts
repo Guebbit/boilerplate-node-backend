@@ -17,6 +17,7 @@ export type { ReturnStatus, ReturnReason, ReturnKind } from './lifecycle';
 
 export {
     returnableQuantities,
+    quantitiesByProduct,
     returnableLinesOf,
     wireLines,
     checkRequestedLines,

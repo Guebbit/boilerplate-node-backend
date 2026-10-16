@@ -25,9 +25,8 @@ import {
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
-import { withTransaction } from '@infrastructure/runtime/database';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
+import { announceInTransaction } from '@kernel/outbox';
 import { inventoryService } from '@modules/inventory';
 import { cheapestStandardShipping } from '@modules/delivery';
 import { orderService, sumLineItems } from '@modules/orders';
@@ -127,54 +126,59 @@ const claimAndRestock = (
     handlingDeduction: number,
     actor: string | null | undefined
 ): Promise<Claimed> =>
-    withTransaction(async (session): Promise<Claimed> => {
-        const orderId = String(returned.orderId);
-        await returnRepository.lockOrder(orderId, session);
-        const everyReturn = await returnRepository.findByOrderId(orderId, session);
-        const others = everyReturn.filter(({ _id }) => String(_id) !== String(returned._id));
+    announceInTransaction(
+        async (session): Promise<Claimed> => {
+            const orderId = String(returned.orderId);
+            await returnRepository.lockOrder(orderId, session);
+            const everyReturn = await returnRepository.findByOrderId(orderId, session);
+            const others = everyReturn.filter(({ _id }) => String(_id) !== String(returned._id));
 
-        const verdict = quote(returned, order, others, handlingDeduction);
-        if (!verdict.ok) return { kind: 'deduction-too-high' };
+            const verdict = quote(returned, order, others, handlingDeduction);
+            if (!verdict.ok) return { kind: 'deduction-too-high' };
 
-        const received = await returnRepository.claimStatus(
-            String(returned._id),
-            RECEIVABLE_RETURN_STATUSES,
-            'received',
-            {
-                receivedAt: new Date(),
-                refundAmount: verdict.breakdown.total,
-                shippingRefund: verdict.breakdown.shipping,
-                ...(handlingDeduction > 0 ? { handlingDeduction } : {})
-            },
-            session
-        );
-        if (!received) return { kind: 'lost' };
+            const received = await returnRepository.claimStatus(
+                String(returned._id),
+                RECEIVABLE_RETURN_STATUSES,
+                'received',
+                {
+                    receivedAt: new Date(),
+                    refundAmount: verdict.breakdown.total,
+                    shippingRefund: verdict.breakdown.shipping,
+                    ...(handlingDeduction > 0 ? { handlingDeduction } : {})
+                },
+                session
+            );
+            if (!received) return { kind: 'lost' };
 
-        await inventoryService.restockReturnedLines(
-            wireLines(received.lines),
-            { reference: String(received.orderId), note: `return ${String(received._id)}` },
-            session
-        );
-        await enqueueOutboxEvent(
-            RETURN_RECEIVED,
-            { returnId: String(received._id), orderId: String(received.orderId) },
-            String(received.orderId),
-            session
-        );
-        await orderService.appendTimeline(
-            String(received.orderId),
-            {
-                type: 'return_received',
-                actor,
-                data: { returnId: String(received._id), refundAmount: verdict.breakdown.total }
-            },
-            session
-        );
-        return { kind: 'received', received, breakdown: verdict.breakdown };
-    }).then((claimed) => {
-        if (claimed.kind === 'received') nudgeOutbox();
-        return claimed;
-    });
+            await inventoryService.restockReturnedLines(
+                wireLines(received.lines),
+                { reference: String(received.orderId), note: `return ${String(received._id)}` },
+                session
+            );
+            await orderService.appendTimeline(
+                String(received.orderId),
+                {
+                    type: 'return_received',
+                    actor,
+                    data: { returnId: String(received._id), refundAmount: verdict.breakdown.total }
+                },
+                session
+            );
+            return { kind: 'received', received, breakdown: verdict.breakdown };
+        },
+        // Only a receipt is announced; a refused deduction or a lost race writes nothing.
+        (claimed) =>
+            claimed.kind === 'received'
+                ? {
+                      name: RETURN_RECEIVED,
+                      payload: {
+                          returnId: String(claimed.received._id),
+                          orderId: String(claimed.received.orderId)
+                      },
+                      aggregateId: String(claimed.received.orderId)
+                  }
+                : []
+    );
 
 /**
  * Pay the customer back and finish the return. A provider refusal is logged and left: the refund
@@ -204,10 +208,7 @@ const refundAndClose = (
                 {
                     returnId: String(received._id),
                     amount: owed,
-                    lines: received.lines.map(({ productId, quantity }) => ({
-                        productId: String(productId),
-                        quantity
-                    })),
+                    lines: wireLines(received.lines),
                     shipping
                 },
                 context

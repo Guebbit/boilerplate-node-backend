@@ -132,9 +132,9 @@ const buyerCancels = (fixture: Fixture) =>
 
 /** A created cancellation, or a loud failure. */
 const created = (outcome: Awaited<ReturnType<typeof createReturn>>) => {
-    if (outcome.kind !== 'created')
-        throw new Error(`expected a cancellation: ${JSON.stringify(outcome.reject.errors)}`);
-    return outcome.created;
+    if (!outcome.success)
+        throw new Error(`expected a cancellation: ${JSON.stringify(outcome.errors)}`);
+    return outcome.data;
 };
 
 /** Withdraw from everything that shipped and take the goods back, as staff would. */
@@ -259,10 +259,8 @@ describe('the buyer cancelling what has not shipped', () => {
         );
 
         for (const outcome of [defective, withLines, none, goodsReturnNamingOne]) {
-            expect(outcome.kind).toBe('refused');
-            expect(outcome.kind === 'refused' && outcome.reject.errors[0].code).toBe(
-                'RETURN_CANCELLATION_INVALID'
-            );
+            expect(outcome.success).toBe(false);
+            expect(!outcome.success && outcome.errors[0].code).toBe('RETURN_CANCELLATION_INVALID');
         }
         expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
     });
@@ -287,9 +285,7 @@ describe('the buyer cancelling what has not shipped', () => {
             testCallerContext
         );
 
-        expect(outcome.kind === 'refused' && outcome.reject.errors[0].code).toBe(
-            'RETURN_NOTHING_TO_CANCEL'
-        );
+        expect(!outcome.success && outcome.errors[0].code).toBe('RETURN_NOTHING_TO_CANCEL');
     });
 
     it('answers 409 the second time: there is no remainder left to cancel', async () => {
@@ -298,9 +294,7 @@ describe('the buyer cancelling what has not shipped', () => {
 
         const again = await buyerCancels(fixture);
 
-        expect(again.kind === 'refused' && again.reject.errors[0].code).toBe(
-            'RETURN_NOTHING_TO_CANCEL'
-        );
+        expect(!again.success && again.errors[0].code).toBe('RETURN_NOTHING_TO_CANCEL');
         expect(await refundsOf(fixture.orderId)).toHaveLength(1);
     });
 
@@ -310,9 +304,7 @@ describe('the buyer cancelling what has not shipped', () => {
 
         const outcome = await buyerCancels(fixture);
 
-        expect(outcome.kind === 'refused' && outcome.reject.errors[0].code).toBe(
-            'RETURN_WINDOW_CLOSED'
-        );
+        expect(!outcome.success && outcome.errors[0].code).toBe('RETURN_WINDOW_CLOSED');
         expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
     });
 
@@ -321,7 +313,7 @@ describe('the buyer cancelling what has not shipped', () => {
 
         const outcomes = await Promise.all([buyerCancels(fixture), buyerCancels(fixture)]);
 
-        expect(outcomes.filter(({ kind }) => kind === 'created')).toHaveLength(1);
+        expect(outcomes.filter(({ success }) => success)).toHaveLength(1);
         expect(await refundsOf(fixture.orderId)).toHaveLength(1);
         expect(await countersOf(fixture.mug._id)).toMatchObject({ reserved: 0 });
     });
@@ -341,7 +333,7 @@ describe('the buyer cancelling what has not shipped', () => {
             testCallerContext
         );
 
-        expect(outcome.kind).toBe('refused');
+        expect(outcome.success).toBe(false);
         expect(await refundsOf(fixture.orderId)).toEqual([]);
     });
 });
@@ -395,7 +387,7 @@ describe('staff cancelling what has not shipped', () => {
 
         const outcome = await staffCancels(fixture, 'warehouse');
 
-        expect(outcome.kind === 'refused' && outcome.reject.status).toBe(403);
+        expect(!outcome.success && outcome.status).toBe(403);
         expect(audited).toEqual([
             expect.objectContaining({
                 action: 'security.forbidden',
@@ -613,13 +605,9 @@ describe('returning goods that shipped in part', () => {
             testCallerContext
         );
 
-        expect(tooMany.kind === 'refused' && tooMany.reject.errors[0].code).toBe(
-            'RETURN_LINES_INVALID'
-        );
-        expect(one.kind).toBe('created');
-        expect(again.kind === 'refused' && again.reject.errors[0].code).toBe(
-            'RETURN_LINES_INVALID'
-        );
+        expect(!tooMany.success && tooMany.errors[0].code).toBe('RETURN_LINES_INVALID');
+        expect(one.success).toBe(true);
+        expect(!again.success && again.errors[0].code).toBe('RETURN_LINES_INVALID');
         expect(await shipmentsOf(orderId)).toHaveLength(1);
     });
 
@@ -648,7 +636,7 @@ describe('returning goods that shipped in part', () => {
         if (shipped.success) {
             // The shipment won: the order is not cancelled, and the withdrawal is a return of what left.
             expect(stored?.status).toBe(OrderStatus.shipped);
-            expect(withdrawn.kind).toBe('created');
+            expect(withdrawn.success).toBe(true);
             expect(returns).toHaveLength(1);
             expect(returns[0]).toMatchObject({ kind: 'return', status: 'approved' });
             expect(returns[0].lines).toHaveLength(1);

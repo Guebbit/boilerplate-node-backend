@@ -17,7 +17,15 @@
  * See: docs/modules/returns.md#what-the-customer-gets-back
  */
 
-import { toDecimalAmount, toMinorUnits, type Money } from '@shared-kernel/money';
+import {
+    addMoney,
+    NO_MONEY,
+    scaleMoney,
+    subtractMoney,
+    toDecimalAmount,
+    toMinorUnits,
+    type Money
+} from '@shared-kernel/money';
 import type { ReturnReason } from './lifecycle';
 
 /** What the calculation needs from the return and its order. */
@@ -50,16 +58,32 @@ export type RefundVerdict =
     | { ok: false; reason: 'deduction-too-high' };
 
 /**
+ * What the returned lines cost at the gross price the order froze, in minor units.
+ * @param lines - the lines, each with its frozen unit price
+ * @param currency - the ISO-4217 code the prices are in
+ */
+const goodsOf = (
+    lines: readonly { quantity: number; unitPrice: number }[],
+    currency: string
+): Money =>
+    addMoney(
+        ...lines.map(({ unitPrice, quantity }) =>
+            scaleMoney(toMinorUnits(unitPrice, currency), quantity)
+        )
+    );
+
+/**
  * The delivery a return refunds, in minor units.
  * @param inputs - the return and its order
  */
 const refundableShipping = (inputs: RefundInputs): Money => {
-    if (!inputs.takesLastUnit) return 0 as Money;
+    if (!inputs.takesLastUnit) return NO_MONEY;
 
     const paid = toMinorUnits(inputs.shippingPaid, inputs.currency);
     if (inputs.reason === 'defective' || inputs.reason === 'wrong_item') return paid;
 
     const cheapest = toMinorUnits(inputs.cheapestStandardShipping, inputs.currency);
+    // `as`: Math.min returns a bare number; both operands are Money, so the smaller one is too.
     return Math.min(paid, cheapest) as Money;
 };
 
@@ -72,22 +96,20 @@ const refundableShipping = (inputs: RefundInputs): Money => {
  */
 export const refundAmountFor = (inputs: RefundInputs): RefundVerdict => {
     const { currency, lines, handlingDeduction } = inputs;
-    let goods = 0;
-    for (const { quantity, unitPrice } of lines)
-        goods += toMinorUnits(unitPrice, currency) * quantity;
+    const goods = goodsOf(lines, currency);
 
     const shipping = refundableShipping(inputs);
     const deduction = toMinorUnits(handlingDeduction, currency);
-    if (deduction > goods + shipping) return { ok: false, reason: 'deduction-too-high' };
+    if (deduction > addMoney(goods, shipping)) return { ok: false, reason: 'deduction-too-high' };
 
-    const decimal = (amount: number): number => toDecimalAmount(amount as Money, currency);
+    const decimal = (amount: Money): number => toDecimalAmount(amount, currency);
     return {
         ok: true,
         breakdown: {
             goods: decimal(goods),
             shipping: decimal(shipping),
             deduction: decimal(deduction),
-            total: decimal(goods + shipping - deduction)
+            total: decimal(subtractMoney(addMoney(goods, shipping), deduction))
         }
     };
 };
@@ -115,17 +137,15 @@ export interface CancellationInputs {
  */
 export const cancellationRefundFor = (inputs: CancellationInputs): RefundBreakdown => {
     const { currency, lines } = inputs;
-    let goods = 0;
-    for (const { quantity, unitPrice } of lines)
-        goods += toMinorUnits(unitPrice, currency) * quantity;
-    const shipping = inputs.takesLastUnit ? toMinorUnits(inputs.shippingPaid, currency) : 0;
+    const goods = goodsOf(lines, currency);
+    const shipping = inputs.takesLastUnit ? toMinorUnits(inputs.shippingPaid, currency) : NO_MONEY;
 
-    const decimal = (amount: number): number => toDecimalAmount(amount as Money, currency);
+    const decimal = (amount: Money): number => toDecimalAmount(amount, currency);
     return {
         goods: decimal(goods),
         shipping: decimal(shipping),
         deduction: 0,
-        total: decimal(goods + shipping)
+        total: decimal(addMoney(goods, shipping))
     };
 };
 
@@ -141,11 +161,11 @@ export const shippingStillOwed = (
     currency: string,
     shippingPaid: number,
     alreadyRefunded: number
-): number =>
-    toDecimalAmount(
-        Math.max(
-            0,
-            toMinorUnits(shippingPaid, currency) - toMinorUnits(alreadyRefunded, currency)
-        ) as Money,
-        currency
+): number => {
+    const owed = subtractMoney(
+        toMinorUnits(shippingPaid, currency),
+        toMinorUnits(alreadyRefunded, currency)
     );
+    // `as`: Math.max returns a bare number; both operands are Money, so the larger one is too.
+    return toDecimalAmount(Math.max(owed, NO_MONEY) as Money, currency);
+};

@@ -83,7 +83,7 @@ describe('a withdrawal before dispatch on a paid order', () => {
             testCallerContext
         );
 
-        expect(outcome.kind).toBe('created');
+        expect(outcome.success).toBe(true);
         const stored = await readOrder(orderId);
         expect(stored?.status).toBe(OrderStatus.cancelled);
         const payment = await paymentService.getForOrder(orderId, asAdmin());

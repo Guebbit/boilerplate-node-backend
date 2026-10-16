@@ -105,8 +105,8 @@ const approvedReturn = async (
         asCustomer(fixture.user.id),
         testCallerContext
     );
-    if (outcome.kind !== 'created') throw new Error('expected a return');
-    const id = String(outcome.created._id);
+    if (!outcome.success) throw new Error('expected a return');
+    const id = String(outcome.data._id);
     if (reason !== 'withdrawal') {
         await approveReturn(id, callerContextAs('admin'));
     }
@@ -258,13 +258,9 @@ describe('receiving a return', () => {
             asCustomer(fixture.user.id),
             testCallerContext
         );
-        if (outcome.kind !== 'created') throw new Error('expected a return');
+        if (!outcome.success) throw new Error('expected a return');
 
-        const result = await receiveReturn(
-            String(outcome.created._id),
-            {},
-            callerContextAs('admin')
-        );
+        const result = await receiveReturn(String(outcome.data._id), {}, callerContextAs('admin'));
 
         expect(asReject(result).errors[0].code).toBe('RETURN_NOT_RECEIVABLE');
     });
@@ -334,13 +330,9 @@ describe('what the customer gets back', () => {
             asCustomer(user.id),
             testCallerContext
         );
-        if (outcome.kind !== 'created') throw new Error('expected a return');
+        if (!outcome.success) throw new Error('expected a return');
 
-        const result = await receiveReturn(
-            String(outcome.created._id),
-            {},
-            callerContextAs('admin')
-        );
+        const result = await receiveReturn(String(outcome.data._id), {}, callerContextAs('admin'));
 
         expect(result.success && result.data.refundAmount).toBe(150);
     });
@@ -514,11 +506,11 @@ describe('what receiving answers and announces', () => {
             asCustomer(fixture.user.id),
             testCallerContext
         );
-        if (outcome.kind !== 'created') throw new Error('expected a return');
+        if (!outcome.success) throw new Error('expected a return');
         await assignRole(fixture.user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'warehouse');
 
         const result = await receiveReturn(
-            String(outcome.created._id),
+            String(outcome.data._id),
             {},
             callerContextAs('warehouse', fixture.user.id)
         );
@@ -538,8 +530,8 @@ describe('the order timeline of a return', () => {
             asCustomer(fixture.user.id),
             testCallerContext
         );
-        if (outcome.kind !== 'created') throw new Error('expected a return');
-        const id = String(outcome.created._id);
+        if (!outcome.success) throw new Error('expected a return');
+        const id = String(outcome.data._id);
         await approveReturn(id, callerContextAs('admin', 'admin-1'));
 
         await receiveReturn(id, {}, callerContextAs('admin', 'admin-2'));
@@ -569,10 +561,10 @@ describe('the order timeline of a return', () => {
             asCustomer(declined.user.id),
             testCallerContext
         );
-        if (outcome.kind !== 'created') throw new Error('expected a return');
+        if (!outcome.success) throw new Error('expected a return');
 
         await declineReturn(
-            String(outcome.created._id),
+            String(outcome.data._id),
             'private opinion of the customer',
             callerContextAs('admin', 'admin-1')
         );

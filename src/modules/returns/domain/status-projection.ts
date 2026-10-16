@@ -6,6 +6,7 @@
 
 import type { OrderReturnStatus } from '@types';
 import { QUANTITY_HOLDING_RETURN_STATUSES } from './lifecycle';
+import { quantitiesByProduct } from './quantities';
 import type { ReturnKind, ReturnStatus } from './lifecycle';
 
 /** A return as the projection sees it. */
@@ -49,10 +50,7 @@ export const projectReturnStatus = (
     if (holding.some(({ status }) => status === 'requested')) return 'requested';
     if (holding.some(({ status }) => status === 'approved')) return 'in_progress';
 
-    const back = new Map<string, number>();
-    for (const { lines } of holding)
-        for (const { productId, quantity } of lines)
-            back.set(productId, (back.get(productId) ?? 0) + quantity);
+    const back = quantitiesByProduct(holding.flatMap(({ lines }) => lines));
 
     const everything = [...ordered].every(
         ([productId, quantity]) => (back.get(productId) ?? 0) >= quantity
