@@ -32,6 +32,7 @@ import {
     editShipmentTracking,
     getForOrder,
     cancelAllForOrder,
+    ensureFulfillmentOrders,
     splitForAllocation
 } from '@modules/delivery/services';
 import { fulfillmentOrderRepository } from '@modules/delivery/repository';
@@ -141,6 +142,20 @@ describe('the fulfillment orders of a paid order', () => {
         expect(again[0].kind).toBe('physical');
         expect(again[0].status).toBe('open');
         expect(again[0].lines.map(({ quantity }) => quantity)).toEqual([2, 1]);
+    });
+
+    // The `paid` listener can read an order paid and then lose it to a cancel before it writes. A
+    // throw there would hold up every later event of the order, the cancel's refund among them.
+    it('are not made, and nothing fails, when the order is cancelled between the read and the write', async () => {
+        const user = await createUser();
+        const order = await createOrder(user, [toOrderItem(await createProduct(), 1)], {
+            status: OrderStatus.paid
+        });
+        jest.spyOn(orderService, 'recordFulfillmentProgress').mockResolvedValueOnce(null);
+
+        await expect(ensureFulfillmentOrders(String(order._id))).resolves.toBeUndefined();
+
+        expect(await fulfillmentOrderRepository.findByOrderId(String(order._id))).toEqual([]);
     });
 
     it('are not made for an order that has not been paid, nor for one already past dispatch', async () => {

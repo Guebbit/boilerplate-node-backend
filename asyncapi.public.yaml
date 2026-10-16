@@ -255,7 +255,8 @@ operations:
         channel:
             $ref: '#/channels/order.cancelled'
         summary: A cancel went through; stock is already back on the shelf.
-        description: One-to-one with the `order.cancelled` domain event — see `orders/events.ts`.
+        description: >-
+            The `order.cancelled` domain event, without its refund policy: whether the cancel owes the buyer money back is for `payments`, and a subscriber learns that money actually moved from `payment.refunded`. See `orders/events.ts`.
         messages:
             - $ref: '#/channels/order.cancelled/messages/OrderCancelledEvent'
     webhookShipmentShipped:
@@ -570,19 +571,6 @@ components:
                 orderId:
                     type: string
             additionalProperties: false
-        OrderCancelledPayload:
-            type: object
-            required:
-                - orderId
-                - refund
-            properties:
-                orderId:
-                    type: string
-                refund:
-                    type: boolean
-                    description: >-
-                        Whether the cancel carries a refund — a customer cancelling is owed their money, an operator cancelling may not be. See `orders/events.ts`.
-            additionalProperties: false
         OrderCreatedEnvelope:
             type: object
             required:
@@ -637,7 +625,7 @@ components:
                     type: string
                     format: date-time
                 data:
-                    $ref: '#/components/schemas/OrderCancelledPayload'
+                    $ref: '#/components/schemas/OrderIdPayload'
             additionalProperties: false
         ShipmentPayload:
             type: object
@@ -807,7 +795,7 @@ components:
                     type: string
                 reason:
                     type: string
-                    description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`.
+                    description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`; `no_answer` when the shop itself cancelled a preorder's remainder after its buyer never answered the late-date question.
             additionalProperties: false
         ReturnReceivedPayload:
             type: object
