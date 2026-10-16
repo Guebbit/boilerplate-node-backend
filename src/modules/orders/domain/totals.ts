@@ -35,6 +35,15 @@ export interface LineItemTotals {
 }
 
 /**
+ * One line's gross price in minor units: `product.price × quantity`. The single spelling of "what
+ * this line costs", shared by the totals and the VAT breakdown so they cannot round apart.
+ * @param item - the priced line; a junk quantity or an unpopulated product counts as nothing
+ * @param currency - the ISO-4217 code the line is priced in — decides the rounding scale
+ */
+export const lineGross = (item: LineItem, currency: string): Money =>
+    scaleMoney(toMinorUnits(item.product?.price, currency), wholeCount(item.quantity));
+
+/**
  * Sum a list of priced line items. `toMinorUnits`/`wholeCount` absorb junk, so a line whose
  * product failed to populate contributes nothing rather than turning the total into `NaN`.
  * @param items - the priced lines
@@ -47,12 +56,8 @@ export const sumLineItems = (items: readonly LineItem[], currency: string): Line
 
     for (const item of items) {
         // One reading of the quantity for both columns — counted and charged must be the same units.
-        const itemQuantity = wholeCount(item.quantity);
-        quantity += itemQuantity;
-        price = addMoney(
-            price,
-            scaleMoney(toMinorUnits(item.product?.price, currency), itemQuantity)
-        );
+        quantity += wholeCount(item.quantity);
+        price = addMoney(price, lineGross(item, currency));
     }
 
     // `count` is lines as given; `quantity` is units. A dropped line still counts as a line.

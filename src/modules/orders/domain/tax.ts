@@ -9,16 +9,15 @@
 import {
     addMoney,
     apportion,
-    scaleMoney,
     scaleMoneyByRate,
     subtractMoney,
     toDecimalAmount,
     toMinorUnits,
-    wholeCount,
     type Money,
     NO_MONEY
 } from '@shared-kernel/money';
 import { isShippedItem } from './rules';
+import { lineGross } from './totals';
 
 /** A priced, taxed line — what `orderTaxBreakdown` needs from each order item. */
 export interface TaxableLineItem {
@@ -208,9 +207,7 @@ export const lineTaxFromRateTotals = (
     goodsTaxByRate: ReadonlyMap<number, number>
 ): LineTaxBreakdown[] => {
     const rates = items.map((item) => frozenRate(item));
-    const grossByLine = items.map((item) =>
-        scaleMoney(toMinorUnits(item.product?.price, currency), wholeCount(item.quantity))
-    );
+    const grossByLine = items.map((item) => lineGross(item, currency));
     const taxes = allocateLineTax(
         grossByLine,
         rates,
@@ -236,9 +233,7 @@ export const orderTaxBreakdown = ({
 }: OrderTaxInput): OrderTaxBreakdown => {
     const rates = items.map((item) => frozenRate(item));
 
-    const grossAmounts = items.map((item) =>
-        scaleMoney(toMinorUnits(item.product?.price, currency), wholeCount(item.quantity))
-    );
+    const grossAmounts = items.map((item) => lineGross(item, currency));
     // Shipping is ancillary to the goods it delivers (see the module docblock) — a digital line
     // carries none of it, so its weight in the apportionment is zero rather than its gross value.
     const shippingWeights = items.map((item, index) =>
