@@ -128,7 +128,7 @@ flowchart LR
 
 What counts as activity is a real request. What does not: a request sent with
 `X-Session-Passive: true` (a poll, a keep-alive), the 30-second recheck of an open event stream, and
-a refresh, which renews a token and carries the clock over unchanged. `POST /account/session/touch`
+a refresh, which renews a token and carries the clock over unchanged. A refresh is still judged: a staff family idle past the limit gets `401 SESSION_IDLE` from `POST /account/refresh` and the family is removed. `POST /account/session/touch`
 counts and answers the clock, which is how a client asks "still there?" from server numbers.
 
 ## What each defends against

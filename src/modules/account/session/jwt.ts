@@ -34,6 +34,8 @@ import { predatesSessionEpoch } from './epoch';
 import { recordActivity } from './activity';
 import { assertProofCurrent, assertSecondFactor } from './mint-guard';
 import { revokeFor } from '../services/revocation';
+import { resolveProof } from './auth-context';
+import { resolveInLiveFamily } from './family-liveness';
 
 /**
  * The claims this app puts in every access/refresh JWT, beyond the registered ones `signToken`
@@ -545,8 +547,19 @@ const reissueRotated = (
         if (predatesSessionEpoch(claims.auth_time, user.tokensValidAfter))
             throw new TokenRejection('revoked', 'Forbidden');
 
-        return sessionRepository.findByHash(hashToken(oldToken)).then((previous) => {
+        return sessionRepository.findByHash(hashToken(oldToken)).then(async (previous) => {
             if (!previous) throw new TokenRejection('revoked', 'Forbidden');
+
+            // A refresh is not the person acting (`passive`): judged against the idle limit, never
+            // counted as activity. An idled-out staff family is removed by the check itself.
+            const liveness = await resolveInLiveFamily(
+                claims.sub,
+                String(previous.familyId),
+                'jwt',
+                () => resolveProof(claims.sub, { authTime: claims.auth_time, amr: claims.amr }),
+                { passive: true }
+            );
+            if ('miss' in liveness) throw new TokenRejection(liveness.miss, 'Session idle');
 
             return signRefreshToken(claims, Math.ceil(remainingMs / 1000)).then((newRefreshToken) =>
                 storeSuccessor(previous, newRefreshToken, claims, remainingMs)

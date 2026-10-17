@@ -8,7 +8,12 @@ import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { authRefreshReuseTotal } from '../metrics';
-import { rotateRefreshToken, TokenReuseError, type RotatedSession } from '../session/jwt';
+import {
+    rotateRefreshToken,
+    TokenReuseError,
+    TokenRejection,
+    type RotatedSession
+} from '../session/jwt';
 
 /**
  * The absence of a refresh cookie, as an error, so that the one `catch` below can tell the two
@@ -21,6 +26,13 @@ class MissingRefreshTokenError extends Error {
         this.name = 'MissingRefreshTokenError';
     }
 }
+
+/** Why a refresh that was not a reuse failed, as the audit row names it. */
+const failureReason = (error: unknown): string => {
+    if (error instanceof MissingRefreshTokenError) return 'missing_token';
+    if (error instanceof TokenRejection && error.reason === 'idle') return 'session_idle';
+    return 'invalid_token';
+};
 
 /**
  * Exchange a refresh token for a fresh access token, ROTATING the refresh token in the same
@@ -67,10 +79,7 @@ export const refreshAccessToken = (
                     ? {}
                     : {
                           metadata: {
-                              reason:
-                                  error instanceof MissingRefreshTokenError
-                                      ? 'missing_token'
-                                      : 'invalid_token'
+                              reason: failureReason(error)
                           }
                       })
             });
