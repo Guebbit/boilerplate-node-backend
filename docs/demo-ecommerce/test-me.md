@@ -25,6 +25,8 @@ npm run dev
 
 Then open `http://localhost:8080`.
 
+Want a walk-through? Sign in, then add `?tour=welcome` to any page's address.
+
 `npm run demo` builds a fresh shop every time it starts and throws it away when you close it. You
 can't break anything permanently: stop it and start it again, and the shop is back to how it was.
 
