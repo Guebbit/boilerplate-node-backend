@@ -138,6 +138,8 @@ export default {
             'order.withdrawal-closed',
             // Delivered today, so the withdrawal window is still open; `order.delivered` is weeks past it.
             'order.deliveredRecent',
+            // Two lines (dog food ×2 and a filler ×1), delivered today: a return can pick part of a line.
+            'order.deliveredTwoLines',
             // Delivered at the start of the shop's history, so its withdrawal window is long closed.
             'order.deliveredLongAgo',
             'order.cancelled',

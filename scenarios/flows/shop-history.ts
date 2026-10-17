@@ -192,6 +192,9 @@ const DOG_FOOD = (quantity: number): Line[] => [
     { productId: SEED_PRODUCT_IDS.dogFoodStandard, quantity }
 ];
 
+/** The stocked, withdrawable filler product `order.deliveredTwoLines` buys beside the dog food. */
+const TWO_LINES_FILLER_INDEX = 126;
+
 /** Every line every flow below will buy — the demand the opening receipts have to cover. */
 const plannedDemand = (): Map<string, number> => {
     const demand = new Map<string, number>();
@@ -212,6 +215,8 @@ const plannedDemand = (): Map<string, number> => {
     for (const index of [121, 122, 123]) add({ productId: fillerProductId(index), quantity: 2 });
     // The two products `order.remainderCancelled` buys one of each of.
     for (const index of [124, 125]) add({ productId: fillerProductId(index), quantity: 2 });
+    // The filler line of `order.deliveredTwoLines`.
+    add({ productId: fillerProductId(TWO_LINES_FILLER_INDEX), quantity: 1 });
 
     return demand;
 };
@@ -425,6 +430,22 @@ export const driveShopHistory = async (
         return orderId;
     };
     subjects['order.deliveredRecent'] = await deliveredToday();
+
+    /*
+     * Two lines, delivered today: one single-product order cannot show "part of a line", "the other
+     * line" and "the last unit" together. Dog food twice plus one filler unit.
+     */
+    subjects['order.deliveredTwoLines'] = await (async (): Promise<string> => {
+        const orderId = await checkoutAndPay(
+            customer,
+            [...DOG_FOOD(2), { productId: fillerProductId(TWO_LINES_FILLER_INDEX), quantity: 1 }],
+            { shippingMethodId: 'standard' }
+        );
+        await startProcessing(owner, orderId);
+        await shipOrder(owner, orderId);
+        await deliverOrder(owner, orderId);
+        return orderId;
+    })();
 
     /*
      * Delivered at the very start of the shop's history, so its withdrawal window closed long ago
