@@ -20,8 +20,6 @@ import {
     CreateReturn201Response,
     DeliverShipment200Response,
     GetFulfillmentByOrder200Response,
-    GetPaymentByOrder200Response,
-    GetProductAdmin200Response,
     GetSalesStats200Response,
     ListAuditEntries200Response,
     ListOrderCreditNotes200Response,
@@ -37,6 +35,7 @@ import { checkoutAs } from '@tests/checkout-as';
 import { drain } from '@tests/drain';
 import { mailsTo, useOutboxMail, waitForMail } from '@tests/journey-mail';
 import { invoicingService } from '@modules/invoicing';
+import { paymentOf, stockOf } from '@tests/journey-orders';
 import { createProduct } from '@modules/products/tests/factories';
 
 setupTestDb();
@@ -59,15 +58,6 @@ const salesTotals = async (bearer: string) =>
             .set('Authorization', bearer),
         GetSalesStats200Response
     ).data.currencies[0].totals;
-
-/** A product's `onHand` and `reserved` counters, as staff read them. */
-const stockOf = async (bearer: string, productId: string) => {
-    const { onHand, reserved } = bodyOf(
-        await api().get(`/products/${productId}/admin`).set('Authorization', bearer),
-        GetProductAdmin200Response
-    ).data;
-    return { onHand, reserved };
-};
 
 it('adds up across money, stock, documents, stats, audit and mail', async () => {
     const dogFood = await createProduct({ price: 20, onHand: 10 });
@@ -206,10 +196,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
     expect(await salesTotals(staff)).toMatchObject({ unitsReversed: 3, refunds: 75 });
 
     // Money: captured minus refunded is nothing kept, and each refund is what its return said.
-    const payment = bodyOf(
-        await api().get(`/payments/order/${order.id}`).set('Authorization', staff),
-        GetPaymentByOrder200Response
-    ).data;
+    const payment = await paymentOf(staff, order.id);
     expect(payment).toMatchObject({ amount: 75, amountRefunded: 75 });
     expect(payment.refunds.map(({ amount, status }) => [amount, status])).toEqual([
         [20, 'succeeded'],
