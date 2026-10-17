@@ -26,6 +26,11 @@ export interface DemoOutboxEmail {
      * whether a bare template variable or the `#token=` fragment on the mailed link.
      */
     token?: string;
+    /**
+     * The language the mail was written in, read from the send's own `data.locale` (every
+     * builder puts it there), so a spec can assert the language without parsing the subject.
+     */
+    locale?: string;
     /** Every primitive template variable, for specs that assert on rendered content. */
     lines: string[];
     /**
@@ -57,6 +62,7 @@ export const recordDemoEmail = (
         subject: request.subject ?? '',
         template: templateName,
         token: typeof variables.token === 'string' ? variables.token : linkToken,
+        locale: typeof variables.locale === 'string' ? variables.locale : undefined,
         lines: Object.entries(variables)
             .filter(([, value]) => typeof value === 'string' || typeof value === 'number')
             .map(([key, value]) => `${key}: ${String(value)}`),
