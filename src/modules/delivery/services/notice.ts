@@ -18,7 +18,6 @@ import type { FulfillmentOrderPatch } from '../repository';
 import type { FulfillmentOrderDocument } from '../model';
 import type { FulfillmentOrderDelayed } from '../events';
 import { announceDelayed } from './announce';
-import { notifyDelayed } from './notify';
 
 /** What a notice says, once the caller has decided it. */
 export interface NoticeInput {
@@ -32,11 +31,9 @@ export interface NoticeInput {
     countsAsSlip: boolean;
 }
 
-/** What a committed notice leaves for after the transaction: the mail. */
+/** What a recorded notice leaves for after the transaction: the fulfillment order it was written on. */
 export interface SentNotice {
     fulfillmentOrder: FulfillmentOrderDocument;
-    order: OrderDocument;
-    delayed: FulfillmentOrderDelayed;
 }
 
 /**
@@ -77,7 +74,7 @@ const payloadOf = (
  * @param input - what the notice says
  * @param now - the instant of the notice
  * @param session - the caller's transaction
- * @returns what to send after the commit, or `undefined` when the fulfillment order moved first
+ * @returns what was announced, or `undefined` when the fulfillment order moved first
  */
 export const recordNotice = async (
     fulfillmentOrder: FulfillmentOrderDocument,
@@ -110,12 +107,5 @@ export const recordNotice = async (
 
     const delayed = payloadOf(claimed, order, input, deadline);
     await announceDelayed(delayed, session);
-    return { fulfillmentOrder: claimed, order, delayed };
+    return { fulfillmentOrder: claimed };
 };
-
-/**
- * After the commit: mail the buyer what the notice said. A mail that fails never undoes the notice.
- * @param sent - what {@link recordNotice} returned
- */
-export const mailNotice = (sent: SentNotice | undefined): Promise<void> =>
-    sent ? notifyDelayed(sent.order, sent.delayed) : Promise.resolve();

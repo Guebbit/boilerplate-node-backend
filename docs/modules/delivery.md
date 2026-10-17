@@ -54,7 +54,8 @@ flowchart LR
 ## The story
 
 A fulfillment order and a shipment are _about_ an order. The shipped email's language comes through
-`orders`' `mailBuyer`, so this module never reads the account itself.
+`orders`' `mailBuyerOfOrder`, so this module never reads the account itself. It is sent from the
+`shipment.shipped` listener, like every customer mail ([Customer mail](../tools/outbox.md#customer-mail)).
 
 **The rates are pure functions in `domain/`, and that is what makes the cart's edge cheap to
 hold.** [`cart`](./cart.md) imports `findShippingMethod` and `priceShipping` directly — a real,

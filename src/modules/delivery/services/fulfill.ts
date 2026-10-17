@@ -30,7 +30,6 @@ import { refuse, refuseMissing, runAct } from './act';
 import { viewShipment } from './actions';
 import { announceDelivered, announceShipped } from './announce';
 import { cutShipment } from './cut';
-import { notifyDelivered } from './notify';
 import { reportProgress, settleOrder } from './progress';
 
 /** What a committed fulfilment leaves for the steps that follow it. */
@@ -112,7 +111,6 @@ export const fulfillFulfillmentOrder = (
                 const { shipment } = result.value;
                 return orderService
                     .refreshShelf(shipment.lines.map(({ productId }) => productId))
-                    .then(() => notifyDelivered(String(shipment.orderId), shipment))
                     .then(() => {
                         recordAudit(context, {
                             action: deliveryAuditActions.ADMIN_ORDER_FULFILLED,

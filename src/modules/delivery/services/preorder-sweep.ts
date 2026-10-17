@@ -24,7 +24,7 @@ import { hasWaitExpired, needsDatePassedNotice } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
 import { announceWaitExpired } from './announce';
 import { runAct } from './act';
-import { mailNotice, recordNotice, type SentNotice } from './notice';
+import { recordNotice, type SentNotice } from './notice';
 
 /** What one sweep did. */
 export interface PreorderSweepResult {
@@ -104,11 +104,10 @@ export const runPreorderSweep = async (now: Date = new Date()): Promise<Preorder
     const result: PreorderSweepResult = { asked: 0, expired: 0 };
 
     // One after another: each is a transaction over its own fulfillment order, and the buyer's mail
-    // follows each commit.
+    // rides each commit's event.
     for (const fulfillmentOrder of await fulfillmentOrderRepository.findDatePassed(now)) {
         const sent = await askOne(String(fulfillmentOrder._id), now);
         if (sent) result.asked += 1;
-        await mailNotice(sent);
     }
 
     for (const fulfillmentOrder of await fulfillmentOrderRepository.findWaitsExpired(now))

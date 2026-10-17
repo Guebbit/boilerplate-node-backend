@@ -20,6 +20,7 @@ import { fulfillmentOrdersOf, shipmentsOf } from '../factories';
 import { OrderStatus } from '@types';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { settleOutboxNudges } from '@kernel/outbox';
+import { eventually } from '@tests/eventually';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -53,7 +54,12 @@ describe('D2 — two admins racing the same ship door', () => {
         expect(countStatus(results, 201) + countStatus(results, 409)).toBe(RACE_SIZE);
         expect(countStatus(results, 201)).toBe(1);
 
-        // The claim under test: exactly one shipped-parcel email, never one per racer.
+        // The claim under test: exactly one shipped-parcel email, never one per racer. The mail
+        // rides `shipment.shipped`, so wait for the relay and then for any straggler.
+        await eventually(() =>
+            settleOutboxNudges().then(() => mockEnqueueEmail.mock.calls.length > 0)
+        );
+        await settleOutboxNudges();
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
 
         const stored = await readOrder(String(order._id));

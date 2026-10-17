@@ -33,7 +33,12 @@ import { deliveryService } from './services';
 import { presentExportFulfillmentOrder, presentExportShipment } from './presenter';
 // Also installs this module's event declarations. Reached directly, never through this module's
 // own barrel — see CLAUDE.md's module-barrel rule.
-import { SHIPMENT_DELIVERED, SHIPMENT_SHIPPED, type ShipmentEventPayload } from './events';
+import {
+    FULFILLMENT_ORDER_DELAYED,
+    SHIPMENT_DELIVERED,
+    SHIPMENT_SHIPPED,
+    type ShipmentEventPayload
+} from './events';
 import { deliveryJobs } from './jobs';
 
 /**
@@ -101,7 +106,7 @@ export default {
         }
     ],
     /*
-     * None of the three requests a fact — each reacts to one `orders` already recorded and
+     * None of the first three requests a fact — each reacts to one `orders` already recorded and
      * announced. A failure is logged by `emitDomainEvent`, and the outbox retries it; the missing
      * fulfillment orders a lost `paid` would leave are made again by the next read or `start`.
      */
@@ -116,6 +121,10 @@ export default {
         onDomainEvent(PREORDER_ALLOCATED, ({ orderId, productId, waiting }) =>
             deliveryService.releaseAllocated(orderId, productId, waiting)
         );
+        // This module's own three mails, from its own facts — see `./services/notify.ts`.
+        onDomainEvent(SHIPMENT_SHIPPED, deliveryService.mailShipped);
+        onDomainEvent(SHIPMENT_DELIVERED, deliveryService.mailDelivered);
+        onDomainEvent(FULFILLMENT_ORDER_DELAYED, deliveryService.mailDelayed);
         onDomainEvent(PRODUCT_RELEASE_DATE_CHANGED, ({ productId }) =>
             deliveryService.onReleaseDateChanged(productId)
         );

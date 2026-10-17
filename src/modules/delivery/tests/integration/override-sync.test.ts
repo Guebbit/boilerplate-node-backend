@@ -141,6 +141,8 @@ describe('an override forward to delivered', () => {
             asAdmin(),
             callerContextAs('admin')
         );
+        // The shipment's own "on its way" mail rides its event: let it land before clearing.
+        await settleOutboxNudges();
         mockEnqueueEmail.mockClear();
 
         await override(orderId, OrderStatus.delivered);

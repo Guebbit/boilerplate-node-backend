@@ -34,6 +34,7 @@ import { runPreorderSweep } from './preorder-sweep';
 import { confirmWait } from './confirm-wait';
 import { listPreorderFulfillmentOrders, summarizePreorders } from './board';
 import { scrubHoldNotes } from './retention';
+import { mailShipped, mailDelivered, mailDelayed } from './notify';
 
 export type { RemainderOption } from './read';
 export type { ShipInput } from './ship';
@@ -72,5 +73,8 @@ export const deliveryService = {
     runPreorderSweep,
     listPreorderFulfillmentOrders,
     summarizePreorders,
-    scrubHoldNotes
+    scrubHoldNotes,
+    mailShipped,
+    mailDelivered,
+    mailDelayed
 };

@@ -25,7 +25,7 @@ import { remainingOfLine } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
 import type { FulfillmentOrderDocument } from '../model';
 import { runAct } from './act';
-import { mailNotice, recordNotice, type SentNotice } from './notice';
+import { recordNotice, type SentNotice } from './notice';
 import type { ClientSession } from 'mongoose';
 
 /**
@@ -161,7 +161,6 @@ const judgeOne = (fulfillmentOrderId: string): Promise<SentNotice | undefined> =
 export const onReleaseDateChanged = async (productId: string): Promise<void> => {
     const waiting = await fulfillmentOrderRepository.findWaitingForProduct(productId);
     // One after another: each judgement is its own transaction over its own fulfillment order, and
-    // the buyer's mail follows each commit.
-    for (const fulfillmentOrder of waiting)
-        await judgeOne(String(fulfillmentOrder._id)).then(mailNotice);
+    // the buyer's mail rides each commit's event.
+    for (const fulfillmentOrder of waiting) await judgeOne(String(fulfillmentOrder._id));
 };

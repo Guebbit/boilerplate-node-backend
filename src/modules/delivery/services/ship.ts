@@ -36,7 +36,6 @@ import { viewShipment } from './actions';
 import { announceShipped } from './announce';
 import { cutShipment } from './cut';
 import { refuseUnearnedForce } from './force';
-import { notifyShipped } from './notify';
 import { reportProgress, settleOrder } from './progress';
 
 /** What staff sends to ship. */
@@ -181,32 +180,30 @@ const shipAct = async (
             },
             session
         );
-    await announceShipped(shipment, session, actor);
+    await announceShipped(shipment, session, actor, progress.summary.remaining);
 
     return { shipment, order, remainingUnits: progress.summary.remaining };
 };
 
 /**
- * What follows a committed shipment: the shelf's stock cache, the buyer's mail, the audit row.
+ * What follows a committed shipment: the shelf's stock cache and the audit row. The buyer's mail
+ * rides `shipment.shipped`.
  * @param shipped - what the act left
  * @param context - the caller
  */
 const afterShipped = (shipped: Shipped, context: CallerContext): Promise<void> =>
-    orderService
-        .refreshShelf(shipped.shipment.lines.map(({ productId }) => productId))
-        .then(() => notifyShipped(shipped.order, shipped.shipment, shipped.remainingUnits))
-        .then(() => {
-            recordAudit(context, {
-                action: deliveryAuditActions.ADMIN_ORDER_SHIPPED,
-                outcome: 'success',
-                targetType: 'order',
-                targetId: String(shipped.shipment.orderId),
-                metadata: {
-                    shipmentId: String(shipped.shipment._id),
-                    forced: shipped.shipment.forced
-                }
-            });
+    orderService.refreshShelf(shipped.shipment.lines.map(({ productId }) => productId)).then(() => {
+        recordAudit(context, {
+            action: deliveryAuditActions.ADMIN_ORDER_SHIPPED,
+            outcome: 'success',
+            targetType: 'order',
+            targetId: String(shipped.shipment.orderId),
+            metadata: {
+                shipmentId: String(shipped.shipment._id),
+                forced: shipped.shipment.forced
+            }
         });
+    });
 
 /**
  * Ship some or all of a fulfillment order's remainder.

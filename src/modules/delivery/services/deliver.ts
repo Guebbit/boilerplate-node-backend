@@ -29,7 +29,6 @@ import { refuse, refuseMissing, runAct } from './act';
 import { viewShipment } from './actions';
 import { announceDelivered } from './announce';
 import { refuseUnearnedForce } from './force';
-import { notifyDelivered } from './notify';
 import { reportProgress, settleOrder } from './progress';
 
 /** What staff sends to record an arrival. */
@@ -129,19 +128,14 @@ export const deliverShipment = (
                 (result) => {
                     if (result.refused) return result.reject;
                     const { shipment } = result.value;
-                    return notifyDelivered(String(shipment.orderId), shipment)
-                        .then(() => {
-                            recordAudit(context, {
-                                action: deliveryAuditActions.ADMIN_ORDER_DELIVERED,
-                                outcome: 'success',
-                                targetType: 'order',
-                                targetId: String(shipment.orderId),
-                                metadata: { shipmentId, forced: input.forced === true }
-                            });
-                        })
-                        .then(() =>
-                            generateSuccess(viewShipment(shipment, result.value.order, authContext))
-                        );
+                    recordAudit(context, {
+                        action: deliveryAuditActions.ADMIN_ORDER_DELIVERED,
+                        outcome: 'success',
+                        targetType: 'order',
+                        targetId: String(shipment.orderId),
+                        metadata: { shipmentId, forced: input.forced === true }
+                    });
+                    return generateSuccess(viewShipment(shipment, result.value.order, authContext));
                 }
             );
         });

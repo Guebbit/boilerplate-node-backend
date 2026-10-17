@@ -37,11 +37,13 @@ const shipmentPayload = (shipment: ShipmentDocument) => ({
  * @param shipment - the shipment that left
  * @param session - the act's transaction
  * @param actor - the staff member who shipped it, when a person did
+ * @param remainingUnits - units still to come in later shipments; omitted for a digital fulfilment
  */
 export const announceShipped = (
     shipment: ShipmentDocument,
     session: ClientSession,
-    actor?: string | null
+    actor?: string | null,
+    remainingUnits?: number
 ): Promise<void> =>
     orderService
         .appendTimeline(
@@ -62,7 +64,10 @@ export const announceShipped = (
         .then(() =>
             enqueueOutboxEvent(
                 SHIPMENT_SHIPPED,
-                shipmentPayload(shipment),
+                {
+                    ...shipmentPayload(shipment),
+                    ...(remainingUnits === undefined ? {} : { remainingUnits })
+                },
                 String(shipment.orderId),
                 session
             )

@@ -11,6 +11,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { logger } from '@infrastructure/adapters/logger';
 import { createUser } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
 import { countersOf, createProduct } from '@modules/products/tests/factories';
@@ -202,9 +203,11 @@ describe('the fulfillment orders of a paid order', () => {
 describe('shipping a whole fulfillment order', () => {
     it('writes the shipment, moves the order, and sends the tracking email once', async () => {
         mockEnqueueEmail.mockClear();
+        wireDelivery();
         const { order } = await processingOrderOf();
 
         const result = await shipFrom(String(order._id), { trackingCode: 'TRK-ABCDEF12' });
+        await settleOutboxNudges();
 
         expect(result.success).toBe(true);
         const [shipment] = await shipmentsOf(String(order._id));
@@ -227,10 +230,12 @@ describe('shipping a whole fulfillment order', () => {
 
     it('still ships and mails the fallback name when the buyer lookup fails', async () => {
         mockEnqueueEmail.mockClear();
+        wireDelivery();
         const { order } = await processingOrderOf();
         jest.spyOn(userService, 'getById').mockRejectedValueOnce(new Error('lookup unavailable'));
 
         const result = await shipFrom(String(order._id), { trackingCode: 'TRK-FALLBACK1' });
+        await settleOutboxNudges();
 
         expect(result.success).toBe(true);
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
@@ -238,6 +243,22 @@ describe('shipping a whole fulfillment order', () => {
         expect(template).toBe('delivery.shipment-shipped');
         // Fallback name policy: `username ?? email`, and no username was ever resolved.
         expect(data?.greeting).toContain(order.email);
+    });
+
+    it('still ships when the tracking mail cannot be queued', async () => {
+        wireDelivery();
+        const { order } = await processingOrderOf();
+        jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        mockEnqueueEmail.mockImplementation(() => {
+            throw new Error('queue down');
+        });
+
+        const result = await shipFrom(String(order._id), { trackingCode: 'TRK-MAILDOWN1' });
+        await settleOutboxNudges();
+
+        expect(result.success).toBe(true);
+        const stored = await orderService.getById(String(order._id));
+        expect(stored!.status).toBe(OrderStatus.shipped);
     });
 
     it('refuses an order that is not processing', async () => {
@@ -304,11 +325,13 @@ describe('shipping a whole fulfillment order', () => {
 describe('shipping in parts', () => {
     it('keeps the order processing until nothing remains, then moves it once', async () => {
         mockEnqueueEmail.mockClear();
+        wireDelivery();
         const { order, products } = await processingOrderOf([3]);
         const orderId = String(order._id);
         const productId = String(products[0]._id);
 
         const first = await shipFrom(orderId, { lines: [{ productId, quantity: 1 }] });
+        await settleOutboxNudges();
 
         expect(first.success).toBe(true);
         let stored = await orderService.getById(orderId);
@@ -402,9 +425,11 @@ describe('shipping in parts', () => {
 
 describe('delivering', () => {
     it('stamps the shipment and moves the order', async () => {
+        wireDelivery();
         const { order } = await processingOrderOf();
         await shipFrom(String(order._id), { trackingCode: 'TRK-TESTFIXTURE' });
         const [shipment] = await shipmentsOf(String(order._id));
+        await settleOutboxNudges();
         mockEnqueueEmail.mockClear();
 
         const result = await deliveryService.deliverShipment(
@@ -413,6 +438,7 @@ describe('delivering', () => {
             asAdmin(),
             admin
         );
+        await settleOutboxNudges();
 
         expect(result.success).toBe(true);
         const stored = await orderService.getById(String(order._id));
@@ -618,6 +644,24 @@ describe('digital fulfilment', () => {
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe(OrderStatus.delivered);
         expect(stored!.withdrawUntil).toEqual(withdrawUntilFrom(paidAt, 30));
+    });
+
+    it('mails only the arrival of a digital fulfilment, never "on its way"', async () => {
+        wireDelivery();
+        const order = await seedDigitalOrder(OrderStatus.processing, new Date());
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+        mockEnqueueEmail.mockClear();
+
+        await deliveryService.fulfillFulfillmentOrder(
+            String(fulfillmentOrder._id),
+            asAdmin(),
+            admin
+        );
+        await settleOutboxNudges();
+
+        expect(mockEnqueueEmail.mock.calls.map(([, template]) => template)).toEqual([
+            'delivery.shipment-delivered'
+        ]);
     });
 
     it('refuses to fulfil a physical fulfillment order, and to ship a digital one', async () => {

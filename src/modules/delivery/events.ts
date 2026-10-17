@@ -21,6 +21,15 @@ export interface ShipmentEventPayload {
     lines: ShipmentEventLine[];
 }
 
+/** The payload of `shipment.shipped`: the shared one, plus what the buyer's mail says. */
+export interface ShipmentShippedPayload extends ShipmentEventPayload {
+    /**
+     * Units still to come in later shipments. Absent for a digital fulfilment, which is born
+     * delivered: its arrival mail is the only one the buyer gets. Internal — the webhook omits it.
+     */
+    remainingUnits?: number;
+}
+
 /** What a `fulfillment_order.delayed` event tells: the dates, and whether the buyer must answer. */
 export interface FulfillmentOrderDelayed {
     orderId: string;
@@ -47,9 +56,10 @@ declare module '@kernel/events' {
         /**
          * A shipment left: some or all of an order's goods. Fires once per shipment, so an order
          * shipped in two goes fires it twice. Not fired for the forced shipments an admin status
-         * override brings in step: nothing left that anyone recorded.
+         * override brings in step: nothing left that anyone recorded. This module mails the buyer
+         * from it (`./services/notify.ts`).
          */
-        'shipment.shipped': ShipmentEventPayload;
+        'shipment.shipped': ShipmentShippedPayload;
 
         /** A shipment arrived. A digital fulfilment fires it right after `shipment.shipped`. */
         'shipment.delivered': ShipmentEventPayload;
@@ -67,7 +77,7 @@ declare module '@kernel/events' {
          * A waiting preorder's buyer was told its date moved or passed (PRODUCT_STATES P5). Written
          * in the same transaction as the change to the fulfillment order. `notifications` turns it
          * into an inbox row, `preorder-delayed` or, when the buyer must answer,
-         * `preorder-confirm-wait`; the email is sent by this module after the commit.
+         * `preorder-confirm-wait`; the email is sent by this module from the same event.
          */
         'fulfillment_order.delayed': FulfillmentOrderDelayed;
 
