@@ -306,6 +306,48 @@ Boots the application against an in-memory MongoDB and drives it as a client wou
 | `tests/integration/trust-proxy-warning.test.ts`                                                                  | The one proxy misconfiguration worth a warning: `X-Forwarded-For` arriving while `NODE_TRUST_PROXY_HOPS` is `0`.                                                                                                 | [Security](../tools/security.md)                                                     |
 | `tests/integration/upload-claim.test.ts`                                                                         | An upload no write claimed is deleted when the response closes 4xx/5xx; a successful write claims it and the file stays.                                                                                         | [Image Processing](../tools/image-processing.md)                                     |
 
+## `tests/integration/journeys/` — one user across modules
+
+A journey walks one story through the REST API with no browser and asserts the **end state across
+modules**: money, stock, documents, audit and mail agree. It does not mirror the frontend's
+Cypress journeys, and it never re-tests a rule one module's own tests pin. It runs inside the
+`integration` suite (in-process `createApp()`), in jwt mode there and in cookie mode through
+`npm run test:journeys:cookie`. Stryker ignores the folder (see
+[Mutation Testing](../tools/mutation-testing.md#what-is-still-excluded-and-why)).
+
+| Step that leaves the API | How a journey handles it                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| Email                    | the `outbox` transport, read with `mailsTo` / `waitForMail`; never cleared between steps |
+| Time                     | `freezeDate` then `advanceDate`, only forward; sign in again after a jump                |
+| Background work          | `drain(...jobs)`: settle the outbox, run the named jobs in-process, settle again         |
+| Card provider            | the `fake` double and its levers                                                         |
+| Human check, TOTP        | `altcha-lib`'s solver through `GET /antibot/challenge`; `codeFor(secret, steps)`         |
+| A webhook subscriber     | `startWebhookReceiver`: the demo sink's certificate and exemption, no mocks              |
+
+```mermaid
+flowchart LR
+    J[journey] -->|supertest| A[createApp]
+    A --> M[(in-memory Mongo)]
+    J -->|advanceDate| C[clock]
+    J -->|drain| B[outbox + jobs]
+    A -->|outbox transport| O[mail outbox]
+    A -->|signed POST| R[webhook receiver]
+    J -->|mailsTo| O
+    J -->|received| R
+```
+
+| File                                                                   | What it guarantees                                                                                     |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `tests/integration/journeys/bought-returned-refunded.test.ts`          | Signup to the last returned unit: money to the cent, stock, document numbers, stats, audit, mail.      |
+| `tests/integration/journeys/the-provider-disagrees.test.ts`            | A wrong amount, a refused refund and a payment settled behind the server's back all end with no drift. |
+| `tests/integration/journeys/the-hold-that-was-never-paid.test.ts`      | An abandoned 3-D Secure challenge and an unpaid transfer are expired by the sweep.                     |
+| `tests/integration/journeys/an-accounts-whole-security-life.test.ts`   | Signup, TOTP, a key, a reset, step-up, and the undo and export links lapsing.                          |
+| `tests/integration/journeys/social-login-with-a-second-factor.test.ts` | A provider sign-in stops at the challenge once a second factor is armed.                               |
+| `tests/integration/journeys/an-integrator-start-to-finish.test.ts`     | A key subscribes an endpoint; each event arrives once, signed, in order; a key follows its minter.     |
+| `tests/integration/journeys/the-preorder-nobody-answered.test.ts`      | An unanswered preorder wait is cancelled and refunded exactly; the shipped line is untouched.          |
+| `tests/integration/journeys/a-receiver-that-stays-down.test.ts`        | Five dead chains and three failing days switch a subscription off, mail its owner and audit it.        |
+| `tests/integration/journeys/quiet-for-three-years.test.ts`             | Minimise, warn, deactivate, delete, across addresses, orders, wishlist, users and signup.              |
+
 ## `tests/cluster/` — more than one worker
 
 One process is not the deployment. These boot real workers, because the bugs they look for cannot
@@ -384,6 +426,8 @@ No assertions live here. These are what the suites are built from.
 | `tests/support/https-test-server.ts`                                                                 | A real local HTTPS listener a test starts and stops, to prove a webhook delivery arrived signed.                                                                                            | —                                                                                    |
 | `tests/support/ports.ts`                                                                             | Observing an observability port from a test, without `jest.spyOn`.                                                                                                                          | —                                                                                    |
 | `tests/support/body-of.ts`                                                                           | A response read through the schema the spec gives its status: the status is asserted and the body is typed from the schema, so a journey cannot read a field the contract does not declare. | [Contract Testing](../tools/contract-testing.md)                                     |
+| `tests/support/journey-mail.ts`<br>`tests/support/journey-orders.ts`<br>`tests/support/drain.ts`     | What a journey shares: the mail lookup, the shopper and order steps and reads, and the settle-run-settle step.                                                                              | [Journeys](#tests-integration-journeys-one-user-across-modules)                      |
+| `tests/support/altcha.ts`<br>`tests/support/webhook-receiver.ts`                                     | Solving the human check; a local subscriber that says whether each delivery was signed.                                                                                                     | [Journeys](#tests-integration-journeys-one-user-across-modules)                      |
 | `tests/support/response.ts`                                                                          | Narrowing a service's response envelope in a test without an inline cast per assertion.                                                                                                     | —                                                                                    |
 | `tests/support/response-contract.ts`                                                                 | Judges one captured HTTP response against the schema `openapi.yaml` declares for it, including a `Location` on every 201.                                                                   | —                                                                                    |
 | `tests/support/contract-routes.ts`<br>`tests/support/routes.ts`<br>`tests/support/routed-modules.ts` | The route table read back from the mounted app and from a module's router, and which modules mount a router at all.                                                                         | —                                                                                    |

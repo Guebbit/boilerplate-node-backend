@@ -201,7 +201,7 @@ and `bson`'s 17 MiB buffer makes each leftover file expensive. The cause and the
 
 ### What is still excluded, and why
 
-`stryker.json` restricts the Jest config Stryker drives to exclude `tests/contract/`, `tests/fuzz/`, and both of those trees' per-module homes:
+`stryker.json` restricts the Jest config Stryker drives to exclude `tests/contract/`, `tests/fuzz/`, both of those trees' per-module homes, and `tests/integration/journeys/`:
 
 ```json
 "jest": {
@@ -211,6 +211,7 @@ and `bson`'s 17 MiB buffer makes each leftover file expensive. The cause and the
             "<rootDir>/tests/contract/",
             "<rootDir>/tests/fuzz/",
             "<rootDir>/src/modules/[^/]+/tests/contract/",
+            "<rootDir>/tests/integration/journeys/",
             "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
             "<rootDir>/tests/cross-cutting/outbox-names.test.ts",
             "<rootDir>/tests/cluster/",
@@ -227,6 +228,10 @@ and `bson`'s 17 MiB buffer makes each leftover file expensive. The cause and the
 boot, and a one-line change in one module would drag in the whole contract suite. Fuzz suites are
 non-deterministic by construction: a mutant killed by a random input on one run and not the next
 produces a score that moves on its own, which is the one thing a ratchet cannot tolerate.
+
+**Journeys stay excluded** for the contract suite's reason: each one boots the whole app, so
+`enableFindRelatedTests` relates it to nearly every file, and a one-line change would drag the
+lot in. See [Journeys](../reference/tests.md#tests-integration-journeys-one-user-across-modules).
 
 `tests/cluster/` forks real workers against a Redis and is not part of `npm test` either; neither is
 `tests/broker/`, which needs a real RabbitMQ. `tmp/` and

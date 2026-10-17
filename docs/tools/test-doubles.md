@@ -73,6 +73,15 @@ The registries live on `globalThis` under a `Symbol.for` key (`createSharedProvi
 Production code therefore has no demo flag, no `NODE_ENV` lock for a double and no exemption in
 the SSRF guard: the registries are empty until a dev-shaped process fills them.
 
+## What the `fake` payment provider does and does not model
+
+| Behaviour              | The fake                                                                                                                                                                                                              |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3-D Secure             | `pm_card_authentication_required` answers `requires_action`, then **settles on its own** to `succeeded`. This models "the challenge was completed"; a pending or abandoned challenge is reached with `setFakeOutcome` |
+| A refund               | Leaves the intent `succeeded`, as a real provider does; the refund is its own record                                                                                                                                  |
+| A refund ledger        | **None.** The service refuses an over-refund with 422 `PAYMENT_REFUND_EXCEEDS_REMAINING` before the provider is called, so a ledger here would guard a path no journey can reach                                      |
+| Wrong amount, refusals | `setFakeReceipt`, `setFakeOutcome`, `setFakeRefundFailure`, keyed by `fake_pi_<paymentId>`                                                                                                                            |
+
 ## Add a double
 
 1. Put the file in `scenarios/support/doubles/`. A double that belongs to a `group: shop` module

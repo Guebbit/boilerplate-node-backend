@@ -701,6 +701,10 @@ jobs:
             - name: Run contract tests in cookie mode
               run: npm run test:contract:cookie
 
+            - name: Run the journeys in cookie mode
+              # `npm run test:integration` runs them in jwt mode; this is the other mode.
+              run: npm run test:journeys:cookie
+
     frontend-e2e:
         # The paired frontend's own Cypress suite, against THIS change's backend. The frontend runs
         # the same suite against the backend's main; only this job can say whether a backend PR

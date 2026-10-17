@@ -62,6 +62,7 @@
         "test:integration": "tsx scripts/testing/run-suite.ts integration",
         "test:contract": "tsx scripts/testing/run-suite.ts contract",
         "test:contract:cookie": "cross-env NODE_SESSION_MODE=cookie tsx scripts/testing/run-suite.ts contract",
+        "test:journeys:cookie": "cross-env NODE_SESSION_MODE=cookie jest --runInBand tests/integration/journeys",
         "test:fuzz": "tsx scripts/testing/run-suite.ts fuzz",
         "test:order-random": "tsx scripts/testing/run-suite.ts integration contract fuzz --unsharded --runInBand --randomize --showSeed",
         "mutation": "tsx scripts/mutation/run-diff.ts",
