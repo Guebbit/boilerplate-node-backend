@@ -23,8 +23,8 @@ import { announceDelayed } from './announce';
 export interface NoticeInput {
     /** `moved` for an admin's edit, `passed` for the sweep. */
     reason: FulfillmentOrderDelayed['reason'];
-    /** The date now expected; absent when there is none. */
-    expectedAt?: Date | undefined;
+    /** The date now expected; `null` removes it (the date was cleared), absent leaves it alone. */
+    expectedAt?: Date | null | undefined;
     /** Whether silence cancels — the buyer must say "keep waiting". */
     needsAnswer: boolean;
     /** Whether this counts as a slip the buyer was told about (the sweep's `passed` does not). */
@@ -54,8 +54,7 @@ const payloadOf = (
     ...(buyerIdOf(order) ? { userId: buyerIdOf(order) } : {}),
     titles: fulfillmentOrder.lines.map(({ title }) => title),
     agreedAt: (fulfillmentOrder.agreedAt ?? new Date(0)).toISOString(),
-    // What the buyer is told is the date NOW expected; a cleared date leaves the stored one behind
-    // but promises nothing new, so it is not in the notice.
+    // What the buyer is told is the date NOW expected; a cleared date promises nothing new.
     ...(input.expectedAt ? { expectedAt: input.expectedAt.toISOString() } : {}),
     reason: input.reason,
     needsAnswer: input.needsAnswer,
@@ -89,6 +88,8 @@ export const recordNotice = async (
     const patch: FulfillmentOrderPatch = {
         lastNoticeAt: now,
         ...(input.expectedAt ? { expectedAt: input.expectedAt } : {}),
+        // A cleared date leaves no `expectedAt`, so a redelivery finds nothing to move.
+        ...(input.expectedAt === null ? { unset: ['expectedAt' as const] } : {}),
         ...(input.countsAsSlip ? { slips: fulfillmentOrder.slips + 1 } : {}),
         ...(input.needsAnswer
             ? {

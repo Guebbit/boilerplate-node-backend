@@ -635,7 +635,7 @@ components:
                 expectedAt:
                     type: string
                     format: date-time
-                    description: When it is now expected to ship, when that differs from what was agreed.
+                    description: When it is now expected to ship, when that differs from what was agreed. Absent when the release date was cleared after the order was paid, since then nothing is expected.
                 consent:
                     $ref: '#/components/schemas/FulfillmentConsent'
                 consentDeadline:

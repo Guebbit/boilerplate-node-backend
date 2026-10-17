@@ -11,8 +11,8 @@
  * | a first slip of at most 28 days            | a notice and the cancel option; silence waits    |
  * | longer, a second slip, or no date at all   | a question; 30 days of silence cancels           |
  *
- * Idempotent on the date itself, since the outbox delivers at least once: a redelivery finds the
- * date already expected and does nothing.
+ * Idempotent, since the outbox delivers at least once: a redelivery finds the date already expected
+ * (or, for a cleared date, no expected date left) and does nothing.
  *
  * See: docs/modules/delivery.md#preorders-and-a-moved-date
  */
@@ -34,23 +34,23 @@ import type { ClientSession } from 'mongoose';
  * holds several products stays right when one of them moves earlier.
  *
  * @param fulfillmentOrder - the waiting fulfillment order
- * @returns the date, or `undefined` when none of its products has one any more
+ * @returns the date, or `undefined` when any product it still waits for has none: the group cannot
+ *   leave before that one, so it has no date
  */
-const expectedFrom = (fulfillmentOrder: FulfillmentOrderDocument): Promise<Date | undefined> =>
-    productService
-        .findManyByIds(
-            fulfillmentOrder.lines
-                .filter((line) => remainingOfLine(line) > 0)
-                .map(({ productId }) => productId)
-        )
-        .then((products) => {
-            const dates = products
-                .map(({ releaseDate }) => releaseDate)
-                .filter((date): date is Date => date !== undefined);
-            return dates.length === 0
-                ? undefined
-                : new Date(Math.max(...dates.map((date) => date.getTime())));
-        });
+const expectedFrom = (fulfillmentOrder: FulfillmentOrderDocument): Promise<Date | undefined> => {
+    const productIds = fulfillmentOrder.lines
+        .filter((line) => remainingOfLine(line) > 0)
+        .map(({ productId }) => productId);
+    return productService.findManyByIds(productIds).then((products) => {
+        const dates = productIds.map(
+            (id) => products.find((product) => String(product._id) === id)?.releaseDate
+        );
+        const known = dates.filter((date): date is Date => date !== undefined);
+        return known.length === 0 || known.length < dates.length
+            ? undefined
+            : new Date(Math.max(...known.map((date) => date.getTime())));
+    });
+};
 
 /**
  * Write the timeline's `release_date_moved`: the date this order's goods are now expected. Only
@@ -117,7 +117,7 @@ const apply = async (
         fulfillmentOrder,
         {
             reason: 'moved',
-            expectedAt: next,
+            expectedAt: next ?? null,
             needsAnswer: verdict.kind === 'ask',
             countsAsSlip: true
         },
@@ -141,7 +141,7 @@ const judgeOne = (fulfillmentOrderId: string): Promise<SentNotice | undefined> =
             fulfillmentOrderId,
             session
         );
-        if (!fulfillmentOrder?.agreedAt || !fulfillmentOrder.expectedAt) return undefined;
+        if (!fulfillmentOrder?.agreedAt) return undefined;
 
         const next = await expectedFrom(fulfillmentOrder);
         const verdict = judgeSlip({

@@ -150,16 +150,88 @@ describe('a release date that moves', () => {
 
     it('asks, with no new date, when the date is cleared', async () => {
         const { orderId, productIds } = await preorder(30);
-        const before = await waitingOf(orderId);
+        await waitingOf(orderId);
 
         await moveDate(productIds[0], null);
 
         const waiting = await waitingOf(orderId);
         expect(waiting.consent).toBe('awaiting');
-        expect(waiting.expectedAt?.toISOString()).toBe(before.expectedAt?.toISOString());
+        expect(waiting.expectedAt).toBeUndefined();
         const [event] = await delayedEvents();
         expect(event).toMatchObject({ needsAnswer: true });
         expect(event.expectedAt).toBeUndefined();
+    });
+
+    it('asks once when a cleared date is announced twice', async () => {
+        const { orderId, productIds } = await preorder(30);
+        await waitingOf(orderId);
+        await moveDate(productIds[0], null);
+        const first = await waitingOf(orderId);
+
+        await deliveryService.onReleaseDateChanged(productIds[0]);
+
+        const waiting = await waitingOf(orderId);
+        expect(await delayedEvents()).toHaveLength(1);
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        expect(waiting.slips).toBe(1);
+        expect(waiting.consentDeadline?.toISOString()).toBe(first.consentDeadline?.toISOString());
+        expect(waiting.expectedAt).toBeUndefined();
+        expect(await typesOf(orderId)).toEqual([
+            'fulfillment_held',
+            'release_date_moved',
+            'delay_notice_sent'
+        ]);
+    });
+
+    it('keeps a buyer who said keep waiting confirmed when a cleared date is redelivered', async () => {
+        const { orderId, productIds, user } = await preorder(30);
+        await moveDate(productIds[0], null);
+        await confirmWait(await waitingIdOf(orderId), asCustomer(user.id), testCallerContext);
+
+        await deliveryService.onReleaseDateChanged(productIds[0]);
+
+        expect(await consentOf(orderId)).toBe('confirmed');
+        expect(await delayedEvents()).toHaveLength(1);
+    });
+
+    it('asks again on every later slip, cleared dates included', async () => {
+        const { orderId, productIds } = await preorder(30);
+        await moveDate(productIds[0], null);
+        await moveDate(productIds[0], inDays(40));
+        await moveDate(productIds[0], null);
+
+        const waiting = await waitingOf(orderId);
+
+        expect(waiting.slips).toBe(2);
+        expect(waiting.expectedAt).toBeUndefined();
+        const events = await delayedEvents();
+        expect(events.map((event) => event.needsAnswer)).toEqual([true, true]);
+    });
+
+    it('does not ask again, once the buyer agreed to an open-ended wait, when the sweep runs', async () => {
+        const { orderId, productIds, user } = await preorder(30);
+        await moveDate(productIds[0], null);
+        await confirmWait(await waitingIdOf(orderId), asCustomer(user.id), testCallerContext);
+
+        await deliveryService.runPreorderSweep(inDays(31));
+
+        expect(await delayedEvents()).toHaveLength(1);
+        expect(await consentOf(orderId)).toBe('confirmed');
+    });
+
+    it('asks, and drops the date, when one product of a group loses its date', async () => {
+        const { orderId, productIds } = await paidPreorderOrder([
+            { quantity: 1, releaseDate: inDays(30) },
+            { quantity: 1, releaseDate: inDays(32) }
+        ]);
+        await fulfillmentOrdersOf(orderId);
+
+        await moveDate(productIds[0], null);
+
+        const waiting = await waitingOf(orderId);
+        expect(waiting.consent).toBe('awaiting');
+        expect(waiting.expectedAt).toBeUndefined();
+        expect(await delayedEvents()).toMatchObject([{ needsAnswer: true }]);
     });
 
     it('is harmless when the same move is announced twice', async () => {

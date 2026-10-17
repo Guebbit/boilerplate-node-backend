@@ -70,6 +70,18 @@ describe('judgeSlip', () => {
     });
 });
 
+describe('judgeSlip with no date expected', () => {
+    it('says nothing when there was none and there is none', () => {
+        expect(judgeSlip({ agreedAt: AGREED, slips: 1, next: undefined }).kind).toBe('earlier');
+    });
+
+    it('follows a new date quietly when there was none', () => {
+        expect(judgeSlip({ agreedAt: AGREED, slips: 1, next: afterAgreed(90) }).kind).toBe(
+            'earlier'
+        );
+    });
+});
+
 describe('answerBy', () => {
     it('is the consent window after the question, and no earlier', () => {
         const asked = new Date('2026-12-10T08:00:00Z');

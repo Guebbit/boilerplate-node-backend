@@ -150,8 +150,8 @@ export type FulfillmentOrderPatch = Partial<
         | 'cancelReason'
     >
 > & {
-    /** Fields to remove — a released hold carries no reason or note, a confirmed wait no deadline. */
-    unset?: readonly ('holdReason' | 'holdNote' | 'consentDeadline')[];
+    /** Fields to remove — a released hold carries no reason or note, a confirmed wait no deadline, a cleared date no expected date. */
+    unset?: readonly ('holdReason' | 'holdNote' | 'consentDeadline' | 'expectedAt')[];
 };
 
 /** The shared factory's CRUD surface plus the fulfillment order's own reads and claims. */

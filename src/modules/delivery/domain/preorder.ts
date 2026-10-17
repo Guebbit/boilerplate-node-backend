@@ -36,7 +36,10 @@ export const CONSENT_WINDOW_DAYS = 30;
 
 /** What a moved date asks of the buyer, decided by {@link judgeSlip}. */
 export type SlipVerdict =
-    /** Not later than the date already expected: no notice, the order page shows the new date. */
+    /**
+     * Not later than the date already expected, or nothing was expected and nothing is now: no
+     * notice, the order page shows the new date.
+     */
     | { kind: 'earlier' }
     /** A short first slip: tell the buyer and offer cancel; silence means they keep waiting. */
     | { kind: 'notify' }
@@ -47,8 +50,8 @@ export type SlipVerdict =
 export interface SlipFacts {
     /** The date promised when ordering; never moves. */
     agreedAt: Date;
-    /** The date expected right now. */
-    expectedAt: Date;
+    /** The date expected right now; absent once the date was cleared. */
+    expectedAt?: Date | undefined;
     /** How many later dates the buyer was already told about. */
     slips: number;
     /** The date now expected; absent when the date was cleared, which is an indefinite delay. */
@@ -61,8 +64,9 @@ export interface SlipFacts {
  * @param facts - the promise, the current expectation, the slips so far and the new date
  */
 export const judgeSlip = ({ agreedAt, expectedAt, slips, next }: SlipFacts): SlipVerdict => {
-    if (next === undefined) return { kind: 'ask' };
-    if (next.getTime() <= expectedAt.getTime()) return { kind: 'earlier' };
+    if (next === undefined) return expectedAt === undefined ? { kind: 'earlier' } : { kind: 'ask' };
+    if (expectedAt === undefined || next.getTime() <= expectedAt.getTime())
+        return { kind: 'earlier' };
 
     const slippedDays = (next.getTime() - agreedAt.getTime()) / DAY_MS;
     return slips === 0 && slippedDays <= SILENT_SLIP_DAYS ? { kind: 'notify' } : { kind: 'ask' };

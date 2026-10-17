@@ -223,7 +223,7 @@ old date, unless the admin moves it after the date has passed; the daily sweep c
 | not later than the date expected                      | nothing; the order page shows the new date             | none owed                                         |
 | a **first** slip, at most **28** days past the agreed | a notice with the cancel option; silence keeps waiting | FTC (b)(1)(ii) allows 30; two days for time zones |
 | a longer slip, **or** any second one                  | a question: keep waiting, or cancel                    | FTC (b)(1)(iii), (b)(2)(ii): silence is a cancel  |
-| none: the date was cleared                            | the same question, with no new date to offer           | an indefinite delay                               |
+| none: the date was cleared                            | the same question, with no new date to offer, once     | an indefinite delay                               |
 
 A question opens a 30-day window (`consent: awaiting`, `consentDeadline`). The buyer answers
 `POST /delivery/fulfillment-orders/{id}/confirm-wait` (`consent: confirmed`), cancels (the existing
@@ -232,6 +232,9 @@ cancel or remainder cancel), or says nothing. The fulfillment order carries the 
 date earlier writes only `expectedAt`. Which date is expected is read from the catalogue, the latest
 release date among the products still waiting, so a group of several stays right when one of them
 moves; the event only says that something moved, and a redelivery finds the date already expected.
+A product that still waits with no release date makes the whole group undated (it cannot leave
+before that product), and an undated group has no `expectedAt` at all: a cleared date removes it, so
+a redelivered event finds nothing to move and asks nobody twice.
 
 ```mermaid
 stateDiagram-v2
