@@ -10,7 +10,9 @@ import {
     CONSENT_WINDOW_DAYS,
     SILENT_SLIP_DAYS,
     answerBy,
+    expectedDateOf,
     hasWaitExpired,
+    judgeMove,
     judgeSlip,
     needsDatePassedNotice,
     slippedDays
@@ -79,6 +81,62 @@ describe('judgeSlip with no date expected', () => {
         expect(judgeSlip({ agreedAt: AGREED, slips: 1, next: afterAgreed(90) }).kind).toBe(
             'earlier'
         );
+    });
+});
+
+/** A line of `quantity` units of product `productId`, with `shipped` already gone. */
+const line = (productId: string, quantity = 1, shipped = 0) => ({
+    productId,
+    title: productId,
+    quantity,
+    shippedQuantity: shipped,
+    cancelledQuantity: 0
+});
+
+describe('expectedDateOf', () => {
+    const dates: Record<string, Date | undefined> = {
+        a: afterAgreed(10),
+        b: afterAgreed(20),
+        none: undefined
+    };
+    const releaseDateOf = (id: string) => dates[id];
+
+    it('is the latest release date among the lines', () => {
+        expect(expectedDateOf([line('a'), line('b')], releaseDateOf)).toEqual(afterAgreed(20));
+    });
+
+    it('ignores a line with nothing left, whatever its date', () => {
+        expect(expectedDateOf([line('a'), line('none', 1, 1)], releaseDateOf)).toEqual(
+            afterAgreed(10)
+        );
+    });
+
+    it('has no date when any line still waiting has none', () => {
+        expect(expectedDateOf([line('a'), line('none')], releaseDateOf)).toBeUndefined();
+    });
+
+    it('has no date when nothing is left to wait for', () => {
+        expect(expectedDateOf([line('a', 1, 1)], releaseDateOf)).toBeUndefined();
+    });
+});
+
+describe('judgeMove', () => {
+    const waiting = { agreedAt: AGREED, expectedAt: AGREED, slips: 0 };
+
+    it('has nothing to judge when nothing was promised', () => {
+        expect(judgeMove({ slips: 0 }, afterAgreed(90))).toBeUndefined();
+    });
+
+    it.each([
+        ['a short first slip', afterAgreed(5), 'notify'],
+        ['a long slip', afterAgreed(60), 'ask'],
+        ['a cleared date', undefined, 'ask']
+    ])('judges %s', (_name, next, expected) => {
+        expect(judgeMove(waiting, next)?.kind).toBe(expected);
+    });
+
+    it('says nothing for a date that was already cleared and is cleared again', () => {
+        expect(judgeMove({ agreedAt: AGREED, slips: 1 }, undefined)?.kind).toBe('earlier');
     });
 });
 

@@ -23,7 +23,7 @@ import {
     FulfillmentOrderStatus,
     PreorderFulfillmentState
 } from '@types';
-import { remainingOf, type FulfillmentLine } from './fulfillment';
+import { remainingOf, remainingOfLine, type FulfillmentLine } from './fulfillment';
 
 /** Milliseconds in a day; every date rule here counts whole UTC days. */
 const DAY_MS = 86_400_000;
@@ -71,6 +71,56 @@ export const judgeSlip = ({ agreedAt, expectedAt, slips, next }: SlipFacts): Sli
     const slippedDays = (next.getTime() - agreedAt.getTime()) / DAY_MS;
     return slips === 0 && slippedDays <= SILENT_SLIP_DAYS ? { kind: 'notify' } : { kind: 'ask' };
 };
+
+/**
+ * The date a fulfillment order is now expected: the latest release date among the lines it still
+ * waits for, since it leaves together.
+ *
+ * @param lines - the fulfillment order's lines; a line with nothing left is ignored
+ * @param releaseDateOf - a product's release date as the catalogue holds it now
+ * @returns the date, or `undefined` when any line still waiting has none (the group cannot leave
+ *   before that product, so it has no date) or when nothing is left to wait for
+ */
+export const expectedDateOf = (
+    lines: readonly FulfillmentLine[],
+    releaseDateOf: (productId: string) => Date | undefined
+): Date | undefined => {
+    const dates = lines
+        .filter((line) => remainingOfLine(line) > 0)
+        .map(({ productId }) => releaseDateOf(productId));
+    const known = dates.filter((date): date is Date => date !== undefined);
+    return known.length === 0 || known.length < dates.length
+        ? undefined
+        : new Date(Math.max(...known.map((date) => date.getTime())));
+};
+
+/** What {@link judgeMove} reads off a waiting fulfillment order. */
+export interface MoveFacts {
+    /** The date promised when ordering; absent on a fulfillment order that is not a preorder wait. */
+    agreedAt?: Date | undefined;
+    /** The date expected right now; absent once the date was cleared. */
+    expectedAt?: Date | undefined;
+    /** How many later dates the buyer was already told about. */
+    slips: number;
+}
+
+/**
+ * What a moved date asks of the buyer of one fulfillment order. The one rule the release-date
+ * listener and the staff preview share, so the preview cannot drift from what the save does.
+ *
+ * @param facts - the fulfillment order
+ * @param next - the date now expected, from {@link expectedDateOf}
+ * @returns the verdict, or `undefined` when nothing was ever promised, so there is nothing to slip
+ */
+export const judgeMove = (facts: MoveFacts, next: Date | undefined): SlipVerdict | undefined =>
+    facts.agreedAt === undefined
+        ? undefined
+        : judgeSlip({
+              agreedAt: facts.agreedAt,
+              expectedAt: facts.expectedAt,
+              slips: facts.slips,
+              next
+          });
 
 /**
  * When silence turns into a cancel, for a buyer asked at `now`.

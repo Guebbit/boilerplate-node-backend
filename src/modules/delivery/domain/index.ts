@@ -44,6 +44,8 @@ export {
     SILENT_SLIP_DAYS,
     CONSENT_WINDOW_DAYS,
     judgeSlip,
+    judgeMove,
+    expectedDateOf,
     answerBy,
     needsDatePassedNotice,
     hasWaitExpired,
@@ -51,4 +53,4 @@ export {
     boardStateOf,
     isLate
 } from './preorder';
-export type { BoardFacts, SlipFacts, SlipVerdict, SweepFacts } from './preorder';
+export type { BoardFacts, MoveFacts, SlipFacts, SlipVerdict, SweepFacts } from './preorder';

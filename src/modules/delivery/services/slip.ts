@@ -19,9 +19,8 @@
 
 import { orderService } from '@modules/orders';
 import { productService } from '@modules/products';
-import { judgeSlip } from '../domain';
+import { expectedDateOf, judgeMove } from '../domain';
 import type { SlipVerdict } from '../domain';
-import { remainingOfLine } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
 import type { FulfillmentOrderDocument } from '../model';
 import { runAct } from './act';
@@ -29,28 +28,21 @@ import { recordNotice, type SentNotice } from './notice';
 import type { ClientSession } from 'mongoose';
 
 /**
- * The date a fulfillment order is now expected: the latest release date among the products it still
- * waits for, since it leaves together. Read from the catalogue, not from the event, so a group that
- * holds several products stays right when one of them moves earlier.
+ * The date a fulfillment order is now expected, read from the catalogue, not from the event, so a
+ * group that holds several products stays right when one of them moves earlier.
  *
  * @param fulfillmentOrder - the waiting fulfillment order
- * @returns the date, or `undefined` when any product it still waits for has none: the group cannot
- *   leave before that one, so it has no date
+ * @returns the date, or `undefined` when it has none (see `expectedDateOf`)
  */
-const expectedFrom = (fulfillmentOrder: FulfillmentOrderDocument): Promise<Date | undefined> => {
-    const productIds = fulfillmentOrder.lines
-        .filter((line) => remainingOfLine(line) > 0)
-        .map(({ productId }) => productId);
-    return productService.findManyByIds(productIds).then((products) => {
-        const dates = productIds.map(
-            (id) => products.find((product) => String(product._id) === id)?.releaseDate
+const expectedFrom = (fulfillmentOrder: FulfillmentOrderDocument): Promise<Date | undefined> =>
+    productService
+        .findManyByIds(fulfillmentOrder.lines.map(({ productId }) => productId))
+        .then((products) =>
+            expectedDateOf(
+                fulfillmentOrder.lines,
+                (id) => products.find((product) => String(product._id) === id)?.releaseDate
+            )
         );
-        const known = dates.filter((date): date is Date => date !== undefined);
-        return known.length === 0 || known.length < dates.length
-            ? undefined
-            : new Date(Math.max(...known.map((date) => date.getTime())));
-    });
-};
 
 /**
  * Write the timeline's `release_date_moved`: the date this order's goods are now expected. Only
@@ -141,16 +133,11 @@ const judgeOne = (fulfillmentOrderId: string): Promise<SentNotice | undefined> =
             fulfillmentOrderId,
             session
         );
-        if (!fulfillmentOrder?.agreedAt) return undefined;
+        if (!fulfillmentOrder) return undefined;
 
         const next = await expectedFrom(fulfillmentOrder);
-        const verdict = judgeSlip({
-            agreedAt: fulfillmentOrder.agreedAt,
-            expectedAt: fulfillmentOrder.expectedAt,
-            slips: fulfillmentOrder.slips,
-            next
-        });
-        return apply(fulfillmentOrder, verdict, next, new Date(), session);
+        const verdict = judgeMove(fulfillmentOrder, next);
+        return verdict && apply(fulfillmentOrder, verdict, next, new Date(), session);
     }).then((result) => (result.refused ? undefined : result.value));
 
 /**
