@@ -33,6 +33,12 @@ export const TEST_CA_CERT: Buffer = readFileSync(
     path.join(__dirname, 'fixtures', 'localhost-test-cert.pem')
 );
 
+/** This file's own throwaway `localhost` pair, which a server serves unless told another. */
+const LOCALHOST_CREDENTIALS = {
+    key: readFileSync(path.join(__dirname, 'fixtures', 'localhost-test-key.pem')),
+    cert: readFileSync(path.join(__dirname, 'fixtures', 'localhost-test-cert.pem'))
+};
+
 /** One captured request the test server received, headers and raw body both. */
 export interface CapturedRequest {
     headers: Record<string, string | string[] | undefined>;
@@ -65,26 +71,22 @@ const readBody = (request: IncomingMessage): Promise<string> =>
  * @param respond - given the response object, decide the status/body for the NEXT request — e.g.
  *   `(res) => res.writeHead(200).end()`, or a closure that answers differently attempt to attempt
  *   for a retry test.
+ * @param credentials - the certificate and key to serve; this file's `localhost` pair by default
  */
 export const startHttpsTestServer = (
-    respond: (response: ServerResponse) => void
+    respond: (response: ServerResponse) => void,
+    credentials: { key: Buffer; cert: Buffer } = LOCALHOST_CREDENTIALS
 ): Promise<HttpsTestServer> => {
     const captured: CapturedRequest[] = [];
 
     // node:https.createServer: https://nodejs.org/api/https.html#httpscreateserveroptions-requestlistener
-    // `key`/`cert` are this file's throwaway localhost pair — see the module docblock.
-    const server: Server = createServer(
-        {
-            key: readFileSync(path.join(__dirname, 'fixtures', 'localhost-test-key.pem')),
-            cert: readFileSync(path.join(__dirname, 'fixtures', 'localhost-test-cert.pem'))
-        },
-        (request, response) => {
-            void readBody(request).then((body) => {
-                captured.push({ headers: request.headers, body });
-                respond(response);
-            });
-        }
-    );
+    // `key`/`cert` default to this file's throwaway localhost pair — see the module docblock.
+    const server: Server = createServer(credentials, (request, response) => {
+        void readBody(request).then((body) => {
+            captured.push({ headers: request.headers, body });
+            respond(response);
+        });
+    });
 
     return new Promise((resolve, reject) => {
         server.on('error', reject);
