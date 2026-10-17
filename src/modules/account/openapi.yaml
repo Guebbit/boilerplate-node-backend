@@ -52,7 +52,7 @@ paths:
                 alternative is every client inventing the same guess.
 
                 `grantableRoles` lists the tenant-scope roles the caller may assign through the user
-                writes, computed by the same rule as their `409`; a role picker reads it instead of a
+                writes, computed by the same rule as their `403`/`422`; a role picker reads it instead of a
                 hard-coded list. Empty for an anonymous caller. It has no authority either.
 
                 Answered for an anonymous caller too: a stranger holds the `guest` role, which is

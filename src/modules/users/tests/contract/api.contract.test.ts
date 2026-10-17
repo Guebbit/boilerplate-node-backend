@@ -646,6 +646,24 @@ describe('the step-up on naming a role', () => {
         expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
     });
 
+    it('401s REAUTH_REQUIRED for a stale session taking a role away too', async () => {
+        freezeDate();
+        const { bearer } = await authenticateAsRole('admin');
+        const target = await createUser(
+            { email: 'stale2@target.test', username: 'staletwo' },
+            'support'
+        );
+        advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
+
+        const response = await api()
+            .patch(`/users/${target.id}`)
+            .set('Authorization', bearer)
+            .send({ role: null });
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+    });
+
     it('lets the same stale session edit the profile, which names no role', async () => {
         freezeDate();
         const { bearer } = await authenticateAsRole('admin');
@@ -659,4 +677,53 @@ describe('the step-up on naming a role', () => {
 
         expect(response.status).toBe(200);
     });
+});
+
+/**
+ * A role grant answers by the rule that refused it: no `assign:Role` is a 403 (judged first), a
+ * name nobody can be given is a translated 422 naming `role`.
+ */
+describe('refusing a role grant over HTTP', () => {
+    it('403s ROLE_MANAGEMENT_REQUIRED for a caller without assign:Role, whatever the name', async () => {
+        const { bearer } = await authenticateAsRole('moderator');
+        const target = await createUser({ email: 'grant@target.test', username: 'granttarget' });
+
+        const real = await api()
+            .patch(`/users/${target.id}`)
+            .set('Authorization', bearer)
+            .send({ role: 'support' });
+        const invented = await api().post('/users').set('Authorization', bearer).send({
+            email: 'invented@target.test',
+            username: 'inventedrole',
+            role: 'no-such-role'
+        });
+
+        expect([real.status, invented.status]).toEqual([403, 403]);
+        expect(real.body.errors[0].code).toBe('ROLE_MANAGEMENT_REQUIRED');
+        expect(invented.body.errors[0].code).toBe('ROLE_MANAGEMENT_REQUIRED');
+    });
+
+    it.each(['no-such-role', 'customer'])(
+        '422s a translated error naming role for %s, to a caller who may assign',
+        async (role) => {
+            const { bearer } = await authenticateAsRole('admin');
+            const target = await createUser({
+                email: 'grant2@target.test',
+                username: 'grant2target'
+            });
+
+            const response = await api()
+                .patch(`/users/${target.id}`)
+                .set('Authorization', bearer)
+                .set('Accept-Language', 'it')
+                .send({ role });
+
+            expect(response.status).toBe(422);
+            expect(response.body.errors[0]).toMatchObject({
+                code: 'VALIDATION_ERROR',
+                details: { field: 'role' },
+                message: 'Questo ruolo non esiste o non può essere assegnato a un account.'
+            });
+        }
+    );
 });

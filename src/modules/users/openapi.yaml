@@ -99,7 +99,8 @@ paths:
                                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # An undeclared role or a privilege escalation the caller may not grant.
+                # 409: the address is taken. A `role` the caller may not hand out is a 403
+                # `ROLE_MANAGEMENT_REQUIRED`; one nothing declares is a 422 naming `role`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
@@ -185,8 +186,8 @@ paths:
                                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # An undeclared role or a privilege escalation the caller may not grant.
-                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # A `role` the caller may not hand out is a 403 `ROLE_MANAGEMENT_REQUIRED`; one nothing
+                # declares (or an audience such as `customer`) is a 422 naming `role`.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
@@ -223,8 +224,8 @@ paths:
                                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # An undeclared role or a privilege escalation the caller may not grant.
-                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # A `role` the caller may not hand out is a 403 `ROLE_MANAGEMENT_REQUIRED`; one nothing
+                # declares (or an audience such as `customer`) is a 422 naming `role`.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
@@ -450,6 +451,9 @@ components:
                     type: string
                     minLength: 3
                     maxLength: 50
+                # A name from `grantableRoles` (`GET /account/abilities`). A caller without
+                # `assign:Role` gets `403 ROLE_MANAGEMENT_REQUIRED`; any other name is a `422`
+                # naming `role`.
                 role:
                     type: string
                     maxLength: 64
@@ -504,7 +508,10 @@ components:
                     type: string
                     minLength: 3
                     maxLength: 50
-                # A staff role by name; `null` takes it away, leaving a plain customer.
+                # A staff role by name from `grantableRoles`; `null` takes it away, leaving a plain customer.
+                # Naming a role, or taking one away, needs `assign:Role` (403
+                # `ROLE_MANAGEMENT_REQUIRED`) and a critically fresh session; any other name is a
+                # `422` naming `role`.
                 role:
                     type: [string, 'null']
                     maxLength: 64
@@ -574,7 +581,8 @@ components:
                     type: string
                     minLength: 3
                     maxLength: 50
-                # A staff role by name; `null` is a plain customer.
+                # A staff role by name from `grantableRoles`; `null` is a plain customer. Same rules as
+                # the PATCH body: `assign:Role`, a critically fresh session, a `422` for any other name.
                 role:
                     type: [string, 'null']
                     maxLength: 64

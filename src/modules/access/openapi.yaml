@@ -69,7 +69,7 @@ components:
                     description: |
                         The tenant-scope roles this caller may assign through `POST`/`PUT`/`PATCH
                         /users`, in the order `shared/authorization-roles.yaml` declares them.
-                        Computed by the same rule as the `409` those writes answer, so a role
+                        Computed by the same rule as the `403`/`422` those writes answer, so a role
                         picker built from it offers exactly what the write accepts. Empty for a
                         caller who may grant nothing, an anonymous one included. It has NO
                         AUTHORITY: the write is re-checked server-side.

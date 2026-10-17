@@ -34,8 +34,20 @@ export class AccessInvariantError extends ConflictError {
     }
 }
 
+/**
+ * Why a grant is refused, for a caller that answers over HTTP: `not_granter` is the granter
+ * lacking {@link ASSIGN_RULE} (a 403), `unknown_role` a name nothing declares or an audience
+ * nobody is granted (a 422 on the `role` field).
+ */
+export interface GrantRefusal {
+    /** Which rule failed. */
+    kind: 'not_granter' | 'unknown_role';
+    /** The internal sentence: logged and thrown, never sent to a client. */
+    message: string;
+}
+
 /** The verdict of {@link checkGrant}: the lowered role name, or why the grant is refused. */
-type GrantVerdict = { lowered: string } | { refusal: string };
+type GrantVerdict = { lowered: string } | { refusal: GrantRefusal };
 
 /**
  * The boolean core of {@link validateGrant}: asks whether a grant would be accepted and, when it
@@ -63,25 +75,39 @@ const checkGrant = (
     granter?: readonly string[]
 ): GrantVerdict => {
     const lowered = roleName.toLowerCase();
+
+    // The permission is judged FIRST: whoever may not hand out roles is told so, and learns
+    // nothing about which role names exist.
+    if (granter && !granter.includes(ASSIGN_RULE)) {
+        return {
+            refusal: {
+                kind: 'not_granter',
+                message:
+                    `[access] cannot grant "${roleName}": the granter does not hold ${ASSIGN_RULE}. ` +
+                    `A role editor that allows this is a privilege-escalation endpoint.`
+            }
+        };
+    }
+
     const role = findRole(lowered);
 
     if (role?.scope !== scope) {
         return {
-            refusal:
-                `[access] "${roleName}" is not a role in this ${scope} scope. ` +
-                `Declare it in shared/authorization-roles.yaml first, or assign one that exists.`
+            refusal: {
+                kind: 'unknown_role',
+                message:
+                    `[access] "${roleName}" is not a role in this ${scope} scope. ` +
+                    `Declare it in shared/authorization-roles.yaml first, or assign one that exists.`
+            }
         };
     }
 
     if (role.assignable === false) {
-        return { refusal: `[access] "${roleName}" is never assigned to an account.` };
-    }
-
-    if (granter && !granter.includes(ASSIGN_RULE)) {
         return {
-            refusal:
-                `[access] cannot grant "${roleName}": the granter does not hold ${ASSIGN_RULE}. ` +
-                `A role editor that allows this is a privilege-escalation endpoint.`
+            refusal: {
+                kind: 'unknown_role',
+                message: `[access] "${roleName}" is never assigned to an account.`
+            }
         };
     }
 
@@ -103,7 +129,7 @@ export const validateGrant = (
     granter?: readonly string[]
 ): string => {
     const verdict = checkGrant(scope, roleName, granter);
-    if ('refusal' in verdict) throw new AccessInvariantError(verdict.refusal);
+    if ('refusal' in verdict) throw new AccessInvariantError(verdict.refusal.message);
     return verdict.lowered;
 };
 
@@ -139,24 +165,25 @@ export const assertCanGrant = (
 };
 
 /**
- * {@link assertCanGrant} for a caller that writes more than the membership: a refusal is audited
- * as a failed grant FIRST, then thrown, so the attempt leaves its row even though nothing was
+ * {@link assertCanGrant} for a caller that writes more than the membership, answering with the
+ * refusal instead of throwing so the HTTP path can say which rule failed (403 or 422). A refusal
+ * is audited as a failed grant FIRST, so the attempt leaves its row even though nothing was
  * written. It is the check an account create or update runs before it opens its transaction.
  *
  * @param granter - same meaning as {@link assignRole}'s own parameter
  * @param context - the caller, whose refused attempt is audited
  * @param userId - the account the grant is for, or `undefined` when it does not exist yet
- * @throws AccessInvariantError for the same two reasons `assignRole` refuses
+ * @returns the refusal, or `undefined` when the grant would be accepted
  */
-export const assertCanGrantAudited = (
+export const grantRefusalAudited = (
     scope: AuthorizationScope,
     roleName: string,
     granter: readonly string[] | undefined,
     context: CallerContext,
     userId?: string
-): void => {
+): GrantRefusal | undefined => {
     const verdict = checkGrant(scope, roleName, granter);
-    if (!('refusal' in verdict)) return;
+    if (!('refusal' in verdict)) return undefined;
 
     auditRoleChange(
         context,
@@ -167,5 +194,5 @@ export const assertCanGrantAudited = (
         scope === 'tenant' ? DEPLOYMENT_TENANT_ID : null,
         scope
     );
-    throw new AccessInvariantError(verdict.refusal);
+    return verdict.refusal;
 };

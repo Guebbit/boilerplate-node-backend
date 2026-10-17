@@ -295,17 +295,16 @@ describe('userService.create', () => {
     it('creates no row when the requested role is an escalation the caller cannot grant', async () => {
         // `moderator` can create accounts but cannot grant `admin`: the grant is refused before the
         // user row is written, so no row holds the email without a membership.
-        await expect(
-            userService.create(
-                {
-                    email: 'never-created@example.com',
-                    username: 'nevercreated',
-                    role: 'admin'
-                },
-                callerContextAs('moderator')
-            )
-        ).rejects.toThrow();
+        const result = await userService.create(
+            {
+                email: 'never-created@example.com',
+                username: 'nevercreated',
+                role: 'admin'
+            },
+            callerContextAs('moderator')
+        );
 
+        expect(result).toMatchObject({ success: false, status: 403 });
         expect(await userRepository.findOne({ email: 'never-created@example.com' })).toBeNull();
         expect(await outboxEventModel.countDocuments({ name: USER_SETUP_REQUESTED })).toBe(0);
     });
@@ -585,21 +584,42 @@ describe('userService.updateById', () => {
         const id = user._id.toString();
 
         // A moderator cannot grant `admin` — the escalation must be
-        // refused BEFORE the deactivation half of this same request is allowed to land. Rejects
-        // rather than resolving to a 409 envelope: `AccessInvariantError` propagates the same way
-        // `create()`'s own escalation refusal does, for `@infrastructure/http/errors`'
-        // `databaseErrorInterpreter` to map at whichever `.catch()` sits above the caller.
-        await expect(
-            userService.updateById(
-                id,
-                { active: false, role: 'admin' },
-                callerContextAs('moderator')
-            )
-        ).rejects.toMatchObject({ name: 'AccessInvariantError' });
+        // refused BEFORE the deactivation half of this same request is allowed to land. It is
+        // answered as a 403 envelope, the same shape `create()`'s own escalation refusal has.
+        const result = await userService.updateById(
+            id,
+            { active: false, role: 'admin' },
+            callerContextAs('moderator')
+        );
+
+        expect(result).toMatchObject({
+            success: false,
+            status: 403,
+            errors: [{ code: 'ROLE_MANAGEMENT_REQUIRED' }]
+        });
 
         const refreshed = await userRepository.findById(id);
         expect(refreshed!.active).toBe(true);
     });
+
+    it.each(['no-such-role', 'customer'])(
+        'answers a translated 422 naming role for %s, to a caller who may assign',
+        async (role) => {
+            const user = await createUser({ active: true });
+
+            const result = await userService.updateById(
+                user._id.toString(),
+                { role },
+                callerContextAs('admin')
+            );
+
+            expect(result).toMatchObject({
+                success: false,
+                status: 422,
+                errors: [{ code: 'VALIDATION_ERROR', details: { field: 'role' } }]
+            });
+        }
+    );
 
     /*
      * A PUT carries `role` and `active` on every save. Resending what the user already has (no

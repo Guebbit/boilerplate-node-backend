@@ -21,6 +21,7 @@ import { usersAnalyticsEvents } from '../analytics';
 import { usersAuditActions } from '../audit';
 import { USER_SETUP_REQUESTED } from '../events';
 import { enqueueIfPending } from './image';
+import { roleRefusalReject } from './role-refusal';
 
 /**
  * Create a new user document — no email confirmation step; that self-service path is
@@ -49,18 +50,20 @@ export const create = (
     const password = randomBytes(32).toString('hex');
     const { role } = data;
 
+    // Checked, and a refusal audited, BEFORE anything is written: an escalation attempt
+    // must leave its row without ever having made a user.
+    const refusal =
+        role === undefined
+            ? undefined
+            : accessService.grantRefusalAudited(
+                  'tenant',
+                  role,
+                  context.caller.permissions,
+                  context
+              );
+    if (refusal) return Promise.resolve(roleRefusalReject(refusal));
+
     return Promise.resolve()
-        .then(() => {
-            // Checked, and a refusal audited, BEFORE anything is written: an escalation attempt
-            // must leave its row without ever having made a user.
-            if (role !== undefined)
-                accessService.assertCanGrantAudited(
-                    'tenant',
-                    role,
-                    context.caller.permissions,
-                    context
-                );
-        })
         .then(() =>
             // The account, its membership and the setup-mail event commit together or not at
             // all: a failure between them leaves nothing behind to undo, so no compensating

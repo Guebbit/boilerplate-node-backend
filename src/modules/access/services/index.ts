@@ -9,7 +9,7 @@
  * See: docs/theory/authorization.md
  */
 
-import { assertCanGrantAudited } from './grants';
+import { grantRefusalAudited } from './grants';
 import {
     assignRole,
     bootstrapAccess,
@@ -31,17 +31,19 @@ import {
 import { auditRoleAssigned, auditRoleRevoked } from './role-audit';
 
 export { AccessInvariantError, assertCanGrant, grantableRoles } from './grants';
+export type { GrantRefusal } from './grants';
 export { DEPLOYMENT_TENANT_SLUG } from './memberships';
 export {
     isOwnThing,
     ownOrderFlag,
+    roleManagementRequired,
     ROLE_PROTECTED_REASON,
     SHOP_REFUSAL_REASONS
 } from './protection';
 
 /** The service's public surface — every operation of this module that reads or writes the database. */
 export const accessService = {
-    assertCanGrantAudited,
+    grantRefusalAudited,
     assignRole,
     bootstrapAccess,
     ensureTenant,

@@ -30,6 +30,7 @@ import { usersAnalyticsEvents } from '../analytics';
 import { usersAuditActions } from '../audit';
 import { markSessionsEnded } from './credentials';
 import { enqueueIfPending } from './image';
+import { roleRefusalReject } from './role-refusal';
 
 /**
  * Update an existing user document. Returns a result envelope instead of throwing, the protocol
@@ -231,24 +232,27 @@ const saveWithRole = (
     data: Pick<UpdateUserByIdRequest, 'active'> & { role: RoleChange },
     context: CallerContext,
     oldImageUrl?: string
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    Promise.resolve()
-        .then(() => {
-            // Validated BEFORE anything is written, and a refusal audited: a refused role change
-            // must not leave the rest of the update — a deactivation included — committed
-            // underneath a request that, as a whole, failed. The escalation rule needs no
-            // database read, so asking first costs one more in-memory pass.
-            if (data.role && 'grant' in data.role)
-                accessService.assertCanGrantAudited(
-                    'tenant',
-                    data.role.grant,
-                    context.caller.permissions,
-                    context,
-                    String(user._id)
-                );
-        })
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    // Validated BEFORE anything is written, and a refusal audited: a refused role change
+    // must not leave the rest of the update — a deactivation included — committed
+    // underneath a request that, as a whole, failed. The escalation rule needs no
+    // database read, so asking first costs one more in-memory pass.
+    const refusal =
+        data.role && 'grant' in data.role
+            ? accessService.grantRefusalAudited(
+                  'tenant',
+                  data.role.grant,
+                  context.caller.permissions,
+                  context,
+                  String(user._id)
+              )
+            : undefined;
+    if (refusal) return Promise.resolve(roleRefusalReject(refusal));
+
+    return Promise.resolve()
         .then(() => withTransaction((session) => saveAndGrant(user, data.role, context, session)))
         .then((savedUser) => finishUpdate(savedUser, data, context, oldImageUrl));
+};
 
 /**
  * The key a writable field needs on top of the route's own `update:User` — the one

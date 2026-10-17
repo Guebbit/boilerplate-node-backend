@@ -78,6 +78,18 @@ export const canChangeAccount = (context: CallerContext, accountId: string): Pro
 };
 
 /**
+ * The `403 ROLE_MANAGEMENT_REQUIRED` envelope: the answer to anything that needs `assign:Role` and
+ * did not have it — changing a staff account, or handing out a role.
+ */
+export const roleManagementRequired = (): ResponseReject =>
+    generateReject(403, [
+        {
+            code: ERROR_CODES.ROLE_MANAGEMENT_REQUIRED,
+            message: t('generic.error-role-management-required')
+        }
+    ]);
+
+/**
  * {@link canChangeAccount} as a refusal a service can return: `undefined` to carry on, or the
  * `403 ROLE_MANAGEMENT_REQUIRED` envelope — recorded as a failed `security.forbidden` first, so an
  * attempt on a staff account leaves a row naming who tried what to whom.
@@ -98,12 +110,7 @@ export const roleProtectedRefusal = (
             metadata: { reason: ROLE_PROTECTED_REASON }
         });
 
-        return generateReject(403, [
-            {
-                code: ERROR_CODES.ROLE_MANAGEMENT_REQUIRED,
-                message: t('generic.error-role-management-required')
-            }
-        ]);
+        return roleManagementRequired();
     });
 
 /**

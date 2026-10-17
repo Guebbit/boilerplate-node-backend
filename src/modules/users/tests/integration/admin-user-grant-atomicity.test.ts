@@ -53,13 +53,12 @@ describe('userService.create', () => {
         const createSpy = jest.spyOn(userRepository, 'create');
 
         // `moderator` can create accounts but cannot grant `admin`.
-        await expect(
-            userService.create(
-                { email: 'never-created@example.com', username: 'nevercreated', role: 'admin' },
-                callerContextAs('moderator')
-            )
-        ).rejects.toMatchObject({ name: 'AccessInvariantError' });
+        const result = await userService.create(
+            { email: 'never-created@example.com', username: 'nevercreated', role: 'admin' },
+            callerContextAs('moderator')
+        );
 
+        expect(result).toMatchObject({ success: false, status: 403 });
         expect(createSpy).not.toHaveBeenCalled();
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -91,14 +90,13 @@ describe('userService.updateById', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ active: true });
 
-        await expect(
-            userService.updateById(
-                user.id,
-                { active: false, role: 'admin' },
-                callerContextAs('moderator')
-            )
-        ).rejects.toMatchObject({ name: 'AccessInvariantError' });
+        const result = await userService.updateById(
+            user.id,
+            { active: false, role: 'admin' },
+            callerContextAs('moderator')
+        );
 
+        expect(result).toMatchObject({ success: false, status: 403 });
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accessAuditActions.ROLE_ASSIGNED,

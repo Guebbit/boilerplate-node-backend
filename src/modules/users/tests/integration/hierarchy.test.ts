@@ -13,7 +13,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { observePort } from '@tests/ports';
 import { callerContextAs } from '@tests/callers';
 import * as auditPort from '@infrastructure/observability/audit';
-import { accessService, AccessInvariantError } from '@modules/access';
+import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseReject } from '@infrastructure/http/response';
 import { userService } from '@modules/users/services';
@@ -249,13 +249,17 @@ describe('handing out a staff role', () => {
     it('refuses a caller without role management, and writes nothing', async () => {
         const target = await accountHolding('customer');
 
-        await expect(
-            userService.updateById(
-                target.id,
-                { role: 'support' },
-                callerContextAs('moderator', 'someone-else')
-            )
-        ).rejects.toThrow(AccessInvariantError);
+        const result = await userService.updateById(
+            target.id,
+            { role: 'support' },
+            callerContextAs('moderator', 'someone-else')
+        );
+
+        expect(result).toMatchObject({
+            success: false,
+            status: 403,
+            errors: [{ code: 'ROLE_MANAGEMENT_REQUIRED' }]
+        });
 
         expect(await heldRole(target.id)).toBeNull();
     });

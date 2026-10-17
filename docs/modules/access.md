@@ -76,7 +76,7 @@ side of that line.
 membership can share one transaction (see [`users`](./users.md#creating-and-updating-with-a-role)).
 Given a session, `assignRole` and `revokeRole` audit only their failures; the success is recorded
 with `auditRoleAssigned` / `auditRoleRevoked` once the caller has committed, and a grant refused before the account even
-exists is audited by `assertCanGrantAudited`.
+exists is audited by `grantRefusalAudited`, which answers the HTTP path with the rule that failed: a granter without `assign:Role` gets `403 ROLE_MANAGEMENT_REQUIRED` (judged first, so it learns nothing about role names), an unknown or never-granted name a translated `422` on `role`.
 
 Every invariant here is a refusal, not a comment: a granter cannot hand over a role they do not
 themselves hold, and `customer`, `unverified` and `guest` are not roles at all — an audience is

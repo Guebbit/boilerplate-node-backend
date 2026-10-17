@@ -348,19 +348,18 @@ describe('assignRole inside a caller transaction', () => {
     });
 });
 
-describe('assertCanGrantAudited', () => {
+describe('grantRefusalAudited', () => {
     it('audits a refused grant as a failure, with no target when the account does not exist yet', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        expect(() =>
-            accessService.assertCanGrantAudited(
-                'tenant',
-                'admin',
-                ['read:Feedback'],
-                callerContextAs('moderator')
-            )
-        ).toThrow(AccessInvariantError);
+        const refusal = accessService.grantRefusalAudited(
+            'tenant',
+            'admin',
+            ['read:Feedback'],
+            callerContextAs('moderator')
+        );
 
+        expect(refusal?.kind).toBe('not_granter');
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accessAuditActions.ROLE_ASSIGNED,
@@ -370,16 +369,42 @@ describe('assertCanGrantAudited', () => {
         );
     });
 
+    it('says a granter without assign:Role is refused before the role name is judged', () => {
+        const refusal = accessService.grantRefusalAudited(
+            'tenant',
+            'no-such-role',
+            ['read:Feedback'],
+            callerContextAs('moderator')
+        );
+
+        expect(refusal?.kind).toBe('not_granter');
+    });
+
+    it.each(['no-such-role', 'customer', 'guest'])(
+        'calls %s an unknown role for a granter who may assign',
+        (role) => {
+            const refusal = accessService.grantRefusalAudited(
+                'tenant',
+                role,
+                permissionsOfRole('admin'),
+                callerContextAs('admin')
+            );
+
+            expect(refusal?.kind).toBe('unknown_role');
+        }
+    );
+
     it('audits nothing for a grant that would be accepted', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        accessService.assertCanGrantAudited(
+        const refusal = accessService.grantRefusalAudited(
             'tenant',
             'manager',
             permissionsOfRole('admin'),
             callerContextAs('admin')
         );
 
+        expect(refusal).toBeUndefined();
         expect(auditSpy).not.toHaveBeenCalled();
     });
 });

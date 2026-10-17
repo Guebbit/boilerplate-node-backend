@@ -106,8 +106,8 @@ sequenceDiagram
     participant A as admin write
     participant X as access (grant check)
     participant D as database
-    A->>X: assertCanGrantAudited(role)
-    X-->>A: refused? audited as a failed grant, nothing written
+    A->>X: grantRefusalAudited(role)
+    X-->>A: refused? audited as a failed grant, 403 or 422, nothing written
     A->>D: transaction: save user, upsert membership
     D-->>A: commit, or roll both back
     A->>A: audit the grant, then react (image, sessions, setup mail)

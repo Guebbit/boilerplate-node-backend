@@ -25,16 +25,14 @@ import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache'
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
 /**
- * Whether this request names a staff role — handing one out, or taking it away. Widening a
- * person's powers is the one admin act a stolen session must not be able to do quietly, so it asks
- * for a fresh session at the tier minting an API key does. Read from the body, so this guard comes
- * after `upload.image()`, which populates it for a multipart request.
+ * Whether this request names a staff role — handing one out, changing it, or taking it away
+ * (`role: null`). Changing a person's powers is the one admin act a stolen session must not be
+ * able to do quietly, so it asks for a fresh session at the tier minting an API key does. A
+ * client that leaves `role` out (an edit that did not touch it) is not asked. Read from the
+ * body, so this guard comes after `upload.image()`, which populates it for a multipart request.
  */
-const namesARole = (request: Request): boolean => {
-    const role = (request.body as { role?: unknown } | undefined)?.role;
-
-    return role !== undefined && role !== '';
-};
+const namesARole = (request: Request): boolean =>
+    (request.body as { role?: unknown } | undefined)?.role !== undefined;
 
 /** Express router for user management (admin only). */
 export const router = Router();
