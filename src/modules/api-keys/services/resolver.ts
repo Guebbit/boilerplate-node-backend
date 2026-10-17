@@ -31,8 +31,8 @@ import type { ApiKeyDocument } from '../model';
  *
  * `findAuthenticatableById` — not `findById` — for the same reason `account/module.ts`'s own
  * resolver uses it: a deactivated or soft-deleted minter must stop granting access on their very
- * next request, not merely at their next login. `undefined` here is what then makes every key they
- * minted hold nothing, without this document ever being touched.
+ * next request, not merely at their next login. `undefined` here is what makes `fromBearerToken`
+ * refuse every key they minted, without this document ever being touched.
  */
 const currentCallerOf = (apiKey: ApiKeyDocument): Promise<Caller | undefined> =>
     userService.findAuthenticatableById(apiKey.createdByUserId).then((user) => {
@@ -59,7 +59,7 @@ const missFor = (token: string, publicPrefix: string): Promise<Resolution<Resolv
 /**
  * This module's `sk_...` verify path: parse, prefix lookup, hash compare, then re-floor against
  * the minter's current caller. Every refusal — malformed token, unknown prefix, wrong secret,
- * revoked, expired, minter gone — resolves a `{ miss }`, the same "no caller" outcome
+ * revoked, expired, minter banned or gone — resolves a `{ miss }`, the same "no caller" outcome
  * `kernel/authentication.ts#resolveCredential` expects; none of them throws.
  */
 export const fromBearerToken = (token: string): Promise<Resolution<ResolvedCredential>> => {
@@ -71,6 +71,10 @@ export const fromBearerToken = (token: string): Promise<Resolution<ResolvedCrede
         if (!verifyApiKey(token, apiKey.hash)) return { miss: 'invalid_signature' as const };
 
         return currentCallerOf(apiKey).then((currentCaller) => {
+            // A banned, soft-deleted or erased minter ends their keys like a revoke would, and
+            // before anything is stamped: an unban or a restore brings them back untouched.
+            if (!currentCaller) return { miss: 'revoked' as const };
+
             // Fire-and-forget — see `repository.ts#touchLastUsed`'s own doc comment for why this
             // path never awaits it. A rejection has nobody else to catch it, so it is logged here
             // rather than left to surface as an unhandled rejection with nothing to tie it back to
@@ -95,10 +99,8 @@ export const fromBearerToken = (token: string): Promise<Resolution<ResolvedCrede
 
             // The literal rules: a minter who is now only a customer holds `read:Order`, not the
             // `display:Order` the credential was minted with, and must not pass for it.
-            const minterKeys = currentCaller ? heldRules(currentCaller) : new Set<string>();
-            const held = currentCaller
-                ? apiKey.permissions.filter((key) => minterKeys.has(key))
-                : [];
+            const minterKeys = heldRules(currentCaller);
+            const held = apiKey.permissions.filter((key) => minterKeys.has(key));
 
             // Never fewer than a stranger holds: a read scope compiled from `request.caller` (the
             // catalogue's, since `callerScope` takes it) would otherwise hide the public storefront

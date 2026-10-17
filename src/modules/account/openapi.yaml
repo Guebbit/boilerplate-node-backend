@@ -1050,7 +1050,10 @@ paths:
                 frontend origin — the cookie alone authenticates it. The cookie is `HttpOnly`,
                 `Secure` in every environment and host-locked (no `Domain`, `Path=/`), so the token
                 is never readable by page scripts, never appears in a URL, a proxy log or a
-                `Referer` header, and a sibling subdomain cannot overwrite it.
+                `Referer` header, and a sibling subdomain cannot overwrite it. A refresh is passive:
+                it never counts as activity. A staff family idle past `NODE_SESSION_IDLE_TIME_STAFF`
+                answers 401 `SESSION_IDLE` and the family is removed, so the next call starts at the
+                sign-in screen.
             operationId: refreshToken
             security: []
             responses:

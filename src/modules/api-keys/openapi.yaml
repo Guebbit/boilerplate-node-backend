@@ -52,6 +52,8 @@ paths:
                 currently-held tenant permissions: a key can never reach further than the person
                 who minted it, and that floor is re-checked on every request the key later makes,
                 not just at mint time — see `docs/tools/security.md#machine-to-machine-credentials`.
+                A key whose minter is banned, soft-deleted or erased is refused with 401 like a
+                revoked one; an unban or a restore brings it back.
                 A permission no credential can use is refused with 422 too: one that demands a freshly
                 proved session, and one whose routes are session-only (`read:Stats`, the inbox, the
                 key list itself), which would grant nothing while looking like it grants something.

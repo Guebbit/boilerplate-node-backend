@@ -59,8 +59,9 @@ secret.
 (`services/api-keys.ts#isMintable`, against what the requesting caller holds right now), and again
 on every single use (`module.ts`'s `CredentialResolver`, re-deriving the minter's CURRENT
 permissions and intersecting them against the key's stored snapshot). The second floor is the one
-that matters after the fact: demote or delete the person who minted a key, and every key they ever
-minted shrinks or dies with them — without the credential document itself ever being touched.
+that matters after the fact: demote the person who minted a key and every key they ever minted shrinks;
+ban, soft-delete or erase them and every key is refused like a revoked one, and an unban or a
+restore brings the key back — without the credential document itself ever being touched.
 
 **A key use counts as activity.** Each use stamps the key's own `lastUsedAt` and, at most once a
 day, the minter's `lastApiKeyUseAt` through the `users` service. The inactivity job reads that, so

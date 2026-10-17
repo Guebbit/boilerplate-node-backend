@@ -221,10 +221,9 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         expect(afterDemotion?.caller.permissions).not.toContain('read:WebhookSubscription');
     });
 
-    // The minter's deactivation is the only way to switch a key off without touching it: an
-    // administrator cannot ban another administrator, so this is what a hand edit of the account
-    // (the technician's door) does to every key that account minted.
-    it('holds nothing for a key whose minter was deactivated, and the key itself is untouched', async () => {
+    // A ban is the one way to switch a key off without touching it: the key is refused like a
+    // revoked one, and an unban brings it back, since nothing on the document changed.
+    it('refuses a key whose minter was deactivated, and the key itself is untouched', async () => {
         const user = await createRealUser('banned-minter');
         const userId = String(user._id);
         await accessService.assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
@@ -240,14 +239,15 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         const before = await credentialOf(minted.data.secret);
 
         await userRepository.updateMany({ _id: userId }, { active: false });
-        const after = await credentialOf(minted.data.secret);
+        const whileBanned = await credentialOf(minted.data.secret);
         const stored = await apiKeyRepository.findById(minted.data.id);
+        await userRepository.updateMany({ _id: userId }, { active: true });
+        const afterUnban = await credentialOf(minted.data.secret);
 
         expect(before?.caller.permissions).toContain('read:WebhookSubscription');
-        // Still recognised (the guest's floor, not a refusal at the door), holding none of the minter's keys.
-        expect(after?.caller.permissions).not.toContain('read:WebhookSubscription');
-        expect(after?.caller.permissions.every((key) => key.startsWith('read:'))).toBe(true);
+        expect(whileBanned).toBeUndefined();
         expect(stored?.revokedAt).toBeUndefined();
+        expect(afterUnban?.caller.permissions).toContain('read:WebhookSubscription');
     });
 
     it('carries the credential id for the audit trail, display-shaped, never the secret', async () => {
