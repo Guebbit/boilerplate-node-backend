@@ -110,18 +110,14 @@ export interface AnalyticsProvider {
 // ─── Registry ────────────────────────────────────────────────────────────────
 
 /**
- * Every implementation this build knows. `none` is the spelling for "analytics off". A live
- * deployment adds one file and calls {@link registerAnalyticsProvider} — no edit here required.
+ * Every implementation this build knows. `none` is the spelling for "analytics off". A new
+ * provider is one adapter file plus one entry here.
  */
 const registry = createProviderRegistry<AnalyticsProvider>({
     umami: umamiAnalyticsProvider,
     posthog: posthogAnalyticsProvider,
     none: noneAnalyticsProvider
 });
-
-/** Add (or, in a test, override) one implementation without editing this file. */
-export const registerAnalyticsProvider = (name: string, provider: AnalyticsProvider): void =>
-    registry.register(name, provider);
 
 /** Memoised provider handle — see `resolveAnalyticsProvider`. */
 let provider: AnalyticsProvider | undefined;

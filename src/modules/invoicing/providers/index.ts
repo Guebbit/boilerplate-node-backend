@@ -47,16 +47,11 @@ export interface EInvoicingProvider {
 }
 
 /**
- * Every implementation this build knows. A live deployment adds one file and calls
- * {@link registerEInvoicingProvider} — no edit here required.
+ * Every implementation this build knows. A new provider is one adapter file plus one entry here.
  */
 const registry = createProviderRegistry<EInvoicingProvider>({
     pdf: pdfEInvoicingProvider
 });
-
-/** Add (or, in a test, override) one implementation without editing this file. */
-export const registerEInvoicingProvider = (name: string, provider: EInvoicingProvider): void =>
-    registry.register(name, provider);
 
 /**
  * The configured e-invoicing provider, read fresh per call rather than memoised — the same

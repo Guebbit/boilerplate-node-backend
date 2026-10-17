@@ -90,20 +90,13 @@ export interface HumanChallengeProvider {
 }
 
 /**
- * Every implementation this build knows. A live deployment adds one file and calls
- * {@link registerHumanChallengeProvider} — no edit here required.
+ * Every implementation this build knows. A new provider is one adapter file plus one entry here.
  */
 const registry = createProviderRegistry<HumanChallengeProvider>({
     none: noneProvider,
     turnstile: turnstileProvider,
     altcha: altchaProvider
 });
-
-/** Add (or, in a test, override) one implementation without editing this file. */
-export const registerHumanChallengeProvider = (
-    name: string,
-    provider: HumanChallengeProvider
-): void => registry.register(name, provider);
 
 /**
  * The configured provider, read fresh per call rather than memoised like `PaymentProvider`'s —
