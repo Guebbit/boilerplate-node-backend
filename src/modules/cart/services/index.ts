@@ -13,25 +13,23 @@ import * as shelf from './shelf';
 
 export type { CheckoutChoices } from './checkout';
 export type { MergeResult } from './merge';
-export { cartItemSetById } from './items';
-export { orderConfirm } from './checkout';
 
 /** The module's barrel export — controllers and siblings call through this, never the bare functions. */
 export const cartService = {
-    cartGet: items.cartGet,
-    cartGetForBadge: items.cartGetForBadge,
-    cartGetForView: items.cartGetForView,
-    cartItemSetById: items.cartItemSetById,
-    cartItemAdd: items.cartItemAdd,
-    cartItemUpdateQuantity: items.cartItemUpdateQuantity,
-    cartItemAddById: items.cartItemAddById,
-    cartItemRemoveById: items.cartItemRemoveById,
-    cartRemove: items.cartRemove,
-    cartShippingMethodSet: items.cartShippingMethodSet,
-    cartDeleteByUserId: cleanup.cartDeleteByUserId,
+    get: items.cartGet,
+    getForBadge: items.cartGetForBadge,
+    getForView: items.cartGetForView,
+    setItemById: items.cartItemSetById,
+    addItem: items.cartItemAdd,
+    updateItemQuantity: items.cartItemUpdateQuantity,
+    addItemById: items.cartItemAddById,
+    removeItemById: items.cartItemRemoveById,
+    remove: items.cartRemove,
+    setShippingMethod: items.cartShippingMethodSet,
+    deleteByUserId: cleanup.cartDeleteByUserId,
     orderConfirm: checkout.orderConfirm,
     reorderIntoCart: reorder.reorderIntoCart,
-    cartMerge: merge.cartMerge,
+    merge: merge.cartMerge,
     productAvailabilityFor: shelf.productAvailabilityFor,
     productRemoveFromCartsById: cleanup.productRemoveFromCartsById
 };

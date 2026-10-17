@@ -31,10 +31,10 @@ import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, readProduct, productRepository } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
-import { cartItemSetById, orderConfirm } from '../../services';
+import { cartService } from '../../services';
 import { cartRepository } from '../../repository';
 import { readOrder } from '@modules/orders/tests/factories';
-import { createIntent, recordOfflinePayment } from '@modules/payments';
+import { paymentService } from '@modules/payments';
 import { stockLevelRepository } from '@modules/inventory/tests/factories';
 
 setupTestDb();
@@ -53,9 +53,9 @@ afterEach(() => {
 const placePendingOrder = async (product: Awaited<ReturnType<typeof createProduct>>) => {
     const user = await createUser();
     await giveAddress(user.id);
-    await cartItemSetById(user.id, String(product._id), 1);
+    await cartService.setItemById(user.id, String(product._id), 1);
     await cartRepository.setShippingMethod(user.id, 'pickup');
-    const result = await orderConfirm(user.id, testCallerContext, undefined);
+    const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
     if (!result.success) throw new Error('setup: checkout was refused');
     // The confirmation email already fired at placement — every assertion below cares only
     // about what happens AFTER the product stops being sellable. `flush()` first, so that
@@ -90,7 +90,7 @@ describe('hard-deleting a product with a pending order against it', () => {
         await productService.remove(deleted!, true);
         await settleOutboxNudges();
 
-        const result = await createIntent(orderId, asCustomer(user.id));
+        const result = await paymentService.createIntent(orderId, asCustomer(user.id));
 
         expect(result.success).toBe(true);
     });
@@ -102,7 +102,7 @@ describe('hard-deleting a product with a pending order against it', () => {
         await productService.remove(deleted!, true);
         await settleOutboxNudges();
 
-        const result = await recordOfflinePayment(
+        const result = await paymentService.recordOfflinePayment(
             orderId,
             { method: 'bank_transfer', reference: 'till-1' },
             callerContextAs('admin')
@@ -126,7 +126,7 @@ describe('soft-deleting a product with a pending order against it', () => {
         const order = await readOrder(orderId);
         expect(order!.status).toBe('pending');
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
-        const result = await createIntent(orderId, asCustomer(user.id));
+        const result = await paymentService.createIntent(orderId, asCustomer(user.id));
         expect(result.success).toBe(true);
     });
 });
@@ -154,7 +154,7 @@ describe('deactivating a product with a pending order against it', () => {
 
         await productService.updateById(String(product._id), { active: false }, testCallerContext);
 
-        const result = await createIntent(orderId, asCustomer(user.id));
+        const result = await paymentService.createIntent(orderId, asCustomer(user.id));
 
         expect(result.success).toBe(true);
     });
@@ -165,7 +165,7 @@ describe('deactivating a product with a pending order against it', () => {
 
         await productService.updateById(String(product._id), { active: false }, testCallerContext);
 
-        const result = await recordOfflinePayment(
+        const result = await paymentService.recordOfflinePayment(
             orderId,
             { method: 'bank_transfer', reference: 'till-1' },
             callerContextAs('admin')
@@ -198,7 +198,7 @@ describe('a write that fails must not have already announced the deletion', () =
     it('a hard delete whose write fails leaves the cart line — the event never fired', async () => {
         const product = await createProduct({ onHand: 5 });
         const user = await createUser();
-        await cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         jest.spyOn(productRepository, 'deleteOne').mockRejectedValueOnce(
             new Error('mongo is down')
@@ -219,7 +219,7 @@ describe('a write that fails must not have already announced the deletion', () =
     it('a soft delete whose write fails leaves the cart line — the event never fired', async () => {
         const product = await createProduct({ onHand: 5 });
         const user = await createUser();
-        await cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         jest.spyOn(productRepository, 'save').mockRejectedValueOnce(new Error('mongo is down'));
 

@@ -1,6 +1,6 @@
 /**
  * @module
- * `PUT /cart/:productId` controller — thin HTTP adapter over `cartService.cartItemUpdateQuantity`.
+ * `PUT /cart/:productId` controller — thin HTTP adapter over `cartService.updateItemQuantity`.
  */
 
 import type { Request, Response } from 'express';
@@ -39,7 +39,7 @@ export const putCartItem = (
     const { quantity } = body;
 
     return cartService
-        .cartItemUpdateQuantity(userId, productId, quantity, callerContextOf(request))
+        .updateItemQuantity(userId, productId, quantity, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 

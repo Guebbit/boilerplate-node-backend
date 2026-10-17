@@ -7,7 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { resetDomainEvents } from '@kernel/events';
 import { asAdmin, asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
@@ -16,10 +16,10 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { carryOrderTo } from '@modules/delivery/tests/factories';
 import { inventoryService } from '@modules/inventory';
 import paymentsModule from '@modules/payments/module';
-import { createIntent, confirmPayment, paymentService } from '@modules/payments';
+import { paymentService } from '@modules/payments';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import returnsModule from '../../module';
-import { createReturn, receiveReturn } from '../../services';
+import { returnService } from '../../services';
 import { returnRepository } from '../../repository';
 
 setupTestDb();
@@ -51,12 +51,17 @@ const withdrawnOrder = async () => {
     await inventoryService.reserveForOrder(orderId, [
         { productId: String(shirt._id), quantity: 2 }
     ]);
-    const intent = await createIntent(orderId, asCustomer(user.id));
+    const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
     if (!intent.success) throw new Error('intent refused');
-    await confirmPayment(intent.data.id, 'pm_card_visa', asCustomer(user.id), testCallerContext);
+    await paymentService.confirmPayment(
+        intent.data.id,
+        'pm_card_visa',
+        asCustomer(user.id),
+        testCallerContext
+    );
     // Through the real doors: each shipment takes its own units off the shelf.
     await carryOrderTo(orderId, 'delivered');
-    const outcome = await createReturn(
+    const outcome = await returnService.createReturn(
         { orderId, reason: 'withdrawal' },
         asCustomer(user.id),
         testCallerContext
@@ -67,11 +72,15 @@ const withdrawnOrder = async () => {
 
 describe('a return whose refund the provider refuses', () => {
     it('leaves the return received, and closes it when the sweep completes the refund', () =>
-        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
             const { shirt, orderId, returnId } = await withdrawnOrder();
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
 
-            const result = await receiveReturn(returnId, {}, callerContextAs('admin'));
+            const result = await returnService.receiveReturn(
+                returnId,
+                {},
+                callerContextAs('admin')
+            );
 
             // The goods are back either way — a failed refund does not undo the receipt.
             expect(result.success && result.data.status).toBe('received');

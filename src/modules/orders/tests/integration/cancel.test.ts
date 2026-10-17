@@ -38,7 +38,7 @@ import {
     testCallerContext
 } from '@tests/callers';
 
-// The queue, not the copy: `mail-copy.test.ts` pins what the email says.
+// The queue, not the copy.
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()

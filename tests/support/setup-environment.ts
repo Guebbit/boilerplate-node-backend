@@ -11,7 +11,7 @@
  *
  * Budgets are raised here; business rules (a cap, a per-line ceiling) never are. The scenario
  * suites build the demo shop in this environment, so a rule raised here passes a seed that
- * production refuses. A case that needs a looser rule sets it itself, with `withEnvironment`.
+ * production refuses. A case that needs a looser rule sets it itself, with `withEnvironmentOverrides`.
  */
 
 /**

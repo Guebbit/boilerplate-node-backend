@@ -1,7 +1,7 @@
 /**
  * @module
  * `DELETE /cart/:productId` and `DELETE /cart` controller — thin HTTP adapter over
- * `cartService.cartItemRemoveById`. One controller for both spellings: `productId` arrives as a
+ * `cartService.removeItemById`. One controller for both spellings: `productId` arrives as a
  * path segment on the canonical route, or as a required body field on the alias
  * (`x-alias-of: removeCartItem`). See docs/theory/request-input.md.
  */
@@ -38,7 +38,7 @@ export const deleteCartItem = (
     if (!productId) return;
 
     return cartService
-        .cartItemRemoveById(userId, productId, callerContextOf(request))
+        .removeItemById(userId, productId, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             successResponse<CartResponse>(response, result.data, 200, t('cart.product-removed'));

@@ -56,11 +56,11 @@ now exists" — created one and reported nothing. Two different routes producing
 operation is common enough (checkout and the admin order form, a wishlist move-to-cart and a
 plain add) that a controller-level emit is a coverage bet the controller cannot see itself making.
 
-**A method serving more than one meaning is split first, emitted second.** `cartGetForView` and
-`cartGetForBadge` read the identical cart; only the first is a `cart_viewed` moment, and each is
+**A method serving more than one meaning is split first, emitted second.** `getForView` and
+`getForBadge` read the identical cart; only the first is a `cart_viewed` moment, and each is
 its own named function rather than one function with a flag — a flag is one more thing a future
-call site can get wrong, a name is not. The same shape applies to `cartItemAdd`/
-`cartItemUpdateQuantity` (one write, two routes, two meanings) and to a shared read wrapped by a
+call site can get wrong, a name is not. The same shape applies to `addItem`/
+`updateItemQuantity` (one write, two routes, two meanings) and to a shared read wrapped by a
 dedicated caller-specific function (`getOwnProfile` beside the admin-shared `userService.getById`)
 rather than an emit added to the shared function itself.
 

@@ -19,7 +19,7 @@ setupTestDb();
 /** One in-stock product straight into the user's cart — the checkout cases' shared setup. */
 const cartWith = async (userId: string) => {
     const product = await createProduct();
-    await cartService.cartItemAddById(userId, String(product._id), 1);
+    await cartService.addItemById(userId, String(product._id), 1);
     return product;
 };
 
@@ -30,7 +30,7 @@ describe('checkout and the address', () => {
         await cartWith(user.id);
 
         // `standard` requires an address — this is the case that resolves it from the default.
-        await cartService.cartShippingMethodSet(user.id, 'standard');
+        await cartService.setShippingMethod(user.id, 'standard');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(true);
@@ -48,7 +48,7 @@ describe('checkout and the address', () => {
         const view = await addressService.list(user.id);
         const office = view.addresses.find(({ label }) => label === 'office');
 
-        await cartService.cartShippingMethodSet(user.id, 'standard');
+        await cartService.setShippingMethod(user.id, 'standard');
         const result = await cartService.orderConfirm(user.id, testCallerContext, {
             addressId: office!.id
         });
@@ -63,7 +63,7 @@ describe('checkout and the address', () => {
         const user = await createUser();
         await addressService.create(user.id, HOME);
         const product = await cartWith(user.id);
-        await cartService.cartShippingMethodSet(user.id, 'standard');
+        await cartService.setShippingMethod(user.id, 'standard');
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, {
             addressId: '65dc8a99604c307b702b5ccc'
@@ -76,7 +76,7 @@ describe('checkout and the address', () => {
         const stored = await readProduct(String(product._id));
         expect(stored?.onHand).toBe(10);
         expect(stored?.reserved).toBe(0);
-        const cart = await cartService.cartGetForBadge(user.id);
+        const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toHaveLength(1);
     });
 
@@ -92,7 +92,7 @@ describe('checkout and the address', () => {
 
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
         const product = await cartWith(stranger.id);
-        await cartService.cartShippingMethodSet(stranger.id, 'standard');
+        await cartService.setShippingMethod(stranger.id, 'standard');
 
         const result = await cartService.orderConfirm(stranger.id, testCallerContext, {
             addressId: ownersEntryId
@@ -113,7 +113,7 @@ describe('checkout and the address', () => {
         await cartWith(user.id);
 
         // `pickup` needs no address, so nothing is frozen as a shipping address.
-        await cartService.cartShippingMethodSet(user.id, 'pickup');
+        await cartService.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(true);
@@ -127,7 +127,7 @@ describe('checkout and the address', () => {
         const user = await createUser();
         const product = await cartWith(user.id);
 
-        await cartService.cartShippingMethodSet(user.id, 'pickup');
+        await cartService.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(false);
@@ -144,7 +144,7 @@ describe('checkout and the billing address', () => {
         const user = await createUser();
         await addressService.create(user.id, HOME);
         await cartWith(user.id);
-        await cartService.cartShippingMethodSet(user.id, 'standard');
+        await cartService.setShippingMethod(user.id, 'standard');
 
         const result = await cartService.orderConfirm(user.id, testCallerContext);
 
@@ -164,7 +164,7 @@ describe('checkout and the billing address', () => {
         await cartWith(user.id);
         const { addresses } = await addressService.list(user.id);
         const office = addresses.find(({ label }) => label === 'office');
-        await cartService.cartShippingMethodSet(user.id, 'standard');
+        await cartService.setShippingMethod(user.id, 'standard');
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, {
             billingAddressId: office!.id
@@ -178,7 +178,7 @@ describe('checkout and the billing address', () => {
         const user = await createUser();
         await addressService.create(user.id, HOME);
         const digital = await createProduct({ requiresShipping: false });
-        await cartService.cartItemAddById(user.id, String(digital._id), 1);
+        await cartService.addItemById(user.id, String(digital._id), 1);
 
         const result = await cartService.orderConfirm(user.id, testCallerContext);
 
@@ -194,7 +194,7 @@ describe('checkout and the billing address', () => {
         await addressService.create(user.id, HOME);
         await addressService.create(user.id, OFFICE);
         const digital = await createProduct({ requiresShipping: false });
-        await cartService.cartItemAddById(user.id, String(digital._id), 1);
+        await cartService.addItemById(user.id, String(digital._id), 1);
         const { addresses } = await addressService.list(user.id);
         const office = addresses.find(({ label }) => label === 'office');
 
@@ -208,7 +208,7 @@ describe('checkout and the billing address', () => {
     it('refuses a digital-only checkout with no address on file', async () => {
         const user = await createUser();
         const digital = await createProduct({ requiresShipping: false });
-        await cartService.cartItemAddById(user.id, String(digital._id), 1);
+        await cartService.addItemById(user.id, String(digital._id), 1);
 
         const result = await cartService.orderConfirm(user.id, testCallerContext);
 
@@ -221,7 +221,7 @@ describe('checkout and the billing address', () => {
         await addressService.create(user.id, HOME);
         const { addresses } = await addressService.list(user.id);
         const digital = await createProduct({ requiresShipping: false });
-        await cartService.cartItemAddById(user.id, String(digital._id), 1);
+        await cartService.addItemById(user.id, String(digital._id), 1);
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, {
             addressId: addresses[0].id
@@ -240,7 +240,7 @@ describe('checkout and the billing address', () => {
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
         await addressService.create(stranger.id, OFFICE);
         await cartWith(stranger.id);
-        await cartService.cartShippingMethodSet(stranger.id, 'standard');
+        await cartService.setShippingMethod(stranger.id, 'standard');
 
         const result = await cartService.orderConfirm(stranger.id, testCallerContext, {
             billingAddressId: ownersEntryId
@@ -255,7 +255,7 @@ describe('checkout and the billing address', () => {
         const user = await createUser();
         await addressService.create(user.id, { ...HOME, country: 'JP' });
         const digital = await createProduct({ requiresShipping: false });
-        await cartService.cartItemAddById(user.id, String(digital._id), 1);
+        await cartService.addItemById(user.id, String(digital._id), 1);
 
         const result = await cartService.orderConfirm(user.id, testCallerContext);
 

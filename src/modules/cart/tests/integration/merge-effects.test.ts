@@ -38,7 +38,7 @@ describe('a merge’s analytics', () => {
         const product = await createProduct();
         const emit = observePort(analyticsPort.emitAnalyticsEvent);
 
-        await cartService.cartMerge(
+        await cartService.merge(
             user.id,
             [{ productId: String(product._id), quantity: 2 }],
             testCallerContext
@@ -56,10 +56,10 @@ describe('a merge’s analytics', () => {
     it('counts a line that grew an existing one as an update, not an add', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemAddById(user.id, String(product._id), 1);
+        await cartService.addItemById(user.id, String(product._id), 1);
         const emit = observePort(analyticsPort.emitAnalyticsEvent);
 
-        await cartService.cartMerge(
+        await cartService.merge(
             user.id,
             [{ productId: String(product._id), quantity: 3 }],
             testCallerContext
@@ -78,7 +78,7 @@ describe('a merge’s analytics', () => {
         const emit = observePort(analyticsPort.emitAnalyticsEvent);
 
         // An id nobody holds and no product has: refused as unavailable, written nowhere.
-        await cartService.cartMerge(
+        await cartService.merge(
             user.id,
             [{ productId: '000000000000000000000000', quantity: 1 }],
             testCallerContext
@@ -92,13 +92,13 @@ describe('a merge that loses a race at the cap', () => {
     it('answers the line as capped, with what the cart holds, and counts nothing', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemAddById(user.id, String(product._id), 5);
+        await cartService.addItemById(user.id, String(product._id), 5);
         // Between the rule's read and the write another request filled the line: the repository
         // refuses the add. Only a race can say so, hence a stand-in for it.
         jest.spyOn(cartRepository, 'upsertLine').mockResolvedValueOnce(QUANTITY_LIMIT);
         const emit = observePort(analyticsPort.emitAnalyticsEvent);
 
-        const { lines } = await cartService.cartMerge(
+        const { lines } = await cartService.merge(
             user.id,
             [{ productId: String(product._id), quantity: 2 }],
             testCallerContext
@@ -129,7 +129,7 @@ describe('productRemoveFromCartsById', () => {
     it('announces whose carts held the product, with its names', async () => {
         const holder = await createUser();
         const product = await createProduct();
-        await cartService.cartItemAddById(holder.id, String(product._id), 1);
+        await cartService.addItemById(holder.id, String(product._id), 1);
 
         await cartService.productRemoveFromCartsById(String(product._id), { en: 'Blue mug' });
 

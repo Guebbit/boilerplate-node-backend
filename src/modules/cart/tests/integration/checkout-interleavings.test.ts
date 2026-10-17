@@ -29,7 +29,7 @@ import { cartService } from '../../services';
 import { cartRepository } from '../../repository';
 import { stockLevelRepository } from '@modules/inventory/tests/factories';
 import { countOrders } from '@modules/orders/tests/factories';
-import { createIntent } from '@modules/payments';
+import { paymentService } from '@modules/payments';
 import { resetDomainEvents } from '@kernel/events';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -52,7 +52,7 @@ const shopperWithCart = async () => {
     await giveAddress(user.id);
     const product = await createProduct({ onHand: 10 });
     const other = await createProduct({ onHand: 10 });
-    await cartService.cartItemAddById(user.id, String(product._id), 3);
+    await cartService.addItemById(user.id, String(product._id), 3);
     await cartRepository.setShippingMethod(user.id, 'pickup');
     return { user, product, other };
 };
@@ -98,20 +98,20 @@ interface CartWrite {
 const CART_WRITES: readonly CartWrite[] = [
     {
         name: 'adds another product',
-        run: ({ userId, otherId }) => cartService.cartItemAddById(userId, otherId, 1)
+        run: ({ userId, otherId }) => cartService.addItemById(userId, otherId, 1)
     },
     {
         name: 'raises the quantity of the line being bought',
-        run: ({ userId, productId }) => cartService.cartItemSetById(userId, productId, 5)
+        run: ({ userId, productId }) => cartService.setItemById(userId, productId, 5)
     },
     {
         name: 'removes the line being bought',
         run: ({ userId, productId }) =>
-            cartService.cartItemRemoveById(userId, productId, testCallerContext)
+            cartService.removeItemById(userId, productId, testCallerContext)
     },
     {
         name: 'clears the whole cart',
-        run: ({ userId }) => cartService.cartRemove(userId, testCallerContext)
+        run: ({ userId }) => cartService.remove(userId, testCallerContext)
     },
     {
         name: 'changes the shipping method',
@@ -150,7 +150,7 @@ describe('a cart write between the version read and the clear', () => {
 
     it('is retryable: the same shopper then checks out the cart they actually have', async () => {
         const { user, product, other } = await shopperWithCart();
-        writeDuringJoin(() => cartService.cartItemAddById(user.id, String(other._id), 2));
+        writeDuringJoin(() => cartService.addItemById(user.id, String(other._id), 2));
 
         const lost = await cartService.orderConfirm(user.id, testCallerContext, undefined);
         const retried = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -169,7 +169,7 @@ describe('a cart write between the version read and the clear', () => {
     it('does not lose a checkout to a write that changed nothing', async () => {
         // PUT the quantity the line already holds: no `__v` bump, so no false CART_CHANGED.
         const { user, product } = await shopperWithCart();
-        writeDuringJoin(() => cartService.cartItemSetById(user.id, String(product._id), 3));
+        writeDuringJoin(() => cartService.setItemById(user.id, String(product._id), 3));
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
@@ -185,7 +185,7 @@ describe('a reprice between the catalogue read and the order write', () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ price: 40, onHand: 10 });
-        await cartService.cartItemAddById(user.id, String(product._id), 3);
+        await cartService.addItemById(user.id, String(product._id), 3);
         await cartRepository.setShippingMethod(user.id, 'standard');
         writeDuringJoin(async () => {
             const stored = await readProduct(String(product._id));
@@ -196,7 +196,7 @@ describe('a reprice between the catalogue read and the order write', () => {
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
         const placed = result.success ? result.data : undefined;
-        const intent = await createIntent(String(placed?._id), asCustomer(user.id));
+        const intent = await paymentService.createIntent(String(placed?._id), asCustomer(user.id));
 
         expect(result.success).toBe(true);
         expect(placed?.items[0]?.product.price).toBe(40);

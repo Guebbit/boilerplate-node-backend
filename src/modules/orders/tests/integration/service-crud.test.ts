@@ -33,7 +33,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
 import { userService } from '@modules/users';
 
-// The queue, not the copy: `mail-copy.test.ts` pins what the placed-order email says.
+// The queue, not the copy.
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()

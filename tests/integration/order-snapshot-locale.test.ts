@@ -93,7 +93,7 @@ describe("cartService.orderConfirm freezes the snapshot in the buyer's stored lo
         const product = await createProduct({ title: 'Dog Bed' });
         await givenTranslation(String(product._id), 'it', { title: 'Cuccia' });
 
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 

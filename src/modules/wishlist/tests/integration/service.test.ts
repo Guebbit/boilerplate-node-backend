@@ -112,7 +112,7 @@ describe('get: availability per line', () => {
 
         expect(saved.success).toBe(true);
         expect(moved.success).toBe(true);
-        const cart = await cartService.cartGetForBadge(user.id);
+        const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toEqual([
             { productId: String(offSale._id), quantity: 1, availability: 'unavailable' }
         ]);
@@ -232,7 +232,7 @@ describe('moveToCart', () => {
 
         expect(result.success).toBe(true);
         expect(await savedIds(user.id)).toEqual([]);
-        const cart = await cartService.cartGetForBadge(user.id);
+        const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toEqual([
             { productId: String(product._id), quantity: 1, availability: 'in_stock' }
         ]);
@@ -241,12 +241,12 @@ describe('moveToCart', () => {
     it('increments a line the cart already holds', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemAddById(user.id, String(product._id), 2);
+        await cartService.addItemById(user.id, String(product._id), 2);
         await wishlistService.add(user.id, String(product._id), testCallerContext);
 
         await wishlistService.moveToCart(user.id, String(product._id), testCallerContext);
 
-        const cart = await cartService.cartGetForBadge(user.id);
+        const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toEqual([
             { productId: String(product._id), quantity: 3, availability: 'in_stock' }
         ]);
@@ -264,12 +264,12 @@ describe('moveToCart', () => {
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
-        const cart = await cartService.cartGetForBadge(user.id);
+        const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toEqual([]);
     });
 
     /*
-     * The catalogue gate, reached THROUGH the cart. `cartItemAddById` refuses a product the
+     * The catalogue gate, reached THROUGH the cart. `addItemById` refuses a product the
      * storefront would not show, and this module turns that refusal into its own 404 rather than
      * asking the catalogue a second time — so these two cases fail if either half breaks: the
      * cart's rule, or this module's reading of it.
@@ -293,7 +293,7 @@ describe('moveToCart', () => {
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
-        const cart = await cartService.cartGetForBadge(user.id);
+        const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toEqual([]);
         // Still saved. The refusal is about buying it now, not about forgetting it — a product
         // can come back, and dropping the line would take the shopper's list with it.
@@ -317,7 +317,7 @@ describe('moveToCart', () => {
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
-        const cart = await cartService.cartGetForBadge(user.id);
+        const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toEqual([]);
     });
 
@@ -331,7 +331,7 @@ describe('moveToCart', () => {
         withEnvironmentOverrides({ NODE_CART_LINE_MAX: '1' }, async () => {
             const user = await createUser();
             const product = await createProduct();
-            await cartService.cartItemAddById(user.id, String(product._id), 1);
+            await cartService.addItemById(user.id, String(product._id), 1);
             await wishlistService.add(user.id, String(product._id), testCallerContext);
 
             const result = await wishlistService.moveToCart(

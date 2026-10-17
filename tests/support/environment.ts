@@ -39,19 +39,6 @@ export const withEnvironmentOverrides = async <T>(
 };
 
 /**
- * {@link withEnvironmentOverrides} for one variable.
- *
- * @param key - the variable to set
- * @param value - what to set it to
- * @param body - what to run with it set
- */
-export const withEnvironment = (
-    key: string,
-    value: string,
-    body: () => Promise<void>
-): Promise<void> => withEnvironmentOverrides({ [key]: value }, body);
-
-/**
  * Every case of a FILE starts with `keys` unset; `setup-environment-reset.ts` puts the worker's own
  * values back after each case.
  *

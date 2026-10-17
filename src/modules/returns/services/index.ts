@@ -19,8 +19,6 @@ export type { CreateReturnInput, CreateReturnOutcome } from './create';
 export type { ReceiveReturnInput } from './receive';
 export type { ReturnFilters } from './read';
 export type { ReturnedBucket } from './stats';
-export { createReturn } from './create';
-export { receiveReturn } from './receive';
 
 /** The service's one handle. Named for the record it serves. */
 export const returnService = {

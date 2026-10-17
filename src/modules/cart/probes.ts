@@ -30,7 +30,7 @@ export const probes: Probe[] = [
     },
     {
         name: 'Probe: set a quantity on a product the storefront will not show',
-        why: `The catalogue gate, from the quieter of the two routes that create a line. \`PUT /cart/{productId}\` writes as readily as \`POST /cart\` does, so it owes the same refusal — and it is the one where a missing gate would hide best, since a line naming a product nobody can see renders as nothing rather than as an error. The rule lives in \`cartItemSetById\`; this proves the route inherits it.`,
+        why: `The catalogue gate, from the quieter of the two routes that create a line. \`PUT /cart/{productId}\` writes as readily as \`POST /cart\` does, so it owes the same refusal — and it is the one where a missing gate would hide best, since a line naming a product nobody can see renders as nothing rather than as an error. The rule lives in \`setItemById\`; this proves the route inherits it.`,
         method: 'PUT',
         path: '/cart/{{seedInactiveProductId}}',
         auth: 'bearer',

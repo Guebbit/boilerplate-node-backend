@@ -143,8 +143,7 @@ export const transferInstructionsEmail = (
             beneficiary: instructions.beneficiary,
             iban: instructions.iban,
             // Not a conditional spread: `undefined` here still reads as "unset" to the
-            // template's `typeof bic !== "undefined"` guard, and a bare key keeps this object a
-            // plain literal `tests/cross-cutting/mail-copy.test.ts` can read statically.
+            // template's `typeof bic !== "undefined"` guard.
             bic: instructions.bic,
             reference: instructions.reference,
             deadline: t('payments.email-transfer.deadline', {

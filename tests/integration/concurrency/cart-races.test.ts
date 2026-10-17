@@ -299,12 +299,12 @@ const loseTheRace = async () => {
     await giveAddress(user.id);
     const product = await createProduct({ onHand: 10 });
     const other = await createProduct({ onHand: 10 });
-    await cartService.cartItemAddById(user.id, String(product._id), 3);
+    await cartService.addItemById(user.id, String(product._id), 3);
     await cartRepository.setShippingMethod(user.id, 'pickup');
     const joinProducts = productService.findManyByIds;
     jest.spyOn(productService, 'findManyByIds').mockImplementationOnce((ids) =>
         joinProducts(ids).then(async (products) => {
-            await cartService.cartItemAddById(user.id, String(other._id), 1);
+            await cartService.addItemById(user.id, String(other._id), 1);
             return products;
         })
     );

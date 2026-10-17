@@ -1,6 +1,6 @@
 /**
  * @module
- * `GET /cart` controller — thin HTTP adapter over `cartService.cartGetForView`.
+ * `GET /cart` controller — thin HTTP adapter over `cartService.getForView`.
  */
 
 import type { Request, Response } from 'express';
@@ -17,7 +17,7 @@ import type { CartResponse } from '@types';
  */
 export const getCart = (request: Request, response: Response) => {
     return cartService
-        .cartGetForView(request.authContext!.id, callerContextOf(request))
+        .getForView(request.authContext!.id, callerContextOf(request))
         .then((cart) => {
             successResponse<CartResponse>(response, cart);
         })

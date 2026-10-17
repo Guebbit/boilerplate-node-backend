@@ -41,7 +41,7 @@ const shopperBuyingThree = async (onHand: number) => {
     const user = await createUser();
     await giveAddress(user.id);
     const product = await createProduct({ onHand });
-    await cartService.cartItemAddById(user.id, String(product._id), 3);
+    await cartService.addItemById(user.id, String(product._id), 3);
     await cartRepository.setShippingMethod(user.id, 'pickup');
     return { user, product };
 };

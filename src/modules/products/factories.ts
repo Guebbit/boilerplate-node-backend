@@ -15,7 +15,7 @@ import type { ProductDocument, ProductRecord } from './model';
  * What a caller may pin; everything absent is left to the schema. Derived from the generated
  * `Product` rather than restated, so a contract change can't drift out of sync. `available` and
  * `currency` are both accepted but ignored — neither is a schema path: pin `onHand`/`reserved`
- * for the former, `NODE_DEFAULT_CURRENCY` (`withEnvironment` in a test) for the latter.
+ * for the former, `NODE_DEFAULT_CURRENCY` (`withEnvironmentOverrides` in a test) for the latter.
  */
 export type ProductOverrides = OverridesFor<Product>;
 

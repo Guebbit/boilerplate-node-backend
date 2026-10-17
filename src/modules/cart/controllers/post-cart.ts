@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /cart` controller — thin HTTP adapter over `cartService.cartItemAdd`.
+ * `POST /cart` controller — thin HTTP adapter over `cartService.addItem`.
  */
 
 import type { Request, Response } from 'express';
@@ -32,7 +32,7 @@ export const postCart = (
     const { productId, quantity } = body;
 
     return cartService
-        .cartItemAdd(userId, productId, quantity, callerContextOf(request))
+        .addItem(userId, productId, quantity, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 

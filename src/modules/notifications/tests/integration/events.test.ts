@@ -37,7 +37,7 @@ describe('the module subscriptions', () => {
             const holder = await createUser({ email: 'holder@example.com', username: 'holder' });
             const bystander = await createUser({ email: 'by@example.com', username: 'by' });
             const doomed = await createProduct({ title: 'Blue mug' });
-            await cartService.cartItemAddById(holder.id, String(doomed._id), 2);
+            await cartService.addItemById(holder.id, String(doomed._id), 2);
 
             await productService.removeById(String(doomed._id), true);
 
@@ -72,7 +72,7 @@ describe('the module subscriptions', () => {
         it('writes both messages for a user who held the product in both lists', async () => {
             const user = await createUser();
             const doomed = await createProduct({ title: 'Blue mug' });
-            await cartService.cartItemAddById(user.id, String(doomed._id), 1);
+            await cartService.addItemById(user.id, String(doomed._id), 1);
             await wishlistService.add(user.id, String(doomed._id), testCallerContext);
 
             await productService.removeById(String(doomed._id), true);
@@ -90,7 +90,7 @@ describe('the module subscriptions', () => {
         it('tells owners of a SOFT delete too, while the product still exists', async () => {
             const holder = await createUser();
             const hidden = await createProduct({ title: 'Blue mug' });
-            await cartService.cartItemAddById(holder.id, String(hidden._id), 1);
+            await cartService.addItemById(holder.id, String(hidden._id), 1);
 
             await productService.removeById(String(hidden._id), false);
 
@@ -122,7 +122,7 @@ describe('the module subscriptions', () => {
             await productService.removeById(String(hidden._id), false);
             await settleOutboxNudges();
 
-            await cartService.cartMerge(
+            await cartService.merge(
                 user.id,
                 [
                     { productId: String(fine._id), quantity: 1 },
@@ -159,7 +159,7 @@ describe('the module subscriptions', () => {
             const user = await createUser();
             const soldOut = await createProduct({ onHand: 0 });
 
-            await cartService.cartMerge(
+            await cartService.merge(
                 user.id,
                 [{ productId: String(soldOut._id), quantity: 2 }],
                 testCallerContext
@@ -172,9 +172,9 @@ describe('the module subscriptions', () => {
             const user = await createUser();
             const full = await createProduct({ onHand: 5000 });
             const scarce = await createProduct({ onHand: 1 });
-            await cartService.cartItemAddById(user.id, String(full._id), 999);
+            await cartService.addItemById(user.id, String(full._id), 999);
 
-            await cartService.cartMerge(
+            await cartService.merge(
                 user.id,
                 [
                     { productId: String(full._id), quantity: 1 },
@@ -190,7 +190,7 @@ describe('the module subscriptions', () => {
             const user = await createUser();
             const fine = await createProduct();
 
-            await cartService.cartMerge(
+            await cartService.merge(
                 user.id,
                 [{ productId: String(fine._id), quantity: 1 }],
                 testCallerContext
@@ -203,7 +203,7 @@ describe('the module subscriptions', () => {
     it('a hard-deleted user takes their inbox with them', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemAddById(user.id, String(product._id), 1);
+        await cartService.addItemById(user.id, String(product._id), 1);
         await productService.removeById(String(product._id), true);
         await settleOutboxNudges();
         await expect(inboxOf(user.id)).resolves.toHaveLength(1);

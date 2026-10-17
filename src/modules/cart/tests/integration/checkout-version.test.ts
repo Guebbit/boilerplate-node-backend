@@ -27,7 +27,7 @@ describe('cart version increments on every write that changes it', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         // Not 0: the very first write is itself a race checkout can lose against, so it must
         // already be distinguishable from "no write happened yet".
@@ -38,10 +38,10 @@ describe('cart version increments on every write that changes it', () => {
         const user = await createUser();
         const first = await createProduct();
         const second = await createProduct();
-        await cartService.cartItemSetById(user.id, String(first._id), 1);
+        await cartService.setItemById(user.id, String(first._id), 1);
         const before = await versionOf(user.id);
 
-        await cartService.cartItemSetById(user.id, String(second._id), 1);
+        await cartService.setItemById(user.id, String(second._id), 1);
 
         await expect(versionOf(user.id)).resolves.toBe((before ?? 0) + 1);
     });
@@ -49,10 +49,10 @@ describe('cart version increments on every write that changes it', () => {
     it('bumps when an existing line is set to a new quantity', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
         const before = await versionOf(user.id);
 
-        await cartService.cartItemSetById(user.id, String(product._id), 3);
+        await cartService.setItemById(user.id, String(product._id), 3);
 
         await expect(versionOf(user.id)).resolves.toBe((before ?? 0) + 1);
     });
@@ -64,10 +64,10 @@ describe('cart version increments on every write that changes it', () => {
     it('does not bump when a line is set to the quantity it already holds', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
         const before = await versionOf(user.id);
 
-        const result = await cartService.cartItemSetById(user.id, String(product._id), 2);
+        const result = await cartService.setItemById(user.id, String(product._id), 2);
 
         expect(result.success).toBe(true);
         await expect(versionOf(user.id)).resolves.toBe(before);
@@ -76,10 +76,10 @@ describe('cart version increments on every write that changes it', () => {
     it('bumps when an existing line is incremented', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
         const before = await versionOf(user.id);
 
-        await cartService.cartItemAddById(user.id, String(product._id), 1);
+        await cartService.addItemById(user.id, String(product._id), 1);
 
         await expect(versionOf(user.id)).resolves.toBe((before ?? 0) + 1);
     });
@@ -87,10 +87,10 @@ describe('cart version increments on every write that changes it', () => {
     it('bumps when a line is removed', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
         const before = await versionOf(user.id);
 
-        await cartService.cartItemRemoveById(user.id, String(product._id), testCallerContext);
+        await cartService.removeItemById(user.id, String(product._id), testCallerContext);
 
         await expect(versionOf(user.id)).resolves.toBe((before ?? 0) + 1);
     });
@@ -98,10 +98,10 @@ describe('cart version increments on every write that changes it', () => {
     it('bumps when the whole cart is cleared', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
         const before = await versionOf(user.id);
 
-        await cartService.cartRemove(user.id, testCallerContext);
+        await cartService.remove(user.id, testCallerContext);
 
         await expect(versionOf(user.id)).resolves.toBe((before ?? 0) + 1);
     });
@@ -109,7 +109,7 @@ describe('cart version increments on every write that changes it', () => {
     it('bumps every cart a deleted product is pulled out of', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
         const before = await versionOf(user.id);
 
         await cartService.productRemoveFromCartsById(String(product._id), {});
@@ -122,7 +122,7 @@ describe('cart version increments on every write that changes it', () => {
 const cartWithChoice = async () => {
     const user = await createUser();
     const product = await createProduct();
-    await cartService.cartItemSetById(user.id, String(product._id), 2);
+    await cartService.setItemById(user.id, String(product._id), 2);
     await cartRepository.setShippingMethod(user.id, 'pickup');
     return { user, product, version: (await versionOf(user.id)) ?? -1 };
 };
@@ -148,7 +148,7 @@ describe('clearLinesIfUnchanged', () => {
 
     it('touches nothing when the cart moved since the version was read', async () => {
         const { user, product, version } = await cartWithChoice();
-        await cartService.cartItemSetById(user.id, String(product._id), 5);
+        await cartService.setItemById(user.id, String(product._id), 5);
         const before = await cartRepository.findByUserId(user.id);
 
         const cleared = await cartRepository.clearLinesIfUnchanged(user.id, version);
@@ -172,7 +172,7 @@ describe('clearLinesIfUnchanged', () => {
     it('does not let a cart emptied and refilled match an older read', async () => {
         const { user, product, version } = await cartWithChoice();
         await cartRepository.clearLines(user.id);
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
 
         const cleared = await cartRepository.clearLinesIfUnchanged(user.id, version);
 

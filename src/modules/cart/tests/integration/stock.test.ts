@@ -52,7 +52,7 @@ describe('checkout holds units without selling them', () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ onHand: 10 });
-        await cartService.cartItemAddById(user.id, String(product._id), 3);
+        await cartService.addItemById(user.id, String(product._id), 3);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -70,7 +70,7 @@ describe('checkout holds units without selling them', () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ onHand: 2 });
-        await cartService.cartItemAddById(user.id, String(product._id), 3);
+        await cartService.addItemById(user.id, String(product._id), 3);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -98,7 +98,7 @@ describe('checkout holds units without selling them', () => {
             available: 2
         });
         // And the cart survives — a refused checkout is not a lost basket.
-        const cart = await cartService.cartGetForBadge(user.id);
+        const cart = await cartService.getForBadge(user.id);
         expect(cart.items).toEqual([
             { productId: String(product._id), quantity: 3, availability: 'insufficient_stock' }
         ]);
@@ -111,7 +111,7 @@ describe('checkout holds units without selling them', () => {
         await giveAddress(latecomer.id);
         const product = await createProduct({ onHand: 4 });
 
-        await cartService.cartItemAddById(holder.id, String(product._id), 4);
+        await cartService.addItemById(holder.id, String(product._id), 4);
         await cartRepository.setShippingMethod(holder.id, 'pickup');
         const firstCheckout = await cartService.orderConfirm(
             holder.id,
@@ -120,7 +120,7 @@ describe('checkout holds units without selling them', () => {
         );
         expect(firstCheckout.success).toBe(true);
 
-        await cartService.cartItemAddById(latecomer.id, String(product._id), 1);
+        await cartService.addItemById(latecomer.id, String(product._id), 1);
         await cartRepository.setShippingMethod(latecomer.id, 'pickup');
         const result = await cartService.orderConfirm(latecomer.id, testCallerContext, undefined);
 
@@ -140,9 +140,9 @@ describe('checkout holds units without selling them', () => {
         const shortA = await createProduct({ title: 'Short A', onHand: 1 });
         const shortB = await createProduct({ title: 'Short B', onHand: 2 });
         const fine = await createProduct({ title: 'Fine', onHand: 99 });
-        await cartService.cartItemAddById(user.id, String(shortA._id), 5);
-        await cartService.cartItemAddById(user.id, String(shortB._id), 5);
-        await cartService.cartItemAddById(user.id, String(fine._id), 1);
+        await cartService.addItemById(user.id, String(shortA._id), 5);
+        await cartService.addItemById(user.id, String(shortB._id), 5);
+        await cartService.addItemById(user.id, String(fine._id), 1);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -172,8 +172,8 @@ describe('checkout holds units without selling them', () => {
         await giveAddress(user.id);
         const plenty = await createProduct({ title: 'Plenty', onHand: 50 });
         const scarce = await createProduct({ title: 'Scarce', onHand: 1 });
-        await cartService.cartItemAddById(user.id, String(plenty._id), 2);
-        await cartService.cartItemAddById(user.id, String(scarce._id), 2);
+        await cartService.addItemById(user.id, String(plenty._id), 2);
+        await cartService.addItemById(user.id, String(scarce._id), 2);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -189,8 +189,8 @@ describe('checkout holds units without selling them', () => {
         const bob = await createUser({ email: 'bob@example.com', username: 'bob' });
         await giveAddress(bob.id);
         const lastOne = await createProduct({ onHand: 1 });
-        await cartService.cartItemAddById(alice.id, String(lastOne._id), 1);
-        await cartService.cartItemAddById(bob.id, String(lastOne._id), 1);
+        await cartService.addItemById(alice.id, String(lastOne._id), 1);
+        await cartService.addItemById(bob.id, String(lastOne._id), 1);
         await cartRepository.setShippingMethod(alice.id, 'pickup');
         await cartRepository.setShippingMethod(bob.id, 'pickup');
 
@@ -249,7 +249,7 @@ describe('a checkout that cannot keep its order', () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ onHand: 1 });
-        await cartService.cartItemAddById(user.id, String(product._id), 2);
+        await cartService.addItemById(user.id, String(product._id), 2);
         const createSpy = jest.spyOn(orderRepository, 'create');
         const counterSpy = jest.spyOn(orderRepository, 'incrementOrderNumberCounter');
 
@@ -267,7 +267,7 @@ describe('a checkout that cannot keep its order', () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ onHand: 5 });
-        await cartService.cartItemAddById(user.id, String(product._id), 2);
+        await cartService.addItemById(user.id, String(product._id), 2);
         // The cart moved under this checkout: the clear matches nothing, so the order must not stand.
         jest.spyOn(cartRepository, 'clearLinesIfUnchanged').mockResolvedValue(null);
 
@@ -285,7 +285,7 @@ describe('a checkout that cannot keep its order', () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ onHand: 10 });
-        await cartService.cartItemAddById(user.id, String(product._id), 3);
+        await cartService.addItemById(user.id, String(product._id), 3);
         await cartRepository.setShippingMethod(user.id, 'pickup');
         jest.spyOn(logger, 'error').mockImplementation(() => logger);
         jest.spyOn(cartRepository, 'clearLinesIfUnchanged').mockRejectedValueOnce(
@@ -358,7 +358,7 @@ describe('cancel releases the hold', () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ onHand: 10 });
-        await cartService.cartItemAddById(user.id, String(product._id), 4);
+        await cartService.addItemById(user.id, String(product._id), 4);
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const checkout = await cartService.orderConfirm(user.id, testCallerContext, undefined);
         expect(await countersOf(product._id)).toMatchObject({ reserved: 4, available: 6 });
@@ -378,7 +378,7 @@ describe('cancel releases the hold', () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ onHand: 10 });
-        await cartService.cartItemAddById(user.id, String(product._id), 4);
+        await cartService.addItemById(user.id, String(product._id), 4);
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const checkout = await cartService.orderConfirm(user.id, testCallerContext, undefined);
         const orderId = String(checkout.success && checkout.data?._id);
@@ -400,7 +400,7 @@ describe('cancel releases the hold', () => {
         await giveAddress(user.id);
         const bought = await createProduct({ title: 'Bought', onHand: 10 });
         const untouched = await createProduct({ title: 'Untouched', onHand: 5 });
-        await cartService.cartItemAddById(user.id, String(bought._id), 1);
+        await cartService.addItemById(user.id, String(bought._id), 1);
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const checkout = await cartService.orderConfirm(user.id, testCallerContext, undefined);
         const orderId = String(checkout.success && checkout.data?._id);
@@ -419,7 +419,7 @@ describe('cancel releases the hold', () => {
             const user = await createUser();
             await giveAddress(user.id);
             const product = await createProduct({ onHand: 10 });
-            await cartService.cartItemAddById(user.id, String(product._id), 4);
+            await cartService.addItemById(user.id, String(product._id), 4);
             await cartRepository.setShippingMethod(user.id, 'pickup');
             const checkout = await cartService.orderConfirm(user.id, testCallerContext, undefined);
             const orderId = String(checkout.success && checkout.data?._id);
@@ -454,7 +454,7 @@ describe('the expiry sweep', () => {
             const user = await createUser();
             await giveAddress(user.id);
             const product = await createProduct({ onHand: 10 });
-            await cartService.cartItemAddById(user.id, String(product._id), 4);
+            await cartService.addItemById(user.id, String(product._id), 4);
             await cartRepository.setShippingMethod(user.id, 'pickup');
             const checkout = await cartService.orderConfirm(user.id, testCallerContext, undefined);
             const orderId = String(checkout.success && checkout.data?._id);
@@ -484,7 +484,7 @@ describe('the expiry sweep', () => {
             const user = await createUser();
             await giveAddress(user.id);
             const product = await createProduct({ onHand: 10 });
-            await cartService.cartItemAddById(user.id, String(product._id), 4);
+            await cartService.addItemById(user.id, String(product._id), 4);
             await cartRepository.setShippingMethod(user.id, 'pickup');
             const checkout = await cartService.orderConfirm(user.id, testCallerContext, undefined);
             const orderId = String(checkout.success && checkout.data?._id);
@@ -510,7 +510,7 @@ describe('the expiry sweep', () => {
             const user = await createUser();
             await giveAddress(user.id);
             const product = await createProduct({ onHand: 10 });
-            await cartService.cartItemAddById(user.id, String(product._id), 4);
+            await cartService.addItemById(user.id, String(product._id), 4);
             await cartRepository.setShippingMethod(user.id, 'pickup');
             await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
@@ -534,7 +534,7 @@ describe('a product with no stock-level row', () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await productWithoutLevelRow();
-        await cartService.cartItemAddById(user.id, String(product._id), 3);
+        await cartService.addItemById(user.id, String(product._id), 3);
         await cartRepository.setShippingMethod(user.id, 'pickup');
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -566,7 +566,7 @@ describe('a catalogue stock cache that sits low', () => {
         const product = await createProduct({ onHand: 10 });
         // The cache lags the ledger (a missed sync): it says nothing is left, the level says 10.
         await productService.syncStockCache(String(product._id), { onHand: 0, reserved: 0 });
-        await cartService.cartItemAddById(user.id, String(product._id), 3);
+        await cartService.addItemById(user.id, String(product._id), 3);
         await cartRepository.setShippingMethod(user.id, 'pickup');
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);

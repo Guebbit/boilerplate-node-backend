@@ -1,6 +1,6 @@
 /**
  * @module
- * `DELETE /cart/all` controller — thin HTTP adapter over `cartService.cartRemove`. Bodyless and on
+ * `DELETE /cart/all` controller — thin HTTP adapter over `cartService.remove`. Bodyless and on
  * its own URL so the destructive spelling has to be asked for by name: were it `DELETE /cart`
  * falling back to "clear everything" on an absent body, a body stripped in transit would destroy
  * the whole cart instead of failing.
@@ -21,7 +21,7 @@ export const clearCart = (request: Request, response: Response) => {
     const userId = request.authContext!.id;
 
     return cartService
-        .cartRemove(userId, callerContextOf(request))
+        .remove(userId, callerContextOf(request))
         .then((cart) => {
             successResponse<CartResponse>(response, cart);
         })

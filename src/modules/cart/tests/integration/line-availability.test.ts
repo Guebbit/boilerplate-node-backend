@@ -29,14 +29,12 @@ beforeEach(() => {
 
 /** The availability of the one line in the user's cart. */
 const availabilityOf = (userId: string) =>
-    cartService
-        .cartGetForView(userId, testCallerContext)
-        .then(({ items }) => items[0]?.availability);
+    cartService.getForView(userId, testCallerContext).then(({ items }) => items[0]?.availability);
 
 /** The quantities the cart holds, as `productId → quantity`. */
 const heldBy = (userId: string) =>
     cartService
-        .cartGetForView(userId, testCallerContext)
+        .getForView(userId, testCallerContext)
         .then(({ items }) =>
             Object.fromEntries(items.map(({ productId, quantity }) => [productId, quantity]))
         );
@@ -49,7 +47,7 @@ describe('a hidden product (active: false)', () => {
     it('keeps the line, reads removed, and returns to in_stock on reactivation', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 5 });
-        await cartService.cartItemAddById(user.id, String(product._id), 2);
+        await cartService.addItemById(user.id, String(product._id), 2);
 
         await edit(product._id, { active: false });
         await expect(availabilityOf(user.id)).resolves.toBe('removed');
@@ -63,7 +61,7 @@ describe('a hidden product (active: false)', () => {
         const user = await createUser();
         const product = await createProduct({ active: false });
 
-        const result = await cartService.cartItemAddById(user.id, String(product._id), 1);
+        const result = await cartService.addItemById(user.id, String(product._id), 1);
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -73,7 +71,7 @@ describe('a hidden product (active: false)', () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ onHand: 5 });
-        await cartService.cartItemAddById(user.id, String(product._id), 1);
+        await cartService.addItemById(user.id, String(product._id), 1);
         await cartRepository.setShippingMethod(user.id, 'pickup');
         await edit(product._id, { active: false });
 
@@ -92,7 +90,7 @@ describe('an off-sale product (purchasable: false)', () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 5, purchasable: false });
 
-        const added = await cartService.cartItemAddById(user.id, String(product._id), 2);
+        const added = await cartService.addItemById(user.id, String(product._id), 2);
 
         expect(added.success).toBe(true);
         await expect(availabilityOf(user.id)).resolves.toBe('unavailable');
@@ -101,7 +99,7 @@ describe('an off-sale product (purchasable: false)', () => {
     it('reads in_stock again once it is put back on sale', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 5 });
-        await cartService.cartItemAddById(user.id, String(product._id), 2);
+        await cartService.addItemById(user.id, String(product._id), 2);
 
         await edit(product._id, { purchasable: false });
         await expect(availabilityOf(user.id)).resolves.toBe('unavailable');
@@ -114,7 +112,7 @@ describe('an off-sale product (purchasable: false)', () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ onHand: 5, purchasable: false, title: 'Heated Bed' });
-        await cartService.cartItemAddById(user.id, String(product._id), 1);
+        await cartService.addItemById(user.id, String(product._id), 1);
         await cartRepository.setShippingMethod(user.id, 'pickup');
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -139,7 +137,7 @@ describe('an off-sale product (purchasable: false)', () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ onHand: 5, purchasable: false });
-        await cartService.cartItemAddById(user.id, String(product._id), 1);
+        await cartService.addItemById(user.id, String(product._id), 1);
         await cartRepository.setShippingMethod(user.id, 'pickup');
 
         await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -160,7 +158,7 @@ describe('merge, by product state', () => {
         const user = await createUser();
         const offSale = await createProduct({ onHand: 5, purchasable: false });
 
-        const { lines } = await cartService.cartMerge(
+        const { lines } = await cartService.merge(
             user.id,
             [{ productId: String(offSale._id), quantity: 2 }],
             testCallerContext
@@ -181,7 +179,7 @@ describe('merge, by product state', () => {
         const user = await createUser();
         const hidden = await createProduct({ onHand: 5, active: false });
 
-        const { lines } = await cartService.cartMerge(
+        const { lines } = await cartService.merge(
             user.id,
             [{ productId: String(hidden._id), quantity: 2 }],
             testCallerContext

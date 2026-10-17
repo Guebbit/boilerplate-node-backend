@@ -484,7 +484,7 @@ describe('PUT /cart/{productId}', () => {
 
     it('matches the error contract for a product that does not exist', async () => {
         // The declared 404 on this operation is only reachable because the gate lives in
-        // `cartItemSetById`: nothing in the route itself asks the catalogue anything.
+        // `setItemById`: nothing in the route itself asks the catalogue anything.
         const { bearer } = await authenticateAs('user');
         const response = await api()
             .put(`/cart/${MISSING_ID}`)

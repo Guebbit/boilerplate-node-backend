@@ -98,14 +98,14 @@ describe('cart storage', () => {
         const user = await createUser();
 
         await expect(cartRepository.findByUserId(user.id)).resolves.toBeNull();
-        await expect(cartService.cartGetForBadge(user.id)).resolves.toEqual(EMPTY_CART);
+        await expect(cartService.getForBadge(user.id)).resolves.toEqual(EMPTY_CART);
     });
 
     it('creates the cart on the first add', async () => {
         const user = await createUser();
         const product = await createProduct();
 
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         const cart = await cartRepository.findByUserId(user.id);
         expect(cart).not.toBeNull();
@@ -118,7 +118,7 @@ describe('cart storage', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         const cart = await cartRepository.findByUserId(user.id);
         expect(cart!.createdAt).toBeInstanceOf(Date);
@@ -129,7 +129,7 @@ describe('cart storage', () => {
         // contract violation the moment anything serialized a cart.
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
 
         const cart = await cartRepository.findByUserId(user.id);
 
@@ -141,9 +141,9 @@ describe('cart storage', () => {
         const keyboard = await createProduct({ title: 'Keyboard' });
         const mouse = await createProduct({ title: 'Mouse' });
 
-        await cartService.cartItemSetById(user.id, String(keyboard._id), 1);
-        await cartService.cartItemSetById(user.id, String(mouse._id), 1);
-        await cartService.cartItemAddById(user.id, String(keyboard._id), 1);
+        await cartService.setItemById(user.id, String(keyboard._id), 1);
+        await cartService.setItemById(user.id, String(mouse._id), 1);
+        await cartService.addItemById(user.id, String(keyboard._id), 1);
 
         await expect(cartRepository.count({ userId: user._id })).resolves.toBe(1);
     });
@@ -152,41 +152,41 @@ describe('cart storage', () => {
         const user = await createUser();
         const keyboard = await createProduct({ title: 'Keyboard' });
         const mouse = await createProduct({ title: 'Mouse' });
-        await cartService.cartItemSetById(user.id, String(keyboard._id), 1);
+        await cartService.setItemById(user.id, String(keyboard._id), 1);
         const before = (await cartRepository.findByUserId(user.id))!.updatedAt!;
 
-        await cartService.cartItemSetById(user.id, String(mouse._id), 1);
+        await cartService.setItemById(user.id, String(mouse._id), 1);
 
         const after = (await cartRepository.findByUserId(user.id))!.updatedAt!;
         expect(after.getTime()).toBeGreaterThanOrEqual(before.getTime());
     });
 });
 
-describe('cartGet', () => {
+describe('get', () => {
     it('returns an empty cart for a user who has never added anything', async () => {
         const user = await createUser();
 
-        await expect(cartService.cartGet(user.id)).resolves.toEqual([]);
+        await expect(cartService.get(user.id)).resolves.toEqual([]);
     });
 
     it('returns an empty list for a user that does not exist', async () => {
         // A read, not a mutation: answering "no items" is more useful than throwing, and every
         // caller already renders an empty cart.
-        await expect(cartService.cartGet(MISSING_ID)).resolves.toEqual([]);
+        await expect(cartService.get(MISSING_ID)).resolves.toEqual([]);
     });
 
     it('returns the populated product alongside each line', async () => {
         const user = await createUser();
         const product = await createProduct({ title: 'Keyboard', price: 25 });
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
 
-        const items = await cartService.cartGet(user.id);
+        const items = await cartService.get(user.id);
 
         expect(items).toHaveLength(1);
         expect(items[0].productId).toBe(String(product._id));
         expect(items[0].quantity).toBe(2);
         // This is the variant that deliberately DOES carry the product — it is what prices the
-        // cart. See cartGetForBadge for the one that must not.
+        // cart. See getForBadge for the one that must not.
         expect(items[0].product).toMatchObject({ title: 'Keyboard' });
     });
 
@@ -195,10 +195,10 @@ describe('cartGet', () => {
         // caller reading the id off that field would lose it exactly when it matters most.
         const user = await createUser();
         const product = await createProduct({ title: 'Discontinued' });
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
         await product.deleteOne();
 
-        const items = await cartService.cartGet(user.id);
+        const items = await cartService.get(user.id);
 
         expect(items).toHaveLength(1);
         expect(items[0].productId).toBe(String(product._id));
@@ -207,13 +207,13 @@ describe('cartGet', () => {
     });
 });
 
-describe('cartGetForBadge', () => {
+describe('getForBadge', () => {
     it('drops the populated product from every line', async () => {
         const user = await createUser();
         const product = await createProduct({ title: 'Keyboard', price: 25 });
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
 
-        const { items } = await cartService.cartGetForBadge(user.id);
+        const { items } = await cartService.getForBadge(user.id);
 
         // `CartResponseItem` is additionalProperties:false — an extra key here is a contract violation.
         expect(items).toEqual([
@@ -226,10 +226,10 @@ describe('cartGetForBadge', () => {
         const user = await createUser();
         const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
         const mouse = await createProduct({ title: 'Mouse', price: 10 });
-        await cartService.cartItemSetById(user.id, String(keyboard._id), 2);
-        await cartService.cartItemSetById(user.id, String(mouse._id), 3);
+        await cartService.setItemById(user.id, String(keyboard._id), 2);
+        await cartService.setItemById(user.id, String(mouse._id), 3);
 
-        const { summary } = await cartService.cartGetForBadge(user.id);
+        const { summary } = await cartService.getForBadge(user.id);
 
         // Distinct numbers on purpose: 2 lines, 5 units, 80.00 total — no two of the three can
         // be confused for each other if one is computed wrongly.
@@ -246,7 +246,7 @@ describe('cartGetForBadge', () => {
     it('reports a zeroed summary for an empty cart', async () => {
         const user = await createUser();
 
-        await expect(cartService.cartGetForBadge(user.id)).resolves.toEqual(EMPTY_CART);
+        await expect(cartService.getForBadge(user.id)).resolves.toEqual(EMPTY_CART);
     });
 });
 
@@ -259,9 +259,9 @@ describe('shipping (FA-D6/B3)', () => {
     it('is empty, and required is false, for an all-digital basket', async () => {
         const user = await createUser();
         const digital = await createProduct({ requiresShipping: false });
-        await cartService.cartItemSetById(user.id, String(digital._id), 1);
+        await cartService.setItemById(user.id, String(digital._id), 1);
 
-        const { shipping } = await cartService.cartGetForBadge(user.id);
+        const { shipping } = await cartService.getForBadge(user.id);
 
         expect(shipping).toEqual({ required: false, selected: null, options: [] });
     });
@@ -270,9 +270,9 @@ describe('shipping (FA-D6/B3)', () => {
         const user = await createUser();
         // Two at 60 clears `standard`'s 100 free-above threshold.
         const product = await createProduct({ price: 60 });
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
 
-        const { shipping } = await cartService.cartGetForBadge(user.id);
+        const { shipping } = await cartService.getForBadge(user.id);
 
         expect(shipping.options.find((option) => option.id === 'standard')?.price).toBe(0);
     });
@@ -280,10 +280,10 @@ describe('shipping (FA-D6/B3)', () => {
     it('reads the stored choice back as selected once it fits the basket', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
-        await cartService.cartShippingMethodSet(user.id, 'standard');
+        await cartService.setItemById(user.id, String(product._id), 1);
+        await cartService.setShippingMethod(user.id, 'standard');
 
-        const { shipping } = await cartService.cartGetForBadge(user.id);
+        const { shipping } = await cartService.getForBadge(user.id);
 
         expect(shipping.selected).toBe('standard');
     });
@@ -291,28 +291,28 @@ describe('shipping (FA-D6/B3)', () => {
     it('reads the stored choice back as null once the basket outgrows it', async () => {
         const user = await createUser();
         const light = await createProduct({ weight: 100 });
-        await cartService.cartItemSetById(user.id, String(light._id), 1);
-        await cartService.cartShippingMethodSet(user.id, 'express');
+        await cartService.setItemById(user.id, String(light._id), 1);
+        await cartService.setShippingMethod(user.id, 'express');
 
         // A second, heavy line pushes the basket past `express`'s 5000g ceiling — the stored
-        // choice stands (`cartShippingMethodSet` only checks at the moment of choosing), but a
+        // choice stands (`setShippingMethod` only checks at the moment of choosing), but a
         // fresh read no longer offers or selects a method the basket has outgrown.
         const heavy = await createProduct({ weight: 6000 });
-        await cartService.cartItemSetById(user.id, String(heavy._id), 1);
+        await cartService.setItemById(user.id, String(heavy._id), 1);
 
-        const { shipping } = await cartService.cartGetForBadge(user.id);
+        const { shipping } = await cartService.getForBadge(user.id);
 
         expect(shipping.selected).toBeNull();
         expect(shipping.options.map((option) => option.id)).not.toContain('express');
     });
 });
 
-describe('cartItemSetById', () => {
+describe('setItemById', () => {
     it('adds a line that was not in the cart', async () => {
         const user = await createUser();
         const product = await createProduct();
 
-        await cartService.cartItemSetById(user.id, String(product._id), 3);
+        await cartService.setItemById(user.id, String(product._id), 3);
 
         await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(3);
     });
@@ -320,9 +320,9 @@ describe('cartItemSetById', () => {
     it('REPLACES the quantity of a line already in the cart', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 5);
+        await cartService.setItemById(user.id, String(product._id), 5);
 
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
 
         // 2, not 7. This is the assertion that separates `set` from `add`.
         await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(2);
@@ -332,7 +332,7 @@ describe('cartItemSetById', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        await cartService.cartItemSetById(user.id, String(product._id));
+        await cartService.setItemById(user.id, String(product._id));
 
         await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(1);
     });
@@ -341,9 +341,9 @@ describe('cartItemSetById', () => {
         const user = await createUser();
         const keyboard = await createProduct({ title: 'Keyboard' });
         const mouse = await createProduct({ title: 'Mouse' });
-        await cartService.cartItemSetById(user.id, String(keyboard._id), 4);
+        await cartService.setItemById(user.id, String(keyboard._id), 4);
 
-        await cartService.cartItemSetById(user.id, String(mouse._id), 1);
+        await cartService.setItemById(user.id, String(mouse._id), 1);
 
         await expect(storedQuantity(user.id, String(keyboard._id))).resolves.toBe(4);
         await expect(storedQuantity(user.id, String(mouse._id))).resolves.toBe(1);
@@ -353,7 +353,7 @@ describe('cartItemSetById', () => {
         const user = await createUser();
         const product = await createProduct({ price: 25 });
 
-        const result = await cartService.cartItemSetById(user.id, String(product._id), 2);
+        const result = await cartService.setItemById(user.id, String(product._id), 2);
 
         expect(result.success).toBe(true);
         expect(result.data).toEqual({
@@ -390,7 +390,7 @@ describe('cartItemSetById', () => {
         const user = await createUser();
         const hidden = await createProduct({ active: false });
 
-        const result = await cartService.cartItemSetById(user.id, String(hidden._id), 1);
+        const result = await cartService.setItemById(user.id, String(hidden._id), 1);
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -402,7 +402,7 @@ describe('cartItemSetById', () => {
         const product = await createProduct();
         await productService.removeById(String(product._id));
 
-        const result = await cartService.cartItemSetById(user.id, String(product._id), 1);
+        const result = await cartService.setItemById(user.id, String(product._id), 1);
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -418,7 +418,7 @@ describe('cartItemSetById', () => {
         const user = await createUser();
         const missing = '65dc8a99604c307b702b5ccc';
 
-        const result = await cartService.cartItemSetById(user.id, missing, 1);
+        const result = await cartService.setItemById(user.id, missing, 1);
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -429,9 +429,9 @@ describe('cartItemSetById', () => {
         const first = await createUser({ email: 'first@example.com' });
         const second = await createUser({ email: 'second@example.com' });
         const product = await createProduct();
-        await cartService.cartItemSetById(first.id, String(product._id), 1);
+        await cartService.setItemById(first.id, String(product._id), 1);
 
-        await cartService.cartItemSetById(second.id, String(product._id), 9);
+        await cartService.setItemById(second.id, String(product._id), 9);
 
         await expect(storedQuantity(first.id, String(product._id))).resolves.toBe(1);
     });
@@ -441,19 +441,19 @@ describe('cartItemSetById', () => {
             const user = await createUser();
             const product = await createProduct();
 
-            const result = await cartService.cartItemSetById(user.id, String(product._id), 999);
+            const result = await cartService.setItemById(user.id, String(product._id), 999);
 
             expect(result.success).toBe(true);
             await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(999);
         }));
 });
 
-describe('cartItemAddById', () => {
+describe('addItemById', () => {
     it('adds a line that was not in the cart', async () => {
         const user = await createUser();
         const product = await createProduct();
 
-        await cartService.cartItemAddById(user.id, String(product._id), 3);
+        await cartService.addItemById(user.id, String(product._id), 3);
 
         // On a missing line, add and set are indistinguishable — both create it at `quantity`.
         await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(3);
@@ -462,9 +462,9 @@ describe('cartItemAddById', () => {
     it('INCREMENTS the quantity of a line already in the cart', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 5);
+        await cartService.setItemById(user.id, String(product._id), 5);
 
-        await cartService.cartItemAddById(user.id, String(product._id), 2);
+        await cartService.addItemById(user.id, String(product._id), 2);
 
         // 7, not 2. The mirror of the `set` assertion above.
         await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(7);
@@ -474,9 +474,9 @@ describe('cartItemAddById', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        await cartService.cartItemAddById(user.id, String(product._id), 1);
-        await cartService.cartItemAddById(user.id, String(product._id), 1);
-        await cartService.cartItemAddById(user.id, String(product._id), 1);
+        await cartService.addItemById(user.id, String(product._id), 1);
+        await cartService.addItemById(user.id, String(product._id), 1);
+        await cartService.addItemById(user.id, String(product._id), 1);
 
         await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(3);
     });
@@ -487,12 +487,12 @@ describe('cartItemAddById', () => {
         // read-modify-write through the user document did.
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         await Promise.all([
-            cartService.cartItemAddById(user.id, String(product._id), 1),
-            cartService.cartItemAddById(user.id, String(product._id), 1),
-            cartService.cartItemAddById(user.id, String(product._id), 1)
+            cartService.addItemById(user.id, String(product._id), 1),
+            cartService.addItemById(user.id, String(product._id), 1),
+            cartService.addItemById(user.id, String(product._id), 1)
         ]);
 
         await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(4);
@@ -508,8 +508,8 @@ describe('cartItemAddById', () => {
         const mouse = await createProduct({ title: 'Mouse' });
 
         await Promise.all([
-            cartService.cartItemAddById(user.id, String(keyboard._id), 1),
-            cartService.cartItemAddById(user.id, String(mouse._id), 1)
+            cartService.addItemById(user.id, String(keyboard._id), 1),
+            cartService.addItemById(user.id, String(mouse._id), 1)
         ]);
 
         await expect(cartRepository.count({ userId: user._id })).resolves.toBe(1);
@@ -525,11 +525,11 @@ describe('cartItemAddById', () => {
         const anchor = await createProduct({ title: 'Anchor' });
         const product = await createProduct({ title: 'Contested' });
         // The cart has to exist first — this pins the line-level race, not the cart-level one.
-        await cartService.cartItemSetById(user.id, String(anchor._id), 1);
+        await cartService.setItemById(user.id, String(anchor._id), 1);
 
         await Promise.all([
-            cartService.cartItemAddById(user.id, String(product._id), 1),
-            cartService.cartItemAddById(user.id, String(product._id), 1)
+            cartService.addItemById(user.id, String(product._id), 1),
+            cartService.addItemById(user.id, String(product._id), 1)
         ]);
 
         const cart = await cartRepository.findByUserId(user.id);
@@ -548,9 +548,9 @@ describe('cartItemAddById', () => {
         atHardCap(async () => {
             const user = await createUser();
             const product = await createProduct();
-            await cartService.cartItemSetById(user.id, String(product._id), 999);
+            await cartService.setItemById(user.id, String(product._id), 999);
 
-            const result = await cartService.cartItemAddById(user.id, String(product._id), 1);
+            const result = await cartService.addItemById(user.id, String(product._id), 1);
 
             expect(result.success).toBe(false);
             expect(asReject(result).status).toBe(422);
@@ -566,7 +566,7 @@ describe('reorderIntoCart', () => {
         atHardCap(async () => {
             const user = await createUser();
             const product = await createProduct();
-            await cartService.cartItemSetById(user.id, String(product._id), 998);
+            await cartService.setItemById(user.id, String(product._id), 998);
             const order = await createOrder(user, [toOrderItem(product, 2)]);
 
             const result = await cartService.reorderIntoCart(
@@ -585,7 +585,7 @@ describe('reorderIntoCart', () => {
             const user = await createUser();
             const kept = await createProduct({ title: 'Kept' });
             const full = await createProduct({ title: 'Full' });
-            await cartService.cartItemSetById(user.id, String(full._id), 999);
+            await cartService.setItemById(user.id, String(full._id), 999);
             const order = await createOrder(user, [toOrderItem(kept, 1), toOrderItem(full, 1)]);
 
             const result = await cartService.reorderIntoCart(
@@ -610,7 +610,7 @@ describe('NODE_CART_LINE_MAX', () => {
             const user = await createUser();
             const product = await createProduct();
 
-            const result = await cartService.cartItemSetById(user.id, String(product._id), 11);
+            const result = await cartService.setItemById(user.id, String(product._id), 11);
 
             expect(asReject(result).status).toBe(422);
             expect(asReject(result).errors[0].code).toBe('CART_QUANTITY_LIMIT');
@@ -622,7 +622,7 @@ describe('NODE_CART_LINE_MAX', () => {
             const user = await createUser();
             const product = await createProduct();
 
-            const result = await cartService.cartItemSetById(user.id, String(product._id), 10);
+            const result = await cartService.setItemById(user.id, String(product._id), 10);
 
             expect(result.success).toBe(true);
             await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(10);
@@ -632,9 +632,9 @@ describe('NODE_CART_LINE_MAX', () => {
         atDefault(async () => {
             const user = await createUser();
             const product = await createProduct();
-            await cartService.cartItemSetById(user.id, String(product._id), 10);
+            await cartService.setItemById(user.id, String(product._id), 10);
 
-            const result = await cartService.cartItemAddById(user.id, String(product._id), 1);
+            const result = await cartService.addItemById(user.id, String(product._id), 1);
 
             expect(asReject(result).errors[0].code).toBe('CART_QUANTITY_LIMIT');
             await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(10);
@@ -645,7 +645,7 @@ describe('NODE_CART_LINE_MAX', () => {
             const user = await createUser();
             const product = await createProduct();
 
-            const result = await cartService.cartItemAddById(user.id, String(product._id), 11);
+            const result = await cartService.addItemById(user.id, String(product._id), 11);
 
             expect(asReject(result).status).toBe(422);
             expect(asReject(result).errors[0].code).toBe('CART_QUANTITY_LIMIT');
@@ -656,7 +656,7 @@ describe('NODE_CART_LINE_MAX', () => {
         atDefault(async () => {
             const user = await createUser();
             const product = await createProduct();
-            await cartService.cartItemSetById(user.id, String(product._id), 8);
+            await cartService.setItemById(user.id, String(product._id), 8);
             const order = await createOrder(user, [toOrderItem(product, 5)]);
 
             await cartService.reorderIntoCart(
@@ -675,7 +675,7 @@ describe('NODE_CART_LINE_MAX', () => {
         await giveUserAnAddress(user.id);
         const product = await createProduct({ onHand: 100 });
         await atHardCap(async () => {
-            await cartService.cartItemSetById(user.id, String(product._id), 50);
+            await cartService.setItemById(user.id, String(product._id), 50);
         });
         await cartRepository.setShippingMethod(user.id, 'pickup');
 
@@ -692,13 +692,13 @@ describe('NODE_CART_LINE_MAX', () => {
     });
 });
 
-describe('cartItemRemoveById', () => {
+describe('removeItemById', () => {
     it('removes the targeted line and answers with what is left', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
 
-        const result = await cartService.cartItemRemoveById(
+        const result = await cartService.removeItemById(
             user.id,
             String(product._id),
             testCallerContext
@@ -706,19 +706,19 @@ describe('cartItemRemoveById', () => {
 
         expect(result.success).toBe(true);
         expect(result.data).toEqual(EMPTY_CART);
-        await expect(cartService.cartGet(user.id)).resolves.toEqual([]);
+        await expect(cartService.get(user.id)).resolves.toEqual([]);
     });
 
     it('leaves the other lines alone', async () => {
         const user = await createUser();
         const keyboard = await createProduct({ title: 'Keyboard' });
         const mouse = await createProduct({ title: 'Mouse' });
-        await cartService.cartItemSetById(user.id, String(keyboard._id), 1);
-        await cartService.cartItemSetById(user.id, String(mouse._id), 2);
+        await cartService.setItemById(user.id, String(keyboard._id), 1);
+        await cartService.setItemById(user.id, String(mouse._id), 2);
 
-        await cartService.cartItemRemoveById(user.id, String(keyboard._id), testCallerContext);
+        await cartService.removeItemById(user.id, String(keyboard._id), testCallerContext);
 
-        const items = await cartService.cartGet(user.id);
+        const items = await cartService.get(user.id);
         expect(items).toHaveLength(1);
         expect(items[0].productId).toBe(String(mouse._id));
     });
@@ -729,9 +729,9 @@ describe('cartItemRemoveById', () => {
         const user = await createUser();
         const other = await createProduct({ title: 'Other' });
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(other._id), 1);
+        await cartService.setItemById(user.id, String(other._id), 1);
 
-        const result = await cartService.cartItemRemoveById(
+        const result = await cartService.removeItemById(
             user.id,
             String(product._id),
             testCallerContext
@@ -747,7 +747,7 @@ describe('cartItemRemoveById', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        const result = await cartService.cartItemRemoveById(
+        const result = await cartService.removeItemById(
             user.id,
             String(product._id),
             testCallerContext
@@ -760,52 +760,46 @@ describe('cartItemRemoveById', () => {
     it('leaves an empty cart behind when the last line goes', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
-        const result = await cartService.cartItemRemoveById(
+        const result = await cartService.removeItemById(
             user.id,
             String(product._id),
             testCallerContext
         );
 
         expect(result.success).toBe(true);
-        await expect(cartService.cartGet(user.id)).resolves.toEqual([]);
+        await expect(cartService.get(user.id)).resolves.toEqual([]);
     });
 });
 
-describe('cartRemove', () => {
+describe('remove', () => {
     it('clears every line and answers with the empty cart', async () => {
         const user = await createUser();
         const keyboard = await createProduct({ title: 'Keyboard' });
         const mouse = await createProduct({ title: 'Mouse' });
-        await cartService.cartItemSetById(user.id, String(keyboard._id), 1);
-        await cartService.cartItemSetById(user.id, String(mouse._id), 2);
+        await cartService.setItemById(user.id, String(keyboard._id), 1);
+        await cartService.setItemById(user.id, String(mouse._id), 2);
 
-        await expect(cartService.cartRemove(user.id, testCallerContext)).resolves.toEqual(
-            EMPTY_CART
-        );
-        await expect(cartService.cartGet(user.id)).resolves.toEqual([]);
+        await expect(cartService.remove(user.id, testCallerContext)).resolves.toEqual(EMPTY_CART);
+        await expect(cartService.get(user.id)).resolves.toEqual([]);
     });
 
     it('succeeds on an already-empty cart', async () => {
         // Idempotent by design — clearing twice must not fail.
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
-        await cartService.cartRemove(user.id, testCallerContext);
+        await cartService.setItemById(user.id, String(product._id), 1);
+        await cartService.remove(user.id, testCallerContext);
 
-        await expect(cartService.cartRemove(user.id, testCallerContext)).resolves.toEqual(
-            EMPTY_CART
-        );
+        await expect(cartService.remove(user.id, testCallerContext)).resolves.toEqual(EMPTY_CART);
     });
 
     it('writes nothing for a user who never had a cart', async () => {
         // Clearing must not be the thing that brings a cart document into existence.
         const user = await createUser();
 
-        await expect(cartService.cartRemove(user.id, testCallerContext)).resolves.toEqual(
-            EMPTY_CART
-        );
+        await expect(cartService.remove(user.id, testCallerContext)).resolves.toEqual(EMPTY_CART);
         await expect(cartRepository.findByUserId(user.id)).resolves.toBeNull();
     });
 });
@@ -816,8 +810,8 @@ describe('orderConfirm', () => {
         await giveUserAnAddress(user.id);
         const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
         const mouse = await createProduct({ title: 'Mouse', price: 10 });
-        await cartService.cartItemSetById(user.id, String(keyboard._id), 2);
-        await cartService.cartItemSetById(user.id, String(mouse._id), 1);
+        await cartService.setItemById(user.id, String(keyboard._id), 2);
+        await cartService.setItemById(user.id, String(mouse._id), 1);
 
         // `pickup`: both products are physical, so checkout needs a method — pickup needs no
         // address either, keeping this test about order creation, not shipping.
@@ -835,14 +829,14 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
         // Ordering matters: the cart must only be cleared after the order was created, or a
         // failure mid-checkout loses the basket.
-        await expect(cartService.cartGet(user.id)).resolves.toEqual([]);
+        await expect(cartService.get(user.id)).resolves.toEqual([]);
     });
 
     it('rejects an empty cart with 409 and creates nothing', async () => {
@@ -886,7 +880,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
         await product.deleteOne();
 
         const result = await cartService.orderConfirm(user.id, testCallerContext);
@@ -899,7 +893,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id); // `express` requires one
         const product = await createProduct({ price: 25 });
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
 
         await cartRepository.setShippingMethod(user.id, 'express');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -914,7 +908,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id); // `standard` requires one
         const product = await createProduct({ price: 60 });
-        await cartService.cartItemSetById(user.id, String(product._id), 2); // 120 ≥ standard's 100
+        await cartService.setItemById(user.id, String(product._id), 2); // 120 ≥ standard's 100
 
         await cartRepository.setShippingMethod(user.id, 'standard');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -933,11 +927,11 @@ describe('orderConfirm', () => {
         await giveUserAnAddress(user.id); // `standard` requires one
         const digital = await createProduct({ price: 150, requiresShipping: false });
         const physical = await createProduct({ price: 10 });
-        await cartService.cartItemSetById(user.id, String(digital._id), 1);
-        await cartService.cartItemSetById(user.id, String(physical._id), 1);
+        await cartService.setItemById(user.id, String(digital._id), 1);
+        await cartService.setItemById(user.id, String(physical._id), 1);
 
         await cartRepository.setShippingMethod(user.id, 'standard');
-        const quoted = await cartService.cartGetForBadge(user.id);
+        const quoted = await cartService.getForBadge(user.id);
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(true);
@@ -951,7 +945,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const product = await createProduct({ onHand: 5 });
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
 
         await cartRepository.setShippingMethod(user.id, 'teleport');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -971,7 +965,7 @@ describe('orderConfirm', () => {
         // Digital: a physical line would refuse checkout outright with no method chosen — this
         // case is about what an omitted method itself leaves behind, not that refusal.
         const product = await createProduct({ requiresShipping: false });
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         await cartService.orderConfirm(user.id, testCallerContext);
 
@@ -987,7 +981,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id); // `standard` requires one
         const product = await createProduct({ price: 500 });
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         // `standard` (5, freeAbove: 100) — a 500 line total clears the threshold.
         await cartRepository.setShippingMethod(user.id, 'standard');
@@ -1002,7 +996,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const ebook = await createProduct({ requiresShipping: false });
-        await cartService.cartItemSetById(user.id, String(ebook._id), 1);
+        await cartService.setItemById(user.id, String(ebook._id), 1);
 
         await cartRepository.setShippingMethod(user.id, 'standard');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -1017,7 +1011,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const physical = await createProduct();
-        await cartService.cartItemSetById(user.id, String(physical._id), 1);
+        await cartService.setItemById(user.id, String(physical._id), 1);
         await cartRepository.setShippingMethod(user.id, 'standard');
         await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
@@ -1025,7 +1019,7 @@ describe('orderConfirm', () => {
         expect(cart!.shippingMethodId).toBeUndefined();
 
         const ebook = await createProduct({ requiresShipping: false });
-        await cartService.cartItemSetById(user.id, String(ebook._id), 1);
+        await cartService.setItemById(user.id, String(ebook._id), 1);
         const second = await cartService.orderConfirm(user.id, testCallerContext, undefined);
         expect(second.success).toBe(true);
     });
@@ -1035,10 +1029,10 @@ describe('orderConfirm', () => {
         await giveUserAnAddress(user.id);
         const physical = await createProduct();
         const ebook = await createProduct({ requiresShipping: false });
-        await cartService.cartItemSetById(user.id, String(physical._id), 1);
-        await cartService.cartItemSetById(user.id, String(ebook._id), 1);
+        await cartService.setItemById(user.id, String(physical._id), 1);
+        await cartService.setItemById(user.id, String(ebook._id), 1);
         await cartRepository.setShippingMethod(user.id, 'standard');
-        await cartService.cartItemRemoveById(user.id, String(physical._id), testCallerContext);
+        await cartService.removeItemById(user.id, String(physical._id), testCallerContext);
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
@@ -1049,7 +1043,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         const result = await cartService.orderConfirm(user.id, testCallerContext);
 
@@ -1061,7 +1055,7 @@ describe('orderConfirm', () => {
     it('refuses a physical basket under an address-requiring method with no address on file', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         // `standard.requiresAddress` is true, and this user's book is empty.
         await cartRepository.setShippingMethod(user.id, 'standard');
@@ -1081,7 +1075,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -1103,7 +1097,7 @@ describe('orderConfirm', () => {
         });
         const addressId = added.success ? added.data.id : undefined;
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, { addressId });
@@ -1118,7 +1112,7 @@ describe('orderConfirm', () => {
         await giveUserAnAddress(user.id); // `express` requires one
         // Express's ceiling is 5000g; two of these clear it.
         const product = await createProduct({ weight: 3000 });
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
 
         await cartRepository.setShippingMethod(user.id, 'express');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -1133,7 +1127,7 @@ describe('orderConfirm', () => {
         await giveUserAnAddress(user.id); // `standard` requires one
         // Over express's 5000g ceiling, comfortably under standard's 30000g one.
         const product = await createProduct({ weight: 3000 });
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
 
         await cartRepository.setShippingMethod(user.id, 'standard');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -1145,7 +1139,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id); // `express` requires one
         const product = await createProduct(); // no `weight` override
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         await cartRepository.setShippingMethod(user.id, 'express');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -1157,7 +1151,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const ebook = await createProduct({ requiresShipping: false });
-        await cartService.cartItemSetById(user.id, String(ebook._id), 1);
+        await cartService.setItemById(user.id, String(ebook._id), 1);
 
         await cartService.orderConfirm(user.id, testCallerContext);
 
@@ -1171,8 +1165,8 @@ describe('orderConfirm', () => {
         await giveUserAnAddress(user.id); // `standard` requires one
         const ebook = await createProduct({ requiresShipping: false });
         const mug = await createProduct({ requiresShipping: true, price: 500 });
-        await cartService.cartItemSetById(user.id, String(ebook._id), 1);
-        await cartService.cartItemAddById(user.id, String(mug._id), 1);
+        await cartService.setItemById(user.id, String(ebook._id), 1);
+        await cartService.addItemById(user.id, String(mug._id), 1);
 
         await cartRepository.setShippingMethod(user.id, 'standard');
         await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -1186,7 +1180,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
-        await cartService.cartItemSetById(user.id, String(keyboard._id), 2);
+        await cartService.setItemById(user.id, String(keyboard._id), 2);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -1218,7 +1212,7 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
         await product.deleteOne();
 
         const result = await cartService.orderConfirm(user.id, testCallerContext);
@@ -1243,7 +1237,7 @@ describe('orderConfirm — paymentMethod', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const before = Date.now();
@@ -1268,7 +1262,7 @@ describe('orderConfirm — paymentMethod', () => {
                 const user = await createUser();
                 await giveUserAnAddress(user.id);
                 const product = await createProduct();
-                await cartService.cartItemSetById(user.id, String(product._id), 1);
+                await cartService.setItemById(user.id, String(product._id), 1);
 
                 const result = await cartService.orderConfirm(user.id, testCallerContext, {
                     paymentMethod: 'bank_transfer'
@@ -1288,7 +1282,7 @@ describe('orderConfirm — paymentMethod', () => {
                     const user = await createUser();
                     await giveUserAnAddress(user.id);
                     const product = await createProduct();
-                    await cartService.cartItemSetById(user.id, String(product._id), 1);
+                    await cartService.setItemById(user.id, String(product._id), 1);
 
                     const before = Date.now();
                     await cartRepository.setShippingMethod(user.id, 'pickup');
@@ -1316,7 +1310,7 @@ describe('orderConfirm — paymentMethod', () => {
             const user = await createUser();
             await giveUserAnAddress(user.id);
             const product = await createProduct();
-            await cartService.cartItemSetById(user.id, String(product._id), 1);
+            await cartService.setItemById(user.id, String(product._id), 1);
 
             await cartRepository.setShippingMethod(user.id, 'pickup');
             await cartService.orderConfirm(user.id, testCallerContext, {
@@ -1335,7 +1329,7 @@ describe('orderConfirm — paymentMethod', () => {
             const user = await createUser();
             await giveUserAnAddress(user.id);
             const product = await createProduct();
-            await cartService.cartItemSetById(user.id, String(product._id), 1);
+            await cartService.setItemById(user.id, String(product._id), 1);
 
             await cartRepository.setShippingMethod(user.id, 'pickup');
             await cartService.orderConfirm(user.id, testCallerContext, {
@@ -1363,7 +1357,7 @@ describe('orderConfirm — paymentMethod', () => {
                 status: 'pending',
                 paymentMethod: 'bank_transfer'
             });
-            await cartService.cartItemSetById(user.id, String(product._id), 1);
+            await cartService.setItemById(user.id, String(product._id), 1);
 
             const result = await cartService.orderConfirm(user.id, testCallerContext, {
                 paymentMethod: 'bank_transfer'
@@ -1395,7 +1389,7 @@ describe('orderConfirm — paymentMethod', () => {
             status: 'pending',
             paymentMethod: 'card'
         });
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
@@ -1413,7 +1407,7 @@ describe('orderConfirm — paymentMethod', () => {
                     status: 'pending',
                     paymentMethod: 'card'
                 });
-                await cartService.cartItemSetById(user.id, String(product._id), 1);
+                await cartService.setItemById(user.id, String(product._id), 1);
 
                 const result = await cartService.orderConfirm(
                     user.id,
@@ -1438,7 +1432,7 @@ describe('orderConfirm — paymentMethod', () => {
             status: 'cancelled',
             paymentMethod: 'card'
         });
-        await cartService.cartItemSetById(user.id, String(product._id), 1);
+        await cartService.setItemById(user.id, String(product._id), 1);
         await cartRepository.setShippingMethod(user.id, 'pickup');
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
@@ -1459,7 +1453,7 @@ describe('orderConfirm — paymentMethod', () => {
                 status: 'pending',
                 paymentMethod: 'bank_transfer'
             });
-            await cartService.cartItemSetById(user.id, String(product._id), 1);
+            await cartService.setItemById(user.id, String(product._id), 1);
 
             await cartRepository.setShippingMethod(user.id, 'pickup');
             const result = await cartService.orderConfirm(user.id, testCallerContext, {
@@ -1476,16 +1470,16 @@ describe('productRemoveFromCartsById', () => {
         const second = await createUser({ email: 'second@example.com' });
         const doomed = await createProduct({ title: 'Discontinued' });
         const kept = await createProduct({ title: 'Kept' });
-        await cartService.cartItemSetById(first.id, String(doomed._id), 1);
-        await cartService.cartItemSetById(first.id, String(kept._id), 2);
-        await cartService.cartItemSetById(second.id, String(doomed._id), 3);
+        await cartService.setItemById(first.id, String(doomed._id), 1);
+        await cartService.setItemById(first.id, String(kept._id), 2);
+        await cartService.setItemById(second.id, String(doomed._id), 3);
 
         await cartService.productRemoveFromCartsById(String(doomed._id), {});
 
         // Both carts cleaned, and the unrelated line survives — a `$pull` that matched too
         // broadly would empty the whole cart instead.
-        await expect(cartService.cartGet(second.id)).resolves.toEqual([]);
-        const firstItems = await cartService.cartGet(first.id);
+        await expect(cartService.get(second.id)).resolves.toEqual([]);
+        const firstItems = await cartService.get(first.id);
         expect(firstItems).toHaveLength(1);
         expect(firstItems[0].productId).toBe(String(kept._id));
     });
@@ -1536,7 +1530,7 @@ describe('productRemoveFromCartsById', () => {
  * the `personalData.erase` hook `users` collects from the registry, so skipping registration would
  * pass for the wrong reason.
  */
-describe('cartDeleteByUserId', () => {
+describe('deleteByUserId', () => {
     beforeEach(() => {
         registerCheckoutModules();
     });
@@ -1550,7 +1544,7 @@ describe('cartDeleteByUserId', () => {
         // when the account is hard-deleted is unreadable forever unless this cleanup runs.
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
 
         await userService.remove(user, true);
 
@@ -1560,7 +1554,7 @@ describe('cartDeleteByUserId', () => {
     it('keeps the cart when the account is only soft-deleted', async () => {
         const user = await createUser();
         const product = await createProduct();
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
+        await cartService.setItemById(user.id, String(product._id), 2);
 
         await userService.remove(user, false);
 

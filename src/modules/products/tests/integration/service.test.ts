@@ -396,10 +396,10 @@ describe('productService.removeById', () => {
         const user = await createUser();
         const userId = user._id.toString();
         const { cartService } = await import('@modules/cart');
-        await cartService.cartItemSetById(userId, pid, 1);
+        await cartService.setItemById(userId, pid, 1);
 
         // Confirm the cart item was added
-        expect(await cartService.cartGet(userId)).toHaveLength(1);
+        expect(await cartService.get(userId)).toHaveLength(1);
 
         const result = await productService.removeById(pid, true);
         // The cascade rides the outbox: it lands after the response, not before it.
@@ -414,7 +414,7 @@ describe('productService.removeById', () => {
          * has been deleted (it captures the id before `populate` nulls the reference), so a line
          * the cleanup missed would still be visible here rather than vanishing into the join.
          */
-        const lines = await cartService.cartGet(userId);
+        const lines = await cartService.get(userId);
         expect(lines.some((line) => line.productId === pid)).toBe(false);
     });
 

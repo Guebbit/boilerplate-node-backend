@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /cart/merge` controller — thin HTTP adapter over `cartService.cartMerge`.
+ * `POST /cart/merge` controller — thin HTTP adapter over `cartService.merge`.
  */
 
 import type { Request, Response } from 'express';
@@ -24,7 +24,7 @@ export const postCartMerge = (
     if (!body) return;
 
     return cartService
-        .cartMerge(request.authContext!.id, body.lines, callerContextOf(request))
+        .merge(request.authContext!.id, body.lines, callerContextOf(request))
         .then((result) => {
             successResponse<MergeCartResponse>(response, result);
         })

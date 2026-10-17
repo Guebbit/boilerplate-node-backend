@@ -1,6 +1,6 @@
 /**
  * @module
- * `GET /cart/summary` controller — thin HTTP adapter over `cartService.cartGetForBadge`.
+ * `GET /cart/summary` controller — thin HTTP adapter over `cartService.getForBadge`.
  */
 
 import type { Request, Response } from 'express';
@@ -16,7 +16,7 @@ import type { CartSummaryResponse } from '@types';
  */
 export const getCartSummary = (request: Request, response: Response) => {
     return cartService
-        .cartGetForBadge(request.authContext!.id)
+        .getForBadge(request.authContext!.id)
         .then((cart) => {
             successResponse<CartSummaryResponse>(response, cart.summary);
         })

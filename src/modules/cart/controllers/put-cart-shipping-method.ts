@@ -1,7 +1,7 @@
 /**
  * @module
  * `PUT /cart/shipping-method` controller — thin HTTP adapter over
- * `cartService.cartShippingMethodSet`.
+ * `cartService.setShippingMethod`.
  */
 
 import type { Request, Response } from 'express';
@@ -26,7 +26,7 @@ export const putCartShippingMethod = (
     if (!body) return;
 
     return cartService
-        .cartShippingMethodSet(userId, body.shippingMethodId)
+        .setShippingMethod(userId, body.shippingMethodId)
         .then((result) => {
             if (refused(response, result)) return;
 

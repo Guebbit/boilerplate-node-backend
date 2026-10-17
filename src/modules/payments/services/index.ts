@@ -49,9 +49,6 @@ export type { PaymentMethodInfo } from '../config';
  * would skip them. `confirmPayment`/`syncPayment`/`applyWebhookSettlement` and
  * `refundByOrder`/`refundForOrder`/`refundForReturn` are the doors.
  */
-export { createIntent } from './intent';
-export { confirmPayment } from './settlement';
-export { recordOfflinePayment } from './offline';
 
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
 export const paymentService = {

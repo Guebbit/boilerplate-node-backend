@@ -124,7 +124,7 @@ const moveToCart = (
         const saved = wishlist?.items.some((item) => String(item.productId) === productId);
         if (!saved) return generateReject(404, [t('wishlist.not-found')]);
 
-        return cartService.cartItemAddById(userId, productId).then((added) => {
+        return cartService.addItemById(userId, productId).then((added) => {
             // The line stays saved either way. A product genuinely gone from the catalogue reads
             // as this module's own 404 (a refusal to buy it now is not a reason to throw away the
             // fact that somebody wants it); the cart's own 422 — the line is already at

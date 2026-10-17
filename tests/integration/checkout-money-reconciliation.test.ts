@@ -17,7 +17,7 @@ import fc from 'fast-check';
 import { api, authenticateAs } from '@tests/http';
 import { checkoutAs } from '@tests/checkout-as';
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { PROPERTY_RUNS_WITH_DATABASE } from '@tests/knobs';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -235,7 +235,7 @@ describe('cart view, order and payment intent agree on the amount (EUR)', () => 
 
 describe('cart view, order and payment intent agree on the amount (JPY, no minor unit)', () => {
     it('prices a whole-yen basket identically in all three', () =>
-        withEnvironment('NODE_DEFAULT_CURRENCY', 'JPY', async () => {
+        withEnvironmentOverrides({ NODE_DEFAULT_CURRENCY: 'JPY' }, async () => {
             const lines = [
                 { price: 1250, quantity: 2 },
                 { price: 399, quantity: 1 }
@@ -248,7 +248,7 @@ describe('cart view, order and payment intent agree on the amount (JPY, no minor
         }));
 
     it('rounds a fractional yen per unit, the same way in all three', () =>
-        withEnvironment('NODE_DEFAULT_CURRENCY', 'JPY', async () => {
+        withEnvironmentOverrides({ NODE_DEFAULT_CURRENCY: 'JPY' }, async () => {
             const lines = [{ price: 99.5, quantity: 3 }];
 
             const prices = await priceThroughHttp(await newShopper(), lines, 'pickup');

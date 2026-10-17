@@ -145,7 +145,7 @@ describe('a step beneath a guarded door', () => {
         const source = payments && program.getSourceFile(payments);
         const symbol = source && checker.getSymbolAtLocation(source);
         const names = symbol ? checker.getExportsOfModule(symbol).map(({ name }) => name) : [];
-        expect(names).toContain('confirmPayment');
+        expect(names).toContain('paymentService');
     });
 
     it('never leaves its module through the barrel', () => {

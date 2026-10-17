@@ -35,12 +35,12 @@ export default {
             // onto is `additionalProperties: false`.
             collect: (subject) =>
                 cartService
-                    .cartGet(subject.userId)
+                    .get(subject.userId)
                     .then((lines) =>
                         lines.map(({ productId, quantity }) => ({ productId, quantity }))
                     ),
-            // Joins the caller's own hard-delete transaction — see `cartDeleteByUserId`.
-            erase: cartService.cartDeleteByUserId
+            // Joins the caller's own hard-delete transaction — see `deleteByUserId`.
+            erase: cartService.deleteByUserId
         }
     ],
     subscribe: () => {
