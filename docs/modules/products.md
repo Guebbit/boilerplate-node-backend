@@ -174,7 +174,8 @@ stateDiagram-v2
 Moving the date announces `product.release_date_changed` through the outbox, in the edit's own
 transaction and only when the instant actually changed. `delivery` listens: buyers who already paid
 were promised the old date, and consumer law decides what they must be told (see
-[delivery](./delivery.md#preorders-and-a-moved-date)).
+[delivery](./delivery.md#preorders-and-a-moved-date)). The edit form can [preview the
+count](./delivery.md#previewing-a-move-before-it-is-saved) first.
 
 ### Industry mapping
 

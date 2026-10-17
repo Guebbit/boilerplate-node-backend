@@ -254,6 +254,31 @@ stateDiagram-v2
     Confirmed --> Allocated: stock arrives
 ```
 
+### Previewing a move before it is saved
+
+`GET /delivery/fulfillment-orders/release-date-impact?productId=&releaseDate=` tells staff, before
+they save, how many **orders** the move would notify (`notify`) or ask (`ask`), and the `answerBy`
+a question would carry. It runs the listener's own rule (`expectedDateOf` and `judgeMove` in
+`domain/preorder.ts`) against the date that would be, and writes nothing, so the two cannot drift.
+
+```mermaid
+flowchart LR
+    Q[productId + releaseDate] --> V{Valid? Product exists?}
+    V -- no --> R[422 / 404]
+    V -- yes --> U{Same date as now?}
+    U -- yes --> Z[0 and 0]
+    U -- no --> W[Each waiting fulfillment order]
+    W --> J[judgeMove with the proposed date]
+    J --> T[Tally in distinct orders]
+    T --> O[notify, ask, answerBy]
+```
+
+- `releaseDate` absent or blank previews a **cleared** date.
+- The same format and "at most one year ahead" rule as the product save.
+- An order with groups in both buckets counts once, under `ask`.
+- Guarded by `update:Product` **and** `display:Order`: an editor moves dates but sees no order volume.
+- A snapshot: a payment or a shipment between the preview and the save can shift a count.
+
 Every notice is one transaction with the state it leaves on the fulfillment order and one outbox
 event, `fulfillment_order.delayed`; the email follows the commit and links to the buyer's order
 page, where the cancel button already is. [`notifications`](./notifications.md) turns the event into an
@@ -283,10 +308,11 @@ The admin's preorder board (ADMIN_SALES 3) reads two things from here. The grain
 order, not the order line: the agreed and expected date, the hold, the consent state and the cancel
 reason all live on it, and `orders → delivery` is forbidden, so `orders` could not serve those columns.
 
-| Route                                      | Answers                                                                                              |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `GET /delivery/fulfillment-orders`         | one row per fulfillment order, with its buyer, `paidAt`, `state`, `late`, `delivered`, `slippedDays` |
-| `GET /delivery/fulfillment-orders/summary` | per product, in units: paid, waiting, awaiting a yes, allocated, shipped, cancelled, late            |
+| Route                                                  | Answers                                                                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `GET /delivery/fulfillment-orders`                     | one row per fulfillment order, with its buyer, `paidAt`, `state`, `late`, `delivered`, `slippedDays`    |
+| `GET /delivery/fulfillment-orders/summary`             | per product, in units: paid, waiting, awaiting a yes, allocated, shipped, cancelled, late               |
+| `GET /delivery/fulfillment-orders/release-date-impact` | orders a release-date move would notify or ask, before it is saved (`update:Product` + `display:Order`) |
 
 Filters on the list: `preorder` (made from a preorder line, the ones that carry an agreed date),
 `state`, `productId`, `late` and `dueWithin`.
