@@ -45,13 +45,29 @@ const warn = (user: UserDocument): Promise<void> => {
  * Stage 0: minimise every account quiet past `minimiseDays`. A failure is logged per account and
  * retried next night, never stopping the rest.
  */
-const minimiseStage = (minimiseDays: number): Promise<void> =>
+const minimiseStage = (minimiseDays: number): Promise<number> =>
     userService.minimiseInactiveBefore(daysAgo(minimiseDays)).then((result) => {
         logger.info({ message: 'Inactive-account minimise stage complete.', ...result });
+        return result.minimised;
     });
 
+/** What the reaper did, per stage: accounts touched, zero for a stage that was off or had nothing. */
+export interface InactiveReapCounts {
+    /** Accounts stage 0 minimised. */
+    minimised: number;
+    /** Accounts stage 1 warned. */
+    warned: number;
+    /** Accounts stage 2 soft-deleted. */
+    softDeleted: number;
+    /** Accounts stage 3 hard-deleted. */
+    hardDeleted: number;
+}
+
+/** The deletion stages' share of {@link InactiveReapCounts}. */
+type DeletionCounts = Omit<InactiveReapCounts, 'minimised'>;
+
 /** Stages 1-3, the opt-in deletion path: warn, soft delete, hard delete. */
-const deletionStages = async (inactiveDays: number): Promise<void> => {
+const deletionStages = async (inactiveDays: number): Promise<DeletionCounts> => {
     const toWarn = await userService.findInactiveUnwarned(daysAgo(inactiveDays));
     for (const user of toWarn) await warn(user);
 
@@ -66,12 +82,13 @@ const deletionStages = async (inactiveDays: number): Promise<void> => {
     for (const user of toHardDelete)
         await userService.remove(user, true, systemCallerContext('User'));
 
-    logger.info({
-        message: 'Inactive-account reaper run complete.',
+    const counts = {
         warned: toWarn.length,
         softDeleted: toSoftDelete.length,
         hardDeleted: toHardDelete.length
-    });
+    };
+    logger.info({ message: 'Inactive-account reaper run complete.', ...counts });
+    return counts;
 };
 
 /**
@@ -81,6 +98,7 @@ const deletionStages = async (inactiveDays: number): Promise<void> => {
  * Needs every module's hooks registered (minimise and erase come from the manifests) and, for the
  * warning mail, translations booted; the caller owns both, and the job's lease.
  *
+ * @returns how many accounts each stage handled
  * @param options - `inactiveDays`: idle days before the warning (0 = no deletion); `minimiseDays`:
  *   idle days before minimising (0 = none)
  */
@@ -90,7 +108,11 @@ export const reapInactiveAccounts = async ({
 }: {
     inactiveDays: number;
     minimiseDays: number;
-}): Promise<void> => {
-    if (minimiseDays > 0) await minimiseStage(minimiseDays);
-    if (inactiveDays > 0) await deletionStages(inactiveDays);
+}): Promise<InactiveReapCounts> => {
+    const minimised = minimiseDays > 0 ? await minimiseStage(minimiseDays) : 0;
+    const deleted =
+        inactiveDays > 0
+            ? await deletionStages(inactiveDays)
+            : { warned: 0, softDeleted: 0, hardDeleted: 0 };
+    return { minimised, ...deleted };
 };
