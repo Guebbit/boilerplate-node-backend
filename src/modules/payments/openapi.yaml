@@ -862,12 +862,15 @@ components:
                 `cancelled` — the order was cancelled before the payment settled.
 
         PaymentSort:
+            description: >-
+                `payBy` sorts on the bank-transfer deadline in `nextAction.payBy`. A payment with
+                none (any other method) counts as the earliest: first ascending, last descending.
             type: array
             minItems: 1
             maxItems: 2
             items:
                 type: string
-                enum: [createdAt, -createdAt, amount, -amount]
+                enum: [createdAt, -createdAt, amount, -amount, payBy, -payBy]
 
         SearchPaymentsRequest:
             type: object

@@ -562,12 +562,12 @@ flowchart LR
 Four reads behind one admin page, all `display:Payment` (support, manager, admin) and never
 shared-cached. A payer reads their own payment through `GET /payments/order/{orderId}` only.
 
-| Read                                     | Answers                                                                                                                                                                    |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /payments`, `POST /payments/search` | one page of payments, newest first; each row carries its order's `orderNumber` and `email`, composed from `orders` in one batch (`findManyByIds`)                          |
-| `GET /payments/refunds`                  | one row per refund across every payment (`$unwind`); refunds stay embedded, because opening one is a single conditional write that also raises `amountRefunded`            |
-| `GET /payments/attention`                | problems still recorded on a document, oldest first; a fixed problem clears its marker and disappears                                                                      |
-| Awaiting transfer                        | `GET /orders?paymentMethod=bank_transfer&status=pending&sort=payBy` (the order's own deadline and hold); the transfers' payments are in the lists above, `requires_action` |
+| Read                                     | Answers                                                                                                                                                                 |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /payments`, `POST /payments/search` | one page of payments, newest first; each row carries its order's `orderNumber` and `email`, composed from `orders` in one batch (`findManyByIds`)                       |
+| `GET /payments/refunds`                  | one row per refund across every payment (`$unwind`); refunds stay embedded, because opening one is a single conditional write that also raises `amountRefunded`         |
+| `GET /payments/attention`                | problems still recorded on a document, oldest first; a fixed problem clears its marker and disappears                                                                   |
+| Awaiting transfer                        | `GET /payments?method=bank_transfer&displayStatus=incomplete&sort=payBy`: soonest deadline first (`nextAction.payBy`); a payment with no deadline sorts as the earliest |
 
 ```mermaid
 flowchart LR

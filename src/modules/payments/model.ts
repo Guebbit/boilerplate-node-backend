@@ -269,6 +269,8 @@ paymentSchema.plugin(moneyPlugin);
 // The staff list: newest first, optionally by status.
 paymentSchema.index({ createdAt: -1 }, { name: 'payments_createdAt' });
 paymentSchema.index({ status: 1, createdAt: -1 }, { name: 'payments_status_createdAt' });
+// The Awaiting tab: bank transfers by deadline.
+paymentSchema.index({ method: 1, payBy: 1 }, { name: 'payments_method_payBy' });
 // The Refunds tab and the needs-attention read, which `$match` on a refund's status first.
 paymentSchema.index(
     { 'refunds.status': 1, 'refunds.createdAt': -1 },

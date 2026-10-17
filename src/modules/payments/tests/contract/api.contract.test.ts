@@ -828,6 +828,29 @@ describe('the staff Payments page', () => {
         });
     });
 
+    it('GET /payments?sort=payBy orders awaiting transfers by deadline, either way', async () => {
+        const { payment: later } = await openTransferOrder({
+            user: await createUser({ email: 'later@example.com' }),
+            holdHours: 72
+        });
+        const { payment: sooner } = await openTransferOrder({
+            user: await createUser({ email: 'sooner@example.com' }),
+            holdHours: 5
+        });
+        const { bearer } = await authenticateAs('admin');
+        const ids = (sort: string) =>
+            api()
+                .get(`/payments?method=bank_transfer&displayStatus=incomplete&sort=${sort}`)
+                .set('Authorization', bearer)
+                .then((response) => {
+                    expect(response.status).toBe(200);
+                    return (response.body.data.items as { id: string }[]).map((row) => row.id);
+                });
+
+        expect(await ids('payBy')).toEqual([String(sooner._id), String(later._id)]);
+        expect(await ids('-payBy')).toEqual([String(later._id), String(sooner._id)]);
+    });
+
     it('POST /payments/search answers what GET /payments does', async () => {
         await paidOrder();
         const { bearer: adminBearer } = await authenticateAs('admin');

@@ -69,6 +69,9 @@ const seedPayment = async (overrides: Record<string, unknown> = {}) => {
     return { user, order, payment };
 };
 
+/** The id of a seeded row's payment, as the list reports it. */
+const idOf = (row: { payment: PaymentDocument }) => String(row.payment._id);
+
 /** Backdates `updatedAt`, which a save would otherwise stamp with now. */
 const backdate = (payment: PaymentDocument, minutesAgo: number) =>
     paymentModel
@@ -195,6 +198,22 @@ describe('listPayments filters and sort', () => {
 
         expect(asc.items.map((item) => item.amount)).toEqual([30, 60, 90]);
         expect(desc.items.map((item) => item.amount)).toEqual([90, 60, 30]);
+    });
+
+    it('sorts by the transfer deadline, a payment with none counting as the earliest', async () => {
+        const hour = 3_600_000;
+        const late = await seedPayment({
+            method: 'bank_transfer',
+            payBy: new Date(Date.now() + 72 * hour)
+        });
+        const soon = await seedPayment({
+            method: 'bank_transfer',
+            payBy: new Date(Date.now() + 5 * hour)
+        });
+        const none = await seedPayment();
+
+        expect(await idsOf({ sort: ['payBy'] })).toEqual([idOf(none), idOf(soon), idOf(late)]);
+        expect(await idsOf({ sort: ['-payBy'] })).toEqual([idOf(late), idOf(soon), idOf(none)]);
     });
 
     it("composes each row with its order's number and email", async () => {

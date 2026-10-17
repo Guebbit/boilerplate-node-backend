@@ -46,7 +46,7 @@ import { setAndUnset } from '@infrastructure/persistence/changes';
 export type PaymentWire = Omit<Wire<PaymentDocument>, 'providerRef'>;
 
 /** What the staff list may order by: wire field → column. */
-const PAYMENT_SORTABLE = { createdAt: 'createdAt', amount: 'amount' };
+const PAYMENT_SORTABLE = { createdAt: 'createdAt', amount: 'amount', payBy: 'payBy' };
 
 /**
  * What the staff list filters by, declared once. `displayStatus` is not here: it is a label, not a
