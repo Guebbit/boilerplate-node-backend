@@ -2,6 +2,8 @@
 
 What someone buying pet supplies actually experiences, start to finish.
 
+Log in as `customer@example.com`. The password is on [Test it yourself](./test-me.md).
+
 ## The journey
 
 ```mermaid

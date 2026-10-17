@@ -68,29 +68,16 @@ Staff see all 138. That difference is deliberate and it is explained on
 
 ## The people in it
 
-Every account below comes with a password you can actually type in:
+Every role below has its own account with a password you can type. They're all listed, with
+things to try as each one, on **[Test it yourself](./test-me.md)**.
 
-| Who               | Email                   | Password           | Can do                             |
-| ----------------- | ----------------------- | ------------------ | ---------------------------------- |
-| **A customer**    | `customer@example.com`  | `Demo-User1!`      | shop, buy, track their own orders  |
-| **The admin**     | `root@root.it`          | `Demo-Admin1!`     | everything, plus run the shop      |
-| **The editor**    | `editor@example.com`    | `Demo-Editor1!`    | the catalogue and every word in it |
-| **The moderator** | `moderator@example.com` | `Demo-Moderator1!` | accounts, orders, payments         |
-
-A few more accounts exist to show one state each: an unverified signup, one with two-factor on, one
-with an email change pending, one banned. They are listed in `scenarios/accounts.ts`.
-
-The manager, warehouse and support pages are jobs, not logins — the admin account does all three,
-and this section splits them up because it reads better, not because the software forces a
-narrower one. **The last two rows are different on purpose.** They exist to show restriction
-actually happening, and an omnipotent account cannot demonstrate a restriction — only a narrower
-one, refused when it reaches past its own job, can. Log into `editor@example.com` and try to open
-`/users`; the 403 is the point of the account existing — `/orders` shows the same restriction a
-different way, coming back 200 and empty rather than refused, since nothing routes that list read
-through a permission check at all. See [the editor's own page](./editor.md#what-this-role-cannot-reach-and-why-each-one-is-a-different-reason)
+Each staff account holds **exactly one role**, on purpose. An account that can do everything
+can't show you a restriction; a narrower one, refused when it reaches past its own job, can. Log
+into `editor@example.com` and try to open `/users`: the 403 is the reason that account exists.
+`/orders` shows the same restriction a different way, coming back 200 and empty rather than
+refused, since nothing routes that list read through a permission check at all. See
+[the editor's own page](./editor.md#what-this-role-cannot-reach-and-why-each-one-is-a-different-reason)
 for why the two shapes differ.
-
-→ [The editor](./editor.md) · [The moderator](./moderator.md)
 
 A further ten customer accounts exist too — `amelia.clarke`, `benjamin.hughes` and so on — with an
 order history spread across them (mostly one small order each, three with a couple more) so the
@@ -184,6 +171,7 @@ declined" path can be shown on demand.
 | Writing and photographing products, and pricing them  | [The editor](./editor.md)        |
 | Translating the shop's screens, and a product's words | [The editor](./editor.md)        |
 | Handling accounts, disputed orders and refunds        | [The moderator](./moderator.md)  |
+| Wanting to log in and click around                    | [Test it yourself](./test-me.md) |
 | A developer who took a wrong turn                     | [Modules](../modules/)           |
 
 ## Opening it yourself

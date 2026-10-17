@@ -3,7 +3,8 @@
 Everything the shop **says and shows**: what a product is called, what it says, what it costs and
 what it looks like — plus the words on every screen, in every language the shop speaks.
 
-Log in as `editor@example.com` / `Demo-Editor1!` — a real, narrower account, not the owner's.
+Log in as `editor@example.com` — a real, narrower account, not the owner's. The password is on
+[Test it yourself](./test-me.md).
 
 ## Three families, one job
 

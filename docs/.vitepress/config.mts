@@ -29,6 +29,7 @@ export default withMermaid(
                         text: 'The Demo Shop',
                         items: [
                             { text: 'Overview', link: '/demo-ecommerce/' },
+                            { text: 'Test it yourself', link: '/demo-ecommerce/test-me' },
                             { text: 'The customer', link: '/demo-ecommerce/shopper' },
                             { text: 'The shop manager', link: '/demo-ecommerce/manager' },
                             { text: 'The warehouse', link: '/demo-ecommerce/warehouse' },

@@ -2,6 +2,8 @@
 
 Messages from people, accounts that need help, and knowing whether the shop is actually broken.
 
+Log in as `support@example.com`. The password is on [Test it yourself](./test-me.md).
+
 ## The contact form
 
 Anyone can send a message — no account needed. It is the only thing in the whole application a

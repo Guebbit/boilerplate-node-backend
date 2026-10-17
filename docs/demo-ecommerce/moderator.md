@@ -3,8 +3,8 @@
 Accounts that need action taken against them, orders that need sorting out, and money that needs
 to go back.
 
-Log in as `moderator@example.com` / `Demo-Moderator1!` — a real, narrower account, not the
-owner's.
+Log in as `moderator@example.com` — a real, narrower account, not the owner's. The password is
+on [Test it yourself](./test-me.md).
 
 ## Key families, three jobs
 

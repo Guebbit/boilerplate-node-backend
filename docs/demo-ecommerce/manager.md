@@ -2,7 +2,8 @@
 
 Running the shop: what is for sale, at what price, and what happens to orders after they arrive.
 
-Everything on this page needs the staff login (`root@root.it` / `Demo-Admin1!`).
+Log in as `manager@example.com`, or as the admin, who can do this job too. The passwords are on
+[Test it yourself](./test-me.md).
 
 ## An order's life
 

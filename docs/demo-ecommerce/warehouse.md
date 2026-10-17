@@ -2,6 +2,8 @@
 
 Stock, and getting parcels out of the door.
 
+Log in as `warehouse@example.com`. The password is on [Test it yourself](./test-me.md).
+
 ## The one rule
 
 **Nobody types a stock number in directly.** Not the manager, not the shop, not anyone.
