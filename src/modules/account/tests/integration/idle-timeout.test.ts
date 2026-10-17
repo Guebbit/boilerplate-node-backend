@@ -10,6 +10,7 @@ import { setEnvironment } from '@tests/environment';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { sessionModel } from '../../model';
 import { sessionRowsOf } from '../factories';
+import { cookieHeader } from '@tests/cookies';
 
 setupTestDb();
 
@@ -125,5 +126,43 @@ describe.each(MODES)('the staff idle timeout in %s mode', (mode) => {
         expect(forStaff.body.data.idleTimeoutSeconds).toBe(LIMIT);
         expect(forShopper.body.data).not.toHaveProperty('idleTimeoutSeconds');
         expect(forShopper.body.data.lastActiveAt).toEqual(expect.any(String));
+    });
+});
+
+/** Signs a staff account in and answers it with the refresh cookie as the browser would hold it. */
+const signInStaff = async () => {
+    const user = await createUser(
+        { email: 'refresher@example.com', verifiedAt: new Date() },
+        'editor'
+    );
+    const login = await api()
+        .post('/account/login')
+        .send({ email: user.email, password: PLAIN_PASSWORD });
+    return { user, cookie: cookieHeader(login, '__Host-session') };
+};
+
+describe('the staff idle timeout at POST /account/refresh (jwt mode)', () => {
+    beforeEach(() => {
+        setEnvironment({ NODE_SESSION_MODE: 'jwt' });
+    });
+
+    it('refuses an idled-out staff family with 401 SESSION_IDLE, and removes the family', async () => {
+        const { user, cookie } = await signInStaff();
+        await idleFor(user.id, LIMIT + 60);
+
+        const response = await api().post('/account/refresh').set('Cookie', cookie);
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('SESSION_IDLE');
+        expect(await sessionRowsOf(user.id)).toEqual([]);
+    });
+
+    it('lets a staff family idle within the limit refresh', async () => {
+        const { user, cookie } = await signInStaff();
+        await idleFor(user.id, LIMIT - 60);
+
+        const response = await api().post('/account/refresh').set('Cookie', cookie);
+
+        expect(response.status).toBe(200);
     });
 });

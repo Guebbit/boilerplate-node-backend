@@ -10,6 +10,7 @@ import {
     FAKE_SUCCESS_METHOD,
     fakePaymentProvider,
     setFakeOutcome,
+    setFakeRefundFailure,
     setFakeReceipt
 } from '@scenarios/support/doubles/payments/fake';
 import {
@@ -134,6 +135,33 @@ describe('fakePaymentProvider.refund', () => {
         });
 
         expect(second).toEqual(first);
+    });
+});
+
+describe('fakePaymentProvider.refund and the settled outcome', () => {
+    it('leaves the intent succeeded after a partial refund', async () => {
+        await fakePaymentProvider.confirm('fake_pi_refunded', FAKE_SUCCESS_METHOD);
+        await fakePaymentProvider.refund(
+            'fake_pi_refunded',
+            { amount: 250, currency: 'eur' },
+            { idempotencyKey: 'partial' }
+        );
+
+        await expect(fakePaymentProvider.retrieve('fake_pi_refunded')).resolves.toMatchObject({
+            status: 'succeeded'
+        });
+    });
+
+    it('succeeds on retry with the same key once the failure lever is cleared', async () => {
+        setFakeRefundFailure('fake_pi_retry', 'provider_unavailable');
+        await expect(
+            fakePaymentProvider.refund('fake_pi_retry', charge, { idempotencyKey: 'again' })
+        ).rejects.toThrow();
+        setFakeRefundFailure('fake_pi_retry', undefined);
+
+        await expect(
+            fakePaymentProvider.refund('fake_pi_retry', charge, { idempotencyKey: 'again' })
+        ).resolves.toEqual({ refundRef: 're_fake_again' });
     });
 });
 

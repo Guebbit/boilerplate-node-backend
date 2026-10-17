@@ -306,13 +306,14 @@ describe('updating', () => {
         expect(cleared?.eventTypes).toEqual(['order.paid']);
     });
 
-    it('re-arms a disabled subscription: failure streak and disabled stamp are cleared', async () => {
+    it('re-arms a disabled subscription: failure streak, failing-since date and disabled stamp are cleared', async () => {
         const created = await subscribe();
         const row = await stored(String(created._id));
         if (!row) throw new Error('setup failed');
         row.enabled = false;
         row.consecutiveFailures = 7;
         row.disabledAt = new Date();
+        row.failingSince = new Date(Date.now() - 4 * 86_400_000);
         await webhookSubscriptionRepository.save(row);
 
         await update(String(created._id), { enabled: true }, context);
@@ -320,6 +321,8 @@ describe('updating', () => {
         const after = await stored(String(created._id));
         expect(after).toMatchObject({ enabled: true, consecutiveFailures: 0 });
         expect(after?.disabledAt).toBeUndefined();
+        // The age floor starts over, or the next five exhausted chains would disable it at once.
+        expect(after?.failingSince).toBeUndefined();
     });
 
     it('leaves a building failure streak alone when an enabled subscription is saved as enabled again', async () => {

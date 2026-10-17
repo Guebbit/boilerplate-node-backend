@@ -45,11 +45,13 @@ describe('reapInactiveAccounts', () => {
         const user = await createUser({ email: 'quiet@reaper.test' }, 'customer');
         await backdate(user.id);
 
-        await reapInactiveAccounts({ inactiveDays: 365, minimiseDays: 0 });
+        const firstRun = await reapInactiveAccounts({ inactiveDays: 365, minimiseDays: 0 });
         const afterFirst = await stateOf(user.id);
-        await reapInactiveAccounts({ inactiveDays: 365, minimiseDays: 0 });
+        const secondRun = await reapInactiveAccounts({ inactiveDays: 365, minimiseDays: 0 });
         const afterSecond = await stateOf(user.id);
 
+        expect(firstRun).toEqual({ minimised: 0, warned: 1, softDeleted: 0, hardDeleted: 0 });
+        expect(secondRun.warned).toBe(0);
         expect(afterFirst?.inactivityWarnedAt).toBeDefined();
         expect(afterFirst?.deletedAt).toBeUndefined();
         // The grace runs from the warning, so a second run straight after changes nothing.
@@ -61,8 +63,9 @@ describe('reapInactiveAccounts', () => {
         const user = await createUser({ email: 'warned@reaper.test' }, 'customer');
         await backdate(user.id, { inactivityWarnedAt: daysAgo(31) });
 
-        await reapInactiveAccounts({ inactiveDays: 365, minimiseDays: 0 });
+        const counts = await reapInactiveAccounts({ inactiveDays: 365, minimiseDays: 0 });
 
+        expect(counts.softDeleted).toBe(1);
         const state = await stateOf(user.id);
         expect(state?.deletedAt).toBeDefined();
         expect(state?.deletedBy).toBe('reaper');
@@ -72,8 +75,9 @@ describe('reapInactiveAccounts', () => {
         const user = await createUser({ email: 'gone@reaper.test' }, 'customer');
         await backdate(user.id, { deletedBy: 'reaper', deletedAt: daysAgo(31) });
 
-        await reapInactiveAccounts({ inactiveDays: 365, minimiseDays: 0 });
+        const counts = await reapInactiveAccounts({ inactiveDays: 365, minimiseDays: 0 });
 
+        expect(counts.hardDeleted).toBe(1);
         expect(await stateOf(user.id)).toBeNull();
     });
 
@@ -81,8 +85,9 @@ describe('reapInactiveAccounts', () => {
         const user = await createUser({ email: 'minimal@reaper.test' }, 'customer');
         await backdate(user.id, { inactivityWarnedAt: daysAgo(100) });
 
-        await reapInactiveAccounts({ inactiveDays: 0, minimiseDays: 30 });
+        const counts = await reapInactiveAccounts({ inactiveDays: 0, minimiseDays: 30 });
 
+        expect(counts).toEqual({ minimised: 1, warned: 0, softDeleted: 0, hardDeleted: 0 });
         const state = await stateOf(user.id);
         expect(state?.inactivityMinimisedAt).toBeDefined();
         expect(state?.deletedAt).toBeUndefined();

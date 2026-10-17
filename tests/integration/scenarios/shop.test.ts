@@ -366,6 +366,19 @@ describe('each subject names a row that really has the property', () => {
         expect(payment?.method).toBe('card');
     });
 
+    it('order.deliveredTwoLines is delivered today with two lines, the first of quantity two', async () => {
+        const order = await orderModel.findById(subjects['order.deliveredTwoLines']).exec();
+        expect(order?.status).toBe('delivered');
+        expect(order?.userId?.toString()).toBe(SEED_USER_ID);
+        expect(order!.withdrawUntil!.getTime()).toBeGreaterThan(Date.now());
+        expect(order?.items.map((item) => item.quantity).toSorted()).toEqual([1, 2]);
+
+        const payment = await paymentModel
+            .findOne({ orderId: subjects['order.deliveredTwoLines'] })
+            .exec();
+        expect(payment?.method).toBe('card');
+    });
+
     it('order.deliveredLongAgo was delivered at the start of the history, and its withdrawal window has closed', async () => {
         const order = await orderModel.findById(subjects['order.deliveredLongAgo']).exec();
         expect(order?.status).toBe('delivered');

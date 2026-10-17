@@ -13,6 +13,9 @@ import { getSessionMode } from '../session/config';
 import { authRefreshTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
 import { readSessionCookie } from '@kernel/cookies';
+import { ERROR_CODES } from '@api/error-codes';
+import { t } from '@infrastructure/i18n';
+import { TokenRejection } from '../session/jwt';
 
 /**
  * POST /account/refresh — `jwt` mode only (404 in `cookie` mode). Mints a new short-lived access
@@ -51,6 +54,14 @@ export const getRefreshToken = (request: Request, response: Response) => {
                     return;
                 }
                 authRefreshTotal.inc({ status: 'failure' });
+                // An idled-out staff session says so, as every other door does: the client then
+                // shows "signed out for inactivity" rather than a generic expiry.
+                if (error instanceof TokenRejection && error.reason === 'idle') {
+                    rejectResponse(response, 401, [
+                        { code: ERROR_CODES.SESSION_IDLE, message: t('account.session-idle') }
+                    ]);
+                    return;
+                }
                 rejectResponse(response, 401);
             })
     );

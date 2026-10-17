@@ -92,12 +92,13 @@ export const SCRIPTED_RATE_LIMITS: Readonly<Record<string, string>> = {
 
 /**
  * Bank transfer at checkout, which `GET /payments/methods` offers only where a deployment names
- * both of these — and the `shop` scenario's `order.awaitingTransfer` guarantee needs it offered.
+ * both of the first two — and the `shop` scenario's `order.awaitingTransfer` guarantee needs it offered.
  *
  * Fictional values: nobody can send money to a demo. A deployment that names its own in `.env`
  * keeps them, since both callers apply these only where nothing is set.
  */
 export const DEMO_BANK_TRANSFER: Readonly<Record<string, string>> = {
     NODE_BANK_TRANSFER_BENEFICIARY: 'Guebbit Demo Shop',
-    NODE_BANK_TRANSFER_IBAN: 'IT60X0542811101000000123456'
+    NODE_BANK_TRANSFER_IBAN: 'IT60X0542811101000000123456',
+    NODE_BANK_TRANSFER_BIC: 'UNCRITMM'
 };

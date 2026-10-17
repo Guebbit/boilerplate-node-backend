@@ -9,7 +9,7 @@
 import type { JobDeclaration } from '@kernel/registry';
 import { logger } from '@infrastructure/adapters/logger';
 import { accountConfig } from './config';
-import { reapInactiveAccounts } from './services/reap-inactive';
+import { reapInactiveAccounts, type InactiveReapCounts } from './services/reap-inactive';
 import { reapLapsedPreviousEmails } from './services/previous-email-cleanup';
 import { reapExpiredExports } from './services/export-rows';
 
@@ -17,7 +17,7 @@ import { reapExpiredExports } from './services/export-rows';
  * Minimise, then (opt in) warn and delete, accounts that have gone quiet. Both dials at 0 means
  * nothing to do.
  */
-const reapInactive = (): Promise<void> => {
+const reapInactive = (): Promise<InactiveReapCounts> => {
     const { NODE_INACTIVE_ACCOUNT_DAYS: inactiveDays, NODE_INACTIVE_MINIMISE_DAYS: minimiseDays } =
         accountConfig();
     if (inactiveDays <= 0 && minimiseDays <= 0) {
@@ -25,7 +25,7 @@ const reapInactive = (): Promise<void> => {
             message:
                 'Inactive-account reaper disabled (NODE_INACTIVE_ACCOUNT_DAYS and NODE_INACTIVE_MINIMISE_DAYS are 0).'
         });
-        return Promise.resolve();
+        return Promise.resolve({ minimised: 0, warned: 0, softDeleted: 0, hardDeleted: 0 });
     }
     return reapInactiveAccounts({ inactiveDays, minimiseDays });
 };
@@ -51,6 +51,7 @@ export const accountJobs: readonly JobDeclaration[] = [
         run: () =>
             reapLapsedPreviousEmails().then((cleared) => {
                 logger.info({ message: 'Previous emails reaped.', previousEmailsCleared: cleared });
+                return { cleared };
             }),
         lease: { ttlMs: 30 * 60 * 1000 }
     },
@@ -62,6 +63,7 @@ export const accountJobs: readonly JobDeclaration[] = [
         run: () =>
             reapExpiredExports().then(({ rows, files }) => {
                 logger.info({ message: 'Account exports reaped.', rows, strayFiles: files });
+                return { rows, files };
             })
     }
 ];

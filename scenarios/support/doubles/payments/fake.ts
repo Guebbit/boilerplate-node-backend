@@ -213,7 +213,7 @@ export const fakePaymentProvider: PaymentProvider = {
             return Promise.reject(
                 new PaymentProviderError(failure, `[fake-psp] simulated refund failure: ${failure}`)
             );
-        outcomes.delete(providerRef);
+        // The intent keeps its settled outcome: a real provider records a refund as its own object.
         // Stryker disable next-line all
         logger.info(
             `[fake-psp] refund ${charge.amount} ${charge.currency} on ${providerRef} (${idempotencyKey})`

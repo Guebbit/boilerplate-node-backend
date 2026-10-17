@@ -168,7 +168,7 @@ if each of THEIR endpoints were at fault. `domain#shouldAutoDisable` requires BO
 `WEBHOOK_MAX_CONSECUTIVE_FAILURES` (5) exhausted chains in a row AND at least
 `WEBHOOK_MIN_FAILING_MS` (3 days) since the streak's first failure
 (`WebhookSubscriptionDocument.failingSince`, stamped on the first failure after a success and
-cleared on the next one) — `webhook_subscriptions_auto_disabled_total` counts how often it fires.
+cleared on the next one, and on a re-enable, so a disabled subscription turned back on starts a fresh streak) — `webhook_subscriptions_auto_disabled_total` counts how often it fires.
 
 **Delayed retry rides the cron container, not the broker.** `webhookdeliveries.nextAttemptAt`
 carries when a failed row is due again; `npm run sweep:webhook-retries` (`sweep:webhook-retries`)

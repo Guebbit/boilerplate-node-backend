@@ -24,6 +24,15 @@ it('records newest first, with primitive template variables as readable lines', 
     expect(oldest.lines).toEqual(expect.arrayContaining(['greeting: Hello', 'count: 2']));
 });
 
+it('records the language the send carries in its own data, and none when it carries none', () => {
+    recordDemoEmail({ to: 'a@b.it', subject: 'Ciao' }, 'one', { locale: 'it' });
+    recordDemoEmail({ to: 'c@d.it', subject: 'Plain' }, 'two', {});
+
+    const [plain, italian] = readDemoOutbox();
+    expect(italian.locale).toBe('it');
+    expect(plain.locale).toBeUndefined();
+});
+
 it('lifts the token out of a link URL"s `#token=` fragment when no bare token variable exists', () => {
     recordDemoEmail({ to: 'a@b.it', subject: 'Reset' }, 'reset', {
         linkUrl:

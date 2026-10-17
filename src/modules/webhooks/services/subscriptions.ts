@@ -236,6 +236,9 @@ export const update = (
                 if (reArming) {
                     subscription.disabledAt = undefined;
                     subscription.consecutiveFailures = 0;
+                    // A fresh streak: the age floor protects subscribers from OUR outages, so
+                    // the old streak's start date must not carry over (`domain/backoff.ts`).
+                    subscription.failingSince = undefined;
                 }
             }
 
