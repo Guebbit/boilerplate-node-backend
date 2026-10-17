@@ -7,6 +7,7 @@
  */
 
 import type { OrderStatus } from '@types';
+import type { CancelCause } from './services/cancel';
 
 /** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
 declare module '@kernel/events' {
@@ -22,10 +23,11 @@ declare module '@kernel/events' {
          * the only durable promise of that money: `payments` opens its refund record from this
          * event, and the relay retries the event until the record exists.
          *
-         * `expired` says the hold ran out unpaid, which is the one cancel the buyer is told about by
-         * the payment: a transfer nobody sent is answered by `payments`, a card hold by `orders`.
+         * `cause` says why: it picks the buyer's mail (`orders` sends it from this event, see
+         * `./services/cancel-mail.ts`), and `reservation_expired` is the cancel a transfer nobody
+         * sent is answered for by `payments`, a card hold by `orders`.
          */
-        'order.cancelled': { orderId: string; refund: boolean; expired: boolean };
+        'order.cancelled': { orderId: string; refund: boolean; cause: CancelCause };
 
         /**
          * An order's status moved, whoever moved it — a status-only admin override

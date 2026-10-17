@@ -21,7 +21,8 @@ import {
 import { create, recordCreated, updateById } from './crud';
 import { removeById, restoreById } from './remove';
 import { placeOrder } from './place';
-import { sendOrderPlacedEmail, mailBuyer } from './notify';
+import { mailOrderPlaced, mailBuyer, mailBuyerOfOrder } from './notify';
+import { mailOrderCancelled } from './cancel-mail';
 import { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
 import { callerScope, cancelScope, actorOf, ownerScope, ownLiveScope, withActions } from './scope';
 import { freezeOrderLines } from './snapshot';
@@ -105,8 +106,10 @@ export const orderService = {
     reencryptOrders,
     create,
     placeOrder,
-    sendOrderPlacedEmail,
+    mailOrderPlaced,
+    mailOrderCancelled,
     mailBuyer,
+    mailBuyerOfOrder,
     openUnpaidOrderIds,
     findManyByIds,
     paidBuckets,

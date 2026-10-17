@@ -150,6 +150,33 @@ A handler on the bus receives `(payload, meta)`. Rules:
 - **Attempt every target, then fail.** `fanOut` uses `Promise.allSettled` so one bad subscription
   does not starve the rest, then throws so the relay retries; already-created rows are skipped.
 
+## Customer mail
+
+**Every mail to a customer is sent from a listener on an outbox event.** One rule, no exceptions:
+the module that owns the fact writes the event in the act's transaction, and the same module
+listens to it and sends. A mail is never sent inline after the commit.
+
+| Mail                                     | Event                                                                 | Listener                         |
+| ---------------------------------------- | --------------------------------------------------------------------- | -------------------------------- |
+| Order placed                             | `order.created`                                                       | `orders/services/notify.ts`      |
+| Cancelled, card hold expired             | `order.cancelled` (`cause`)                                           | `orders/services/cancel-mail.ts` |
+| Payment received, refund issued          | `payment.succeeded`, `payment.refunded`                               | `payments/services/notify.ts`    |
+| Shipped, arrived, preorder late          | `shipment.shipped`, `shipment.delivered`, `fulfillment_order.delayed` | `delivery/services/notify.ts`    |
+| Return acknowledged, decided, money back | `return.requested`, `return.decided`, `return.closed`                 | `returns/services/notify.ts`     |
+
+Why: a listener covers every path that announces the fact (a request, a sweep, a recovery job), and
+a crash between the commit and the send no longer loses the mail. The rules that come with it:
+
+- **A duplicate is accepted.** Delivery is at-least-once, so a mail can go out twice; no dedupe
+  field is kept. A duplicate beats a lost mail, see [rabbitmq.md](rabbitmq.md#emails-fire-and-forget).
+- **A failed mail never fails the act.** The listener logs and swallows, and the buyer-mail
+  lookup is `orders`' `mailBuyerOfOrder`. `enqueueEmail` itself never rejects, so the outbox covers
+  the crash window, not a failed send.
+- **The event names the cause, not the mail.** `order.cancelled` carries a `cause`, and the
+  listener picks the mail from the cause table in `orders/services/cancel.ts`.
+- **Not every mail is a customer's.** Account links (reset, verification, deletion) answer a
+  request the user is waiting on and are sent by the request.
+
 ## Poison events
 
 A row is `dead` after `NODE_OUTBOX_MAX_ATTEMPTS` failed dispatches. `OutboxEventsDead` fires on

@@ -184,7 +184,7 @@ describe('cancelling an order', () => {
         expect(rows[0].payload).toEqual({
             orderId: String(order._id),
             refund: true,
-            expired: false
+            cause: 'customer'
         });
     });
 

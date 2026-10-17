@@ -104,6 +104,10 @@ export default {
         onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) =>
             orderService.expireReservationById(orderId)
         );
+        // The buyer's mails, from this module's own facts — see `./services/notify.ts` and
+        // `./services/cancel-mail.ts`.
+        onDomainEvent(ORDER_CREATED, orderService.mailOrderPlaced);
+        onDomainEvent(ORDER_CANCELLED, orderService.mailOrderCancelled);
     },
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates'),

@@ -26,7 +26,6 @@ import { orderRepository } from '../repository';
 import { placeOrder } from './place';
 import { isSellable } from '../domain/rules';
 import { maxAdminOrderLineQuantity, maxAdminOrderLines } from '../config';
-import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
@@ -119,9 +118,7 @@ export const create = async (
     // admin's own UI language, not the recipient's. Same rule as `@modules/cart`'s checkout.
     //
     // Guarded: a lookup failure here must fall back to the default locale, not abort the order
-    // this endpoint is about to place. `mailBuyer`, further down, covers the same failure for the
-    // placed-order email with its own independent lookup — the two normally agree, since both
-    // read the same account, but neither may block on the other.
+    // this endpoint is about to place.
     const buyerLocale = await userService
         .getById(userId)
         .then((buyer) => buyer?.locale ?? getDefaultLocale())
@@ -184,12 +181,6 @@ export const create = async (
     const { order } = outcome;
 
     recordCreated(order, context);
-
-    // `recordCreated` is shared with `@modules/cart`'s checkout, which sends its own placed-order
-    // email, so mailing here too would double-send if this weren't split per caller. `mailBuyer`
-    // re-resolves the buyer for the mail's own locale/name — see this function's own guarded
-    // lookup above for why a second, independent attempt is worth the extra read.
-    void mailBuyer(order, (locale, name) => sendOrderPlacedEmail(order, locale, name, email));
 
     return generateSuccess(order, 201, t('orders.creation-success'));
 };

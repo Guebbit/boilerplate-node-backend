@@ -95,7 +95,11 @@ describe('every public webhook event has exactly one producer, and no producer n
             from: 'paid',
             to: 'shipped'
         });
-        await emitDomainEvent(ORDER_CANCELLED, { orderId: ORDER_ID, refund: true, expired: false });
+        await emitDomainEvent(ORDER_CANCELLED, {
+            orderId: ORDER_ID,
+            refund: true,
+            cause: 'customer'
+        });
         await emitDomainEvent(PAYMENT_SUCCEEDED, { paymentId: PAYMENT_ID, orderId: ORDER_ID });
         await emitDomainEvent(PAYMENT_FAILED, { paymentId: PAYMENT_ID, orderId: ORDER_ID });
         await emitDomainEvent(PAYMENT_REFUNDED, {

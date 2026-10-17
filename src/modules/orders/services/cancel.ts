@@ -13,7 +13,6 @@
 
 import { SYSTEM_ACTOR, systemCallerContext } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { OrderStatus } from '@types';
 import type { AuthContext } from '@types';
 import type { OrderDocument } from '../model';
@@ -34,10 +33,8 @@ import { ordersAuditActions } from '../audit';
 import { ORDER_CANCELLED } from '../events';
 import { orderRepository } from '../repository';
 import { ORDER_EVENTS, statusesLeadingTo, type OrderActor } from '../domain';
-import { cardHoldExpiredEmail, orderCancelledEmail } from '../emails';
 import { getById } from './read';
 import { withTimeline } from './timeline';
-import { mailBuyer } from './notify';
 import { cancelScope, actorOf } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -94,7 +91,7 @@ const moveToCancelled = (
         },
         () => ({
             name: ORDER_CANCELLED,
-            payload: { orderId: id, refund, expired: cause === 'reservation_expired' },
+            payload: { orderId: id, refund, cause },
             aggregateId: id
         })
     ).then((order) =>
@@ -120,7 +117,7 @@ interface CauseRules {
     /** The lifecycle column the move is read from, and who the timeline row says did it. */
     by: OrderActor;
     /**
-     * The buyer's explanation: `cancelled` says what became of their money, `reservation-expiry`
+     * The buyer's explanation, sent by `./cancel-mail.ts`: `cancelled` says what became of their money, `reservation-expiry`
      * says the hold timed out, `none` is for a cause with its own acknowledgement (a withdrawal's
      * is `returns`') or with nobody to tell (an erased account).
      */
@@ -138,7 +135,7 @@ interface CauseRules {
 }
 
 /** The one table: every cause, and what it decides. A new cause is a new row and a new door. */
-const CANCEL_CAUSES = {
+export const CANCEL_CAUSES = {
     customer: {
         by: 'customer',
         mail: 'cancelled',
@@ -184,46 +181,21 @@ const CANCEL_CAUSES = {
 } as const satisfies Record<CancelCause, CauseRules>;
 
 /**
- * Everything a successful cancel unlocks after its commit: the audit row, the analytics event, and
- * the customer's explanation by mail, as the cause decides. The refund itself is not here: it rides
- * the `order.cancelled` row the cancel's own transaction wrote.
+ * Everything a successful cancel unlocks after its commit: the audit row and the analytics event.
+ * The refund and the customer's mail are not here: they ride the `order.cancelled` row the cancel's
+ * own transaction wrote.
  * @param order - the cancelled order
- * @param refund - whether the cancel returns the money, for the mail that says so
  * @param cause - why it was cancelled
  * @param context - the caller's context; absent for a system-initiated cancel, which is still
  *   audited as the system actor rather than skipped
  */
-const afterCancel = async (
+const afterCancel = (
     order: OrderDocument,
-    refund: boolean,
     cause: CancelCause,
     context?: CallerContext
-): Promise<ResponseSuccess<OrderDocument>> => {
+): ResponseSuccess<OrderDocument> => {
     const rules: CauseRules = CANCEL_CAUSES[cause];
     const emitContext = context ?? systemCallerContext('Order');
-
-    /*
-     * The customer's answer to "what happened to my order" when the sweep lets a `card` hold go —
-     * thirty minutes, short but no shorter than the time it takes to abandon a checkout tab and
-     * wonder later where the order went. A bank transfer nobody sent is answered by `payments`,
-     * which owns the transfer's deadline; it hears the same cancel (`expired`).
-     */
-    if (rules.mail === 'reservation-expiry' && order.paymentMethod !== 'bank_transfer')
-        await mailBuyer(order, (locale) => {
-            const mail = cardHoldExpiredEmail(locale, order);
-            void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
-        });
-
-    /*
-     * A cancel that says what became of the money: a paid order's refund is the one thing the
-     * buyer cannot see for themselves. An unpaid cancel gets the same mail, so the answer is the
-     * same whoever pressed the button.
-     */
-    if (rules.mail === 'cancelled')
-        await mailBuyer(order, (locale, name) => {
-            const mail = orderCancelledEmail(locale, name, order, order.orderNumber, refund);
-            void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
-        });
 
     // No override needed: `emitContext.caller` is `SYSTEM_ACTOR`'s own caller for a system cancel,
     // and `buildAuditEvent`'s defaults already read `actorUserId`/`actorRole` off
@@ -291,7 +263,7 @@ const cancel = (
         rules.by === 'system' ? undefined : authContext.id
     ).then((order) =>
         order
-            ? afterCancel(order, refund, cause, context)
+            ? afterCancel(order, cause, context)
             : // Which refusal was it? This read only informs the message — the write
               // above already decided nothing changes.
               getById(id, scope).then((existing) =>
@@ -403,6 +375,8 @@ export const cancelUnanswered = (orderId: string): Promise<boolean> =>
         true,
         'wait_unanswered',
         undefined
-    ).then((order) =>
-        order ? afterCancel(order, true, 'wait_unanswered').then(() => true) : false
-    );
+    ).then((order) => {
+        if (!order) return false;
+        afterCancel(order, 'wait_unanswered');
+        return true;
+    });

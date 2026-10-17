@@ -22,6 +22,8 @@ import { orderModel } from '../../model';
 import { OrderStatus } from '@types';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
+import { registerModules } from '@kernel/registry';
+import ordersModule from '../../module';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { userService } from '@modules/users';
 import * as auditPort from '@infrastructure/observability/audit';
@@ -210,7 +212,7 @@ describe('cancelOnRequestById — who gets their money back', () => {
         await settleOutboxNudges();
 
         expect(cancellations).toEqual([
-            { orderId: String(order._id), refund: true, expired: false }
+            { orderId: String(order._id), refund: true, cause: 'customer' }
         ]);
     });
 
@@ -223,7 +225,7 @@ describe('cancelOnRequestById — who gets their money back', () => {
         await settleOutboxNudges();
 
         expect(cancellations).toEqual([
-            { orderId: String(order._id), refund: false, expired: false }
+            { orderId: String(order._id), refund: false, cause: 'operator' }
         ]);
     });
 
@@ -236,7 +238,7 @@ describe('cancelOnRequestById — who gets their money back', () => {
         await settleOutboxNudges();
 
         expect(cancellations).toEqual([
-            { orderId: String(order._id), refund: true, expired: false }
+            { orderId: String(order._id), refund: true, cause: 'operator' }
         ]);
     });
 
@@ -252,7 +254,7 @@ describe('cancelOnRequestById — who gets their money back', () => {
         await settleOutboxNudges();
 
         expect(cancellations).toEqual([
-            { orderId: String(order._id), refund: false, expired: false }
+            { orderId: String(order._id), refund: false, cause: 'operator' }
         ]);
     });
 
@@ -335,6 +337,15 @@ describe('cancelOnRequestById — audit and analytics', () => {
 });
 
 describe('cancelOnRequestById — the payment-window-expired email', () => {
+    // The mails ride `order.cancelled`: this module's listener must be wired.
+    beforeEach(() => {
+        registerModules([ordersModule]);
+    });
+
+    afterEach(() => {
+        resetDomainEvents();
+    });
+
     // A bank transfer nobody sent is answered by `payments`, which owns the transfer's deadline: the
     // order's own cancel stays quiet, and says the hold ran out on the event it announces.
     it('sends no expiry email of its own when a bank_transfer order times out', async () => {
@@ -349,9 +360,14 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
         // and the flag only that handler sets.
         await orderService.expireReservationById(String(order._id));
 
+        await settleOutboxNudges();
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
         const [row] = await outboxEventModel.find({ name: ORDER_CANCELLED }).lean();
-        expect(row.payload).toEqual({ orderId: String(order._id), refund: true, expired: true });
+        expect(row.payload).toEqual({
+            orderId: String(order._id),
+            refund: true,
+            cause: 'reservation_expired'
+        });
     });
 
     /*
@@ -366,6 +382,7 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
 
         await orderService.expireReservationById(String(order._id));
 
+        await settleOutboxNudges();
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(user.email);
@@ -388,6 +405,7 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
         );
 
         // The cancelled notice is the answer to a person's cancel; the expiry one is not.
+        await settleOutboxNudges();
         const templates = mockEnqueueEmail.mock.calls.map(([, template]) => template);
         expect(templates).toEqual(['orders.order-cancelled']);
     });
@@ -407,6 +425,7 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
         expect(result.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
         expect(stored?.status).toBe('cancelled');
+        await settleOutboxNudges();
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(order.email);
@@ -424,6 +443,7 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
         // A system actor with no context and no reservation flag: not the sweep, so no expiry notice.
         await orderService.cancelForErasureById(String(order._id));
 
+        await settleOutboxNudges();
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
 });
@@ -438,6 +458,7 @@ const mailsFor = async (
     const product = await createProduct();
     const order = await createOrder(user, [toOrderItem(product, 1)], extras);
     await cancel(String(order._id));
+    await settleOutboxNudges();
     return {
         user,
         order,
@@ -450,6 +471,14 @@ const mailsFor = async (
 };
 
 describe('cancelOnRequestById — the cancelled notice', () => {
+    beforeEach(() => {
+        registerModules([ordersModule]);
+    });
+
+    afterEach(() => {
+        resetDomainEvents();
+    });
+
     it('mails the buyer when the customer cancels, saying nothing was charged for an unpaid order', async () => {
         const user = await createUser();
         const product = await createProduct();
@@ -463,6 +492,7 @@ describe('cancelOnRequestById — the cancelled notice', () => {
             testCallerContext
         );
 
+        await settleOutboxNudges();
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(user.email);
@@ -486,6 +516,7 @@ describe('cancelOnRequestById — the cancelled notice', () => {
             testCallerContext
         );
 
+        await settleOutboxNudges();
         const [, template, data] = mockEnqueueEmail.mock.calls[0];
         expect(template).toBe('orders.order-cancelled');
         expect((data as { refundNote: string }).refundNote).toContain('returned');
@@ -507,6 +538,7 @@ describe('cancelOnRequestById — the cancelled notice', () => {
             callerContextAs('admin')
         );
 
+        await settleOutboxNudges();
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(user.email);
@@ -527,6 +559,7 @@ describe('cancelOnRequestById — the cancelled notice', () => {
         );
 
         expect(result.success).toBe(true);
+        await settleOutboxNudges();
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
 

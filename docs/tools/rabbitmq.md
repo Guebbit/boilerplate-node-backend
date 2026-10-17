@@ -48,14 +48,15 @@ flowchart LR
 ### Emails (fire-and-forget)
 
 Everything that sends an email calls `enqueueEmail()` from `src/infrastructure/adapters/mailer.ts`,
-from a module's service (not a controller):
+from a module's service (not a controller). A mail to a customer about an order, payment, shipment
+or return is sent from an outbox-event listener — see [outbox.md](outbox.md#customer-mail):
 
 - **Queue enabled** → the email job is published to the `worker.email.send` queue. The `email.worker.ts` consumer picks it up and calls `sendTemplatedEmail()` in the background.
 - **Queue disabled, or the publish failed** → falls back to calling `sendTemplatedEmail()` directly, at the cost of request latency.
 
 Callers include `account/services/mail.ts` (reset, verification, deletion links),
-`orders/services/notify.ts`, `payments/services/settlement.ts` and `refunds.ts`,
-`delivery/services/notify.ts` and `feedback/service.ts`. `grep -rn enqueueEmail src` is the live list.
+`orders/services/notify.ts` and `cancel-mail.ts`, `payments/services/notify.ts`,
+`delivery/services/notify.ts`, `returns/services/notify.ts` and `feedback/service.ts`. `grep -rn enqueueEmail src` is the live list.
 
 ### Invoice PDF rendering — NOT a queue
 

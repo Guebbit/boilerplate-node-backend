@@ -12,6 +12,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { testCallerContext, asCustomer, callerContextAs } from '@tests/callers';
 import { resetDomainEvents } from '@kernel/events';
+import { eventually } from '@tests/eventually';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -20,9 +21,9 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 }));
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
-/** Waits out `sendOrderPlacedEmail`'s own fire-and-forget chain, so its `enqueueEmail` call has
- * already landed before a case clears or asserts on the mock. */
-const flush = () => new Promise((resolve) => setImmediate(resolve));
+/** Waits for the placed-order mail, which rides `order.created` through the outbox relay. */
+const placedMailSent = () =>
+    eventually(() => settleOutboxNudges().then(() => mockEnqueueEmail.mock.calls.length > 0));
 
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
@@ -57,10 +58,10 @@ const placePendingOrder = async (product: Awaited<ReturnType<typeof createProduc
     await cartRepository.setShippingMethod(user.id, 'pickup');
     const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
     if (!result.success) throw new Error('setup: checkout was refused');
-    // The confirmation email already fired at placement — every assertion below cares only
-    // about what happens AFTER the product stops being sellable. `flush()` first, so that
-    // fire-and-forget dispatch has actually landed on the mock before this clears it.
-    await flush();
+    // The confirmation email is sent at placement — every assertion below cares only about what
+    // happens AFTER the product stops being sellable. Wait for it first, so it has actually landed
+    // on the mock before this clears it.
+    await placedMailSent();
     mockEnqueueEmail.mockClear();
     return { user, orderId: String(result.data._id) };
 };

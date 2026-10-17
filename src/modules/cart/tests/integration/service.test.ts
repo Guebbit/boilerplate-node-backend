@@ -21,9 +21,9 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 }));
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
-/** Waits out `sendOrderPlacedEmail`'s own fire-and-forget chain, so its `enqueueEmail` call has
- * already landed before a case clears or asserts on the mock. */
-const flush = () => new Promise((resolve) => setImmediate(resolve));
+/** Waits for a mail queued from an outbox-event listener: the relay delivers it after the commit. */
+const mailQueued = () =>
+    eventually(() => settleOutboxNudges().then(() => mockEnqueueEmail.mock.calls.length > 0));
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
@@ -38,6 +38,8 @@ import { PRODUCT_DELETED } from '@modules/products';
 import { logger } from '@infrastructure/adapters/logger';
 import cartModule from '@modules/cart/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
+import { eventually } from '@tests/eventually';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { countOrders, findOrder } from '@modules/orders/tests/factories';
 import { productService } from '@modules/products';
 import { asReject } from '@tests/response';
@@ -1183,8 +1185,10 @@ describe('orderConfirm', () => {
         await cartService.setItemById(user.id, String(keyboard._id), 2);
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
+        registerCheckoutModules();
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
-        await flush();
+        await mailQueued();
+        resetDomainEvents();
 
         expect(result.success).toBe(true);
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
@@ -1203,7 +1207,10 @@ describe('orderConfirm', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
 
+        registerCheckoutModules();
         await cartService.orderConfirm(user.id, testCallerContext);
+        await settleOutboxNudges();
+        resetDomainEvents();
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
@@ -1332,10 +1339,12 @@ describe('orderConfirm — paymentMethod', () => {
             await cartService.setItemById(user.id, String(product._id), 1);
 
             await cartRepository.setShippingMethod(user.id, 'pickup');
+            registerCheckoutModules();
             await cartService.orderConfirm(user.id, testCallerContext, {
                 paymentMethod: 'bank_transfer'
             });
-            await flush();
+            await mailQueued();
+            resetDomainEvents();
 
             expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
             const [envelope, template] = mockEnqueueEmail.mock.calls[0];

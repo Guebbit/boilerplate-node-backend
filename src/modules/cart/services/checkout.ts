@@ -662,8 +662,6 @@ const runCheckout = async (
     if (!outcome.ok) return refusalForPlaceOrder(outcome);
     const { order } = outcome;
 
-    // Sent from the service, not the controller: only this point knows the order stood.
-    orderService.sendOrderPlacedEmail(order, buyerLocale, user.username, user.email);
     return generateSuccess<OrderDocument>(order);
 };
 

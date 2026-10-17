@@ -585,14 +585,14 @@ flowchart LR
 
 Every cancel and every refund leaves one written trace, and each has exactly one mail:
 
-| What happened                                      | The mail                                                                          | Template                                                 |
-| -------------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| The customer, or staff, cancelled                  | what the cancel did to their money: going back, no refund, or nothing charged     | `orders.order-cancelled`                                 |
-| The reservation sweep cancelled (a hold timed out) | a card hold's expiry notice; a transfer's is `payments`' (`expired` on the event) | `orders.order-card-expired`, `payments.transfer-expired` |
-| The customer withdrew before dispatch              | `returns`' withdrawal acknowledgement                                             | `returns.notice`                                         |
-| The account was erased                             | none: the address belongs to an account that no longer exists                     |                                                          |
-| Money went back outside a return                   | the amount, and whether it was everything                                         | `payments.refund-issued` (sent by `payments`)            |
-| Money went back for a return                       | `returns`' closing notice                                                         | `returns.notice`                                         |
+| What happened                                      | The mail                                                                                             | Template                                                 |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| The customer, or staff, cancelled                  | what the cancel did to their money: going back, no refund, or nothing charged                        | `orders.order-cancelled`                                 |
+| The reservation sweep cancelled (a hold timed out) | a card hold's expiry notice; a transfer's is `payments`' (`cause: reservation_expired` on the event) | `orders.order-card-expired`, `payments.transfer-expired` |
+| The customer withdrew before dispatch              | `returns`' withdrawal acknowledgement                                                                | `returns.notice`                                         |
+| The account was erased                             | none: the address belongs to an account that no longer exists                                        |                                                          |
+| Money went back outside a return                   | the amount, and whether it was everything                                                            | `payments.refund-issued` (sent by `payments`)            |
+| Money went back for a return                       | `returns`' closing notice                                                                            | `returns.notice`                                         |
 
 The analytics event follows the same split: only a hold that timed out reports
 `order_reservation_expired`. An erasure's cancel, which also has no request behind it, reports
@@ -613,7 +613,8 @@ flowchart TD
     ret -- yes --> closed["returns' closing notice"]
 ```
 
-The cancelled mail is sent when the cancel happens, so it says what is being returned. The refunded
+The cancelled mail is sent from the `order.cancelled` listener (`services/cancel-mail.ts`, the rule
+is [Customer mail](../tools/outbox.md#customer-mail)), so it says what is being returned. The refunded
 mail belongs to `payments`, which sends it from its own `payment.refunded` listener once the refund settles, so it only ever says what already went back. A paid
 cancel therefore sends both, a few moments apart. A refund the provider refused sends nothing: no
 money moved.

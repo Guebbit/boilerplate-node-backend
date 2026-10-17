@@ -32,6 +32,10 @@ import { freezeDate } from '@tests/clock';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
 import { userService } from '@modules/users';
+import { registerModules } from '@kernel/registry';
+import { resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
+import ordersModule from '../../module';
 
 // The queue, not the copy.
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -39,9 +43,6 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     enqueueEmail: jest.fn()
 }));
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
-
-/** Waits out `create`'s fire-and-forget placed-order email, same convention as `cart`'s checkout suite. */
-const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 setupTestDb();
 
@@ -396,6 +397,8 @@ describe('create', () => {
         // Every `userService.getById` call rejects — the pre-order locale lookup AND `mailBuyer`'s
         // own lookup for the placed-order email both have to survive this, not just one of them.
         jest.spyOn(userService, 'getById').mockRejectedValue(new Error('lookup unavailable'));
+        // The placed-order mail rides `order.created`: this module's listener must be wired.
+        registerModules([ordersModule]);
 
         const result = await orderService.create(
             String(user._id),
@@ -403,7 +406,8 @@ describe('create', () => {
             [{ productId: String(product._id), quantity: 1 }],
             callerContextAs('admin')
         );
-        await flush();
+        await settleOutboxNudges();
+        resetDomainEvents();
 
         expect(result.success).toBe(true);
         expect(asSuccess(result).status).toBe(201);

@@ -1,15 +1,14 @@
 /**
  * @module
- * `sendOrderPlacedEmail` and `mailBuyer` (`services/notify.ts`): the confirmation is the one mail it
- * builds, and it never carries an attachment: nothing is invoiced yet at placement time, whatever the payment method
- * (see `docs/modules/invoicing.md`).
+ * `mailBuyer` (`services/notify.ts`): the buyer-mail policy every customer mail follows. The
+ * mails themselves are pinned by the listener tests beside the flows that send them.
  */
 
 import { asStub } from '@tests/stub';
 import { Types } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 import { userService } from '@modules/users';
-import { mailBuyer, sendOrderPlacedEmail } from '../../services/notify';
+import { mailBuyer } from '../../services/notify';
 import { ANONYMIZED_EMAIL } from '../../domain/anonymization';
 import type { OrderDocument } from '../../model';
 
@@ -18,7 +17,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     enqueueEmail: (...args: unknown[]) => enqueueEmailMock(...args)
 }));
 
-/** An order shaped for `sendOrderPlacedEmail` — a card order by default, the plain-confirmation path. */
+/** An order shaped for the mail policy — a card order by default. */
 const orderFixture = (overrides: Partial<OrderDocument> = {}): OrderDocument =>
     asStub<OrderDocument>({
         _id: 'order-1',
@@ -32,35 +31,6 @@ const orderFixture = (overrides: Partial<OrderDocument> = {}): OrderDocument =>
 beforeEach(() => {
     jest.clearAllMocks();
     enqueueEmailMock.mockResolvedValue(undefined);
-});
-
-describe('sendOrderPlacedEmail — no invoice attachment', () => {
-    it('sends the card confirmation with no attachment', () => {
-        sendOrderPlacedEmail(orderFixture(), 'en', 'Ada', 'ada@example.com');
-
-        const [request] = enqueueEmailMock.mock.calls[0] as [Record<string, unknown>];
-        expect(request.attachments).toBeUndefined();
-    });
-
-    // The transfer's instructions are the payment's own mail; the order still gets its confirmation.
-    it('sends the same confirmation, no attachment, for a bank transfer', () => {
-        sendOrderPlacedEmail(
-            orderFixture({
-                paymentMethod: 'bank_transfer',
-                payBy: new Date('2026-09-27T00:00:00.000Z')
-            }),
-            'en',
-            'Ada',
-            'ada@example.com'
-        );
-
-        const [request, templateName] = enqueueEmailMock.mock.calls[0] as [
-            Record<string, unknown>,
-            string
-        ];
-        expect(templateName).toBe('orders.order-confirm');
-        expect(request.attachments).toBeUndefined();
-    });
 });
 
 describe('mailBuyer — anonymised order', () => {
