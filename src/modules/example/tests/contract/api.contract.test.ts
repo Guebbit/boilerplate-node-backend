@@ -13,7 +13,7 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs, authenticateAsRole } from '@tests/http';
+import { api, authenticateAs } from '@tests/http';
 import { requestAndDownloadExport } from '@tests/account-export';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { MISSING_ID } from '@tests/ids';
@@ -67,7 +67,7 @@ const etagOf = (request: PromiseLike<{ headers: Record<string, string> }>): Prom
 
 describe('GET /examples/published/{id}', () => {
     it('answers anyone, with no credentials, for a published example', async () => {
-        const { user } = await authenticateAsRole('editor');
+        const { user } = await authenticateAs('user');
         const published = await createExample({ userId: user.id, status: ExampleStatus.published });
 
         const response = await api().get(`/examples/published/${String(published._id)}`);
@@ -83,7 +83,7 @@ describe('GET /examples/published/{id}', () => {
     it.each([ExampleStatus.draft, ExampleStatus.archived])(
         'answers 404 for a %s example, exactly as for one that does not exist',
         async (status) => {
-            const { user } = await authenticateAsRole('editor');
+            const { user } = await authenticateAs('user');
             const hidden = await createExample({ userId: user.id, status });
 
             const response = await api().get(`/examples/published/${String(hidden._id)}`);
@@ -103,7 +103,7 @@ describe('GET /examples/published/{id}', () => {
 
 describe('POST /examples', () => {
     it('creates a draft owned by the caller, and points at it', async () => {
-        const { user, bearer } = await authenticateAsRole('editor');
+        const { user, bearer } = await authenticateAs('user');
 
         const response = await api()
             .post('/examples')
@@ -121,7 +121,7 @@ describe('POST /examples', () => {
     });
 
     it('answers 422 for a body the contract refuses', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
 
         const response = await api()
             .post('/examples')
@@ -134,7 +134,7 @@ describe('POST /examples', () => {
 
 describe('GET /examples and POST /examples/search', () => {
     it('lists the caller’s own examples with the pagination meta', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         await createViaApi(bearer, A_NOTE);
 
         const response = await api().get('/examples').set('Authorization', bearer);
@@ -145,7 +145,7 @@ describe('GET /examples and POST /examples/search', () => {
     });
 
     it('never lists someone else’s', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const other = await createUser({ email: 'other@example.com' });
         await createExample({ userId: other.id });
 
@@ -165,7 +165,7 @@ describe('GET /examples and POST /examples/search', () => {
     });
 
     it('filters by status in the query, and sorts', async () => {
-        const { user, bearer } = await authenticateAsRole('editor');
+        const { user, bearer } = await authenticateAs('user');
         await createExample({ userId: user.id, title: 'B draft' });
         await createExample({ userId: user.id, title: 'A out', status: ExampleStatus.published });
 
@@ -180,7 +180,7 @@ describe('GET /examples and POST /examples/search', () => {
     });
 
     it('answers 422 for a status outside the closed set', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
 
         const response = await api()
             .get('/examples')
@@ -191,7 +191,7 @@ describe('GET /examples and POST /examples/search', () => {
     });
 
     it('searches the same way through the DTO form', async () => {
-        const { user, bearer } = await authenticateAsRole('editor');
+        const { user, bearer } = await authenticateAs('user');
         await createExample({ userId: user.id, title: 'Puppies' });
         await createExample({ userId: user.id, title: 'Birds' });
 
@@ -207,7 +207,7 @@ describe('GET /examples and POST /examples/search', () => {
 
 describe('GET /examples/{id}', () => {
     it('reads the caller’s own draft, with an ETag', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const { id } = await createViaApi(bearer, A_NOTE);
 
         const response = await api().get(`/examples/${id}`).set('Authorization', bearer);
@@ -217,7 +217,7 @@ describe('GET /examples/{id}', () => {
     });
 
     it('answers 404, not 403, for someone else’s example', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const other = await createUser({ email: 'other@example.com' });
         const theirs = await createExample({ userId: other.id });
 
@@ -231,7 +231,7 @@ describe('GET /examples/{id}', () => {
 
 describe('PUT and PATCH /examples/{id}', () => {
     it('replaces the representation', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const { id } = await createViaApi(bearer, A_NOTE);
 
         const response = await api()
@@ -245,7 +245,7 @@ describe('PUT and PATCH /examples/{id}', () => {
     });
 
     it('answers 422 to a PUT that leaves out a required field', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const { id } = await createViaApi(bearer, A_NOTE);
 
         const response = await api()
@@ -257,7 +257,7 @@ describe('PUT and PATCH /examples/{id}', () => {
     });
 
     it('merges a change, leaving every omitted field alone', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const { id } = await createViaApi(bearer, A_NOTE);
 
         const response = await api()
@@ -274,7 +274,7 @@ describe('PUT and PATCH /examples/{id}', () => {
     });
 
     it('accepts the merge-patch media type', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const { id } = await createViaApi(bearer, A_NOTE);
 
         const response = await api()
@@ -287,7 +287,7 @@ describe('PUT and PATCH /examples/{id}', () => {
     });
 
     it('answers 422 for an illegal status move', async () => {
-        const { user, bearer } = await authenticateAsRole('editor');
+        const { user, bearer } = await authenticateAs('user');
         const archived = await createExample({ userId: user.id, status: ExampleStatus.archived });
 
         const response = await api()
@@ -299,7 +299,7 @@ describe('PUT and PATCH /examples/{id}', () => {
     });
 
     it('answers 412 when If-Match names a version that has moved on, and changes nothing', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const { id } = await createViaApi(bearer, A_NOTE);
         const stale = await etagOf(api().get(`/examples/${id}`).set('Authorization', bearer));
         await api()
@@ -317,7 +317,7 @@ describe('PUT and PATCH /examples/{id}', () => {
     });
 
     it('answers 404 for someone else’s example, on both verbs', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const other = await createUser({ email: 'other@example.com' });
         const theirs = await createExample({ userId: other.id });
         const url = `/examples/${String(theirs._id)}`;
@@ -345,7 +345,7 @@ describe('PUT and PATCH /examples/{id}', () => {
     });
 
     it('answers 404 for a malformed id, as it does for an unknown one', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
 
         const response = await api()
             .patch(`/examples/${MALFORMED_ID}`)
@@ -358,7 +358,7 @@ describe('PUT and PATCH /examples/{id}', () => {
 
 describe('DELETE /examples/{id}', () => {
     it('removes the caller’s own example', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const { id } = await createViaApi(bearer, A_NOTE);
 
         const response = await api().delete(`/examples/${id}`).set('Authorization', bearer);
@@ -368,7 +368,7 @@ describe('DELETE /examples/{id}', () => {
     });
 
     it('answers 404 for someone else’s, and keeps it', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const other = await createUser({ email: 'other@example.com' });
         const theirs = await createExample({ userId: other.id });
 
@@ -386,7 +386,7 @@ describe('an id no ObjectId can be built from', () => {
         ['DELETE', (id: string) => api().delete(`/examples/${id}`)],
         ['PUT cover', (id: string) => api().put(`/examples/${id}/cover`)]
     ] as const)('answers 404 on %s, the same as for an id nothing holds', async (_name, send) => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
 
         expect(await statusOf(send(MALFORMED_ID).set('Authorization', bearer))).toBe(404);
     });
@@ -394,7 +394,7 @@ describe('an id no ObjectId can be built from', () => {
 
 describe('PUT /examples/{id}/cover', () => {
     it('stores an uploaded image as the cover', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const { id } = await createViaApi(bearer, A_NOTE);
 
         const response = await api()
@@ -408,7 +408,7 @@ describe('PUT /examples/{id}/cover', () => {
     });
 
     it('answers 422 when no file is sent', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const { id } = await createViaApi(bearer, A_NOTE);
 
         const response = await api().put(`/examples/${id}/cover`).set('Authorization', bearer);
@@ -417,7 +417,7 @@ describe('PUT /examples/{id}/cover', () => {
     });
 
     it('answers 404 for someone else’s example, and throws the upload away', async () => {
-        const { bearer } = await authenticateAsRole('editor');
+        const { bearer } = await authenticateAs('user');
         const other = await createUser({ email: 'other@example.com' });
         const theirs = await createExample({ userId: other.id });
 
@@ -432,7 +432,7 @@ describe('PUT /examples/{id}/cover', () => {
 
 describe('POST /account/export', () => {
     it('lists the caller’s own examples, drafts included, and nobody else’s', async () => {
-        const { user, bearer } = await authenticateAsRole('editor');
+        const { user, bearer } = await authenticateAs('user');
         const other = await createUser({ email: 'other@example.com' });
         await createExample({ userId: user.id, title: 'Mine' });
         await createExample({ userId: other.id, title: 'Theirs' });

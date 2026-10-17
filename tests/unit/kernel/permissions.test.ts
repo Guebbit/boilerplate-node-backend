@@ -290,6 +290,23 @@ describe('audience roles', () => {
         }
     });
 
+    // `*Own`, `*Shopping` and `*Storefront` are the sets that make a signed-in account a shopper;
+    // one left off the customer audience would leave a proven account unable to use the shop.
+    it('gives the customer every own, shopping and storefront set', () => {
+        const customer = new Set(AUDIENCE_ROLES.customer.permissions);
+        const missing = PERMISSION_SETS.filter((set) => /(Own|Shopping|Storefront)$/.test(set.name))
+            .flatMap((set) => set.rules.map((rule) => `${set.name}:${rule}`))
+            .filter((entry) => !customer.has(entry.slice(entry.indexOf(':') + 1)));
+
+        expect(missing).toEqual([]);
+    });
+
+    it('keeps the unverified audience within what the customer may do', () => {
+        const customer = new Set(AUDIENCE_ROLES.customer.permissions);
+
+        expect(AUDIENCE_ROLES.unverified.permissions.filter((id) => !customer.has(id))).toEqual([]);
+    });
+
     it('gives a staff member the customer rules on top of the role’s own', () => {
         const manager = callerAs('manager').permissions;
 
