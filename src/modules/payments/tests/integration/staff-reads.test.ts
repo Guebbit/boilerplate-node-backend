@@ -146,6 +146,25 @@ describe('listPayments by displayStatus', () => {
     });
 });
 
+describe('listPayments rows carry the actions of the caller', () => {
+    it('offers a refund only on money that arrived and is not all returned, and never pay', async () => {
+        const open = await seedPayment();
+        const declined = await seedPayment({ status: 'declined' });
+        const returned = await seedPayment({
+            amountRefunded: 50,
+            refunds: [refundRecord({ amount: 50 })]
+        });
+
+        const { items } = await paymentService.listPayments({}, asAdmin());
+        const actionsOf = (row: { payment: PaymentDocument }) =>
+            items.find((item) => item.id === idOf(row))?.actions;
+
+        expect(actionsOf(open)).toEqual({ pay: false, refund: true });
+        expect(actionsOf(declined)).toEqual({ pay: false, refund: false });
+        expect(actionsOf(returned)).toEqual({ pay: false, refund: false });
+    });
+});
+
 describe('listPayments filters and sort', () => {
     it('narrows by method, provider, amount range, order id and reference', async () => {
         const card = await seedPayment({ amount: 50 });

@@ -20,9 +20,9 @@ import { orderService } from '@modules/orders';
 import { paymentAttentionMinutes } from '../config';
 import { displayStatusFilter } from '../domain';
 import type { PaymentDocument } from '../model';
-import { presentPayment } from '../presenter';
 import { paymentRepository, type RefundFilters, type RefundRow } from '../repository';
 import { callerScope } from './scope';
+import { withActions } from './view';
 
 /** Most rows one needs-attention source contributes. */
 const ATTENTION_LIMIT = 100;
@@ -32,12 +32,16 @@ const ATTENTION_LIMIT = 100;
  *
  * @param payment - the stored row
  * @param order - its order's number and email, when `orders` knows it
+ * @param authContext - the caller, whose `actions` the row carries
  */
 const staffRow = (
     payment: PaymentDocument,
-    order: { orderNumber: string; email: string } | undefined
+    order: { orderNumber: string; email: string } | undefined,
+    authContext?: AuthContext
 ): Payment => ({
-    ...presentPayment(payment, true),
+    // No order document is read for a list: `pay` is the payer's own step and stays false here, so
+    // the row carries the same `actions.refund` the order page's panel does.
+    ...withActions(payment, undefined, authContext),
     ...(order ? { orderNumber: order.orderNumber, email: order.email } : {})
 });
 
@@ -61,7 +65,9 @@ export const listPayments = (
             orderService.findManyByIds(items.map((item) => String(item.orderId))).then((orders) => {
                 const byId = new Map(orders.map((order) => [order.id, order]));
                 return {
-                    items: items.map((item) => staffRow(item, byId.get(String(item.orderId)))),
+                    items: items.map((item) =>
+                        staffRow(item, byId.get(String(item.orderId)), authContext)
+                    ),
                     meta
                 };
             })

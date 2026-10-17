@@ -52,9 +52,11 @@ paths:
                 `display:Payment`; the payer reads their own through `GET /payments/order/{orderId}`.
                 `displayStatus` filters by the label the page shows, and the server maps each label to
                 the stored fields behind it. Each row carries its order's `orderNumber` and `email`,
-                composed from `orders`. The provider references (`providerRef`, each refund's
-                `providerRefundRef`) and a failed refund's `failureReason` are sent here and nowhere
-                a payer reads.
+                composed from `orders`. Each row carries `actions` for the caller, so a client never
+                decides `refund` from the status; `actions.pay` is false on a list row (paying is the
+                payer's own step, read on the order page). The provider references (`providerRef`, each
+                refund's `providerRefundRef`) and a failed refund's `failureReason` are sent here and
+                nowhere a payer reads.
             operationId: listPayments
             security:
                 - bearerAuth: []
