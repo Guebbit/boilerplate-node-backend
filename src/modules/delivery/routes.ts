@@ -14,6 +14,7 @@ import {
     requirePermission,
     requireFreshAuthWhen
 } from '@kernel/middlewares/authorizations';
+import { noStore } from '@infrastructure/http/middlewares/cache';
 import { getShippingMethods } from './controllers/get-shipping-methods';
 import { getOrderFulfillment } from './controllers/get-order-fulfillment';
 import { postStartOrder } from './controllers/post-start-order';
@@ -26,6 +27,7 @@ import {
 } from './controllers/post-hold-fulfillment-order';
 import { patchShipment } from './controllers/patch-shipment';
 import { postConfirmWait } from './controllers/post-confirm-wait';
+import { getReleaseDateImpact } from './controllers/get-release-date-impact';
 import {
     getPreorderFulfillmentOrders,
     getPreorderSummary
@@ -65,6 +67,19 @@ router.get(
     isAuth,
     requirePermission('read', 'Order'),
     getPreorderSummary
+);
+
+// GET /delivery/fulfillment-orders/release-date-impact — what saving a release date would tell the
+// buyers. It exists for the product form, so it needs the key that moves the date, and it counts
+// orders, so it needs the key that reads them: an editor moves dates but sees no order volume.
+router.get(
+    '/fulfillment-orders/release-date-impact',
+    getAuth,
+    isAuth,
+    requirePermission('update', 'Product'),
+    requirePermission('display', 'Order'),
+    noStore,
+    getReleaseDateImpact
 );
 
 // POST /delivery/order/:orderId/start — begins fulfilment; moves the order paid -> processing.

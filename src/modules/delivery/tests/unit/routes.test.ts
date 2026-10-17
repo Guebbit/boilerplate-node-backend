@@ -26,6 +26,7 @@ describe('delivery routes', () => {
             'GET /order/:orderId',
             'GET /fulfillment-orders',
             'GET /fulfillment-orders/summary',
+            'GET /fulfillment-orders/release-date-impact',
             'POST /order/:orderId/start',
             'POST /fulfillment-orders/:id/shipments',
             'POST /fulfillment-orders/:id/fulfill',
@@ -69,6 +70,14 @@ describe('delivery routes', () => {
 
         expect(guards).toContain('isAuth');
         expect(guards).not.toContain('requirePermissionGuard');
+    });
+
+    it('asks for the product key AND the order key on the release-date preview', () => {
+        // Moving the date is the editor's job, counting the orders it concerns is not: both keys.
+        const guards = guardsOn(router, 'GET /fulfillment-orders/release-date-impact');
+
+        expect(guards).toContain('isAuth');
+        expect(guards.filter((name) => name === 'requirePermissionGuard')).toHaveLength(2);
     });
 
     it('leaves nothing but the methods list unauthenticated', () => {

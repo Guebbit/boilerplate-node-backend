@@ -4,5 +4,5 @@ group: shop
 dependsOn:
     - inventory # the event a stock allocation announces, which releases a fulfillment order held for it
     - orders # a fulfillment order and a shipment are about an order
-    - products # the event a moved release date announces, which the buyers who already paid are told about
+    - products # the event a moved release date announces, which the buyers who already paid are told about; and the dates the staff preview reads
     - shop # the currency a rate is quoted in

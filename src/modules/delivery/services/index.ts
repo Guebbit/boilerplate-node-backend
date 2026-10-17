@@ -33,6 +33,7 @@ import { onReleaseDateChanged } from './slip';
 import { runPreorderSweep } from './preorder-sweep';
 import { confirmWait } from './confirm-wait';
 import { listPreorderFulfillmentOrders, summarizePreorders } from './board';
+import { previewReleaseDateImpact } from './release-date-impact';
 import { scrubHoldNotes } from './retention';
 import { mailShipped, mailDelivered, mailDelayed } from './notify';
 
@@ -73,6 +74,7 @@ export const deliveryService = {
     runPreorderSweep,
     listPreorderFulfillmentOrders,
     summarizePreorders,
+    previewReleaseDateImpact,
     scrubHoldNotes,
     mailShipped,
     mailDelivered,

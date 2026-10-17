@@ -700,3 +700,84 @@ describe('GET /delivery/fulfillment-orders/summary', () => {
         expect(response.body.data.items).toMatchObject([{ productId: productIds[1], paid: 2 }]);
     });
 });
+
+describe('GET /delivery/fulfillment-orders/release-date-impact', () => {
+    const DAY = 86_400_000;
+    const url = '/delivery/fulfillment-orders/release-date-impact';
+
+    /** An admin who is logged in, with one paid preorder promised 30 days out. */
+    const adminWithPreorder = async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const { orderId, productIds } = await paidPreorderOrder(
+            [{ quantity: 1, releaseDate: new Date(Date.now() + 30 * DAY) }],
+            user
+        );
+        await fulfillmentOrdersOf(orderId);
+        return { bearer, productId: productIds[0] };
+    };
+
+    it('matches the contract: one order told a long slip is one order asked', async () => {
+        const { bearer, productId } = await adminWithPreorder();
+
+        const response = await api()
+            .get(url)
+            .query({ productId, releaseDate: new Date(Date.now() + 75 * DAY).toISOString() })
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toEqual({
+            notify: 0,
+            ask: 1,
+            answerBy: expect.any(String)
+        });
+    });
+
+    it.each([
+        ['absent', {}],
+        ['blank', { releaseDate: '' }]
+    ])(
+        'reads a %s releaseDate as a cleared date, which asks every waiting buyer',
+        async (_name, extra) => {
+            const { bearer, productId } = await adminWithPreorder();
+
+            const response = await api()
+                .get(url)
+                .query({ productId, ...extra })
+                .set('Authorization', bearer);
+
+            expect(response.status).toBe(200);
+            expect(response.body.data).toMatchObject({ notify: 0, ask: 1 });
+        }
+    );
+
+    it('refuses a date more than a year ahead, as the save does', async () => {
+        const { bearer, productId } = await adminWithPreorder();
+
+        const response = await api()
+            .get(url)
+            .query({ productId, releaseDate: new Date(Date.now() + 400 * DAY).toISOString() })
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+    });
+
+    it('answers 404 for a product that does not exist', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .get(url)
+            .query({ productId: MISSING_ID })
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('is refused to an editor, who may move a date but not read orders', async () => {
+        const { productId } = await adminWithPreorder();
+        const { bearer } = await authenticateAsRole('editor');
+
+        const response = await api().get(url).query({ productId }).set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+    });
+});
