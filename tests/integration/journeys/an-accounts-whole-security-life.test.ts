@@ -15,7 +15,7 @@ import { accessService } from '@modules/access';
 import { settleInlineExports } from '@modules/account/services/export';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, bearerForCookie } from '@tests/http';
+import { api, bearerForCookie, loginBearer } from '@tests/http';
 import { bodyOf } from '@tests/body-of';
 import { solvedChallenge, useAltcha } from '@tests/altcha';
 import { setCookie } from '@tests/cookies';
@@ -53,7 +53,8 @@ const ACCOUNT = {
  * @param email - the address to sign in as
  * @param password - the account's current password
  * @param code - a code for a step the account has not used yet
- * @returns the 2FA answer, its bearer and its session cookie
+ * @returns the 2FA answer and the session cookie, to be turned into a bearer once: a refresh
+ *   token is single-use
  */
 const signIn = async (email: string, password: string, code: string) => {
     const challenged = await api().post('/account/login').send({ email, password });
@@ -61,11 +62,9 @@ const signIn = async (email: string, password: string, code: string) => {
         .post('/account/login/2fa')
         .send({ challenge: challenged.body.data.challenge, code });
 
-    return {
-        response,
-        bearer: `Bearer ${response.body.data.token as string}`,
-        cookie: setCookie(response, '__Host-session') ?? ''
-    };
+    const cookie = setCookie(response, '__Host-session') ?? '';
+
+    return { response, cookie };
 };
 
 it('keeps the account safe from signup to the last lapsed link', async () => {
@@ -92,10 +91,7 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
     );
 
     // Arm TOTP. Arming ends the session that did it, so the account signs in again, with a code.
-    const login = await api()
-        .post('/account/login')
-        .send({ email: ACCOUNT.email, password: ACCOUNT.password });
-    const plain = `Bearer ${login.body.data.token as string}`;
+    const plain = await loginBearer(ACCOUNT.email, ACCOUNT.password);
     const setup = await api()
         .post('/account/2fa/methods/totp/setup')
         .set('Authorization', plain)
@@ -110,11 +106,12 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
     await api().get('/account').set('Authorization', plain).expect(401);
     const armed = await signIn(ACCOUNT.email, ACCOUNT.password, await codeFor(secret, 1));
     expect(armed.response.status).toBe(200);
+    const armedBearer = await bearerForCookie(armed.cookie);
 
     // A machine credential works until the account says it was compromised.
     const minted = await api()
         .post('/api-keys')
-        .set('Authorization', armed.bearer)
+        .set('Authorization', armedBearer)
         .send({
             name: 'ci',
             permissions: ['read:WebhookSubscription'],
@@ -139,7 +136,7 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
             passwordConfirm: ACCOUNT.replacement
         })
         .expect(200);
-    await api().get('/account').set('Authorization', armed.bearer).expect(401);
+    await api().get('/account').set('Authorization', armedBearer).expect(401);
     await api().get('/webhooks/subscriptions').set('Authorization', key).expect(401);
     expect(mailsTo(ACCOUNT.email, 'api-keys.revoked')).toHaveLength(1);
 
@@ -164,7 +161,9 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
         .set('Authorization', stale)
         .send({ method: 'password', password: ACCOUNT.replacement, otp: await codeFor(secret, 0) })
         .expect(200);
-    const fresh = `Bearer ${reauthed.body.data.token as string}`;
+    // A jwt session answers a token; a cookie session, called with a bearer, its session id.
+    const { token, sessionToken } = reauthed.body.data as { token?: string; sessionToken?: string };
+    const fresh = `Bearer ${token ?? sessionToken ?? ''}`;
     await api()
         .patch('/account')
         .set('Authorization', fresh)
@@ -186,23 +185,25 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
     // An export is ready for 7 days; after that it is gone, and the sweep drops its record.
     advanceDate(60_000);
     const exporter = await signIn(ACCOUNT.movedTo, ACCOUNT.replacement, await codeFor(secret, 0));
+    const exporterBearer = await bearerForCookie(exporter.cookie);
     const requested = await api()
         .post('/account/export')
-        .set('Authorization', exporter.bearer)
+        .set('Authorization', exporterBearer)
         .send()
         .expect(202);
     await settleInlineExports();
     const exportPath = `/account/export/${String(requested.body.data.id)}`;
     expect(mailsTo(ACCOUNT.movedTo, 'account.export-ready')).toHaveLength(1);
-    await api().get(exportPath).set('Authorization', exporter.bearer).expect(200);
+    await api().get(exportPath).set('Authorization', exporterBearer).expect(200);
     advanceDate(8 * DAY_MS + 60_000);
     const later = await signIn(ACCOUNT.movedTo, ACCOUNT.replacement, await codeFor(secret, 0));
-    await api().get(exportPath).set('Authorization', later.bearer).expect(404);
+    const laterBearer = await bearerForCookie(later.cookie);
+    await api().get(exportPath).set('Authorization', laterBearer).expect(404);
     expect(await runJob('reap:account-exports')).toMatchObject({ rows: 1 });
 
     // The trail and the mail tell the same story.
     const audit = bodyOf(
-        await api().get('/audit').query({ pageSize: 100 }).set('Authorization', later.bearer),
+        await api().get('/audit').query({ pageSize: 100 }).set('Authorization', laterBearer),
         ListAuditEntries200Response
     ).data.items.map(({ action }) => action);
     expect(audit).toEqual(
