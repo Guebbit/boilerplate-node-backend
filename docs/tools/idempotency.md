@@ -100,6 +100,25 @@ response, and that response carries the `clientSecret`. Asking again already ref
 intent, so a retry needs no key. The two share one per-account hourly budget instead
 (`NODE_PAYMENT_INTENT_RATE_LIMIT_MAX`, 30).
 
+## What a failure stores
+
+Every finished attempt is stored, a server fault (5xx) included, and replayed for the
+[retention](#retention) window with `Idempotent-Replay: true`. So a retry under the same key
+re-sends the failure without running the handler again; only a new key runs it.
+
+This is Stripe's v1 rule. The alternative, dropping the record on a 5xx so the same key retries
+for real, is safe only when every handler is atomic. They are not: a stock receipt commits and
+then a read fails with a 500, so a rerun counts the delivery twice; a partial refund refused
+after the provider moved the money would pay twice. The client therefore:
+
+- keeps its key only after a lost connection or `409 IDEMPOTENCY_IN_FLIGHT`;
+- spends it on any other answer, a 5xx included, and re-reads what the call was about (the
+  payment, the stock level) before offering the button again;
+- scopes the key to one operation on one subject (a refund of order A never shares a key with a
+  refund of order B).
+
+Proven by `tests/integration/idempotency-server-fault.test.ts`.
+
 ## Retention
 
 `NODE_IDEMPOTENCY_RETENTION_HOURS` (default 24) backs a TTL index on `createdAt`, the same
