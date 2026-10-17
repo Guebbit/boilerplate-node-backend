@@ -4,7 +4,7 @@
  * {@link installDemo} and {@link restoreScenario} to `createApp` as its extension (`npm run
  * demo`). Nothing under `src/` knows it exists: production has no such routes to mount.
  *
- * Six routes for the paired frontend's e2e suite, all under `/__test/*`:
+ * Eight routes for the paired frontend's e2e suite, all under `/__test/*`:
  *
  * `POST /__test/restore`   empty the database and put a named scenario back, clearing the outbox
  *                          and putting the clock back to real time
@@ -15,6 +15,8 @@
  *                          is then triggered through its own door, e.g. the reservation sweep
  * `POST /__test/jobs/:name` run one declared background job now, under its name with
  *                          the colon as a dash — `reap:orders` is `reap-orders`
+ * `GET /__test/jobs`       the lever names of every declared job
+ * `POST /__test/payments/refund-failure` make an order's refunds fail (or stop failing)
  *
  * A scenario is BUILT once per process and REPLAYED thereafter — see {@link buildOnce}.
  * Unauthenticated since the profile only ever binds beside a database `npm run demo` just created.
@@ -36,6 +38,10 @@ import {
 import { getDemoClock, type DemoClock } from './demo-clock';
 import { clearDemoOutbox, readDemoOutbox } from './doubles/mail-outbox';
 import { z } from 'zod';
+import { ObjectId } from 'mongodb';
+import { RefundFailureReason } from '@types';
+import { connection } from '@infrastructure/runtime/database';
+import { setFakeRefundFailure } from './doubles/payments/fake';
 
 /**
  * Thrown for anything `scenarios/index.ts`'s `SCENARIOS` registry does not carry — by
@@ -191,6 +197,25 @@ const RESTORE_BODY = z.object({ scenario: z.string().optional() });
 const CLOCK_BODY = z.object({ advanceMs: z.number().nonnegative() });
 
 /**
+ * The body of `POST /__test/payments/refund-failure`: the order, and the closed code every refund
+ * on its payment should refuse with, or `null` to let refunds through again.
+ */
+const REFUND_FAILURE_BODY = z.object({
+    orderId: z.string().refine((value) => ObjectId.isValid(value), 'not an order id'),
+    reason: z.enum(RefundFailureReason).nullable()
+});
+
+/**
+ * The provider's id for an order's payment, read straight from the collection: the wire shape
+ * hides it, and the lever is the one caller that needs it.
+ */
+const providerRefOf = (orderId: string): Promise<string | undefined> =>
+    connection
+        .collection<{ providerRef?: string }>('payments')
+        .findOne({ orderId: new ObjectId(orderId) })
+        .then((payment) => payment?.providerRef);
+
+/**
  * The job lever's lookup: each declared job under its URL segment (`reap:orders` → `reap-orders`).
  *
  * A map rather than an object: a lookup by an arbitrary segment must never find an inherited
@@ -257,6 +282,10 @@ export const installDemo = (app: Express, jobs: readonly JobDeclaration[]): void
         response.json({ now: clock.now().toISOString(), offsetMs: clock.offsetMs() });
     });
 
+    app.get('/__test/jobs', (_request: Request, response: Response) => {
+        response.json({ jobs: [...levers.keys()] });
+    });
+
     app.post('/__test/jobs/:name', (request: Request, response: Response) => {
         // Express types a route parameter as `string | string[]`; this route has one plain segment.
         const name = String(request.params.name);
@@ -276,6 +305,32 @@ export const installDemo = (app: Express, jobs: readonly JobDeclaration[]): void
             .catch((error: unknown) => {
                 // Stryker disable next-line all
                 logger.error({ message: 'demo job failed', job: name, error });
+                response.status(500).json({ success: false });
+            });
+    });
+
+    app.post('/__test/payments/refund-failure', (request: Request, response: Response) => {
+        const body = REFUND_FAILURE_BODY.safeParse(request.body ?? {});
+        if (!body.success) {
+            response.status(400).json({ success: false, message: z.prettifyError(body.error) });
+            return;
+        }
+
+        providerRefOf(body.data.orderId)
+            .then((providerRef) => {
+                if (!providerRef) {
+                    response
+                        .status(404)
+                        .json({ success: false, message: 'no payment with a provider reference' });
+                    return;
+                }
+                // `null` becomes `undefined`: that is how the double clears a failure.
+                setFakeRefundFailure(providerRef, body.data.reason ?? undefined);
+                response.status(204).end();
+            })
+            .catch((error: unknown) => {
+                // Stryker disable next-line all
+                logger.error({ message: 'refund-failure lever failed', error });
                 response.status(500).json({ success: false });
             });
     });
