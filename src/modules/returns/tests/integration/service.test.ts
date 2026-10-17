@@ -16,6 +16,7 @@ import {
     createOrder,
     forceOrderStatus,
     readOrder,
+    setConformityUntil,
     setWithdrawUntil,
     toOrderItem,
     markOrderPaidAt
@@ -303,6 +304,22 @@ describe('goods excluded from the right of withdrawal (Art. 16)', () => {
         });
     });
 
+    it('takes a defective made-to-order line, which the guarantee covers', async () => {
+        const { user, engraved, orderId } = await orderWithExcluded();
+
+        const outcome = await returnService.createReturn(
+            {
+                orderId,
+                reason: 'defective',
+                lines: [{ productId: String(engraved._id), quantity: 1 }]
+            },
+            buyer(user),
+            testCallerContext
+        );
+
+        expect(outcome.success).toBe(true);
+    });
+
     it('keeps a whole-order withdrawal before dispatch from cancelling an order holding one', async () => {
         customers += 1;
         const user = await createUser({ email: `customer-${customers}@example.com` });
@@ -541,6 +558,48 @@ describe('a return on goods that have shipped', () => {
 
         expect(!outcome.success && outcome.errors[0]).toMatchObject({
             code: 'RETURN_WINDOW_CLOSED'
+        });
+    });
+
+    it('still takes a defect after the withdrawal period, and refuses the rest of the reasons', async () => {
+        const { user, orderId } = await orderIn(OrderStatus.delivered);
+        await setWithdrawUntil(orderId, new Date(Date.now() - 1000));
+
+        const reasons = ['withdrawal', 'other', 'defective', 'wrong_item'] as const;
+        const outcomes = await Promise.all(
+            reasons.map((reason) =>
+                returnService.createReturn(
+                    { orderId, reason, lines: [{ productId: reason, quantity: 1 }] },
+                    buyer(user),
+                    testCallerContext
+                )
+            )
+        );
+
+        // The two withdrawal-period reasons are shut; the two guarantee reasons got past the
+        // deadline check (their made-up line is then refused for what it is, not for the date).
+        expect(outcomes.map((o) => !o.success && o.errors[0].code)).toEqual([
+            'RETURN_WINDOW_CLOSED',
+            'RETURN_WINDOW_CLOSED',
+            'RETURN_LINES_INVALID',
+            'RETURN_LINES_INVALID'
+        ]);
+    });
+
+    it('refuses a defect once the two years are over, in the guarantee’s own words', async () => {
+        const { user, orderId } = await orderIn(OrderStatus.delivered);
+        await setWithdrawUntil(orderId, new Date(Date.now() - 2000));
+        await setConformityUntil(orderId, new Date(Date.now() - 1000));
+
+        const outcome = await returnService.createReturn(
+            { orderId, reason: 'defective' },
+            buyer(user),
+            testCallerContext
+        );
+
+        expect(!outcome.success && outcome.errors[0]).toMatchObject({
+            code: 'RETURN_WINDOW_CLOSED',
+            message: 'The two years of legal guarantee for this order have ended.'
         });
     });
 
@@ -1094,5 +1153,65 @@ describe('the account export, field by field', () => {
         const [section] = await collectPersonalData(fixture.user.id);
 
         expect(section).not.toHaveProperty('note');
+    });
+});
+
+describe('the options read, by caller and deadline', () => {
+    it('lists what the buyer can still return, with the reasons that are open', async () => {
+        const { user, orderId } = await deliveredOrder();
+
+        const options = await returnService.getReturnOptions(orderId, buyer(user));
+
+        expect(options.success && options.data.reasons).toEqual([
+            'withdrawal',
+            'defective',
+            'wrong_item',
+            'other'
+        ]);
+        expect(options.success && options.data.returnable.length > 0).toBe(true);
+    });
+
+    it('offers staff nothing to return: the right is the buyer’s own', async () => {
+        const { orderId } = await deliveredOrder();
+
+        const options = await returnService.getReturnOptions(orderId, asAdmin());
+
+        expect(options.success && options.data).toMatchObject({ reasons: [], returnable: [] });
+    });
+
+    it('narrows to the guarantee after the withdrawal period, made-to-order goods marked', async () => {
+        const { user, engraved, orderId } = await orderWithExcluded();
+        await setWithdrawUntil(orderId, new Date(Date.now() - 1000));
+
+        const options = await returnService.getReturnOptions(orderId, buyer(user));
+
+        expect(options.success && options.data.reasons).toEqual(['defective', 'wrong_item']);
+        expect(
+            options.success &&
+                options.data.returnable.find((line) => line.productId === String(engraved._id))
+        ).toMatchObject({ withdrawable: false });
+    });
+
+    it('hides excluded goods while only the withdrawal period is open', async () => {
+        const { user, engraved, orderId } = await orderWithExcluded();
+        await setConformityUntil(orderId, new Date(Date.now() - 1000));
+
+        const options = await returnService.getReturnOptions(orderId, buyer(user));
+
+        expect(options.success && options.data.reasons).toEqual(['withdrawal', 'other']);
+        expect(
+            options.success &&
+                options.data.returnable.some((line) => line.productId === String(engraved._id))
+        ).toBe(false);
+    });
+
+    it('is empty for the buyer once both deadlines are over', async () => {
+        const { user, orderId } = await deliveredOrder();
+        await setWithdrawUntil(orderId, new Date(Date.now() - 2000));
+        await setConformityUntil(orderId, new Date(Date.now() - 1000));
+
+        const options = await returnService.getReturnOptions(orderId, buyer(user));
+
+        expect(options.success && options.data).toMatchObject({ reasons: [], returnable: [] });
     });
 });

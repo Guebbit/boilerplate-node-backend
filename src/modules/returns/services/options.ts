@@ -2,7 +2,7 @@
  * @module
  * What an order can still send back, and what it can still cancel — computed here, once, so no
  * client re-derives a quantity or a refund. `returnable` is what has SHIPPED and is not already
- * coming back; `cancellable` is each fulfillment order with a remainder and the exact refund
+ * coming back, offered only to the buyer and only while a `reasons` deadline is open; `cancellable` is each fulfillment order with a remainder and the exact refund
  * cancelling it would owe, delivery included when it takes the last unit.
  *
  * See: docs/modules/returns.md#the-options-read
@@ -18,11 +18,17 @@ import {
 import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
 import { deliveryService } from '@modules/delivery';
-import { orderService, isExcludedFromWithdrawal } from '@modules/orders';
+import { orderService, isBuyer, isExcludedFromWithdrawal } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import type { AuthContext, ReturnOptions } from '@types';
 import { returnRepository } from '../repository';
-import { holdsReturnedGoods, returnableQuantities, wireLines } from '../domain';
+import {
+    holdsReturnedGoods,
+    isGuaranteeReason,
+    reasonsOpenAt,
+    returnableQuantities,
+    wireLines
+} from '../domain';
 import type { ProductQuantity } from '../domain';
 import { cancellationRefundOn } from './cancellation-refund';
 import { cancelRefusalOf } from './cancel-right';
@@ -47,7 +53,11 @@ const readableOrder = (
  * @param order - the order
  * @param quantities - product id → units
  */
-const optionLines = (order: OrderDocument, quantities: ReadonlyMap<string, number>) => {
+const optionLines = (
+    order: OrderDocument,
+    quantities: ReadonlyMap<string, number>,
+    excluded: ReadonlySet<string>
+) => {
     const titles = new Map(
         order.items.map((item) => [String(item.product._id), item.product.title])
     );
@@ -56,7 +66,8 @@ const optionLines = (order: OrderDocument, quantities: ReadonlyMap<string, numbe
         .map(([productId, quantity]) => ({
             productId,
             title: titles.get(productId) ?? '',
-            quantity
+            quantity,
+            withdrawable: !excluded.has(productId)
         }));
 };
 
@@ -79,13 +90,20 @@ export const getReturnOptions = (
             deliveryService.shippedQuantities(orderId),
             deliveryService.remainderOptions(orderId, order.fulfillment?.shipped === true)
         ]).then(([returns, shipped, remainders]) => {
-            // Excluded goods (Art. 16) never come back, so they are not offered.
+            // Only the buyer exercises a right (staff open nothing here), and only for a reason
+            // whose deadline is still open: none left means no form.
+            const reasons = isBuyer(order, authContext) ? reasonsOpenAt(order, new Date()) : [];
+            // Excluded goods (Art. 16) are offered only for a reason that is not the withdrawal:
+            // a defect or a wrong item reaches made-to-order goods too.
             const excluded = new Set(
                 order.items
                     .filter((item) => isExcludedFromWithdrawal(item))
                     .map((item) => String(item.product._id))
             );
-            const returnable = shipped.filter(({ productId }) => !excluded.has(productId));
+            const guaranteeOpen = reasons.some((reason) => isGuaranteeReason(reason));
+            const returnable = shipped.filter(
+                ({ productId }) => guaranteeOpen || !excluded.has(productId)
+            );
             const back: ProductQuantity[] = returns
                 .filter(holdsReturnedGoods)
                 .flatMap(({ lines }) => wireLines(lines));
@@ -93,7 +111,11 @@ export const getReturnOptions = (
             return generateSuccess({
                 orderId,
                 currency: order.currency,
-                returnable: optionLines(order, returnableQuantities(returnable, back)),
+                reasons,
+                returnable:
+                    reasons.length === 0
+                        ? []
+                        : optionLines(order, returnableQuantities(returnable, back), excluded),
                 cancellable: remainders.map((remainder) => {
                     const refund = cancellationRefundOn(order, returns, remainder.lines);
                     return {

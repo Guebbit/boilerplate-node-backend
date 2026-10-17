@@ -67,10 +67,18 @@ export const notReturnable = (): CreateReturnOutcome =>
         }
     ]);
 
-/** The 409 for a withdrawal after its window closed. */
-export const windowClosed = (): CreateReturnOutcome =>
+/**
+ * The 409 for a reason whose period has ended: the withdrawal period for a withdrawal or a
+ * goodwill return, the two-year guarantee for a defect or a wrong item. One code, the reason
+ * picking the sentence.
+ * @param guarantee - whether the reason was a defect or a wrong item
+ */
+export const windowClosed = (guarantee = false): CreateReturnOutcome =>
     generateReject(409, [
-        { code: ERROR_CODES.RETURN_WINDOW_CLOSED, message: t('returns.window-closed') }
+        {
+            code: ERROR_CODES.RETURN_WINDOW_CLOSED,
+            message: t(guarantee ? 'returns.guarantee-ended' : 'returns.window-closed')
+        }
     ]);
 
 /**

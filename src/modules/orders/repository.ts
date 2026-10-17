@@ -20,7 +20,12 @@ import {
 } from './model';
 import type { OrderDocument, OrderEventDocument, OrderReference } from './model';
 import { paymentStatusFilter, returnStatusFilter } from './domain';
-import type { FulfillmentSummary, StampedPaymentStatus, StampedReturnStatus } from './domain';
+import type {
+    DeliveryClock,
+    FulfillmentSummary,
+    StampedPaymentStatus,
+    StampedReturnStatus
+} from './domain';
 import { Types } from 'mongoose';
 import type { PipelineStage, QueryFilter, ClientSession } from 'mongoose';
 import { incrementYearlyCounter } from '@infrastructure/persistence/yearly-counter';
@@ -317,20 +322,20 @@ const markPaid = (
  * has no slot for a stamp.
  * @param id - the order that arrived
  * @param from - the status this move must currently be in
- * @param withdrawUntil - the last instant a withdrawal is valid
+ * @param clock - the withdrawal and guarantee deadlines to freeze with the move
  * @param session - joins the write to the caller's transaction, so its outbox row rides with it
  * @returns the order as it now stands, or `null` if it was not in `from`
  */
 const markDelivered = (
     id: string,
     from: OrderStatus,
-    withdrawUntil: Date,
+    clock: DeliveryClock,
     session?: ClientSession
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
             { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
-            { $set: { status: OrderStatus.delivered, withdrawUntil } },
+            { $set: { status: OrderStatus.delivered, ...clock } },
             { returnDocument: 'after', session }
         )
         .exec();
@@ -372,8 +377,8 @@ const setProjection = (
  * @param id - the order to move
  * @param from - the status the caller read; the write lands only if the order is still there
  * @param to - the status being written
- * @param withdrawUntil - the withdrawal deadline to freeze in the same write, for a move into
- *   `delivered`; absent for every other destination
+ * @param clock - the deadlines to freeze in the same write, for a move into `delivered`;
+ *   absent for every other destination
  * @param session - joins the write to the caller's transaction, so its outbox row rides with it
  * @returns the order as it now stands, or `null` if `id`'s current status is no longer `from`
  */
@@ -381,13 +386,13 @@ const applyStatusOverride = (
     id: string,
     from: OrderStatus,
     to: OrderStatus,
-    withdrawUntil?: Date,
+    clock?: DeliveryClock,
     session?: ClientSession
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
             { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
-            { $set: { status: to, ...(withdrawUntil ? { withdrawUntil } : {}) } },
+            { $set: { status: to, ...clock } },
             { returnDocument: 'after', session }
         )
         .exec();
@@ -686,14 +691,14 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     markDelivered: (
         id: string,
         from: OrderStatus,
-        withdrawUntil: Date,
+        clock: DeliveryClock,
         session?: ClientSession
     ) => Promise<OrderDocument | null>;
     applyStatusOverride: (
         id: string,
         from: OrderStatus,
         to: OrderStatus,
-        withdrawUntil?: Date,
+        clock?: DeliveryClock,
         session?: ClientSession
     ) => Promise<OrderDocument | null>;
     findInSession: (id: string, session: ClientSession) => Promise<OrderDocument | null>;

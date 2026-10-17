@@ -25,6 +25,15 @@ export {
 } from './quantities';
 export type { ProductQuantity, LinesVerdict } from './quantities';
 
+export {
+    CONFORMITY_REASONS,
+    WITHDRAWAL_WINDOW_REASONS,
+    isGuaranteeReason,
+    isReasonOpen,
+    reasonsOpenAt
+} from './reasons';
+export type { FrozenDeadlines } from './reasons';
+
 export { projectReturnStatus } from './status-projection';
 export type { ProjectedReturn, ProjectedReturnStatus } from './status-projection';
 

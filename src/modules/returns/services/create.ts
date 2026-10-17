@@ -30,6 +30,8 @@ import type { ReturnDocument } from '../model';
 import {
     checkRequestedLines,
     holdsReturnedGoods,
+    isGuaranteeReason,
+    isReasonOpen,
     initialStatusFor,
     returnableQuantities,
     wireLines
@@ -193,16 +195,20 @@ const openReturn = (
     ownOrder(input.orderId, authContext).then((order) => {
         if (!order) return generateReject(404, [t('returns.order-not-found')]);
 
-        const now = new Date();
-        if (order.withdrawUntil && now.getTime() > order.withdrawUntil.getTime())
-            return windowClosed();
+        // Each reason has its own deadline: the shop's withdrawal period for a withdrawal or a
+        // goodwill return, two years from delivery for a defect or a wrong item.
+        if (!isReasonOpen(order, input.reason, new Date()))
+            return windowClosed(isGuaranteeReason(input.reason));
 
         // Art. 16: goods the product marks as excluded cannot be withdrawn from. A cancel before
-        // dispatch takes the whole order, so one such line keeps the whole withdrawal out.
+        // dispatch takes the whole order, so one such line keeps the whole withdrawal out. A defect
+        // or a wrong item is the guarantee, not the withdrawal: made-to-order goods are covered.
         const excluded = new Set(
-            order.items
-                .filter((item) => isExcludedFromWithdrawal(item))
-                .map((item) => String(item.product._id))
+            isGuaranteeReason(input.reason)
+                ? []
+                : order.items
+                      .filter((item) => isExcludedFromWithdrawal(item))
+                      .map((item) => String(item.product._id))
         );
         if (input.reason === 'withdrawal' && isBeforeDispatch(order))
             return excluded.size > 0

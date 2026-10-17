@@ -6,6 +6,8 @@
 import { OrderStatus } from '@types';
 import {
     canWithdraw,
+    conformityUntilFrom,
+    deliveryClockFor,
     isBeforeDispatch,
     isExcludedFromWithdrawal,
     withdrawalStartFor,
@@ -50,6 +52,32 @@ describe('withdrawUntilFrom', () => {
         expect(withdrawUntilFrom(new Date('2026-01-25T00:00:00Z'), 14).toISOString()).toBe(
             '2026-02-08T23:59:59.999Z'
         );
+    });
+});
+
+describe('conformityUntilFrom', () => {
+    it('ends with the last hour of the same day two years on', () => {
+        expect(conformityUntilFrom(new Date('2026-03-01T10:00:00Z')).toISOString()).toBe(
+            '2028-03-01T23:59:59.999Z'
+        );
+    });
+
+    it('lets a 29 February delivery run to the first of March', () => {
+        expect(conformityUntilFrom(new Date('2028-02-29T10:00:00Z')).toISOString()).toBe(
+            '2030-03-01T23:59:59.999Z'
+        );
+    });
+});
+
+describe('deliveryClockFor', () => {
+    it('counts the withdrawal from its own clock and the guarantee from the arrival', () => {
+        const paidAt = new Date('2026-02-01T10:00:00Z');
+        const at = new Date('2026-03-01T10:00:00Z');
+
+        const goods = deliveryClockFor({ items: [], paidAt }, at, 30);
+
+        expect(goods.withdrawUntil.toISOString()).toBe('2026-03-31T23:59:59.999Z');
+        expect(goods.conformityUntil.toISOString()).toBe('2028-03-01T23:59:59.999Z');
     });
 });
 

@@ -57,7 +57,7 @@ const mover =
  *
  * `updatedAt` moves with `createdAt` rather than staying put: a row last touched a minute ago
  * describing something that happened in March is the exact incoherence this pass exists to avoid.
- * `withdrawUntil` moves as well: a "delivered weeks ago" order that still shows a live withdrawal
+ * `withdrawUntil` and `conformityUntil` move as well: a "delivered weeks ago" order that still shows a live withdrawal
  * window is the one date in the row that would make it look delivered today.
  * `reservations.expiresAt` moves too — every backdated order's hold is long since committed or
  * released, and a deadline left at boot time would be the only date in the row disagreeing.
@@ -68,6 +68,7 @@ const TRAILS = [
         'updatedAt',
         'deletedAt',
         'withdrawUntil',
+        'conformityUntil',
         'fulfillment.lastDeliveredAt'
     ]),
     mover(paymentModel, (orderId) => ({ orderId }), ['createdAt', 'updatedAt', 'receivedAt']),

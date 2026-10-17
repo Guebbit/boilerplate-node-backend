@@ -13,6 +13,7 @@ import {
     holdsReturnedGoods,
     initialStatusFor,
     quantitiesByProduct,
+    reasonsOpenAt,
     returnableLinesOf,
     returnableQuantities,
     takesLastUnit,
@@ -305,5 +306,30 @@ describe('accountsOf', () => {
 
     it('treats the settled statuses as received and closed', () => {
         expect(BACK_RETURN_STATUSES).toEqual(['received', 'closed']);
+    });
+});
+
+describe('reasonsOpenAt', () => {
+    const NOW = new Date('2026-06-01T12:00:00Z');
+    const past = new Date('2026-05-31T23:59:59.999Z');
+    const future = new Date('2026-07-01T23:59:59.999Z');
+
+    it('offers every reason while neither clock has started', () => {
+        expect(reasonsOpenAt({}, NOW)).toEqual(['withdrawal', 'defective', 'wrong_item', 'other']);
+    });
+
+    it('keeps only the guarantee reasons once the withdrawal period is over', () => {
+        expect(reasonsOpenAt({ withdrawUntil: past, conformityUntil: future }, NOW)).toEqual([
+            'defective',
+            'wrong_item'
+        ]);
+    });
+
+    it('offers nothing once both deadlines are over', () => {
+        expect(reasonsOpenAt({ withdrawUntil: past, conformityUntil: past }, NOW)).toEqual([]);
+    });
+
+    it('treats the deadline instant itself as still open', () => {
+        expect(reasonsOpenAt({ withdrawUntil: NOW, conformityUntil: NOW }, NOW)).toHaveLength(4);
     });
 });

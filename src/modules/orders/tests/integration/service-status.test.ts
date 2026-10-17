@@ -152,6 +152,14 @@ describe('markDelivered', () => {
         expect(updated?.withdrawUntil?.toISOString()).toBe('2026-03-31T23:59:59.999Z');
     });
 
+    it('freezes the two-year guarantee deadline beside it', async () => {
+        const order = await seedOrder(OrderStatus.shipped);
+
+        const updated = await markDelivered(String(order._id), new Date('2026-03-01T10:00:00Z'));
+
+        expect(updated?.conformityUntil?.toISOString()).toBe('2028-03-01T23:59:59.999Z');
+    });
+
     it('honours the shortest period a deployment may offer', () =>
         withEnvironmentOverrides({ NODE_WITHDRAWAL_PERIOD_DAYS: '21' }, async () => {
             const order = await seedOrder(OrderStatus.shipped);

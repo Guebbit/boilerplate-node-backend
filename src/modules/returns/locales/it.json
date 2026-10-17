@@ -4,6 +4,7 @@
         "order-not-found": "Ordine non trovato",
         "order-not-returnable": "Questo ordine non può essere reso nel suo stato attuale.",
         "window-closed": "Il periodo di recesso per questo ordine è terminato.",
+        "guarantee-ended": "I due anni di garanzia legale per questo ordine sono terminati.",
         "line-unknown-product": "Una delle righe indica un prodotto che non è in questo ordine.",
         "line-too-many": "Una delle righe chiede di rendere più di quanto ne resta.",
         "line-excluded": "Alcuni di questi beni sono esclusi dal diritto di recesso.",

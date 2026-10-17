@@ -177,6 +177,23 @@ status follow the commit, so a lost race announces nothing.
 The lock is a row of its own because `returns` must not write `orders`' document, and a counter of
 returned quantities would be a second copy of the truth.
 
+## The two deadlines
+
+An order freezes two deadlines the moment it is delivered, and a request is judged by the one that
+belongs to its reason:
+
+| Reason                    | Deadline                                                                          | Art. 16 exclusion |
+| ------------------------- | --------------------------------------------------------------------------------- | ----------------- |
+| `withdrawal`, `other`     | `withdrawUntil`: the shop's period (`NODE_WITHDRAWAL_PERIOD_DAYS`, 30 by default) | applies           |
+| `defective`, `wrong_item` | `conformityUntil`: two years from delivery                                        | does not apply    |
+
+The second row is the legal guarantee of conformity (Directive 2019/771 Art. 10(1), Art. 21: not
+waivable). Art. 16 CRD only takes the right of **withdrawal** away, so a made-to-order item that
+arrives broken is still the shop's to put right. A reason past its deadline is a 409
+`RETURN_WINDOW_CLOSED`, worded for the guarantee when the reason was a defect or a wrong item.
+`reasonsOpenAt` (`domain/reasons.ts`) is the one rule; the door and [the options
+read](#the-options-read) both ask it.
+
 ## Goods with no right of withdrawal
 
 Art. 16(c)–(d) of the Consumer Rights Directive takes the right away from some goods — those made
@@ -186,7 +203,8 @@ product form); the flag is **frozen onto each order line at checkout**, like eve
 so changing the product later cannot rewrite what a customer was sold.
 
 - A withdrawal that names no lines leaves excluded lines out of what comes back.
-- A return that names an excluded line is refused (422, `RETURN_LINES_INVALID`).
+- A `withdrawal` or `other` return that names an excluded line is refused (422,
+  `RETURN_LINES_INVALID`); a `defective` or `wrong_item` one is not ([the two deadlines](#the-two-deadlines)).
 - A withdrawal **before dispatch** takes the whole order, so one excluded line keeps it out (422); the
   ordinary cancel is the shop's own policy and is unaffected.
 - `OrderActions.withdraw` is `false` on an order made only of excluded goods.
@@ -398,8 +416,11 @@ delivery's `remainder_cancelled` already say it.
 ## The options read
 
 `GET /returns/options?orderId=` is the server's answer to "what can I still return, and what can I
-still cancel?", so the frontend shows and never counts: `returnable` is the quantity per product that
-has **shipped** and is not already coming back; `cancellable` lists each fulfillment order with a
+still cancel?", so the frontend shows and never counts: `reasons` is what THIS caller can still name
+([the two deadlines](#the-two-deadlines)), empty for staff, who open nothing, and for a buyer past
+every deadline; `returnable` is the quantity per product that
+has **shipped** and is not already coming back, empty while `reasons` is, with each line's
+`withdrawable` flag (false for Art. 16 goods, which only a defect or a wrong item may name); `cancellable` lists each fulfillment order with a
 remainder and the exact refund cancelling it would owe (the delivery included when it takes the last
 unit), each with `cancel`: whether THIS caller may cancel it. The buyer may inside the window and
 when the remainder holds no excluded goods; anyone else when they hold the refund key. It is the

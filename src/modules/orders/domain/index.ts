@@ -42,11 +42,18 @@ export type { OrderTaxBreakdown, LineTaxBreakdown, TaxableLineItem, TaxRateSumma
 export {
     canWithdraw,
     isBeforeDispatch,
+    conformityUntilFrom,
+    deliveryClockFor,
     isExcludedFromWithdrawal,
     withdrawUntilFrom,
     withdrawalStartFor
 } from './withdrawal';
-export type { WithdrawalCandidate, WithdrawableLine, WithdrawalClockCandidate } from './withdrawal';
+export type {
+    DeliveryClock,
+    WithdrawalCandidate,
+    WithdrawableLine,
+    WithdrawalClockCandidate
+} from './withdrawal';
 
 /** The money and the return stamped beside `status`, and the filters that are their inverse. */
 export {

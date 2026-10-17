@@ -58,6 +58,26 @@ export const withdrawUntilFrom = (start: Date, days: number): Date => {
     return new Date(startOfEventDay + (days + 1) * DAY_MS - 1);
 };
 
+/** The statutory guarantee of conformity, in years (Directive 2019/771 Art. 10(1), 2019/770 Art. 11(2)). */
+const CONFORMITY_YEARS = 2;
+
+/**
+ * When the legal guarantee of conformity ends, counted from delivery: two calendar years, to the
+ * end of that UTC day. A defect or a wrong item is the buyer's right until then, whatever the
+ * shop's own (shorter) withdrawal period says — and made-to-order goods are covered too, since
+ * Art. 16 CRD only takes the right of WITHDRAWAL away.
+ * @param deliveredAt - when the goods arrived
+ * @returns the last instant a defect or wrong item can still be reported
+ */
+export const conformityUntilFrom = (deliveredAt: Date): Date =>
+    new Date(
+        Date.UTC(
+            deliveredAt.getUTCFullYear() + CONFORMITY_YEARS,
+            deliveredAt.getUTCMonth(),
+            deliveredAt.getUTCDate() + 1
+        ) - 1
+    );
+
 /** What {@link withdrawalStartFor} reads off an order. */
 export interface WithdrawalClockCandidate {
     items: readonly ShippableLineCandidate[];
@@ -75,6 +95,30 @@ export interface WithdrawalClockCandidate {
  */
 export const withdrawalStartFor = (order: WithdrawalClockCandidate, at: Date): Date =>
     isDigitalOnlyOrder(order.items) ? (order.paidAt ?? at) : at;
+
+/** The two deadlines frozen the moment an order is delivered. */
+export interface DeliveryClock {
+    /** The last instant a withdrawal is valid. */
+    withdrawUntil: Date;
+    /** The last instant a defect or wrong item can be reported. */
+    conformityUntil: Date;
+}
+
+/**
+ * Both deadlines for an order that arrived at `at`: the withdrawal period counted from its own
+ * clock start, the guarantee from the arrival.
+ * @param order - the order arriving
+ * @param at - when it arrived
+ * @param days - the withdrawal period in days
+ */
+export const deliveryClockFor = (
+    order: WithdrawalClockCandidate,
+    at: Date,
+    days: number
+): DeliveryClock => ({
+    withdrawUntil: withdrawUntilFrom(withdrawalStartFor(order, at), days),
+    conformityUntil: conformityUntilFrom(at)
+});
 
 /** The one fact about a line that decides whether the right of withdrawal reaches it. */
 export interface WithdrawableLine {

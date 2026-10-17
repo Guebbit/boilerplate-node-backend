@@ -4,6 +4,7 @@
         "order-not-found": "The order was not found",
         "order-not-returnable": "This order cannot be returned in its current status.",
         "window-closed": "The withdrawal period for this order has ended.",
+        "guarantee-ended": "The two years of legal guarantee for this order have ended.",
         "line-unknown-product": "One of the lines names a product that is not on this order.",
         "line-too-many": "One of the lines asks to return more than is left of it.",
         "line-excluded": "Some of these goods are excluded from the right of withdrawal.",

@@ -16,7 +16,7 @@ x-error-codes:
     RETURN_ORDER_NOT_RETURNABLE: { status: 409, description: 'The order is not in a state a return can be opened on — cancelled, or (for a reason other than withdrawal) still in the shop''s hands.' }
     RETURN_CANCELLATION_INVALID: { status: 422, description: 'A cancellation names no fulfillment order of this order, or sends `lines` (the remainder is its lines), or a return names a fulfillment order. Also the reason does not fit the caller: the order''s buyer cancels only as a `withdrawal`; anyone else (staff) may name any reason but `withdrawal`, which is the buyer''s own right.' }
     RETURN_NOTHING_TO_CANCEL: { status: 409, description: 'The fulfillment order has nothing left to cancel, or nothing has shipped from the order yet (cancel the whole order instead).' }
-    RETURN_WINDOW_CLOSED: { status: 409, description: 'The withdrawal period for this order has ended.' }
+    RETURN_WINDOW_CLOSED: { status: 409, description: 'The period for the reason named has ended: the withdrawal period for a withdrawal or other, two years from delivery for a defect or a wrong item.' }
 
 # This module's section of the account data export (`POST /account/export`): the bundler
 # adds it to `AccountExportResponse`. Removing the module removes the section.
@@ -140,7 +140,9 @@ paths:
             description: >-
                 The server's answer to "what can I still return, and what can I still cancel?" for one
                 order, so no client counts. `returnable` is the quantity per product that has SHIPPED
-                and has not already been returned. `cancellable` lists each fulfillment order that
+                and has not already been returned, offered to the buyer only and only while a
+                deadline in `reasons` is open: staff get an empty list (cancelling is theirs, returning
+                is the buyer's right), and so does a buyer past every deadline. `cancellable` lists each fulfillment order that
                 still has a remainder, with the exact refund cancelling it would owe (the delivery
                 included when it takes the last unit of the order). `cancellable` is empty while
                 nothing has shipped — the whole order is cancelled instead (`Order.actions.cancel`).
@@ -507,7 +509,27 @@ components:
         ReturnOptionLine:
             type: object
             additionalProperties: false
+            required: [productId, title, quantity, withdrawable]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                quantity:
+                    type: integer
+                    minimum: 1
+                withdrawable:
+                    type: boolean
+                    description: >-
+                        Whether the right of withdrawal reaches this line. False for goods Art. 16
+                        excludes (made to order, perishable): only `defective` or `wrong_item` may
+                        name them, and a request that names them with another reason is a 422.
+
+        CancelOptionLine:
+            type: object
+            additionalProperties: false
             required: [productId, title, quantity]
+            description: 'A line of the remainder a cancel would take, which is what has not shipped, per product.'
             properties:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -531,7 +553,7 @@ components:
                 lines:
                     type: array
                     items:
-                        $ref: '#/components/schemas/ReturnOptionLine'
+                        $ref: '#/components/schemas/CancelOptionLine'
                 refundAmount:
                     type: number
                     format: double
@@ -559,11 +581,24 @@ components:
                 currency:
                     type: string
                     description: ISO-4217 code of the order's own currency.
+                reasons:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ReturnRequestReason'
+                    description: >-
+                        The reasons THIS caller can still name, so a client offers no door that is shut.
+                        Empty for staff (the right is the buyer's own) and once every deadline has
+                        passed. `withdrawal` and `other` last for the withdrawal period; `defective`
+                        and `wrong_item` for two years from delivery (the legal guarantee of
+                        conformity), made-to-order goods included.
                 returnable:
                     type: array
                     items:
                         $ref: '#/components/schemas/ReturnOptionLine'
-                    description: Per product, what has shipped and not yet been returned. Goods excluded from withdrawal (Art. 16) are not listed.
+                    description: >-
+                        Per product, what has shipped and not yet been returned. Empty unless `reasons`
+                        is not. Goods excluded from withdrawal (Art. 16) are listed only while a
+                        `defective` or `wrong_item` reason is open, and carry `withdrawable: false`.
                 cancellable:
                     type: array
                     items:

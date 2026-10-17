@@ -22,8 +22,10 @@ import {
     isDigitalOnlyOrder,
     type OrderEventName,
     type TimelineEntryInput,
-    withdrawalStartFor,
+    conformityUntilFrom,
+    deliveryClockFor,
     withdrawUntilFrom,
+    type DeliveryClock,
     type StampedPaymentStatus,
     type StampedReturnStatus
 } from '../domain';
@@ -203,12 +205,15 @@ export const markDelivered = (
     actor?: string | null
 ): Promise<OrderDocument | null> => {
     const { from, to } = ORDER_EVENTS.deliver;
-    const withdrawUntil = withdrawUntilFrom(deliveredAt, withdrawalPeriodDays());
+    const clock: DeliveryClock = {
+        withdrawUntil: withdrawUntilFrom(deliveredAt, withdrawalPeriodDays()),
+        conformityUntil: conformityUntilFrom(deliveredAt)
+    };
     return announceMove(
         session,
         withTimeline(
-            (active) => orderRepository.markDelivered(orderId, from[0], withdrawUntil, active),
-            () => [deliveredRow(withdrawUntil, actor)]
+            (active) => orderRepository.markDelivered(orderId, from[0], clock, active),
+            () => [deliveredRow(clock.withdrawUntil, actor)]
         ),
         () => statusChangedEvent(orderId, from[0], to)
     );
@@ -240,21 +245,17 @@ export const markFulfilmentComplete = (
         // The table's tuples are literal types; widened so `includes` accepts any status.
         if (!order || !(from as readonly OrderStatus[]).includes(order.status)) return null;
 
-        const withdrawUntil = withdrawUntilFrom(
-            withdrawalStartFor(order, at),
-            withdrawalPeriodDays()
-        );
+        const clock = deliveryClockFor(order, at, withdrawalPeriodDays());
         const events: readonly OrderEventName[] = isDigitalOnlyOrder(order.items)
             ? ['fulfilmentComplete']
             : ['ship', 'deliver'];
         return announceWithin(
             session,
             withTimeline(
-                (active) =>
-                    orderRepository.markDelivered(orderId, order.status, withdrawUntil, active),
+                (active) => orderRepository.markDelivered(orderId, order.status, clock, active),
                 () => [
                     ...(events.includes('ship') ? [{ type: 'shipped' as const, actor }] : []),
-                    deliveredRow(withdrawUntil, actor)
+                    deliveredRow(clock.withdrawUntil, actor)
                 ]
             ),
             () =>

@@ -183,6 +183,24 @@ export const markOrderPaidAt = (orderId: string, paidAt: Date): Promise<OrderDoc
         .exec();
 
 /**
+ * Set an order's frozen guarantee deadline directly, the way {@link setWithdrawUntil} does for the
+ * withdrawal one.
+ * @param orderId - the order
+ * @param conformityUntil - the deadline to freeze; `undefined` clears it
+ */
+export const setConformityUntil = (
+    orderId: string,
+    conformityUntil: Date | undefined
+): Promise<void> =>
+    orderModel
+        .updateOne(
+            { _id: toObjectId(orderId) },
+            conformityUntil ? { conformityUntil } : { $unset: { conformityUntil: 1 } }
+        )
+        .exec()
+        .then(() => undefined);
+
+/**
  * Set an order's frozen withdrawal deadline directly — the state `markDelivered` leaves it in,
  * for a test that needs the window open or closed without running a delivery.
  * @param orderId - the order

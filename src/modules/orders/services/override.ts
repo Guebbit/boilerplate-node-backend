@@ -30,13 +30,7 @@ import { statusChangedEvent, statusOverriddenEvent } from './announce';
 import { announceMoveShippingStock } from './ship-stock';
 import { withTimeline } from './timeline';
 import { ordersAuditActions } from '../audit';
-import {
-    canOverrideTo,
-    isDigitalOnlyOrder,
-    shipsAwaitedStock,
-    withdrawalStartFor,
-    withdrawUntilFrom
-} from '../domain';
+import { canOverrideTo, isDigitalOnlyOrder, deliveryClockFor, shipsAwaitedStock } from '../domain';
 import { withdrawalPeriodDays } from '../config';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -78,15 +72,15 @@ const applyOverride = (
     // An override into `delivered` never passes through `markDelivered`, so no delivery timestamp
     // exists: the deadline is counted from the override itself, which is when the shop says the
     // order arrived — or from payment, for digital content.
-    const withdrawUntil =
+    const clock =
         to === OrderStatus.delivered
-            ? withdrawUntilFrom(withdrawalStartFor(order, at), withdrawalPeriodDays())
+            ? deliveryClockFor(order, at, withdrawalPeriodDays())
             : undefined;
 
     // The row commits with the move: no override exists without its history, or the reverse.
     const write = withTimeline(
         (session: ClientSession) =>
-            orderRepository.applyStatusOverride(orderId, observedFrom, to, withdrawUntil, session),
+            orderRepository.applyStatusOverride(orderId, observedFrom, to, clock, session),
         () => [
             {
                 type: 'status_overridden',

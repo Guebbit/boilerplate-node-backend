@@ -178,6 +178,12 @@ export interface OrderDocument
      */
     withdrawUntil?: Date;
     /**
+     * The last instant a defect or a wrong item can be reported: two calendar years from delivery,
+     * the legal guarantee of conformity (Directive 2019/771 Art. 10). Frozen with `withdrawUntil`,
+     * absent until delivery. Internal: `GET /returns/options` reads it as the reasons on offer.
+     */
+    conformityUntil?: Date;
+    /**
      * The refund state of the money, stamped by `payments` through `services/status.ts`'s
      * `markPaymentStatus`. Absent until a refund exists — `paid`/`unpaid` are derived from `paidAt`
      * on read, so nothing here can disagree with it. The wire's `paymentStatus` is derived from this.
@@ -385,6 +391,10 @@ export const orderSchema = new Schema<OrderDocument>(
         withdrawUntil: {
             type: Date
         },
+        // Frozen beside `withdrawUntil` — see the interface field's own comment.
+        conformityUntil: {
+            type: Date
+        },
         // Reported by `delivery`, never written by `orders` on its own — see the interface field.
         fulfillment: {
             type: new Schema<FulfillmentSummary>(
@@ -579,7 +589,7 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
 export const applyOrderTransform = applySerialization(orderSchema, {
     // `anonymizeAfter` is the reaper's own bookkeeping, not part of the `Order` contract — same
     // reasoning as `users`' `pendingImageKey`/`inactivityWarnedAt`.
-    omit: ['anonymizeAfter', 'withdrawUntil'],
+    omit: ['anonymizeAfter', 'withdrawUntil', 'conformityUntil'],
     after: (serialized) => {
         applyOrderItems(serialized);
         // `currency` is required on the schema, so a serialized order always carries it; the
