@@ -101,7 +101,10 @@ order they were written.
 | `return.closed`    | the `received → closed` claim (only the caller that won) | `services/close.ts`   |
 
 A return that is lost to a race writes nothing, and a failed event write takes the move down with
-it. The mail, the audit row and the order's `returnStatus` stay after the commit, best effort.
+it. The audit row and the order's `returnStatus` stay after the commit, best effort. The
+customer's mail is sent from a listener on these events ([Customer mail](../tools/outbox.md#customer-mail)):
+`return.requested` acknowledges, `return.decided` (internal) answers staff's decision, `return.closed`
+says the money went back.
 
 ## The withdrawal button
 
@@ -168,7 +171,7 @@ Two returns opened at the same instant for the same units cannot both pass the q
 Mongo transactions are snapshot isolation, so each would read "nothing returned yet" and both
 would commit. Opening a return therefore first writes the order's lock row (`ReturnOrderLock`, one
 per order, `$inc` in the same transaction); a second opening conflicts on that write, is re-run
-after the first commits, and then sees its return. The mail, the audit row and the order's return
+after the first commits, and then sees its return. The audit row and the order's return
 status follow the commit, so a lost race announces nothing.
 
 The lock is a row of its own because `returns` must not write `orders`' document, and a counter of

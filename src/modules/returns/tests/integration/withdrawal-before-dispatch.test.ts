@@ -104,6 +104,7 @@ describe('a withdrawal before dispatch on a paid order', () => {
             asCustomer(user.id),
             testCallerContext
         );
+        await settleOutboxNudges();
 
         const notices = mockEnqueueEmail.mock.calls.filter(
             ([, template]) => template === 'returns.notice'

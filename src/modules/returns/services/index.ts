@@ -13,6 +13,7 @@ import { collectPersonalData } from './personal-data';
 import { listReturns, getReturn, withActions } from './read';
 import { getReturnOptions } from './options';
 import { scrubReturnText } from './retention';
+import { mailReturnRequested, mailReturnDecided, mailReturnClosed } from './notify';
 import { returnedBuckets, returnedByProduct, returnedSeries } from './stats';
 
 export type { CreateReturnInput, CreateReturnOutcome } from './create';
@@ -35,5 +36,8 @@ export const returnService = {
     returnedByProduct,
     returnedSeries,
     cancelUnanswered,
-    collectPersonalData
+    collectPersonalData,
+    mailReturnRequested,
+    mailReturnDecided,
+    mailReturnClosed
 };

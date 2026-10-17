@@ -19,7 +19,7 @@ import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
 import { returnService } from '../../services';
 import { closeReturn } from '../../services/close';
-import { RETURN_CLOSED, RETURN_RECEIVED, RETURN_REQUESTED } from '../../events';
+import { RETURN_CLOSED, RETURN_DECIDED, RETURN_RECEIVED, RETURN_REQUESTED } from '../../events';
 import { returnRepository } from '../../repository';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -124,6 +124,43 @@ describe('return.requested', () => {
 
         expect(await returnRepository.findByOrderId(orderId)).toHaveLength(0);
         expect(await returnRows()).toHaveLength(0);
+    });
+});
+
+describe('return.decided', () => {
+    it.each([
+        ['approved', (id: string) => returnService.approveReturn(id, callerContextAs('admin'))],
+        [
+            'declined',
+            (id: string) => returnService.declineReturn(id, 'Worn', callerContextAs('admin'))
+        ]
+    ])('is written with the %s decision, keyed on the order', async (decision, decide) => {
+        const { user, orderId } = await orderIn(OrderStatus.delivered);
+        const outcome = await returnService.createReturn(
+            { orderId, reason: 'defective' },
+            asCustomer(user.id),
+            testCallerContext
+        );
+        if (!outcome.success) throw new Error('expected a return');
+        const returnId = String(outcome.data._id);
+
+        await decide(returnId);
+        await settleOutboxNudges();
+
+        const rows = await outboxEventModel.find({ name: RETURN_DECIDED }).lean();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({
+            aggregateId: orderId,
+            payload: { returnId, orderId, decision }
+        });
+    });
+
+    it('is not written for a decision that lost the race', async () => {
+        const { id } = await approvedReturn();
+
+        await returnService.approveReturn(id, callerContextAs('admin'));
+
+        expect(await outboxEventModel.countDocuments({ name: RETURN_DECIDED })).toBe(1);
     });
 });
 

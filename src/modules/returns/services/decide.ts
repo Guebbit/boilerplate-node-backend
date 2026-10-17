@@ -16,6 +16,7 @@ import {
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
+import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
 import type { CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
@@ -23,9 +24,8 @@ import { returnRepository, type ReturnStamp } from '../repository';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
 import { DECIDABLE_RETURN_STATUSES } from '../domain';
-import { mailReturnNotice } from './notify';
+import { RETURN_DECIDED } from '../events';
 import { syncReturnStatus } from './projection';
-import { returnAddress } from '@modules/shop';
 
 /**
  * What a lost race, or a request already answered, looks like: 404 for a return that does not
@@ -46,28 +46,7 @@ const notDecidable = (id: string): Promise<ResponseReject> =>
     );
 
 /**
- * Tell the customer what was decided. The order is read only for the mail — its number, and where
- * to send it — so a vanished order costs the mail, never the decision.
- * @param decided - the return as it now stands
- * @param kind - the notice to send
- */
-const notifyDecision = (
-    decided: ReturnDocument,
-    kind: 'return-approved' | 'return-declined'
-): Promise<void> =>
-    orderService.getById(String(decided.orderId)).then((order) => {
-        if (!order) return undefined;
-        return mailReturnNotice(kind, order, {
-            returnPostage: decided.returnPostage,
-            at: decided.decidedAt ?? new Date(),
-            declineReason: decided.declineReason,
-            // Told where to send the goods only when they are being asked for.
-            ...(kind === 'return-approved' ? { returnAddress: returnAddress() } : {})
-        });
-    });
-
-/**
- * The shared shape of both decisions: the conditional move, then the audit row and the mail.
+ * The shared shape of both decisions: the conditional move, then the audit row.
  *
  * @param id - the return being decided
  * @param to - `approved` or `declined`
@@ -80,7 +59,7 @@ const decide = (
     stamp: ReturnStamp,
     context: CallerContext
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
-    // The order's timeline row commits with the decision; a lost race writes none. A
+    // The order's timeline row and `return.decided` commit with the decision; a lost race writes none. A
     // decline's reason stays on the return, where `reap:returns` owns its clock.
     withTransaction((session) =>
         returnRepository
@@ -103,6 +82,14 @@ const decide = (
                               },
                               session
                           )
+                          .then(() =>
+                              enqueueOutboxEvent(
+                                  RETURN_DECIDED,
+                                  { returnId: id, orderId: String(decided.orderId), decision: to },
+                                  String(decided.orderId),
+                                  session
+                              )
+                          )
                           .then(() => decided)
                     : decided
             )
@@ -111,7 +98,8 @@ const decide = (
     );
 
 /**
- * What follows a won claim: the audit row, the order's projection and the customer's mail.
+ * What follows a won claim: the audit row and the order's projection. The customer's mail rides
+ * `return.decided`.
  *
  * @param decided - the return as the claim left it
  * @param to - `approved` or `declined`
@@ -135,17 +123,15 @@ const settleDecision = (
         metadata: { orderId: String(decided.orderId) }
     });
 
-    return syncReturnStatus(String(decided.orderId))
-        .then(() =>
-            notifyDecision(decided, to === 'approved' ? 'return-approved' : 'return-declined')
+    nudgeOutbox();
+
+    return syncReturnStatus(String(decided.orderId)).then(() =>
+        generateSuccess(
+            decided,
+            200,
+            t(to === 'approved' ? 'returns.approved' : 'returns.declined')
         )
-        .then(() =>
-            generateSuccess(
-                decided,
-                200,
-                t(to === 'approved' ? 'returns.approved' : 'returns.declined')
-            )
-        );
+    );
 };
 
 /**

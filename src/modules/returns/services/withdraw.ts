@@ -16,7 +16,6 @@ import { returnPostagePayer } from '@modules/shop';
 import type { AuthContext, CallerContext } from '@types';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
-import { mailReturnNotice } from './notify';
 import { ownOrder } from './ownership';
 import {
     enqueueClosed,
@@ -107,9 +106,5 @@ export const withdrawBeforeDispatch = (
                 fresh && !isBeforeDispatch(fresh) ? openAsReturn() : cancelled
             );
 
-        return writeWithdrawalRecord(order, context).then((created) =>
-            mailReturnNotice('withdrawal-acknowledged', order, {
-                at: created.createdAt ?? new Date()
-            }).then((): CreateReturnOutcome => opened(created))
-        );
+        return writeWithdrawalRecord(order, context).then(opened);
     });

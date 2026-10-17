@@ -48,6 +48,7 @@ import { inventoryService } from '@modules/inventory';
 import paymentsModule from '@modules/payments/module';
 import { paymentService } from '@modules/payments';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import returnsModule from '../../module';
 import { returnService } from '../../services';
 import { returnRepository } from '../../repository';
@@ -56,6 +57,12 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
+
+const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
+
+/** The `returns.notice` mails queued so far. */
+const returnNotices = () =>
+    mockEnqueueEmail.mock.calls.filter(([, template]) => template === 'returns.notice');
 
 setupTestDb();
 
@@ -408,6 +415,21 @@ describe('staff cancelling what has not shipped', () => {
             refundAmount: 10
         });
         expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: 10 }]);
+    });
+
+    it('acknowledges the buyer’s cancel but sends no returns notice for staff’s', async () => {
+        const buyerSide = await partlyShipped();
+        const staffSide = await partlyShipped();
+        mockEnqueueEmail.mockClear();
+
+        await staffCancels(staffSide, 'moderator');
+        await settleOutboxNudges();
+        const afterStaff = returnNotices();
+        await buyerCancels(buyerSide);
+        await settleOutboxNudges();
+
+        expect(afterStaff).toEqual([]);
+        expect(returnNotices()).toHaveLength(1);
     });
 
     it('is refused to a caller without it — the warehouse may receive goods, not decide a refund', async () => {

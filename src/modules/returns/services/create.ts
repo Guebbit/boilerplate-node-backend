@@ -35,7 +35,6 @@ import {
     wireLines
 } from '../domain';
 import type { ProductQuantity } from '../domain';
-import { mailReturnNotice } from './notify';
 import { ownOrder } from './ownership';
 import { syncReturnStatus } from './projection';
 import { createCancellation } from './cancel-remainder';
@@ -51,7 +50,7 @@ import {
     type CreateReturnInput,
     type CreateReturnOutcome
 } from './outcome';
-import { returnAddress, returnPostagePayer } from '@modules/shop';
+import { returnPostagePayer } from '@modules/shop';
 
 export type { CreateReturnInput, CreateReturnOutcome } from './outcome';
 
@@ -163,9 +162,8 @@ const openUnderLock = (
     );
 
 /**
- * Everything opening a return unlocks: the acknowledgement mail — the Art. 11a one for a
- * withdrawal, a plain "received" for any other reason — after the order's return status is
- * brought in step.
+ * Everything opening a return unlocks: the order's return status brought in step. The
+ * acknowledgement mail rides `return.requested`.
  * @param order - the order the goods came from
  * @param created - the return just written
  * @param context - for audit
@@ -177,21 +175,7 @@ const announceOpened = (
 ): Promise<CreateReturnOutcome> => {
     recordOpened(order, created, context);
 
-    return syncReturnStatus(String(order._id))
-        .then(() =>
-            mailReturnNotice(
-                created.reason === 'withdrawal' ? 'withdrawal-acknowledged' : 'return-requested',
-                order,
-                {
-                    returnPostage: created.returnPostage,
-                    at: created.createdAt ?? new Date(),
-                    // A withdrawal is approved from the start, so the customer is told where to send the
-                    // goods in the same mail; any other reason hears it once staff approve.
-                    ...(created.reason === 'withdrawal' ? { returnAddress: returnAddress() } : {})
-                }
-            )
-        )
-        .then((): CreateReturnOutcome => opened(created));
+    return syncReturnStatus(String(order._id)).then((): CreateReturnOutcome => opened(created));
 };
 
 /**

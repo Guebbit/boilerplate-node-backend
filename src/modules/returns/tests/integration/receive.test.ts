@@ -29,6 +29,7 @@ import { RETURN_CLOSED, RETURN_RECEIVED } from '../../events';
 import { returnRepository } from '../../repository';
 import { invoicingService, type CreditNoteDocument } from '@modules/invoicing';
 import { eventually } from '@tests/eventually';
+import { settleOutboxNudges } from '@kernel/outbox';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -107,6 +108,8 @@ const approvedReturn = async (
     if (reason !== 'withdrawal') {
         await returnService.approveReturn(id, callerContextAs('admin'));
     }
+    // The acknowledgement and the decision mails ride their events: let them land as setup.
+    await settleOutboxNudges();
     return id;
 };
 
@@ -282,6 +285,11 @@ describe('receiving a return', () => {
         mockEnqueueEmail.mockClear();
 
         await returnService.receiveReturn(id, {}, callerContextAs('admin'));
+        await eventually(() =>
+            settleOutboxNudges().then(() =>
+                mockEnqueueEmail.mock.calls.some(([, template]) => template === 'returns.notice')
+            )
+        );
 
         const mail = mockEnqueueEmail.mock.calls.find(
             ([, template]) => template === 'returns.notice'

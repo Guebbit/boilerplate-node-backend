@@ -89,7 +89,9 @@ const orderIn = async (status: OrderStatus) => {
     // Goods that left or arrived get there through the real doors, so the shipments exist.
     if (carried) {
         await carryOrderTo(String(order._id), status);
-        // The shipped and delivered mails belong to the setup, not to what the test is about.
+        // The shipped and delivered mails belong to the setup, not to what the test is about: let
+        // their events land before clearing.
+        await settleOutboxNudges();
         mockEnqueueEmail.mockClear();
     }
     return { user, shirt, mug, order, orderId: String(order._id) };
@@ -118,6 +120,7 @@ describe('a withdrawal before dispatch', () => {
             );
 
             expect(outcome.success).toBe(true);
+            await settleOutboxNudges();
             const stored = await readOrder(orderId);
             expect(stored?.status).toBe(OrderStatus.cancelled);
             const [written, ...others] = await returnRepository.findByOrderId(orderId);
@@ -565,6 +568,8 @@ const requestedReturn = async () => {
         testCallerContext
     );
     if (!outcome.success) throw new Error('expected a return');
+    // The acknowledgement rides `return.requested`: let it land, so it is the setup's, not the test's.
+    await settleOutboxNudges();
     return { ...fixture, returnId: String(outcome.data._id) };
 };
 
@@ -574,6 +579,7 @@ describe('deciding a request', () => {
         mockEnqueueEmail.mockClear();
 
         const result = await returnService.approveReturn(returnId, callerContextAs('admin'));
+        await settleOutboxNudges();
 
         expect(result.success && result.data.status).toBe('approved');
         expect(result.success && result.data.decidedAt).toBeInstanceOf(Date);
@@ -589,6 +595,7 @@ describe('deciding a request', () => {
             'Worn',
             callerContextAs('admin')
         );
+        await settleOutboxNudges();
 
         expect(result.success && result.data).toMatchObject({
             status: 'declined',
@@ -973,6 +980,7 @@ describe('what a new return leaves behind', () => {
             buyer(withdrawing.user),
             testCallerContext
         );
+        await settleOutboxNudges();
 
         expect(mailSubject(0)).toBe('We received your return request');
         expect(mailData(0).address).toBeUndefined();
@@ -1042,6 +1050,7 @@ describe('what a decision leaves behind', () => {
             'Worn',
             callerContextAs('admin')
         );
+        await settleOutboxNudges();
 
         expect(mailSubject(0)).toBe('Your return was approved');
         expect(mailData(0).address).toEqual(expect.stringContaining('Send the goods to:'));

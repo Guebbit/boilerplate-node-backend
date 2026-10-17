@@ -38,7 +38,6 @@ import type { ReturnDocument } from '../model';
 import type { ProductQuantity } from '../domain';
 import { cancelRefusalOf } from './cancel-right';
 import { cancellationRefundOn } from './cancellation-refund';
-import { mailReturnNotice } from './notify';
 import { syncReturnStatus } from './projection';
 import {
     badCancellation,
@@ -206,17 +205,15 @@ const refund = (order: OrderDocument, done: Cancelled, context: CallerContext): 
 
 /**
  * Everything a committed cancellation unlocks: the stock cache, the refund, the audit row, the
- * order's return status and — for the buyer's own withdrawal — the acknowledgement mail.
+ * order's return status. The buyer's acknowledgement mail rides `return.requested`.
  *
  * @param order - the order
  * @param done - the cancellation just committed
- * @param byBuyer - whether the buyer exercised their right (and is told so)
  * @param context - the caller
  */
 const announceCancelled = (
     order: OrderDocument,
     done: Cancelled,
-    byBuyer: boolean,
     context: CallerContext
 ): Promise<CreateReturnOutcome> => {
     nudgeOutbox();
@@ -226,13 +223,6 @@ const announceCancelled = (
         .refreshStockCacheForProducts(done.lines.map(({ productId }) => productId))
         .then(() => syncReturnStatus(String(order._id)))
         .then(() => refund(order, done, context))
-        .then(() =>
-            byBuyer
-                ? mailReturnNotice('withdrawal-acknowledged', order, {
-                      at: done.created.createdAt ?? new Date()
-                  })
-                : undefined
-        )
         .then((): CreateReturnOutcome => opened(done.created));
 };
 
@@ -309,7 +299,7 @@ export const createCancellation = (
                             ? done === 'not-found'
                                 ? badCancellation()
                                 : nothingToCancel()
-                            : announceCancelled(order, done, byBuyer, context)
+                            : announceCancelled(order, done, context)
                     )
                     .catch((error: unknown) => {
                         if (error instanceof ActRefusal) return error.reject;
@@ -346,7 +336,7 @@ const cancelRemainderUnanswered = (
     ).then((done) =>
         typeof done === 'string'
             ? undefined
-            : announceCancelled(order, done, false, context).then(() => undefined)
+            : announceCancelled(order, done, context).then(() => undefined)
     );
 };
 

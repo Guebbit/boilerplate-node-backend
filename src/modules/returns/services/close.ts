@@ -12,7 +12,6 @@ import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { CLOSABLE_RETURN_STATUSES } from '../domain';
 import { returnClosedEvent } from './outcome';
-import { mailReturnNotice } from './notify';
 import { syncReturnStatus } from './projection';
 
 /**
@@ -60,19 +59,5 @@ export const closeReturn = (id: string): Promise<ReturnDocument | null> =>
     ).then((closed) => {
         if (!closed) return null;
 
-        return syncReturnStatus(String(closed.orderId))
-            .then(() => orderService.getById(String(closed.orderId)))
-            .then((order) =>
-                order
-                    ? mailReturnNotice('return-closed', order, {
-                          returnPostage: closed.returnPostage,
-                          at: closed.closedAt ?? new Date(),
-                          refund: {
-                              amount: closed.refundAmount ?? 0,
-                              currency: closed.currency
-                          }
-                      })
-                    : undefined
-            )
-            .then(() => closed);
+        return syncReturnStatus(String(closed.orderId)).then(() => closed);
     });

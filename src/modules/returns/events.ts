@@ -15,6 +15,13 @@ declare module '@kernel/events' {
         'return.requested': { returnId: string; orderId: string; reason: string };
 
         /**
+         * Staff answered a request: approved it or declined it. Written with the decision, so the
+         * customer's mail is sent exactly when a decision stood. Internal — no AsyncAPI channel
+         * carries it.
+         */
+        'return.decided': { returnId: string; orderId: string; decision: 'approved' | 'declined' };
+
+        /**
          * The goods arrived and went back on sale — one `restock` movement per line, in the same
          * transaction as the status move.
          */
@@ -43,3 +50,6 @@ export const RETURN_RECEIVED = 'return.received';
 
 /** See `DomainEventMap['return.closed']` above. */
 export const RETURN_CLOSED = 'return.closed';
+
+/** See `DomainEventMap['return.decided']` above. */
+export const RETURN_DECIDED = 'return.decided';
