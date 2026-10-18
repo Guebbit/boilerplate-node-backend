@@ -70,6 +70,12 @@ export interface AuthContext {
      */
     twoFactorArmed: boolean;
     /**
+     * Whether an authenticator app (TOTP) is armed, read fresh like `twoFactorArmed`. A staff role
+     * grants nothing while this is `false`: a mailed code is not a second factor for a role that
+     * reads customer data (`callerInScope` in `kernel/permissions.ts`).
+     */
+    authenticatorArmed: boolean;
+    /**
      * Whether the account's address is proven (`User.verifiedAt` is set), read fresh on every
      * request. It is what makes the account a `customer` rather than `unverified` — the audience
      * role is computed from this, never stored (`audienceOf` in `kernel/permissions.ts`).

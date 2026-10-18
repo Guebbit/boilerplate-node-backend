@@ -23,6 +23,7 @@ flowchart LR
     invoicing["invoicing"]
     orders["orders"]
     returns["returns"]
+    shop["shop"]
     stats["stats"]
 
     cart --> payments
@@ -32,6 +33,7 @@ flowchart LR
     payments --> access
     payments --> inventory
     payments --> orders
+    payments --> shop
     orders -. "order.cancelled" .-> payments
     orders -. "order.created" .-> payments
     payments -. "payment.refunded" .-> invoicing
@@ -42,7 +44,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class inventory,invoicing,returns,stats supporting;
+    class inventory,invoicing,returns,shop,stats supporting;
     class access generic;
     class payments centre;
 ```

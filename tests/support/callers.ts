@@ -26,6 +26,7 @@ const identity = (id: string) => ({
     authTime: Math.floor(Date.now() / 1000),
     amr: ['pwd'] as readonly string[],
     twoFactorArmed: false,
+    authenticatorArmed: false,
     analyticsConsent: false
 });
 
@@ -40,6 +41,8 @@ export const asRole = (role: string, id = 'test-user'): AuthContext => ({
     ...identity(id),
     roles: { tenant: isAudienceName(role) ? null : role, platform: null },
     tenantId: TEST_TENANT_ID,
+    // Staff hold an authenticator app, or their role grants nothing (`callerInScope`).
+    authenticatorArmed: !isAudienceName(role),
     verified: role !== 'unverified'
 });
 
@@ -75,6 +78,7 @@ export const asOperator = (id = 'test-operator'): AuthContext => ({
     ...identity(id),
     roles: { tenant: null, platform: 'operator' },
     tenantId: TEST_TENANT_ID,
+    authenticatorArmed: true,
     verified: true
 });
 

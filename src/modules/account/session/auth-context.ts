@@ -59,6 +59,7 @@ export const resolveProof = (
                 // Read fresh, like `analyticsConsent`: arming or removing a factor applies to the
                 // very next request, whatever the session carries.
                 twoFactorArmed: user.twoFactorEnabledAt !== undefined,
+                authenticatorArmed: user.authenticatorEnabledAt !== undefined,
                 // Read fresh like the factor above: verifying the address makes the account a
                 // customer on its very next request, with no role to promote.
                 verified: Boolean(user.verifiedAt),

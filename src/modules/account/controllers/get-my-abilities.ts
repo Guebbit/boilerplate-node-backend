@@ -23,6 +23,7 @@ import {
     anonymousCaller,
     callerInScope,
     permissionModelVersion,
+    staffRoleWithheld,
     PERMISSION_RULES,
     PERMISSION_SUBJECTS
 } from '@kernel/permissions';
@@ -80,6 +81,7 @@ export const getMyAbilities = (request: Request, response: Response) => {
         platform: platform ? rulesFor(platform) : [],
         // Empty for a stranger: they grant nothing. Same rule as the 409, so the two cannot drift.
         grantableRoles: context ? grantableRoles('tenant', tenant.permissions) : [],
+        secondFactorRequired: context ? staffRoleWithheld(context) : false,
         version: modelVersion,
         subjects: PERMISSION_SUBJECTS
     });

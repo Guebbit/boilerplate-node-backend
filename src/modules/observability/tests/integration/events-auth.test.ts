@@ -1,7 +1,7 @@
 import express from 'express';
 import supertest from 'supertest';
 import cookieParser from 'cookie-parser';
-import { api } from '@tests/http';
+import { api, loginCompleting } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import {
@@ -22,9 +22,7 @@ setupTestDb();
 /** Logs in through the real route and returns the user plus the `jwt` refresh cookie it sets. */
 const signIn = async (role: 'admin' | 'user') => {
     const user = await (role === 'admin' ? createAdminUser() : createUser());
-    const response = await api()
-        .post('/account/login')
-        .send({ email: user.email, password: PLAIN_PASSWORD });
+    const response = await loginCompleting(user.email, PLAIN_PASSWORD);
 
     const cookies = response.get('Set-Cookie') ?? [];
     return { user, cookie: cookies.find((cookie) => cookie.startsWith('__Host-session='))! };

@@ -20,8 +20,18 @@ declare module '@kernel/events' {
          * AsyncAPI channel carries it, nothing outside this application needs to know.
          */
         'account.sessions-revoked': { userId: string; reason: SessionsRevokedReason };
+
+        /**
+         * A staff member's last authenticator app was removed: their role grants nothing from now
+         * on, and `api-keys` revokes what they minted under it. Not a compromise, so it is not a
+         * session revocation. Internal only: no AsyncAPI channel carries it.
+         */
+        'account.authenticator-removed': { userId: string };
     }
 }
 
 /** See `DomainEventMap['account.sessions-revoked']` above. */
 export const ACCOUNT_SESSIONS_REVOKED = 'account.sessions-revoked';
+
+/** See `DomainEventMap['account.authenticator-removed']` above. */
+export const ACCOUNT_AUTHENTICATOR_REMOVED = 'account.authenticator-removed';

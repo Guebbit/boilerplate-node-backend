@@ -16,6 +16,7 @@
 import {
     SEED_ADMIN_EMAIL,
     SEED_ADMIN_PASSWORD,
+    SEED_STAFF_TOTP_SECRET,
     SEED_USER_EMAIL,
     SEED_USER_PASSWORD
 } from '@scenarios/accounts';
@@ -361,7 +362,12 @@ const requireBankTransfer = (owner: Caller): Promise<void> =>
 export const driveShopHistory = async (
     baseUrl: string
 ): Promise<Readonly<Record<string, string>>> => {
-    const owner = await signIn(baseUrl, SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD);
+    const owner = await signIn(
+        baseUrl,
+        SEED_ADMIN_EMAIL,
+        SEED_ADMIN_PASSWORD,
+        SEED_STAFF_TOTP_SECRET
+    );
     const customer = await signIn(baseUrl, SEED_USER_EMAIL, SEED_USER_PASSWORD);
 
     await requireBankTransfer(owner);

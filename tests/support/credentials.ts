@@ -10,6 +10,7 @@ import { resolveCredential, type ResolvedCredential } from '@kernel/authenticati
 import type { TenantCallerContext } from '@types';
 import { createUser } from '@modules/users/tests/factories';
 import { mint } from '@modules/api-keys/services/api-keys';
+import { armAuthenticator } from './authenticator';
 
 /**
  * Mint a credential holding exactly `permissions` and return its plaintext secret.
@@ -20,6 +21,8 @@ import { mint } from '@modules/api-keys/services/api-keys';
  */
 export const credentialHolding = async (permissions: string[]): Promise<string> => {
     const user = await createUser({ verifiedAt: new Date() }, 'admin');
+    // The minter's staff role counts only with an authenticator app armed, for a key as for a session.
+    await armAuthenticator(user.id);
     const context: TenantCallerContext = {
         caller: {
             id: String(user._id),

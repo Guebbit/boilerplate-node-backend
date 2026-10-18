@@ -17,6 +17,7 @@ import { cookieValue, setCookie } from './cookies';
 import { freezeDate, advanceDate } from './clock';
 import { reauthWindowSeconds } from '@kernel/config';
 import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { armStaffAuthenticator, withLoginCode } from './authenticator';
 import type { UserDocument } from '@modules/users';
 
 /** The one instance every test in this process shares — see this file's own docblock. */
@@ -78,6 +79,36 @@ export const authenticateAsRole = async (role: string): Promise<AuthenticatedTes
 };
 
 /**
+ * Signs an account in through `POST /account/login`, answering the second step too when the
+ * account carries an authenticator app — a staff account does, or its role grants nothing.
+ *
+ * @param email - the account's address
+ * @param password - its password
+ * @param body - more of the login body (`remember`, `transport`), sent to both steps
+ * @param options - `arm: false` signs a staff account in as it is, for a suite that enrols the app itself
+ */
+export const loginCompleting = async (
+    email: string,
+    password: string,
+    body: Record<string, unknown> = {},
+    options: { arm?: boolean } = {}
+): Promise<request.Response> => {
+    if (options.arm !== false) await armStaffAuthenticator(email);
+
+    const first = await api()
+        .post('/account/login')
+        .send({ email, password, ...body });
+    if (first.status !== 200 || first.body?.data?.mfaRequired !== true) return first;
+
+    // An armed account answers a challenge, not a session: finish it the way its app would.
+    return withLoginCode(email, (code) =>
+        api()
+            .post('/account/login/2fa')
+            .send({ challenge: first.body.data.challenge, code, ...body })
+    );
+};
+
+/**
  * Log an existing account in through `POST /account/login` and answer the bearer a client sends
  * next. Mode-agnostic: `transport: 'bearer'` is ignored in `jwt` mode (the access token comes
  * back) and in `cookie` mode makes the login hand back a `ses_…` id to send as a bearer instead of
@@ -86,16 +117,21 @@ export const authenticateAsRole = async (role: string): Promise<AuthenticatedTes
  * @param email - the account's address
  * @param password - its password; the factories' shared one by default
  * @param body - more of the login body (`remember`)
+ * @param options - `arm: false` leaves a staff account without an authenticator app
  * @throws {Error} when the login is refused or answers no credential
  */
 export const loginBearer = async (
     email: string,
     password: string = PLAIN_PASSWORD,
-    body: Record<string, unknown> = {}
+    body: Record<string, unknown> = {},
+    options: { arm?: boolean } = {}
 ): Promise<`Bearer ${string}`> => {
-    const response = await api()
-        .post('/account/login')
-        .send({ email, password, transport: 'bearer', ...body });
+    const response = await loginCompleting(
+        email,
+        password,
+        { transport: 'bearer', ...body },
+        options
+    );
 
     if (response.status !== 200)
         throw new Error(
@@ -146,9 +182,7 @@ export const staleBearerFor = async (
     tier: 'sensitive' | 'critical'
 ): Promise<`Bearer ${string}`> => {
     freezeDate();
-    const response = await api()
-        .post('/account/login')
-        .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'short' });
+    const response = await loginCompleting(user.email, PLAIN_PASSWORD, { remember: 'short' });
     const cookie = setCookie(response, '__Host-session');
     if (!cookie) throw new Error('staleBearerFor: the login set no session cookie');
 

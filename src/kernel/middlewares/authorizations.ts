@@ -35,6 +35,7 @@ import {
     callerForSubject,
     callerInScope,
     ruleId,
+    staffRoleWithheld,
     type StepUpTier
 } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
@@ -168,6 +169,7 @@ const applySession = (
         authTime: user.authTime,
         amr: user.amr,
         twoFactorArmed: user.twoFactorArmed,
+        authenticatorArmed: user.authenticatorArmed,
         verified: user.verified,
         analyticsConsent: user.analyticsConsent
     };
@@ -470,6 +472,19 @@ const challengeForFreshAuth = (
 };
 
 /**
+ * Would this session hold the rule if its authenticator app were armed — what tells "enrol to use
+ * your staff tools" from a plain refusal. Asked only after the rule check failed, and only of a
+ * session whose staff role is withheld, so it hands a person nothing they had not earned.
+ *
+ * @param context - the resolved session
+ * @param action - the action the guard asks for
+ * @param subject - the subject it asks about
+ */
+const wouldHoldOnceEnrolled = (context: AuthContext, action: string, subject: string): boolean =>
+    staffRoleWithheld(context) &&
+    holds(callerForSubject({ ...context, authenticatorArmed: true }, subject), action, subject);
+
+/**
  * Reject with 403 unless the resolved caller holds a rule for `action` on `subject`. MUST run
  * after `isAuth`.
  *
@@ -572,6 +587,27 @@ export const requirePermission = (action: string, subject: string) => {
             });
             challengeForFreshAuth(response, reauthWindowSeconds(declared.stepUp));
 
+            return;
+        }
+
+        // A staff role switched off for want of an authenticator app: say so, so the client can
+        // send the person to enrol instead of showing a bare refusal.
+        if (
+            !allowed &&
+            request.authContext &&
+            wouldHoldOnceEnrolled(request.authContext, action, subject)
+        ) {
+            auditRefusal(request, {
+                action: coreAuditActions.SECURITY_FORBIDDEN,
+                actorScope: scope,
+                metadata: { reason: 'second_factor_enrollment_required', permission }
+            });
+            rejectResponse(response, 403, [
+                {
+                    code: ERROR_CODES.SECOND_FACTOR_ENROLLMENT_REQUIRED,
+                    message: t(errorLocaleKeyFor(ERROR_CODES.SECOND_FACTOR_ENROLLMENT_REQUIRED))
+                }
+            ]);
             return;
         }
 

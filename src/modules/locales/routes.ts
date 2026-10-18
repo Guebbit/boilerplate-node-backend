@@ -1,8 +1,8 @@
 /**
  * @module
  * Express router for locale discovery and translation administration. The four GET reads are
- * public — an unauthenticated client is exactly who needs a dictionary — with only the
- * manifest taking `getAuth`, to include inactive languages for admins. Every write is gated per
+ * public — an unauthenticated client is exactly who needs a dictionary — with the manifest and
+ * the messages taking `getAuth`, to include inactive languages for staff. Every write is gated per
  * mount (`getAuth, isAuthOrCredential, requirePermission(...)` spelled on each route, not a
  * shared `router.use`) and invalidates the shared Redis cache. Route order matters: `/apps`
  * and `/:locale/messages` must be declared before `/:locale`, or Express's first-match wins the
@@ -58,10 +58,10 @@ const messagesCache = setCache(3600, {
  * one failure this tier cannot afford. Costs one conditional request per read, answered `304`
  * when nothing changed.
  *
- * `scopeKey`: three of the four never see `request.authContext` at all (no `getAuth` mounted
- * ahead of them), so they are trivially guest-equivalent; `GET /locales` does take `getAuth`, for
- * the admin manifest that includes inactive languages — `hasAnonymousReadScope` is what tells
- * that caller apart from a guest and bypasses Redis for them, safe BY CONSTRUCTION.
+ * `scopeKey`: two of the four never see `request.authContext` at all (no `getAuth` mounted
+ * ahead of them), so they are trivially guest-equivalent; `GET /locales` and the messages read do
+ * take `getAuth`, for the inactive languages staff may see — `hasAnonymousReadScope` is what
+ * tells that caller apart from a guest and bypasses Redis for them, safe BY CONSTRUCTION.
  */
 const publicLocaleCache = setCache(3600, {
     tags: ['locales'],
@@ -78,8 +78,9 @@ router.get('/', getAuth, publicLocaleCache, getLocales);
 // GET /locales/apps — the keyspaces an entry can belong to. Before `/:locale`, see above.
 router.get('/apps', publicLocaleCache, getLocaleApps);
 
-// GET /locales/:locale/messages — the client's dictionary, out of the database
-router.get('/:locale/messages', messagesCache, getLocaleMessages);
+// GET /locales/:locale/messages — the client's dictionary, out of the database.
+// `getAuth` (and only that: no token still answers) so staff can preview an inactive language.
+router.get('/:locale/messages', getAuth, messagesCache, getLocaleMessages);
 
 // GET /locales/:locale — the API's own dictionary, off the filesystem
 router.get('/:locale', publicLocaleCache, getLocaleDictionary);

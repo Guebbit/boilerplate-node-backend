@@ -39,9 +39,13 @@ import {
     SEED_MANAGER_ID,
     SEED_WAREHOUSE_ID,
     SEED_SUPPORT_ID,
-    SEED_OPERATOR_ID
+    SEED_OPERATOR_ID,
+    SEED_STAFF_TOTP_SECRET
 } from '@scenarios/accounts';
+import { Types } from 'mongoose';
 import { generateBackupCodeSalt, hashBackupCodes } from '@modules/account/two-factor/backup-codes';
+import { encryptTotpSecret } from '@modules/account/two-factor/totp';
+import type { UserOverrides } from '@modules/users/factories';
 import userImages from './users-images.generated.json';
 import { makeUser } from '@modules/users/factories';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
@@ -80,6 +84,31 @@ export const SEED_CUSTOMER_IDS = {
  * as long as the two stay together.
  */
 const twoFactorBackupCodeSalt = generateBackupCodeSalt();
+
+/**
+ * An authenticator app already armed with the shared staff secret — what a staff role needs
+ * before it grants anything. The entry's id is the account's own, so the encrypted secret (bound
+ * to that id) is reproducible per account and a reseed writes the same row.
+ *
+ * @param userId - the account's id, which doubles as its one method entry's id
+ */
+const armedAuthenticator = (
+    userId: string
+): Pick<UserOverrides, 'twoFactorEnabledAt' | 'authenticatorEnabledAt' | 'twoFactorMethods'> => {
+    const enrolledAt = new Date();
+    return {
+        twoFactorEnabledAt: enrolledAt.toISOString(),
+        authenticatorEnabledAt: enrolledAt,
+        twoFactorMethods: [
+            {
+                _id: new Types.ObjectId(userId),
+                method: 'totp',
+                enrolledAt,
+                secret: encryptTotpSecret(SEED_STAFF_TOTP_SECRET, userId)
+            }
+        ]
+    };
+};
 
 /**
  * The five personas — customers in one particular state each, written straight to the collection
@@ -154,8 +183,10 @@ const staffUsers = (
     makeUser({
         id,
         username: name,
-        ...seedStaffCredentials[name],
+        email: seedStaffCredentials[name].email,
+        password: seedStaffCredentials[name].password,
         verifiedAt: new Date(),
+        ...armedAuthenticator(id),
         ...userImages.root
     })
 );
@@ -171,6 +202,7 @@ const namedUsers = [
         username: 'root',
         email: SEED_ADMIN_EMAIL,
         password: SEED_ADMIN_PASSWORD,
+        ...armedAuthenticator(SEED_ADMIN_ID),
         /*
          * Verified, not the schema's absent-until-proven default — a seed account exists to be
          * logged into, not to demonstrate the "verify your email" nag banner to everyone who boots
@@ -200,6 +232,7 @@ const namedUsers = [
         email: SEED_EDITOR_EMAIL,
         password: SEED_EDITOR_PASSWORD,
         verifiedAt: new Date(),
+        ...armedAuthenticator(SEED_EDITOR_ID),
         ...userImages.root
     }),
     makeUser({
@@ -208,6 +241,7 @@ const namedUsers = [
         email: SEED_MODERATOR_EMAIL,
         password: SEED_MODERATOR_PASSWORD,
         verifiedAt: new Date(),
+        ...armedAuthenticator(SEED_MODERATOR_ID),
         ...userImages.root
     }),
     ...personaUsers,

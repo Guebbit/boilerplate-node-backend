@@ -10,6 +10,9 @@ import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 import type { SessionsRevokedReason } from '@modules/account';
 
+/** Why a person's keys were revoked wholesale: their sessions were ended, or their staff authenticator app went. */
+export type KeysRevokedReason = SessionsRevokedReason | 'authenticator-removed';
+
 /**
  * Sent to the minter the moment a credential is created: a stolen session that mints a key is
  * otherwise silent, and the key outlives the session. Carries no secret and no link that acts.
@@ -50,7 +53,7 @@ export const apiKeyMintedEmail = (
  */
 export const apiKeysRevokedEmail = (
     locale: string,
-    reason: SessionsRevokedReason,
+    reason: KeysRevokedReason,
     credentials: readonly string[]
 ): EmailContent => {
     const t = translator(locale);

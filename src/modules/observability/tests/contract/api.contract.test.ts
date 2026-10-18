@@ -11,7 +11,7 @@
 import type { IncomingMessage } from 'node:http';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs } from '@tests/http';
+import { api, authenticateAs, loginCompleting } from '@tests/http';
 import { setCookie } from '@tests/cookies';
 import { createAdminUser, createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { connection } from '@infrastructure/runtime/database';
@@ -284,9 +284,7 @@ const sessionCookie = async (role: 'admin' | 'customer') => {
     const user = await (role === 'admin'
         ? createAdminUser(identity)
         : createUser(identity, 'customer'));
-    const login = await api()
-        .post('/account/login')
-        .send({ email: user.email, password: PLAIN_PASSWORD });
+    const login = await loginCompleting(user.email, PLAIN_PASSWORD);
     return `__Host-session=${/^__Host-session=([^;]+)/.exec(setCookie(login, '__Host-session') ?? '')?.[1] ?? ''}`;
 };
 

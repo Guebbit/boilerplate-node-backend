@@ -24,18 +24,21 @@ import { languageNotFound } from './languages';
  *
  * The backend app, an unconfigured id, and an INACTIVE language all answer 404 exactly as an
  * unknown language does — a 403 or empty 200 for "inactive" would leak that a draft translation
- * exists.
+ * exists. The one exception is a caller who may read inactive languages (`includeInactive`): staff
+ * previewing a draft before it goes live.
  *
  * @param app - whose dictionary; omitted, the deployment's default frontend app
+ * @param includeInactive - the caller's read scope reaches inactive languages (see `callerScope`)
  */
 export const readMessages = (
     tag: string,
-    app: LocaleApp = frontendApp()
+    app: LocaleApp = frontendApp(),
+    includeInactive = false
 ): Promise<ResponseSuccess<LocaleMessages> | ResponseReject> => {
     if (!isFrontendApp(app)) return Promise.resolve(languageNotFound());
 
     return localeRepository.findByTag(tag).then((language) => {
-        if (!language?.active) return languageNotFound();
+        if (!language || !(language.active || includeInactive)) return languageNotFound();
 
         return localeEntryRepository.listEntries(language.tag, app).then((entries) =>
             generateSuccess({

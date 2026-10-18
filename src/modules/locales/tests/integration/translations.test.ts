@@ -151,7 +151,7 @@ describe('upsertEntityTranslations', () => {
         localeService.setTranslatables(real);
     });
 
-    it('refuses a locale that is not active', async () => {
+    it('drafts content in a locale that is not active, and the editor lists it', async () => {
         const product = await createProduct();
         await givenLocale('it', { active: false });
 
@@ -163,7 +163,45 @@ describe('upsertEntityTranslations', () => {
             }
         );
 
-        expect(result.status).toBe(422);
+        expect(result.success).toBe(true);
+        expect(result.data?.translations.map((row) => row.locale)).toEqual(['it']);
+    });
+
+    it('does not serve a draft locale’s text, nor find a product through it', async () => {
+        const product = await createProduct();
+        const id = String(product._id);
+        await givenLocale('it', { active: false });
+        await localeService.upsertEntityTranslations('product', id, {
+            it: { fields: { title: 'Cuccia' } }
+        });
+
+        const resolved = await translationRepository.resolveEntityFields('product', [id], ['it']);
+        const found = await translationRepository.findEntityIdsByFieldMatch(
+            'product',
+            ['title'],
+            'Cuccia',
+            ['it']
+        );
+
+        expect(resolved.size).toBe(0);
+        expect(found).toEqual([]);
+    });
+
+    it('serves that text again once the language goes live', async () => {
+        const product = await createProduct();
+        const id = String(product._id);
+        await givenLocale('it', { active: false });
+        await localeService.upsertEntityTranslations('product', id, {
+            it: { fields: { title: 'Cuccia' } }
+        });
+        const draft = await localeRepository.findByTag('it');
+        if (!draft) throw new Error('the draft language was just created');
+        draft.active = true;
+        await localeRepository.save(draft);
+
+        const resolved = await translationRepository.resolveEntityFields('product', [id], ['it']);
+
+        expect(resolved.get(id)).toEqual({ title: 'Cuccia' });
     });
 
     it('writes the fallback locale even with no locale row for it', async () => {

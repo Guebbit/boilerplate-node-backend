@@ -5,6 +5,7 @@
  * testable without a database. See `docs/modules/delivery.md#the-two-records`.
  */
 
+import { dayInZone } from '@domain-primitives/time';
 import {
     FulfillmentConsent,
     FulfillmentHoldReason,
@@ -99,13 +100,6 @@ const toFulfillmentLine = ({ productId, title, quantity }: GroupableLine): Fulfi
     cancelledQuantity: 0
 });
 
-/**
- * The calendar day a waiting date falls in, as its own group key. UTC days, like every other
- * date rule here.
- * @param date - a release or promised date
- */
-const dayKey = (date: Date): string => date.toISOString().slice(0, 10);
-
 /** A line, or the part of one, that waits for stock, with what it waits for. */
 interface Waiting {
     line: GroupableLine;
@@ -159,7 +153,7 @@ const promisedAt = (group: readonly Waiting[]): Date =>
  *   ship with the physical ones);
  * - the `noWithdrawal` lines that ship now get one `open` fulfillment order of their own;
  * - waiting lines (a preorder, or the owed part of a line the shelf half covered) get one
- *   fulfillment order per distinct day, per cause and per `noWithdrawal` value, `on_hold` for
+ *   fulfillment order per distinct shop day, per cause and per `noWithdrawal` value, `on_hold` for
  *   `awaiting_stock`, with `agreedAt` and `expectedAt` both the group's promised instant (the
  *   latest date among its lines). A group whose date is the 30-day default is marked, so a later
  *   change to the catalogue's date leaves it alone.
@@ -170,9 +164,13 @@ const promisedAt = (group: readonly Waiting[]): Date =>
  * bespoke goods stands.
  *
  * @param lines - the order's lines with the facts frozen on them
+ * @param timeZone - the shop's zone: two dates are one group when they are the same shop day
  * @returns at least one fulfillment order for any non-empty order
  */
-export const groupOrderLines = (lines: readonly GroupableLine[]): FulfillmentOrderDraft[] => {
+export const groupOrderLines = (
+    lines: readonly GroupableLine[],
+    timeZone: string
+): FulfillmentOrderDraft[] => {
     const parts = lines.map((line) => partsOf(line));
     const now = parts.flatMap(({ ready }) => (ready ? [ready] : []));
     const waiting = parts.flatMap(({ wait }) => (wait ? [wait] : []));
@@ -184,7 +182,7 @@ export const groupOrderLines = (lines: readonly GroupableLine[]): FulfillmentOrd
     const byKey = new Map<string, Waiting[]>();
     for (const wait of waiting) {
         const bespoke = wait.line.noWithdrawal === true ? 1 : 0;
-        const key = `${dayKey(wait.date)}|${bespoke}|${wait.cause}|${wait.defaulted ? 1 : 0}`;
+        const key = `${dayInZone(wait.date, timeZone)}|${bespoke}|${wait.cause}|${wait.defaulted ? 1 : 0}`;
         byKey.set(key, [...(byKey.get(key) ?? []), wait]);
     }
 

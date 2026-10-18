@@ -14,6 +14,7 @@
         "error-not-found": "Questo elemento non esiste più.",
         "error-rate-limited": "Troppe richieste. Riprova tra poco.",
         "error-reauth-required": "Conferma che sei tu prima di continuare.",
+        "error-second-factor-enrollment-required": "Configura un'app di autenticazione per usare gli strumenti dello staff.",
         "error-antibot-verification-failed": "Non è stato possibile verificare che questa richiesta provenga da una persona. Riprova la verifica.",
         "error-antibot-no-challenge": "Questa installazione non emette una verifica da risolvere.",
         "error-email-not-verified": "Conferma il tuo indirizzo email prima di continuare.",

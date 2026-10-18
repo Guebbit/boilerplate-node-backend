@@ -8,7 +8,13 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs, authenticateAsRole, bearerForCookie } from '@tests/http';
+import {
+    api,
+    authenticateAs,
+    authenticateAsRole,
+    bearerForCookie,
+    loginCompleting
+} from '@tests/http';
 import { MISSING_ID } from '@tests/ids';
 import { setCookie } from '@tests/cookies';
 import { freezeDate, advanceDate } from '@tests/clock';
@@ -490,9 +496,7 @@ describe('POST /delivery/shipments/{id}/deliver', () => {
  */
 const loginAdminRemembered = async () => {
     const user = await createAdminUser({ verifiedAt: new Date() });
-    const response = await api()
-        .post('/account/login')
-        .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'short' });
+    const response = await loginCompleting(user.email, PLAIN_PASSWORD, { remember: 'short' });
     const jwtCookie = setCookie(response, '__Host-session');
     if (!jwtCookie) throw new Error('login set no jwt cookie');
     return jwtCookie;

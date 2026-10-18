@@ -552,7 +552,7 @@ flowchart LR
     shipped -- "remainder cancelled after every arrival" --> late["delivered<br/><i>withdrawUntil = from the cancellation, the later date</i>"]
 ```
 
-- **`conformityUntil` is frozen beside it**, two calendar years from the arrival (the legal guarantee of conformity); `returns` judges a defect or a wrong item by it, see [the two deadlines](./returns.md#the-two-deadlines).
+- **`conformityUntil` is frozen beside it**, two calendar years from the arrival plus one UTC day of margin (the legal guarantee of conformity); `returns` judges a defect or a wrong item by it, see [the two deadlines](./returns.md#the-two-deadlines).
 - **`withdrawUntil` is frozen, never recomputed** — the same "freeze the fact at the moment it
   happens" rule `shippingCost` and `currency` follow, so a config change cannot move a promise
   already made. Goods count from delivery (Art. 9(2)(b)); digital content from the conclusion of the
@@ -564,7 +564,9 @@ flowchart LR
   `orders` cannot read `delivery`'s own timestamps.
 - **The window ends with the last hour of its last day.** The day of the event is not counted and
   the last day of the period is counted whole (CRD recital 41 → Regulation 1182/71 Art. 3(1),
-  3(2)(c)), in UTC.
+  3(2)(c)), in UTC. A date in an email is the opposite case: staff type it on the shop's clock, so it
+  is printed in `NODE_SHOP_TIMEZONE` (the delivery mails, the order confirmation, the bank-transfer
+  deadline with its zone named, the API-key expiry in UTC, named).
 - **No weekend or holiday roll-over is computed.** Art. 3(4) moves a deadline that lands on one to
   the next working day; closing early would be illegal, offering more never is. So the period is
   long enough that the move cannot matter:
@@ -670,7 +672,7 @@ when the shop offers a longer withdrawal period.
 | Variable                               | Default | Meaning                                                                                                                                                                                        |
 | -------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NODE_WITHDRAWAL_PERIOD_DAYS`          | `30`    | Days a consumer has to withdraw. The legal 14 plus the margin in [the withdrawal window](#the-withdrawal-window) gives a floor of 21, so a smaller value is refused at read; the default is 30 |
-| `NODE_ORDER_PII_RETENTION_DAYS`        | `3650`  | Days after an order's `createdAt` (or account erasure or inactivity minimisation, if later) before `reap:orders` replaces its remaining personal data with placeholders                        |
+| `NODE_ORDER_PII_RETENTION_DAYS`        | `3653`  | Days after an order's `createdAt` (or account erasure or inactivity minimisation, if later) before `reap:orders` replaces its remaining personal data with placeholders                        |
 | `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS` | `1095`  | Days after a timeline row's own instant before `reap:orders` unsets the free text staff wrote on it (an override's reason). The row stays                                                      |
 | `NODE_ORDER_EXPORT_MAX_ROWS`           | `20000` | Most orders one `GET /orders/export` may carry. Over it: `422` `ORDER_EXPORT_TOO_LARGE`, before any byte of the file                                                                           |
 | `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`     | `10`    | Exports allowed per window, per ACCOUNT                                                                                                                                                        |

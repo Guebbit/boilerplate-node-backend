@@ -556,6 +556,8 @@ describe('a credential outlives a session, so ending sessions wholesale ends cre
         expect(mails).toHaveLength(1);
         expect(mails[0].to).toBe('minter-mail@example.com');
         expect(JSON.stringify(mails[0].data)).not.toContain(minted.data?.secret ?? 'missing');
+        // The expiry names its zone: a bare date reads as the reader's own day.
+        expect(String(mails[0].data.body)).toContain('UTC');
     });
 
     it('revokes every live key a person minted when they log out everywhere, and mails the list', async () => {

@@ -130,6 +130,11 @@ page and types. Each password is overridable — `NODE_SEED_ADMIN_PASSWORD` for 
 `NODE_SEED_USER_PASSWORD`, `NODE_SEED_EDITOR_PASSWORD`, `NODE_SEED_MODERATOR_PASSWORD`, and one per
 persona and staff account (below) — change both `.env` files together, never one alone.
 
+Every staff login also carries an authenticator app (a staff role grants nothing without one), all
+armed with `NODE_SEED_STAFF_TOTP_SECRET`. The login asks a code on top of the password; the
+scenario description publishes the secret beside each staff login as `totpSecret`, so a journey
+computes the code instead of keeping a copy.
+
 **The password is stored plaintext on purpose.** `userSchema`'s pre-save hook hashes it on the way
 in, so a hash written there would drift from that hook and lose its plaintext. It never reaches a
 response — `password` is `select: false` and the user transform omits it — which is why

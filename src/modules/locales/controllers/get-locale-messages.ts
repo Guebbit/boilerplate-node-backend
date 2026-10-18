@@ -9,12 +9,14 @@ import { GetLocaleMessagesQueryParams } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
 import { localeService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
+import { hasAnonymousReadScope } from '@kernel/access/query';
 
 /**
  * GET /locales/:locale/messages
  * The client's dictionary for one language, built from the stored entries and served
  * nested to match GET /locales/:locale. Public and cacheable; every admin write
- * invalidates the `locales` tag, so an edit is visible on the next request.
+ * invalidates the `locales` tag, so an edit is visible on the next request. A caller whose read
+ * scope differs from a stranger's (`display:Locale`) also gets inactive languages — the draft preview.
  */
 export const getLocaleMessages = (
     request: Request<{ locale: string }, unknown, unknown, unknown>,
@@ -29,7 +31,11 @@ export const getLocaleMessages = (
     return (
         localeService
             // `?app=` names which frontend's copy; omitted, the deployment's default one.
-            .readMessages(request.params.locale, query.app)
+            .readMessages(
+                request.params.locale,
+                query.app,
+                !hasAnonymousReadScope(localeService.callerScope, request.caller)
+            )
             .then((result) => {
                 if (refused(response, result)) return;
                 return successResponse<LocaleMessages>(response, result.data);
