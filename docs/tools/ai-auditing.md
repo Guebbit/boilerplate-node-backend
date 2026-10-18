@@ -10,8 +10,7 @@ approximating one. This repo has ~56 files under `docs/` stating rules no schema
 
 `scripts/audit/` holds the prompts that work in that gap, plus two that judge something else:
 `code-shape` judges design, `test-honesty` judges whether a test can fail at all. They are plain
-markdown, run by hand against an LLM, and they write reports — `test-honesty` alone edits tests,
-and only when asked.
+markdown, run by hand against an LLM, and they write reports — never code.
 
 ## The one rule
 
@@ -218,10 +217,6 @@ tool:
 The pointer's `allowed-tools` is Claude Code's permission list: `Read`, `Glob`, `Grep`, `Write` and
 a few `Bash` verbs, with no `Edit`. These prompts report; they never touch source.
 
-`test-honesty` is the one exception, and its pointer carries `Edit` and `npx jest` for it. Its
-oracle breaks a line of `src/` for the length of one test run and restores it, and its `--fix`
-edits test files. It never commits, and it never deletes a test — it proposes the deletion.
-
 ::: tip Which model
 Claude for `spec-drift` and `spec-gaps` — long-context reasoning over prose vs. code is exactly
 where small local models confabulate citations most confidently, and a fabricated `file:line` costs
@@ -238,18 +233,19 @@ stay green whatever the code does. Mutation testing finds some of them. This aud
 and names the shape — coverage padding, a mocked subject, a swallowed failure, a title that lies, an
 input that cannot discriminate.
 
-It applies [the one rule](#the-one-rule) with a cheap oracle: **sabotage**. For each suspect test,
-the model writes down what the test's title claims, and the smallest `src/` edit that would break
-that claim. Then the test runs against the broken code.
+It applies [the one rule](#the-one-rule) with Stryker as the oracle. For each suspect test, the
+model writes down what the test's title claims, and the smallest `src/` change that would break
+that claim. Then it looks that change up in Stryker's report, which records per mutant which tests
+ran it and which failed on it. Stryker breaks the code in a sandbox copy; this audit never does.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
 flowchart LR
-    C["Candidate<br/><i>grep, survived mutants,<br/>git history</i>"] --> T["Sabotage<br/>written from the title"]
-    T --> R{"Run the one test<br/>against broken code"}
-    R -->|still green| Y["CONFIRMED"]
-    R -->|red| N["CLEAN —<br/>dropped silently"]
-    Y --> F["--fix: strengthen it,<br/>re-run both ways"]
+    C["Candidate<br/><i>grep, survived mutants,<br/>git history</i>"] --> T["Break<br/>written from the title"]
+    T --> R{"Matching mutant<br/>in Stryker's report"}
+    R -->|survived this test| Y["CONFIRMED"]
+    R -->|killed by this test| N["CLEAN —<br/>dropped silently"]
+    Y --> F["Report, with a<br/>suggested fix in prose"]
 
     classDef ai fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef gate fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -261,12 +257,11 @@ flowchart LR
     class N dead;
 ```
 
-The sabotage comes from the title, never from the assertions. One chosen by reading the assertions
+The break comes from the title, never from the assertions. One chosen by reading the assertions
 proves only that they agree with themselves.
 
-A fix has to pass twice: green on the real code, red under the same sabotage. A fix whose honest
-version fails on the real code is not softened. It is reverted and reported as `BUG?`, because the
-test was hiding a defect and the decision belongs to a human.
+Like every prompt here it only reports. The fix is a human's, written from the report's suggested
+fix and the spec it cites.
 
 ## Reading the output
 
