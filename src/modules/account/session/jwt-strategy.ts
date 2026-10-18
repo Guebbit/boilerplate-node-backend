@@ -10,12 +10,12 @@
 
 import type { Request, Response } from 'express';
 import type { Types } from 'mongoose';
-import { readSessionCookie } from '@kernel/cookies';
+import { bearerOf, readSessionCookie } from '@kernel/cookies';
 import type { Resolution, StreamWatch } from '@kernel/authentication';
 import { logger } from '@infrastructure/adapters/logger';
 import { hashToken } from '@infrastructure/security/hash-token';
 import type { AuthContext, ResolveOptions } from '@types';
-import { sessionRepository } from '../repository';
+import { sessionRepository, type SessionRow } from '../repository';
 import {
     startSession,
     continueSession,
@@ -134,17 +134,18 @@ const retirePresentedSession = (refreshToken: string | undefined): Promise<void>
         : Promise.resolve();
 
 /**
- * What the session behind a refresh cookie carries — its tier, family, start and expiry — so a
+ * What the caller's session carries (found by {@link sessionRowOf}) — its tier, family, start and expiry — so a
  * re-mint continues it instead of starting a fresh one. Read BEFORE the change that ends it: a
  * password change deletes the row. Without a live row of this account the answer is the tier alone.
  */
-const snapshotOf = (request: SessionRequest, userId: string): Promise<SessionSnapshot> => {
+const snapshotOf = (
+    request: SessionRequest,
+    userId: string,
+    followBearer = false
+): Promise<SessionSnapshot> => {
     const credential = readSessionCookie(request);
     return rememberOfRefreshToken(credential, userId).then((remember) =>
-        (credential
-            ? sessionRepository.findByHash(hashToken(credential))
-            : Promise.resolve(undefined)
-        ).then((row) => ({
+        sessionRowOf(request, userId, credential, followBearer).then((row) => ({
             ...(remember && { remember }),
             ...(row?.mode === 'jwt' &&
                 String(row.userId) === userId && {
@@ -153,6 +154,45 @@ const snapshotOf = (request: SessionRequest, userId: string): Promise<SessionSna
                     expiresAt: row.expiresAt
                 })
         }))
+    );
+};
+
+/**
+ * The session row a change continues: the refresh cookie's own row, else — only when asked
+ * (`followBearer`) — the newest live row of the family the request's access token names by `sid`.
+ * Without the fallback, a reauth from a client that sends only its access token would start a
+ * second family and leave the first alive. A change that ends every session (a factor change)
+ * does not ask: the token it was sent with must die with the rest.
+ *
+ * @param request - the request being served
+ * @param userId - the account being changed
+ * @param credential - the refresh cookie, when the request carries one
+ * @param followBearer - whether to fall back to the access token's family
+ */
+const sessionRowOf = (
+    request: SessionRequest,
+    userId: string,
+    credential: string | undefined,
+    followBearer: boolean
+): Promise<SessionRow | undefined> => {
+    if (credential)
+        return sessionRepository.findByHash(hashToken(credential)).then((row) => row ?? undefined);
+
+    const bearer = followBearer ? bearerOf(request.headers.authorization) : undefined;
+    if (!bearer) return Promise.resolve(undefined);
+
+    return (
+        verifyAccessToken(bearer)
+            .then((claims) =>
+                claims.sub === userId
+                    ? sessionRepository.findLiveFamilyRow(userId, claims.sid, 'jwt', new Date())
+                    : undefined
+            )
+            // A token that no longer verifies names no family: the change starts one, as before.
+            .catch((error: unknown) => {
+                if (error instanceof TokenRejection) return undefined;
+                throw error;
+            })
     );
 };
 
@@ -256,13 +296,13 @@ export const jwtStrategy: SessionStrategy = {
             retirePresentedSession(readSessionCookie(request)).then(() => issued)
         ),
 
-    snapshot: snapshotOf,
+    snapshot: (request, userId) => snapshotOf(request, userId),
 
     reissue: (request: SessionRequest & Pick<Request, 'get'>, response, userId, options) => {
         const previous = readSessionCookie(request);
         const ready = options.snapshot
             ? Promise.resolve(options.snapshot)
-            : snapshotOf(request, userId);
+            : snapshotOf(request, userId, true);
         return ready.then((snapshot) =>
             mintSession(
                 response,

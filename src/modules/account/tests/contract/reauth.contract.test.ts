@@ -12,6 +12,7 @@ import { api, bearerForCookie } from '@tests/http';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { createUser, userRepository, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { reauthWindowSeconds } from '@kernel/config';
+import { sessionModel } from '../../model';
 import { mintSession } from '../factories';
 import { bearerIn, claimedAmr } from './support';
 
@@ -324,5 +325,26 @@ describe('POST /account/reauth with a password', () => {
             .send({ password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(422);
+    });
+});
+
+describe('POST /account/reauth by access token alone, in jwt mode', () => {
+    it('continues the login’s session family and retires the refresh cookie it left behind', async () => {
+        setEnvironment({ NODE_SESSION_MODE: 'jwt' });
+        const { user, bearer, jwtCookie } = await sessionFor(['pwd'], true);
+        const familiesBefore = await sessionModel.distinct('familyId', { userId: user._id });
+
+        // The bearer only: no refresh cookie travels with this call.
+        const response = await api()
+            .post('/account/reauth')
+            .set('Authorization', bearer)
+            .send({ method: 'password', password: PLAIN_PASSWORD });
+        const oldCookie = await api().post('/account/refresh').set('Cookie', jwtCookie);
+
+        expect(response.status).toBe(200);
+        expect(await sessionModel.distinct('familyId', { userId: user._id })).toEqual(
+            familiesBefore
+        );
+        expect(oldCookie.status).toBe(401);
     });
 });
