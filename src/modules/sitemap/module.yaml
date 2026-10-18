@@ -1,0 +1,10 @@
+summary: 'sitemap.xml for search engines: the shop pages and every public product, once per language.'
+subdomain: generic
+group: shop
+dependsOn:
+    - locales # one address per language the deployment offers
+    - products # the public catalogue is what a product page's address is built from
+noAudit: 'Read-only, public: it publishes addresses that are already public.'
+frontend:
+    counterparts: []
+    why: 'It has no screen: a search engine reads its files. The frontend only points at it, from its own robots.txt (`VITE_ROBOTS_INDEX`).'

@@ -1,0 +1,97 @@
+openapi: 3.1.0
+info:
+    title: sitemap — module contract
+    version: '0.1.0'
+
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Sitemap
+      description: The shop's pages and products as sitemap files, for search engines.
+
+paths:
+    /sitemap/index.xml:
+        get:
+            tags: [Sitemap]
+            summary: Sitemap index
+            description: >-
+                The one address a search engine needs: it lists `pages.xml` and one `products-{page}.xml` per run of
+                public products. Always an index, so the address the frontend's `robots.txt` names never changes as
+                the catalogue grows. Public; built from the live catalogue on each request and cacheable for an hour.
+            operationId: getSitemapIndex
+            security: []
+            responses:
+                '200':
+                    description: The sitemap index, as XML
+                    headers:
+                        Cache-Control:
+                            description: '`public, max-age=3600`'
+                            schema: { type: string }
+                    content:
+                        application/xml:
+                            schema:
+                                $ref: '#/components/schemas/SitemapDocument'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /sitemap/pages.xml:
+        get:
+            tags: [Sitemap]
+            summary: Sitemap of the shop pages
+            description: >-
+                The static pages (home, about, FAQ, terms, privacy, contact, the catalogue), one `url` per active
+                language, each with `xhtml:link` alternates for every language and `x-default`. No `lastmod`:
+                nothing dates a prose page.
+            operationId: getSitemapPages
+            security: []
+            responses:
+                '200':
+                    description: The shop pages, as XML
+                    headers:
+                        Cache-Control:
+                            description: '`public, max-age=3600`'
+                            schema: { type: string }
+                    content:
+                        application/xml:
+                            schema:
+                                $ref: '#/components/schemas/SitemapDocument'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /sitemap/products-{page}.xml:
+        get:
+            tags: [Sitemap]
+            summary: Sitemap of the public products
+            description: >-
+                One run of the public catalogue (active and not deleted), oldest id first, one `url` per active
+                language with alternates and `x-default`. `lastmod` is the product's `updatedAt`, which a
+                translation edit also moves and a sale does not. A run holds as many products as keep the file at
+                or under 50,000 `url` entries. A number the index does not list answers `404`.
+            operationId: getSitemapProducts
+            security: []
+            parameters:
+                - name: page
+                  in: path
+                  required: true
+                  description: 1-based number of the file, as the index lists it.
+                  schema:
+                      type: integer
+                      minimum: 1
+            responses:
+                '200':
+                    description: The products of this run, as XML
+                    headers:
+                        Cache-Control:
+                            description: '`public, max-age=3600`'
+                            schema: { type: string }
+                    content:
+                        application/xml:
+                            schema:
+                                $ref: '#/components/schemas/SitemapDocument'
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        SitemapDocument:
+            type: string
+            description: >-
+                A sitemap file (sitemaps.org 0.9): an `urlset` of `url` entries, or a `sitemapindex` of `sitemap`
+                entries. Served as `application/xml`, not JSON.
