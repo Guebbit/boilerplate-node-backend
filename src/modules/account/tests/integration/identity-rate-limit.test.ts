@@ -243,6 +243,30 @@ describe('address-block keying', () => {
     });
 });
 
+describe('passwordCheckLimiters', () => {
+    afterEach(() => jest.resetModules());
+
+    it('spends one block budget across addresses of the same /24, while each address stays under its own', async () => {
+        const passwordCheckLimiters = await withAccountRateLimits(
+            {
+                NODE_PASSWORD_CHECK_RATE_LIMIT_MAX: '50',
+                NODE_PASSWORD_CHECK_RATE_LIMIT_BLOCK_MAX: '2'
+            },
+            (module) => module.passwordCheckLimiters
+        );
+
+        const app = appAnswering(200, true, ...passwordCheckLimiters);
+        const attempt = (ip: string) =>
+            supertest(app).post('/route').set('X-Forwarded-For', ip).send({});
+
+        expect(await statusOf(attempt('203.0.113.5'))).toBe(200);
+        expect(await statusOf(attempt('203.0.113.9'))).toBe(200);
+        expect(await statusOf(attempt('203.0.113.20'))).toBe(429);
+        // A different /24 is a different block, with its own budget.
+        expect(await statusOf(attempt('198.51.100.5'))).toBe(200);
+    });
+});
+
 describe('mfaChallengeLimiter', () => {
     afterEach(() => jest.resetModules());
 

@@ -16,7 +16,7 @@ import {
     sessionCredentialLimiters,
     signupLimiters,
     resetRequestLimiters,
-    passwordCheckLimiter,
+    passwordCheckLimiters,
     mfaChallengeLimiter,
     mfaSendLimiter,
     accountCodeSendLimiter,
@@ -188,8 +188,9 @@ router.delete(
     deleteAccountRequest
 );
 
-// DELETE /account/delete-confirm — confirm account deletion with token
-router.delete('/delete-confirm', deleteAccountConfirm);
+// DELETE /account/delete-confirm — confirm account deletion with token. Public, the token is the
+// credential: `credentialLimiters` bound the guesses like `/verify-confirm`.
+router.delete('/delete-confirm', credentialLimiters, deleteAccountConfirm);
 
 // POST /account/login — authenticate and get tokens. `loginChallengeGate` (rung 3, off by
 // default) only engages once `credentialLimiters`' identity budget is mostly spent — never on an
@@ -237,10 +238,10 @@ router.post(
 );
 
 // POST /account/password/check — advisory breach check, unauthenticated (signup needs it before
-// an account exists). `passwordCheckLimiter`, not `credentialLimiters`: this body carries no
+// an account exists). `passwordCheckLimiters`, not `credentialLimiters`: this body carries no
 // email/username, so `credentialLimiters`' identity key would fall back to the caller's address
-// block. Address-keyed directly instead, like `submissionLimiter`.
-router.post('/password/check', passwordCheckLimiter, postPasswordCheck);
+// block. Address- and block-keyed directly instead.
+router.post('/password/check', passwordCheckLimiters, postPasswordCheck);
 
 // GET /account/reauth — which methods this account can step up with. Plain `isAuth`: a stale
 // session has to be able to ask, or it could never learn how to get fresh.

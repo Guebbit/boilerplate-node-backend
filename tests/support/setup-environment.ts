@@ -178,12 +178,13 @@ process.env.NODE_MFA_ACCOUNT_SEND_MAX ??= '1000';
 process.env.NODE_API_KEY_RATE_LIMIT_MAX ??= '1000';
 
 /**
- * `passwordCheckLimiter` needs the same treatment: `POST /account/password/check` fires on every
+ * `passwordCheckLimiters` need the same treatment: `POST /account/password/check` fires on every
  * debounced keystroke pause in a real client, so a suite exercising the live meter more than
  * `PASSWORD_CHECK_BUDGET`'s default (20) times from one address would trip a 429 that has
  * nothing to do with what it is testing.
  */
 process.env.NODE_PASSWORD_CHECK_RATE_LIMIT_MAX ??= '1000';
+process.env.NODE_PASSWORD_CHECK_RATE_LIMIT_BLOCK_MAX ??= '1000';
 
 /**
  * Bank transfer at checkout, which `GET /payments/methods` offers only where a deployment names

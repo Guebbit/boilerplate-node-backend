@@ -3,7 +3,7 @@
  * Account's own rate-limit budgets: the four credential-guess dimensions
  * (`credentialLimiters`), the two Sybil-shaped budgets spent by SUCCESS rather than failure
  * (`signupLimiters`, `resetRequestLimiters`), the password-strength advisory
- * (`passwordCheckLimiter`), and the two MFA challenge budgets (`mfaChallengeLimiter`,
+ * (`passwordCheckLimiters`), and the two MFA challenge budgets (`mfaChallengeLimiter`,
  * `mfaSendLimiter`). Each is data (`RateLimitBudget`, declared on `./module.ts`'s `rateLimits`)
  * turned into middleware by `buildRateLimiter` (`@infrastructure/http/middlewares/rate-limit`),
  * the same factory every other module's budgets go through.
@@ -230,9 +230,9 @@ export const loginChallengeGate: RequestHandler = (request, response, next) =>
         : next();
 
 /**
- * `POST /account/password/check`'s own budget — unauthenticated, and every call may trigger an
- * outbound HIBP lookup, so it is an amplifier against HIBP and a free CPU sink without one. Every
- * request counts — a validation-only 200 is exactly what an amplifier farms, so
+ * `POST /account/password/check`'s per-address budget — unauthenticated, and every call may trigger
+ * an outbound HIBP lookup, so without one it is a free CPU sink and a way to spend the shared
+ * lookup quota. Every request counts — a validation-only 200 is exactly what a farm wants, so
  * `skipSuccessfulRequests` would bound nothing.
  */
 const PASSWORD_CHECK_BUDGET: RateLimitBudget = {
@@ -248,8 +248,29 @@ const PASSWORD_CHECK_BUDGET: RateLimitBudget = {
     audited: true
 };
 
-/** The budget for `POST /account/password/check` — see {@link PASSWORD_CHECK_BUDGET}. */
-export const passwordCheckLimiter: RequestHandler = buildRateLimiter(PASSWORD_CHECK_BUDGET);
+/**
+ * `POST /account/password/check`'s per-block budget: a caller rotating addresses inside one block
+ * spends one counter, so the per-address one alone does not bound the outbound lookups.
+ */
+const PASSWORD_CHECK_BLOCK_BUDGET: RateLimitBudget = {
+    name: 'Password-strength checks — per address block',
+    namespace: 'password-check-block',
+    environmentVariable: 'NODE_PASSWORD_CHECK_RATE_LIMIT_BLOCK_MAX',
+    defaultMax: 60,
+    windowMs: 'shared',
+    keyedBy: KEYED_BY_ADDRESS_BLOCK,
+    bounds:
+        'Checks from ONE address block, sized above the address budget because a block is shared ' +
+        'by many honest typists.',
+    audited: true,
+    keyGenerator: addressBlockOf
+};
+
+/** The budgets for `POST /account/password/check` — see {@link PASSWORD_CHECK_BUDGET}. */
+export const passwordCheckLimiters: RequestHandler[] = [
+    buildRateLimiter(PASSWORD_CHECK_BUDGET),
+    buildRateLimiter(PASSWORD_CHECK_BLOCK_BUDGET)
+];
 
 /** Signups allowed per window, per submitted EMAIL ADDRESS, spent by SUCCESS. */
 const SIGNUP_IDENTITY_BUDGET: RateLimitBudget = {
@@ -467,6 +488,7 @@ export const accountRateLimits: readonly RateLimitBudget[] = [
     CREDENTIAL_BLOCK_BUDGET,
     SESSION_CREDENTIAL_BUDGET,
     PASSWORD_CHECK_BUDGET,
+    PASSWORD_CHECK_BLOCK_BUDGET,
     SIGNUP_IDENTITY_BUDGET,
     SIGNUP_ADDRESS_BUDGET,
     SIGNUP_BLOCK_BUDGET,

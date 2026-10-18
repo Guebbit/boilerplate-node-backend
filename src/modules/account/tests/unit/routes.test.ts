@@ -25,6 +25,7 @@ import { router } from '@modules/account/routes';
 const TOKEN_BEARING = [
     'DELETE /delete-confirm',
     'POST /reset-confirm',
+    'DELETE /delete-confirm',
     'POST /verify-confirm',
     'POST /email-change-confirm',
     'POST /email-change-undo',
@@ -40,6 +41,7 @@ const TOKEN_BEARING = [
 const RATE_LIMITED = [
     'POST /login',
     'POST /reset-confirm',
+    'DELETE /delete-confirm',
     'POST /password',
     'POST /reauth',
     'POST /verify-request',
