@@ -7,7 +7,6 @@
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
-import { logger } from '@infrastructure/adapters/logger';
 import type { OrderLineInput, UpdateOrderByIdRequest, CallerContext } from '@types';
 import type { OrderDocument } from '../model';
 import {
@@ -113,25 +112,15 @@ export const create = async (
     const overLimit = lineLimitRefusal(items);
     if (overLimit) return overLimit;
 
+    // The buyer must exist: an order for nobody is a dangling reference. A failed lookup is a
+    // 500, never an order placed for someone unchecked.
+    const buyer = await userService.getById(userId);
+    if (!buyer) return generateReject(404, [t('users.not-found')]);
+
     // The snapshot each line freezes wants the BUYER's stored language, never the caller's: this
     // endpoint lets an admin place an order for someone else, and `context.locale` there is the
     // admin's own UI language, not the recipient's. Same rule as `@modules/cart`'s checkout.
-    //
-    // Guarded: a lookup failure here must fall back to the default locale, not abort the order
-    // this endpoint is about to place.
-    const buyerLocale = await userService
-        .getById(userId)
-        .then((buyer) => buyer?.locale ?? getDefaultLocale())
-        .catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: 'Buyer lookup failed while pricing a new order; using the default locale.',
-                userId,
-                error
-            });
-            // Stryker restore all
-            return getDefaultLocale();
-        });
+    const buyerLocale = buyer.locale ?? getDefaultLocale();
 
     // `Promise.all([])` settles without a query, so an empty basket still costs no round trip.
     const resolvedItems = await resolveItemProducts(items);

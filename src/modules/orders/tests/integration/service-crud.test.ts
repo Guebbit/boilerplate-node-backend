@@ -29,20 +29,13 @@ import { asCustomer, asAdmin, callerAs, callerContextAs, testCallerContext } fro
 import type { CallerContext } from '@types';
 import { MISSING_ID } from '@tests/ids';
 import { freezeDate } from '@tests/clock';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { logger } from '@infrastructure/adapters/logger';
 import { userService } from '@modules/users';
-import { registerModules } from '@kernel/registry';
-import { resetDomainEvents } from '@kernel/events';
-import { settleOutboxNudges } from '@kernel/outbox';
-import ordersModule from '../../module';
 
 // The queue, not the copy.
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
-const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
 
@@ -389,40 +382,39 @@ describe('create', () => {
         await expect(orderRepository.count({})).resolves.toBe(0);
     });
 
-    it('still creates the order and mails the fallback name when the buyer lookup fails', async () => {
-        mockEnqueueEmail.mockClear();
-        const loggedError = jest.spyOn(logger, 'error').mockImplementation(() => logger);
-        const user = await createUser({ email: 'buyer@example.com' });
-        const product = await createProduct({ title: 'Keyboard', price: 25 });
-        // Every `userService.getById` call rejects — the pre-order locale lookup AND `mailBuyer`'s
-        // own lookup for the placed-order email both have to survive this, not just one of them.
-        jest.spyOn(userService, 'getById').mockRejectedValue(new Error('lookup unavailable'));
-        // The placed-order mail rides `order.created`: this module's listener must be wired.
-        registerModules([ordersModule]);
+    it('answers 404 for a buyer that does not exist, and writes no order or order number', async () => {
+        const product = await createProduct({ price: 25 });
+        const createSpy = jest.spyOn(orderRepository, 'create');
+        const counterSpy = jest.spyOn(orderRepository, 'incrementOrderNumberCounter');
 
         const result = await orderService.create(
-            String(user._id),
-            user.email,
+            MISSING_ID,
+            'nobody@example.com',
             [{ productId: String(product._id), quantity: 1 }],
             callerContextAs('admin')
         );
-        await settleOutboxNudges();
-        resetDomainEvents();
 
-        expect(result.success).toBe(true);
-        expect(asSuccess(result).status).toBe(201);
-        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
-        const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
-        expect(envelope.to).toBe(user.email);
-        expect(template).toBe('orders.order-confirm');
-        // The fallback name policy: `username ?? email`, and no username was ever resolved.
-        expect(data?.greeting).toContain(user.email);
-        // The pricing lookup says so; the mail lookup's own log is `notify.test.ts`'s to pin.
-        expect(loggedError).toHaveBeenCalledWith(
-            expect.objectContaining({
-                message: 'Buyer lookup failed while pricing a new order; using the default locale.'
-            })
-        );
+        expect(asReject(result)).toMatchObject({ status: 404 });
+        expect(createSpy).not.toHaveBeenCalled();
+        expect(counterSpy).not.toHaveBeenCalled();
+        await expect(orderRepository.count({})).resolves.toBe(0);
+    });
+
+    it('places no order for someone unchecked when the buyer lookup fails', async () => {
+        const user = await createUser({ email: 'buyer@example.com' });
+        const product = await createProduct({ title: 'Keyboard', price: 25 });
+        jest.spyOn(userService, 'getById').mockRejectedValue(new Error('lookup unavailable'));
+
+        await expect(
+            orderService.create(
+                String(user._id),
+                user.email,
+                [{ productId: String(product._id), quantity: 1 }],
+                callerContextAs('admin')
+            )
+        ).rejects.toThrow('lookup unavailable');
+
+        await expect(orderRepository.count({})).resolves.toBe(0);
     });
 
     it('writes no order and burns no order number when the hold is refused', async () => {
