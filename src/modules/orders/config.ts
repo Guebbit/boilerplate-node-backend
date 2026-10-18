@@ -25,7 +25,7 @@ export const ordersConfig = defineConfig({
         NODE_ADMIN_ORDER_MAX_LINES: int({ default: 100, min: 1 }),
         NODE_ADMIN_ORDER_MAX_LINE_QUANTITY: int({ default: 99_999, min: 1 }),
         NODE_WITHDRAWAL_PERIOD_DAYS: int({ default: 30, min: 21 }),
-        NODE_ORDER_PII_RETENTION_DAYS: int({ default: 3650, min: 1 }),
+        NODE_ORDER_PII_RETENTION_DAYS: int({ default: 3653, min: 1 }),
         NODE_ORDER_EVENT_TEXT_RETENTION_DAYS: int({ default: 1095, min: 1 }),
         NODE_ORDER_EXPORT_MAX_ROWS: int({ default: 20_000, min: 1 }),
         NODE_FRONTEND_LINK_ORDER: text({ default: 'orders/{id}' })
