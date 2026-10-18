@@ -7,6 +7,7 @@
  */
 
 import { Router, type Request } from 'express';
+import { holds } from '@kernel/ability';
 import {
     getAuth,
     isAuthOrCredential,
@@ -34,6 +35,21 @@ import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 const namesARole = (request: Request): boolean =>
     (request.body as { role?: unknown } | undefined)?.role !== undefined;
 
+/**
+ * Whether this request bans or unbans, and the caller manages staff. A ban keeps the role, so
+ * unbanning a banned administrator hands every power back and banning every other administrator
+ * locks the shop out: both need the same fresh session as the grant. A moderator who bans a
+ * customer holds no `assign:Role` and is never asked.
+ */
+const bansAsRoleManager = (request: Request): boolean =>
+    (request.body as { active?: unknown } | undefined)?.active !== undefined &&
+    request.caller !== undefined &&
+    holds(request.caller, 'assign', 'Role');
+
+/** Whether this write changes who holds powers: a role named, or a ban by a role manager. */
+const changesPowers = (request: Request): boolean =>
+    namesARole(request) || bansAsRoleManager(request);
+
 /** Express router for user management (admin only). */
 export const router = Router();
 
@@ -60,7 +76,7 @@ router.post(
     requirePermission('create', 'User'),
     uploadLimiter,
     upload.image(),
-    requireFreshAuthWhen(namesARole, 'critical'),
+    requireFreshAuthWhen(changesPowers, 'critical'),
     createUser
 );
 
@@ -76,7 +92,7 @@ router.put(
     requirePermission('update', 'User'),
     uploadLimiter,
     upload.image(),
-    requireFreshAuthWhen(namesARole, 'critical'),
+    requireFreshAuthWhen(changesPowers, 'critical'),
     replaceUser
 );
 
@@ -86,7 +102,7 @@ router.patch(
     requirePermission('update', 'User'),
     uploadLimiter,
     upload.image(),
-    requireFreshAuthWhen(namesARole, 'critical'),
+    requireFreshAuthWhen(changesPowers, 'critical'),
     updateUser
 );
 

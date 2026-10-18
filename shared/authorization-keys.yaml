@@ -475,6 +475,7 @@ rules:
       subject: Role
       module: access
       scope: tenant
+      credential: false
       description: Hand a staff role to an account or take it away, and change an account that holds one — edit, ban, erase. Held by administrators.
 
     # -- audit-logs ----------------------------------------------------------------------------

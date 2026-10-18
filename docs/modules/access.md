@@ -132,7 +132,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 | Rule          | Set              | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                              |
 | ------------- | ---------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `assign:Role` | `RoleManagement` | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | ✅         | Hand a staff role to an account or take it away, and change an account that holds one — edit, ban, erase. Held by administrators. |
+| `assign:Role` | `RoleManagement` | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | —          | Hand a staff role to an account or take it away, and change an account that holds one — edit, ban, erase. Held by administrators. |
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in

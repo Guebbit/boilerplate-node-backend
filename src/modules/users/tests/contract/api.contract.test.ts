@@ -677,6 +677,41 @@ describe('the step-up on naming a role', () => {
 
         expect(response.status).toBe(200);
     });
+
+    it.each([false, true])(
+        '401s REAUTH_REQUIRED for a stale role manager setting active to %s, and writes nothing',
+        async (active) => {
+            freezeDate();
+            const { bearer } = await authenticateAsRole('admin');
+            const target = await createUser(
+                { email: 'stale3@target.test', username: 'stalethree' },
+                'support'
+            );
+            advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
+
+            const response = await api()
+                .patch(`/users/${target.id}`)
+                .set('Authorization', bearer)
+                .send({ active });
+
+            expect(response.status).toBe(401);
+            expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+        }
+    );
+
+    it('lets a stale moderator ban a customer, since a moderator manages no staff', async () => {
+        freezeDate();
+        const { bearer } = await authenticateAsRole('moderator');
+        const target = await createUser({ email: 'stale4@target.test', username: 'stalefour' });
+        advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
+
+        const response = await api()
+            .patch(`/users/${target.id}`)
+            .set('Authorization', bearer)
+            .send({ active: false });
+
+        expect(response.status).toBe(200);
+    });
 });
 
 /**

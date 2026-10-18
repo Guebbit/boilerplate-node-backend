@@ -1,7 +1,8 @@
 /**
  * The protection of staff accounts, row by row, through the real app and a real database. A holder
  * of a users key changes a plain customer's account, and an account that holds a staff role only if
- * they also hold `assign:Role` — which, of the preset roles, is the administrator alone.
+ * they also hold `assign:Role` — which, of the preset roles, is the administrator alone, and which
+ * no API key can hold.
  *
  * Each row of `tests/support/account-protection-rows.ts` is run as every role that holds the row's
  * key, against every kind of account: a customer, a staff account, an administrator, a
@@ -136,10 +137,9 @@ describe('an API key holds exactly the keys it was minted with', () => {
         ]);
     });
 
-    it('reaches a staff account once it was minted with role management', async () => {
-        const secret = await credentialHolding(['update:User', 'assign:Role']);
-        const admin = await createOwner('owner-admin', 'admin');
-
-        expect(await patchAsKey(secret, admin)).toBe('passed');
+    it('cannot be minted with role management, so no key ever reaches a staff account', async () => {
+        await expect(credentialHolding(['update:User', 'assign:Role'])).rejects.toThrow(
+            'mint failed in test setup'
+        );
     });
 });
