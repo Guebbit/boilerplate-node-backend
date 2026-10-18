@@ -12,7 +12,6 @@
         "error-entity-type-unknown": "{{entityType}} non è un tipo di entità traducibile registrato.",
         "error-entity-not-found": "Nessun {{entityType}} esiste con id {{entityId}}.",
         "error-translation-locale-unknown": "La lingua {{locale}} non esiste.",
-        "error-translation-locale-inactive": "La lingua {{locale}} non è attiva.",
         "error-translation-field-unknown": "{{field}} non è un campo traducibile di {{entityType}}.",
         "error-translation-fields-empty": "I campi di una traduzione non possono essere vuoti — ometti la lingua per lasciarla invariata, oppure invia null per eliminarla.",
         "error-translation-fallback-required": "La lingua di fallback {{locale}} non può essere eliminata: è quella su cui ricadono tutte le altre."

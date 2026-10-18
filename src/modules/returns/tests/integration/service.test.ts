@@ -295,24 +295,29 @@ describe('goods excluded from the right of withdrawal (Art. 16)', () => {
         ]);
     });
 
-    it('refuses a return that names an excluded line', async () => {
-        const { user, engraved, orderId } = await orderWithExcluded();
+    // Only a defect brings an excluded line back (the guarantee covers it); any other reason names
+    // goods the withdrawal right never reached.
+    it.each(['withdrawal', 'other'] as const)(
+        'refuses a %s return that names an excluded line',
+        async (reason) => {
+            const { user, engraved, orderId } = await orderWithExcluded();
 
-        const outcome = await returnService.createReturn(
-            {
-                orderId,
-                reason: 'withdrawal',
-                lines: [{ productId: String(engraved._id), quantity: 1 }]
-            },
-            buyer(user),
-            testCallerContext
-        );
+            const outcome = await returnService.createReturn(
+                {
+                    orderId,
+                    reason,
+                    lines: [{ productId: String(engraved._id), quantity: 1 }]
+                },
+                buyer(user),
+                testCallerContext
+            );
 
-        expect(!outcome.success && outcome.status).toBe(422);
-        expect(!outcome.success && outcome.errors[0]).toMatchObject({
-            code: 'RETURN_LINES_INVALID'
-        });
-    });
+            expect(!outcome.success && outcome.status).toBe(422);
+            expect(!outcome.success && outcome.errors[0]).toMatchObject({
+                code: 'RETURN_LINES_INVALID'
+            });
+        }
+    );
 
     it('takes a defective made-to-order line, which the guarantee covers', async () => {
         const { user, engraved, orderId } = await orderWithExcluded();

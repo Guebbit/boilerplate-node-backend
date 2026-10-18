@@ -28,6 +28,7 @@ flowchart LR
     api_keys --> access
     api_keys --> account
     api_keys --> users
+    account -. "account.authenticator-removed" .-> api_keys
     account -. "account.sessions-revoked" .-> api_keys
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -62,6 +63,13 @@ permissions and intersecting them against the key's stored snapshot). The second
 that matters after the fact: demote the person who minted a key and every key they ever minted shrinks;
 ban, soft-delete or erase them and every key is refused like a revoked one, and an unban or a
 restore brings the key back — without the credential document itself ever being touched.
+
+**A key that does not resolve is refused, not demoted to anonymous.** An `sk_...` token that is
+unknown, revoked, expired, malformed or whose minter is gone gets `401` with
+`WWW-Authenticate: Bearer error="invalid_token"` (RFC 6750 §3.1) on every route behind `getAuth`,
+public ones included — a caller who presents a credential is told it failed, as GitHub and Stripe
+do. A fake `Bearer sk_` header therefore buys nothing. An expired session bearer is different: it
+still browses as anonymous, because the SPA sends whatever it holds.
 
 **A key use counts as activity.** Each use stamps the key's own `lastUsedAt` and, at most once a
 day, the minter's `lastApiKeyUseAt` through the `users` service. The inactivity job reads that, so
@@ -111,6 +119,11 @@ a person with none live gets neither audit row nor mail), so a redelivery does n
   a password reset or an email-change undo ("this wasn't me") revoked them. These are the causes whose row in `REVOCATION` (`account/domain/revocation.ts`) announces; the list is derived there, not restated. `account` only announces the event; this module owns what it
   means for keys. An ordinary password change, where the owner typed the current password, leaves
   keys alone.
+- **Losing a staff authenticator app revokes the keys.** The removal that takes a staff member's last
+  app announces `account.authenticator-removed`; this module revokes what they minted and mails the
+  list. Not a compromise, so it is not a session revocation. And a key never holds more than its
+  minter does: a minter with no app lends it no staff rule
+  ([Staff need an authenticator app](./account-two-factor.md#staff-need-an-authenticator-app)).
 - **A replayed refresh token leaves keys alone.** It signs every device out (see
   [Refresh rotation](./account-sessions.md#refresh-rotation)) but does not announce
   `account.sessions-revoked`: it shows one browser's token leaked, not that the owner's account

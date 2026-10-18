@@ -26,6 +26,7 @@ flowchart LR
     account --> users
     users -. "user.deactivated" .-> account
     users -. "user.setup-requested" .-> account
+    account -. "account.authenticator-removed" .-> api_keys
     account -. "account.sessions-revoked" .-> api_keys
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;

@@ -6,7 +6,7 @@
  * what the sweep at the end of this file is for.
  */
 
-import { routeSignatures, guardsOn } from '@tests/routes';
+import { routeSignatures, routeTable, guardsOn } from '@tests/routes';
 import { router } from '@modules/delivery/routes';
 
 /** Every door that writes a fulfillment order or a shipment. */
@@ -73,13 +73,22 @@ describe('delivery routes', () => {
         expect(guards).not.toContain('requirePermissionGuard');
     });
 
-    it('asks for the product key AND the order key on the release-date preview', () => {
-        // Moving the date is the editor's job, counting the orders it concerns is not: both keys.
-        const guards = guardsOn(router, 'GET /fulfillment-orders/release-date-impact');
+    it.each(['release-date-impact', 'restock-date-impact'])(
+        'asks for the product key AND the order key on the %s preview',
+        (name) => {
+            // Moving the date is the editor's job, counting the orders it concerns is not: both keys.
+            const signature = `GET /fulfillment-orders/${name}`;
+            const row = routeTable(router).find(
+                ({ method, path }) => `${method} ${path}` === signature
+            );
 
-        expect(guards).toContain('isAuth');
-        expect(guards.filter((name) => name === 'requirePermissionGuard')).toHaveLength(2);
-    });
+            expect(guardsOn(router, signature)).toContain('isAuth');
+            expect(row?.permissions.map(({ action, subject }) => `${action}:${subject}`)).toEqual([
+                'update:Product',
+                'display:Order'
+            ]);
+        }
+    );
 
     it('leaves nothing but the methods list unauthenticated', () => {
         // The sweep: a route added here without a guard fails this, rather than shipping open.

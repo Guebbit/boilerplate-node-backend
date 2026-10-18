@@ -364,8 +364,16 @@ const GLOBAL_RATE_LIMIT_BUDGET: RateLimitBudget = {
     keyedBy: KEYED_BY_ADDRESS,
     bounds:
         'Every request across the whole surface — a scanner sweeping for paths that do not exist ' +
-        'is the traffic most worth braking, same as a browsing session.',
+        'is the traffic most worth braking, same as a browsing session. A request that carried a ' +
+        'valid api-key is refunded once it ends and counts against that key instead, so partners ' +
+        "sharing one exit address do not spend each other's allowance; a fake key does not earn " +
+        'the refund.',
     audited: false,
+    // Refund, not skip: the key is only known after `getAuth`, which runs after this limiter, and a
+    // `Bearer sk_` header alone must not buy an exemption. "Successful" here means "a key
+    // resolved" — it says nothing about the status code.
+    skipSuccessfulRequests: true,
+    requestWasSuccessful: (request) => request.credentialId !== undefined,
     // The one budget that lets a request through while the limits Redis is down: it guards
     // browsing, not a credential, and counting it per worker would only brake honest traffic.
     onStoreError: 'pass',

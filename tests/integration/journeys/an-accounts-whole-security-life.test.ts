@@ -91,7 +91,8 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
     );
 
     // Arm TOTP. Arming ends the session that did it, so the account signs in again, with a code.
-    const plain = await loginBearer(ACCOUNT.email, ACCOUNT.password);
+    // The role came after the signup, so the account has no app yet: it enrols the real way.
+    const plain = await loginBearer(ACCOUNT.email, ACCOUNT.password, {}, { arm: false });
     const setup = await api()
         .post('/account/2fa/methods/totp/setup')
         .set('Authorization', plain)

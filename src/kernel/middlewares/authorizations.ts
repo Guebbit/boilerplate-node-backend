@@ -35,6 +35,7 @@ import {
     callerForSubject,
     callerInScope,
     ruleId,
+    staffRoleWithheld,
     type StepUpTier
 } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
@@ -168,6 +169,7 @@ const applySession = (
         authTime: user.authTime,
         amr: user.amr,
         twoFactorArmed: user.twoFactorArmed,
+        authenticatorArmed: user.authenticatorArmed,
         verified: user.verified,
         analyticsConsent: user.analyticsConsent
     };
@@ -261,6 +263,19 @@ const continueWithCookie = (request: Request, response: Response, next: NextFunc
 const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
+ * The 401 for an `sk_...` key that does not resolve (unknown, revoked, expired, its minter gone).
+ * A key is a credential somebody chose to present, so a bad one is told so — as GitHub and Stripe
+ * do — instead of quietly browsing as anonymous. `WWW-Authenticate` per RFC 6750 §3.1.
+ * https://www.rfc-editor.org/rfc/rfc6750#section-3.1
+ *
+ * @param response - answered here
+ */
+const refuseInvalidApiKey = (response: Response): void => {
+    response.setHeader('WWW-Authenticate', 'Bearer error="invalid_token"');
+    rejectResponse(response, 401, cookieUnauthorizedErrors());
+};
+
+/**
  * Resolve `request.authContext` from a session credential when one is present, then continue. This
  * sits in front of routes that work for both anonymous and authenticated callers.
  *
@@ -271,9 +286,9 @@ const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
  * Outage:     a resolver failure meaning Mongo/Redis was unreachable goes to `next(error)`, so the
  *             global handler answers 503, never "your credentials are wrong" (RFC 9110 §15.5.2;
  *             see `infrastructure/http/errors.ts#isInfrastructureError`).
- * Credential: `sk_...` (resolved by `@modules/api-keys` when present) gets the same treatment,
- *             plus `apiKeyLimiter`'s 429 for one over its own request budget — refused here, not
- *             at the route.
+ * Credential: `sk_...` (resolved by `@modules/api-keys` when present) that does not resolve is
+ *             refused here with a 401 and `WWW-Authenticate: Bearer error="invalid_token"`; a
+ *             valid one also gets `apiKeyLimiter`'s 429 for one over its own request budget.
  *
  * @param request - populated with `authContext` (a session) or `caller`/`credentialId` (credential) on success
  * @param response - answers 429 on the credential path's own rate limit, 403 on a cookie-authenticated
@@ -307,7 +322,7 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
             .then((resolution) => {
                 if ('miss' in resolution) {
                     noteMiss(request, 'api_key', resolution.miss);
-                    next();
+                    refuseInvalidApiKey(response);
                     return;
                 }
                 request.caller = resolution.ok.caller;
@@ -470,6 +485,19 @@ const challengeForFreshAuth = (
 };
 
 /**
+ * Would this session hold the rule if its authenticator app were armed — what tells "enrol to use
+ * your staff tools" from a plain refusal. Asked only after the rule check failed, and only of a
+ * session whose staff role is withheld, so it hands a person nothing they had not earned.
+ *
+ * @param context - the resolved session
+ * @param action - the action the guard asks for
+ * @param subject - the subject it asks about
+ */
+const wouldHoldOnceEnrolled = (context: AuthContext, action: string, subject: string): boolean =>
+    staffRoleWithheld(context) &&
+    holds(callerForSubject({ ...context, authenticatorArmed: true }, subject), action, subject);
+
+/**
  * Reject with 403 unless the resolved caller holds a rule for `action` on `subject`. MUST run
  * after `isAuth`.
  *
@@ -572,6 +600,27 @@ export const requirePermission = (action: string, subject: string) => {
             });
             challengeForFreshAuth(response, reauthWindowSeconds(declared.stepUp));
 
+            return;
+        }
+
+        // A staff role switched off for want of an authenticator app: say so, so the client can
+        // send the person to enrol instead of showing a bare refusal.
+        if (
+            !allowed &&
+            request.authContext &&
+            wouldHoldOnceEnrolled(request.authContext, action, subject)
+        ) {
+            auditRefusal(request, {
+                action: coreAuditActions.SECURITY_FORBIDDEN,
+                actorScope: scope,
+                metadata: { reason: 'second_factor_enrollment_required', permission }
+            });
+            rejectResponse(response, 403, [
+                {
+                    code: ERROR_CODES.SECOND_FACTOR_ENROLLMENT_REQUIRED,
+                    message: t(errorLocaleKeyFor(ERROR_CODES.SECOND_FACTOR_ENROLLMENT_REQUIRED))
+                }
+            ]);
             return;
         }
 

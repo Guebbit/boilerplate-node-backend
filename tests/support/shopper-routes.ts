@@ -8,9 +8,12 @@
  */
 import type { Operation } from './spec-walk';
 
-/** The basket, the wishlist's move into it, and the card steps of a payment (intent, confirm, sync). */
+/**
+ * The basket, the wishlist's move into it, the card steps of a payment (intent, confirm, sync),
+ * and enrolling a second factor — an armed administrator would be asked for a code first.
+ */
 const SHOPPER_ROUTE =
-    /^\/(cart|wishlist\/\{productId\}\/move-to-cart|payments\/(\{id\}\/(confirm|sync)|intent))/;
+    /^\/(cart|account\/2fa|wishlist\/\{productId\}\/move-to-cart|payments\/(\{id\}\/(confirm|sync)|intent))/;
 
 /**
  * The seeded role that reaches an operation's controller.

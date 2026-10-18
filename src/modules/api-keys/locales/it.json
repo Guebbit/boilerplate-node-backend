@@ -16,6 +16,7 @@
             "body-logout-all": "Ti sei disconnesso da ogni dispositivo, quindi le chiavi API che hai creato sono state revocate:",
             "body-password-reset": "La tua password è stata reimpostata, quindi le chiavi API che hai creato sono state revocate:",
             "body-email-change-undo": "Hai segnalato un cambio di email come non tuo, quindi le chiavi API che hai creato sono state revocate:",
+            "body-authenticator-removed": "La tua app di autenticazione è stata rimossa, quindi le chiavi API che hai creato sono state revocate:",
             "advice": "Crea nuove chiavi quando sei sicuro che l'account sia tuo."
         }
     }

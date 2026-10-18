@@ -18,6 +18,7 @@ import deliveryModule from '@modules/delivery/module';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
 import { MISSING_ID } from '@tests/ids';
+import { fulfillmentOrderModel } from '@modules/delivery/model';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -131,6 +132,23 @@ describe('the preview', () => {
         const result = await deliveryService.previewDateImpact(MISSING_ID, 'preorder', inDays(10));
 
         expect(result).toMatchObject({ success: false, status: 404 });
+    });
+
+    it('counts an order with a notice AND a question once, under ask', async () => {
+        const { orderId, productIds } = await preorder(inDays(30));
+        // A second group of the same order waiting on the same product, already slipped once: the
+        // same move is a notice for the first group and a question for this one.
+        const [first] = await fulfillmentOrdersOf(orderId);
+        await fulfillmentOrderModel.create({
+            ...first.toObject(),
+            _id: undefined,
+            number: first.number + 1,
+            slips: 1
+        });
+
+        const previewed = await preview(productIds[0], inDays(40));
+
+        expect(previewed).toEqual({ notify: 0, ask: 1 });
     });
 
     it('names the deadline a question would carry', async () => {

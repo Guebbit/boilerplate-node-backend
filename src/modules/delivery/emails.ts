@@ -9,6 +9,7 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
+import { shopTimezone } from '@modules/shop';
 
 /** A line of a shipment, as the email lists it. */
 export interface EmailLine {
@@ -53,13 +54,14 @@ export interface FulfillmentDelayedEmailInput {
 }
 
 /**
- * A date as the buyer reads it: long, in their language, in UTC like every date rule here.
+ * A date as the buyer reads it: long, in their language, on the shop's calendar (staff type a day
+ * on the shop's wall clock, and UTC would print the evening before it).
  * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
  * @param locale - the buyer's language
  * @param date - the date
  */
 const longDate = (locale: string, date: Date): string =>
-    new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(date);
+    new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: shopTimezone() }).format(date);
 
 /**
  * The product lines as printed text: "2 × Title". The numbers and the title are data, not copy.

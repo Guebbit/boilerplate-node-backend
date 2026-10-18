@@ -10,6 +10,8 @@
  * See: docs/tools/demo-profile.md
  */
 
+import { generate } from 'otplib';
+
 /** Every response this API sends, successful or not. Only these two fields are ever read here. */
 interface Envelope {
     data?: unknown;
@@ -113,6 +115,33 @@ const send = (
     }).then(readAttempt);
 
 /**
+ * Answers the second step of a login when the account carries an authenticator app: computes the
+ * code its app would show from the account's secret and posts it to `POST /account/login/2fa`.
+ *
+ * @param baseUrl - where the app is listening, without a trailing slash
+ * @param attempt - the answer to the password step
+ * @param totpSecret - the account's base32 authenticator secret; without one a challenge stays unanswered
+ */
+const answerChallenge = (
+    baseUrl: string,
+    attempt: Attempt,
+    totpSecret: string | undefined
+): Promise<Attempt> => {
+    const data = attempt.data as { mfaRequired?: boolean; challenge?: string } | undefined;
+    if (!totpSecret || data?.mfaRequired !== true) return Promise.resolve(attempt);
+
+    // otplib: the six digits an authenticator app derives from the secret at this moment.
+    // https://otplib.yeojz.dev/
+    return generate({ secret: totpSecret }).then((code) =>
+        send(baseUrl, { 'content-type': 'application/json' }, 'POST', '/account/login/2fa', {
+            challenge: data.challenge,
+            code,
+            transport: 'bearer'
+        })
+    );
+};
+
+/**
  * Sign `email` in through the real `POST /account/login` and return a caller holding its token.
  *
  * Through the endpoint, never a hand-signed token: a flow-produced dataset is only worth more
@@ -123,35 +152,43 @@ const send = (
  * @param baseUrl - where the app is listening, without a trailing slash
  * @param email - the account to sign in as
  * @param password - its plaintext password, as `scenarios/accounts.ts` seeded it
+ * @param totpSecret - its authenticator secret, for a staff account whose login asks a code
  * @throws {ScenarioFlowError} when login does not answer 200 with a token
  */
-export const signIn = (baseUrl: string, email: string, password: string): Promise<Caller> =>
+export const signIn = (
+    baseUrl: string,
+    email: string,
+    password: string,
+    totpSecret?: string
+): Promise<Caller> =>
     send(baseUrl, { 'content-type': 'application/json' }, 'POST', '/account/login', {
         email,
         password,
         transport: 'bearer'
-    }).then((attempt) => {
-        // jwt mode answers `token`; cookie mode answers `sessionToken` to a `transport: bearer` login.
-        const data = attempt.data as { token?: string; sessionToken?: string } | undefined;
-        const token = data?.token ?? data?.sessionToken;
-        if (attempt.status !== 200 || !token)
-            throw new ScenarioFlowError(email, 'POST', '/account/login', attempt);
+    })
+        .then((attempt) => answerChallenge(baseUrl, attempt, totpSecret))
+        .then((attempt) => {
+            // jwt mode answers `token`; cookie mode answers `sessionToken` to a `transport: bearer` login.
+            const data = attempt.data as { token?: string; sessionToken?: string } | undefined;
+            const token = data?.token ?? data?.sessionToken;
+            if (attempt.status !== 200 || !token)
+                throw new ScenarioFlowError(email, 'POST', '/account/login', attempt);
 
-        const headers = {
-            'content-type': 'application/json',
-            authorization: `Bearer ${token}`
-        };
-        const attemptAs = (method: Method, path: string, body?: unknown) =>
-            send(baseUrl, headers, method, path, body);
+            const headers = {
+                'content-type': 'application/json',
+                authorization: `Bearer ${token}`
+            };
+            const attemptAs = (method: Method, path: string, body?: unknown) =>
+                send(baseUrl, headers, method, path, body);
 
-        return {
-            email,
-            attempt: attemptAs,
-            call: <T>(method: Method, path: string, body?: unknown): Promise<T> =>
-                attemptAs(method, path, body).then((outcome) => {
-                    if (outcome.status < 200 || outcome.status >= 300)
-                        throw new ScenarioFlowError(email, method, path, outcome);
-                    return outcome.data as T;
-                })
-        };
-    });
+            return {
+                email,
+                attempt: attemptAs,
+                call: <T>(method: Method, path: string, body?: unknown): Promise<T> =>
+                    attemptAs(method, path, body).then((outcome) => {
+                        if (outcome.status < 200 || outcome.status >= 300)
+                            throw new ScenarioFlowError(email, method, path, outcome);
+                        return outcome.data as T;
+                    })
+            };
+        });

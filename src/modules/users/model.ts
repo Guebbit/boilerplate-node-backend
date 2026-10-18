@@ -121,6 +121,13 @@ export interface UserRecord extends Omit<
     twoFactorEnabledAt?: Date;
 
     /**
+     * When an authenticator-app (TOTP) factor was first armed, cleared when the last one goes. The
+     * flag staff access is gated on: a delivered code (email) is not a second factor for a role
+     * that reads customer data. Derived with `twoFactorEnabledAt` in the same write; never on the wire.
+     */
+    authenticatorEnabledAt?: Date;
+
+    /**
      * When the address was proven, or absent until it is — informational only, see the schema
      * field's own doc comment. Same ISO-string-vs-`Date` redeclaration as `createdAt`/`updatedAt`.
      */
@@ -511,6 +518,10 @@ export const userSchema = new Schema<UserDocument, UserModel>(
         twoFactorEnabledAt: {
             type: Date
         },
+        /* When the first authenticator-app factor was armed; derived like `twoFactorEnabledAt`. */
+        authenticatorEnabledAt: {
+            type: Date
+        },
         /*
          * Recovery codes for a lost authenticator — salted-scrypt digests, not a bare hash: at 40
          * bits each they are short enough for an offline dump to brute-force, so storage carries
@@ -654,6 +665,7 @@ const WIRE_OMITTED_FIELDS = [
     'inactivityMinimisedAt',
     'deletedBy',
     'twoFactorMethods',
+    'authenticatorEnabledAt',
     'twoFactorBackupCodes',
     'twoFactorBackupCodeSalt',
     'reauthCode',

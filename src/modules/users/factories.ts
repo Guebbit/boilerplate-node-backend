@@ -40,6 +40,8 @@ export type UserOverrides = Omit<
     password?: string;
     /** Enrolled second factors — the contract exposes only `twoFactorEnabledAt`. */
     twoFactorMethods?: TwoFactorMethodRecord[];
+    /** When an authenticator app was armed; the flag a staff role is gated on. Never on the wire. */
+    authenticatorEnabledAt?: Date;
     /** Salted-scrypt digests of unused backup codes (`account/two-factor/backup-codes.ts`). */
     twoFactorBackupCodes?: string[];
     /** The salt those digests were made under. */

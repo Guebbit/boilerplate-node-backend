@@ -140,6 +140,11 @@ x-error-codes:
             status: 401,
             description: "This action requires a session fresher than the caller's current one — see `POST /account/reauth`. `details.maxAge` is the freshness asked for; `details.methods`, when present, lists what the re-authentication must also prove (`otp`: a code from an armed second factor)."
         }
+    SECOND_FACTOR_ENROLLMENT_REQUIRED:
+        {
+            status: 403,
+            description: "The caller's staff role grants nothing until an authenticator app is armed, and this action needs it. Enrol at `POST /account/2fa/methods/totp/setup`; the account keeps its customer powers meanwhile."
+        }
 
 servers:
     - url: http://localhost:3000

@@ -16,6 +16,7 @@ import {
     maxAdminOrderLines,
     maxAdminOrderLineQuantity,
     orderFrontendLink,
+    orderPiiRetentionDays,
     withdrawalPeriodDays
 } from '../../config';
 import ordersModule from '../../module';
@@ -144,5 +145,11 @@ describe('the withdrawal period', () => {
 
         expect(() => assertModuleConfig([ordersModule], [])).not.toThrow();
         expect(withdrawalPeriodDays()).toBe(21);
+    });
+});
+
+describe('the order PII retention', () => {
+    it('reads ten calendar years with their leap days when unset', () => {
+        expect(orderPiiRetentionDays()).toBe(3653);
     });
 });

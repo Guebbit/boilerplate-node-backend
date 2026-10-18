@@ -208,17 +208,6 @@ describe('verifyAccessToken', () => {
         });
     });
 
-    it('rejects a token whose signature does not verify', async () => {
-        // Claims the real ring member's `kid` but was actually signed with a different secret —
-        // an attacker who can read the (public) kid format but not the secret itself.
-        const forged = await new SignJWT({ sub: USER_ID })
-            .setProtectedHeader({ alg: 'HS256', kid: keyId('access-secret') })
-            .setExpirationTime('10m')
-            .sign(new TextEncoder().encode('wrong-secret'));
-
-        await expect(verifyAccessToken(forged)).rejects.toThrow();
-    });
-
     it('classifies each refusal for the resolver: expired, forged, retired key, not a JWT', async () => {
         const expired = await signAs('access-secret', { sub: USER_ID }, { expiresIn: -10 });
         const forged = await new SignJWT({ sub: USER_ID })
@@ -527,12 +516,14 @@ describe('startSession', () => {
         mintable();
 
         await startSession(USER_ID, ['pwd']);
+        await startSession(USER_ID, ['pwd']);
 
-        const [row] = mockedSessions.insert.mock.calls[0] as [
-            { familyId: unknown; startedAt: Date }
-        ];
-        expect(row.familyId).toBeDefined();
-        expect(row.startedAt).toBeInstanceOf(Date);
+        const [first, second] = mockedSessions.insert.mock.calls.map(
+            ([row]) => row as { familyId: unknown; startedAt: Date }
+        );
+        expect(first.familyId).toBeDefined();
+        expect(second.familyId).not.toEqual(first.familyId);
+        expect(first.startedAt).toBeInstanceOf(Date);
     });
 
     it('signs the id with the refresh secret, not the access one', async () => {

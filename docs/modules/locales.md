@@ -69,6 +69,15 @@ Nothing here is awaited on the request path. Mongo down, a language half-transla
 key — the worst outcome is one endpoint failing and the overlay going stale, while every other
 response still resolves its copy from the files.
 
+### A draft language
+
+`active: false` keeps a language off the public surface: absent from the manifest, `404` on
+`GET /locales/{locale}/messages`, and its translated entity text (a product's title and
+description) is neither served nor searched. Staff holding `display:Locale` still see the manifest
+row and the dictionary, so a translation can be read in the shop's own screens before it is
+switched on, and entity text can be written into it from the editor's language tabs. Going live is
+the one flag.
+
 ## The pipeline
 
 The two tiers, and the two sinks they never share. Follow `app` and the whole module falls out.
@@ -120,8 +129,9 @@ fallback locale.
 | `translatedBy` | Whoever last wrote the row, for the audit trail.                                                                                                                                                                                        |
 
 `src/modules/locales/services/translations.ts` owns the write path: `planTranslationWrites`
-validates a whole PATCH-shaped batch — the locale exists and is `active`, every field name is one
-the registry declares for that `entityType` — before anything is written; `writePlannedTranslations`
+validates a whole PATCH-shaped batch — the locale exists (active or not: a draft language is where
+content is written before it goes live), every field name is one the registry declares for that
+`entityType` — before anything is written; `writePlannedTranslations`
 applies it, and is also the one place that updates an entity's derived index column (its own
 `title`/`description`, kept for sort and search only — see [`products`](./products.md)), so that
 write can never vary by caller.

@@ -168,7 +168,9 @@ The preorder flag and the date are read from the snapshot frozen at checkout, ne
 at payment time: a bank transfer can be paid a week after it was ordered. `agreedAt` is the date the
 buyer was shown, and it never moves; `expectedAt` starts equal to it and is rewritten if the date
 slips. A group of one day leaves together, so it is promised for the latest release instant among
-its lines. A product line that carries neither flag simply lands in #1.
+its lines. "One day" is the shop's calendar day (`NODE_SHOP_TIMEZONE`): staff type a date on the shop's
+wall clock, so two instants UTC splits can still be the same day. The emails print those dates in the
+same zone, so the day staff typed is the day the buyer reads. A product line that carries neither flag simply lands in #1.
 
 ### Holds
 
@@ -325,7 +327,7 @@ does two things, and only to fulfillment orders still `on_hold` for stock:
   notice since, asks the same question. The offer must go out no later than the promise (FTC
   435.2(b)(1)), so it goes out ahead of the date, never after. It is keyed on `expectedAt`, not `agreedAt`: after an accepted slip the agreed date
   is long gone and only the expected one can still be missed. `lastNoticeAt` is what stops a daily
-  repeat;
+  repeat. A backorder promised the 30-day default is asked like any other, on day 28;
 - one asked and not answered for 30 days is marked `consent: expired` and announced as
   `fulfillment_order.wait_expired`. [`returns`](./returns.md#a-wait-nobody-answered) cancels and refunds
   it. It is announced again each day until the cancel lands, so a failed cancel retries by itself.

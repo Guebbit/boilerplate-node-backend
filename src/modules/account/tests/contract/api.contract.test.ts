@@ -874,16 +874,23 @@ describe('POST /account/reauth', () => {
         expect(response.status).toBe(422);
     });
 
-    it('sets a fresh refresh cookie too, same as POST /account/password', async () => {
+    it('swaps the refresh cookie for a fresh one: the new one refreshes, the old one is dead', async () => {
         inJwtMode();
-        const { bearer } = await loginWithCookie();
+        const { bearer, jwtCookie } = await loginWithCookie();
 
         const response = await api()
             .post('/account/reauth')
             .set('Authorization', bearer)
+            .set('Cookie', jwtCookie)
             .send({ method: 'password', password: PLAIN_PASSWORD });
 
-        expect(setCookie(response, '__Host-session')).toBeDefined();
+        const fresh = setCookie(response, '__Host-session');
+        expect(fresh).toBeDefined();
+        expect(fresh).not.toBe(jwtCookie);
+        // The new cookie is checked before the old one: refreshing the old first could not tell
+        // "reauth killed it" from "the probe order did".
+        expect(await statusOfSession(fresh!)).toBe(200);
+        expect(await statusOfSession(jwtCookie)).toBe(401);
     });
 
     /*

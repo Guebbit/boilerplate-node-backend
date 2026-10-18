@@ -176,6 +176,11 @@ twice would say one thing in two places, so `tests/unit/kernel/permissions.test.
 role that lists an audience rule. Verifying an address is one write (`verifiedAt`), with nothing to
 promote; an operator who types an address in sets it the same way.
 
+**The staff role is the one part that can be switched off.** It contributes nothing while the
+account has no authenticator app armed, so an account that holds `admin` and no app is a customer
+that can enrol. See
+[Staff need an authenticator app](../modules/account-two-factor.md#staff-need-an-authenticator-app).
+
 Every door into a basket asks the rule: the cart routes, a reorder and a wishlist's move into the
 cart ask `update:Cart`; placing an order and the card steps ask `checkout:Cart`, which
 answers an unproven address with `EMAIL_NOT_VERIFIED` ("confirm your email") instead of a bare

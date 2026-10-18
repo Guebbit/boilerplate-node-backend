@@ -138,6 +138,13 @@ export const SEED_TWO_FACTOR_BACKUP_CODES = [
 /** The persona and staff accounts' passwords, read once — see {@link seedPasswordsConfig}. */
 const personaPasswords = seedPasswordsConfig();
 
+/**
+ * The base32 secret of the authenticator app every staff account is seeded with — PLAINTEXT, like
+ * the passwords; the row stores it encrypted. Published beside each staff login (`totpSecret`) so
+ * a journey can compute the code a login asks for.
+ */
+export const SEED_STAFF_TOTP_SECRET = personaPasswords.NODE_SEED_STAFF_TOTP_SECRET;
+
 /** The logins for the persona accounts, by the name a spec asks for. */
 export const seedPersonaCredentials = {
     unverified: {
@@ -163,24 +170,46 @@ export const seedPersonaCredentials = {
 
 /** The logins for the staff accounts, by the name a spec asks for. */
 export const seedStaffCredentials = {
-    manager: { email: SEED_MANAGER_EMAIL, password: personaPasswords.NODE_SEED_MANAGER_PASSWORD },
+    manager: {
+        email: SEED_MANAGER_EMAIL,
+        password: personaPasswords.NODE_SEED_MANAGER_PASSWORD,
+        totpSecret: SEED_STAFF_TOTP_SECRET
+    },
     warehouse: {
         email: SEED_WAREHOUSE_EMAIL,
-        password: personaPasswords.NODE_SEED_WAREHOUSE_PASSWORD
+        password: personaPasswords.NODE_SEED_WAREHOUSE_PASSWORD,
+        totpSecret: SEED_STAFF_TOTP_SECRET
     },
-    support: { email: SEED_SUPPORT_EMAIL, password: personaPasswords.NODE_SEED_SUPPORT_PASSWORD },
+    support: {
+        email: SEED_SUPPORT_EMAIL,
+        password: personaPasswords.NODE_SEED_SUPPORT_PASSWORD,
+        totpSecret: SEED_STAFF_TOTP_SECRET
+    },
     operator: {
         email: SEED_OPERATOR_EMAIL,
-        password: personaPasswords.NODE_SEED_OPERATOR_PASSWORD
+        password: personaPasswords.NODE_SEED_OPERATOR_PASSWORD,
+        totpSecret: SEED_STAFF_TOTP_SECRET
     }
 } as const;
 
 /** The logins for the demo accounts. */
 export const seedCredentials = {
-    admin: { email: SEED_ADMIN_EMAIL, password: SEED_ADMIN_PASSWORD },
+    admin: {
+        email: SEED_ADMIN_EMAIL,
+        password: SEED_ADMIN_PASSWORD,
+        totpSecret: SEED_STAFF_TOTP_SECRET
+    },
     user: { email: SEED_USER_EMAIL, password: SEED_USER_PASSWORD },
-    editor: { email: SEED_EDITOR_EMAIL, password: SEED_EDITOR_PASSWORD },
-    moderator: { email: SEED_MODERATOR_EMAIL, password: SEED_MODERATOR_PASSWORD },
+    editor: {
+        email: SEED_EDITOR_EMAIL,
+        password: SEED_EDITOR_PASSWORD,
+        totpSecret: SEED_STAFF_TOTP_SECRET
+    },
+    moderator: {
+        email: SEED_MODERATOR_EMAIL,
+        password: SEED_MODERATOR_PASSWORD,
+        totpSecret: SEED_STAFF_TOTP_SECRET
+    },
     ...seedPersonaCredentials,
     ...seedStaffCredentials
 } as const;

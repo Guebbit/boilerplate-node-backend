@@ -14,6 +14,8 @@ import { api } from '@tests/http';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { createProduct, readProduct } from '@modules/products/tests/factories';
 import { localeService } from '@modules/locales';
+import { inventoryService } from '@modules/inventory';
+import { givenLocale } from '@modules/locales/tests/factories';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { enabledModules } from '../../../../modules';
@@ -104,6 +106,10 @@ describe('GET /sitemap/pages.xml', () => {
     });
 });
 
+/** The first `lastmod` the products file gives, as a time. */
+const lastmodOf = (): Promise<number> =>
+    entriesOf('/sitemap/products-1.xml').then(([entry]) => new Date(entry.lastmod!).getTime());
+
 describe('GET /sitemap/products-{page}.xml', () => {
     it('lists a public product once per language, with alternates and its updatedAt as lastmod', async () => {
         const product = await createProduct();
@@ -124,6 +130,31 @@ describe('GET /sitemap/products-{page}.xml', () => {
             { lang: 'it', url: `${FRONTEND}/it/products/${id}` },
             { lang: 'x-default', url: `${FRONTEND}/en/products/${id}` }
         ]);
+    });
+
+    it('moves lastmod when a translation is edited', async () => {
+        const product = await createProduct();
+        const before = await lastmodOf();
+        // `updatedAt` has millisecond resolution; this keeps the edit from landing in the same one.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        await givenLocale('it');
+        const edit = await localeService.upsertEntityTranslations('product', String(product._id), {
+            it: { fields: { title: 'Un titolo nuovo' } }
+        });
+
+        expect(edit.success).toBe(true);
+        expect(await lastmodOf()).toBeGreaterThan(before);
+    });
+
+    it('leaves lastmod alone when only stock changes', async () => {
+        const product = await createProduct();
+        const before = await lastmodOf();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        await inventoryService.receive(String(product._id), 3);
+
+        expect(await lastmodOf()).toBe(before);
     });
 
     it('leaves out a hidden product and a soft-deleted one', async () => {

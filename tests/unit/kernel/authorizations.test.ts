@@ -201,6 +201,24 @@ const runUntilNext = async (
     return next;
 };
 
+/**
+ * Runs `getAuth` on an `sk_` token that does not resolve, until it answers: a refused key ends the
+ * request with a 401 instead of calling `next`.
+ */
+const runUntilRefused = async (request: Request) => {
+    const response = makeResponseStub();
+    const setHeader = jest.fn();
+    const refused = new Promise<void>((resolve) => {
+        response.json.mockImplementation(() => {
+            resolve();
+            return response;
+        });
+    });
+    getAuth(request, Object.assign(response, { setHeader }), jest.fn());
+    await refused;
+    return { response, setHeader };
+};
+
 describe('getTokenBearer', () => {
     it('strips the Bearer prefix and returns the token', () => {
         expect(getTokenBearer(makeRequest({ authorization: 'Bearer abc.def.ghi' }))).toBe(
@@ -370,11 +388,7 @@ describe('getAuth', () => {
     ] as const)('audits a %s sk_ credential as a security event', async (reason, action) => {
         mockedResolveCredential.mockResolvedValue({ miss: reason });
 
-        await runUntilNext(
-            getAuth,
-            makeRequest({ authorization: 'Bearer sk_abcdefgh_secret' }),
-            makeResponseStub()
-        );
+        await runUntilRefused(makeRequest({ authorization: 'Bearer sk_abcdefgh_secret' }));
 
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -387,14 +401,27 @@ describe('getAuth', () => {
     it('only counts an expired sk_ credential, without an audit entry', async () => {
         mockedResolveCredential.mockResolvedValue({ miss: 'expired' });
 
-        await runUntilNext(
-            getAuth,
-            makeRequest({ authorization: 'Bearer sk_abcdefgh_secret' }),
-            makeResponseStub()
-        );
+        await runUntilRefused(makeRequest({ authorization: 'Bearer sk_abcdefgh_secret' }));
 
         expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
     });
+
+    it.each(['malformed', 'invalid_signature', 'expired', 'revoked'] as const)(
+        'answers 401 with WWW-Authenticate for a %s sk_ credential, never anonymous',
+        async (reason) => {
+            mockedResolveCredential.mockResolvedValue({ miss: reason });
+            const request = makeRequest({ authorization: 'Bearer sk_abcdefgh_secret' });
+
+            const { response, setHeader } = await runUntilRefused(request);
+
+            expect(response.status).toHaveBeenCalledWith(401);
+            expect(setHeader).toHaveBeenCalledWith(
+                'WWW-Authenticate',
+                'Bearer error="invalid_token"'
+            );
+            expect(request.caller).toBeUndefined();
+        }
+    );
 
     it('resolves once when two mounted routers both apply it to the same request', async () => {
         // Two modules sharing a URL prefix (`account`, `addresses`) both mount this guard on
@@ -764,6 +791,47 @@ describe('requirePermission', () => {
         expect(staff.next).toHaveBeenCalledTimes(1);
     });
 
+    it('tells a staff member without an authenticator app to enrol, not just no', () => {
+        const unarmed = { ...asAdmin('user-1'), authenticatorArmed: false };
+        const next = jest.fn();
+        const response = makeResponseStub();
+
+        requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
+            makeRequest({ authContext: unarmed }),
+            response,
+            next
+        );
+
+        expect(next).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(403);
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                errors: [expect.objectContaining({ code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED' })]
+            })
+        );
+        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({ reason: 'second_factor_enrollment_required' })
+            })
+        );
+    });
+
+    it('does not say so to a customer, who could never hold the rule', () => {
+        const response = makeResponseStub();
+
+        requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
+            makeRequest({ authContext: asCustomer('user-1') }),
+            response,
+            jest.fn()
+        );
+
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                errors: [expect.objectContaining({ code: 'FORBIDDEN' })]
+            })
+        );
+    });
+
     it('answers 401, not 403, for an unauthenticated caller', () => {
         // No `authContext` at all means no credentials were presented — 401, distinct from the
         // case above (authenticated, just not admin), which is 403.
@@ -839,6 +907,26 @@ describe('requirePermission', () => {
 
         expect(unauthenticated.status).toHaveBeenCalledWith(401);
         expect(nonAdmin.status).toHaveBeenCalledWith(403);
+    });
+
+    it('refuses an API-key credential a platform rule with 403, and audits why', () => {
+        // An api-key is tenant-scoped by construction, so it can never satisfy a platform rule.
+        const response = makeResponseStub();
+        const next = jest.fn();
+
+        requirePermission('read', 'ObservabilitySnapshot')(makeCredentialRequest(), response, next);
+
+        expect(response.status).toHaveBeenCalledWith(403);
+        expect(next).not.toHaveBeenCalled();
+        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: coreAuditActions.SECURITY_FORBIDDEN,
+                metadata: expect.objectContaining({
+                    reason: 'credential_wrong_scope',
+                    permission: expect.stringContaining('ObservabilitySnapshot')
+                })
+            })
+        );
     });
 });
 

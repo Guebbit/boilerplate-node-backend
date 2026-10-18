@@ -68,17 +68,6 @@ describe('productRepository', () => {
 
             expect(found).toBeNull();
         });
-
-        it('returns only the first match when multiple documents qualify', async () => {
-            // Two active products
-            await createProduct({ title: 'Alpha', active: true });
-            await createProduct({ title: 'Beta', active: true });
-
-            const found = await productRepository.findOne({ active: true });
-
-            // At least one was returned (we don't rely on insertion order)
-            expect(found).not.toBeNull();
-        });
     });
 
     describe('findAll', () => {

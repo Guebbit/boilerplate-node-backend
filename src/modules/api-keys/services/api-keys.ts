@@ -32,8 +32,7 @@ import { mintApiKey, displayIdOf } from '../credentials';
 import { apiKeysAuditActions } from '../audit';
 import { ERROR_CODES } from '@api/error-codes';
 import { presentApiKey } from '../presenter';
-import { apiKeyMintedEmail, apiKeysRevokedEmail } from '../emails';
-import type { SessionsRevokedReason } from '@modules/account';
+import { apiKeyMintedEmail, apiKeysRevokedEmail, type KeysRevokedReason } from '../emails';
 import type { ApiKeyDocument } from '../model';
 
 /**
@@ -87,9 +86,16 @@ const notifyMinted = (minterId: string, apiKey: ApiKeyDocument): void => {
             const locale = minter.locale ?? getDefaultLocale();
             // Intl: a long, locale-aware date, so the mail reads the way the recipient's own does.
             // https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
-            const expires = new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(
-                apiKey.expiresAt
-            );
+            // Naming the zone: a foundation module knows no shop zone, and a date
+            // with no zone reads as the server's. Naming UTC is what makes the day unambiguous.
+            const expires = new Intl.DateTimeFormat(locale, {
+                // Field by field: `dateStyle` refuses a `timeZoneName`.
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                timeZone: 'UTC',
+                timeZoneName: 'short'
+            }).format(apiKey.expiresAt);
             const mail = apiKeyMintedEmail(
                 locale,
                 apiKey.name,
@@ -252,7 +258,7 @@ export const revoke = (
  */
 const notifyRevoked = (
     userId: string,
-    reason: SessionsRevokedReason,
+    reason: KeysRevokedReason,
     revoked: readonly ApiKeyDocument[]
 ): Promise<void> =>
     userService
@@ -287,7 +293,7 @@ const notifyRevoked = (
  * @param userId - the minter
  * @param reason - which `account` event asked for this
  */
-export const revokeAllMintedBy = (userId: string, reason: SessionsRevokedReason): Promise<void> =>
+export const revokeAllMintedBy = (userId: string, reason: KeysRevokedReason): Promise<void> =>
     apiKeyRepository.findActiveByMinter(userId).then((live) => {
         if (live.length === 0) return undefined;
 

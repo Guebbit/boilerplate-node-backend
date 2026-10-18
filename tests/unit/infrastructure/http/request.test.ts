@@ -751,6 +751,7 @@ describe('callerContextOf', () => {
                     authTime: 0,
                     amr: [],
                     twoFactorArmed: false,
+                    authenticatorArmed: false,
                     verified: true,
                     analyticsConsent: true
                 }
@@ -773,6 +774,7 @@ describe('callerContextOf', () => {
                     authTime: 0,
                     amr: [],
                     twoFactorArmed: false,
+                    authenticatorArmed: false,
                     verified: true,
                     analyticsConsent: false
                 }
@@ -795,6 +797,7 @@ describe('callerContextOf', () => {
                     authTime: 0,
                     amr: [],
                     twoFactorArmed: false,
+                    authenticatorArmed: false,
                     verified: true
                 }
             })

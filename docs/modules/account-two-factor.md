@@ -228,6 +228,38 @@ sequenceDiagram
 Every add or replace, removal, and "2FA turned off" also **mails the account holder** out of band
 (`account.two-factor-changed`), because a change from a stolen session is otherwise silent.
 
+## Staff need an authenticator app
+
+A staff role (any role in either scope: manager, warehouse, support, editor, moderator, admin,
+operator) **grants nothing while no authenticator app is armed**. Every staff role reads customer
+personal data, so a password alone is not enough for one (NIST SP 800-53 IA-2(1), OWASP ASVS 6.3.3).
+Only an app counts: a mailed code is not a second factor for a role like this (ASVS 6.3.6; NIST
+SP 800-63B-4 does not take email as out-of-band).
+
+```mermaid
+flowchart LR
+    S[Staff request] --> A{Authenticator<br/>app armed?}
+    A -- yes --> R[Role's rules plus the customer's]
+    A -- no --> C[Customer's rules only]
+    C --> G{Staff door?}
+    G -- yes --> E["403 SECOND_FACTOR_ENROLLMENT_REQUIRED"]
+    G -- no --> O[Served as a customer]
+```
+
+- **Read fresh on every request** (`authenticatorEnabledAt` on the user, derived with
+  `twoFactorEnabledAt` in the same write). A role granted to an account with no app is withheld on
+  its very next request; enrolling unlocks it on the next one. No session is revoked either way.
+- **The account keeps its customer powers and can enrol**, so nobody is locked out of the app that
+  unlocks the role. `403 SECOND_FACTOR_ENROLLMENT_REQUIRED` is said only to a session that WOULD
+  hold the rule once enrolled; anyone else gets the plain refusal.
+- **`GET /account/abilities` carries `secondFactorRequired`**, so a client shows an "enrol to use
+  your staff tools" prompt instead of a staff menu the server will refuse.
+- **Taking the app away revokes the keys the staff member minted** (`account.authenticator-removed`,
+  announced from the same removal; `api-keys` revokes). A key also never holds more than its minter
+  does now: a minter with no app lends it no staff rule. API keys themselves still carry no second
+  factor, by design.
+- **The system actor is no person** and is never gated.
+
 ## Adding a channel
 
 1. Write the handler under `methods/` — one file, satisfying `TwoFactorMethodHandler`.

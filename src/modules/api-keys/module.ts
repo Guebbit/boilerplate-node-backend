@@ -19,7 +19,7 @@ import { router } from './routes';
 import { fromBearerToken } from './services/resolver';
 import { findOwnApiKeys, apiKeysDeleteByUserId, revokeAllMintedBy } from './services/api-keys';
 import { onDomainEvent } from '@kernel/events';
-import { ACCOUNT_SESSIONS_REVOKED } from '@modules/account';
+import { ACCOUNT_AUTHENTICATOR_REMOVED, ACCOUNT_SESSIONS_REVOKED } from '@modules/account';
 
 /**
  * Installs the credential resolver once this module is known to be enabled — registering it
@@ -42,6 +42,10 @@ export default {
         // nothing about keys, it only announces.
         onDomainEvent(ACCOUNT_SESSIONS_REVOKED, ({ userId, reason }) =>
             revokeAllMintedBy(userId, reason)
+        );
+        // A staff member's authenticator app is gone, so the keys minted under it go too.
+        onDomainEvent(ACCOUNT_AUTHENTICATOR_REMOVED, ({ userId }) =>
+            revokeAllMintedBy(userId, 'authenticator-removed')
         );
     },
     locales: path.join(__dirname, 'locales'),

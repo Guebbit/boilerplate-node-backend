@@ -16,6 +16,7 @@
             "body-logout-all": "You signed out of every device, so the API keys you created were revoked:",
             "body-password-reset": "Your password was reset, so the API keys you created were revoked:",
             "body-email-change-undo": "You reported an email change as not yours, so the API keys you created were revoked:",
+            "body-authenticator-removed": "Your authenticator app was removed, so the API keys you created were revoked:",
             "advice": "Create new keys once you are sure the account is yours."
         }
     }

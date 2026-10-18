@@ -59,13 +59,14 @@ const KEYED_BY_SUBMITTED_ACCOUNT =
 
 /**
  * Whether a request's body names the account it is aimed at — an `email` or a `username`. The
- * per-account budget exists for exactly that case: guessing at ONE account. A confirm that carries
+ * per-account budget exists for exactly that case: guessing at ONE account. A blank value names
+ * nobody — `identityOf` files it under the address block too. A confirm that carries
  * only a token (a reset link, a 2FA code, an OAuth callback) names nobody, and keying it anyway
  * would put every neighbour in one /24 into one shared bucket; the address and block budgets
  * already bound those routes.
  */
 const namesAnAccount = (request: Request): boolean =>
-    (readBodyField(request, 'email') ?? readBodyField(request, 'username')) !== undefined;
+    Boolean(readBodyField(request, 'email') ?? readBodyField(request, 'username'));
 
 /** Failed attempts against ONE named account — the smallest of the credential budgets. */
 const CREDENTIAL_IDENTITY_BUDGET: RateLimitBudget = {

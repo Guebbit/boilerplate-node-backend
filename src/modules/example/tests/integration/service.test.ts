@@ -282,6 +282,8 @@ describe('updateById', () => {
         asSuccess(
             await exampleService.updateById(String(theirs._id), { title: 'Edited by staff' }, admin)
         );
+
+        expect(await fieldOf(String(theirs._id), 'title')).toBe('Edited by staff');
     });
 
     it('lets an administrator edit a fellow administrator’s example: nothing ranks, the key is the rule', async () => {

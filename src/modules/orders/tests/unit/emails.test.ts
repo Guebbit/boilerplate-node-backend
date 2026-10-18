@@ -99,6 +99,28 @@ describe('orderConfirmEmail', () => {
         expect(lines[3]).not.toContain('2026');
     });
 
+    it("prints a date staff typed on the shop's day, not the UTC evening before it", () => {
+        // Local midnight on 20 December in Rome (UTC+1) is 23:00Z on the 19th.
+        const order: OrderLines = {
+            items: [
+                {
+                    quantity: 1,
+                    product: {
+                        title: 'Preorder',
+                        price: 5,
+                        preorder: true,
+                        releaseDate: new Date('2026-12-19T23:00:00Z')
+                    }
+                }
+            ],
+            currency: 'EUR'
+        };
+
+        const lines = orderConfirmEmail('en', NAME, order, ORDER_ID).data.lines as string[];
+
+        expect(lines[0]).toContain('ships from December 20, 2026');
+    });
+
     it('states the same total the order itself computes, shipping included', () => {
         // Not a recomputation: the point is that this builder defers to `orderTotal`, so the
         // email and the charge cannot drift apart. `totals.property.test.ts` covers the sum.
