@@ -27,6 +27,7 @@ flowchart LR
     cart -. "cart.lines_removed" .-> notifications
     cart -. "cart.merge_refused" .-> notifications
     delivery -. "fulfillment_order.delayed" .-> notifications
+    delivery -. "fulfillment_order.hold_noticed" .-> notifications
     wishlist -. "wishlist.items_removed" .-> notifications
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -68,10 +69,15 @@ backend keeps no copy in step with the UI.
 | `notifications.cart-merge-refused`    | `{ lines: [{ productId, requested, titles }] }`                  |
 | `notifications.preorder-delayed`      | `{ orderId, fulfillmentOrderId, titles, agreedAt, expectedAt? }` |
 | `notifications.preorder-confirm-wait` | the same, plus `answerBy`                                        |
+| `notifications.fulfillment-held`      | `{ orderId, fulfillmentOrderId, notice, message? }`              |
 
 The last two are a late preorder's notice ([delivery](./delivery.md#preorders-and-a-moved-date)): the
 first only informs and offers the cancel, the second needs an answer by `answerBy` or silence cancels.
 Both are written from `fulfillment_order.delayed`, and an erased account has no inbox to write to.
+
+`notifications.fulfillment-held` is a hold the buyer can act on or should read about, written from
+`fulfillment_order.hold_noticed` ([delivery](./delivery.md#holds)): `notice` is `check_address` or `delayed`,
+`message` is what staff wrote for them. It never carries staff's reason.
 
 The stored `params` is `Mixed` in Mongo, but the document type is the same union
 (`NotificationBody` in `model.ts`), so a writer cannot pair a code with another code's params and

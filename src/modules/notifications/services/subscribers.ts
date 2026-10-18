@@ -49,6 +49,30 @@ export const onCartMergeRefused = ({
     ]);
 
 /**
+ * A hold gave the buyer something to do or read: the same message in their inbox, so it is still
+ * there when the email is not. Staff's reason never gets here, only the notice. An erased account
+ * has no inbox to write to.
+ */
+export const onFulfillmentOrderHoldNoticed = (
+    held: DomainEventMap['fulfillment_order.hold_noticed']
+): Promise<void> =>
+    held.userId === undefined
+        ? Promise.resolve()
+        : notificationsCreate([
+              {
+                  userId: new Types.ObjectId(held.userId),
+                  code: 'notifications.fulfillment-held',
+                  severity: 'warning',
+                  params: {
+                      orderId: held.orderId,
+                      fulfillmentOrderId: held.fulfillmentOrderId,
+                      notice: held.notice,
+                      ...(held.message ? { message: held.message } : {})
+                  }
+              }
+          ]);
+
+/**
  * A waiting preorder's buyer was told its date moved or passed: the same message in their inbox, so
  * it is still there when the email is not. One code for a notice that only informs, another for one
  * that needs an answer, so the screen can put Keep waiting beside the second. An erased account has no

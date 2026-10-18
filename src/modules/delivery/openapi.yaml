@@ -63,7 +63,7 @@ paths:
                 actually left, with its tracking code). Each record carries its own `actions`, decided
                 per caller. Ownership is the order's, read through the same scope every order read
                 uses. An order that is not paid yet answers both lists empty — absence is the answer,
-                never a 404. `holdNote` is staff's own and is left out for anyone else.
+                never a 404. A hold reads to the buyer as `holdNotice` and staff's `holdMessage`; `holdReason` and `holdNote` are staff's own and are left out for anyone else.
             operationId: getFulfillmentByOrder
             security:
                 - bearerAuth: []
@@ -568,6 +568,16 @@ components:
                 Why a fulfillment order is on hold (Shopify's hold reasons). `awaiting_stock` is set
                 only by the allocation of stock, and released only by it; the other three are staff's.
 
+        FulfillmentHoldNotice:
+            type: string
+            enum: [awaiting_stock, check_address, delayed]
+            description: >-
+                What a hold means to the BUYER, whatever staff's reason: `awaiting_stock` (the goods are
+                not here yet), `check_address` (the buyer can act: the address needs a look), `delayed`
+                (held for a check, said plainly). A reason that must stay quiet, such as `high_risk`, reads
+                as `delayed`, so a notice never reveals a screening result. The reason itself
+                (`FulfillmentHoldReason`) is staff's.
+
         FulfillmentConsent:
             type: string
             enum: [awaiting, confirmed, expired]
@@ -668,6 +678,12 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/FulfillmentOrderLine'
+                holdNotice:
+                    $ref: '#/components/schemas/FulfillmentHoldNotice'
+                holdMessage:
+                    type: string
+                    maxLength: 500
+                    description: What staff wrote for the buyer about the hold. Everyone who reads the fulfillment order sees it.
                 holdReason:
                     $ref: '#/components/schemas/FulfillmentHoldReason'
                 holdNote:
@@ -844,6 +860,11 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/FulfillmentOrderLine'
+                holdNotice:
+                    $ref: '#/components/schemas/FulfillmentHoldNotice'
+                holdMessage:
+                    type: string
+                    maxLength: 500
                 holdReason:
                     $ref: '#/components/schemas/FulfillmentHoldReason'
                 holdNote:
@@ -938,6 +959,14 @@ components:
                     maxLength: 1000
                     minLength: 1
                     description: Free text for the staff who read the hold later; reaped with the other free text.
+                message:
+                    type: string
+                    maxLength: 500
+                    minLength: 1
+                    description: >-
+                        A sentence for the buyer, shown on their order and mailed with the hold. Separate
+                        from `note`, which they never see. A hold for `incorrect_address` or with a message is
+                        mailed; a bare one is not.
 
         OrderFulfillmentEnvelope:
             type: object

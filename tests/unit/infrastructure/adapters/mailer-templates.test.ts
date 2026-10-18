@@ -47,6 +47,7 @@ import {
 } from '@modules/payments/emails';
 import { buildDocumentView } from '@modules/invoicing/emails';
 import {
+    holdNoticeEmail,
     preorderDelayedEmail,
     shipmentDeliveredEmail,
     shipmentShippedEmail
@@ -179,6 +180,11 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'delivery.shipment-delivered': shipmentDeliveredEmail(locale, 'Ada', {
         lines: [{ title: 'Widget', quantity: 1 }],
         withdrawUntil: new Date(Date.UTC(2026, 10, 14))
+    }),
+    'delivery.hold-notice': holdNoticeEmail(locale, 'Ada', {
+        notice: 'check_address',
+        message: 'Is the flat number right?',
+        orderUrl: 'https://shop.example/orders/an-order-id'
     }),
     'delivery.preorder-delayed': preorderDelayedEmail(locale, 'Ada', {
         titles: ['Widget'],

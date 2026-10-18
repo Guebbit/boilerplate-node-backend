@@ -38,6 +38,8 @@ export interface HoldInput {
     reason: Exclude<FulfillmentHoldReason, 'awaiting_stock'>;
     /** Free text for the staff who read the hold later. */
     note?: string | undefined;
+    /** A sentence for the buyer, mailed with the hold. */
+    message?: string | undefined;
 }
 
 /** What a committed hold or release leaves for the steps that follow it. */
@@ -97,14 +99,15 @@ const holdAct = async (
         {
             status: statusOfLines(fulfillmentOrder.lines, true),
             holdReason: input.reason,
-            ...(input.note ? { holdNote: input.note } : {})
+            ...(input.note ? { holdNote: input.note } : {}),
+            ...(input.message ? { holdMessage: input.message } : {})
         },
         session
     );
     if (!held) return refuse(409, ERROR_CODES.DELIVERY_NOT_HOLDABLE, 'delivery.not-holdable');
 
     await reportProgress(String(held.orderId), session);
-    await announceHeld(held, session, actor);
+    await announceHeld(held, order, session, actor);
     return { fulfillmentOrder: held, order };
 };
 
@@ -128,7 +131,7 @@ const releaseAct = async (
         fulfillmentOrder.revision,
         {
             status: statusOfLines(fulfillmentOrder.lines, false),
-            unset: ['holdReason', 'holdNote']
+            unset: ['holdReason', 'holdNote', 'holdMessage']
         },
         session
     );

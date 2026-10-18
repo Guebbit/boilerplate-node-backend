@@ -50,6 +50,21 @@ export interface FulfillmentOrderDelayed {
     answerBy?: string;
 }
 
+/**
+ * What a `fulfillment_order.hold_noticed` event tells: a hold the buyer can act on or should read
+ * about. Buyer-safe by construction: the notice, never staff's reason or note.
+ */
+export interface FulfillmentOrderHoldNoticed {
+    orderId: string;
+    fulfillmentOrderId: string;
+    /** The buyer; absent once the account was erased, so there is no inbox to write to. */
+    userId?: string;
+    /** `check_address` when the address needs a look, else `delayed`. */
+    notice: 'check_address' | 'delayed';
+    /** What staff wrote for the buyer, if anything. */
+    message?: string;
+}
+
 /** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
 declare module '@kernel/events' {
     interface DomainEventMap {
@@ -66,6 +81,13 @@ declare module '@kernel/events' {
 
         /** Staff put a fulfillment order on hold, or the stock it awaits did not arrive. */
         'fulfillment_order.held': { orderId: string; fulfillmentOrderId: string; reason: string };
+
+        /**
+         * A hold the buyer has something to do or read about: an address to check, or a message
+         * staff wrote for them. A bare delay and `awaiting_stock` fire nothing. `notifications`
+         * turns it into an inbox row (`fulfillment-held`); this module mails the same from it.
+         */
+        'fulfillment_order.hold_noticed': FulfillmentOrderHoldNoticed;
 
         /** A hold ended and the fulfillment order may ship. */
         'fulfillment_order.released': { orderId: string; fulfillmentOrderId: string };
@@ -99,6 +121,9 @@ export const SHIPMENT_DELIVERED = 'shipment.delivered';
 
 /** See `DomainEventMap['fulfillment_order.held']` above. */
 export const FULFILLMENT_ORDER_HELD = 'fulfillment_order.held';
+
+/** See `DomainEventMap['fulfillment_order.hold_noticed']` above. */
+export const FULFILLMENT_ORDER_HOLD_NOTICED = 'fulfillment_order.hold_noticed';
 
 /** See `DomainEventMap['fulfillment_order.released']` above. */
 export const FULFILLMENT_ORDER_RELEASED = 'fulfillment_order.released';

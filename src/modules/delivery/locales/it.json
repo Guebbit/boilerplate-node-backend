@@ -31,6 +31,19 @@
             "withdraw-until": "Puoi recedere dall'acquisto fino al {{date}}."
         },
         "not-awaiting-answer": "Questa spedizione non attende una risposta",
+        "email-hold-notice": {
+            "meta-title": "Una parte del tuo ordine è in sospeso",
+            "greeting": "Ciao, {{name}}!",
+            "check_address": {
+                "subject": "Controlla l'indirizzo di consegna del tuo ordine",
+                "body": "Non abbiamo ancora potuto spedire una parte del tuo ordine perché ci serve che tu controlli l'indirizzo di consegna. Apri il tuo ordine e dicci se qualcosa non va."
+            },
+            "delayed": {
+                "subject": "Una parte del tuo ordine è in ritardo",
+                "body": "Una parte del tuo ordine è trattenuta per un momento e partirà più tardi del previsto. Puoi annullarla in qualsiasi momento prima della spedizione e sarai rimborsato per intero."
+            },
+            "link-label": "Vedi il tuo ordine"
+        },
         "email-preorder-delayed": {
             "meta-title": "Il tuo preordine è in ritardo",
             "greeting": "Ciao, {{name}}!",

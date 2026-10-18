@@ -15,7 +15,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { CART_LINES_REMOVED, CART_MERGE_REFUSED } from '@modules/cart';
-import { FULFILLMENT_ORDER_DELAYED } from '@modules/delivery';
+import { FULFILLMENT_ORDER_DELAYED, FULFILLMENT_ORDER_HOLD_NOTICED } from '@modules/delivery';
 import { WISHLIST_ITEMS_REMOVED } from '@modules/wishlist';
 import { notificationsConfig } from './config';
 import { router } from './routes';
@@ -41,6 +41,10 @@ export default {
         onDomainEvent(WISHLIST_ITEMS_REMOVED, notificationsService.onWishlistItemsRemoved);
         onDomainEvent(CART_MERGE_REFUSED, notificationsService.onCartMergeRefused);
         onDomainEvent(FULFILLMENT_ORDER_DELAYED, notificationsService.onFulfillmentOrderDelayed);
+        onDomainEvent(
+            FULFILLMENT_ORDER_HOLD_NOTICED,
+            notificationsService.onFulfillmentOrderHoldNoticed
+        );
     },
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

@@ -35,7 +35,7 @@ import { confirmWait } from './confirm-wait';
 import { listPreorderFulfillmentOrders, summarizePreorders } from './board';
 import { previewReleaseDateImpact } from './release-date-impact';
 import { scrubHoldNotes } from './retention';
-import { mailShipped, mailDelivered, mailDelayed } from './notify';
+import { mailShipped, mailDelivered, mailDelayed, mailHoldNoticed } from './notify';
 
 export type { RemainderOption } from './read';
 export type { ShipInput } from './ship';
@@ -78,5 +78,6 @@ export const deliveryService = {
     scrubHoldNotes,
     mailShipped,
     mailDelivered,
-    mailDelayed
+    mailDelayed,
+    mailHoldNoticed
 };

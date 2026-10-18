@@ -35,6 +35,7 @@ import { presentExportFulfillmentOrder, presentExportShipment } from './presente
 // own barrel — see CLAUDE.md's module-barrel rule.
 import {
     FULFILLMENT_ORDER_DELAYED,
+    FULFILLMENT_ORDER_HOLD_NOTICED,
     SHIPMENT_DELIVERED,
     SHIPMENT_SHIPPED,
     type ShipmentEventPayload
@@ -125,6 +126,7 @@ export default {
         onDomainEvent(SHIPMENT_SHIPPED, deliveryService.mailShipped);
         onDomainEvent(SHIPMENT_DELIVERED, deliveryService.mailDelivered);
         onDomainEvent(FULFILLMENT_ORDER_DELAYED, deliveryService.mailDelayed);
+        onDomainEvent(FULFILLMENT_ORDER_HOLD_NOTICED, deliveryService.mailHoldNoticed);
         onDomainEvent(PRODUCT_RELEASE_DATE_CHANGED, ({ productId }) =>
             deliveryService.onReleaseDateChanged(productId)
         );

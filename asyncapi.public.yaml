@@ -982,6 +982,60 @@ components:
                     type: string
                     format: date-time
             additionalProperties: false
+        FulfillmentHeldParamsPayload:
+            title: FulfillmentHeldParamsPayload
+            type: object
+            required:
+                - orderId
+                - fulfillmentOrderId
+                - notice
+            properties:
+                orderId:
+                    type: string
+                fulfillmentOrderId:
+                    type: string
+                notice:
+                    type: string
+                    enum:
+                        - check_address
+                        - delayed
+                message:
+                    type: string
+                    maxLength: 500
+            additionalProperties: false
+        NotificationFulfillmentHeldPayload:
+            title: NotificationFulfillmentHeldPayload
+            type: object
+            required:
+                - id
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                code:
+                    type: string
+                    enum:
+                        - notifications.fulfillment-held
+                params:
+                    $ref: '#/components/schemas/FulfillmentHeldParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
         NotificationPreorderDelayedPayload:
             title: NotificationPreorderDelayedPayload
             type: object
@@ -1155,6 +1209,7 @@ components:
                 - $ref: '#/components/schemas/NotificationCartMergeRefusedPayload'
                 - $ref: '#/components/schemas/NotificationPreorderDelayedPayload'
                 - $ref: '#/components/schemas/NotificationPreorderConfirmWaitPayload'
+                - $ref: '#/components/schemas/NotificationFulfillmentHeldPayload'
             # A plain property name here, unlike OpenAPI's `{ propertyName }` object.
             discriminator: code
         NotificationCreatedPayload:

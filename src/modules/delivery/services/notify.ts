@@ -13,9 +13,14 @@ import type { DomainEventMap } from '@kernel/events';
 import { OrderStatus } from '@types';
 import { orderService } from '@modules/orders';
 import { orderFrontendLink } from '@modules/orders';
-import { preorderDelayedEmail, shipmentDeliveredEmail, shipmentShippedEmail } from '../emails';
+import {
+    holdNoticeEmail,
+    preorderDelayedEmail,
+    shipmentDeliveredEmail,
+    shipmentShippedEmail
+} from '../emails';
 import { shipmentRepository } from '../repository';
-import type { FulfillmentOrderDelayed } from '../events';
+import type { FulfillmentOrderDelayed, FulfillmentOrderHoldNoticed } from '../events';
 import type { ShipmentDocument } from '../model';
 
 /**
@@ -126,6 +131,22 @@ export const mailDelayed = (delayed: FulfillmentOrderDelayed): Promise<void> =>
             ...(delayed.expectedAt ? { expectedAt: new Date(delayed.expectedAt) } : {}),
             needsAnswer: delayed.needsAnswer,
             ...(delayed.answerBy ? { answerBy: new Date(delayed.answerBy) } : {}),
+            orderUrl: orderFrontendLink({ locale, id: String(order._id) })
+        });
+        void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
+    });
+
+/**
+ * Tell the buyer a hold needs their eye: an address to check, or a message staff wrote. The
+ * notice is already a fact; the inbox row and the order page say the same.
+ *
+ * @param held - the `fulfillment_order.hold_noticed` fact
+ */
+export const mailHoldNoticed = (held: FulfillmentOrderHoldNoticed): Promise<void> =>
+    orderService.mailBuyerOfOrder(held.orderId, (order, locale, name) => {
+        const mail = holdNoticeEmail(locale, name, {
+            notice: held.notice,
+            message: held.message,
             orderUrl: orderFrontendLink({ locale, id: String(order._id) })
         });
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);

@@ -15,7 +15,7 @@ import type {
     ExportShipment,
     ExportFulfillmentOrder
 } from '@types';
-import { boardStateOf, isLate, remainingOfLine, slippedDays } from './domain';
+import { boardStateOf, holdNoticeOf, isLate, remainingOfLine, slippedDays } from './domain';
 import type { ProductSummaryRow } from './repository';
 import type { OrderBrief } from '@modules/orders';
 import type { FulfillmentOrderDocument, ShipmentDocument } from './model';
@@ -72,17 +72,21 @@ export const presentExportShipment = (shipment: ShipmentDocument): ExportShipmen
 });
 
 /**
- * The fulfillment order's record without staff's hold note: what any reader of it may see.
+ * The fulfillment order's record as any reader may see it: a hold is the buyer-safe notice and
+ * staff's message for the buyer, never the reason (which may be a risk call) or the note.
  * @param fulfillmentOrder - the stored fulfillment order
  */
-const presentRecord = (fulfillmentOrder: FulfillmentOrderDocument): ExportFulfillmentOrder => ({
+const presentRecord = (fulfillmentOrder: FulfillmentOrderDocument) => ({
     id: String(fulfillmentOrder._id),
     orderId: String(fulfillmentOrder.orderId),
     number: fulfillmentOrder.number,
     kind: fulfillmentOrder.kind,
     status: fulfillmentOrder.status,
     lines: presentLines(fulfillmentOrder.lines),
-    ...(fulfillmentOrder.holdReason ? { holdReason: fulfillmentOrder.holdReason } : {}),
+    ...(fulfillmentOrder.holdReason
+        ? { holdNotice: holdNoticeOf(fulfillmentOrder.holdReason) }
+        : {}),
+    ...(fulfillmentOrder.holdMessage ? { holdMessage: fulfillmentOrder.holdMessage } : {}),
     ...(fulfillmentOrder.agreedAt ? { agreedAt: fulfillmentOrder.agreedAt.toISOString() } : {}),
     ...(fulfillmentOrder.expectedAt
         ? { expectedAt: fulfillmentOrder.expectedAt.toISOString() }
@@ -98,14 +102,16 @@ const presentRecord = (fulfillmentOrder: FulfillmentOrderDocument): ExportFulfil
 });
 
 /**
- * The fulfillment order as an account export carries it. Staff's hold note is in: their
- * assessment of the buyer is the buyer's data. The record holds no staff id, so none is out.
+ * The fulfillment order as an account export carries it. Staff's hold reason and note are in:
+ * their assessment of the buyer is the buyer's data (GDPR Art. 15). The record holds no staff id,
+ * so none is out.
  * @param fulfillmentOrder - the stored fulfillment order
  */
 export const presentExportFulfillmentOrder = (
     fulfillmentOrder: FulfillmentOrderDocument
 ): ExportFulfillmentOrder => ({
     ...presentRecord(fulfillmentOrder),
+    ...(fulfillmentOrder.holdReason ? { holdReason: fulfillmentOrder.holdReason } : {}),
     ...(fulfillmentOrder.holdNote ? { holdNote: fulfillmentOrder.holdNote } : {})
 });
 
@@ -113,16 +119,19 @@ export const presentExportFulfillmentOrder = (
  * The fulfillment order as `openapi.yaml` declares it, with the caller's `actions`.
  * @param fulfillmentOrder - the stored fulfillment order
  * @param actions - what this caller may do to it
- * @param showNote - whether the caller may read staff's hold note
+ * @param staffView - whether the caller may read staff's hold reason and note
  */
 export const presentFulfillmentOrder = (
     fulfillmentOrder: FulfillmentOrderDocument,
     actions: FulfillmentOrderActions,
-    showNote: boolean
+    staffView: boolean
 ): FulfillmentOrder => ({
     ...presentRecord(fulfillmentOrder),
     actions,
-    ...(showNote && fulfillmentOrder.holdNote ? { holdNote: fulfillmentOrder.holdNote } : {}),
+    ...(staffView && fulfillmentOrder.holdReason
+        ? { holdReason: fulfillmentOrder.holdReason }
+        : {}),
+    ...(staffView && fulfillmentOrder.holdNote ? { holdNote: fulfillmentOrder.holdNote } : {}),
     createdAt: (fulfillmentOrder.createdAt ?? new Date(0)).toISOString(),
     ...(fulfillmentOrder.updatedAt ? { updatedAt: fulfillmentOrder.updatedAt.toISOString() } : {})
 });

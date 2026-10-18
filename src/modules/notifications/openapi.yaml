@@ -206,6 +206,49 @@ components:
                     type: string
                     format: date-time
 
+        FulfillmentHeldParams:
+            type: object
+            additionalProperties: false
+            required: [orderId, fulfillmentOrderId, notice]
+            description: >-
+                What the buyer needs to read a hold notice: which order and fulfillment order, whether
+                the address needs a look (`check_address`) or the order is only `delayed`, and the
+                sentence staff wrote for them, if any. Never staff's reason.
+            properties:
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                fulfillmentOrderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                notice:
+                    type: string
+                    enum: [check_address, delayed]
+                message:
+                    type: string
+                    maxLength: 500
+
+        NotificationFulfillmentHeld:
+            type: object
+            additionalProperties: false
+            description: Part of an order the caller bought is held back, and they can act (check the address) or have a message from the shop.
+            required: [id, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                code:
+                    type: string
+                    enum: [notifications.fulfillment-held]
+                params:
+                    $ref: '#/components/schemas/FulfillmentHeldParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
         NotificationPreorderDelayed:
             type: object
             additionalProperties: false
@@ -328,6 +371,7 @@ components:
                 - $ref: '#/components/schemas/NotificationCartMergeRefused'
                 - $ref: '#/components/schemas/NotificationPreorderDelayed'
                 - $ref: '#/components/schemas/NotificationPreorderConfirmWait'
+                - $ref: '#/components/schemas/NotificationFulfillmentHeld'
             discriminator:
                 propertyName: code
                 mapping:
@@ -336,6 +380,7 @@ components:
                     notifications.cart-merge-refused: '#/components/schemas/NotificationCartMergeRefused'
                     notifications.preorder-delayed: '#/components/schemas/NotificationPreorderDelayed'
                     notifications.preorder-confirm-wait: '#/components/schemas/NotificationPreorderConfirmWait'
+                    notifications.fulfillment-held: '#/components/schemas/NotificationFulfillmentHeld'
 
         NotificationsResponse:
             type: object

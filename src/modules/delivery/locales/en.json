@@ -31,6 +31,19 @@
             "withdraw-until": "You may withdraw from the purchase until {{date}}."
         },
         "not-awaiting-answer": "This fulfillment order is not waiting for an answer",
+        "email-hold-notice": {
+            "meta-title": "Part of your order is on hold",
+            "greeting": "Hello, {{name}}!",
+            "check_address": {
+                "subject": "Please check the delivery address of your order",
+                "body": "We could not send part of your order yet because we need you to check its delivery address. Open your order and tell us if anything is wrong."
+            },
+            "delayed": {
+                "subject": "Part of your order is delayed",
+                "body": "Part of your order is held back for a moment and will leave later than planned. You may cancel it at any time before it ships, and you will be refunded in full."
+            },
+            "link-label": "See your order"
+        },
         "email-preorder-delayed": {
             "meta-title": "Your preorder is late",
             "greeting": "Hello, {{name}}!",

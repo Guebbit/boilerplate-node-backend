@@ -24,6 +24,15 @@ import { enabledModules } from '../../../../modules';
 setupTestDb();
 
 /** A user's inbox, newest first. */
+/** A `fulfillment_order.hold_noticed` fact for `userId`, absent for an erased account. */
+const heldFor = (userId: string | undefined) => ({
+    orderId: 'order-1',
+    fulfillmentOrderId: 'fo-1',
+    ...(userId ? { userId } : {}),
+    notice: 'check_address' as const,
+    message: 'Is the flat number right?'
+});
+
 const inboxOf = (userId: string) => notificationsService.list(userId).then(({ items }) => items);
 
 describe('the module subscriptions', () => {
@@ -274,6 +283,33 @@ describe('the module subscriptions', () => {
             const { user } = await moved(10);
 
             await expect(inboxOf(user.id)).resolves.toEqual([]);
+        });
+    });
+
+    describe('a hold the buyer can act on', () => {
+        it('lands in the buyer inbox with the notice and the shop’s message, never a reason', async () => {
+            const user = await createUser();
+
+            await emitDomainEvent('fulfillment_order.hold_noticed', heldFor(user.id));
+
+            const [message, ...rest] = await inboxOf(user.id);
+            expect(rest).toEqual([]);
+            expect(message).toMatchObject({
+                code: 'notifications.fulfillment-held',
+                severity: 'warning',
+                params: {
+                    orderId: 'order-1',
+                    notice: 'check_address',
+                    message: 'Is the flat number right?'
+                }
+            });
+            expect(JSON.stringify(message)).not.toMatch(/reason/i);
+        });
+
+        it('writes no row at all for a buyer whose account was erased', async () => {
+            await emitDomainEvent('fulfillment_order.hold_noticed', heldFor(undefined));
+
+            await expect(notificationModel.countDocuments({})).resolves.toBe(0);
         });
     });
 });

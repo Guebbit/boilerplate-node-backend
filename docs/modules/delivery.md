@@ -38,6 +38,7 @@ flowchart LR
     orders -. "order.status_overridden" .-> delivery
     products -. "product.release_date_changed" .-> delivery
     delivery -. "fulfillment_order.delayed" .-> notifications
+    delivery -. "fulfillment_order.hold_noticed" .-> notifications
     delivery -. "fulfillment_order.wait_expired" .-> returns
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -174,6 +175,24 @@ its lines. A product line that carries neither flag simply lands in #1.
 | `incorrect_address`, `high_risk`, `other` (+ a note) | staff, `…/hold`   | staff, `…/release`                                                                                                                 |
 
 A fulfillment order is **never** shipped from `on_hold`, forced or not.
+
+**What the buyer sees is not the reason.** Staff's reason can be an internal call (a risk check), and
+naming it tips off the people a check exists for, so the buyer gets one of three notices, mapped
+once in `domain/hold-notice.ts`:
+
+| Staff's reason       | The buyer reads                          | Mailed (and an inbox row)?                      |
+| -------------------- | ---------------------------------------- | ----------------------------------------------- |
+| `awaiting_stock`     | `holdNotice: awaiting_stock`             | never                                           |
+| `incorrect_address`  | `check_address`: the buyer can act       | always                                          |
+| `high_risk`, `other` | `delayed`: the same plain delay for both | only when staff wrote a `message` for the buyer |
+
+Hiding the hold instead would put a false "being prepared" on a held order (UCPD Art. 6(1)(b)) and leave
+a wrong address unfixable. `holdReason` and `holdNote` are staff's (and the buyer's own GDPR export);
+`holdMessage`, the optional sentence staff write **for** the buyer (`message` on `…/hold`, at most 500
+characters), is read by everyone and is dropped with the hold on release. It is not scrubbed with
+the note: it is something the shop told a customer. A mail and an inbox row come from one fact,
+`fulfillment_order.hold_noticed`, written in the hold's transaction. When the address is wrong, staff
+correct it with [`PUT /orders/{id}/shipping-address`](./orders.md#correcting-the-shipping-address).
 
 ### A short stock delivery
 
@@ -501,13 +520,14 @@ date this order was expecting, not the product's previous date.
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
 frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../theory/authorization.md#protecting-people).
 
-| Event                                                 | Payload                                            | Public webhook                 |
-| ----------------------------------------------------- | -------------------------------------------------- | ------------------------------ |
-| `shipment.shipped`                                    | `{orderId, shipmentId, fulfillmentOrderId, lines}` | yes — replaces `order.shipped` |
-| `shipment.delivered`                                  | the same                                           | yes                            |
-| `fulfillment_order.held` · `.released` · `.cancelled` | `{orderId, fulfillmentOrderId, reason?}`           | no                             |
-| `fulfillment_order.delayed`                           | the dates, the titles, `needsAnswer`, `answerBy`   | no                             |
-| `fulfillment_order.wait_expired`                      | `{orderId, fulfillmentOrderId}`                    | no                             |
+| Event                                                 | Payload                                                    | Public webhook                 |
+| ----------------------------------------------------- | ---------------------------------------------------------- | ------------------------------ |
+| `shipment.shipped`                                    | `{orderId, shipmentId, fulfillmentOrderId, lines}`         | yes — replaces `order.shipped` |
+| `shipment.delivered`                                  | the same                                                   | yes                            |
+| `fulfillment_order.held` · `.released` · `.cancelled` | `{orderId, fulfillmentOrderId, reason?}`                   | no                             |
+| `fulfillment_order.hold_noticed`                      | `{orderId, fulfillmentOrderId, userId?, notice, message?}` | no                             |
+| `fulfillment_order.delayed`                           | the dates, the titles, `needsAnswer`, `answerBy`           | no                             |
+| `fulfillment_order.wait_expired`                      | `{orderId, fulfillmentOrderId}`                            | no                             |
 
 All are written through the outbox **in the act's transaction**. An order shipped in two goes fires
 `shipment.shipped` twice, and the order reaching `shipped` is the last of them.

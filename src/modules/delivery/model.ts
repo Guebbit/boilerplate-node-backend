@@ -48,6 +48,12 @@ export interface FulfillmentOrderDocument extends Document {
     holdReason?: FulfillmentHoldReason;
     /** Staff's free text about a hold. Reaped like the other free text. */
     holdNote?: string;
+    /**
+     * What staff wrote FOR the buyer about a hold: a sentence the buyer reads and is mailed. Kept
+     * with the order like any message sent to a customer, so it is not scrubbed with `holdNote`;
+     * a release drops it with the hold.
+     */
+    holdMessage?: string;
     /** The date promised when ordering, frozen from the line snapshot. */
     agreedAt?: Date;
     /** When it is now expected to ship. */
@@ -134,6 +140,7 @@ export const fulfillmentOrderSchema = new Schema<FulfillmentOrderDocument>(
         lines: { type: [fulfillmentLineSchema], required: true },
         holdReason: { type: String, enum: Object.values(FulfillmentHoldReason) },
         holdNote: { type: String, maxlength: 1000 },
+        holdMessage: { type: String, maxlength: 500 },
         agreedAt: { type: Date },
         expectedAt: { type: Date },
         consent: { type: String, enum: Object.values(FulfillmentConsent) },

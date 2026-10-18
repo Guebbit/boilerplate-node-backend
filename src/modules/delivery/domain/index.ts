@@ -4,6 +4,8 @@
  * See `docs/theory/domain-layer.md`.
  */
 
+export { holdNoticeOf, holdNeedsBuyerNotice } from './hold-notice';
+
 export {
     SHIPPING_METHODS,
     findShippingMethod,

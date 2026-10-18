@@ -30,6 +30,9 @@ const bodyOf = (notification: NotificationDocument): NotificationBody => {
         case 'notifications.preorder-confirm-wait': {
             return { code: notification.code, params: notification.params };
         }
+        case 'notifications.fulfillment-held': {
+            return { code: notification.code, params: notification.params };
+        }
     }
 };
 

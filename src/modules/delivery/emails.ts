@@ -141,6 +141,47 @@ export const shipmentDeliveredEmail = (
     };
 };
 
+/** What the hold-notice email says. */
+export interface HoldNoticeEmailInput {
+    /** `check_address`: the buyer can fix something; `delayed`: a plain delay. */
+    notice: 'check_address' | 'delayed';
+    /** What staff wrote for the buyer, if anything. */
+    message?: string | undefined;
+    /** The order page, where the buyer reads the same and acts. */
+    orderUrl: string;
+}
+
+/**
+ * "Part of your order is on hold" — sent when a hold gives the buyer something to do or read.
+ * Never says why staff held it: an address hold asks the buyer to check the address, and a
+ * held-for-a-check order says only that it is delayed, plus the sentence staff wrote for them.
+ *
+ * @param locale - the buyer's language
+ * @param name - the buyer's name, for the greeting
+ * @param input - the notice, staff's message and the link
+ */
+export const holdNoticeEmail = (
+    locale: string,
+    name: string,
+    input: HoldNoticeEmailInput
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'delivery.hold-notice',
+        subject: t(`delivery.email-hold-notice.${input.notice}.subject`),
+        data: {
+            locale,
+            pageMetaTitle: t('delivery.email-hold-notice.meta-title'),
+            greeting: t('delivery.email-hold-notice.greeting', { name }),
+            body: t(`delivery.email-hold-notice.${input.notice}.body`),
+            message: input.message,
+            linkLabel: t('delivery.email-hold-notice.link-label'),
+            linkUrl: input.orderUrl,
+            footer: t('email.footer')
+        }
+    };
+};
+
 /**
  * "Your preorder will be late" — sent when a waiting preorder's date moved or passed. Three
  * wordings, one per thing the buyer is owed: a short slip (the new date, and cancel is open;

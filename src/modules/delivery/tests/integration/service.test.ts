@@ -758,6 +758,61 @@ describe('holds', () => {
         expect(shipped.success).toBe(true);
     });
 
+    it('tells the buyer a delay and staff’s message, never the reason or the note', async () => {
+        const { user, order } = await processingOrderOf();
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+
+        const asBuyer = await deliveryService.holdFulfillmentOrder(
+            String(fulfillmentOrder._id),
+            { reason: 'high_risk', note: 'rang twice', message: 'We are checking a detail.' },
+            asCustomer(user.id),
+            admin
+        );
+
+        expect(asBuyer.success && asBuyer.data).toMatchObject({
+            holdNotice: 'delayed',
+            holdMessage: 'We are checking a detail.'
+        });
+        expect(JSON.stringify(asBuyer.success && asBuyer.data)).not.toMatch(
+            /high_risk|rang twice|holdReason|holdNote/
+        );
+    });
+
+    it('lets staff read the reason and the note beside the buyer’s notice', async () => {
+        const { order } = await processingOrderOf();
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+
+        const asStaff = await deliveryService.holdFulfillmentOrder(
+            String(fulfillmentOrder._id),
+            { reason: 'incorrect_address', note: 'zip looks wrong' },
+            asAdmin(),
+            admin
+        );
+
+        expect(asStaff.success && asStaff.data).toMatchObject({
+            holdReason: 'incorrect_address',
+            holdNote: 'zip looks wrong',
+            holdNotice: 'check_address'
+        });
+    });
+
+    it('drops the buyer’s message with the hold when it is released', async () => {
+        const { order } = await processingOrderOf();
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+        const id = String(fulfillmentOrder._id);
+        await deliveryService.holdFulfillmentOrder(
+            id,
+            { reason: 'other', message: 'One moment.' },
+            asAdmin(),
+            admin
+        );
+
+        const released = await deliveryService.releaseFulfillmentOrder(id, asAdmin(), admin);
+
+        expect(released.success && released.data.holdMessage).toBeUndefined();
+        expect(released.success && released.data.holdNotice).toBeUndefined();
+    });
+
     it('refuses a hand release of a hold for stock, and holding what is not workable', async () => {
         const { order } = await processingOrderOf();
         const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
@@ -935,5 +990,51 @@ describe('a short stock delivery', () => {
         ]);
 
         expect(split).toBeUndefined();
+    });
+});
+
+/** Hold a fresh order's fulfillment order as `input` says, with delivery's listeners wired, and let the outbox deliver. */
+const holdAndSettle = async (input: Parameters<typeof deliveryService.holdFulfillmentOrder>[1]) => {
+    wireDelivery();
+    mockEnqueueEmail.mockClear();
+    const { order } = await processingOrderOf();
+    const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+    await deliveryService.holdFulfillmentOrder(
+        String(fulfillmentOrder._id),
+        input,
+        asAdmin(),
+        admin
+    );
+    await settleOutboxNudges();
+    return order;
+};
+
+/** The hold-notice mails queued so far. */
+const holdMails = () =>
+    mockEnqueueEmail.mock.calls.filter(([, template]) => template === 'delivery.hold-notice');
+
+describe('mailing the buyer about a hold', () => {
+    it('asks the buyer to check the address when staff held for an incorrect one', async () => {
+        const order = await holdAndSettle({ reason: 'incorrect_address' });
+
+        const [[envelope, , data]] = holdMails();
+        expect(envelope.to).toBe(order.email);
+        expect(JSON.stringify(data)).not.toMatch(/incorrect_address|high_risk/);
+        expect(holdMails()).toHaveLength(1);
+    });
+
+    it('mails a bare risk hold to nobody', async () => {
+        await holdAndSettle({ reason: 'high_risk', note: 'odd voice' });
+
+        expect(holdMails()).toHaveLength(0);
+    });
+
+    it('mails a risk hold once staff wrote the buyer a message, as a plain delay', async () => {
+        await holdAndSettle({ reason: 'high_risk', message: 'A short check, back soon.' });
+
+        const [mail] = holdMails();
+        const data = mail[2];
+        expect(data?.message).toBe('A short check, back soon.');
+        expect(JSON.stringify(data)).not.toMatch(/high_risk/);
     });
 });

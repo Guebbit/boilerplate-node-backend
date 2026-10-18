@@ -8,11 +8,14 @@
 import type { ClientSession } from 'mongoose';
 import { enqueueOutboxEvent } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
+import type { OrderDocument } from '@modules/orders';
+import { holdNeedsBuyerNotice, holdNoticeOf } from '../domain';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import {
     FULFILLMENT_ORDER_CANCELLED,
     FULFILLMENT_ORDER_DELAYED,
     FULFILLMENT_ORDER_HELD,
+    FULFILLMENT_ORDER_HOLD_NOTICED,
     FULFILLMENT_ORDER_RELEASED,
     FULFILLMENT_ORDER_WAIT_EXPIRED,
     type FulfillmentOrderDelayed,
@@ -110,14 +113,47 @@ export const announceDelivered = (
         );
 
 /**
+ * Write `fulfillment_order.hold_noticed` when the hold gives the buyer something to do or read: an
+ * address to check, or a message staff wrote for them. Same transaction as the hold, so the mail
+ * and the inbox row exist exactly when the hold does.
+ * @param fulfillmentOrder - the held fulfillment order
+ * @param order - its order, for the buyer
+ * @param session - the act's transaction
+ */
+const noticeTheBuyer = (
+    fulfillmentOrder: FulfillmentOrderDocument,
+    order: OrderDocument,
+    session: ClientSession
+): Promise<void> => {
+    const { holdReason, holdMessage } = fulfillmentOrder;
+    if (!holdReason || !holdNeedsBuyerNotice(holdReason, holdMessage)) return Promise.resolve();
+
+    const notice = holdNoticeOf(holdReason);
+    return enqueueOutboxEvent(
+        FULFILLMENT_ORDER_HOLD_NOTICED,
+        {
+            orderId: String(fulfillmentOrder.orderId),
+            fulfillmentOrderId: String(fulfillmentOrder._id),
+            ...(order.userId ? { userId: String(order.userId) } : {}),
+            notice: notice === 'check_address' ? 'check_address' : 'delayed',
+            ...(holdMessage ? { message: holdMessage } : {})
+        },
+        String(fulfillmentOrder.orderId),
+        session
+    );
+};
+
+/**
  * Write `fulfillment_order.held`, and the timeline's `fulfillment_held` with the reason code (the
  * note staff typed stays on the fulfillment order, where it has its own retention clock).
  * @param fulfillmentOrder - the fulfillment order now on hold
+ * @param order - its order, for the buyer a notice goes to
  * @param session - the act's transaction
  * @param actor - the staff member who held it
  */
 export const announceHeld = (
     fulfillmentOrder: FulfillmentOrderDocument,
+    order: OrderDocument,
     session: ClientSession,
     actor?: string | null
 ): Promise<void> =>
@@ -145,7 +181,8 @@ export const announceHeld = (
                 String(fulfillmentOrder.orderId),
                 session
             )
-        );
+        )
+        .then(() => noticeTheBuyer(fulfillmentOrder, order, session));
 
 /**
  * Write `fulfillment_order.released`, and the timeline's `fulfillment_released`.

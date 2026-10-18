@@ -85,6 +85,15 @@ describe('presentNotification, per code', () => {
                 agreedAt: '2026-12-01T00:00:00.000Z',
                 answerBy: '2027-01-10T00:00:00.000Z'
             }
+        },
+        {
+            code: 'notifications.fulfillment-held',
+            params: {
+                orderId: 'o3',
+                fulfillmentOrderId: 'f3',
+                notice: 'check_address',
+                message: 'Is the flat number right?'
+            }
         }
     ];
 
