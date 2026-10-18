@@ -179,6 +179,9 @@ export const create = async (
  * function ever sees: `UpdateOrderByIdRequest` does not declare it, so there is no admin status
  * move here to refuse or apply, and no partial write between an email save and a status move to
  * guard against. See `docs/theory/tactical-ddd.md#who-writes-the-status`.
+ *
+ * @internal The raw write beneath `updateById`, which loads the order by id and records the audit
+ * row. A sibling that edits an order goes through the door, so the row is never skipped.
  */
 export const update = (
     order: OrderDocument,

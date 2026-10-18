@@ -74,6 +74,9 @@ const hardDeleteCancelled = (order: OrderDocument): Promise<ResponseReject | und
  * reason `docs/modules/invoicing.md` gives for the module never hard-deleting one of its own.
  * `paidAt` alone answers this, with no need to ask `invoicing` whether the freeze actually landed
  * (see `services/scope.ts`'s `invoice` flag): a paid order is worth keeping either way.
+ *
+ * @internal The raw write beneath `removeById`, which loads the order by id and answers 404. The
+ * barrel publishes the door only, the same shape every module gives its delete.
  * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
  * @param context - records `ORDER_DELETED`; omit for a caller with no request behind it
  */

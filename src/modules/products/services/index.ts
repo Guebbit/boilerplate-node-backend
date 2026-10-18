@@ -17,7 +17,7 @@ import { canSeeStock, redactStock } from './stock-view';
 import { search, searchForCaller, facets } from './search';
 import { callerScope, getById, getByIdForCaller, getAdmin } from './read';
 import { create, updateById, clearOmittedLocales } from './translated-write';
-import { remove, removeById, restoreById } from './remove';
+import { removeById, restoreById } from './remove';
 import {
     findByIdRaw,
     isLive,
@@ -60,7 +60,6 @@ export const productService = {
     create,
     updateById,
     clearOmittedLocales,
-    remove,
     removeById,
     restoreById,
     // The barrel never publishes a presenter function, so a sibling that has to shape a product

@@ -72,7 +72,7 @@ describe('hard-deleting a product with a pending order against it', () => {
         const { orderId } = await placePendingOrder(product);
 
         const deleted = await readProduct(String(product._id));
-        const result = await productService.remove(deleted!, true);
+        const result = await productService.removeById(String(deleted!._id), true);
         await settleOutboxNudges();
 
         expect(result.success).toBe(true);
@@ -88,7 +88,7 @@ describe('hard-deleting a product with a pending order against it', () => {
         const product = await createProduct({ onHand: 5 });
         const { orderId, user } = await placePendingOrder(product);
         const deleted = await readProduct(String(product._id));
-        await productService.remove(deleted!, true);
+        await productService.removeById(String(deleted!._id), true);
         await settleOutboxNudges();
 
         const result = await paymentService.createIntent(orderId, asCustomer(user.id));
@@ -100,7 +100,7 @@ describe('hard-deleting a product with a pending order against it', () => {
         const product = await createProduct({ onHand: 5 });
         const { orderId } = await placePendingOrder(product);
         const deleted = await readProduct(String(product._id));
-        await productService.remove(deleted!, true);
+        await productService.removeById(String(deleted!._id), true);
         await settleOutboxNudges();
 
         const result = await paymentService.recordOfflinePayment(
@@ -120,7 +120,7 @@ describe('soft-deleting a product with a pending order against it', () => {
         const product = await createProduct({ onHand: 5 });
         const { orderId, user } = await placePendingOrder(product);
 
-        await productService.remove(product, false);
+        await productService.removeById(String(product._id), false);
 
         await settleOutboxNudges();
 
@@ -182,13 +182,12 @@ describe('a soft delete or a restore', () => {
     it('leaves the level row alone — only a hard delete removes it', async () => {
         const product = await createProduct({ onHand: 5 });
 
-        await productService.remove(product, false); // soft delete
+        await productService.removeById(String(product._id), false); // soft delete
         await expect(
             stockLevelRepository.findByProductId(String(product._id))
         ).resolves.not.toBeNull();
 
-        const softDeleted = await readProduct(String(product._id));
-        await productService.remove(softDeleted!, false); // restore
+        await productService.restoreById(String(product._id));
         await expect(
             stockLevelRepository.findByProductId(String(product._id))
         ).resolves.not.toBeNull();
@@ -205,7 +204,9 @@ describe('a write that fails must not have already announced the deletion', () =
             new Error('mongo is down')
         );
 
-        await expect(productService.remove(product, true)).rejects.toThrow('mongo is down');
+        await expect(productService.removeById(String(product._id), true)).rejects.toThrow(
+            'mongo is down'
+        );
 
         // `cart`'s own `PRODUCT_DELETED` listener drops the line unconditionally — it never ran,
         // because the event is only emitted AFTER `deleteOne` succeeds, and this `deleteOne` didn't.
@@ -224,7 +225,9 @@ describe('a write that fails must not have already announced the deletion', () =
 
         jest.spyOn(productRepository, 'save').mockRejectedValueOnce(new Error('mongo is down'));
 
-        await expect(productService.remove(product, false)).rejects.toThrow('mongo is down');
+        await expect(productService.removeById(String(product._id), false)).rejects.toThrow(
+            'mongo is down'
+        );
 
         const cart = await cartRepository.findByUserId(user.id);
         expect(cart!.items.some((item) => item.productId.toString() === String(product._id))).toBe(

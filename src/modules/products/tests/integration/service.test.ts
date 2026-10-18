@@ -498,7 +498,7 @@ describe('productService.remove', () => {
         const product = await createProduct({ active: true });
         const id = product._id.toString();
 
-        const result = await productService.remove(product, false);
+        const result = await productService.removeById(String(product._id), false);
 
         expect(result.success).toBe(true);
         const refreshed = await productRepository.findById(id);
@@ -509,7 +509,7 @@ describe('productService.remove', () => {
         const product = await createProduct({ active: true });
         const pid = product._id.toString();
 
-        const result = await productService.remove(product, true);
+        const result = await productService.removeById(String(product._id), true);
 
         expect(result.success).toBe(true);
         expect(await productRepository.findById(pid)).toBeNull();
@@ -530,7 +530,7 @@ describe('productService.remove', () => {
             const product = await createProduct({ active: true });
             const pid = product._id.toString();
 
-            await productService.remove(product, true);
+            await productService.removeById(String(product._id), true);
 
             // The third argument is the delete's transaction: the rows go with the product or not at all.
             expect(removeAll).toHaveBeenCalledWith('product', pid, expect.anything());
@@ -541,7 +541,7 @@ describe('productService.remove', () => {
             registerTranslationPort(fakeTranslationPort({ removeAll }));
             const product = await createProduct({ active: true });
 
-            await productService.remove(product, false);
+            await productService.removeById(String(product._id), false);
 
             expect(removeAll).not.toHaveBeenCalled();
         });

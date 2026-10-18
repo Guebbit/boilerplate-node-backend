@@ -34,7 +34,7 @@ describe('a late product.deleted for a restored product', () => {
         const product = await createProduct({ onHand: 5 });
         const id = String(product._id);
 
-        await productService.remove(product, false);
+        await productService.removeById(String(product._id), false);
         await settleOutboxNudges();
         await productService.restoreById(id);
         await cartService.setItemById(user.id, id, 1);
@@ -54,7 +54,7 @@ describe('a late product.deleted for a restored product', () => {
         const id = String(product._id);
         await cartService.setItemById(user.id, id, 1);
 
-        await productService.remove(product, false);
+        await productService.removeById(String(product._id), false);
         await settleOutboxNudges();
 
         expect(await basketLines(user.id)).toBe(0);
