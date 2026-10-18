@@ -77,13 +77,10 @@ const moveToCancelled = (
         async (session) => {
             const order = await withTimeline(
                 (active) =>
-                    orderRepository.updateStatusIfIn(
-                        id,
-                        from,
-                        OrderStatus.cancelled,
+                    orderRepository.updateStatusIfIn(id, from, OrderStatus.cancelled, {
                         scope,
-                        active
-                    ),
+                        session: active
+                    }),
                 () => [{ type: 'cancelled', actor: actorId, data: { by: CANCEL_CAUSES[cause].by } }]
             )(session);
             if (order) await giveBackStock(id, session);

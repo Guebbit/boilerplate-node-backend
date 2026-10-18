@@ -256,15 +256,15 @@ const ownerScope = (userId: string): Record<string, unknown> => ({
  * `callerScope` (`services/scope.ts`) rides in the same filter, so there's no window between an
  * ownership check and the write.
  *
- * @param session - joins the write to the caller's transaction — a cancel moves the status, the
- *   hold and the stock together or not at all
+ * @param options.scope - `callerScope`'s filter, when the caller is bound to its own orders
+ * @param options.session - joins the write to the caller's transaction — a cancel moves the
+ *   status, the hold and the stock together or not at all
  */
 const updateStatusIfIn = (
     id: string,
     from: readonly string[],
     to: string,
-    scope?: Record<string, unknown>,
-    session?: ClientSession
+    { scope, session }: { scope?: Record<string, unknown>; session?: ClientSession } = {}
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
@@ -704,8 +704,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         id: string,
         from: readonly string[],
         to: string,
-        scope?: Record<string, unknown>,
-        session?: ClientSession
+        options?: { scope?: Record<string, unknown>; session?: ClientSession }
     ) => Promise<OrderDocument | null>;
     markPaid: (
         id: string,
