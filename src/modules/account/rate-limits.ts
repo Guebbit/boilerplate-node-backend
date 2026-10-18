@@ -319,8 +319,9 @@ const SIGNUP_BLOCK_BUDGET: RateLimitBudget = {
  * `credentialLimiters` is the wrong shape for `POST /account/signup`: `skipSuccessfulRequests`
  * spends nothing on the 201s that ARE the abuse (Sybil accounts), so a determined caller spent
  * this route's whole budget on requests that never counted. Every request counts here instead,
- * with `identityOf` added as a second dimension, since a proxy pool cannot vary the mailbox it is
- * registering.
+ * with `identityOf` added as a second dimension. It keys on the submitted string, so a `+tag`
+ * gives a fresh bucket here; the address and block budgets, and the canonical-mailbox budget
+ * (`mail-budget.ts`), still bound it.
  *
  * See: docs/tools/security.md#the-rate-limit-budgets
  */
