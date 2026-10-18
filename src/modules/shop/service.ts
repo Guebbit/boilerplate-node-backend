@@ -53,6 +53,10 @@ export interface ShopIdentity {
     legalName: string;
     /** VAT identification number; absent for a shop below the registration threshold. */
     vatNumber?: string;
+    /** The commercial register the seller is entered in (e-Commerce Directive Art. 5(1)(d)); absent for a seller in none. */
+    tradeRegister?: string;
+    /** The seller's number in that register; absent when there is no register. */
+    registrationNumber?: string;
     street: string;
     city: string;
     zip: string;
@@ -65,16 +69,20 @@ export interface ShopIdentity {
 }
 
 /**
- * The shop's identity — every required field present, the VAT number only when set.
+ * The shop's identity — every required field present, the optional ones (VAT number, trade
+ * register, registration number) only when set.
  * @returns the identity
  * @throws {ConfigError} when a required variable is unset (only possible under `NODE_ENV=test`)
  */
 export const shopIdentity = (): ShopIdentity => {
     const config = shopConfig();
-    const vatNumber = config.NODE_SHOP_VAT_NUMBER;
+    const { NODE_SHOP_VAT_NUMBER: vatNumber, NODE_SHOP_TRADE_REGISTER: tradeRegister } = config;
+    const registrationNumber = config.NODE_SHOP_REGISTRATION_NUMBER;
     return {
         legalName: requiredValue('NODE_SHOP_LEGAL_NAME', config.NODE_SHOP_LEGAL_NAME),
         ...(vatNumber ? { vatNumber } : {}),
+        ...(tradeRegister ? { tradeRegister } : {}),
+        ...(registrationNumber ? { registrationNumber } : {}),
         street: requiredValue('NODE_SHOP_STREET', config.NODE_SHOP_STREET),
         city: requiredValue('NODE_SHOP_CITY', config.NODE_SHOP_CITY),
         zip: requiredValue('NODE_SHOP_ZIP', config.NODE_SHOP_ZIP),

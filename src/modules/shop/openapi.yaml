@@ -77,6 +77,12 @@ components:
                 vatNumber:
                     type: string
                     description: VAT identification number; absent for a shop below the registration threshold.
+                tradeRegister:
+                    type: string
+                    description: The commercial register the seller is entered in (`NODE_SHOP_TRADE_REGISTER`); absent for a seller in none.
+                registrationNumber:
+                    type: string
+                    description: The seller's number in that register (`NODE_SHOP_REGISTRATION_NUMBER`); absent when there is no register.
                 street:
                     type: string
                 city:
