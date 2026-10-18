@@ -7,6 +7,7 @@ import { givenLocale } from '@modules/locales/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { MISSING_ID } from '@tests/ids';
+import { eventually } from '@tests/eventually';
 import { createExample } from '@modules/example/tests/factories';
 import { decodablePng, publicDirectory } from '@tests/images';
 
@@ -43,12 +44,7 @@ const uploadedFiles = () =>
  *
  * @param isDone - true once the disk is in the state the test expects
  */
-const settled = async (isDone: () => boolean): Promise<void> => {
-    for (let attempt = 0; attempt < 50 && !isDone(); attempt++)
-        await new Promise((resolve) => {
-            setTimeout(resolve, 20);
-        });
-};
+const settled = (isDone: () => boolean): Promise<void> => eventually(isDone, 1000);
 
 setupTestDb();
 

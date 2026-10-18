@@ -55,8 +55,7 @@ jest.mock('@infrastructure/adapters/cache', () => {
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
-import { localeRepository } from '@modules/locales/repository';
-import { makeLocale } from '@modules/locales/factories';
+import { givenLocale } from '@modules/locales/tests/factories';
 
 setupTestDb();
 
@@ -65,9 +64,7 @@ const FALLBACK = 'en';
 
 describe('a translation write invalidates the cached product it translated', () => {
     it('serves a second identical read from cache, then re-renders it after a PATCH', async () => {
-        await localeRepository.create(
-            makeLocale({ tag: FALLBACK, name: 'English', nativeName: 'English' })
-        );
+        await givenLocale(FALLBACK);
         const product = await createProduct({ title: 'Old title' });
         const id = String(product._id);
         const { bearer } = await authenticateAs('admin');
@@ -90,9 +87,7 @@ describe('a translation write invalidates the cached product it translated', () 
     });
 
     it('does not clear the cache when the write was refused', async () => {
-        await localeRepository.create(
-            makeLocale({ tag: FALLBACK, name: 'English', nativeName: 'English' })
-        );
+        await givenLocale(FALLBACK);
         const product = await createProduct({ title: 'Untouched' });
         const id = String(product._id);
         const { bearer } = await authenticateAs('admin');

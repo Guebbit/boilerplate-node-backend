@@ -8,6 +8,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { withEnvironmentOverrides } from '@tests/environment';
+import { eventually } from '@tests/eventually';
 import { resetDomainEvents } from '@kernel/events';
 import { asAdmin, asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
@@ -32,15 +33,6 @@ afterEach(() => {
     resetDomainEvents();
     jest.restoreAllMocks();
 });
-
-/** Waits for a fire-and-forget listener's write. */
-const waitFor = async (check: () => Promise<boolean>): Promise<void> => {
-    const startedAt = Date.now();
-    while (!(await check())) {
-        if (Date.now() - startedAt > 3000) throw new Error('waitFor: timed out');
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-};
 
 /** A paid, delivered order and a withdrawal on it, ready to receive. */
 const withdrawnOrder = async () => {
@@ -93,7 +85,7 @@ describe('a return whose refund the provider refuses', () => {
 
             await paymentService.retryOpenRefunds();
 
-            await waitFor(async () => {
+            await eventually(async () => {
                 const stored = await returnRepository.findById(returnId);
                 return stored?.status === 'closed';
             });
