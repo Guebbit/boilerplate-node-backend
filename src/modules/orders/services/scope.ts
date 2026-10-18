@@ -18,6 +18,7 @@ import {
     overridableTargetsFrom,
     isDigitalOnlyOrder,
     isPayable,
+    canCorrectAddress,
     canWithdraw,
     shipsAwaitedStock,
     isBuyer
@@ -116,8 +117,8 @@ export const actorOf = (authContext?: AuthContext): OrderActor => {
 const startAndOverrideActions = (
     order: OrderDocument,
     authContext: AuthContext | undefined
-): Pick<OrderActions, 'start' | 'override'> => {
-    if (!authContext) return { start: false, override: [] };
+): Pick<OrderActions, 'start' | 'override' | 'correctAddress'> => {
+    if (!authContext) return { start: false, override: [], correctAddress: false };
 
     const { status } = order;
     const caller = callerForSubject(authContext, 'Order');
@@ -127,6 +128,7 @@ const startAndOverrideActions = (
     const reachesProcessing = (ORDER_EVENTS.start.from as readonly OrderStatus[]).includes(status);
     return {
         start: holds(caller, 'start', 'Shipment') && reachesProcessing,
+        correctAddress: holds(caller, 'update', 'Order') && canCorrectAddress(order),
         // The door's own stock guard, so no target is offered that answers 409.
         override: holds(caller, 'override', 'Order')
             ? overridableTargetsFrom(status, isDigitalOnlyOrder(order.items)).filter(

@@ -22,6 +22,7 @@ import { callerForSubject } from '@kernel/permissions';
 import { getOrders } from './controllers/get-orders';
 import { createOrder } from './controllers/create-order';
 import { replaceOrderById, updateOrderById } from './controllers/update-order';
+import { putShippingAddress } from './controllers/put-shipping-address';
 import { deleteOrders } from './controllers/delete-orders';
 import { restoreOrders } from './controllers/restore-orders';
 import { getOrderItem } from './controllers/get-order-item';
@@ -103,6 +104,10 @@ router.post(
     requirePermission('override', 'Order'),
     postOrderStatusOverride
 );
+
+// PUT /orders/:id/shipping-address — staff correcting where an unshipped order goes (a held
+// `incorrect_address` fulfillment order needs it). Before `/:id`, which PUT would otherwise match.
+router.put('/:id/shipping-address', requirePermission('update', 'Order'), putShippingAddress);
 
 // GET /orders/:id/timeline — the order's history; scoped like the order itself, and what each
 // caller sees of it is decided per row (the audience table in the domain layer). Never Redis-cached.

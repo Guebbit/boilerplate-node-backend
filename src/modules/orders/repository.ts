@@ -33,7 +33,7 @@ import { encryptOrderPii } from './pii';
 import { ANONYMIZED_EMAIL } from './domain/anonymization';
 import { OrderStatus } from '@types';
 import type { OrderPaymentStatus, OrderReturnStatus } from '@types';
-import type { Order } from '@types';
+import type { Order, OrderAddress } from '@types';
 import {
     createRepository,
     toObjectId,
@@ -336,6 +336,39 @@ const markDelivered = (
         .findOneAndUpdate(
             { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
             { $set: { status: OrderStatus.delivered, ...clock } },
+            { returnDocument: 'after', session }
+        )
+        .exec();
+
+/**
+ * Replace where an order ships, encrypted under the order's own id like the address it replaces.
+ * Conditional on the status the caller read and on nothing having shipped, so a correction that
+ * lost a race against a dispatch writes nothing.
+ * @param id - the order
+ * @param observedStatus - the status the caller read; the write lands only while it still holds
+ * @param address - the corrected address, in the clear
+ * @param session - joins the write to the caller's transaction, so its timeline row rides with it
+ * @returns the order as it now stands, or `null` if it moved or shipped in between
+ */
+const replaceShippingAddress = (
+    id: string,
+    observedStatus: OrderStatus,
+    address: OrderAddress,
+    session?: ClientSession
+): Promise<OrderDocument | null> =>
+    orderModel
+        .findOneAndUpdate(
+            {
+                _id: toObjectId(id),
+                status: observedStatus,
+                'fulfillment.shipped': { $ne: true }
+            } as QueryFilter<OrderDocument>,
+            {
+                $set: {
+                    shippingAddress: encryptOrderPii({ shippingAddress: address }, toObjectId(id))
+                        .shippingAddress
+                }
+            },
             { returnDocument: 'after', session }
         )
         .exec();
@@ -694,6 +727,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         clock: DeliveryClock,
         session?: ClientSession
     ) => Promise<OrderDocument | null>;
+    replaceShippingAddress: typeof replaceShippingAddress;
     applyStatusOverride: (
         id: string,
         from: OrderStatus,
@@ -731,6 +765,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     updateStatusIfIn,
     markPaid,
     markDelivered,
+    replaceShippingAddress,
     setProjection,
     applyStatusOverride,
     findInSession,

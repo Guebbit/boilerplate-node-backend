@@ -11,6 +11,7 @@ describe('the timeline audience table', () => {
         const hidden = Object.values(OrderTimelineType).filter((type) => !isBuyerVisible(type));
 
         expect(hidden.toSorted()).toEqual([
+            'address_corrected',
             'fulfillment_held',
             'fulfillment_released',
             'refund_failed',

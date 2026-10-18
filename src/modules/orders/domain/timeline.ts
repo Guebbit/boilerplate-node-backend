@@ -22,6 +22,8 @@ export type TimelineAudience = 'buyer' | 'staff';
  * Staff only:
  *   status_overridden: carries the staff's own reason.
  *   fulfillment_held / fulfillment_released: a hold's reason is an internal call (a risk check, say).
+ *   address_corrected: who changed where an order ships is the shop's own business; the buyer sees the
+ *     new address on the order itself.
  *   refund_failed: the provider's refusal; the buyer's answer is the refund that settles.
  */
 export const TIMELINE_AUDIENCE: Readonly<Record<OrderTimelineType, TimelineAudience>> = {
@@ -51,7 +53,8 @@ export const TIMELINE_AUDIENCE: Readonly<Record<OrderTimelineType, TimelineAudie
     release_date_moved: 'buyer',
     delay_notice_sent: 'buyer',
     wait_confirmed: 'buyer',
-    wait_expired: 'buyer'
+    wait_expired: 'buyer',
+    address_corrected: 'staff'
 };
 
 /**

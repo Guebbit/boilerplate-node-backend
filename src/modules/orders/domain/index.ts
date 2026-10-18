@@ -40,6 +40,7 @@ export type { OrderTaxBreakdown, LineTaxBreakdown, TaxableLineItem, TaxRateSumma
 
 /** The right of withdrawal: when the window closes, and whether the button shows. */
 export {
+    canCorrectAddress,
     canWithdraw,
     isBeforeDispatch,
     conformityUntilFrom,
@@ -49,6 +50,7 @@ export {
     withdrawalStartFor
 } from './withdrawal';
 export type {
+    AddressCandidate,
     DeliveryClock,
     WithdrawalCandidate,
     WithdrawableLine,

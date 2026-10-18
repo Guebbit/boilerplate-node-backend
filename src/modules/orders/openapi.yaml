@@ -17,6 +17,7 @@ x-error-codes:
     ORDER_NOT_CANCELLABLE: { status: 409, description: 'The order is not in a state that can still be cancelled.' }
     ORDER_NOT_CANCELLED: { status: 409, description: 'A hard delete needs a cancelled order: this one is still open. Cancel it first (`POST /orders/{id}/cancel`).' }
     ORDER_OVERRIDE_NOT_ALLOWED: { status: 409, description: 'This status transition is not on the admin override''s allowed list.' }
+    ORDER_ADDRESS_LOCKED: { status: 409, description: 'The order cannot be redirected: something has shipped, or it has no shipping address (a pickup, a digital order).' }
     ORDER_OVERRIDE_AWAITING_STOCK: { status: 409, description: 'The order still has units awaiting stock; overriding it forward would ship goods the stock ledger never counted out.' }
 
 # This module's section of the account data export (`POST /account/export`): the bundler
@@ -574,6 +575,43 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /orders/{id}/shipping-address:
+        put:
+            tags: [Orders]
+            summary: Correct where an unshipped order ships (staff)
+            description: >-
+                Replaces the order's shipping address, as staff do when a fulfillment order was held
+                for `incorrect_address` and the buyer wrote back. Needs `update:Order`. Allowed only
+                while nothing has shipped and the order has a shipping address at all: after that the
+                parcel went where it went (`409 ORDER_ADDRESS_LOCKED`). Leaves a staff-only timeline row,
+                `address_corrected`, and an audit row naming who changed it, never what it says.
+                `OrderActions.correctAddress` says whether this would be accepted.
+            operationId: correctOrderShippingAddress
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReplaceShippingAddressRequest'
+            responses:
+                '200':
+                    description: The order, with its new address
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # `errors[].code` is `ORDER_ADDRESS_LOCKED`.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /orders/{id}/status-override:
         post:
             tags: [Orders]
@@ -694,6 +732,7 @@ components:
                 - delay_notice_sent
                 - wait_confirmed
                 - wait_expired
+                - address_corrected
             description: >-
                 What happened. Order: `created`, `paid`, `processing`, `shipped`, `delivered`,
                 `cancelled`, `status_overridden`. Payment: `payment_declined`, `refund_issued`,
@@ -702,7 +741,7 @@ components:
                 `remainder_cancelled`. Returns: `return_requested`, `return_approved`,
                 `return_declined`, `return_received`, `return_closed`. Documents: `invoice_issued`,
                 `credit_note_issued`. Preorders: `release_date_moved`, `delay_notice_sent`,
-                `wait_confirmed`, `wait_expired`.
+                `wait_confirmed`, `wait_expired`. Staff-only: `address_corrected`.
 
         OrderTimelineEntry:
             type: object
@@ -933,6 +972,11 @@ components:
         # exactly like the product snapshots the items embed: an order must keep where it was
         # going and who it was billed to, not what the address book says today. No `id`, no
         # `default` — those are facts about the book entry, not the order.
+        ReplaceShippingAddressRequest:
+            allOf:
+                - $ref: '#/components/schemas/OrderAddress'
+            description: The corrected shipping address; the whole of it replaces the old one.
+
         OrderAddress:
             type: object
             additionalProperties: false
@@ -940,16 +984,21 @@ components:
             properties:
                 fullName:
                     type: string
+                    maxLength: 100
                 street:
                     type: string
+                    maxLength: 200
                 city:
                     type: string
+                    maxLength: 100
                 zip:
                     type: string
+                    maxLength: 20
                 country:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
                 phone:
                     type: string
+                    maxLength: 32
 
         # `Product`, without `onHand`/`reserved`/`available`, and without an image — see
         # `OrderLineCurrent`. An order line is a purchase-time SNAPSHOT — the price and title a
@@ -1135,6 +1184,7 @@ components:
                     recordPayment,
                     start,
                     override,
+                    correctAddress,
                     invoice,
                     withdraw
                 ]
@@ -1190,6 +1240,12 @@ components:
                         destination for this caller right now — empty for anyone without
                         `override:Order`, or once the order has left every overridable status.
                     example: [processing, shipped, delivered]
+                correctAddress:
+                    type: boolean
+                    description: >-
+                        Whether `PUT /orders/{id}/shipping-address` would be accepted for this caller:
+                        they hold `update:Order`, the order has a shipping address, and nothing has
+                        shipped.
                 withdraw:
                     type: boolean
                     description: >-

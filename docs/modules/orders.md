@@ -582,6 +582,19 @@ flowchart LR
   exists for it. A digital-only order is the exception: its clock starts at `paidAt`, as it does
   through fulfilment (`withdrawalStartFor` owns that rule).
 
+## Correcting the shipping address
+
+`PUT /orders/{id}/shipping-address` (`update:Order`) replaces where an order ships, for the case a held
+`incorrect_address` fulfillment order creates: nothing else could change an address after checkout.
+Shopify lets staff edit an unfulfilled fulfillment order's address the same way; the buyer's own
+edit is a later, optional step.
+
+- Allowed only while the order has a shipping address and **nothing has shipped**
+  (`canCorrectAddress`): a parcel on its way went where it went. Otherwise `409 ORDER_ADDRESS_LOCKED`,
+  and `OrderActions.correctAddress` says in advance, so no button is offered that the door refuses.
+- The new address is encrypted under the order's id like the one it replaces. The staff-only timeline
+  row `address_corrected` and the audit row name **who**, never what it says.
+
 ## Cancel and refund mails
 
 Every cancel and every refund leaves one written trace, and each has exactly one mail:

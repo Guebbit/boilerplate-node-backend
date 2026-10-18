@@ -52,6 +52,7 @@ import {
     refreshShelf
 } from './fulfillment';
 import { overrideStatus } from './override';
+import { correctShippingAddress } from './address';
 import { openOrderExport } from './export';
 import {
     appendTimeline,
@@ -136,6 +137,7 @@ export const orderService = {
     shipStock,
     refreshShelf,
     overrideStatus,
+    correctShippingAddress,
     openOrderExport,
     appendTimeline,
     readTimeline,
