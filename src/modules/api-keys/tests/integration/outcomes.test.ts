@@ -8,6 +8,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { TEST_TENANT_ID } from '@tests/callers';
+import { freezeDate } from '@tests/clock';
 import type { TenantCallerContext } from '@types';
 import { userRepository } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
@@ -61,7 +62,10 @@ beforeEach(() => {
     registerModules(enabledModules);
 });
 
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+});
 
 /** A week out — inside the one-year ceiling. */
 const IN_A_WEEK = new Date(Date.now() + 7 * 24 * 3_600_000).toISOString();
@@ -120,6 +124,13 @@ describe('the one-year ceiling', () => {
         );
     });
 
+    it('is a calendar year, not 365 days, across a leap day', () => {
+        // 365 days after 2031-03-01 is 2032-02-29; a calendar year is 2032-03-01.
+        expect(latestExpiry(new Date('2031-03-01T12:00:00.000Z')).toISOString()).toBe(
+            '2032-03-01T12:00:00.000Z'
+        );
+    });
+
     it('refuses an expiry past it, naming the expiry it was given', async () => {
         const user = await createRealUser('too-far');
         const tooFar = new Date(Date.now() + 400 * 24 * 3_600_000).toISOString();
@@ -137,6 +148,28 @@ describe('the one-year ceiling', () => {
             message: 'A credential may expire at most one year from now.',
             details: { field: 'expiresAt' }
         });
+    });
+
+    it('accepts exactly the ceiling and refuses a millisecond past it', async () => {
+        const user = await createRealUser('on-the-line');
+        const now = new Date('2030-06-15T12:00:00.000Z');
+        freezeDate(now);
+        const ceiling = latestExpiry(now);
+        const mintAt = (expiresAt: Date) =>
+            mint(
+                {
+                    name: 'edge',
+                    permissions: ['read:WebhookSubscription'],
+                    expiresAt: expiresAt.toISOString()
+                },
+                contextFor(String(user._id))
+            );
+
+        const onTheLine = await mintAt(ceiling);
+        const pastIt = await mintAt(new Date(ceiling.getTime() + 1));
+
+        expect(onTheLine.success).toBe(true);
+        expect(pastIt.success).toBe(false);
     });
 
     it('accepts an expiry a few seconds inside it', async () => {
