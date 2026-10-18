@@ -543,6 +543,8 @@ describe('PUT /cart/shipping-method', () => {
             .send({ shippingMethodId: 'teleport' });
 
         expect(response.status).toBe(404);
+        // The storefront branches on this code, not on the status.
+        expect(response.body.errors[0].code).toBe('CART_SHIPPING_METHOD_NOT_FOUND');
     });
 
     it('matches the error contract for a digital-only basket', async () => {
@@ -559,6 +561,7 @@ describe('PUT /cart/shipping-method', () => {
             .send({ shippingMethodId: 'standard' });
 
         expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('CART_SHIPPING_NOT_APPLICABLE');
     });
 
     it("matches the error contract for a basket outside the method's weight range", async () => {
@@ -576,6 +579,7 @@ describe('PUT /cart/shipping-method', () => {
             .send({ shippingMethodId: 'express' });
 
         expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('CART_SHIPPING_METHOD_WEIGHT');
     });
 
     it('matches the error contract for a malformed body', async () => {
