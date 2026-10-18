@@ -126,7 +126,8 @@ export const removeById = (
 
 /**
  * Undo a soft delete. Announces nothing: what the delete set in motion (carts and
- * wishlists emptied) stays done — a restore puts the product back on sale, not the past.
+ * wishlists emptied) stays done — a restore clears `deletedAt` only, so the product comes back
+ * as it was (on sale, off sale or hidden), not the past.
  *
  * @param id - the product to restore
  * @param context - records `ADMIN_PRODUCT_RESTORED`; omit for a caller with no request behind it
