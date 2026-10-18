@@ -83,6 +83,8 @@ export interface OrderDocumentItem {
     backorderedQuantity?: number;
     /** When those owed units were promised, frozen with them; present exactly when they are. */
     promisedAt?: Date;
+    /** Whether `promisedAt` was the product's own restock date, not the 30-day default. */
+    promiseDated?: boolean;
     /**
      * The language `product.title`/`description` were resolved into, frozen alongside them —
      * see `resolveSnapshotProducts` in `./services/snapshot`. Lives on the item, not the product:
@@ -308,6 +310,7 @@ const orderItemSchema = new Schema(
         // Owed units and their promise, frozen with the line — see `OrderDocumentItem`.
         backorderedQuantity: { type: Number, min: 1 },
         promisedAt: { type: Date },
+        promiseDated: { type: Boolean },
         // The language `product.title`/`description` were resolved into when this line was
         // frozen — see `OrderDocumentItem.locale`.
         locale: {

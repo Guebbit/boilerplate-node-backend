@@ -106,6 +106,7 @@ describe('checking out a backorder', () => {
         expect(line?.quantity).toBe(3);
         expect(line?.backorderedQuantity).toBe(1);
         expect(line?.promisedAt?.toISOString()).toBe(product.restockDate?.toISOString());
+        expect(line?.promiseDated).toBe(true);
         const levels = await inventoryService.listLevels();
         expect(levels.items).toMatchObject([
             { productId, reserved: 2, available: 0, backordered: 1 }
@@ -120,6 +121,7 @@ describe('checking out a backorder', () => {
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
         const promised = result.success ? result.data.items[0]?.promisedAt : undefined;
+        expect(result.success ? result.data.items[0]?.promiseDated : undefined).toBe(false);
         expect(promised?.getTime()).toBeGreaterThanOrEqual(before + 30 * DAY_MS);
         expect(promised?.getTime()).toBeLessThan(Date.now() + 30 * DAY_MS + 1000);
     });

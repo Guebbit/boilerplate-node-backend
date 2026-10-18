@@ -1128,6 +1128,11 @@ components:
                         When the owed units were promised: the product's `restockDate`, or the day the
                         order was placed plus 30 days when it had none. Present with `backorderedQuantity`
                         and frozen with it, so a later change to the catalogue moves no promise.
+                promiseDated:
+                    type: boolean
+                    description: >-
+                        Whether `promisedAt` was a date the product named. `false` means the buyer was
+                        promised delivery "within 30 days" of the order. Present with `promisedAt`.
                 current:
                     oneOf:
                         - $ref: '#/components/schemas/OrderLineCurrent'
