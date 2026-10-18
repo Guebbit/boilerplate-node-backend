@@ -481,7 +481,7 @@ components:
                         $ref: '#/components/schemas/AddCartItemRequest'
 
         # One value for a cart line, a wishlist line and a merge result. Google's feed vocabulary.
-        # First match wins: removed, unavailable, out_of_stock, insufficient_stock, preorder, in_stock.
+        # First match wins: removed, unavailable, out_of_stock, insufficient_stock, preorder, backorder, in_stock.
         LineAvailability:
             type: string
             description: >-
@@ -491,6 +491,11 @@ components:
                 - `preorder`: buyable before its release date; it ships from `releaseDate`. Judged
                   against the preorder allowance, so `out_of_stock` and `insufficient_stock` mean
                   the allowance is full or short, not that the shelf is empty.
+                - `backorder`: a released product the shop keeps selling while it is out of stock.
+                  The shelf covers less than the line asks for (or nothing, for a wishlist line), and
+                  the rest is owed, to arrive by the product's `restockDate` or within 30 days. Judged
+                  against the shelf and the room under the cap together, so `out_of_stock` and
+                  `insufficient_stock` mean both are used up.
                 - `insufficient_stock`: some left, fewer than the line wants (cart lines only).
                 - `out_of_stock`: none left.
                 - `unavailable`: the product is taken off sale (`purchasable: false`).
@@ -498,7 +503,7 @@ components:
                   and returns to a stock value if the product is shown again.
 
                 Never a number: exact stock stays behind `read:StockLevel`.
-            enum: [in_stock, preorder, insufficient_stock, out_of_stock, unavailable, removed]
+            enum: [in_stock, preorder, backorder, insufficient_stock, out_of_stock, unavailable, removed]
 
         MergeLineReason:
             type: string

@@ -21,6 +21,7 @@ import {
     orderTotal,
     type OrderDocument,
     type PlaceOrderInput,
+    type PlaceOrderLine,
     type PlaceOrderOutcome
 } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
@@ -49,7 +50,7 @@ import {
     shippingPriceFor,
     type JoinedCartLine
 } from './view';
-import { availabilityProductOf, preorderIdsOf } from './preorder';
+import { availabilityProductOf, backorderIdsOf, preorderIdsOf } from './preorder';
 import { ERROR_CODES } from '@api/error-codes';
 import { shipToCountries, shopCurrency } from '@modules/shop';
 
@@ -426,6 +427,25 @@ const refuseShippingRequirement = (
     ]);
 };
 
+/**
+ * The cart's joined lines as `placeOrder` takes them. The catalogue says which may spill past the
+ * shelf (open to backorder right now); the hold then takes what the shelf has and owes the rest.
+ *
+ * @param joined - the cart's lines, joined to their products
+ */
+const placeLinesOf = (joined: readonly JoinedCartLine[]): PlaceOrderLine[] => {
+    const backorders = backorderIdsOf(joined);
+    return joined.map((line) => ({
+        item: { productId: line.productId, quantity: line.quantity },
+        // Already a plain, lean object — `readCartLines` joins via `productService.findManyByIds`,
+        // not a hydrated `populate()`, so no `.toObject()` cast is needed here any more.
+        product: line.product,
+        ...(backorders.has(line.productId)
+            ? { backorder: { restockDate: line.product.restockDate } }
+            : {})
+    }));
+};
+
 /** Everything {@link placeOrderInputOf} assembles an order write from. */
 interface CheckoutPlacement {
     user: { id: string; email: string };
@@ -467,12 +487,7 @@ const placeOrderInputOf = ({
     email: user.email,
     locale: buyerLocale,
     notes,
-    lines: joined.map((line) => ({
-        item: { productId: line.productId, quantity: line.quantity },
-        // Already a plain, lean object — `readCartLines` joins via `productService.findManyByIds`,
-        // not a hydrated `populate()`, so no `.toObject()` cast is needed here any more.
-        product: line.product
-    })),
+    lines: placeLinesOf(joined),
     paymentMethod: requestedMethod,
     billingAddress: toOrderAddress(billingAddress),
     shipping: {
@@ -595,9 +610,10 @@ const runCheckout = async (
      * while `message` is translated for the user.
      */
     // The ledger decides how much can be sold, never the catalogue's cached copy of it.
-    const availableByProduct = await inventoryService.availableFor(
+    const positionByProduct = await inventoryService.availableFor(
         lines.map((line) => line.productId),
-        preorderIdsOf(lines)
+        preorderIdsOf(lines),
+        backorderIdsOf(lines)
     );
     const verdict = evaluateCheckout(
         lines.map((line) => ({
@@ -605,7 +621,8 @@ const runCheckout = async (
             product: line.product && {
                 ...availabilityProductOf(line.product),
                 title: line.product.title,
-                available: availableByProduct.get(line.productId) ?? 0
+                available: positionByProduct.get(line.productId)?.available ?? 0,
+                shelf: positionByProduct.get(line.productId)?.shelf ?? 0
             }
         }))
     );

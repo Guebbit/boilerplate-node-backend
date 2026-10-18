@@ -19,6 +19,7 @@ import { inventoryService, type StockShortfall } from '@modules/inventory';
 import { announceInTransaction } from '@kernel/outbox';
 import type { OrderDocument, OrderDocumentItem } from '../model';
 import { checkOrderLines } from '../domain/rules';
+import { owedLineOf } from '../domain/backorder';
 import { freezeOrderLines } from './snapshot';
 import { allocateOrderNumber } from './order-numbering';
 import { orderRepository } from '../repository';
@@ -38,6 +39,13 @@ import type { OrderAddress } from '@types';
 export interface PlaceOrderLine {
     item: { productId: string; quantity: number };
     product: ProductSnapshot | null | undefined;
+    /**
+     * Set when the product is released and open to backorder: the shelf units there are are taken
+     * and the rest is owed. The catalogue decides, so the caller says; `restockDate` is the
+     * promise when the product names one. Absent for an admin-placed order, which is refused
+     * past the shelf as before.
+     */
+    backorder?: { restockDate?: Date };
 }
 
 /**
@@ -90,6 +98,28 @@ export type PlaceOrderOutcome =
 class OrderSuperseded extends Error {}
 
 /**
+ * The frozen lines, each with the units the hold ended up owing and the day they were promised:
+ * decided once here, between the hold and the write, and never re-derived.
+ *
+ * @param items - the frozen lines
+ * @param lines - the lines as the caller placed them, same order
+ * @param owed - per product, how many units the hold could not take from the shelf
+ */
+const withOwedLines = (
+    items: readonly OrderDocumentItem[],
+    lines: readonly PlaceOrderLine[],
+    owed: readonly { productId: string; quantity: number }[]
+): OrderDocumentItem[] => {
+    const placedAt = new Date();
+    return items.map((item, index) => {
+        const productId = lines[index]?.item.productId;
+        const quantity = owed.find((part) => part.productId === productId)?.quantity ?? 0;
+        const line = owedLineOf(quantity, lines[index]?.backorder?.restockDate, placedAt);
+        return line ? { ...item, ...line } : item;
+    });
+};
+
+/**
  * Write a new order: freeze the lines, hold the stock, allocate the order number, then write the
  * row. Never rejects on a refusal — `checkOrderLines`/the stock hold answer through the returned
  * verdict, the same convention `checkOrderLines` itself already uses.
@@ -132,11 +162,16 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
      */
     const outcome = await inventoryService.reserveForOrder(
         orderId.toHexString(),
-        // A line frozen as a preorder claims the allowance, not a shelf unit.
-        input.lines.map(({ item }, index) => ({
+        // A line frozen as a preorder claims the allowance, not a shelf unit; a backorder line takes
+        // the shelf first and claims only the rest.
+        input.lines.map(({ item, backorder }, index) => ({
             productId: item.productId,
             quantity: item.quantity,
-            ...(orderItems[index]?.product.preorder ? { kind: 'backorder' as const } : {})
+            ...(orderItems[index]?.product.preorder
+                ? { kind: 'backorder' as const }
+                : backorder
+                  ? { spill: true as const }
+                  : {})
         })),
         input.shipping?.holdMinutes
     );
@@ -146,6 +181,7 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
     // a bank-transfer order, so the deadline shown to the buyer and the sweep's own timeout can
     // never disagree. See `PlaceOrderShipping.holdMinutes`' own docblock for who chooses the length.
     const { expiresAt: payBy } = outcome;
+    const items = withOwedLines(orderItems, input.lines, outcome.owed);
 
     // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback: the hold is already taken by this point, so a failed order-number allocation or order write must give it back rather than leave it standing on a row that was never created
     try {
@@ -158,7 +194,7 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
             _id: orderId,
             userId: toObjectId(input.userId),
             email: input.email,
-            items: orderItems,
+            items,
             orderNumber,
             currency: shopCurrency(),
             payBy,
@@ -171,7 +207,7 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
             ...(input.shipping?.method
                 ? {
                       shippingMethod: input.shipping.method.id,
-                      shippingCost: input.shipping.method.priceFor(orderItems)
+                      shippingCost: input.shipping.method.priceFor(items)
                   }
                 : {})
             // The conditional spreads above widen to a plain index signature, which `create`'s

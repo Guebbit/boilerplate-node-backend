@@ -85,6 +85,46 @@ describe('lineAvailability', () => {
             'a hidden preorder, which hidden still wins over',
             { product: { ...LIVE, active: false, preorder: true }, available: 5, quantity: 1 },
             'removed'
+        ],
+        [
+            'a backorder product whose shelf covers the line',
+            { product: { ...LIVE, backorder: true }, available: 15, shelf: 5, quantity: 3 },
+            'in_stock'
+        ],
+        [
+            'a backorder product whose shelf covers part of the line',
+            { product: { ...LIVE, backorder: true }, available: 12, shelf: 2, quantity: 3 },
+            'backorder'
+        ],
+        [
+            'a backorder product with an empty shelf and room',
+            { product: { ...LIVE, backorder: true }, available: 10, shelf: 0, quantity: 3 },
+            'backorder'
+        ],
+        [
+            'a backorder product whose shelf and room together fall short',
+            { product: { ...LIVE, backorder: true }, available: 2, shelf: 0, quantity: 3 },
+            'insufficient_stock'
+        ],
+        [
+            'a backorder product with neither shelf nor room',
+            { product: { ...LIVE, backorder: true }, available: 0, shelf: 0, quantity: 1 },
+            'out_of_stock'
+        ],
+        [
+            'an unlimited backorder product',
+            {
+                product: { ...LIVE, backorder: true },
+                available: Infinity,
+                shelf: 0,
+                quantity: 500
+            },
+            'backorder'
+        ],
+        [
+            'a preorder, whose shelf is ignored',
+            { product: { ...LIVE, preorder: true }, available: 5, shelf: 9, quantity: 3 },
+            'preorder'
         ]
     ])('cart line, %s: %s', (_label, facts, expected) => {
         expect(lineAvailability(facts)).toBe(expected);
@@ -100,6 +140,16 @@ describe('lineAvailability', () => {
             'a preorder with allowance',
             { product: { ...LIVE, preorder: true }, available: 1 },
             'preorder'
+        ],
+        [
+            'a backorder product with an empty shelf and room',
+            { product: { ...LIVE, backorder: true }, available: 4, shelf: 0 },
+            'backorder'
+        ],
+        [
+            'a backorder product with something on the shelf',
+            { product: { ...LIVE, backorder: true }, available: 9, shelf: 5 },
+            'in_stock'
         ]
     ])('wishlist line, %s: %s', (_label, facts, expected) => {
         expect(lineAvailability(facts)).toBe(expected);

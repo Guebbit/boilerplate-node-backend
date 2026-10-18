@@ -9,6 +9,9 @@
 
 export { sumLineItems, orderTotal } from './totals';
 
+export { owedLineOf, DEFAULT_BACKORDER_PROMISE_DAYS } from './backorder';
+export type { OwedLine } from './backorder';
+
 export {
     buyerIdOf,
     checkOrderLines,

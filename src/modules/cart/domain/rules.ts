@@ -26,11 +26,15 @@ export interface CartLineCandidate {
     product?: {
         title?: string;
         available?: number;
+        /** Shelf units alone; only a product open to backorder reads them. */
+        shelf?: number;
         active?: boolean;
         purchasable?: boolean;
         deletedAt?: Date;
         /** On sale before its release date; `available` is then what is left of its allowance. */
         preorder?: boolean;
+        /** Released and open to backorder; `available` is then the shelf and the room together. */
+        backorder?: boolean;
     } | null;
 }
 
@@ -50,7 +54,7 @@ export interface CheckoutShortfall {
     title: string;
     requested: number;
     /** Why the line is refused, so the client picks the message. Never `in_stock` or `removed`. */
-    availability: Exclude<LineAvailability, 'in_stock' | 'preorder' | 'removed'>;
+    availability: Exclude<LineAvailability, 'in_stock' | 'preorder' | 'backorder' | 'removed'>;
 }
 
 /** A cart line as {@link basketWeight} sees it — only the fields it actually sums or filters on. */
@@ -163,6 +167,7 @@ export const evaluateCheckout = (lines: readonly CartLineCandidate[]): CheckoutV
         availability: lineAvailability({
             product: line.product,
             available: line.product?.available,
+            shelf: line.product?.shelf,
             quantity: line.quantity ?? 0
         })
     }));
@@ -175,7 +180,10 @@ export const evaluateCheckout = (lines: readonly CartLineCandidate[]): CheckoutV
 
     // Off sale and sold out join the stock refusal, each naming its own availability.
     const shortfalls = judged.flatMap(({ line, availability }) =>
-        availability === 'in_stock' || availability === 'preorder' || availability === 'removed'
+        availability === 'in_stock' ||
+        availability === 'preorder' ||
+        availability === 'backorder' ||
+        availability === 'removed'
             ? []
             : [
                   {

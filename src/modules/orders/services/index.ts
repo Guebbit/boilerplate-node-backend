@@ -73,7 +73,7 @@ import {
 } from './stats';
 
 export type { OrderBrief } from './read';
-export type { PlaceOrderInput, PlaceOrderOutcome } from './place';
+export type { PlaceOrderInput, PlaceOrderLine, PlaceOrderOutcome } from './place';
 export type { CancelCause } from './cancel';
 export type { ForcedFulfilment } from './fulfillment';
 export type { OrderExport } from './export';

@@ -11,7 +11,7 @@ import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import type { Lean } from '@infrastructure/persistence/create-repository';
 import { lineAvailability, type LineAvailability } from '../domain';
-import { availabilityProductOf, preorderIdsOf } from './preorder';
+import { availabilityProductOf, backorderIdsOf, preorderIdsOf } from './preorder';
 
 /** One product's shelf: the document (`null` = hard-deleted) and the units for sale. */
 export interface Shelf {
@@ -19,6 +19,8 @@ export interface Shelf {
     product: Lean<ProductDocument> | null;
     /** The ledger's units for sale; absent for a product with no level row. */
     available: number | undefined;
+    /** The shelf alone, which tells a line the shelf covers from one that spills; absent likewise. */
+    shelf?: number | undefined;
 }
 
 /**
@@ -32,21 +34,22 @@ export const readShelf = (productIds: readonly string[]): Promise<Map<string, Sh
     const ids = [...new Set(productIds)];
     return productService.findManyByIds(ids).then((products) => {
         const byId = new Map(products.map((product) => [String(product._id), product]));
-        // The catalogue says which are preorders; the ledger then answers their allowance, not the shelf.
-        const preorders = preorderIdsOf(
-            ids.map((id) => ({ productId: id, product: byId.get(id) ?? null }))
+        // The catalogue says which are preorders and which are open to backorder; the ledger then
+        // answers their allowance, or the shelf and the room together, instead of the shelf.
+        const lines = ids.map((id) => ({ productId: id, product: byId.get(id) ?? null }));
+        return inventoryService.availableFor(ids, preorderIdsOf(lines), backorderIdsOf(lines)).then(
+            (positions) =>
+                new Map(
+                    ids.map((id) => [
+                        id,
+                        {
+                            product: byId.get(id) ?? null,
+                            available: positions.get(id)?.available,
+                            shelf: positions.get(id)?.shelf
+                        }
+                    ])
+                )
         );
-        return inventoryService
-            .availableFor(ids, preorders)
-            .then(
-                (available) =>
-                    new Map(
-                        ids.map((id) => [
-                            id,
-                            { product: byId.get(id) ?? null, available: available.get(id) }
-                        ])
-                    )
-            );
     });
 };
 
@@ -59,10 +62,10 @@ export const readShelf = (productIds: readonly string[]): Promise<Map<string, Sh
  * @returns the line's availability
  */
 export const shelfAvailability = (
-    { product, available }: Shelf,
+    { product, available, shelf }: Shelf,
     quantity?: number
 ): LineAvailability =>
-    lineAvailability({ product: availabilityProductOf(product), available, quantity });
+    lineAvailability({ product: availabilityProductOf(product), available, shelf, quantity });
 
 /**
  * Whether the catalogue shows the product publicly — the same test `findPublicById` applies. A

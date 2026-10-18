@@ -41,6 +41,7 @@ export type {
     StockLine,
     StockShortfall,
     ReserveOutcome,
+    StockPosition,
     LevelFilters,
     MovementFilters
 } from './types';

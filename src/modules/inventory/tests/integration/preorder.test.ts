@@ -367,8 +367,8 @@ describe('what a shopper may buy', () => {
         const sellable = await inventoryService.availableFor([productId], new Set([productId]));
         const onTheShelf = await inventoryService.availableFor([productId]);
 
-        expect(sellable.get(productId)).toBe(3);
-        expect(onTheShelf.get(productId)).toBe(50);
+        expect(sellable.get(productId)?.available).toBe(3);
+        expect(onTheShelf.get(productId)?.available).toBe(50);
     });
 });
 

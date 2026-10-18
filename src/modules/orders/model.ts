@@ -79,6 +79,10 @@ export interface OrderDocumentItem {
      */
     product: FrozenOrderLineProduct;
     quantity: number;
+    /** How many of `quantity` were owed rather than on the shelf at checkout; absent for none. */
+    backorderedQuantity?: number;
+    /** When those owed units were promised, frozen with them; present exactly when they are. */
+    promisedAt?: Date;
     /**
      * The language `product.title`/`description` were resolved into, frozen alongside them —
      * see `resolveSnapshotProducts` in `./services/snapshot`. Lives on the item, not the product:
@@ -301,6 +305,9 @@ const orderItemSchema = new Schema(
             type: Number,
             required: true
         },
+        // Owed units and their promise, frozen with the line — see `OrderDocumentItem`.
+        backorderedQuantity: { type: Number, min: 1 },
+        promisedAt: { type: Date },
         // The language `product.title`/`description` were resolved into when this line was
         // frozen — see `OrderDocumentItem.locale`.
         locale: {

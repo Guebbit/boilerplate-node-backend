@@ -120,7 +120,11 @@ const mergeLines = async (
         const step = await mergeLine(
             userId,
             line,
-            shelves.get(line.productId) ?? { product: null, available: undefined },
+            shelves.get(line.productId) ?? {
+                product: null,
+                available: undefined,
+                shelf: undefined
+            },
             cart,
             context
         );

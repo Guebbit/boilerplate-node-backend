@@ -14,7 +14,7 @@ import { lowStockThreshold } from '../config';
 import { stockLevelRepository, stockMovementRepository } from '../repository';
 import { roomOn } from '../domain';
 import type { PaginationInput } from '@infrastructure/persistence/search';
-import type { LevelFilters, MovementFilters } from './types';
+import type { LevelFilters, MovementFilters, StockPosition } from './types';
 
 /**
  * A new product's stock level, at zero — `module.ts`'s `PRODUCT_CREATED` listener's own job, and
@@ -41,34 +41,37 @@ export const removeLevel = (productId: string): Promise<void> =>
     stockLevelRepository.deleteByProductId(productId);
 
 /**
- * How many units of each product can be sold right now, read from the ledger.
+ * What can be sold of each product right now, read from the ledger.
  *
  * The checkout pre-flight asks this rather than the catalogue's cached copy: a cache that sits
  * low (a missed sync) would refuse a sale the shelf covers, and nothing would ever heal it, since
  * a refused checkout moves no stock. A level that never existed reads as nothing available.
  *
  * A product the caller names in `preorderIds` is sold against its allowance, not the shelf: what
- * is left of `backorderLimit`, because its units do not exist yet.
+ * is left of `backorderLimit`, because its units do not exist yet. One in `backorderIds` is sold
+ * against the shelf AND the room under the cap together. Either room can be `Infinity` (no cap),
+ * never `null`.
  *
  * @param productIds - the products to look up
  * @param preorderIds - the ones that are preorders right now (the catalogue decides, not this module)
- * @returns units for sale by product id; absent for a product with no level row
+ * @param backorderIds - the released ones open to backorder right now (likewise the catalogue's call)
+ * @returns what can be sold by product id; absent for a product with no level row
  */
 export const availableFor = (
     productIds: readonly string[],
-    preorderIds: ReadonlySet<string> = new Set()
-): Promise<Map<string, number>> =>
-    stockLevelRepository
-        .findManyByProductIds(productIds)
-        .then(
-            (levels) =>
-                new Map(
-                    levels.map((level) => [
-                        String(level.productId),
-                        preorderIds.has(String(level.productId)) ? roomOn(level) : level.available
-                    ])
-                )
-        );
+    preorderIds: ReadonlySet<string> = new Set(),
+    backorderIds: ReadonlySet<string> = new Set()
+): Promise<Map<string, StockPosition>> =>
+    stockLevelRepository.findManyByProductIds(productIds).then((levels) => {
+        const positionOf = (level: (typeof levels)[number]): StockPosition => {
+            const id = String(level.productId);
+            if (preorderIds.has(id)) return { available: roomOn(level), shelf: level.available };
+            if (backorderIds.has(id))
+                return { available: level.available + roomOn(level), shelf: level.available };
+            return { available: level.available, shelf: level.available };
+        };
+        return new Map(levels.map((level) => [String(level.productId), positionOf(level)]));
+    });
 
 /**
  * A page of the preorder board: every product with an allowance or something outstanding, the most

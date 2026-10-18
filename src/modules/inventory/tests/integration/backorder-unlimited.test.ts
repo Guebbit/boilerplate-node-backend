@@ -53,7 +53,7 @@ describe('an unlimited backorder cap', () => {
 
         const room = await inventoryService.availableFor([productId], new Set([productId]));
 
-        expect(room.get(productId)).toBe(Infinity);
+        expect(room.get(productId)?.available).toBe(Infinity);
     });
 
     it('sits on the board with no number left', async () => {

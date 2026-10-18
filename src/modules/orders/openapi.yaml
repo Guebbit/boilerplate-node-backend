@@ -1113,6 +1113,21 @@ components:
                 # language it was bought in, regardless of the reader's own locale.
                 locale:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                # Frozen at checkout, like the rest of the line: how many of `quantity` the shelf
+                # could not cover and the shop owes. Absent when the shelf covered the whole line.
+                backorderedQuantity:
+                    type: integer
+                    minimum: 1
+                    description: >-
+                        How many of `quantity` were owed rather than on the shelf when the order was
+                        placed. Absent when the shelf covered the whole line.
+                promisedAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When the owed units were promised: the product's `restockDate`, or the day the
+                        order was placed plus 30 days when it had none. Present with `backorderedQuantity`
+                        and frozen with it, so a later change to the catalogue moves no promise.
                 current:
                     oneOf:
                         - $ref: '#/components/schemas/OrderLineCurrent'

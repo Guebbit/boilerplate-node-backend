@@ -110,7 +110,7 @@ describe('checking out a preorder', () => {
             { productId, backordered: 2, held: 2, paid: 0, left: 3 }
         ]);
         const shelf = await inventoryService.availableFor([productId]);
-        expect(shelf.get(productId)).toBe(0);
+        expect(shelf.get(productId)?.available).toBe(0);
     });
 
     it('refuses once the allowance is full, naming the line as out of stock', async () => {
@@ -151,7 +151,7 @@ describe('checking out a preorder', () => {
             ])
         );
         const shelf = await inventoryService.availableFor([String(ordinary._id)]);
-        expect(shelf.get(String(ordinary._id))).toBe(2);
+        expect(shelf.get(String(ordinary._id))?.available).toBe(2);
     });
 
     it('keeps the promise frozen when the date later passes', async () => {

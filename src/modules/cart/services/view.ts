@@ -10,7 +10,7 @@
  */
 
 import { orderTotal, sumLineItems } from '@modules/orders';
-import { inventoryService } from '@modules/inventory';
+import { inventoryService, type StockPosition } from '@modules/inventory';
 import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import type { Lean } from '@infrastructure/persistence/create-repository';
@@ -23,7 +23,7 @@ import {
 } from '@modules/delivery';
 import type { CartDocument } from '../model';
 import { basketWeight, lineAvailability, needsShipping } from '../domain';
-import { availabilityProductOf, preorderIdsOf } from './preorder';
+import { availabilityProductOf, backorderIdsOf, preorderIdsOf } from './preorder';
 import { shopCurrency } from '@modules/shop';
 
 /**
@@ -152,7 +152,7 @@ export const effectiveShippingChoice = (
 const buildView = (
     cart: CartDocument | null,
     lines: CartLine[],
-    available: Map<string, number>
+    positions: Map<string, StockPosition>
 ): CartView => {
     // A cart never freezes a currency of its own — it hasn't checked out — so it always
     // prices against the shop's CURRENT setting, unlike an order's own frozen `currency`.
@@ -168,7 +168,8 @@ const buildView = (
             quantity: lineQuantity,
             availability: lineAvailability({
                 product: availabilityProductOf(product),
-                available: available.get(productId),
+                available: positions.get(productId)?.available,
+                shelf: positions.get(productId)?.shelf,
                 quantity: lineQuantity
             })
         })),
@@ -200,7 +201,8 @@ export const toCartView = (cart: CartDocument | null): Promise<CartView> =>
         inventoryService
             .availableFor(
                 lines.map(({ productId }) => productId),
-                preorderIdsOf(lines)
+                preorderIdsOf(lines),
+                backorderIdsOf(lines)
             )
-            .then((available) => buildView(cart, lines, available))
+            .then((positions) => buildView(cart, lines, positions))
     );

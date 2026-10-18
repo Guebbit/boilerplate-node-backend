@@ -50,6 +50,16 @@ export type ReserveOutcome =
       }
     | { held: false; shortfalls: StockShortfall[] };
 
+/**
+ * What can be sold of one product right now. `available` is everything a line may ask for (the
+ * shelf, the room under the cap, or both, by what the product is); `shelf` is only the units on
+ * the shelf, which tells a line the shelf covers from one that spills into the cap.
+ */
+export interface StockPosition {
+    available: number;
+    shelf: number;
+}
+
 /** What a stock-board read accepts. */
 export interface LevelFilters extends PaginationInput {
     lowOnly?: boolean;
