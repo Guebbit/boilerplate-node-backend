@@ -13,7 +13,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
-import { PRODUCT_DELETED } from '@modules/products';
+import { PRODUCT_DELETED, productService } from '@modules/products';
 import { router } from './routes';
 import { wishlistService } from './service';
 
@@ -31,8 +31,14 @@ export default {
         }
     ],
     subscribe: () => {
+        // Skipped for a product that is live again: a retried delivery can arrive after a
+        // restore, and pulling the line would tell a shopper "removed" about a product on sale.
         onDomainEvent(PRODUCT_DELETED, ({ productId, titles }) =>
-            wishlistService.removeByProductId(productId, titles)
+            productService
+                .isLive(productId)
+                .then((live) =>
+                    live ? undefined : wishlistService.removeByProductId(productId, titles)
+                )
         );
     },
     locales: path.join(__dirname, 'locales')

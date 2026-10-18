@@ -20,6 +20,7 @@ import { create, updateById, clearOmittedLocales } from './translated-write';
 import { remove, removeById, restoreById } from './remove';
 import {
     findByIdRaw,
+    isLive,
     findPublicById,
     findManyByIds,
     countPublic,
@@ -66,6 +67,7 @@ export const productService = {
     // for a response reaches the helper through the service.
     toProduct,
     findByIdRaw,
+    isLive,
     findPublicById,
     findManyByIds,
     countPublic,

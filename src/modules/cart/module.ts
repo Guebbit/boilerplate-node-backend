@@ -15,7 +15,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { router } from './routes';
-import { PRODUCT_DELETED } from '@modules/products';
+import { PRODUCT_DELETED, productService } from '@modules/products';
 import { cartService } from './services';
 import { cartConfig } from './config';
 import { cartRateLimits } from './rate-limits';
@@ -44,8 +44,14 @@ export default {
         }
     ],
     subscribe: () => {
+        // Skipped for a product that is live again: a retried delivery can arrive after a
+        // restore, and pulling the line would tell a shopper "removed" about a product on sale.
         onDomainEvent(PRODUCT_DELETED, ({ productId, titles }) =>
-            cartService.productRemoveFromCartsById(productId, titles)
+            productService
+                .isLive(productId)
+                .then((live) =>
+                    live ? undefined : cartService.productRemoveFromCartsById(productId, titles)
+                )
         );
     },
     locales: path.join(__dirname, 'locales')

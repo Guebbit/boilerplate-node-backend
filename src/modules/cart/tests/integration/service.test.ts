@@ -1515,8 +1515,9 @@ describe('productRemoveFromCartsById', () => {
         );
         const loggedError = jest.spyOn(logger, 'error').mockImplementation(() => logger);
 
+        // A product that is gone (hard-deleted) is not "live", so the handler goes on to the write.
         const settled = await emitDomainEvent(PRODUCT_DELETED, {
-            productId: 'irrelevant',
+            productId: MISSING_ID,
             hardDelete: false,
             titles: {}
         });

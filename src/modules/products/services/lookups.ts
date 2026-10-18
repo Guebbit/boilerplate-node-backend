@@ -20,6 +20,17 @@ import { productRepository, type ListedProduct, type StockCounters } from '../re
  */
 export const findByIdRaw = (productId: string) => productRepository.findByIdRaw(productId);
 
+/**
+ * Whether a product exists and is not soft-deleted — the question a late `product.deleted` handler
+ * asks before it acts: a retried delivery can arrive after the product was restored.
+ *
+ * @param productId - the product the event named
+ */
+export const isLive = (productId: string): Promise<boolean> =>
+    productRepository
+        .findByIdRaw(productId)
+        .then((product) => product !== null && !product.deletedAt);
+
 /** The publicly visible product with this id, or `null` — `cart` and `wishlist`'s one read. */
 export const findPublicById = (productId: string) => productRepository.findPublicById(productId);
 
