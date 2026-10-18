@@ -227,16 +227,17 @@ Only two failures answer with a body. Everything past the state check redirects 
 with `?error=<code>`, because by then the browser is mid-navigation and a JSON body has nowhere to
 be read:
 
-| Failure                            | Answer                        |
-| ---------------------------------- | ----------------------------- |
-| provider never configured          | `404`                         |
-| `state` missing or mismatched      | `400`                         |
-| consent declined                   | `302 ?error=access_denied`    |
-| no `code`, or the exchange failed  | `302 ?error=provider_error`   |
-| email the provider won't vouch for | `302 ?error=email_unverified` |
-| email matches an existing account  | `302 ?error=account_exists`   |
-| connect: identity held elsewhere   | `302 ?error=already_linked`   |
-| connect: token missing or spent    | `302 ?error=link_expired`     |
+| Failure                            | Answer                          |
+| ---------------------------------- | ------------------------------- |
+| provider never configured          | `404`                           |
+| `state` missing or mismatched      | `400`                           |
+| consent declined                   | `302 ?error=access_denied`      |
+| no `code`, or the exchange failed  | `302 ?error=provider_error`     |
+| email the provider won't vouch for | `302 ?error=email_unverified`   |
+| email matches an existing account  | `302 ?error=account_exists`     |
+| …and that account never proved it  | `302 ?error=account_unverified` |
+| connect: identity held elsewhere   | `302 ?error=already_linked`     |
+| connect: token missing or spent    | `302 ?error=link_expired`       |
 
 The success path calls the same `issueSession` [`postLogin`](./account-sessions.md) does, with
 `amr: [provider.name]` — so a Google login records **how** it was proved, and the freshness guards
