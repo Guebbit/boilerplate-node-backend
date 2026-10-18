@@ -106,30 +106,6 @@ export const carryOrderTo = async (orderId: string, to: 'shipped' | 'delivered')
     if (to === 'delivered') await deliverEverything(orderId);
 };
 
-/**
- * A shipment of the order's first fulfillment order, written straight to the collection — no
- * rank rule, no stock, no status move. For a test that needs a shipment to AIM at (a rank check, a
- * route table) rather than one that happened.
- *
- * @param orderId - the order, `paid` or `processing` so it has fulfillment orders
- */
-export const createShipmentFor = async (orderId: string): Promise<ShipmentDocument> => {
-    const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
-    return shipmentRepository.create({
-        orderId: fulfillmentOrder.orderId,
-        fulfillmentOrderId: fulfillmentOrder._id,
-        number: 1,
-        status: 'shipped',
-        lines: fulfillmentOrder.lines.map(({ productId, title, quantity }) => ({
-            productId,
-            title,
-            quantity
-        })),
-        forced: false,
-        shippedAt: new Date()
-    });
-};
-
 /** One preorder line to place: how many units, promised for which date. */
 export interface WantedPreorder {
     quantity: number;

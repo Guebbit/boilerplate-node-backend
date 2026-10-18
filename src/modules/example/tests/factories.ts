@@ -8,8 +8,6 @@ import { exampleRepository } from '../repository';
 import type { ExampleDocument } from '../model';
 import { makeExample, type ExampleOverrides } from '../factories';
 
-export { makeExample, type ExampleOverrides } from '../factories';
-
 /**
  * Persist an example owned by `overrides.userId`.
  * @param overrides - the owner, plus whatever the case cares about
