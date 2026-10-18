@@ -295,11 +295,17 @@ paths:
 
                 404 for a language that does not exist in the dynamic tier, and equally for one
                 that exists but is inactive — an inactive language is invisible to every public
-                route, which is the whole point of the flag.
+                route, which is the whole point of the flag. A caller holding `display:Locale`
+                (staff, or an API key minted with it) is the exception: they get an inactive
+                language's dictionary too, so a translation can be seen in the shop before it is
+                switched on for everyone.
 
-                Public and cacheable, like every other locale read.
+                Public and cacheable, like every other locale read; a staff answer skips the
+                shared cache.
             operationId: getLocaleMessages
-            security: []
+            security:
+                - {}
+                - bearerAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/MessagesAppQueryParam'
@@ -609,8 +615,7 @@ paths:
                 invariant `POST /products` already enforces on create: a caller cannot replace the
                 whole set and leave the entity with nothing to fall back to.
 
-                422 for the same reasons `PATCH` refuses — an unknown locale, an inactive one being written (a `null` that deletes an inactive locale's row is
-                allowed), an empty
+                422 for the same reasons `PATCH` refuses — an unknown locale, an empty
                 `fields` object, a `fields` key the `translatables` registry does not declare, or a
                 missing/`null` fallback locale.
             operationId: replaceEntityTranslations
@@ -876,8 +881,10 @@ components:
                 direction:
                     $ref: '#/components/schemas/LocaleDirection'
                 # Inactive means invisible to every PUBLIC route: absent from the manifest, 404 on
-                # the dictionary. It is the state a half-finished translation lives in, and the
-                # state a language must be put into before it can be deleted.
+                # the dictionary, and its translated entity text is not served. Staff holding
+                # `display:Locale` still see the manifest row and the dictionary, and entity text
+                # can be drafted into it. It is the state a half-finished translation lives in,
+                # and the state a language must be put into before it can be deleted.
                 active:
                     type: boolean
                 # Bumped on ANY write to this language's entries, in the same operation as the

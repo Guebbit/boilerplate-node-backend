@@ -251,6 +251,31 @@ describe('GET /locales/:locale/messages', () => {
         expect(hidden.status).toBe(404);
         expect(unknown.status).toBe(404);
     });
+
+    it('serves an inactive language to staff, and to a key minted with display:Locale', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        await api().patch('/locales/pt').set('Authorization', bearer).send({ active: false });
+        const secret = await credentialHolding(['display:Locale']);
+
+        const asStaff = await api().get('/locales/pt/messages').set('Authorization', bearer);
+        const asKey = await api()
+            .get('/locales/pt/messages')
+            .set('Authorization', `Bearer ${secret}`);
+        const asStranger = await api().get('/locales/pt/messages');
+
+        expect(asStaff.status).toBe(200);
+        expect(asKey.status).toBe(200);
+        expect(asStranger.status).toBe(404);
+    });
+
+    it('still 404s a language that does not exist, for staff too', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api().get('/locales/zz/messages').set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
 });
 
 describe('POST /locales', () => {

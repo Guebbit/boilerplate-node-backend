@@ -128,9 +128,9 @@ const planSlot = (
     return localeRepository.findByTag(locale).then((language) => {
         if (!language)
             return slotRejection('locales.error-translation-locale-unknown', { locale }, locale);
-        if (!language.active)
-            return slotRejection('locales.error-translation-locale-inactive', { locale }, locale);
 
+        // An inactive language is writable on purpose: that is where a translation is drafted.
+        // The read paths drop its rows until the language goes live (`inactiveTags`).
         return planFields();
     });
 };

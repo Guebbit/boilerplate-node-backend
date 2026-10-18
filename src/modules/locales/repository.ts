@@ -334,6 +334,13 @@ const findEntityLocale = (
         .exec();
 
 /**
+ * The tags of the languages switched off. A draft language's entity text is written but not
+ * served: both public read paths below drop its rows, the way the manifest and the dictionary
+ * drop the language itself. Languages are a handful of rows, so this is one tiny query.
+ */
+const inactiveTags = (): Promise<string[]> => localeModel.distinct('tag', { active: false }).exec();
+
+/**
  * A page's translated fields, one indexed `$in` query resolving every entity at once — the query
  * `kernel/translation.ts`'s translation port resolves reads through, and the primitive a future
  * read-path decorator batches a whole page against.
@@ -348,11 +355,18 @@ const resolveEntityFields = (
     entityIds: string[],
     localeCandidates: string[]
 ): Promise<Map<string, TranslationFields>> =>
-    translationModel
-        .find({ entityType, entityId: { $in: entityIds }, locale: { $in: localeCandidates } })
-        .select({ entityId: 1, locale: 1, fields: 1, _id: 0 })
-        .lean<Pick<TranslationDocument, 'entityId' | 'locale' | 'fields'>[]>()
-        .exec()
+    inactiveTags()
+        .then((inactive) =>
+            translationModel
+                .find({
+                    entityType,
+                    entityId: { $in: entityIds },
+                    locale: { $in: localeCandidates, $nin: inactive }
+                })
+                .select({ entityId: 1, locale: 1, fields: 1, _id: 0 })
+                .lean<Pick<TranslationDocument, 'entityId' | 'locale' | 'fields'>[]>()
+                .exec()
+        )
         .then((rows) => {
             const byEntity = new Map<string, Map<string, TranslationFields>>();
             for (const row of rows) {
@@ -393,17 +407,20 @@ const findEntityIdsByFieldMatch = (
     pattern: string,
     localeCandidates: string[]
 ): Promise<string[]> =>
-    translationModel
-        .find({
-            entityType,
-            locale: { $in: localeCandidates },
-            $or: fields.map((field) => ({
-                [`fields.${field}`]: { $regex: pattern, $options: 'i' }
-            }))
-        })
-        .select({ entityId: 1, _id: 0 })
-        .lean<{ entityId: string }[]>()
-        .exec()
+    inactiveTags()
+        .then((inactive) =>
+            translationModel
+                .find({
+                    entityType,
+                    locale: { $in: localeCandidates, $nin: inactive },
+                    $or: fields.map((field) => ({
+                        [`fields.${field}`]: { $regex: pattern, $options: 'i' }
+                    }))
+                })
+                .select({ entityId: 1, _id: 0 })
+                .lean<{ entityId: string }[]>()
+                .exec()
+        )
         .then((rows) => [...new Set(rows.map((row) => row.entityId))]);
 
 /**
