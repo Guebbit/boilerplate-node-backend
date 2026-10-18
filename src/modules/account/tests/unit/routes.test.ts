@@ -173,8 +173,8 @@ describe('account routes — authorization', () => {
     );
 
     it('keys no route at all: what you may do to your own record follows from being signed in', () => {
-        // An operational lever across every account, such as the expired-token sweep, is a nightly
-        // job (`reap:expired-tokens`), never a route here.
+        // An operational lever across every account, such as a reaper, is a nightly job
+        // (`reap:inactive-accounts`), never a route here.
         const keyed = routeSignatures(router).filter((signature) =>
             guardsOn(router, signature).includes('requirePermissionGuard')
         );

@@ -48,7 +48,6 @@ const transportOptions = async (
     await sendTemplatedEmail({ to: 'ada@example.com' }, 'account.reset-confirm', {
         locale: 'en',
         pageMetaTitle: '',
-        pageMetaLinks: [],
         greeting: '',
         body: '',
         providers: '',

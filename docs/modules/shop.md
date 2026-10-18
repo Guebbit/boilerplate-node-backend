@@ -65,7 +65,7 @@ every call, so a test varies a setting per case and a deployment corrects one wi
 identity, address, phone and email before the contract, and the e-Commerce Directive (Art. 5) wants
 the VAT number. `GET /shop` is where a visitor, and the Terms page, read them. Not published: the
 time zone (an operator's fact, not a visitor's), and the bank-transfer details, which travel on
-each order and stay with `orders`.
+each order and stay with `payments`.
 
 **Required at boot, because a notice without an address is not one.** The legal name, street,
 city, zip, country, email, phone and time zone refuse to boot when unset; the VAT number and the

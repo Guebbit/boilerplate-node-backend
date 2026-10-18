@@ -568,7 +568,7 @@ const reissueRotated = (
     });
 
 /**
- * The losing side of a rotation race: `tokenSupersede` already gave the swap to someone else, so
+ * The losing side of a rotation race: the session row's `supersede` already gave the swap to someone else, so
  * work out what the presented token actually is — a benign two-tabs race, an ordinary dead
  * credential, or theft — and answer accordingly. Split out of `rotateRefreshToken` purely so that
  * function reads as one decision (won the race, or didn't); the revoke-then-throw at the bottom

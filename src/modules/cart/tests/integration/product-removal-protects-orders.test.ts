@@ -1,7 +1,7 @@
 /**
  * @module
  * A product removed or deactivated AFTER an order was placed counts as present for that order
- * (Q14 of the merge-alert plan: the order was placed while the product was on sale). `products`
+ * (the order was placed while the product was on sale). `products`
  * announces either; `inventory` drops the level row on a hard delete only; `orders` and `payments`
  * do nothing: a pending order stays `pending`, nobody is emailed, and a card or offline payment
  * still goes through. Every module involved is one `cart` depends on, so their real `subscribe()`

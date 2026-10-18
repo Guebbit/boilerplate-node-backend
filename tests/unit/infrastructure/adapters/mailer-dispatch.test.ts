@@ -78,7 +78,6 @@ const TEMPLATE = 'account.reset-request';
 const DATA: Data = {
     locale: 'en',
     pageMetaTitle: 'Reset',
-    pageMetaLinks: [],
     greeting: 'Hello, Ada!',
     intro: 'We received a request to reset your password.',
     linkLabel: 'Reset my password',

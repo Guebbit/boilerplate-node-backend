@@ -72,7 +72,7 @@ const lineTexts = (t: ReturnType<typeof translator>, lines: readonly EmailLine[]
 /**
  * "Your order is on its way" — sent when a shipment leaves. Lists what is in it, the tracking line
  * only when the method actually carries one (`undefined` still reads as "unset" to the template's
- * own `typeof tracking !== "undefined"` guard, same convention `bankTransferInstructionsEmail`'s
+ * own `typeof tracking !== "undefined"` guard, same convention `payments`' `transferInstructionsEmail`'s
  * optional fields follow), and how many more items are to follow when anything remains.
  * @param locale - the buyer's language
  * @param name - the buyer's name, for the greeting

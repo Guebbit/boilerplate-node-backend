@@ -177,7 +177,7 @@ const planTranslationWrites = async (
 /**
  * Apply an ALREADY-VALIDATED plan — see {@link planTranslationWrites} — without touching the
  * entity's cache tag or its audit trail: a caller with its own document to write
- * (`productService.writeCreate`/`writeUpdate`) owns both itself, in the same operation that calls this.
+ * (`productService.create`/`updateById`) owns both itself, in the same operation that calls this.
  * `upsertEntityTranslations` below is the generic door's own caller, and still owns that pair for
  * itself.
  *
@@ -242,7 +242,7 @@ const writePlannedTranslations = async (
  * this module's own `PlannedWrite` (the wall `kernel/translation.ts`'s header names), so its
  * `plan` capability is typed against `TranslationWriteSlot` instead: the same shape, minus
  * `origin`, which a caller writing its own document alongside the translations
- * (`productService.writeCreate`/`writeUpdate`) has no use for.
+ * (`productService.create`/`updateById`) has no use for.
  */
 export const planForPort = (
     entityType: string,

@@ -73,8 +73,8 @@ export const markEmailVerified = (user: UserDocument): Promise<UserDocument> => 
  * Swap a proven `pendingEmail` into `email`, and mark the account verified — the new address just
  * proved itself. Document-only, same split as {@link markEmailVerified}: the caller promotes a
  * still-`unverified` role, since an email change can be the first proof an `unverified` signup
- * ever completes. Revoking the account's refresh tokens afterward is also the caller's job, not
- * this operation's — `save` here answers with the document a token-revoke call needs, nothing more.
+ * ever completes. The sessions end in this same save (`markSessionsEnded`); purging the links and
+ * session rows that follow is the caller's job, not this operation's.
  */
 export const applyEmailChange = (user: UserDocument, newEmail: string): Promise<UserDocument> => {
     // Kept for the undo link: the only copy of the address the account is being moved away from.

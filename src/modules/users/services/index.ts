@@ -133,8 +133,8 @@ export const userService = {
     findWarnedStillInactive,
     findReaperSoftDeletedPastGrace,
     enqueueIfPending,
-    // A controller may not reach `./presenter` directly (the persistence wall), so the shaping
-    // helper it needs to build a response rides through the service instead.
+    // The barrel never publishes a presenter function, so a sibling that has to shape a user for
+    // a response reaches the helper through the service.
     toUser: presentUser,
     toUserContract: presentUserWithCurrentRole,
     toUserContracts: presentUsersWithCurrentRoles,

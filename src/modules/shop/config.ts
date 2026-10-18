@@ -7,7 +7,7 @@
  *
  * Owner of the identity:  `shop`, since none of these is an order concept — `orders`, `cart`,
  *                         `delivery`, `invoicing`, `returns`, `products` and `stats` all read them.
- * Bank transfer:          not here; `orders` owns it, since it renders `transferInstructions`.
+ * Bank transfer:          not here; `payments` owns it, since it renders `transferInstructions`.
  * VAT rates:              not here; `products` resolves them and `orders` only freezes the number.
  *
  * See: docs/modules/shop.md

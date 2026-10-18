@@ -25,7 +25,6 @@ import { setEnvironment } from '@tests/environment';
 const DATA = {
     locale: 'en',
     pageMetaTitle: '',
-    pageMetaLinks: [],
     greeting: '',
     body: '',
     providers: '',

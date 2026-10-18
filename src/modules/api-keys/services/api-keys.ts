@@ -280,7 +280,7 @@ const notifyRevoked = (
 
 /**
  * Revoke every live credential a person minted — what `account` asks for when their sessions are
- * ended wholesale (logout everywhere, a password reset): both mean "I may be compromised", and a
+ * ended wholesale (logout everywhere, a password reset, an email change undone): each means "I may be compromised", and a
  * key outlives every session. Audited as the system's act, then the owner is mailed the list.
  * A person with nothing live gets neither.
  *

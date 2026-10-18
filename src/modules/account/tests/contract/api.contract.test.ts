@@ -49,7 +49,7 @@ afterEach(() => settleInlineExports().then(emptyFileSandbox));
 /*
  * The mailer is REPLACED, not spied on — same reasoning as the audit/analytics ports elsewhere
  * (`jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes
- * under swc). Needed here because `tokens[].token` is a digest at rest: the plaintext verify
+ * under swc). Needed here because a token is a digest at rest: the plaintext verify
  * token this suite submits to `/account/verify-confirm` only ever exists in the emailed link,
  * never in storage — see `verifyTokenFromMail` below.
  */

@@ -86,8 +86,8 @@ describe('every route requiring a caller (contract-derived)', () => {
 /**
  * Every tenant persona a person can log in as: the two audiences with no stored role
  * (`unverified`, `customer`) and every preset tenant role, the administrator included. The
- * administrator holds no shopping key (staff and administrators do not shop) and no platform key,
- * so there are routes it is refused, and the model's `holds` says which. Derived, so a role added
+ * administrator holds no platform key, so there are routes it is refused, and the model's `holds`
+ * says which. Derived, so a role added
  * to the YAML is never silently skipped.
  */
 const TENANT_PERSONAS: readonly string[] = [

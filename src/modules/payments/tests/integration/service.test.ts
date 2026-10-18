@@ -3,7 +3,7 @@
  * Payments service (`src/modules/payments/services/`) — pins the invariants: the intent freezes
  * the ORDER's total (shipping included), a confirm moves the order `pending → paid` conditionally
  * so the payment row only says `succeeded` when the order does, a decline is retryable, and a
- * refund (the `ORDER_REFUND_OWED` listener) is at-most-once. Real Mongo throughout, because the
+ * refund (the `order.cancelled` listener) is at-most-once. Real Mongo throughout, because the
  * guarantees are the conditional writes; the provider is the real `fake` one.
  */
 
@@ -1793,7 +1793,7 @@ describe('order.cancelled — closing a still-open intent at the provider', () =
     });
 
     it('does not ask the provider anything for a payment that already succeeded', async () => {
-        // `succeeded` is `order.refund_owed`'s to give back, not this listener's to cancel.
+        // `succeeded` is the refund's to give back, not this listener's to cancel.
         const { user, order } = await orderFor();
         await payFor(String(order._id), user);
 

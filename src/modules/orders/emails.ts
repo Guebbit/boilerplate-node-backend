@@ -232,7 +232,7 @@ const linePromise = (
 /**
  * The placed-order email, sent to the customer — "order received, awaiting payment", never
  * "confirmed": every order this builds for is still `pending` at send time (a `bank_transfer`
- * order gets {@link bankTransferInstructionsEmail} instead, the only other placed-order mail).
+ * order gets `transferInstructionsEmail` from `payments` instead, the only other placed-order mail).
  * The bought lines are resolved here, one translated string each, since per-line copy interpolates
  * per-line values and can't be a single string decided up front. The total is `orderTotal`'s
  * arithmetic, not a fresh sum — the email quotes what the order stands for, shipping included.

@@ -333,7 +333,7 @@ const afterSettlement = (
  * The gate:     the PAYMENT write. The settleable sets exclude `succeeded`, and the non-success
  *               ones `cancelled`, so exactly one caller ever sees its own write succeed.
  * Not the gate: the order's own `pending → paid` move. A webhook retried after
- *               {@link applyWebhookDelivery} released its claim re-enters here and can lose that
+ *               {@link applyWebhookDelivery} failed re-enters here and can lose that
  *               race (the order got there on the failed first attempt) while still being the one
  *               call that must finish the job.
  *
@@ -722,7 +722,7 @@ export const settleFromProvider = (payment: PaymentDocument): Promise<Settlement
  * (`./effects.ts#reconcileStalePayments`) has no delivery either.
  *
  * Unattended, so outcomes are logged rather than audited — the same rule the cancel listener and
- * the token-cleanup job follow.
+ * the sweeps follow.
  *
  * @param providerRef - the intent the event named
  */

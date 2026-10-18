@@ -1,8 +1,8 @@
 # users
 
 ::: tip At a glance
-**Owns** — the user record: email, password hash, role name, the second-factor and linked-provider material, and the session epoch. Credentials stay on the record on purpose: bounded, read at login, dying with the user ([why](./account-two-factor.md#what-the-user-document-carries)). Sessions and one-time tokens are [`account`](./account.md)'s own collections.
-**Depends on** — nothing. Authentication is next door in [`account`](./account.md).
+**Owns** — the user record: email, password hash, the second-factor and linked-provider material, and the session epoch. Credentials stay on the record on purpose: bounded, read at login, dying with the user ([why](./account-two-factor.md#what-the-user-document-carries)). Sessions and one-time tokens are [`account`](./account.md)'s own collections.
+**Depends on** — [`access`](./access.md), for the role half of a write: the role lives in a membership, never on the record. Authentication is next door in [`account`](./account.md).
 **Breaks if you change** — the credential fields (password, second factors, linked providers, the epoch). `account` reads and writes them, and it is the repo's only shared-kernel edge.
 :::
 
@@ -51,13 +51,13 @@ flowchart LR
 
 ## The story
 
-A user record with an email, a password hash and a role name is the same problem in every
-application that has ever had one. Nothing about it differentiates this shop — which is exactly
+A user record with an email and a password hash is the same problem in every application that
+has ever had one. Nothing about it differentiates this shop — which is exactly
 what `generic` means, and why no aggregate belongs here however central the record feels.
 
-The role name is a fallback, not the source of truth — a stored membership always wins, and this
-module publishes its own field alongside it purely so a staff list has something to show. See
-[Authorization](../theory/authorization.md) for where the decision actually gets made.
+The record carries no role: a staff role is a membership in [`access`](./access.md), and a
+customer is whoever has no membership. See [Authorization](../theory/authorization.md) for where
+the decision actually gets made.
 
 **Authentication is not here.** Signup, login, password reset, sessions and the one-time-token lifecycle all live in
 [`account`](./account.md), which is a _second service over this same collection_. That split is why
@@ -136,7 +136,7 @@ password, second factor or sign-in email. Each row also carries an `actions` blo
 
 `phone` is stored AES-256-GCM under `NODE_PII_ENCRYPTION_KEY`
 (`@infrastructure/security/pii-encryption`) — `services/update.ts`'s `update` encrypts it on the one write
-path, `toUser` (`model.ts`) decrypts it on the way out, whether the source document was hydrated or
+path, `presentUser` (`presenter.ts`) decrypts it on the way out, whether the source document was hydrated or
 `search()`'s `.lean()` result. See
 [Secrets at rest](../theory/defences/crypto-and-secrets.md#secrets-at-rest).
 

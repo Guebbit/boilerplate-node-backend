@@ -782,7 +782,7 @@ describe('logging in with a device factor', () => {
 
     it('spends the challenge on success — presenting it again fails even with a fresh code', async () => {
         // The property the JWT design never had: a challenge is a single-use, revocable token now
-        // (users/model.ts's tokens[]), not a self-verifying signature good for its whole TTL.
+        // (a row in the account's token store), not a self-verifying signature good for its whole TTL.
         const { user, bearer } = await authenticateVerified();
         const { secret } = await enrollTotp(bearer);
         const login = await startLogin(user.email);

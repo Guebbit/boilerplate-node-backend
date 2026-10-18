@@ -129,7 +129,7 @@ paths:
                                 $ref: '#/components/schemas/ProductEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # SH4: a `sku` colliding with another product's.
+                # A `sku` colliding with another product's.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `uploadLimiter` sits in front of this route — see routes.ts.
@@ -239,7 +239,7 @@ paths:
                                 $ref: '#/components/schemas/ProductEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # SH4: a `sku` colliding with another product's.
+                # A `sku` colliding with another product's.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -295,7 +295,7 @@ paths:
                                 $ref: '#/components/schemas/ProductEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # SH4: a `sku` colliding with another product's.
+                # A `sku` colliding with another product's.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -1294,7 +1294,7 @@ components:
                 set a new date or clear it. Moving it later notifies the buyers who already paid
                 (`delivery`).
 
-        # SH4: a stock-keeping unit, deliberately just a string — this deployment's own numbering
+        # A stock-keeping unit, deliberately just a string — this deployment's own numbering
         # scheme, unvalidated beyond "not empty". Product VARIANTS (one SKU per size/colour) are
         # a separate, larger feature, on the roadmap and not built here; today's SKU is one per
         # product, same cardinality as `Product` itself.

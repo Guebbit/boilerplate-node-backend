@@ -6,8 +6,8 @@
  * `payment.` prefix, since it names a kind of payment event rather than an admin override of one.
  *
  * `refundForOrder` (the refund half of the `order.cancelled` listener) logs a
- * real-provider refund rather than auditing it — there is no request behind it, like the
- * token-cleanup job — but still audits `PAYMENT_REFUND_OWED_BY_HAND` for a hand-paid order left
+ * real-provider refund rather than auditing it — there is no request behind it, like a sweep —
+ * but still audits `PAYMENT_REFUND_OWED_BY_HAND` for a hand-paid order left
  * for an operator, since that one needs a human to see it.
  */
 

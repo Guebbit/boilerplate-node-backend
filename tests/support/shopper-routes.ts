@@ -3,8 +3,8 @@
  *
  * The spec-walking suites send as an administrator so that a refusal is the controller's own and
  * never a permission gate. The basket, the wishlist's move into it and the card steps of a payment
- * are the exception: an administrator holds no basket key (`shopperOnly`), a customer does, so
- * they are sent as one.
+ * are the exception: they act on the caller's own basket and order, so they are sent as a
+ * customer, whose basket the suite builds.
  */
 import type { Operation } from './spec-walk';
 

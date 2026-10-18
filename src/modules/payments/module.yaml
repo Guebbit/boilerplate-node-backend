@@ -3,5 +3,5 @@ subdomain: supporting
 group: shop
 dependsOn:
     - access # ownOrderFlag: the audit flag of a money step on the caller's own order
-    - inventory # confirm commits an order's held stock into a sale
+    - inventory # a settlement extends a hold, finishes a missed commit and refreshes the stock cache
     - orders # a payment freezes an order's total; a refunding cancel opens the refund

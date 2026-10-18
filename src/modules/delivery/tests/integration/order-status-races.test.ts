@@ -33,7 +33,7 @@ setupTestDb();
 
 afterEach(() => jest.restoreAllMocks());
 
-describe('D2 — two admins racing the same ship door', () => {
+describe('two admins racing the same ship door', () => {
     it('ships once: one 201, the rest refused, one email, one shipment', async () => {
         const { user, bearer } = await authenticateAs('admin');
         const product = await createProduct();
