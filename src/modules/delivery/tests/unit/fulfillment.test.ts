@@ -103,6 +103,64 @@ describe('groupOrderLines', () => {
         expect(drafts[2].agreedAt).toEqual(new Date('2026-12-20T00:00:00Z'));
     });
 
+    it('ships the shelf part of a half-covered line now and holds the owed part for its promise', () => {
+        const promisedAt = new Date('2026-12-20T00:00:00Z');
+        const drafts = groupOrderLines([
+            groupable('half', 3, { backorder: { quantity: 1, promisedAt, dated: true } }),
+            groupable('plain', 1)
+        ]);
+
+        expect(drafts.map(({ number, status }) => [number, status])).toEqual([
+            [1, 'open'],
+            [2, 'on_hold']
+        ]);
+        expect(drafts[0].lines.map(({ productId, quantity }) => [productId, quantity])).toEqual([
+            ['half', 2],
+            ['plain', 1]
+        ]);
+        expect(drafts[1]).toMatchObject({
+            holdReason: 'awaiting_stock',
+            cause: 'backorder',
+            agreedAt: promisedAt,
+            expectedAt: promisedAt
+        });
+        expect(drafts[1].lines).toMatchObject([{ productId: 'half', quantity: 1 }]);
+        expect(drafts[1].defaulted).toBeUndefined();
+    });
+
+    it('holds a line the shelf did not cover at all, and opens nothing for it', () => {
+        const promisedAt = new Date('2026-12-20T00:00:00Z');
+
+        const drafts = groupOrderLines([
+            groupable('none', 2, { backorder: { quantity: 2, promisedAt, dated: true } })
+        ]);
+
+        expect(drafts).toHaveLength(1);
+        expect(drafts[0]).toMatchObject({ number: 1, status: 'on_hold', cause: 'backorder' });
+    });
+
+    it('marks a group promised the 30-day default, and keeps it apart from a dated one', () => {
+        const promisedAt = new Date('2026-12-20T09:00:00Z');
+        const drafts = groupOrderLines([
+            groupable('dated', 1, { backorder: { quantity: 1, promisedAt, dated: true } }),
+            groupable('default', 1, { backorder: { quantity: 1, promisedAt, dated: false } })
+        ]);
+
+        expect(drafts).toHaveLength(2);
+        expect(drafts.filter(({ defaulted }) => defaulted === true)).toHaveLength(1);
+        expect(drafts.find(({ defaulted }) => defaulted)?.lines[0].productId).toBe('default');
+    });
+
+    it('keeps a preorder and a backorder due the same day in groups of their own', () => {
+        const date = new Date('2026-12-20T00:00:00Z');
+        const drafts = groupOrderLines([
+            groupable('pre', 1, { preorder: true, releaseDate: date }),
+            groupable('back', 1, { backorder: { quantity: 1, promisedAt: date, dated: true } })
+        ]);
+
+        expect(drafts.map(({ cause }) => cause).toSorted()).toEqual(['backorder', 'preorder']);
+    });
+
     it('gives made-to-order lines a fulfillment order of their own, after the ordinary one', () => {
         const drafts = groupOrderLines([
             groupable('engraved', 1, { noWithdrawal: true }),

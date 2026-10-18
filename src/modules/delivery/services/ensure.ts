@@ -31,7 +31,16 @@ const groupableLinesOf = (order: OrderDocument): GroupableLine[] =>
         ships: isShippedItem(item),
         ...(item.product.noWithdrawal ? { noWithdrawal: true } : {}),
         ...(item.product.preorder ? { preorder: true } : {}),
-        ...(item.product.releaseDate ? { releaseDate: item.product.releaseDate } : {})
+        ...(item.product.releaseDate ? { releaseDate: item.product.releaseDate } : {}),
+        ...(item.backorderedQuantity && item.promisedAt
+            ? {
+                  backorder: {
+                      quantity: item.backorderedQuantity,
+                      promisedAt: item.promisedAt,
+                      dated: item.promiseDated === true
+                  }
+              }
+            : {})
     }));
 
 /**

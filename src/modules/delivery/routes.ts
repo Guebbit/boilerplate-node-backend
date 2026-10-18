@@ -28,6 +28,7 @@ import {
 import { patchShipment } from './controllers/patch-shipment';
 import { postConfirmWait } from './controllers/post-confirm-wait';
 import { getReleaseDateImpact } from './controllers/get-release-date-impact';
+import { getRestockDateImpact } from './controllers/get-restock-date-impact';
 import {
     getPreorderFulfillmentOrders,
     getPreorderSummary
@@ -80,6 +81,18 @@ router.get(
     requirePermission('display', 'Order'),
     noStore,
     getReleaseDateImpact
+);
+
+// GET /delivery/fulfillment-orders/restock-date-impact — the same preview for a restock date, which
+// moves the promise of the units a shelf could not cover. Same keys, same reasons.
+router.get(
+    '/fulfillment-orders/restock-date-impact',
+    getAuth,
+    isAuth,
+    requirePermission('update', 'Product'),
+    requirePermission('display', 'Order'),
+    noStore,
+    getRestockDateImpact
 );
 
 // POST /delivery/order/:orderId/start — begins fulfilment; moves the order paid -> processing.

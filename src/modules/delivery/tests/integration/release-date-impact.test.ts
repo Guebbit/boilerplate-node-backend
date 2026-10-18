@@ -78,7 +78,7 @@ const countsOf = async (before: number) => {
 
 /** What the preview says moving `productId` to `to` would do. */
 const preview = (productId: string, to: Date | null) =>
-    deliveryService.previewReleaseDateImpact(productId, to ?? undefined).then((result) => {
+    deliveryService.previewDateImpact(productId, 'preorder', to ?? undefined).then((result) => {
         if (!result.success) throw new Error('the preview was refused');
         const { notify, ask } = result.data;
         return { notify, ask };
@@ -128,7 +128,7 @@ describe('the preview matches what the save then does', () => {
 
 describe('the preview', () => {
     it('answers a 404 for a product that does not exist', async () => {
-        const result = await deliveryService.previewReleaseDateImpact(MISSING_ID, inDays(10));
+        const result = await deliveryService.previewDateImpact(MISSING_ID, 'preorder', inDays(10));
 
         expect(result).toMatchObject({ success: false, status: 404 });
     });
@@ -137,8 +137,9 @@ describe('the preview', () => {
         const { productIds } = await preorder(inDays(30));
         const now = new Date('2026-12-01T00:00:00Z');
 
-        const result = await deliveryService.previewReleaseDateImpact(
+        const result = await deliveryService.previewDateImpact(
             productIds[0],
+            'preorder',
             undefined,
             now
         );

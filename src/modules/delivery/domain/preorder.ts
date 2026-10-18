@@ -71,8 +71,8 @@ export const judgeSlip = ({ agreedAt, expectedAt, slips, next }: SlipFacts): Sli
 };
 
 /**
- * The date a fulfillment order is now expected: the latest release date among the lines it still
- * waits for, since it leaves together.
+ * The date a fulfillment order is now expected: the latest date among the lines it still waits
+ * for, since it leaves together.
  *
  * @param lines - the fulfillment order's lines; a line with nothing left is ignored
  * @param releaseDateOf - a product's release date as the catalogue holds it now
@@ -91,6 +91,27 @@ export const expectedDateOf = (
         ? undefined
         : new Date(Math.max(...known.map((date) => date.getTime())));
 };
+
+/**
+ * The date a WAITING fulfillment order is now expected. One rule for the listener and the staff
+ * preview, so they cannot disagree. An order promised the 30-day default has no catalogue date to
+ * follow, by design: it keeps the date it was promised and is left alone. Any other follows the
+ * latest catalogue date among its lines ({@link expectedDateOf}).
+ *
+ * @param waiting - the fulfillment order: its lines, whether its promise was the default, and the
+ *   date it is expected now
+ * @param dateOf - a product's date as the catalogue holds it now (the one this order follows)
+ * @returns the date, or `undefined` when it has none
+ */
+export const expectedDateOfWaiting = (
+    waiting: {
+        lines: readonly FulfillmentLine[];
+        defaulted?: boolean | undefined;
+        expectedAt?: Date | undefined;
+    },
+    dateOf: (productId: string) => Date | undefined
+): Date | undefined =>
+    waiting.defaulted === true ? waiting.expectedAt : expectedDateOf(waiting.lines, dateOf);
 
 /** What {@link judgeMove} reads off a waiting fulfillment order. */
 export interface MoveFacts {

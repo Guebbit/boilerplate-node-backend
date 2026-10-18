@@ -37,6 +37,7 @@ export type {
     FulfillmentReport,
     GroupableLine,
     ProductQuantity,
+    WaitCause,
     ShipLinesVerdict,
     SummaryInputs,
     ActionCandidate
@@ -48,6 +49,7 @@ export {
     judgeSlip,
     judgeMove,
     expectedDateOf,
+    expectedDateOfWaiting,
     answerBy,
     needsDatePassedNotice,
     hasWaitExpired,

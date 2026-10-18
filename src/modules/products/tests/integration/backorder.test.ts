@@ -10,7 +10,9 @@
 import { api, authenticateAsRole } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
+import { outboxEventModel } from '@kernel/outbox';
 import { productModel } from '../../model';
+import { PRODUCT_RESTOCK_DATE_CHANGED } from '../../events';
 
 setupTestDb();
 
@@ -123,5 +125,48 @@ describe('PATCH /products/:id', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.backorder).toBe(false);
+    });
+});
+
+/** The `product.restock_date_changed` payloads written so far, in order. */
+const announced = () =>
+    outboxEventModel
+        .find({ name: PRODUCT_RESTOCK_DATE_CHANGED })
+        .sort({ _id: 1 })
+        .lean()
+        .exec()
+        .then((rows) => rows.map(({ payload }) => payload));
+
+describe('PATCH /products/:id restockDate announcements', () => {
+    it('announces a date set, moved and cleared, each with what it was and what it became', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct();
+        const id = String(product._id);
+        const [first, second] = [inDays(10), inDays(20)];
+        const patch = (restockDate: string | null) =>
+            api().patch(`/products/${id}`).set('Authorization', bearer).send({ restockDate });
+
+        await patch(first);
+        await patch(second);
+        await patch(null);
+
+        expect(await announced()).toEqual([
+            { productId: id, to: first },
+            { productId: id, from: first, to: second },
+            { productId: id, from: second }
+        ]);
+    });
+
+    it('announces nothing when the date it already has is saved again', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const restockDate = inDays(10);
+        const product = await createProduct({ restockDate });
+
+        await api()
+            .patch(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ restockDate });
+
+        expect(await announced()).toEqual([]);
     });
 });

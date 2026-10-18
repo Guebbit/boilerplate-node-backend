@@ -37,6 +37,7 @@ flowchart LR
     orders -. "order.status_changed" .-> delivery
     orders -. "order.status_overridden" .-> delivery
     products -. "product.release_date_changed" .-> delivery
+    products -. "product.restock_date_changed" .-> delivery
     delivery -. "fulfillment_order.delayed" .-> notifications
     delivery -. "fulfillment_order.hold_noticed" .-> notifications
     delivery -. "fulfillment_order.wait_expired" .-> returns

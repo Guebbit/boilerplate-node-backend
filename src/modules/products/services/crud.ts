@@ -20,7 +20,11 @@ import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { afterCommit } from '@infrastructure/runtime/after-commit';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { productsAuditActions } from '../audit';
-import { PRODUCT_CREATED, PRODUCT_RELEASE_DATE_CHANGED } from '../events';
+import {
+    PRODUCT_CREATED,
+    PRODUCT_RELEASE_DATE_CHANGED,
+    PRODUCT_RESTOCK_DATE_CHANGED
+} from '../events';
 import type { ProductDocument } from '../model';
 import { productRepository } from '../repository';
 import { sanitizeStringArray } from './validation';
@@ -237,30 +241,56 @@ const moneyChangesOf = (product: ProductDocument, data: ProductUpdateData): Prod
         : {})
 });
 
+/** What moved when one of a product's two dates did: ISO strings, absent for none. */
+interface DateChange {
+    from?: string;
+    to?: string;
+}
+
 /**
- * Move a product's `releaseDate` and say what moved.
+ * Move one of a product's dates and say what moved.
  *
  * @param product - the fetched document, mutated in place
+ * @param field - which date: when it ships from, or when stock is expected back
  * @param requested - the new ISO date, `null` to clear, `undefined` to leave it alone
- * @returns the `from`/`to` of an actual change (ISO strings, absent for none), or `undefined` when
- *   the stored instant is the one asked for
+ * @returns the `from`/`to` of an actual change, or `undefined` when the stored instant is the one
+ *   asked for
  */
-const applyReleaseDate = (
+const applyDate = (
     product: ProductDocument,
+    field: 'releaseDate' | 'restockDate',
     requested: string | null | undefined
-): { from?: string; to?: string } | undefined => {
+): DateChange | undefined => {
     if (requested === undefined) return undefined;
 
-    const from = product.releaseDate;
+    const from = product[field];
     const to = requested === null ? undefined : new Date(requested);
     if (from?.getTime() === to?.getTime()) return undefined;
 
-    product.releaseDate = clearedOrValue(to ?? null);
+    product[field] = clearedOrValue(to ?? null);
     return {
         ...(from ? { from: from.toISOString() } : {}),
         ...(to ? { to: to.toISOString() } : {})
     };
 };
+
+/**
+ * Announce a moved date through the outbox, in the edit's own transaction.
+ *
+ * @param name - the event for the date that moved
+ * @param change - what moved
+ * @param productId - the product
+ * @param session - the edit's transaction
+ */
+const announceDateChange = (
+    name: typeof PRODUCT_RELEASE_DATE_CHANGED | typeof PRODUCT_RESTOCK_DATE_CHANGED,
+    change: DateChange | undefined,
+    productId: string,
+    session: ClientSession
+): Promise<unknown> =>
+    change
+        ? enqueueOutboxEvent(name, { productId, ...change }, productId, session)
+        : Promise.resolve();
 
 /**
  * Applies a change-set to a fetched product and saves it — inside the caller's transaction.
@@ -295,13 +325,10 @@ const applyUpdate = (
     if (data.active !== undefined) product.active = data.active;
     if (data.purchasable !== undefined) product.purchasable = data.purchasable;
     // `null` clears the date back to unset — $unset on save, same as weight/taxClass.
-    const releaseDateChange = applyReleaseDate(product, data.releaseDate);
+    const releaseDateChange = applyDate(product, 'releaseDate', data.releaseDate);
     if (data.allowBackorder !== undefined) product.allowBackorder = data.allowBackorder;
     // `null` clears the date back to unset ("within 30 days") — $unset on save.
-    if (data.restockDate !== undefined)
-        product.restockDate = clearedOrValue(
-            data.restockDate === null ? null : new Date(data.restockDate)
-        );
+    const restockDateChange = applyDate(product, 'restockDate', data.restockDate);
     if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
     if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
     // `null` clears a recorded weight back to unset — $unset on save.
@@ -324,14 +351,21 @@ const applyUpdate = (
     return productRepository
         .save(product, session)
         .then((updated) =>
-            releaseDateChange
-                ? enqueueOutboxEvent(
-                      PRODUCT_RELEASE_DATE_CHANGED,
-                      { productId: String(updated._id), ...releaseDateChange },
-                      String(updated._id),
-                      session
-                  ).then(() => updated)
-                : updated
+            announceDateChange(
+                PRODUCT_RELEASE_DATE_CHANGED,
+                releaseDateChange,
+                String(updated._id),
+                session
+            )
+                .then(() =>
+                    announceDateChange(
+                        PRODUCT_RESTOCK_DATE_CHANGED,
+                        restockDateChange,
+                        String(updated._id),
+                        session
+                    )
+                )
+                .then(() => updated)
         )
         .then((updated) => ({ updated, oldImageUrl, changes }));
 };

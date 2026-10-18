@@ -139,11 +139,15 @@ export const makeOrder = ({
     // Both are required on a real order, so a fixture that does not pin one gets a stand-in.
     currency: currency ?? shopCurrency(),
     orderNumber: orderNumber ?? nextOrderNumber(),
-    items: (items ?? []).map(({ product, quantity, locale }) => ({
-        product: toSnapshot(product),
-        quantity,
-        locale: locale ?? getDefaultLocale()
-    })),
+    items: (items ?? []).map(
+        ({ product, quantity, locale, backorderedQuantity, promisedAt, promiseDated }) => ({
+            product: toSnapshot(product),
+            quantity,
+            locale: locale ?? getDefaultLocale(),
+            // The owed part of a line and its promise, when the fixture states one.
+            ...stripUndefined({ backorderedQuantity, promisedAt: toDate(promisedAt), promiseDated })
+        })
+    ),
     // Passed through, never defaulted here: the model's own `default: OrderStatus.pending`
     // already covers "not stated", and repeating that default in two places is how they drift.
     ...stripUndefined({ status }),

@@ -29,11 +29,11 @@ import { cancelRemainder, cancelAllForOrder } from './cancel-remainder';
 import { syncWithOverride } from './override-sync';
 import { splitForAllocation } from './split';
 import { releaseAllocated } from './release-allocated';
-import { onReleaseDateChanged } from './slip';
+import { onDateChanged } from './slip';
 import { runPreorderSweep } from './preorder-sweep';
 import { confirmWait } from './confirm-wait';
 import { listPreorderFulfillmentOrders, summarizePreorders } from './board';
-import { previewReleaseDateImpact } from './release-date-impact';
+import { previewDateImpact } from './release-date-impact';
 import { scrubHoldNotes } from './retention';
 import { mailShipped, mailDelivered, mailDelayed, mailHoldNoticed } from './notify';
 
@@ -70,11 +70,11 @@ export const deliveryService = {
     syncWithOverride,
     splitForAllocation,
     releaseAllocated,
-    onReleaseDateChanged,
+    onDateChanged,
     runPreorderSweep,
     listPreorderFulfillmentOrders,
     summarizePreorders,
-    previewReleaseDateImpact,
+    previewDateImpact,
     scrubHoldNotes,
     mailShipped,
     mailDelivered,

@@ -27,6 +27,7 @@ describe('delivery routes', () => {
             'GET /fulfillment-orders',
             'GET /fulfillment-orders/summary',
             'GET /fulfillment-orders/release-date-impact',
+            'GET /fulfillment-orders/restock-date-impact',
             'POST /order/:orderId/start',
             'POST /fulfillment-orders/:id/shipments',
             'POST /fulfillment-orders/:id/fulfill',

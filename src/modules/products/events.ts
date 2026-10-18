@@ -57,6 +57,14 @@ declare module '@kernel/events' {
          * is absent for a first date, `to` for a cleared one.
          */
         'product.release_date_changed': { productId: string; from?: string; to?: string };
+
+        /**
+         * A product's `restockDate` moved, was set or was cleared. The twin of
+         * `product.release_date_changed` for the owed units of a released product: buyers who
+         * already paid for them were promised the old date, and `delivery` decides per waiting
+         * fulfillment order what they are owed. Same shape and the same transaction as the edit.
+         */
+        'product.restock_date_changed': { productId: string; from?: string; to?: string };
     }
 }
 
@@ -71,3 +79,6 @@ export const PRODUCT_CREATED = 'product.created';
 
 /** See {@link DomainEventMap}'s `'product.release_date_changed'` for what listens and why. */
 export const PRODUCT_RELEASE_DATE_CHANGED = 'product.release_date_changed';
+
+/** See {@link DomainEventMap}'s `'product.restock_date_changed'` for what listens and why. */
+export const PRODUCT_RESTOCK_DATE_CHANGED = 'product.restock_date_changed';

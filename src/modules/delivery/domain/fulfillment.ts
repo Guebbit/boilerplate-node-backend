@@ -12,6 +12,9 @@ import {
     FulfillmentOrderStatus
 } from '@types';
 
+/** Why a fulfillment order waits for stock: its units are not released yet, or ran out. */
+export type WaitCause = 'preorder' | 'backorder';
+
 /** One product on a fulfillment order, with how much of it has gone each way. */
 export interface FulfillmentLine {
     productId: string;
@@ -39,6 +42,13 @@ export interface GroupableLine {
      * the rest without it and the shop's work on it is never cancelled by accident.
      */
     noWithdrawal?: boolean;
+    /**
+     * Frozen at checkout: units of the line the shelf could not cover, owed against a promise. The
+     * rest of `quantity` ships now; these wait, dated by `promisedAt`. `dated` is whether that
+     * date was the product's own (`false`: the 30-day default, which a later catalogue change
+     * leaves alone).
+     */
+    backorder?: { quantity: number; promisedAt: Date; dated: boolean };
 }
 
 /** A fulfillment order as the grouping rule makes it, before it is stored. */
@@ -50,6 +60,10 @@ export interface FulfillmentOrderDraft {
     holdReason?: FulfillmentHoldReason;
     agreedAt?: Date;
     expectedAt?: Date;
+    /** Why it waits; present exactly when it is held for stock. */
+    cause?: WaitCause;
+    /** The promise is the 30-day default, not a date the catalogue named: a later change leaves it alone. */
+    defaulted?: true;
 }
 
 /**
@@ -86,51 +100,92 @@ const toFulfillmentLine = ({ productId, title, quantity }: GroupableLine): Fulfi
 });
 
 /**
- * The calendar day a preorder date falls in, as its own group key. UTC days, like every other
+ * The calendar day a waiting date falls in, as its own group key. UTC days, like every other
  * date rule here.
- * @param date - a release date
+ * @param date - a release or promised date
  */
 const dayKey = (date: Date): string => date.toISOString().slice(0, 10);
 
+/** A line, or the part of one, that waits for stock, with what it waits for. */
+interface Waiting {
+    line: GroupableLine;
+    /** The date it is promised for. */
+    date: Date;
+    cause: WaitCause;
+    /** Whether the date is the 30-day default rather than one the catalogue named. */
+    defaulted: boolean;
+}
+
 /**
- * The instant a group of preorder lines was promised for: the latest release date among them, since
- * the group leaves together and cannot leave before its last product exists.
- * @param group - lines of one release day, all with a date
+ * Split a line into the part that ships now and the part that waits. A preorder line waits whole.
+ * A line with owed units ships the shelf part now and waits for the owed part, dated by the frozen
+ * promise. A preorder line without a date is an ordinary line: with nothing to wait for it cannot
+ * be held.
+ *
+ * @param line - the order's line with the facts frozen on it
  */
-const promisedAt = (group: readonly GroupableLine[]): Date =>
-    new Date(Math.max(...group.map((line) => line.releaseDate!.getTime())));
+const partsOf = (line: GroupableLine): { ready?: GroupableLine; wait?: Waiting } => {
+    const { backorder, ...rest } = line;
+    if (backorder && backorder.quantity > 0) {
+        const shelf = line.quantity - backorder.quantity;
+        return {
+            ...(shelf > 0 ? { ready: { ...rest, quantity: shelf } } : {}),
+            wait: {
+                line: { ...rest, quantity: backorder.quantity },
+                date: backorder.promisedAt,
+                cause: 'backorder',
+                defaulted: !backorder.dated
+            }
+        };
+    }
+    if (line.preorder === true && line.releaseDate)
+        return { wait: { line, date: line.releaseDate, cause: 'preorder', defaulted: false } };
+    return { ready: line };
+};
+
+/**
+ * The instant a group of waiting lines was promised for: the latest date among them, since the
+ * group leaves together and cannot leave before its last product exists.
+ * @param group - lines of one day and one cause, all with a date
+ */
+const promisedAt = (group: readonly Waiting[]): Date =>
+    new Date(Math.max(...group.map(({ date }) => date.getTime())));
 
 /**
  * Split an order's lines into fulfillment orders — the rule that runs when an order is paid.
  *
- * - every line that is neither a preorder nor `noWithdrawal` goes in ONE fulfillment order, `open`,
+ * - every line that is neither waiting nor `noWithdrawal` goes in ONE fulfillment order, `open`,
  *   `physical` if any of its lines ships and `digital` otherwise (digital lines of a mixed order
  *   ship with the physical ones);
  * - the `noWithdrawal` lines that ship now get one `open` fulfillment order of their own;
- * - preorder lines get one fulfillment order per distinct release day and per `noWithdrawal` value,
- *   `on_hold` for `awaiting_stock`, with `agreedAt` and `expectedAt` both the group's promised
- *   instant (the latest release date among its lines).
+ * - waiting lines (a preorder, or the owed part of a line the shelf half covered) get one
+ *   fulfillment order per distinct day, per cause and per `noWithdrawal` value, `on_hold` for
+ *   `awaiting_stock`, with `agreedAt` and `expectedAt` both the group's promised instant (the
+ *   latest date among its lines). A group whose date is the 30-day default is marked, so a later
+ *   change to the catalogue's date leaves it alone.
  *
  * Numbered 1.. in that order: the ordinary group that ships now first, then the made-to-order one,
- * then the preorders by date. A preorder line without a date is treated as an ordinary line: with
- * nothing to wait for it cannot be held. Keeping the made-to-order lines apart is what lets the
- * buyer cancel the ordinary rest on its own (S4 of the Q-W2 decision) while the shop's work on the
+ * then the waiting ones by date. Keeping the made-to-order lines apart is what lets the buyer
+ * cancel the ordinary rest on its own (S4 of the Q-W2 decision) while the shop's work on the
  * bespoke goods stands.
  *
  * @param lines - the order's lines with the facts frozen on them
  * @returns at least one fulfillment order for any non-empty order
  */
 export const groupOrderLines = (lines: readonly GroupableLine[]): FulfillmentOrderDraft[] => {
-    const waiting = lines.filter(({ preorder, releaseDate }) => preorder === true && releaseDate);
-    const now = lines.filter((line) => !waiting.includes(line));
+    const parts = lines.map((line) => partsOf(line));
+    const now = parts.flatMap(({ ready }) => (ready ? [ready] : []));
+    const waiting = parts.flatMap(({ wait }) => (wait ? [wait] : []));
     const nowOrdinary = now.filter(({ noWithdrawal }) => noWithdrawal !== true);
     const nowBespoke = now.filter(({ noWithdrawal }) => noWithdrawal === true);
 
-    // Key: the release day, then 0 for ordinary and 1 for bespoke, so a day's ordinary group sorts first.
-    const byDay = new Map<string, GroupableLine[]>();
-    for (const line of waiting) {
-        const key = `${dayKey(line.releaseDate!)}|${line.noWithdrawal === true ? 1 : 0}`;
-        byDay.set(key, [...(byDay.get(key) ?? []), line]);
+    // Key: the day, then 0 for ordinary and 1 for bespoke so a day's ordinary group sorts first,
+    // then the cause and whether the date was defaulted, so nothing of a different kind shares one.
+    const byKey = new Map<string, Waiting[]>();
+    for (const wait of waiting) {
+        const bespoke = wait.line.noWithdrawal === true ? 1 : 0;
+        const key = `${dayKey(wait.date)}|${bespoke}|${wait.cause}|${wait.defaulted ? 1 : 0}`;
+        byKey.set(key, [...(byKey.get(key) ?? []), wait]);
     }
 
     const openGroup = (group: readonly GroupableLine[]): Omit<FulfillmentOrderDraft, 'number'>[] =>
@@ -147,16 +202,23 @@ export const groupOrderLines = (lines: readonly GroupableLine[]): FulfillmentOrd
     const drafts: Omit<FulfillmentOrderDraft, 'number'>[] = [
         ...openGroup(nowOrdinary),
         ...openGroup(nowBespoke),
-        ...[...byDay]
+        ...[...byKey]
             .toSorted(([a], [b]) => a.localeCompare(b))
-            .map(([, group]) => ({
-                kind: kindOf(group),
-                status: FulfillmentOrderStatus.on_hold,
-                lines: group.map((line) => toFulfillmentLine(line)),
-                holdReason: FulfillmentHoldReason.awaiting_stock,
-                agreedAt: promisedAt(group),
-                expectedAt: promisedAt(group)
-            }))
+            .map(([, group]) => {
+                const lines = group.map(({ line }) => line);
+                // Every line of a group shares one cause and one kind of promise, by its key.
+                const { cause, defaulted } = group[0];
+                return {
+                    kind: kindOf(lines),
+                    status: FulfillmentOrderStatus.on_hold,
+                    lines: lines.map((line) => toFulfillmentLine(line)),
+                    holdReason: FulfillmentHoldReason.awaiting_stock,
+                    agreedAt: promisedAt(group),
+                    expectedAt: promisedAt(group),
+                    cause,
+                    ...(defaulted ? { defaulted: true as const } : {})
+                };
+            })
     ];
 
     return drafts.map((draft, index) => ({ ...draft, number: index + 1 }));

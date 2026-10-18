@@ -168,7 +168,7 @@ describe('a release date that moves', () => {
         await moveDate(productIds[0], null);
         const first = await waitingOf(orderId);
 
-        await deliveryService.onReleaseDateChanged(productIds[0]);
+        await deliveryService.onDateChanged(productIds[0], 'preorder');
 
         const waiting = await waitingOf(orderId);
         expect(await delayedEvents()).toHaveLength(1);
@@ -188,7 +188,7 @@ describe('a release date that moves', () => {
         await moveDate(productIds[0], null);
         await confirmWait(await waitingIdOf(orderId), asCustomer(user.id), testCallerContext);
 
-        await deliveryService.onReleaseDateChanged(productIds[0]);
+        await deliveryService.onDateChanged(productIds[0], 'preorder');
 
         expect(await consentOf(orderId)).toBe('confirmed');
         expect(await delayedEvents()).toHaveLength(1);
@@ -240,7 +240,7 @@ describe('a release date that moves', () => {
         await moveDate(productIds[0], inDays(40));
 
         // A redelivery: the date is already the expected one.
-        await deliveryService.onReleaseDateChanged(productIds[0]);
+        await deliveryService.onDateChanged(productIds[0], 'preorder');
 
         expect(await delayedEvents()).toHaveLength(1);
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
@@ -499,7 +499,7 @@ describe('what the timeline says of a preorder', () => {
     it('writes the move, then the notice, for a slip, and each only once', async () => {
         const { orderId, productIds } = await preorder(30);
         await moveDate(productIds[0], inDays(75));
-        await deliveryService.onReleaseDateChanged(productIds[0]);
+        await deliveryService.onDateChanged(productIds[0], 'preorder');
 
         const rows = await trailOf(orderId);
 

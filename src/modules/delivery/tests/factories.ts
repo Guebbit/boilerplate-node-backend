@@ -11,6 +11,7 @@ import type { UserDocument } from '@modules/users';
 import { createProduct } from '@modules/products/tests/factories';
 import { inventoryService } from '@modules/inventory';
 import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
+import { owedLineOf } from '@modules/orders';
 import { OrderStatus } from '@types';
 import type { Shipment } from '@types';
 import { deliveryService } from '../services';
@@ -170,4 +171,54 @@ export const paidPreorderOrder = async (
     await inventoryService.reserveForOrder(orderId, lines);
     await inventoryService.commitForOrder(orderId);
     return { user, orderId, productIds: lines.map(({ productId }) => productId) };
+};
+
+/** One backordered line to place: how many units, how many of them the shelf holds, and the promise. */
+export interface WantedBackorder {
+    quantity: number;
+    /** Units on the shelf; the rest are owed. */
+    shelf: number;
+    /** The product's restock date; absent means the 30-day default. */
+    restockDate?: Date;
+}
+
+/**
+ * A PAID order of one released product open to backorder, held in the ledger as a checkout would:
+ * the shelf units there are are taken, the rest claimed against an uncapped limit, the owed part
+ * frozen on the line with its promise. No fulfillment order exists until something reads them.
+ *
+ * @param wanted - the line
+ * @param buyer - the buyer's address (a new account is made), or an account that already exists
+ */
+export const paidBackorderOrder = async (
+    wanted: WantedBackorder,
+    buyer: string | UserDocument = 'buyer@example.com'
+) => {
+    const user = typeof buyer === 'string' ? await createUser({ email: buyer }) : buyer;
+    const product = await createProduct({
+        onHand: wanted.shelf,
+        price: 10,
+        allowBackorder: true,
+        ...(wanted.restockDate ? { restockDate: wanted.restockDate.toISOString() } : {})
+    });
+    const productId = String(product._id);
+    await inventoryService.setBackorderLimit(productId, null);
+    const owed = Math.max(0, wanted.quantity - wanted.shelf);
+    const owedLine = owedLineOf(owed, wanted.restockDate, new Date());
+    const order = await createOrder(
+        user,
+        [
+            {
+                ...toOrderItem(product, wanted.quantity),
+                ...(owedLine ? { ...owedLine, promisedAt: owedLine.promisedAt.toISOString() } : {})
+            }
+        ],
+        { status: OrderStatus.paid }
+    );
+    const orderId = String(order._id);
+    await inventoryService.reserveForOrder(orderId, [
+        { productId, quantity: wanted.quantity, spill: true }
+    ]);
+    await inventoryService.commitForOrder(orderId);
+    return { user, orderId, productId };
 };

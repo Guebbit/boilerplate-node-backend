@@ -1,7 +1,8 @@
 /**
  * @module
- * A moved release date, as the buyers who already paid for it are affected (PRODUCT_STATES P5).
- * `products` announces `product.release_date_changed`; this is the listener. For every fulfillment
+ * A moved release or restock date, as the buyers who already paid for it are affected
+ * (PRODUCT_STATES P5). `products` announces `product.release_date_changed` and
+ * `product.restock_date_changed`; this is the listener for both. For every fulfillment
  * order still waiting for that product it works out the date now expected and decides what the buyer
  * is owed — the pure table is `../domain/preorder.ts`:
  *
@@ -19,8 +20,8 @@
 
 import { orderService } from '@modules/orders';
 import { productService } from '@modules/products';
-import { expectedDateOf, judgeMove } from '../domain';
-import type { SlipVerdict } from '../domain';
+import { expectedDateOfWaiting, judgeMove } from '../domain';
+import type { SlipVerdict, WaitCause } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
 import type { FulfillmentOrderDocument } from '../model';
 import { runAct } from './act';
@@ -29,19 +30,22 @@ import type { ClientSession } from 'mongoose';
 
 /**
  * The date a fulfillment order is now expected, read from the catalogue, not from the event, so a
- * group that holds several products stays right when one of them moves earlier.
+ * group that holds several products stays right when one of them moves earlier. A preorder follows
+ * the products' release dates, a backorder their restock dates.
  *
  * @param fulfillmentOrder - the waiting fulfillment order
- * @returns the date, or `undefined` when it has none (see `expectedDateOf`)
+ * @returns the date, or `undefined` when it has none (see `expectedDateOfWaiting`)
  */
 const expectedFrom = (fulfillmentOrder: FulfillmentOrderDocument): Promise<Date | undefined> =>
     productService
         .findManyByIds(fulfillmentOrder.lines.map(({ productId }) => productId))
         .then((products) =>
-            expectedDateOf(
-                fulfillmentOrder.lines,
-                (id) => products.find((product) => String(product._id) === id)?.releaseDate
-            )
+            expectedDateOfWaiting(fulfillmentOrder, (id) => {
+                const product = products.find((one) => String(one._id) === id);
+                return fulfillmentOrder.cause === 'backorder'
+                    ? product?.restockDate
+                    : product?.releaseDate;
+            })
         );
 
 /**
@@ -141,12 +145,14 @@ const judgeOne = (fulfillmentOrderId: string): Promise<SentNotice | undefined> =
     }).then((result) => (result.refused ? undefined : result.value));
 
 /**
- * React to a release date that moved: tell the buyers it concerns what the law owes them.
+ * React to a date that moved, a release date for the preorders waiting on it or a restock date for
+ * the backorders: tell the buyers it concerns what the law owes them.
  *
  * @param productId - the product whose date moved
+ * @param cause - which date moved: a `preorder`'s release date or a `backorder`'s restock date
  */
-export const onReleaseDateChanged = async (productId: string): Promise<void> => {
-    const waiting = await fulfillmentOrderRepository.findWaitingForProduct(productId);
+export const onDateChanged = async (productId: string, cause: WaitCause): Promise<void> => {
+    const waiting = await fulfillmentOrderRepository.findWaitingForProduct(productId, cause);
     // One after another: each judgement is its own transaction over its own fulfillment order, and
     // the buyer's mail rides each commit's event.
     for (const fulfillmentOrder of waiting) await judgeOne(String(fulfillmentOrder._id));

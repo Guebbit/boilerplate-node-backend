@@ -38,8 +38,9 @@ export const getReleaseDateImpact = (request: Request, response: Response) => {
     if (!checked) return Promise.resolve();
 
     return deliveryService
-        .previewReleaseDateImpact(
+        .previewDateImpact(
             query.productId,
+            'preorder',
             query.releaseDate === undefined ? undefined : new Date(query.releaseDate)
         )
         .then((result) => {

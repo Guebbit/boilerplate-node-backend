@@ -33,6 +33,7 @@ flowchart LR
     products --> shop
     products -. "product.deleted" .-> cart
     products -. "product.release_date_changed" .-> delivery
+    products -. "product.restock_date_changed" .-> delivery
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
     products -. "product.deleted" .-> wishlist

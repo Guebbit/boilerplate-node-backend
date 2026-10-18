@@ -1,7 +1,7 @@
 /**
  * @module
- * The staff preview of a release-date move: how many orders the move would notify or ask, before
- * it is saved. It judges every waiting fulfillment order with the listener's own rule
+ * The staff preview of a release-date or restock-date move: how many orders the move would notify
+ * or ask, before it is saved. It judges every waiting fulfillment order with the listener's own rule
  * (`judgeMove`, `expectedDateOf`) against the date that WOULD be, and writes nothing, so the
  * preview cannot drift from the save.
  *
@@ -20,8 +20,8 @@ import {
 } from '@infrastructure/http/response';
 import { productService } from '@modules/products';
 import type { ReleaseDateImpact } from '@types';
-import { answerBy, expectedDateOf, judgeMove } from '../domain';
-import type { SlipVerdict } from '../domain';
+import { answerBy, expectedDateOfWaiting, judgeMove } from '../domain';
+import type { SlipVerdict, WaitCause } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
 import type { FulfillmentOrderDocument } from '../model';
 
@@ -37,30 +37,44 @@ const sameDate = (a: Date | undefined, b: Date | undefined): boolean =>
     a?.getTime() === b?.getTime();
 
 /**
- * The verdict of every waiting fulfillment order if `productId` took `releaseDate`.
+ * The date a product holds for the kind of wait asked about: a release date for a preorder, a
+ * restock date for a backorder.
+ * @param product - the product
+ * @param cause - which wait
+ */
+const dateFor = (
+    product: { releaseDate?: Date | undefined; restockDate?: Date | undefined },
+    cause: WaitCause
+): Date | undefined => (cause === 'backorder' ? product.restockDate : product.releaseDate);
+
+/**
+ * The verdict of every waiting fulfillment order if `productId` took `date`.
  *
  * @param waiting - the fulfillment orders still waiting for the product
  * @param productId - the product whose date would move
- * @param releaseDate - the date to preview, absent when cleared
+ * @param date - the date to preview, absent when cleared
+ * @param cause - which date: a preorder's release date or a backorder's restock date
  * @returns one `[orderId, verdict]` per fulfillment order that was promised a date
  */
 const verdictsFor = (
     waiting: readonly FulfillmentOrderDocument[],
     productId: string,
-    releaseDate: Date | undefined
+    date: Date | undefined,
+    cause: WaitCause
 ): Promise<[string, SlipVerdict][]> => {
     const otherIds = [
         ...new Set(waiting.flatMap(({ lines }) => lines.map((line) => line.productId)))
     ].filter((id) => id !== productId);
     return productService.findManyByIds(otherIds).then((products) => {
-        const releaseDateOf = (id: string): Date | undefined =>
-            id === productId
-                ? releaseDate
-                : products.find((product) => String(product._id) === id)?.releaseDate;
+        const dateOf = (id: string): Date | undefined => {
+            if (id === productId) return date;
+            const other = products.find((product) => String(product._id) === id);
+            return other && dateFor(other, cause);
+        };
         return waiting.flatMap<[string, SlipVerdict]>((fulfillmentOrder) => {
             const verdict = judgeMove(
                 fulfillmentOrder,
-                expectedDateOf(fulfillmentOrder.lines, releaseDateOf)
+                expectedDateOfWaiting(fulfillmentOrder, dateOf)
             );
             return verdict ? [[String(fulfillmentOrder.orderId), verdict]] : [];
         });
@@ -82,16 +96,18 @@ const tally = (verdicts: readonly [string, SlipVerdict][]): Omit<ReleaseDateImpa
 };
 
 /**
- * What saving `releaseDate` on a product would tell the buyers who already paid.
+ * What saving a date on a product would tell the buyers who already paid.
  *
- * @param productId - the product whose release date would move
- * @param releaseDate - the date to preview; absent means cleared
+ * @param productId - the product whose date would move
+ * @param cause - which date: `preorder` for the release date, `backorder` for the restock date
+ * @param date - the date to preview; absent means cleared
  * @param now - the instant a question would be asked, for `answerBy`
  * @returns the counts, or a 404 for an unknown product
  */
-export const previewReleaseDateImpact = (
+export const previewDateImpact = (
     productId: string,
-    releaseDate: Date | undefined,
+    cause: WaitCause,
+    date: Date | undefined,
     now = new Date()
 ): Promise<ResponseSuccess<ReleaseDateImpact> | ResponseReject> =>
     productService.findByIdRaw(productId).then((product) => {
@@ -99,11 +115,11 @@ export const previewReleaseDateImpact = (
 
         const deadline = answerBy(now).toISOString();
         // Saving the date it already has emits nothing, so nobody hears anything.
-        if (sameDate(product.releaseDate, releaseDate))
+        if (sameDate(dateFor(product, cause), date))
             return generateSuccess({ ...NOBODY, answerBy: deadline });
 
         return fulfillmentOrderRepository
-            .findWaitingForProduct(productId)
-            .then((waiting) => verdictsFor(waiting, productId, releaseDate))
+            .findWaitingForProduct(productId, cause)
+            .then((waiting) => verdictsFor(waiting, productId, date, cause))
             .then((verdicts) => generateSuccess({ ...tally(verdicts), answerBy: deadline }));
     });

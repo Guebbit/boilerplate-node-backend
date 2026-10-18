@@ -14,7 +14,7 @@ import {
     applyShipmentTransform
 } from './model';
 import type { FulfillmentOrderDocument, ShipmentDocument } from './model';
-import type { FulfillmentOrderDraft } from './domain';
+import type { FulfillmentOrderDraft, WaitCause } from './domain';
 import {
     FulfillmentConsent,
     FulfillmentHoldReason,
@@ -184,7 +184,10 @@ export const fulfillmentOrderRepository: Repository<
         session: ClientSession
     ) => Promise<FulfillmentOrderDocument | null>;
     scrubHoldNotesBefore: (cutoff: Date) => Promise<number>;
-    findWaitingForProduct: (productId: string) => Promise<FulfillmentOrderDocument[]>;
+    findWaitingForProduct: (
+        productId: string,
+        cause: WaitCause
+    ) => Promise<FulfillmentOrderDocument[]>;
     findDatePassed: (now: Date) => Promise<FulfillmentOrderDocument[]>;
     findWaitsExpired: (now: Date) => Promise<FulfillmentOrderDocument[]>;
     searchBoard: (
@@ -259,6 +262,8 @@ export const fulfillmentOrderRepository: Repository<
                         lines: draft.lines,
                         revision: 0,
                         ...(draft.holdReason ? { holdReason: draft.holdReason } : {}),
+                        ...(draft.cause ? { cause: draft.cause } : {}),
+                        ...(draft.defaulted ? { defaulted: true } : {}),
                         ...(draft.agreedAt ? { agreedAt: draft.agreedAt } : {}),
                         ...(draft.expectedAt ? { expectedAt: draft.expectedAt } : {}),
                         slips: 0
@@ -299,12 +304,14 @@ export const fulfillmentOrderRepository: Repository<
      * release date concerns. Served by the `status + holdReason + lines.productId` index.
      * @param productId - the product whose release date moved
      */
-    findWaitingForProduct: (productId) =>
+    findWaitingForProduct: (productId, cause) =>
         fulfillmentOrderModel
             .find({
                 status: FulfillmentOrderStatus.on_hold,
                 holdReason: FulfillmentHoldReason.awaiting_stock,
-                'lines.productId': productId
+                'lines.productId': productId,
+                // A preorder wait carries no cause when it was made before backorder existed.
+                cause: cause === 'backorder' ? 'backorder' : { $ne: 'backorder' }
             })
             .exec(),
 

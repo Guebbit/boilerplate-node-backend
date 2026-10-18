@@ -255,6 +255,52 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /delivery/fulfillment-orders/restock-date-impact:
+        get:
+            tags: [Delivery]
+            summary: What moving a product's restock date would tell the buyers
+            description: |
+                A preview for staff about to save a restock date, so the save is never a surprise. Counts the
+                orders whose backordered units for this product would get a notice (`notify`: a short first
+                slip, silence keeps them waiting) or a question (`ask`: silence for 30 days cancels and refunds,
+                by `answerBy`). An order with groups in both counts once, under `ask`. It judges with the same rule
+                the save does and writes nothing: the counts are a snapshot, and a payment or shipment between the
+                preview and the save can shift them.
+
+                `restockDate` absent or blank previews a CLEARED date, which asks every buyer who was promised that date. A buyer promised the 30-day default is left alone. The same
+                format and "at most one year ahead" rule as the product save apply (422). An unchanged date counts
+                nothing. For the product form; a holder of both `update:Product` and `display:Order`. The response
+                is never cached.
+            operationId: previewRestockDateImpact
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: productId
+                  in: query
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The product whose restock date would move.
+                - name: restockDate
+                  in: query
+                  required: false
+                  schema:
+                      type: string
+                      format: date-time
+                  description: The date to preview, an ISO 8601 date-time with a zone. Absent or blank means cleared.
+            responses:
+                '200':
+                    description: How many orders the move would notify and how many it would ask
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReleaseDateImpactEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /delivery/fulfillment-orders/{id}/shipments:
         post:
             tags: [Delivery]

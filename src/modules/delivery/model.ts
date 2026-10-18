@@ -23,7 +23,7 @@ import {
     FulfillmentOrderStatus,
     ShipmentStatus
 } from '@types';
-import type { FulfillmentLine } from './domain';
+import type { FulfillmentLine, WaitCause } from './domain';
 
 /** One product on a fulfillment order. */
 export type FulfillmentOrderLine = FulfillmentLine;
@@ -54,6 +54,13 @@ export interface FulfillmentOrderDocument extends Document {
      * a release drops it with the hold.
      */
     holdMessage?: string;
+    /** Why it waits for stock; present exactly when it does. Absent reads `preorder`. */
+    cause?: WaitCause;
+    /**
+     * The promise was the 30-day default, not a date the catalogue named: a later change to the
+     * catalogue's date leaves this order alone.
+     */
+    defaulted?: boolean;
     /** The date promised when ordering, frozen from the line snapshot. */
     agreedAt?: Date;
     /** When it is now expected to ship. */
@@ -141,6 +148,8 @@ export const fulfillmentOrderSchema = new Schema<FulfillmentOrderDocument>(
         holdReason: { type: String, enum: Object.values(FulfillmentHoldReason) },
         holdNote: { type: String, maxlength: 1000 },
         holdMessage: { type: String, maxlength: 500 },
+        cause: { type: String, enum: ['preorder', 'backorder'] },
+        defaulted: { type: Boolean },
         agreedAt: { type: Date },
         expectedAt: { type: Date },
         consent: { type: String, enum: Object.values(FulfillmentConsent) },

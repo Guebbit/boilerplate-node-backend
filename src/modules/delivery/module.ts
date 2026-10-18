@@ -25,7 +25,7 @@ import {
     ORDER_STATUS_OVERRIDDEN
 } from '@modules/orders';
 import { PREORDER_ALLOCATED } from '@modules/inventory';
-import { PRODUCT_RELEASE_DATE_CHANGED } from '@modules/products';
+import { PRODUCT_RELEASE_DATE_CHANGED, PRODUCT_RESTOCK_DATE_CHANGED } from '@modules/products';
 import { OrderStatus } from '@types';
 import { router } from './routes';
 import { deliveryConfig } from './config';
@@ -128,7 +128,10 @@ export default {
         onDomainEvent(FULFILLMENT_ORDER_DELAYED, deliveryService.mailDelayed);
         onDomainEvent(FULFILLMENT_ORDER_HOLD_NOTICED, deliveryService.mailHoldNoticed);
         onDomainEvent(PRODUCT_RELEASE_DATE_CHANGED, ({ productId }) =>
-            deliveryService.onReleaseDateChanged(productId)
+            deliveryService.onDateChanged(productId, 'preorder')
+        );
+        onDomainEvent(PRODUCT_RESTOCK_DATE_CHANGED, ({ productId }) =>
+            deliveryService.onDateChanged(productId, 'backorder')
         );
     },
     locales: path.join(__dirname, 'locales'),
