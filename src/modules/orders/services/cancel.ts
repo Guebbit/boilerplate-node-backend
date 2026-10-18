@@ -81,7 +81,13 @@ const moveToCancelled = (
                         scope,
                         session: active
                     }),
-                () => [{ type: 'cancelled', actor: actorId, data: { by: CANCEL_CAUSES[cause].by } }]
+                () => [
+                    {
+                        type: 'cancelled',
+                        actor: actorId,
+                        data: { by: CANCEL_CAUSES[cause].by, refund }
+                    }
+                ]
             )(session);
             if (order) await giveBackStock(id, session);
             return order;
@@ -183,12 +189,15 @@ export const CANCEL_CAUSES = {
  * own transaction wrote.
  * @param order - the cancelled order
  * @param cause - why it was cancelled
+ * @param refund - whether the cancel returned the money; with `paid`, the audit row's answer to
+ *   "cancelled and refunded, or cancelled and the money kept"
  * @param context - the caller's context; absent for a system-initiated cancel, which is still
  *   audited as the system actor rather than skipped
  */
 const afterCancel = (
     order: OrderDocument,
     cause: CancelCause,
+    refund: boolean,
     context?: CallerContext
 ): ResponseSuccess<OrderDocument> => {
     const rules: CauseRules = CANCEL_CAUSES[cause];
@@ -201,7 +210,8 @@ const afterCancel = (
         action: ordersAuditActions.ORDER_CANCELLED,
         outcome: 'success',
         targetType: 'order',
-        targetId: String(order._id)
+        targetId: String(order._id),
+        metadata: { cause, refund, paid: order.paidAt !== undefined }
     });
     emitAnalyticsEvent({
         ...buildAnalyticsBase(emitContext),
@@ -260,7 +270,7 @@ const cancel = (
         rules.by === 'system' ? undefined : authContext.id
     ).then((order) =>
         order
-            ? afterCancel(order, cause, context)
+            ? afterCancel(order, cause, refund, context)
             : // Which refusal was it? This read only informs the message — the write
               // above already decided nothing changes.
               getById(id, scope).then((existing) =>
@@ -374,6 +384,6 @@ export const cancelUnanswered = (orderId: string): Promise<boolean> =>
         undefined
     ).then((order) => {
         if (!order) return false;
-        afterCancel(order, 'wait_unanswered');
+        afterCancel(order, 'wait_unanswered', true);
         return true;
     });

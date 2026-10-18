@@ -13,6 +13,7 @@ import {
     createOrder,
     markOrderPaidAt,
     setWithdrawUntil,
+    timelineOf,
     toOrderItem
 } from '@modules/orders/tests/factories';
 import { orderService } from '@modules/orders/services';
@@ -296,6 +297,50 @@ describe('cancelOnRequestById — audit and analytics', () => {
         expect(analyticsSpy).toHaveBeenCalledWith(
             expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_CANCELLED })
         );
+    });
+
+    it('an operator cancel that keeps the money says so in the audit row and on the timeline', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        await orderService.cancelOnRequestById(
+            String(order._id),
+            asAdmin(),
+            { refund: false },
+            testCallerContext
+        );
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: ordersAuditActions.ORDER_CANCELLED,
+                metadata: { cause: 'operator', refund: false, paid: false }
+            })
+        );
+        const rows = await timelineOf(String(order._id), 'cancelled');
+        expect(rows.map(({ data }) => data)).toEqual([{ by: 'admin', refund: false }]);
+    });
+
+    it('a customer cancel says the money goes back', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        await orderService.cancelOnRequestById(
+            String(order._id),
+            asUser(user),
+            {},
+            testCallerContext
+        );
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: ordersAuditActions.ORDER_CANCELLED,
+                metadata: { cause: 'customer', refund: true, paid: false }
+            })
+        );
+        const rows = await timelineOf(String(order._id), 'cancelled');
+        expect(rows.map(({ data }) => data)).toEqual([{ by: 'customer', refund: true }]);
     });
 
     it('a reservation timing out (no context) is audited as the system, not left silent', async () => {

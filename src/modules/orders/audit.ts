@@ -20,7 +20,8 @@ export const ordersAuditActions = {
     /*
      * The one order write a customer performs. Audited because a cancelled order is a support
      * question with a money answer — who cancelled it, the customer or the shop, decides who owes
-     * whom an apology. `actorRole` on the record carries who did it.
+     * whom an apology. `actorRole` on the record carries who did it; `metadata` carries `cause`,
+     * `refund` (whether the money went back) and `paid` (whether there was money to return).
      */
     ORDER_CANCELLED: 'order.cancelled',
     /* An admin skipped or corrected the normal lifecycle. `metadata` carries mode/from/to/reason. */
