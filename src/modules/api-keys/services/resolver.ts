@@ -39,7 +39,12 @@ const currentCallerOf = (apiKey: ApiKeyDocument): Promise<Caller | undefined> =>
         if (!user) return undefined;
 
         return accessService.rolesOf(apiKey.createdByUserId, apiKey.tenant).then((roles) => {
-            const permissions = keysInScope(roles.tenant, 'tenant');
+            // The minter's staff role counts only with an authenticator app armed, as for their own
+            // session (`callerInScope`): a key never holds more than the person does.
+            const permissions = keysInScope(
+                user.authenticatorEnabledAt ? roles.tenant : null,
+                'tenant'
+            );
 
             return assembleCaller(apiKey.createdByUserId, apiKey.tenant, 'tenant', permissions);
         });

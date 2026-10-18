@@ -274,7 +274,10 @@ The attacker's side of the second factor. The registry's shape, the enrollment s
 what a user document carries are on
 [Two-factor authentication](../modules/account-two-factor.md).
 
-An optional second factor on top of the login flow above. An account may arm **several**, and the
+A second factor on top of the login flow above, optional for a shopper and required for any staff
+role (the role grants nothing without an authenticator app — see
+[Staff need an authenticator app](../modules/account-two-factor.md#staff-need-an-authenticator-app)).
+An account may arm **several**, and the
 set of them is a registry rather than a branch: `src/modules/account/two-factor/methods/` holds one
 handler per channel, and everything above it — services, controllers, contract — deals in a
 `method` string.

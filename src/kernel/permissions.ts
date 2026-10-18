@@ -581,13 +581,34 @@ export function callerInScope(context: AuthContext, scope: AuthorizationScope): 
     // Platform scope is tenant-less by definition; carrying a tenantId here would let a platform
     // rule be narrowed by a shop it does not belong to.
     const tenantId = scope === 'platform' ? null : context.tenantId;
+    const held = scope === 'platform' ? context.roles.platform : context.roles.tenant;
+    // A staff role grants nothing until an authenticator app is armed: the account keeps what its
+    // audience holds (a customer's own cart, orders) and can enrol, nothing more.
     const permissions = keysInScope(
-        scope === 'platform' ? context.roles.platform : context.roles.tenant,
+        staffRoleWithheld(context) ? null : held,
         scope,
         audienceOf(context)
     );
     return assembleCaller(context.id, tenantId, scope, permissions);
 }
+
+/**
+ * Whether the account's staff role is switched off for want of an authenticator app.
+ *
+ * Staff means a role in either scope (the same test `session/idle.ts` uses). Every staff role
+ * reads customer personal data, so password-only staff is the gap NIST 800-53 IA-2(1) and ASVS
+ * 6.3.3 close. The role is read fresh with the factor on every request: a role granted to an
+ * account without one is withheld on its very next request, and no session needs revoking.
+ * Email codes do not count (ASVS 6.3.6). The system actor is no person.
+ *
+ * @param context - the resolved session
+ */
+export const staffRoleWithheld = (
+    context: Pick<AuthContext, 'id' | 'roles' | 'authenticatorArmed'>
+): boolean =>
+    context.id !== SYSTEM_ACTOR_ID &&
+    !context.authenticatorArmed &&
+    (context.roles.tenant !== null || context.roles.platform !== null);
 
 /**
  * Which scope a SUBJECT's rows live in, read from the rules that declare it.
@@ -677,6 +698,7 @@ export const SYSTEM_ACTOR: AuthContext = {
     authTime: 0,
     amr: [],
     twoFactorArmed: false,
+    authenticatorArmed: false,
     verified: true,
     analyticsConsent: false
 };

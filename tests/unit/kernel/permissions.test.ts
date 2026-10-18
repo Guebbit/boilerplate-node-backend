@@ -13,6 +13,8 @@ import {
     isAudienceName,
     keysInScope,
     callerInScope,
+    staffRoleWithheld,
+    SYSTEM_ACTOR,
     keysDocumentSchema,
     permissionModelVersion,
     PERMISSION_RULES,
@@ -316,5 +318,46 @@ describe('audience roles', () => {
         expect(keysInScope('operator', 'platform', 'customer')).toEqual([
             'read:ObservabilitySnapshot'
         ]);
+    });
+});
+
+/*
+ * A staff role is data the account holds; the authenticator app is what switches it on. The same
+ * account keeps what its audience holds either way, so signing in never narrows a shopper.
+ */
+describe('the staff gate', () => {
+    const unarmedManager = { ...asRole('manager'), authenticatorArmed: false };
+    const unarmedOperator = {
+        ...asRole('customer'),
+        roles: { tenant: null, platform: 'operator' }
+    };
+
+    it('withholds a staff role from an account with no authenticator app', () => {
+        expect(staffRoleWithheld(unarmedManager)).toBe(true);
+        expect(staffRoleWithheld(unarmedOperator)).toBe(true);
+    });
+
+    it('withholds nothing from an armed staff member, a shopper, or the system actor', () => {
+        expect(staffRoleWithheld(asRole('manager'))).toBe(false);
+        expect(staffRoleWithheld(asRole('customer'))).toBe(false);
+        expect(staffRoleWithheld(SYSTEM_ACTOR)).toBe(false);
+    });
+
+    it('leaves the unarmed staff member the customer rules and nothing of the role', () => {
+        const caller = callerInScope(unarmedManager, 'tenant');
+
+        expect(caller.permissions).toEqual(AUDIENCE_ROLES.customer.permissions);
+        expect(caller.permissions).not.toContain('display:Order');
+        expect(caller.unrestricted).toBe(false);
+    });
+
+    it('gives an unarmed operator nothing in the platform scope', () => {
+        expect(callerInScope(unarmedOperator, 'platform').permissions).toEqual([]);
+    });
+
+    it('restores the role the moment an authenticator app is armed', () => {
+        const caller = callerInScope({ ...unarmedManager, authenticatorArmed: true }, 'tenant');
+
+        expect(caller.permissions).toContain('display:Order');
     });
 });

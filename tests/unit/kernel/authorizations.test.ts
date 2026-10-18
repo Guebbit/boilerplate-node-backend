@@ -764,6 +764,47 @@ describe('requirePermission', () => {
         expect(staff.next).toHaveBeenCalledTimes(1);
     });
 
+    it('tells a staff member without an authenticator app to enrol, not just no', () => {
+        const unarmed = { ...asAdmin('user-1'), authenticatorArmed: false };
+        const next = jest.fn();
+        const response = makeResponseStub();
+
+        requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
+            makeRequest({ authContext: unarmed }),
+            response,
+            next
+        );
+
+        expect(next).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(403);
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                errors: [expect.objectContaining({ code: 'SECOND_FACTOR_ENROLLMENT_REQUIRED' })]
+            })
+        );
+        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({ reason: 'second_factor_enrollment_required' })
+            })
+        );
+    });
+
+    it('does not say so to a customer, who could never hold the rule', () => {
+        const response = makeResponseStub();
+
+        requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
+            makeRequest({ authContext: asCustomer('user-1') }),
+            response,
+            jest.fn()
+        );
+
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                errors: [expect.objectContaining({ code: 'FORBIDDEN' })]
+            })
+        );
+    });
+
     it('answers 401, not 403, for an unauthenticated caller', () => {
         // No `authContext` at all means no credentials were presented — 401, distinct from the
         // case above (authenticated, just not admin), which is 403.

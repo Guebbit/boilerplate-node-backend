@@ -7,6 +7,9 @@
 
 import { t } from '@infrastructure/i18n';
 import { userService, type TwoFactorMethodRecord, type UserDocument } from '@modules/users';
+import { accessService } from '@modules/access';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { announceInTransaction } from '@kernel/outbox';
 import {
     generateSuccess,
     generateReject,
@@ -24,6 +27,7 @@ import type {
 } from '@types';
 import { accountAuditActions } from '../audit';
 import { revokeFor } from './revocation';
+import { ACCOUNT_AUTHENTICATOR_REMOVED } from '../events';
 import {
     availableTwoFactorMethods,
     deliveryCooldownRemaining,
@@ -54,6 +58,36 @@ const entryFor = (user: UserDocument, method: string): TwoFactorMethodRecord => 
     // subdocument, and the handler about to mutate it needs that one, not the plain object.
     return user.twoFactorMethods.at(-1)!;
 };
+
+/** Whether an entry is an armed authenticator app — the factor a staff role is gated on. */
+const isArmedAuthenticator = (entry: TwoFactorMethodRecord): boolean =>
+    entry.method === 'totp' && Boolean(entry.enrolledAt);
+
+/**
+ * Tell the world a staff member's authenticator app is gone, so `api-keys` revokes what they
+ * minted under it (the way a GitHub org cuts such a member's tokens). Said only when the LAST app
+ * of an account that holds a staff role went; any other removal leaves their keys alone.
+ *
+ * @param user - the account after the removal
+ * @param hadAuthenticator - whether it held an armed authenticator app before
+ */
+const announceAuthenticatorLoss = (user: UserDocument, hadAuthenticator: boolean): Promise<void> =>
+    hadAuthenticator && user.twoFactorMethods.every((entry) => !isArmedAuthenticator(entry))
+        ? accessService.rolesOf(user.id, DEPLOYMENT_TENANT_ID).then(({ tenant, platform }) => {
+              if (tenant === null && platform === null) return undefined;
+
+              // A transaction with nothing to write: the outbox row is the whole act, and it is
+              // retried by the relay if the subscriber fails.
+              return announceInTransaction(
+                  () => Promise.resolve(user.id),
+                  (userId) => ({
+                      name: ACCOUNT_AUTHENTICATOR_REMOVED,
+                      payload: { userId },
+                      aggregateId: userId
+                  })
+              ).then(() => undefined);
+          })
+        : Promise.resolve();
 
 /**
  * `GET /account/2fa` — what this account has armed and what it could still add.
@@ -290,6 +324,9 @@ export const removeTwoFactorMethod = (
                 : undefined;
         },
         (user) => {
+            const hadAuthenticator = user.twoFactorMethods.some((entry) =>
+                isArmedAuthenticator(entry)
+            );
             user.twoFactorMethods.splice(enrolledIndex, 1);
             userService.markSessionsEnded(user);
             return (
@@ -302,6 +339,7 @@ export const removeTwoFactorMethod = (
                         discardCodesIfDisarmed: true
                     })
                     .then(() => revokeFor('two-factor-change', user.id))
+                    .then(() => announceAuthenticatorLoss(user, hadAuthenticator))
                     .then(() => {
                         // Removing the last factor is 2FA going off: say that, not just "a method left".
                         notifyChange(
@@ -341,11 +379,15 @@ export const disableTwoFactor = (
                 ? undefined
                 : generateReject(422, [t('account.two-factor.not-enabled')]),
         (user) => {
+            const hadAuthenticator = user.twoFactorMethods.some((entry) =>
+                isArmedAuthenticator(entry)
+            );
             user.twoFactorMethods = [];
             userService.markSessionsEnded(user);
             return userService
                 .persistTwoFactorWrite(user, { dropped: 'all', discardCodesIfDisarmed: true })
                 .then(() => revokeFor('two-factor-change', user.id))
+                .then(() => announceAuthenticatorLoss(user, hadAuthenticator))
                 .then(() => {
                     notifyChange(user, 'disabled', '', context);
                     return generateSuccess(undefined);

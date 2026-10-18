@@ -11,6 +11,7 @@ import {
     SEED_ADMIN_PASSWORD,
     SEED_USER_PASSWORD,
     SEED_TWO_FACTOR_BACKUP_CODES,
+    SEED_STAFF_TOTP_SECRET,
     seedCredentials
 } from '@scenarios/accounts';
 import { setEnvironment } from '@tests/environment';
@@ -83,7 +84,8 @@ describe('seedCredentials', () => {
     it('publishes exactly what each account was seeded with', () => {
         expect(seedCredentials.admin).toEqual({
             email: SEED_ADMIN_EMAIL,
-            password: SEED_ADMIN_PASSWORD
+            password: SEED_ADMIN_PASSWORD,
+            totpSecret: SEED_STAFF_TOTP_SECRET
         });
         expect(seedCredentials.user).toEqual({
             email: SEED_USER_EMAIL,
@@ -103,6 +105,20 @@ describe('seedCredentials', () => {
         for (const staff of ['manager', 'warehouse', 'support', 'operator'] as const)
             expect(satisfiesPolicy(seedCredentials[staff].password)).toBe(true);
         expect(seedCredentials.operator.email).toBe('operator@example.com');
+    });
+
+    it('publishes the authenticator secret beside every staff login, and beside no shopper’s', () => {
+        for (const staff of [
+            'admin',
+            'editor',
+            'moderator',
+            'manager',
+            'warehouse',
+            'support',
+            'operator'
+        ] as const)
+            expect(seedCredentials[staff].totpSecret).toBe(SEED_STAFF_TOTP_SECRET);
+        expect(seedCredentials.user).not.toHaveProperty('totpSecret');
     });
 
     it('publishes the two-factor persona’s backup codes beside its login', () => {

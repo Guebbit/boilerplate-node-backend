@@ -159,7 +159,7 @@ const wholeEntry = (entry: TwoFactorMethodRecord): TwoFactorMethodRecord => ({
  * A copy's own value for them is a guess from what it loaded, and sending it is how two requests
  * left the flag disagreeing with the factors.
  */
-const DERIVED_PATHS = new Set(['twoFactorEnabledAt']);
+const DERIVED_PATHS = new Set(['twoFactorEnabledAt', 'authenticatorEnabledAt']);
 
 /**
  * The account-level paths a request changed, other than the method array and the derived ones: the
@@ -314,12 +314,19 @@ const methodsAfter = (write: TwoFactorWrite) => {
 /** Scratch field holding "is any stored entry armed" between the two derived stages; never persisted. */
 const ARMED_FIELD = '__armed';
 
+/** Scratch field holding "is an authenticator-app entry armed", beside {@link ARMED_FIELD}; never persisted. */
+const AUTHENTICATOR_FIELD = '__authenticator';
+
+/** The method name of the authenticator-app factor — the one staff access is gated on. */
+const AUTHENTICATOR_METHOD = 'totp';
+
 /**
  * The two stages that derive the armed flag and the backup-code set from the array as stored after
  * the write. Separate from the stage that writes the array because a `$set` stage reads the
  * document as it was before that stage.
  *
  * - the flag keeps its date while armed and goes when no entry is;
+ * - the authenticator flag does the same for the app factor alone;
  * - a minted set lands only on an armed account that holds no code yet;
  * - a discard empties the set only when no entry is armed.
  */
@@ -354,6 +361,22 @@ const derivedStages = (write: TwoFactorWrite): Record<string, unknown>[] => {
                             }
                         }
                     ]
+                },
+                [AUTHENTICATOR_FIELD]: {
+                    $anyElementTrue: [
+                        {
+                            $map: {
+                                input: { $ifNull: ['$twoFactorMethods', []] },
+                                as: 'entry',
+                                in: {
+                                    $and: [
+                                        { $eq: ['$$entry.method', AUTHENTICATOR_METHOD] },
+                                        { $ne: [{ $ifNull: ['$$entry.enrolledAt', null] }, null] }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
                 }
             }
         },
@@ -362,11 +385,18 @@ const derivedStages = (write: TwoFactorWrite): Record<string, unknown>[] => {
                 twoFactorEnabledAt: {
                     $cond: [armed, { $ifNull: ['$twoFactorEnabledAt', '$$NOW'] }, '$$REMOVE']
                 },
+                authenticatorEnabledAt: {
+                    $cond: [
+                        `$${AUTHENTICATOR_FIELD}`,
+                        { $ifNull: ['$authenticatorEnabledAt', '$$NOW'] },
+                        '$$REMOVE'
+                    ]
+                },
                 ...(codes && { twoFactorBackupCodes: codes }),
                 ...(salt && { twoFactorBackupCodeSalt: salt })
             }
         },
-        { $unset: ARMED_FIELD }
+        { $unset: [ARMED_FIELD, AUTHENTICATOR_FIELD] }
     ];
 };
 

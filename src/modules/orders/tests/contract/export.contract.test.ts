@@ -7,7 +7,13 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
-import { api, authenticateAs, authenticateAsRole, bearerForCookie } from '@tests/http';
+import {
+    api,
+    authenticateAs,
+    authenticateAsRole,
+    bearerForCookie,
+    loginCompleting
+} from '@tests/http';
 import { setCookie } from '@tests/cookies';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { reauthWindowSeconds } from '@kernel/config';
@@ -56,9 +62,7 @@ describe('GET /orders/export', () => {
     it('refuses an admin whose session is older than the sensitive window', async () => {
         freezeDate();
         const user = await createAdminUser({ verifiedAt: new Date() });
-        const login = await api()
-            .post('/account/login')
-            .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'short' });
+        const login = await loginCompleting(user.email, PLAIN_PASSWORD, { remember: 'short' });
         const jwtCookie = setCookie(login, '__Host-session');
         advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
         const staleBearer = await bearerForCookie(jwtCookie ?? '');

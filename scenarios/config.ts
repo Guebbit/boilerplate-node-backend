@@ -46,7 +46,13 @@ export const seedPasswordsConfig = defineConfig({
         NODE_SEED_MANAGER_PASSWORD: seedPassword('manager', 'Demo-Manager1!'),
         NODE_SEED_WAREHOUSE_PASSWORD: seedPassword('warehouse', 'Demo-Warehouse1!'),
         NODE_SEED_SUPPORT_PASSWORD: seedPassword('support', 'Demo-Support1!'),
-        NODE_SEED_OPERATOR_PASSWORD: seedPassword('platform operator', 'Demo-Operator1!')
+        NODE_SEED_OPERATOR_PASSWORD: seedPassword('platform operator', 'Demo-Operator1!'),
+        // Every staff account carries an authenticator app, or its role grants nothing. One shared
+        // secret, since a demo fixture gains nothing from seven. Base32, 160 bits.
+        NODE_SEED_STAFF_TOTP_SECRET: seedPassword(
+            'staff authenticator app',
+            'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'
+        )
     }
 });
 
