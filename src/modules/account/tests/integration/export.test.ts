@@ -237,6 +237,48 @@ describe('what the export holds of the users module', () => {
     });
 });
 
+describe('the profile section of the export', () => {
+    it('carries none of the fields the schema keeps out of every plain read', async () => {
+        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
+        // One distinctive value in every `select: false` field the wire strips.
+        await userRepository.updateMany(
+            { _id: user.id },
+            {
+                $set: {
+                    pendingImageKey: 'marker-pending-image',
+                    deletedBy: 'marker-deleted-by',
+                    twoFactorBackupCodes: ['marker-backup-code'],
+                    twoFactorBackupCodeSalt: 'marker-backup-salt',
+                    reauthCode: { codeHash: 'marker-reauth', codeAttempts: 0 },
+                    oauthAccounts: [
+                        { provider: 'github', providerId: 'marker-oauth', connectedAt: new Date() }
+                    ],
+                    mfaFailures: 7,
+                    mfaLockedUntil: new Date('2031-01-01T00:00:00.000Z'),
+                    tokensValidAfter: new Date('2032-02-02T00:00:00.000Z'),
+                    previousEmail: 'marker-previous@example.com'
+                }
+            }
+        );
+
+        const result = await requestExport(user.id, testCallerContext);
+        await settleInlineExports();
+
+        if (!result.success) throw new Error('the request was refused');
+        const { profile } = JSON.parse(await fileOf(`${result.data.id}.json`)) as {
+            profile: Record<string, unknown>;
+        };
+
+        expect(Object.keys(profile)).not.toEqual(
+            expect.arrayContaining(['password', 'twoFactorBackupCodes', 'reauthCode'])
+        );
+        // The values, wherever they would have landed in the file.
+        expect(JSON.stringify(profile)).not.toMatch(
+            /marker-|2031-01-01|2032-02-02|"mfaFailures"|"tokensValidAfter"|"password"/
+        );
+    });
+});
+
 describe('requestExport', () => {
     it('answers 202 with a building row, and the worker then makes it ready', async () => {
         setPersonalDataSections(basicSections());
