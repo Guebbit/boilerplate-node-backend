@@ -58,6 +58,47 @@ describe('orderConfirmEmail', () => {
         expect(lines[1]).toContain('€7.50');
     });
 
+    it('promises a delivery on a line that is not ready now, and says nothing on one that is', () => {
+        const order: OrderLines = {
+            items: [
+                { quantity: 1, product: { title: 'Ready', price: 5 } },
+                {
+                    quantity: 1,
+                    product: {
+                        title: 'Preorder',
+                        price: 5,
+                        preorder: true,
+                        releaseDate: new Date('2026-12-20T00:00:00Z')
+                    }
+                },
+                {
+                    quantity: 3,
+                    backorderedQuantity: 1,
+                    promisedAt: new Date('2026-11-05T00:00:00Z'),
+                    promiseDated: true,
+                    product: { title: 'Dated', price: 5 }
+                },
+                {
+                    quantity: 2,
+                    backorderedQuantity: 2,
+                    promisedAt: new Date('2026-11-05T00:00:00Z'),
+                    promiseDated: false,
+                    product: { title: 'Undated', price: 5 }
+                }
+            ],
+            currency: 'EUR'
+        };
+
+        const lines = orderConfirmEmail('en', NAME, order, ORDER_ID).data.lines as string[];
+
+        expect(lines[0]).not.toContain('—  ');
+        expect(lines[0]).not.toMatch(/ship|arrive/);
+        expect(lines[1]).toContain('ships from December 20, 2026');
+        expect(lines[2]).toContain('1 to arrive by November 5, 2026');
+        expect(lines[3]).toContain('2 to arrive within 30 days');
+        expect(lines[3]).not.toContain('2026');
+    });
+
     it('states the same total the order itself computes, shipping included', () => {
         // Not a recomputation: the point is that this builder defers to `orderTotal`, so the
         // email and the charge cannot drift apart. `totals.property.test.ts` covers the sum.

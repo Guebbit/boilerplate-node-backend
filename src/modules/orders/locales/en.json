@@ -27,7 +27,10 @@
             "body": "We've received your order. It's awaiting payment — nothing has been charged yet.",
             "line": "{{title}} — {{quantity}} × {{price}}",
             "total": "Total: {{total}}",
-            "link-label": "View your order and receipt"
+            "link-label": "View your order and receipt",
+            "promise-preorder": "ships from {{date}}",
+            "promise-owed-dated": "{{count}} to arrive by {{date}}",
+            "promise-owed-default": "{{count}} to arrive within 30 days"
         },
         "email-withdrawal": {
             "heading": "Right of withdrawal",

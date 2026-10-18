@@ -33,7 +33,15 @@ export interface OrderLines {
             requiresShipping?: boolean | null;
             /** Frozen at checkout: Art. 16 takes the right of withdrawal away from this line. */
             noWithdrawal?: boolean | null;
+            /** Frozen at checkout: the date a preorder line ships from. */
+            releaseDate?: Date | null;
+            preorder?: boolean | null;
         };
+        /** Frozen at checkout: units the shelf could not cover, and the day they were promised. */
+        backorderedQuantity?: number | null;
+        promisedAt?: Date | null;
+        /** Whether `promisedAt` was a date the product named, not the 30-day default. */
+        promiseDated?: boolean | null;
     }[];
     /** The shipping frozen at checkout. Absent on an order that chose no delivery method. */
     shippingCost?: number;
@@ -193,6 +201,45 @@ export const withdrawalNotice = (
 };
 
 /**
+ * The date a delivery date is printed as, in the recipient's language. UTC days, like every date
+ * rule that decides them.
+ *
+ * @param locale - the recipient's language
+ * @param date - the date
+ */
+const longDate = (locale: string, date: Date): string =>
+    new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(date);
+
+/**
+ * What a line promises about delivery, when it is not "ready now": a preorder ships from its date,
+ * owed units come by their date or within 30 days. CRD Art. 8(7)(a) wants delivery information on
+ * the durable medium too, not only on the page the buyer ordered from.
+ *
+ * @param t - the translator for the email's language
+ * @param locale - the recipient's language
+ * @param item - the order line
+ * @returns the promise as one sentence, or `undefined` when the line is ready now
+ */
+const linePromise = (
+    t: ReturnType<typeof translator>,
+    locale: string,
+    item: OrderLines['items'][number]
+): string | undefined => {
+    if (item.backorderedQuantity && item.promisedAt)
+        return item.promiseDated === true
+            ? t('orders.email-confirm.promise-owed-dated', {
+                  count: item.backorderedQuantity,
+                  date: longDate(locale, item.promisedAt)
+              })
+            : t('orders.email-confirm.promise-owed-default', { count: item.backorderedQuantity });
+    if (item.product.preorder === true && item.product.releaseDate)
+        return t('orders.email-confirm.promise-preorder', {
+            date: longDate(locale, item.product.releaseDate)
+        });
+    return undefined;
+};
+
+/**
  * The placed-order email, sent to the customer — "order received, awaiting payment", never
  * "confirmed": every order this builds for is still `pending` at send time (a `bank_transfer`
  * order gets {@link bankTransferInstructionsEmail} instead, the only other placed-order mail).
@@ -221,13 +268,15 @@ export const orderConfirmEmail = (
             pageMetaTitle: t('orders.email-confirm.meta-title'),
             greeting: t('orders.email-confirm.greeting', { name }),
             body: t('orders.email-confirm.body'),
-            lines: order.items.map((item) =>
-                t('orders.email-confirm.line', {
+            lines: order.items.map((item) => {
+                const line = t('orders.email-confirm.line', {
                     title: item.product.title,
                     quantity: item.quantity,
                     price: money(locale, item.product.price, order.currency)
-                })
-            ),
+                });
+                const promise = linePromise(t, locale, item);
+                return promise ? `${line} — ${promise}` : line;
+            }),
             total: t('orders.email-confirm.total', {
                 total: money(locale, orderTotal(order), order.currency)
             }),

@@ -27,7 +27,10 @@
             "body": "Abbiamo ricevuto il tuo ordine. È in attesa di pagamento — non è stato ancora addebitato nulla.",
             "line": "{{title}} — {{quantity}} × {{price}}",
             "total": "Totale: {{total}}",
-            "link-label": "Visualizza il tuo ordine e la ricevuta"
+            "link-label": "Visualizza il tuo ordine e la ricevuta",
+            "promise-preorder": "spedizione dal {{date}}",
+            "promise-owed-dated": "{{count}} in arrivo entro il {{date}}",
+            "promise-owed-default": "{{count}} in arrivo entro 30 giorni"
         },
         "email-withdrawal": {
             "heading": "Diritto di recesso",
