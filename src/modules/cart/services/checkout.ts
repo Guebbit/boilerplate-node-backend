@@ -15,7 +15,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { toMinorUnits } from '@shared-kernel/money';
+import { toMinorUnits } from '@domain-primitives/money';
 import {
     orderService,
     orderTotal,

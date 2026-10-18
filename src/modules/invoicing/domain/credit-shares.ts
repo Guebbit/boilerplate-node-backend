@@ -29,7 +29,7 @@ import {
     toMinorUnits,
     NO_MONEY,
     type Money
-} from '@shared-kernel/money';
+} from '@domain-primitives/money';
 
 /** The part of an invoice the split reads, as plain data — the invoice document is not this layer's. */
 export interface CreditableInvoice {

@@ -15,7 +15,7 @@ import {
     toMinorUnits,
     type Money,
     NO_MONEY
-} from '@shared-kernel/money';
+} from '@domain-primitives/money';
 import { isShippedItem } from './rules';
 import { lineGross } from './totals';
 

@@ -16,7 +16,7 @@ import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import type { TranslationFieldIssue } from '@kernel/registry';
-import { fitsCurrency, minorUnitExponent } from '@shared-kernel/money';
+import { fitsCurrency, minorUnitExponent } from '@domain-primitives/money';
 import { latestReleaseDate } from './domain/preorder';
 import { derivedStockFields } from './presenter';
 import { RateType, TaxClass, type Product } from '@types';

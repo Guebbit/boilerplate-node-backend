@@ -9,7 +9,7 @@
  * payment by seconds, a credit note its refund's settlement.
  */
 
-import { NO_MONEY, toMinorUnits, type Money } from '@shared-kernel/money';
+import { NO_MONEY, toMinorUnits, type Money } from '@domain-primitives/money';
 import { type ReportWindow } from '@infrastructure/persistence/report';
 import { invoicingRepository, type DocumentBucketRow } from '../repository';
 

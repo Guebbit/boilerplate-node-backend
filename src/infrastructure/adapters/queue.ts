@@ -43,7 +43,7 @@ import { queueConfig } from '@infrastructure/adapters/config';
 import { isTestEnvironment } from '@infrastructure/runtime/config';
 import { settleWithin } from '@infrastructure/runtime/settle';
 import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metrics-queue';
-import { DAY_MS } from '@infrastructure/runtime/time';
+import { DAY_MS } from '@domain-primitives/time';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 

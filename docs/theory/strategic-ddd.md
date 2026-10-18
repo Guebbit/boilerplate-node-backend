@@ -75,9 +75,6 @@ and the kinds differ enormously in what they cost when the upstream moves:
 | `published-language` | receives vocabulary, not records: pure functions over plain data    | **low** — neither side knows the other's storage | `cart → delivery`   |
 | `shared-kernel`      | both read and write the same model                                  | **highest** — every change agreed twice          | `account → users`   |
 
-The relationship is not the folder: `src/shared-kernel/` is a tier of our own pure code (`Money`) that
-every module may import, and it shares no model. See [Layers](./layers.md).
-
 Anticorruption layer is deliberately absent from the list. It is the right pattern for a model you
 do not control, and every module here is a sibling in this repo. `payments` does wrap an outside
 provider that way — behind `./providers`.

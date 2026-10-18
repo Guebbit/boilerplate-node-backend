@@ -10,7 +10,7 @@ import { model, Schema } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
-import { toMinorUnits } from '@shared-kernel/money';
+import { toMinorUnits } from '@domain-primitives/money';
 
 setupTestDb();
 

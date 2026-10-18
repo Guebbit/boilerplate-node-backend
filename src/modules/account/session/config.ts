@@ -6,6 +6,7 @@
  * from. See docs/modules/account-sessions.md and docs/theory/sessions.md.
  */
 
+import { DAY_MS } from '@domain-primitives/time';
 import { defineConfig } from '@infrastructure/config/define';
 import {
     choice,
@@ -111,7 +112,7 @@ export const sessionConfig = defineConfig({
         NODE_TOKEN_ACCESS_AUDIENCE: text(),
         NODE_TOKEN_REFRESH_AUDIENCE: text(),
         NODE_TOKEN_ROTATION_GRACE_MS: int({ default: 10_000, min: 0 }),
-        NODE_TOKEN_REUSE_WINDOW_MS: int({ default: 86_400_000, min: 1 })
+        NODE_TOKEN_REUSE_WINDOW_MS: int({ default: DAY_MS, min: 1 })
     },
     // The one relationship between the two windows that must hold: a token has to outlive the
     // grace window by some margin, or there is no interval in which reuse is detectable at all.

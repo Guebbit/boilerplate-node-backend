@@ -29,7 +29,7 @@
 #   - `verbatimModuleSyntax: true` conflicts with a CommonJS emit, so that direction is closed.
 #   - An ESM emit needs every relative import to carry an explicit `.js` extension. This codebase
 #     resolves with `moduleResolution: "bundler"` and writes them extensionless, across ~300 files.
-#   - `paths` aliases (`@infrastructure/*`, `@kernel/*`, `@shared-kernel/*`, `@modules/*`, `@api/*`) are a compile-time
+#   - `paths` aliases (`@infrastructure/*`, `@kernel/*`, `@domain-primitives/*`, `@modules/*`, `@api/*`) are a compile-time
 #     mapping that `tsc` does NOT rewrite in its output, so the emitted files import package names
 #     that do not exist. That needs `tsc-alias`, a bundler, or Node subpath imports.
 #

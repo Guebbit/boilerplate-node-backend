@@ -2,7 +2,7 @@
  * @module
  * User service — the User document's admin CRUD and search, plus the named identity operations
  * `account` calls to authenticate, register, verify and 2FA-protect it: the `users` end of the one
- * shared-kernel relationship in this repo (`docs/theory/strategic-ddd.md` §5). One file per
+ * domain-primitives relationship in this repo (`docs/theory/strategic-ddd.md` §5). One file per
  * flow, not one big file; see `docs/theory/layers.md`.
  *
  * The flows themselves — HTTP, sessions, emails, rate limits, anti-automation — stay in `account`;

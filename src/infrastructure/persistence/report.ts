@@ -5,7 +5,7 @@
  * uses it for its own grouped read.
  *
  * Money is stored as Decimal128, so a plain `$sum` of it is exact; the result is read once, as
- * minor units per currency, by `toMinorUnits` (`@shared-kernel/money`).
+ * minor units per currency, by `toMinorUnits` (`@domain-primitives/money`).
  */
 
 /** The bucket sizes a grouped read may use. */

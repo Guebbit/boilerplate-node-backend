@@ -12,7 +12,7 @@
  *
  * Why Decimal128: MongoDB calls `double` unsuitable for money. Stored exactly, a database `$sum`
  * needs no conversion and is exact. The arithmetic in code is unchanged: integer minor units in
- * `@shared-kernel/money`.
+ * `@domain-primitives/money`.
  * https://www.mongodb.com/docs/manual/tutorial/model-monetary-data/
  */
 

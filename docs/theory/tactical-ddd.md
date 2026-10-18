@@ -367,7 +367,7 @@ interface being edited.
 
 ## 3. Money
 
-`src/shared-kernel/money.ts` — a branded integer count of minor units.
+`src/domain-primitives/money.ts` — a branded integer count of minor units.
 
 ### The boundary, which is the whole design
 
@@ -450,19 +450,19 @@ blank price. So every construction point funnels through one private `asMoney`, 
 with one meaning.
 
 That is a property over every possible input, which is why
-`tests/unit/shared-kernel/money.property.test.ts` is property-based rather than a table of
+`tests/unit/domain-primitives/money.property.test.ts` is property-based rather than a table of
 examples. It found the `-0` case.
 
-### Why it lives in `src/shared-kernel/`
+### Why it lives in `src/domain-primitives/`
 
 Money arithmetic is not one module's business: `orders`, `payments`, `returns`, `invoicing`,
 `cart` and `stats` all add, scale or convert amounts. A type six modules need has no single owner,
-so it sits in its own tier, `src/shared-kernel/`.
+so it sits in its own tier, `src/domain-primitives/`.
 
 There is also a hard constraint. The domain layer may not import `@kernel/*`, `@infrastructure/*`,
 `@modules/*` or even `../*` — see the folder rule in `eslint.config.ts`. A jointly-owned value type
 therefore has to sit somewhere a `domain/` folder CAN reach, without loosening that rule. The
-`shared-kernel` tier does it: it imports npm and `@types` only, and every tier may import it.
+`domain-primitives` tier does it: it imports npm and `@types` only, and every tier may import it.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
@@ -470,7 +470,7 @@ flowchart TD
     K["@kernel/*"] -.->|"❌ lint"| D["domain/ folders"]
     I["@infrastructure/*"] -.->|"❌ lint"| D
     S["@modules/*"] -.->|"❌ lint"| D
-    SK["src/shared-kernel/money.ts<br/><i>npm and @types only</i>"] -->|"✅"| D
+    SK["src/domain-primitives/money.ts<br/><i>npm and @types only</i>"] -->|"✅"| D
     SK -->|"✅"| C["services, repositories, stats<br/><i>every other tier</i>"]
 
     classDef pure fill:#dcfce7,stroke:#16a34a,color:#111827;
@@ -478,10 +478,6 @@ flowchart TD
     class D,SK pure;
     class K,I,S banned;
 ```
-
-The tier is about the code, not the term: it holds our own pure helpers and shares no model, unlike
-the `shared-kernel` relationship in [Strategic DDD](./strategic-ddd.md), where two modules read and
-write one document.
 
 ### Per-rate VAT, and where shipping's own split goes
 
@@ -494,7 +490,7 @@ order's frozen lines, not three separate ones:
 - **Shipping's own split** (`shippingNetAmount`/`shippingTaxAmount`) — delivery carries no VAT
   rate of its own; it is taxed as ancillary to what it delivers, apportioned pro-rata across the
   lines by their own gross value (`apportion`, the same "remainder to the largest weight" rule
-  `shared-kernel/money.ts` has), then taxed at _each line's own rate_. Two lines at different rates
+  `domain-primitives/money.ts` has), then taxed at _each line's own rate_. Two lines at different rates
   split shipping's cost between them and pay two different amounts of tax on their own halves.
 - **Per rate** (`taxSummary[]`) — one row per DISTINCT rate charged on the order, goods and
   shipping folded into the same row, since shipping was never a rate of its own to begin with.

@@ -265,7 +265,7 @@ The shop's one currency (`NODE_DEFAULT_CURRENCY`) belongs to [shop](./shop.md), 
 input to that currency's minor unit. Read through `shopCurrency()`.
 
 A price may have no more decimal places than that currency's minor unit (ISO 4217, pinned in
-`shared-kernel/money.ts`): 19.999 EUR is a 422 on create, `PUT` and `PATCH`, because it would be
+`domain-primitives/money.ts`): 19.999 EUR is a 422 on create, `PUT` and `PATCH`, because it would be
 stored as typed and charged as 20.00. The price is stored as a `Decimal128`
 ([Money at rest](../theory/tactical-ddd.md#at-rest-decimal128)); the API still sends a plain number.
 

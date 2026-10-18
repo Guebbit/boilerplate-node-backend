@@ -17,6 +17,7 @@
  * See: docs/modules/delivery.md#preorders-and-a-moved-date
  */
 
+import { DAY_MS } from '@domain-primitives/time';
 import {
     FulfillmentConsent,
     FulfillmentHoldReason,
@@ -24,9 +25,6 @@ import {
     PreorderFulfillmentState
 } from '@types';
 import { remainingOf, remainingOfLine, type FulfillmentLine } from './fulfillment';
-
-/** Milliseconds in a day; every date rule here counts whole UTC days. */
-const DAY_MS = 86_400_000;
 
 /** The longest first slip a buyer's silence may stand for: the FTC's 30 days, less a margin. */
 export const SILENT_SLIP_DAYS = 28;

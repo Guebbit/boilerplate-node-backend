@@ -5,7 +5,7 @@
  * by whichever cancel or return takes the LAST unit" is testable without a database.
  */
 
-import { addMoney, toDecimalAmount, toMinorUnits, NO_MONEY } from '@shared-kernel/money';
+import { addMoney, toDecimalAmount, toMinorUnits, NO_MONEY } from '@domain-primitives/money';
 import { BACK_RETURN_STATUSES } from './lifecycle';
 import type { ReturnKind, ReturnStatus } from './lifecycle';
 import { wireLines } from './quantities';

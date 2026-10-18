@@ -11,7 +11,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, makeOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { orderRepository } from '../../repository';
-import { toMinorUnits } from '@shared-kernel/money';
+import { toMinorUnits } from '@domain-primitives/money';
 import { DEFAULT_SORT } from '@infrastructure/persistence/search';
 
 setupTestDb();

@@ -903,7 +903,11 @@ export default tseslint.config(
                  * (Money first). It reaches npm and nothing else, so sharing it loosens no wall.
                  * See `docs/theory/layers.md`.
                  */
-                { type: 'shared-kernel', pattern: 'src/shared-kernel', partialMatch: false },
+                {
+                    type: 'domain-primitives',
+                    pattern: 'src/domain-primitives',
+                    partialMatch: false
+                },
                 { type: 'infrastructure', pattern: 'src/infrastructure', partialMatch: false },
                 { type: 'app', pattern: 'src/app', partialMatch: false },
                 { type: 'types', pattern: 'src/types', partialMatch: false },
@@ -980,7 +984,7 @@ export default tseslint.config(
                             allow: { to: { element: { type: ['infrastructure', 'types'] } } }
                         },
                         {
-                            // `shared-kernel` is pure and generic, so every tier may take from it —
+                            // `domain-primitives` is pure and generic, so every tier may take from it —
                             // `domain` included, which is the reason it exists.
                             from: {
                                 element: {
@@ -994,11 +998,11 @@ export default tseslint.config(
                                     ]
                                 }
                             },
-                            allow: { to: { element: { type: 'shared-kernel' } } }
+                            allow: { to: { element: { type: 'domain-primitives' } } }
                         },
                         {
-                            from: { element: { type: 'shared-kernel' } },
-                            allow: { to: { element: { type: 'shared-kernel' } } }
+                            from: { element: { type: 'domain-primitives' } },
+                            allow: { to: { element: { type: 'domain-primitives' } } }
                         },
                         {
                             // `kernel` is the module system, reachable by what sits above it.
@@ -1092,7 +1096,7 @@ export default tseslint.config(
                          * ── What is refused ───────────────────────────────────────────────────
                          */
                         {
-                            from: { element: { type: 'shared-kernel' } },
+                            from: { element: { type: 'domain-primitives' } },
                             disallow: {
                                 to: {
                                     element: {
@@ -1107,7 +1111,7 @@ export default tseslint.config(
                                 }
                             },
                             message:
-                                'shared-kernel imports npm and @types only. It is below every tier so that domain/ can use it; one import of a tier would hand that reach back to whoever imports it.'
+                                'domain-primitives imports npm and @types only. It is below every tier so that domain/ can use it; one import of a tier would hand that reach back to whoever imports it.'
                         },
                         {
                             from: { element: { type: 'infrastructure' } },
@@ -1165,7 +1169,7 @@ export default tseslint.config(
                                             'module',
                                             'domain',
                                             'kernel',
-                                            'shared-kernel',
+                                            'domain-primitives',
                                             'infrastructure',
                                             'types'
                                         ]

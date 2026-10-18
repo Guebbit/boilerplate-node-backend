@@ -25,7 +25,7 @@ import {
     toDecimalAmount,
     toMinorUnits,
     type Money
-} from '@shared-kernel/money';
+} from '@domain-primitives/money';
 import type { ReturnReason } from './lifecycle';
 
 /** What the calculation needs from the return and its order. */

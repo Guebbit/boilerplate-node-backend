@@ -5,7 +5,7 @@
  * a real database to prove a shipment persists; the pricing rule itself does not, and belongs here.
  */
 
-import { fitsCurrency } from '@shared-kernel/money';
+import { fitsCurrency } from '@domain-primitives/money';
 import {
     cheapestStandardShipping,
     findShippingMethod,

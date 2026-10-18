@@ -13,7 +13,7 @@
             "@kernel/*": ["./src/kernel/*"],
             "@modules/*": ["./src/modules/*"],
             "@scenarios/*": ["./scenarios/*"],
-            "@shared-kernel/*": ["./src/shared-kernel/*"]
+            "@domain-primitives/*": ["./src/domain-primitives/*"]
         },
         "strict": true,
         "composite": true,

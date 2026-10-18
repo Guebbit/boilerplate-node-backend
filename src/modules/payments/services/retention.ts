@@ -12,7 +12,7 @@ import type { ExportPayment, Refund } from '@types';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 import { abandonedPaymentRetentionDays, TRANSFER_PAYMENT_RETENTION_DAYS } from '../config';
-import { DAY_MS } from '@infrastructure/runtime/time';
+import { DAY_MS } from '@domain-primitives/time';
 
 /**
  * The `personalData.erase` hook. Unsets `userId` on every payment this account made; the

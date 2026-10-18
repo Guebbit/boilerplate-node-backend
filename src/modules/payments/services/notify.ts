@@ -12,7 +12,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import type { DomainEventMap } from '@kernel/events';
 import { RefundStatus } from '@types';
-import { toMinorUnits } from '@shared-kernel/money';
+import { toMinorUnits } from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
 import {
     paymentReceivedEmail,

@@ -1,7 +1,7 @@
 /**
  * @module
  * The user collection's persistence layer: standard CRUD from the repository factory, plus the
- * credential and token operations `account` needs from the other side of the shared-kernel edge.
+ * credential and token operations `account` needs from the other side of the domain-primitives edge.
  *
  * See: docs/modules/users.md
  */
@@ -34,7 +34,7 @@ import {
 } from '@infrastructure/persistence/create-repository';
 import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 import { imageWritebackFor } from '@infrastructure/persistence/image-writeback';
-import { DAY_MS } from '@infrastructure/runtime/time';
+import { DAY_MS } from '@domain-primitives/time';
 
 /**
  * `password`, the 2FA secret fields, `reauthCode`, `oauthAccounts` and `pendingEmail` are

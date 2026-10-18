@@ -5,6 +5,8 @@
  * cases can cover.
  */
 
+import { DAY_MS } from '@domain-primitives/time';
+
 /** A calendar day as the shop's wall calendar shows it. `month` is 1-12. */
 export interface CalendarDay {
     year: number;
@@ -14,9 +16,6 @@ export interface CalendarDay {
 
 /** The bucket sizes a report may ask for. */
 export type CalendarInterval = 'day' | 'week' | 'month';
-
-/** Milliseconds in a day: the unit of the UTC arithmetic below, which has no DST to trip on. */
-const DAY_MS = 86_400_000;
 
 /**
  * A calendar day as a UTC timestamp at midnight — the one representation arithmetic is done in.

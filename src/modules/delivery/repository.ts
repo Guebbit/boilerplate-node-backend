@@ -27,7 +27,7 @@ import {
     type Repository,
     type Wire
 } from '@infrastructure/persistence/create-repository';
-import { DAY_MS } from '@infrastructure/runtime/time';
+import { DAY_MS } from '@domain-primitives/time';
 
 /** What the preorder board filters by. */
 export interface BoardFilters {

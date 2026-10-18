@@ -37,7 +37,7 @@
     "mutate": [
         "src/infrastructure/**/*.ts",
         "src/kernel/**/*.ts",
-        "src/shared-kernel/**/*.ts",
+        "src/domain-primitives/**/*.ts",
         "src/modules/*/**/*.ts",
         "!src/modules/*/index.ts",
         "!src/modules/*/tests/**"

@@ -10,7 +10,7 @@
 import { logger } from '@infrastructure/adapters/logger';
 import { fulfillmentOrderRepository } from '../repository';
 import { holdNoteRetentionDays } from '../config';
-import { DAY_MS } from '@infrastructure/runtime/time';
+import { DAY_MS } from '@domain-primitives/time';
 
 /**
  * `reap:delivery`'s sweep. Unsets `holdNote` on every fulfillment order whose

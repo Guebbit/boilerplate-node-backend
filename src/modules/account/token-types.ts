@@ -1,4 +1,4 @@
-import { DAY_MS } from '@infrastructure/runtime/time';
+import { DAY_MS } from '@domain-primitives/time';
 /**
  * @module
  * The one-time token kinds this module stores in `verificationtokens` — a leaf, so the schema, the

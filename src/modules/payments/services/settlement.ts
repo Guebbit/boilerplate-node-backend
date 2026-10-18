@@ -14,7 +14,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { PaymentStatus, AuthContext } from '@types';
-import { toMinorUnits } from '@shared-kernel/money';
+import { toMinorUnits } from '@domain-primitives/money';
 import { orderService, isPayable, paymentSettled } from '@modules/orders';
 import { bankTransferHoldHours } from '../config';
 import { inventoryService } from '@modules/inventory';

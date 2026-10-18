@@ -22,7 +22,7 @@ import type { OrderDocument } from '../model';
 import { orderEventTextRetentionDays } from '../config';
 import { presentTimeline, presentTimelineEntry } from '../presenter';
 import type { TimelineEntryInput } from '../domain';
-import { DAY_MS } from '@infrastructure/runtime/time';
+import { DAY_MS } from '@domain-primitives/time';
 
 /**
  * Append one row to an order's timeline, in the caller's transaction so the row commits with the

@@ -98,7 +98,7 @@ is the amount with VAT taken out.
 Money is grouped by currency and never converted. One deployment has one currency
 (`NODE_DEFAULT_CURRENCY`), so a second group appears only after a config change. Money is stored as
 Decimal128, so Mongo's plain `$sum` is exact; one conversion to minor units per currency follows in
-code (`shared-kernel/money.ts#toMinorUnits`, reading the sum as text). See
+code (`domain-primitives/money.ts#toMinorUnits`, reading the sum as text). See
 [Money at rest](../theory/tactical-ddd.md#at-rest-decimal128).
 
 ## Dates and the time zone

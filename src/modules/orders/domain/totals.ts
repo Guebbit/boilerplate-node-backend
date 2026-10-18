@@ -15,7 +15,7 @@ import {
     wholeCount,
     type Money,
     NO_MONEY
-} from '@shared-kernel/money';
+} from '@domain-primitives/money';
 
 /** A priced line. Loose: order items arrive as raw aggregate output, cart items as DTOs. */
 export interface LineItem {

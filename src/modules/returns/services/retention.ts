@@ -9,7 +9,7 @@
 import { logger } from '@infrastructure/adapters/logger';
 import { returnRepository } from '../repository';
 import { returnTextRetentionDays } from '../config';
-import { DAY_MS } from '@infrastructure/runtime/time';
+import { DAY_MS } from '@domain-primitives/time';
 
 /**
  * `reap:returns`'s sweep. Unsets `note` and `declineReason` on every return whose

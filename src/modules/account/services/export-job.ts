@@ -14,6 +14,7 @@
  * See: docs/modules/account.md#data-export
  */
 
+import { DAY_MS } from '@domain-primitives/time';
 import { logger } from '@infrastructure/adapters/logger';
 import {
     removeExport,
@@ -96,7 +97,7 @@ const mailRequester = (
  * @param row - the settled row
  */
 const mailLink = (job: AccountExportJobPayload, row: AccountExportRow): Promise<void> => {
-    const days = Math.round(exportRetentionMs() / 86_400_000);
+    const days = Math.round(exportRetentionMs() / DAY_MS);
     return mailRequester(job, (name) => exportReadyEmail(job.locale, name, String(row._id), days));
 };
 

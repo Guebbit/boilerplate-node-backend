@@ -19,7 +19,7 @@ import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { readBodyField } from '@infrastructure/http/middlewares/rate-limit';
 import { secureCookieOptions } from './cookies';
 import { sessionConfig } from './config';
-import { DAY_MS } from '@infrastructure/runtime/time';
+import { DAY_MS } from '@domain-primitives/time';
 
 /** The cookie's name. */
 export const DEVICE_COOKIE = 'device';

@@ -61,7 +61,7 @@ const ALIAS_PREFIXES = [
     '@app/',
     '@infrastructure/',
     '@kernel/',
-    '@shared-kernel/',
+    '@domain-primitives/',
     '@modules/',
     '@scenarios/'
 ];
@@ -94,7 +94,7 @@ const ownerOf = (file: string): string => {
     const moduleMatch = /^src\/modules\/([^/]+)\//.exec(relativePath);
     if (moduleMatch) return `module:${moduleMatch[1]}`;
     if (relativePath.startsWith('src/kernel/')) return 'kernel';
-    if (relativePath.startsWith('src/shared-kernel/')) return 'shared-kernel';
+    if (relativePath.startsWith('src/domain-primitives/')) return 'domain-primitives';
     if (relativePath.startsWith('src/infrastructure/')) return 'infrastructure';
     if (relativePath.startsWith('scenarios/')) return 'scenarios';
     if (relativePath.startsWith('scripts/')) return 'scripts';

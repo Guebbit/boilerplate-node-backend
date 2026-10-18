@@ -9,7 +9,7 @@
  * which the stored status no longer says (a refunded payment stays `succeeded`).
  */
 
-import { toMinorUnits } from '@shared-kernel/money';
+import { toMinorUnits } from '@domain-primitives/money';
 import { PaymentDisplayStatus, RefundStatus, type PaymentStatus } from '@types';
 import { OPEN_REFUND_STATUSES } from './lifecycle';
 

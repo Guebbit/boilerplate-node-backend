@@ -19,7 +19,7 @@ import { getDefaultLocale } from '@infrastructure/i18n';
 import { systemCallerContext } from '@kernel/permissions';
 import { userService, type UserDocument } from '@modules/users';
 import { inactivityWarningEmail, greetableName } from '../emails';
-import { DAY_MS } from '@infrastructure/runtime/time';
+import { DAY_MS } from '@domain-primitives/time';
 
 /** Fixed pause between the deletion stages — not configurable, so the one dial stays a day count. */
 const GRACE_DAYS = 30;

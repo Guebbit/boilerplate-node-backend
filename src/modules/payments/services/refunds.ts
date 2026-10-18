@@ -43,7 +43,7 @@ import {
     addMoney,
     subtractMoney,
     type Money
-} from '@shared-kernel/money';
+} from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
 import { ownOrderFlag } from '@modules/access';
 import { paymentsAuditActions } from '../audit';

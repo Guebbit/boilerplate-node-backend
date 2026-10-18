@@ -169,7 +169,7 @@ module.exports = {
         '^@infrastructure/(.*)$': '<rootDir>/src/infrastructure/$1',
         '^@kernel/(.*)$': '<rootDir>/src/kernel/$1',
         '^@modules/(.*)$': '<rootDir>/src/modules/$1',
-        '^@shared-kernel/(.*)$': '<rootDir>/src/shared-kernel/$1',
+        '^@domain-primitives/(.*)$': '<rootDir>/src/domain-primitives/$1',
         '^@scenarios/(.*)$': '<rootDir>/scenarios/$1',
 
         /*

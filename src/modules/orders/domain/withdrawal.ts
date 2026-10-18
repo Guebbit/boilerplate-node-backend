@@ -8,13 +8,11 @@
  * the window has no end yet, which is why `withdrawUntil` is absent until then.
  */
 
+import { DAY_MS } from '@domain-primitives/time';
 import { OrderStatus } from '@types';
 import type { FulfillmentSummary } from './fulfillment';
 import { ORDER_STATUS_TRAITS } from './status-traits';
 import { isDigitalOnlyOrder, type ShippableLineCandidate } from './rules';
-
-/** One day, in milliseconds. */
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** What {@link isBeforeDispatch} reads off an order. */
 export interface DispatchCandidate {
