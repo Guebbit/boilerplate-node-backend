@@ -115,6 +115,9 @@ session is revoked and the refusal is audited. A shopper's session never idles o
 Shopify and Amazon do not either); NIST AAL2 asks at most an hour of inactivity of staff, and OWASP
 asks that the server enforce it, so a client timer is only a courtesy.
 
+One limit for every staff role, the administrator included: NIST sets limits by login strength, not
+by job role, and the dangerous acts already need a login within the last five minutes (step-up).
+
 ```mermaid
 flowchart LR
     R[request] --> L{staff or admin?}

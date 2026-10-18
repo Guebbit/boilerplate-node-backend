@@ -463,9 +463,7 @@ outlive the original. The one free text `orders` owns is an override's reason (`
   their own orders, staff text and actor included: the export is their data, the screen is a view.
 - The buyer's own screen never shows `actor`: who at the shop did something is the shop's business.
 
-Not built: `note_added` (no staff-note door exists), `email_sent`, and the preorder types
-(`release_date_moved`, `delay_notice_sent`, `wait_confirmed`, `wait_expired`), which arrive with the
-preorder lane as new rows in the table above.
+Not built: `note_added` (no staff-note door exists) and `email_sent`.
 
 ## The CSV export
 
