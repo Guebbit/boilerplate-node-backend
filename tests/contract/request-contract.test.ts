@@ -106,6 +106,9 @@ const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
     'GET /delivery/fulfillment-orders/release-date-impact': {
         request: adminQuery('/delivery/fulfillment-orders/release-date-impact')
     },
+    'GET /delivery/fulfillment-orders/restock-date-impact': {
+        request: adminQuery('/delivery/fulfillment-orders/restock-date-impact')
+    },
     'GET /webhooks/deliveries': { request: adminQuery('/webhooks/deliveries') },
     'GET /payments': { request: adminQuery('/payments') },
     'GET /payments/refunds': { request: adminQuery('/payments/refunds') },
