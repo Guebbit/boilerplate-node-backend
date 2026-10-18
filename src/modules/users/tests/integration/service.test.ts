@@ -13,6 +13,7 @@ import type { ClientSession } from 'mongoose';
 import { personalDataErasers, setPersonalDataErasers } from '../../erasure-registry';
 import { createUser } from '@modules/users/tests/factories';
 import { userService } from '@modules/users/services';
+import { remove } from '../../services/remove';
 import { USER_SETUP_REQUESTED } from '../../events';
 import { userRepository } from '../../repository';
 import { usersAuditActions } from '@modules/users/audit';
@@ -443,7 +444,7 @@ describe('userService.updateById', () => {
         /** Answer through the profile door, on a freshly loaded account, and read the date back. */
         const answer = async (consent: boolean): Promise<Date | undefined> => {
             const loaded = await userRepository.findById(id);
-            await userService.update(loaded!, { analyticsConsent: consent }, owner);
+            await userService.updateOwnProfile(loaded!, { analyticsConsent: consent }, owner);
             const stored = await userRepository.findById(id);
             return stored?.analyticsConsentAt;
         };
@@ -751,11 +752,11 @@ describe('userService.updateById', () => {
     });
 });
 
-describe('userService.update', () => {
-    it('updates an existing user document directly', async () => {
+describe('userService.updateOwnProfile', () => {
+    it('updates the owner’s own document', async () => {
         const user = await createUser();
 
-        const result = await userService.update(
+        const result = await userService.updateOwnProfile(
             user,
             { username: 'direct-update' },
             testCallerContext
@@ -937,7 +938,7 @@ describe('userService.remove', () => {
         const user = await createUser();
         const id = user._id.toString();
 
-        const result = await userService.remove(user);
+        const result = await remove(user);
 
         expect(result.success).toBe(true);
         const updated = await userRepository.findById(id);
@@ -948,7 +949,7 @@ describe('userService.remove', () => {
         const user = await createUser();
         const id = user._id.toString();
 
-        await userService.remove(user, true);
+        await remove(user, true);
 
         expect(await userRepository.findById(id)).toBeNull();
     });
@@ -960,7 +961,7 @@ describe('userService.remove', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser();
 
-        await userService.remove(user, true);
+        await remove(user, true);
 
         expect(auditSpy).not.toHaveBeenCalled();
     });
@@ -972,7 +973,7 @@ describe('userService.remove', () => {
         const user = await createUser();
         const id = user._id.toString();
 
-        await userService.remove(user, true, systemCallerContext('User'));
+        await remove(user, true, systemCallerContext('User'));
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -989,7 +990,7 @@ describe('userService.remove', () => {
         const user = await createUser();
         const id = user._id.toString();
 
-        await userService.remove(user, false, systemCallerContext('User'));
+        await remove(user, false, systemCallerContext('User'));
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -1022,7 +1023,7 @@ describe('userService.remove', () => {
             });
             setPersonalDataErasers([firstEraser, failingEraser]);
 
-            await expect(userService.remove(user, true)).rejects.toThrow('simulated failure');
+            await expect(remove(user, true)).rejects.toThrow('simulated failure');
 
             expect(firstEraser).toHaveBeenCalledTimes(1);
             expect(failingEraser).toHaveBeenCalledTimes(1);
@@ -1044,7 +1045,7 @@ describe('userService.remove', () => {
             );
             setPersonalDataErasers([deferring]);
 
-            await userService.remove(user, true);
+            await remove(user, true);
 
             expect(stillThereWhenDeferredRan).toBe(false);
         });
@@ -1056,7 +1057,7 @@ describe('userService.remove', () => {
             const failing = jest.fn(() => Promise.reject(new Error('rolled back')));
             setPersonalDataErasers([deferring, failing]);
 
-            await expect(userService.remove(user, true)).rejects.toThrow('rolled back');
+            await expect(remove(user, true)).rejects.toThrow('rolled back');
 
             expect(deferred).not.toHaveBeenCalled();
         });
@@ -1071,7 +1072,7 @@ describe('userService.remove', () => {
                 () => Promise.resolve(otherStep)
             ]);
 
-            const result = await userService.remove(user, true);
+            const result = await remove(user, true);
 
             expect(result.success).toBe(true);
             expect(otherStep).toHaveBeenCalledTimes(1);
@@ -1092,7 +1093,7 @@ describe('userService.remove', () => {
             });
             setPersonalDataErasers([first, second]);
 
-            await userService.remove(user, true);
+            await remove(user, true);
 
             expect(order).toEqual(['first', 'second']);
             expect(await userRepository.findById(id)).toBeNull();

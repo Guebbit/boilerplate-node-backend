@@ -23,22 +23,20 @@ import { ACCOUNT_DELETE_TOKEN_TYPE } from '../token-types';
 
 /**
  * Hard-delete the caller's own account, confirmed by a one-time token.
- * Wraps `userService.remove` rather than emitting inside it: `remove` is also `removeById`'s
- * last step for the admin `DELETE /users/:id`, which already reports its own
- * `ADMIN_USER_ERASED`/`ADMIN_USER_SOFT_DELETED`. Emitting inside `remove` would double up there,
- * and — worse — misattribute
- * it: this event's `actorUserId`/`actorRole` are the deleted account's own, correct for a
- * self-delete but backwards for an admin's.
+ * Wraps `userService.eraseOwnAccount` rather than emitting inside it: the admin `DELETE /users/:id`
+ * reports its own `ADMIN_USER_ERASED`, and this event's `actorUserId`/`actorRole` are the deleted
+ * account's own, correct for a self-delete but backwards for an admin's. No context is passed on
+ * for the same reason: the row it would record is the admin one.
  */
 export const removeOwnAccount = (
     user: UserDocument,
     context: CallerContext
-): ReturnType<typeof userService.remove> => {
+): ReturnType<typeof userService.eraseOwnAccount> => {
     /*
-     * Read before the write. This is a hard delete, so after `remove` resolves there is no
+     * Read before the write. This is a hard delete, so after the erase resolves there is no
      * document left to take an address, a name or a language from — the goodbye mail has to be
      * addressed from a copy taken while the account still existed. The role is read the same way,
-     * from the membership store rather than the document, which holds none — `remove`'s own
+     * from the membership store rather than the document, which holds none — the
      * erasure cascade may already have revoked the membership by the time this resolves.
      */
     const { email, locale, _id } = user;
@@ -46,7 +44,7 @@ export const removeOwnAccount = (
     const goodbyeName = greetableName(user, email);
 
     return isUnrestrictedCaller(String(_id)).then((unrestricted) =>
-        userService.remove(user, true).then((result) => {
+        userService.eraseOwnAccount(user).then((result) => {
             if (result.success) {
                 recordAudit(context, {
                     action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,

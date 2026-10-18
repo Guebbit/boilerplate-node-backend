@@ -36,7 +36,13 @@ import { roleRefusalReject } from './role-refusal';
 
 /**
  * Update an existing user document. Returns a result envelope instead of throwing, the protocol
- * every service here follows. Typed off `UpdateUserByIdRequest` rather than a hand-picked `Pick`:
+ * every service here follows.
+ *
+ * @internal The step beneath `updateById` (which asks the ban and staff-role questions first) and
+ * `updateOwnProfile` (whose data cannot carry `active`). Unpublished, a sibling could ban or
+ * re-role an account with neither check.
+ *
+ * Typed off `UpdateUserByIdRequest` rather than a hand-picked `Pick`:
  * a hand-picked list can miss `active`, which would fire `USER_DEACTIVATED` without ever
  * writing the field.
  */

@@ -33,7 +33,7 @@ describe('erasing an account whose unpaid order cannot be cancelled', () => {
         const product = await createProduct({ onHand: 10 });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
 
-        const result = await userService.remove(user, true);
+        const result = await userService.eraseOwnAccount(user);
 
         expect(result.success).toBe(true);
         expect(await userRepository.findById(user.id)).toBeNull();

@@ -5,6 +5,7 @@
         "soft-deleted": "User was soft deleted (deactivated).",
         "restored": "User restored. Their sessions stay signed out.",
         "not-deleted": "This user is not deleted.",
+        "not-reaper-deleted": "Only an account the inactivity reaper deleted can be erased by it.",
         "role-not-assignable": "This role does not exist or cannot be given to an account."
     }
 }

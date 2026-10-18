@@ -76,6 +76,10 @@ const runAfterErase = (userId: string, deferred: readonly AfterErase[]): Promise
  * transaction as the row. Only the hard path does, since a soft delete is a restore waiting to
  * happen.
  *
+ * @internal The step beneath `removeById` (which refuses a staff account the caller may not
+ * manage) and the three named doors (`eraseOwnAccount`, `softDeleteInactive`, `eraseInactive`).
+ * Unpublished, a sibling could erase an administrator with no check.
+ *
  * @param context - who did this. Absent for a caller with no request behind it that also has no
  * stake in the trail (a test, a script's dry run). Present and `caller.system` for the inactivity
  * reaper, which records `SYSTEM_USER_SOFT_DELETED`/`SYSTEM_USER_ERASED` rather than an `admin.*`

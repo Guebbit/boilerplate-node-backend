@@ -83,7 +83,7 @@ describe('a hard delete of an account that has bought, been refunded and written
         expect(await addressBookModel.countDocuments({ userId: user.id })).toBe(1);
 
         const loaded = await userRepository.findById(user.id);
-        const result = await userService.remove(loaded!, true, callerContextAs('admin'));
+        const result = await userService.removeById(loaded!.id, true, callerContextAs('admin'));
 
         expect(result.success).toBe(true);
         expect(await userRepository.findById(user.id)).toBeNull();

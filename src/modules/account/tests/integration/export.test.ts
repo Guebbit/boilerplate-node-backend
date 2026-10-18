@@ -730,7 +730,7 @@ describe('erasing the account', () => {
         setPersonalDataSections(originalSections);
         const stored = await userService.getById(user.id);
 
-        const removed = await userService.remove(stored!, true);
+        const removed = await userService.eraseOwnAccount(stored!);
 
         expect(removed.success).toBe(true);
         await expect(accountExportRepository.findById(result.data.id)).resolves.toBeNull();

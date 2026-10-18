@@ -20,8 +20,14 @@ import {
 import { search, getById, findByEmail } from './read';
 import { enqueueIfPending } from './image';
 import { create } from './create';
-import { update, updateById } from './update';
-import { remove, restoreById, removeById } from './remove';
+import { updateById } from './update';
+import { restoreById, removeById } from './remove';
+import {
+    updateOwnProfile,
+    eraseOwnAccount,
+    softDeleteInactive,
+    eraseInactive
+} from './own-account';
 import {
     findAuthenticatableById,
     findByIdWithCredentials,
@@ -76,9 +82,10 @@ export type { TwoFactorSecretRing } from './reencrypt';
 
 /**
  * The service's public surface — the controllers call through this, never the bare functions.
- * `update` and `remove` take an already-loaded document and skip the rank check, for the trusted
- * callers that hold the record and the right to change it; `updateById` and `removeById` load by
- * id and ask first.
+ * `updateById` and `removeById` load by id and ask the ban and staff-role questions first. The four
+ * named doors take an already-loaded document for the one caller that holds the record and the
+ * right to change it: the owner (`updateOwnProfile`, `eraseOwnAccount`) and the inactivity reaper
+ * (`softDeleteInactive`, `eraseInactive`). The raw `update` and `remove` beneath them are not here.
  */
 export const userService = {
     search,
@@ -87,11 +94,13 @@ export const userService = {
     registerSelfService,
     registerFromOAuth,
     buildSignupDecoy,
-    update,
     updateById,
-    remove,
     removeById,
     restoreById,
+    updateOwnProfile,
+    eraseOwnAccount,
+    softDeleteInactive,
+    eraseInactive,
     findByEmail,
     emailTaken,
     findAuthenticatableById,

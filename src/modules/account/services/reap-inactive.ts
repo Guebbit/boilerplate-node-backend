@@ -74,13 +74,13 @@ const deletionStages = async (inactiveDays: number): Promise<DeletionCounts> => 
     const toSoftDelete = await userService.findWarnedStillInactive(daysAgo(GRACE_DAYS));
     // Both deletes hand a system context: nobody is at the keyboard, so the trail is the only record.
     for (const user of toSoftDelete)
-        await userService.remove(user, false, systemCallerContext('User'));
+        await userService.softDeleteInactive(user, systemCallerContext('User'));
 
     const toHardDelete = await userService.findReaperSoftDeletedPastGrace(daysAgo(GRACE_DAYS));
     // Every HTTP-driven delete records through `createDeleteController`'s spec; this one has no
     // request behind it, so it hands its own audit context.
     for (const user of toHardDelete)
-        await userService.remove(user, true, systemCallerContext('User'));
+        await userService.eraseInactive(user, systemCallerContext('User'));
 
     const counts = {
         warned: toWarn.length,

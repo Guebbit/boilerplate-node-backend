@@ -31,6 +31,7 @@ import { cartService } from '@modules/cart/services';
 import { cartRepository } from '@modules/cart/repository';
 import { addressService } from '@modules/addresses';
 import { userService } from '@modules/users';
+import { callerContextAs } from '@tests/callers';
 import { asCustomer, testCallerContext } from '@tests/callers';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents, emitDomainEvent } from '@kernel/events';
@@ -1556,7 +1557,7 @@ describe('deleteByUserId', () => {
         const product = await createProduct();
         await cartService.setItemById(user.id, String(product._id), 2);
 
-        await userService.remove(user, true);
+        await userService.eraseOwnAccount(user);
 
         await expect(cartRepository.findByUserId(user.id)).resolves.toBeNull();
     });
@@ -1566,7 +1567,7 @@ describe('deleteByUserId', () => {
         const product = await createProduct();
         await cartService.setItemById(user.id, String(product._id), 2);
 
-        await userService.remove(user, false);
+        await userService.removeById(user.id, false, callerContextAs('admin'));
 
         await expect(cartRepository.findByUserId(user.id)).resolves.not.toBeNull();
     });

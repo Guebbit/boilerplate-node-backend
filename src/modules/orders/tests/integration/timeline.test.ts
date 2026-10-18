@@ -204,7 +204,7 @@ describe('what the law lets go', () => {
             callerContextAs('admin', staff.id)
         );
 
-        await userService.remove(staff, true);
+        await userService.eraseOwnAccount(staff);
 
         const [row] = await timelineOf(String(order._id));
         expect(row.type).toBe('status_overridden');

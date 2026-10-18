@@ -93,7 +93,7 @@ const saveProfile = (
     return budget.then((refusal) => {
         if (refusal) return refusal;
 
-        return userService.update(user, fields, context).then((result) => {
+        return userService.updateOwnProfile(user, fields, context).then((result) => {
             if (!result.success || !emailOutcome.requested) return result;
             return notifyEmailChangeRequested(result.data, context).then(() => result);
         });

@@ -42,7 +42,7 @@ describe('payments — detach on account erasure', () => {
         const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
         const payment = (intent as ResponseSuccess<Payment>).data;
 
-        await userService.remove(user, true);
+        await userService.eraseOwnAccount(user);
 
         const reloaded = await paymentRepository.findById(payment.id);
         expect(reloaded!.userId).toBeUndefined();
@@ -55,7 +55,7 @@ describe('payments — detach on account erasure', () => {
         const intent = await paymentService.createIntent(String(order._id), asCustomer(user.id));
         const payment = (intent as ResponseSuccess<Payment>).data;
 
-        await userService.remove(user, true);
+        await userService.eraseOwnAccount(user);
 
         await expect(paymentRepository.findById(payment.id)).resolves.not.toBeNull();
     });

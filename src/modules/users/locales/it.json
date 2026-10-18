@@ -5,6 +5,7 @@
         "soft-deleted": "L'utente è stato eliminato logicamente (disattivato).",
         "restored": "Utente ripristinato. Le sue sessioni restano disconnesse.",
         "not-deleted": "Questo utente non è eliminato.",
+        "not-reaper-deleted": "Solo un account eliminato dal processo di inattività può essere cancellato da esso.",
         "role-not-assignable": "Questo ruolo non esiste o non può essere assegnato a un account."
     }
 }

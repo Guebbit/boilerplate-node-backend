@@ -152,6 +152,21 @@ create or update has committed, a failed image hand-off is logged and the saved 
 a 500 on a write that landed. Ending sessions is not such a step — it rides in the same save as the
 session epoch.
 
+## The doors a sibling module may use
+
+Two writes skip the ban check and the staff protection the admin routes enforce: the raw `update`
+and `remove`. Both are `@internal` and never leave the module. `account` reaches the record through
+four named doors instead, each narrower than the write beneath it:
+
+| Door                 | Who calls it                                | What it cannot do                                                  |
+| -------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
+| `updateOwnProfile`   | the owner, `PUT`/`PATCH /account`           | take `active` or `role`: a profile edit cannot ban its own account |
+| `eraseOwnAccount`    | the owner, `DELETE /account/delete-confirm` | none; the route is anonymous, so no rank check can apply           |
+| `softDeleteInactive` | the inactivity reaper                       | none; its read already returns customers only                      |
+| `eraseInactive`      | the inactivity reaper                       | erase a row the reaper did not soft-delete itself (409)            |
+
+`updateById` and `removeById` stay the doors for an admin: they load by id and ask first.
+
 ## Soft delete vs. erasure
 
 `DELETE /users/:id` soft-deletes by default — `deletedAt` is stamped, the account's sessions are

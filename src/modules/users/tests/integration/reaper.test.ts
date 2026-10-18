@@ -173,8 +173,8 @@ describe('who soft-deleted the account', () => {
         const byReaper = await createUser({ email: 'by-reaper@reaper.test', username: 'byreaper' });
         const byStaff = await createUser({ email: 'by-staff@reaper.test', username: 'bystaff' });
 
-        await userService.remove(byReaper, false, systemCallerContext('User'));
-        await userService.remove(byStaff, false, callerContextAs('admin'));
+        await userService.softDeleteInactive(byReaper, systemCallerContext('User'));
+        await userService.removeById(byStaff.id, false, callerContextAs('admin'));
 
         expect(await markerOf(byReaper.id)).toBe('reaper');
         expect(await markerOf(byStaff.id)).toBeUndefined();
@@ -182,11 +182,35 @@ describe('who soft-deleted the account', () => {
 
     it('clears the marker when the account is restored', async () => {
         const user = await createUser({ email: 'restored@reaper.test', username: 'restored' });
-        await userService.remove(user, false, systemCallerContext('User'));
+        await userService.softDeleteInactive(user, systemCallerContext('User'));
 
         await userService.restoreById(user.id, callerContextAs('admin'));
 
         expect(await markerOf(user.id)).toBeUndefined();
+    });
+});
+
+describe('the reaper’s hard delete', () => {
+    it('erases an account the reaper soft-deleted itself', async () => {
+        const user = await createUser({ email: 'erase-own@reaper.test', username: 'eraseown' });
+        await userService.softDeleteInactive(user, systemCallerContext('User'));
+        const marked = await userModel.findById(user.id).exec();
+
+        const result = await userService.eraseInactive(marked!, systemCallerContext('User'));
+
+        expect(result.success).toBe(true);
+        expect(await userModel.findById(user.id).lean().exec()).toBeNull();
+    });
+
+    it('refuses a soft delete somebody else made, and leaves the row', async () => {
+        const user = await createUser({ email: 'erase-staff@reaper.test', username: 'erasestaff' });
+        await userService.removeById(user.id, false, callerContextAs('admin'));
+        const marked = await userModel.findById(user.id).exec();
+
+        const result = await userService.eraseInactive(marked!, systemCallerContext('User'));
+
+        expect(result).toMatchObject({ success: false, status: 409 });
+        expect(await userModel.findById(user.id).lean().exec()).not.toBeNull();
     });
 });
 
