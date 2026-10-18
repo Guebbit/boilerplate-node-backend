@@ -10,9 +10,7 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { t } from '@infrastructure/i18n';
 import {
-    generateReject,
     generateSuccess,
     type ResponseReject,
     type ResponseSuccess
@@ -27,7 +25,7 @@ import { isHoldable, isReleasable, statusOfLines } from '../domain';
 import { deliveryAuditActions } from '../audit';
 import { fulfillmentOrderRepository } from '../repository';
 import type { FulfillmentOrderDocument } from '../model';
-import { refuse, refuseMissing, runAct } from './act';
+import { readWithOrder, refuse, runAct } from './act';
 import { viewFulfillmentOrder } from './actions';
 import { announceHeld, announceReleased } from './announce';
 import { reportProgress } from './progress';
@@ -51,26 +49,6 @@ interface Changed {
 }
 
 /**
- * Read the fulfillment order and its order in the act's snapshot, and check the order can still be
- * held or released: `paid` or `processing`.
- * @param fulfillmentOrderId - the fulfillment order
- * @param session - the act's transaction
- */
-const readForHold = async (
-    fulfillmentOrderId: string,
-    session: ClientSession
-): Promise<Changed> => {
-    const fulfillmentOrder = await fulfillmentOrderRepository.findInSession(
-        fulfillmentOrderId,
-        session
-    );
-    if (!fulfillmentOrder) return refuseMissing('delivery.fulfillment-order-not-found');
-    const order = await orderService.readOrder(String(fulfillmentOrder.orderId), session);
-    if (!order) return refuseMissing('delivery.order-not-found');
-    return { fulfillmentOrder, order };
-};
-
-/**
  * Whether the order is still being worked: a hold or release on a delivered or cancelled order is
  * meaningless.
  * @param order - the order
@@ -91,7 +69,7 @@ const holdAct = async (
     session: ClientSession,
     actor: string | null | undefined
 ): Promise<Changed> => {
-    const { fulfillmentOrder, order } = await readForHold(fulfillmentOrderId, session);
+    const { fulfillmentOrder, order } = await readWithOrder(fulfillmentOrderId, session);
     if (!isWorked(order) || !isHoldable(fulfillmentOrder))
         refuse(409, ERROR_CODES.DELIVERY_NOT_HOLDABLE, 'delivery.not-holdable');
 
@@ -124,7 +102,7 @@ const releaseAct = async (
     session: ClientSession,
     actor: string | null | undefined
 ): Promise<Changed> => {
-    const { fulfillmentOrder, order } = await readForHold(fulfillmentOrderId, session);
+    const { fulfillmentOrder, order } = await readWithOrder(fulfillmentOrderId, session);
     if (!isWorked(order) || !isReleasable(fulfillmentOrder))
         refuse(409, ERROR_CODES.DELIVERY_NOT_RELEASABLE, 'delivery.not-releasable');
 
@@ -161,37 +139,25 @@ const guarded = (
     authContext: AuthContext | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<FulfillmentOrder> | ResponseReject> =>
-    fulfillmentOrderRepository.findById(fulfillmentOrderId).then((found) => {
-        if (!found) return generateReject(404, [t('delivery.fulfillment-order-not-found')]);
-
-        return orderService.getById(String(found.orderId)).then((order) => {
-            if (!order) return generateReject(404, [t('delivery.order-not-found')]);
-
-            return runAct(act).then((result) => {
-                if (result.refused) return result.reject;
-                const { fulfillmentOrder, reason } = result.value;
-                recordAudit(context, {
-                    action,
-                    outcome: 'success',
-                    targetType: 'order',
-                    targetId: String(fulfillmentOrder.orderId),
-                    // The code only, never `holdNote`: free text the operator log has no business
-                    // holding (it reaches Loki unhashed).
-                    metadata: { fulfillmentOrderId, ...(reason ? { reason } : {}) }
-                });
-                return orderService
-                    .getById(String(fulfillmentOrder.orderId))
-                    .then((fresh) =>
-                        generateSuccess(
-                            viewFulfillmentOrder(
-                                fulfillmentOrder,
-                                fresh ?? result.value.order,
-                                authContext
-                            )
-                        )
-                    );
-            });
+    runAct(act).then((result) => {
+        if (result.refused) return result.reject;
+        const { fulfillmentOrder, reason } = result.value;
+        recordAudit(context, {
+            action,
+            outcome: 'success',
+            targetType: 'order',
+            targetId: String(fulfillmentOrder.orderId),
+            // The code only, never `holdNote`: free text the operator log has no business
+            // holding (it reaches Loki unhashed).
+            metadata: { fulfillmentOrderId, ...(reason ? { reason } : {}) }
         });
+        return orderService
+            .getById(String(fulfillmentOrder.orderId))
+            .then((fresh) =>
+                generateSuccess(
+                    viewFulfillmentOrder(fulfillmentOrder, fresh ?? result.value.order, authContext)
+                )
+            );
     });
 
 /**

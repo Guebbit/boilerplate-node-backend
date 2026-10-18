@@ -9,9 +9,7 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { t } from '@infrastructure/i18n';
 import {
-    generateReject,
     generateSuccess,
     type ResponseReject,
     type ResponseSuccess
@@ -24,9 +22,8 @@ import type { AuthContext, CallerContext, Shipment } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { isFulfillable, remainderLines } from '../domain';
 import { deliveryAuditActions } from '../audit';
-import { fulfillmentOrderRepository } from '../repository';
 import type { ShipmentDocument } from '../model';
-import { refuse, refuseMissing, runAct } from './act';
+import { readWithOrder, refuse, runAct } from './act';
 import { viewShipment } from './actions';
 import { announceDelivered, announceShipped } from './announce';
 import { cutShipment } from './cut';
@@ -49,15 +46,8 @@ const fulfillAct = async (
     session: ClientSession,
     actor: string | null | undefined
 ): Promise<Fulfilled> => {
-    const fulfillmentOrder = await fulfillmentOrderRepository.findInSession(
-        fulfillmentOrderId,
-        session
-    );
-    if (!fulfillmentOrder) return refuseMissing('delivery.fulfillment-order-not-found');
+    const { fulfillmentOrder, order } = await readWithOrder(fulfillmentOrderId, session);
     const orderId = String(fulfillmentOrder.orderId);
-
-    const order = await orderService.readOrder(orderId, session);
-    if (!order) return refuseMissing('delivery.order-not-found');
     if (order.status !== OrderStatus.processing)
         refuse(409, ERROR_CODES.ORDER_NOT_PROCESSING, 'delivery.not-processing');
     if (fulfillmentOrder.kind !== 'digital')
@@ -98,31 +88,23 @@ export const fulfillFulfillmentOrder = (
     authContext: AuthContext | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<Shipment> | ResponseReject> =>
-    fulfillmentOrderRepository.findById(fulfillmentOrderId).then((found) => {
-        if (!found) return generateReject(404, [t('delivery.fulfillment-order-not-found')]);
-
-        return orderService.getById(String(found.orderId)).then((order) => {
-            if (!order) return generateReject(404, [t('delivery.order-not-found')]);
-
-            return runAct((session) =>
-                fulfillAct(fulfillmentOrderId, session, context.caller.id)
-            ).then((result) => {
-                if (result.refused) return result.reject;
-                const { shipment } = result.value;
-                return orderService
-                    .refreshShelf(shipment.lines.map(({ productId }) => productId))
-                    .then(() => {
-                        recordAudit(context, {
-                            action: deliveryAuditActions.ADMIN_ORDER_FULFILLED,
-                            outcome: 'success',
-                            targetType: 'order',
-                            targetId: String(shipment.orderId),
-                            metadata: { shipmentId: String(shipment._id) }
-                        });
-                    })
-                    .then(() =>
-                        generateSuccess(viewShipment(shipment, result.value.order, authContext))
-                    );
-            });
-        });
-    });
+    runAct((session) => fulfillAct(fulfillmentOrderId, session, context.caller.id)).then(
+        (result) => {
+            if (result.refused) return result.reject;
+            const { shipment } = result.value;
+            return orderService
+                .refreshShelf(shipment.lines.map(({ productId }) => productId))
+                .then(() => {
+                    recordAudit(context, {
+                        action: deliveryAuditActions.ADMIN_ORDER_FULFILLED,
+                        outcome: 'success',
+                        targetType: 'order',
+                        targetId: String(shipment.orderId),
+                        metadata: { shipmentId: String(shipment._id) }
+                    });
+                })
+                .then(() =>
+                    generateSuccess(viewShipment(shipment, result.value.order, authContext))
+                );
+        }
+    );

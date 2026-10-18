@@ -9,9 +9,7 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { t } from '@infrastructure/i18n';
 import {
-    generateReject,
     generateSuccess,
     type ResponseReject,
     type ResponseSuccess
@@ -118,30 +116,20 @@ export const deliverShipment = (
     const unearned = refuseUnearnedForce(context, input.forced, input.reason);
     if (unearned) return Promise.resolve(unearned);
 
-    return shipmentRepository.findById(shipmentId).then((found) => {
-        if (!found) return generateReject(404, [t('delivery.shipment-not-found')]);
-
-        return orderService.getById(String(found.orderId)).then((order) => {
-            if (!order) return generateReject(404, [t('delivery.order-not-found')]);
-
-            return runAct((session) => deliverAct(shipmentId, input, context, session)).then(
-                (result) => {
-                    if (result.refused) return result.reject;
-                    const { shipment } = result.value;
-                    recordAudit(context, {
-                        action: deliveryAuditActions.ADMIN_ORDER_DELIVERED,
-                        outcome: 'success',
-                        targetType: 'order',
-                        targetId: String(shipment.orderId),
-                        // A forced arrival is a sanctioned bypass: its reason is the justification.
-                        metadata:
-                            input.forced === true
-                                ? { shipmentId, forced: true, reason: input.reason }
-                                : { shipmentId, forced: false }
-                    });
-                    return generateSuccess(viewShipment(shipment, result.value.order, authContext));
-                }
-            );
+    return runAct((session) => deliverAct(shipmentId, input, context, session)).then((result) => {
+        if (result.refused) return result.reject;
+        const { shipment } = result.value;
+        recordAudit(context, {
+            action: deliveryAuditActions.ADMIN_ORDER_DELIVERED,
+            outcome: 'success',
+            targetType: 'order',
+            targetId: String(shipment.orderId),
+            // A forced arrival is a sanctioned bypass: its reason is the justification.
+            metadata:
+                input.forced === true
+                    ? { shipmentId, forced: true, reason: input.reason }
+                    : { shipmentId, forced: false }
         });
+        return generateSuccess(viewShipment(shipment, result.value.order, authContext));
     });
 };

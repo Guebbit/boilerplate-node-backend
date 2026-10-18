@@ -17,7 +17,11 @@ import { nudgeOutbox } from '@kernel/outbox';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
+import { orderService } from '@modules/orders';
+import type { OrderDocument } from '@modules/orders';
 import type { ErrorCode } from '@api/error-codes';
+import { fulfillmentOrderRepository } from '../repository';
+import type { FulfillmentOrderDocument } from '../model';
 
 /** A refusal thrown from inside an act's transaction: the transaction aborts, the door answers it. */
 export class ActRefusal extends Error {
@@ -74,3 +78,26 @@ export const runAct = <T>(work: (session: ClientSession) => Promise<T>): Promise
             if (error instanceof ActRefusal) return { refused: true, reject: error.reject };
             throw error instanceof Error ? error : new Error(String(error));
         });
+
+/**
+ * Read a fulfillment order and its order in the act's snapshot, refusing a 404 for either. The
+ * acts that start from a fulfillment order (hold, release, ship, fulfil) read it here, so the
+ * door needs no read of its own: this one is the one the writes land in.
+ *
+ * @param fulfillmentOrderId - the fulfillment order
+ * @param session - the act's transaction
+ * @throws {ActRefusal} 404 when either record is missing
+ */
+export const readWithOrder = async (
+    fulfillmentOrderId: string,
+    session: ClientSession
+): Promise<{ fulfillmentOrder: FulfillmentOrderDocument; order: OrderDocument }> => {
+    const fulfillmentOrder = await fulfillmentOrderRepository.findInSession(
+        fulfillmentOrderId,
+        session
+    );
+    if (!fulfillmentOrder) return refuseMissing('delivery.fulfillment-order-not-found');
+    const order = await orderService.readOrder(String(fulfillmentOrder.orderId), session);
+    if (!order) return refuseMissing('delivery.order-not-found');
+    return { fulfillmentOrder, order };
+};

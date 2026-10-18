@@ -29,9 +29,8 @@ import { ERROR_CODES } from '@api/error-codes';
 import { checkShipLines, findShippingMethod, isShippable } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { deliveryAuditActions } from '../audit';
-import { fulfillmentOrderRepository } from '../repository';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
-import { ActRefusal, refuse, refuseMissing, runAct } from './act';
+import { ActRefusal, readWithOrder, refuse, runAct } from './act';
 import { viewShipment } from './actions';
 import { announceShipped } from './announce';
 import { cutShipment } from './cut';
@@ -127,15 +126,8 @@ const shipAct = async (
     session: ClientSession
 ): Promise<Shipped> => {
     const forced = input.forced === true;
-    const fulfillmentOrder = await fulfillmentOrderRepository.findInSession(
-        fulfillmentOrderId,
-        session
-    );
-    if (!fulfillmentOrder) return refuseMissing('delivery.fulfillment-order-not-found');
+    const { fulfillmentOrder, order } = await readWithOrder(fulfillmentOrderId, session);
     const orderId = String(fulfillmentOrder.orderId);
-
-    const order = await orderService.readOrder(orderId, session);
-    if (!order) return refuseMissing('delivery.order-not-found');
     gateOrder(order.status, forced);
     const lines = gateFulfillmentOrder(fulfillmentOrder, input.lines);
     gateTracking(order, input.trackingCode);
@@ -228,23 +220,15 @@ export const shipFulfillmentOrder = (
     const unearned = refuseUnearnedForce(context, input.forced, input.reason);
     if (unearned) return Promise.resolve(unearned);
 
-    return fulfillmentOrderRepository.findById(fulfillmentOrderId).then((found) => {
-        if (!found) return generateReject(404, [t('delivery.fulfillment-order-not-found')]);
-
-        return orderService.getById(String(found.orderId)).then((order) => {
-            if (!order) return generateReject(404, [t('delivery.order-not-found')]);
-
-            return runAct((session) => shipAct(fulfillmentOrderId, input, context, session)).then(
-                (result) => {
-                    if (result.refused) return result.reject;
-                    return afterShipped(result.value, input.reason, context).then(() =>
-                        generateSuccess(
-                            viewShipment(result.value.shipment, result.value.order, authContext),
-                            201
-                        )
-                    );
-                }
+    return runAct((session) => shipAct(fulfillmentOrderId, input, context, session)).then(
+        (result) => {
+            if (result.refused) return result.reject;
+            return afterShipped(result.value, input.reason, context).then(() =>
+                generateSuccess(
+                    viewShipment(result.value.shipment, result.value.order, authContext),
+                    201
+                )
             );
-        });
-    });
+        }
+    );
 };
