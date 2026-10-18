@@ -11,7 +11,7 @@ import { successResponse } from '@infrastructure/http/response';
 import type { VerifyEmailConfirmRequest } from '@types';
 import { authEmailChangeUndoTotal } from '../metrics';
 import { accountService } from '../services';
-import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
+import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
@@ -24,14 +24,14 @@ export const postEmailChangeUndo = (
     response: Response
 ) => {
     // Same `{ token }` body as the confirm endpoint, so its schema is the one that applies.
-    const parseResult = ConfirmEmailChangeBody.safeParse(request.body);
-    if (!parseResult.success) {
+    const parsed = parseBody(ConfirmEmailChangeBody, request.body, response);
+    if (!parsed) {
         authEmailChangeUndoTotal.inc({ status: 'failure' });
-        return rejectValidation(response, parseResult.error);
+        return;
     }
 
     return accountService
-        .undoEmailChangeByToken(parseResult.data.token, callerContextOf(request))
+        .undoEmailChangeByToken(parsed.token, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) {
                 authEmailChangeUndoTotal.inc({ status: 'failure' });

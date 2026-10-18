@@ -17,7 +17,7 @@ import { recordLoginSuccess } from '../session/login-observability';
 import { authTwoFactorChallengeTotal } from '../metrics';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { rejectValidation, refused } from '@infrastructure/http/controller';
+import { parseBody, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { readMfaChallengeCookie, destroyMfaChallengeCookie } from '../oauth/mfa-redirect';
 import { AMR, withProofs } from '../domain/session-proof';
@@ -34,15 +34,15 @@ export const postLoginTwoFactor = (
     request: Request<Record<string, string>, unknown, LoginTwoFactorRequest>,
     response: Response
 ) => {
-    const parseResult = LoginTwoFactorBody.safeParse(request.body);
-    if (!parseResult.success) {
+    const parsed = parseBody(LoginTwoFactorBody, request.body, response);
+    if (!parsed) {
         authTwoFactorChallengeTotal.inc({ status: 'failure' });
-        return rejectValidation(response, parseResult.error);
+        return;
     }
-    const { code, remember, transport } = parseResult.data;
+    const { code, remember, transport } = parsed;
     // Omitted from the body: an OAuth-originated challenge was never sent to the client at all —
     // see `oauth/mfa-redirect.ts`. A password-originated one always has it in the body.
-    const challenge = parseResult.data.challenge ?? readMfaChallengeCookie(request);
+    const challenge = parsed.challenge ?? readMfaChallengeCookie(request);
     if (!challenge) {
         authTwoFactorChallengeTotal.inc({ status: 'failure' });
         return rejectResponse(response, 401, [t('account.two-factor.challenge-invalid')]);

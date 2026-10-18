@@ -8,16 +8,16 @@
 import type { Request, Response } from 'express';
 import { CheckPasswordBreachedBody } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
-import { rejectValidation, catchAs } from '@infrastructure/http/controller';
+import { parseBody, catchAs } from '@infrastructure/http/controller';
 import { checkPasswordBreach } from '@infrastructure/security/breached-passwords';
 import type { PasswordCheck } from '@types';
 
 /** POST /account/password/check — reports a candidate password's breach status. */
 export const postPasswordCheck = (request: Request, response: Response) => {
-    const parseResult = CheckPasswordBreachedBody.safeParse(request.body);
-    if (!parseResult.success) return rejectValidation(response, parseResult.error);
+    const parsed = parseBody(CheckPasswordBreachedBody, request.body, response);
+    if (!parsed) return;
 
-    return checkPasswordBreach(parseResult.data.password)
+    return checkPasswordBreach(parsed.password)
         .then((result) => {
             successResponse<PasswordCheck>(response, result);
         })

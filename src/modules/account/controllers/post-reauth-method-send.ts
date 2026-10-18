@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { SendReauthCodeParams } from '@api/schemas.zod';
 import type { TwoFactorDelivery } from '@types';
 import { successResponse } from '@infrastructure/http/response';
-import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
+import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { accountService } from '../services';
@@ -21,11 +21,11 @@ import { accountService } from '../services';
 export const postReauthMethodSend = (request: Request<{ method: string }>, response: Response) => {
     const { id } = request.authContext!;
 
-    const pathParameters = SendReauthCodeParams.safeParse(request.params);
-    if (!pathParameters.success) return rejectValidation(response, pathParameters.error);
+    const pathParameters = parseBody(SendReauthCodeParams, request.params, response);
+    if (!pathParameters) return;
 
     return accountService
-        .sendReauthCode(id, pathParameters.data.method, callerContextOf(request))
+        .sendReauthCode(id, pathParameters.method, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             successResponse<TwoFactorDelivery>(

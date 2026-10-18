@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { RemoveTwoFactorMethodBody, RemoveTwoFactorMethodParams } from '@api/schemas.zod';
 import type { AuthTokens, TwoFactorCodeRequest } from '@types';
 import { successResponse } from '@infrastructure/http/response';
-import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
+import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
@@ -27,21 +27,21 @@ export const delete2faMethod = (
 ) => {
     const { id, amr } = request.authContext!;
 
-    const pathParameters = RemoveTwoFactorMethodParams.safeParse(request.params);
-    if (!pathParameters.success) return rejectValidation(response, pathParameters.error);
+    const pathParameters = parseBody(RemoveTwoFactorMethodParams, request.params, response);
+    if (!pathParameters) return;
 
-    const body = RemoveTwoFactorMethodBody.safeParse(request.body);
-    if (!body.success) {
-        authTwoFactorDisableTotal.inc({ method: pathParameters.data.method, status: 'failure' });
-        return rejectValidation(response, body.error);
+    const body = parseBody(RemoveTwoFactorMethodBody, request.body, response);
+    if (!body) {
+        authTwoFactorDisableTotal.inc({ method: pathParameters.method, status: 'failure' });
+        return;
     }
-    const { method } = pathParameters.data;
+    const { method } = pathParameters;
 
     // Taken first: the change below deletes the session this request is signed in on.
     return sessionSnapshotOf(request, id)
         .then((snapshot) =>
             twoFactorService
-                .removeTwoFactorMethod(id, method, body.data.code, callerContextOf(request))
+                .removeTwoFactorMethod(id, method, body.code, callerContextOf(request))
                 .then((result) => {
                     if (refused(response, result)) {
                         authTwoFactorDisableTotal.inc({ method, status: 'failure' });

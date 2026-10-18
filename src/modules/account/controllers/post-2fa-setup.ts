@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { SetupTwoFactorMethodBody, SetupTwoFactorMethodParams } from '@api/schemas.zod';
 import type { TwoFactorSetup } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectValidation, catchAs } from '@infrastructure/http/controller';
+import { parseBody, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { twoFactorService } from '../services';
 
@@ -21,15 +21,15 @@ import { twoFactorService } from '../services';
 export const post2faSetup = (request: Request<{ method: string }>, response: Response) => {
     const { id } = request.authContext!;
 
-    const parseResult = SetupTwoFactorMethodParams.safeParse(request.params);
-    if (!parseResult.success) return rejectValidation(response, parseResult.error);
+    const parsed = parseBody(SetupTwoFactorMethodParams, request.params, response);
+    if (!parsed) return;
 
     // The body is optional: the account's first factor sends none.
-    const body = SetupTwoFactorMethodBody.safeParse(request.body ?? {});
-    if (!body.success) return rejectValidation(response, body.error);
+    const body = parseBody(SetupTwoFactorMethodBody, request.body ?? {}, response);
+    if (!body) return;
 
     return twoFactorService
-        .setupTwoFactorMethod(id, parseResult.data.method, body.data.code, callerContextOf(request))
+        .setupTwoFactorMethod(id, parsed.method, body.code, callerContextOf(request))
         .then((result) => {
             if (!result.success) {
                 rejectResponse(response, result.status, result.errors);

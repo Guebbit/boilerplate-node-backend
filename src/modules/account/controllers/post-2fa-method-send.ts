@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { SendTwoFactorMethodCodeParams } from '@api/schemas.zod';
 import type { TwoFactorDelivery } from '@types';
 import { successResponse } from '@infrastructure/http/response';
-import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
+import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
@@ -21,11 +21,11 @@ import { twoFactorService } from '../services';
 export const post2faMethodSend = (request: Request<{ method: string }>, response: Response) => {
     const { id } = request.authContext!;
 
-    const pathParameters = SendTwoFactorMethodCodeParams.safeParse(request.params);
-    if (!pathParameters.success) return rejectValidation(response, pathParameters.error);
+    const pathParameters = parseBody(SendTwoFactorMethodCodeParams, request.params, response);
+    if (!pathParameters) return;
 
     return twoFactorService
-        .sendMethodCode(id, pathParameters.data.method, callerContextOf(request))
+        .sendMethodCode(id, pathParameters.method, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             successResponse<TwoFactorDelivery>(

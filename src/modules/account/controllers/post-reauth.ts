@@ -13,7 +13,7 @@ import type { ReauthRequest, AuthTokens } from '@types';
 import { accountService } from '../services';
 import { reissueSession } from '../session/session';
 import { authReauthTotal } from '../metrics';
-import { rejectValidation, refused } from '@infrastructure/http/controller';
+import { parseBody, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
@@ -30,14 +30,14 @@ export const postReauth = (
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = request.authContext!;
 
-    const parseResult = ReauthBody.safeParse(request.body);
-    if (!parseResult.success) {
+    const parsed = parseBody(ReauthBody, request.body, response);
+    if (!parsed) {
         authReauthTotal.inc({ status: 'failure' });
-        return rejectValidation(response, parseResult.error);
+        return;
     }
 
     return accountService
-        .reauth(id, parseResult.data, callerContextOf(request))
+        .reauth(id, parsed, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) {
                 authReauthTotal.inc({ status: 'failure' });

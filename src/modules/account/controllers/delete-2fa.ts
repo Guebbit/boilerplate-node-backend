@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 import { DisableTwoFactorBody } from '@api/schemas.zod';
 import type { AuthTokens, TwoFactorCodeRequest } from '@types';
 import { successResponse } from '@infrastructure/http/response';
-import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
+import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { twoFactorService } from '../services';
 import { remintSession, sessionSnapshotOf } from '../session/session';
 import { authTwoFactorDisableTotal } from '../metrics';
@@ -26,17 +26,17 @@ export const delete2fa = (
 ) => {
     const { id, amr } = request.authContext!;
 
-    const parseResult = DisableTwoFactorBody.safeParse(request.body);
-    if (!parseResult.success) {
+    const parsed = parseBody(DisableTwoFactorBody, request.body, response);
+    if (!parsed) {
         authTwoFactorDisableTotal.inc({ method: 'all', status: 'failure' });
-        return rejectValidation(response, parseResult.error);
+        return;
     }
 
     // Taken first: the change below deletes the session this request is signed in on.
     return sessionSnapshotOf(request, id)
         .then((snapshot) =>
             twoFactorService
-                .disableTwoFactor(id, parseResult.data.code, callerContextOf(request))
+                .disableTwoFactor(id, parsed.code, callerContextOf(request))
                 .then((result) => {
                     if (refused(response, result)) {
                         authTwoFactorDisableTotal.inc({ method: 'all', status: 'failure' });

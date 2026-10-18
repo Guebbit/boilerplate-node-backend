@@ -10,7 +10,7 @@ import { successResponse } from '@infrastructure/http/response';
 import type { VerifyEmailConfirmRequest } from '@types';
 import { authEmailVerifyTotal } from '../metrics';
 import { accountService } from '../services';
-import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
+import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
@@ -22,14 +22,14 @@ export const postVerifyConfirm = (
     request: Request<unknown, unknown, VerifyEmailConfirmRequest>,
     response: Response
 ) => {
-    const parseResult = ConfirmEmailVerificationBody.safeParse(request.body);
-    if (!parseResult.success) {
+    const parsed = parseBody(ConfirmEmailVerificationBody, request.body, response);
+    if (!parsed) {
         authEmailVerifyTotal.inc({ status: 'failure' });
-        return rejectValidation(response, parseResult.error);
+        return;
     }
 
     return accountService
-        .confirmEmailVerification(parseResult.data.token, callerContextOf(request))
+        .confirmEmailVerification(parsed.token, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) {
                 authEmailVerifyTotal.inc({ status: 'failure' });

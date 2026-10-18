@@ -18,8 +18,8 @@ import {
     catchAs,
     namedHandler,
     operationName,
+    parseBody,
     refused,
-    rejectValidation,
     type ServiceResult
 } from '@infrastructure/http/controller';
 
@@ -64,11 +64,9 @@ export const createDeleteController = ({ entity, remove, notFoundKey }: DeleteCo
         // on a different transport.
         const input = readInput(request, { surface: 'delete', anyTrue: ['hardDelete'] });
         // Validates the merged `hardDelete` value against its schema; 422s and returns
-        // undefined on failure.
-        const parseResult = hardDeleteSchema.safeParse(input.hardDelete);
-        if (!parseResult.success)
-            return Promise.resolve(rejectValidation(response, parseResult.error));
-        const hardDelete = parseResult.data;
+        // undefined on failure (a valid `false` is not `undefined`).
+        const hardDelete = parseBody(hardDeleteSchema, input.hardDelete, response);
+        if (hardDelete === undefined) return Promise.resolve();
 
         // An `If-Match` on the request fences the delete; without one this is just `remove()`.
         return withIfMatch(request, id, () => remove(id, hardDelete, request))

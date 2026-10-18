@@ -14,7 +14,7 @@ import type { ChangePasswordRequest, AuthTokens } from '@types';
 import { accountService } from '../services';
 import { reissueSession, sessionSnapshotOf } from '../session/session';
 import { authPasswordChangeTotal } from '../metrics';
-import { rejectValidation, refused } from '@infrastructure/http/controller';
+import { parseBody, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { AMR } from '../domain/session-proof';
 
@@ -33,13 +33,13 @@ export const postPasswordChange = (
 
     // The contract's own body: an absent or out-of-bounds field is a malformed request, not a
     // wrong password. The service adds only what the contract cannot say (the repeat matches).
-    const parseResult = ChangePasswordBody.safeParse(request.body);
-    if (!parseResult.success) {
+    const parsed = parseBody(ChangePasswordBody, request.body, response);
+    if (!parsed) {
         authPasswordChangeTotal.inc({ status: 'failure' });
-        return rejectValidation(response, parseResult.error);
+        return;
     }
 
-    const { currentPassword, password, passwordConfirm } = parseResult.data;
+    const { currentPassword, password, passwordConfirm } = parsed;
 
     // Taken first: the change purges every session, this request's included, and the re-mint below
     // has to continue the one it replaces.

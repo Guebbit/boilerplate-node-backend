@@ -9,7 +9,7 @@ import { SendTwoFactorCodeBody } from '@api/schemas.zod';
 import type { TwoFactorSendRequest, TwoFactorDelivery } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { rejectValidation, refused } from '@infrastructure/http/controller';
+import { parseBody, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
@@ -24,14 +24,14 @@ export const postLoginTwoFactorSend = (
     request: Request<Record<string, string>, unknown, TwoFactorSendRequest>,
     response: Response
 ) => {
-    const parseResult = SendTwoFactorCodeBody.safeParse(request.body);
-    if (!parseResult.success) {
+    const parsed = parseBody(SendTwoFactorCodeBody, request.body, response);
+    if (!parsed) {
         authTwoFactorCodeSentTotal.inc({ method: 'unknown', status: 'failure' });
-        return rejectValidation(response, parseResult.error);
+        return;
     }
-    const { method } = parseResult.data;
+    const { method } = parsed;
     // Same fallback `postLoginTwoFactor` makes — see `oauth/mfa-redirect.ts`.
-    const challenge = parseResult.data.challenge ?? readMfaChallengeCookie(request);
+    const challenge = parsed.challenge ?? readMfaChallengeCookie(request);
     if (!challenge) {
         authTwoFactorCodeSentTotal.inc({ method, status: 'failure' });
         return rejectResponse(response, 401, [t('account.two-factor.challenge-invalid')]);
