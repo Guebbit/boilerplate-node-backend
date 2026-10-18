@@ -864,9 +864,9 @@ sets:
       rules:
           - read:ObservabilitySnapshot
 
-    - name: ExampleOwn
+    - name: ExampleAuthoring
       module: example
-      description: Read, write, edit and remove one's own examples.
+      description: Read, write, edit and remove one's own examples. Staff-only, since a shopper authors no storefront content.
       rules:
           - read:Example
           - create:Example

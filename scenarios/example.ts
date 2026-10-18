@@ -8,51 +8,51 @@
 
 import { Types } from 'mongoose';
 import { ExampleStatus } from '@types';
-import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
+import { SEED_ADMIN_ID, SEED_EDITOR_ID } from '@scenarios/accounts';
 import { type SeedOutcome, insertIfAbsent } from '@scenarios/seed';
 import { makeExample, type PinnedExample } from '@modules/example/factories';
 import { exampleRepository } from '@modules/example/repository';
 
 /** The pinned ids, so a journey or a screenshot can name a row rather than search for it. */
 const SEED_EXAMPLE_IDS = {
-    customerPublished: '65e1a0000000000000000e01',
-    customerDraft: '65e1a0000000000000000e02',
-    customerArchived: '65e1a0000000000000000e03',
+    editorPublished: '65e1a0000000000000000e01',
+    editorDraft: '65e1a0000000000000000e02',
+    editorArchived: '65e1a0000000000000000e03',
     adminPublished: '65e1a0000000000000000e04'
 } as const;
 
 /**
- * The seeded examples: the customer holds one per status (so a list shows all three), and the
+ * The seeded examples: the editor holds one per status (so a list shows all three), and the
  * admin one published, so the public door has something to read.
  */
 const exampleFixtures: PinnedExample[] = [
     {
         ...makeExample({
-            userId: SEED_USER_ID,
+            userId: SEED_EDITOR_ID,
             title: 'Training a puppy to sit',
             body: 'Start with a treat, hold it above the nose, and wait. Reward the moment the bottom touches the floor.',
             status: ExampleStatus.published,
             publishedAt: new Date('2026-01-12T09:00:00Z')
         }),
-        _id: new Types.ObjectId(SEED_EXAMPLE_IDS.customerPublished)
+        _id: new Types.ObjectId(SEED_EXAMPLE_IDS.editorPublished)
     },
     {
         ...makeExample({
-            userId: SEED_USER_ID,
+            userId: SEED_EDITOR_ID,
             title: 'Notes on a first vet visit',
             body: 'Bring the vaccination card, a stool sample, and a list of questions.'
         }),
-        _id: new Types.ObjectId(SEED_EXAMPLE_IDS.customerDraft)
+        _id: new Types.ObjectId(SEED_EXAMPLE_IDS.editorDraft)
     },
     {
         ...makeExample({
-            userId: SEED_USER_ID,
+            userId: SEED_EDITOR_ID,
             title: 'A winter coat checklist',
             body: 'Measure the chest before ordering. Reflective strips matter more than the colour.',
             status: ExampleStatus.archived,
             publishedAt: new Date('2025-11-03T09:00:00Z')
         }),
-        _id: new Types.ObjectId(SEED_EXAMPLE_IDS.customerArchived)
+        _id: new Types.ObjectId(SEED_EXAMPLE_IDS.editorArchived)
     },
     {
         ...makeExample({

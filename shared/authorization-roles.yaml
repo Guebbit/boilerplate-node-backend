@@ -77,6 +77,7 @@ roles:
           - AuditDisplay
           - WebhookDisplay
           - WebhookManagement
+          - ExampleAuthoring
 
     - name: warehouse
       scope: tenant
@@ -100,6 +101,7 @@ roles:
           # whether a return was owed is the manager's and the support desk's, not theirs.
           - ReturnDisplay
           - ReturnReceiving
+          - ExampleAuthoring
 
     - name: support
       scope: tenant
@@ -121,6 +123,7 @@ roles:
           # Helping a customer with a return: read the queue and answer a request.
           - ReturnDisplay
           - ReturnManagement
+          - ExampleAuthoring
 
     - name: editor
       scope: tenant
@@ -141,6 +144,7 @@ roles:
           - LocaleManagement
           - TranslationDisplay
           - TranslationManagement
+          - ExampleAuthoring
 
     - name: moderator
       scope: tenant
@@ -167,6 +171,7 @@ roles:
           - ReturnDisplay
           - ReturnManagement
           - AuditDisplay
+          - ExampleAuthoring
 
     - name: admin
       scope: tenant
@@ -215,6 +220,7 @@ roles:
           - ApiKeyDisplay
           - ApiKeyManagement
           - RoleManagement
+          - ExampleAuthoring
           - ExampleManagement
 
     # The principal background/scheduled work runs as — a reservation
@@ -285,7 +291,6 @@ audience:
             - PaymentOwn
             - CartShopping
             - NotificationOwn
-            - ExampleOwn
 
     # A session whose address is proven.
     customer:
@@ -303,4 +308,3 @@ audience:
             - CartShopping
             - CartCheckout
             - NotificationOwn
-            - ExampleOwn

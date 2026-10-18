@@ -281,13 +281,11 @@ describe('audience roles', () => {
         expect(callerAs('unverified').permissions).toContain('update:Cart');
     });
 
-    it('lets every signed-in account keep examples of its own, and nobody else’s', () => {
+    it('leaves authoring examples to staff, never to a shopper', () => {
         for (const name of ['unverified', 'customer'] as const) {
-            expect(callerAs(name).permissions).toEqual(
-                expect.arrayContaining(['read:Example', 'create:Example'])
-            );
-            expect(callerAs(name).permissions).not.toContain('display:Example');
+            expect(callerAs(name).permissions).not.toContain('create:Example');
         }
+        expect(callerAs('editor').permissions).toContain('create:Example');
     });
 
     // `*Own`, `*Shopping` and `*Storefront` are the sets that make a signed-in account a shopper;

@@ -93,7 +93,7 @@ npm run ts-check        # see exactly what is left
 branch, or after committing whatever you had in progress. It touches:
 
 - **Every `group: shop` module folder and the `group: example` one**, deleted outright — routes,
-  model, tests, everything. `example` goes too because it is mounted in production: anyone could
+  model, tests, everything. `example` goes too because it is mounted in production: any staff role can
   create notes, upload a cover and publish (which sends mail and webhooks). Copy it first if you
   want its shape for your own domain; it is also the module [the template page](./theory/modules.md#the-module-template)
   describes.
