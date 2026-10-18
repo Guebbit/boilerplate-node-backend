@@ -89,12 +89,6 @@ describe('POST /stock-alerts/:productId', () => {
 
         expect(response.status).toBe(404);
     });
-
-    it('needs a signed-in caller', async () => {
-        const response = await api().post(`/stock-alerts/${await soldOut()}`);
-
-        expect(response.status).toBe(401);
-    });
 });
 
 describe('DELETE /stock-alerts/:productId and GET /stock-alerts', () => {

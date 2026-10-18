@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /account/reset-request` controller — thin HTTP adapter over
+ * `POST /account/reset` controller — thin HTTP adapter over
  * `accountService.requestPasswordReset`, answering identically, and at once, whether or not the
  * email exists.
  */
@@ -15,7 +15,7 @@ import { parseBody } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/reset-request
+ * POST /account/reset
  * Indistinguishable response for valid and invalid emails — prevents user enumeration.
  * `accountService.requestPasswordReset` owns the unconditional `AUTH_PASSWORD_RESET_REQUESTED`
  * emit, the metric and the fail-closed handling behind it, all detached from the response; the
