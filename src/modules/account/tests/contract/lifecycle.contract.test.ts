@@ -92,11 +92,20 @@ describe('POST /account/reset', () => {
     });
 
     it('answers an unknown address exactly like a known one — no account enumeration', async () => {
-        const response = await api().post('/account/reset').send({ email: 'nobody@example.com' });
+        const user = await createUser({ email: 'known-reset@example.com' });
+        const known = await api().post('/account/reset').send({ email: user.email });
+        await queued('account.reset-request');
+        (mailerPort.enqueueEmail as jest.Mock).mockClear();
+
+        const unknown = await api().post('/account/reset').send({ email: 'nobody@example.com' });
         // Detached work: give it its whole window, so "nothing was queued" is a finding, not a race.
         await eventually(() => false, 200);
 
-        expect(response.status).toBe(200);
+        // Everything a client can read, except the RateLimit headers, which count per caller.
+        expect(unknown.status).toBe(known.status);
+        expect(unknown.body).toEqual(known.body);
+        expect(unknown.headers['set-cookie']).toEqual(known.headers['set-cookie']);
+        expect(unknown.headers.etag).toEqual(known.headers.etag);
         expect(mailerPort.enqueueEmail).not.toHaveBeenCalled();
     });
 

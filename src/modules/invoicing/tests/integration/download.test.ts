@@ -6,7 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironmentOverrides } from '@tests/environment';
+import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { orderService } from '@modules/orders';
 import { createProduct } from '@modules/products/tests/factories';
@@ -105,6 +105,27 @@ describe('GET /orders/{id}/invoice', () => {
         expect(html.some((page) => page.includes('Ada Lovelace'))).toBe(true);
         const row = await invoicingRepository.findInvoiceByOrderId(String(order._id));
         expect(row?.billingAddress?.fullName).not.toBe('Ada Lovelace');
+    });
+
+    it('renders the seller the invoice was issued with, after the shop changed its details', async () => {
+        // Retention 0 stores no PDF, so every download renders afresh and a cache cannot hide a live read.
+        setEnvironment({ NODE_INVOICE_PDF_RETENTION_DAYS: '0' });
+        const { bearer, user } = await authenticateAs('user');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        await orderService.markPaid(String(order._id));
+        await waitUntilInvoiced(String(order._id), bearer);
+
+        setEnvironment({ NODE_SHOP_LEGAL_NAME: 'Renamed Holding Srl' });
+        jest.mocked(renderHtmlToPdf).mockClear();
+        const response = await api()
+            .get(`/orders/${String(order._id)}/invoice`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        const html = jest.mocked(renderHtmlToPdf).mock.calls.map(([page]) => page);
+        expect(html.some((page) => page.includes('Guebbit Demo Shop Srl'))).toBe(true);
+        expect(html.some((page) => page.includes('Renamed Holding Srl'))).toBe(false);
     });
 
     it("a scoped caller cannot download another customer's invoice — absence, not refusal", async () => {

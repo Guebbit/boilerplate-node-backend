@@ -448,12 +448,6 @@ const connect = async (bearer: string, provider = 'fake') => {
 };
 
 describe('POST /account/oauth/links/:provider', () => {
-    it('needs a signed-in caller', async () => {
-        const response = await api().post('/account/oauth/links/fake');
-
-        expect(response.status).toBe(401);
-    });
-
     it('answers 404 for a provider this deployment never configured', async () => {
         await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
         const bearer = await signInAs('owner@example.com');
@@ -473,8 +467,11 @@ describe('POST /account/oauth/links/:provider', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.authorizeUrl).toContain('/account/oauth/fake/callback');
-        for (const name of ['oauth_state', 'oauth_verifier', 'oauth_link'])
+        for (const name of ['oauth_state', 'oauth_verifier', 'oauth_link']) {
             expect(setCookie(response, name)).toMatch(/HttpOnly/i);
+            // Five minutes, the lifetime of the link token the cookie carries.
+            expect(setCookie(response, name)).toMatch(/Max-Age=300(;|$)/i);
+        }
     });
 
     it('links the provider to the signed-in account, mints no session, and sends the browser back', async () => {

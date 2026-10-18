@@ -65,8 +65,8 @@ beforeEach(() => {
 });
 
 /** A signed-in account and its bearer — fresh enough for `requireFreshAuth(CRITICAL)`. */
-const authenticate = async () => {
-    const user = await createUser({ email: 'doomed@example.com' });
+const authenticate = async (email = 'doomed@example.com') => {
+    const user = await createUser({ email });
     const login = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
@@ -102,12 +102,22 @@ describe('DELETE /account — deleteAccountRequest', () => {
     });
 
     it('answers the same 200, and sends no mail, when the lookup misses (enumeration prevention)', async () => {
+        const known = await authenticate('known@example.com');
+        const knownResponse = await api()
+            .delete('/account')
+            .set('Authorization', known.bearer)
+            .send();
+        mockOutbox.length = 0;
+
         const { bearer } = await authenticate();
         mockFindByEmail.mockResolvedValueOnce(undefined);
-
         const response = await api().delete('/account').set('Authorization', bearer).send();
 
-        expect(response.status).toBe(200);
+        // Everything a client can read, except the RateLimit headers, which count per caller.
+        expect(response.status).toBe(knownResponse.status);
+        expect(response.body).toEqual(knownResponse.body);
+        expect(response.headers['set-cookie']).toEqual(knownResponse.headers['set-cookie']);
+        expect(response.headers.etag).toEqual(knownResponse.headers.etag);
         expect(mockOutbox).toEqual([]);
     });
 });

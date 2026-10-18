@@ -290,6 +290,32 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         expect(stored?.timezone).toBe('Europe/Rome');
     });
 
+    // The seller is a legal fact of the day of sale: a later rename or a new VAT number must not
+    // reach a document that already exists.
+    it('freezes the seller as issued, without the shop’s email or phone, and keeps it when the settings change', async () => {
+        setEnvironment({ NODE_SHOP_VAT_NUMBER: 'IT12345678901' });
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        await invoicingService.issueInvoice(order);
+
+        setEnvironment({
+            NODE_SHOP_LEGAL_NAME: 'Renamed Holding Srl',
+            NODE_SHOP_VAT_NUMBER: 'IT99999999999'
+        });
+        const stored = await invoicingRepository.findInvoiceByOrderId(String(order._id));
+
+        // `toObject`: a stored subdocument is a Mongoose object, which `toEqual` cannot walk.
+        expect(stored?.toObject().seller).toEqual({
+            legalName: 'Guebbit Demo Shop Srl',
+            vatNumber: 'IT12345678901',
+            street: 'Via Roma 1',
+            city: 'Milano',
+            zip: '20100',
+            country: 'IT'
+        });
+    });
+
     it('issues nothing for an order with no lines', async () => {
         const user = await createUser();
         const order = await createOrder(user, []);

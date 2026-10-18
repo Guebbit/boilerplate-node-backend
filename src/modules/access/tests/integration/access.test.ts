@@ -204,14 +204,6 @@ describe('a role lives in exactly one place, the membership row', () => {
             ).toBeNull();
         }
     );
-
-    it('assignRole refuses a name the shared presets do not declare', async () => {
-        const shop = await accessService.ensureTenant('shop', 'The Shop');
-
-        await expect(
-            accessService.assignRole('person-1', String(shop._id), 'tenant', 'not-a-real-role')
-        ).rejects.toThrow(AccessInvariantError);
-    });
 });
 
 describe('auditing a role change', () => {

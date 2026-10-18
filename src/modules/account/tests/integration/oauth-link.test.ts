@@ -27,6 +27,7 @@ import {
     OAuthLinkExpiredError
 } from '../../services/oauth';
 import { accountAuditActions } from '../../audit';
+import { tokenRowsOf } from '../factories';
 import { accountAnalyticsEvents } from '../../analytics';
 import type { OAuthIdentity } from '../../oauth/providers/port';
 
@@ -187,6 +188,16 @@ const connecting = async (overrides: Record<string, unknown> = {}) => {
 };
 
 describe('connecting a provider from a signed-in session', () => {
+    it('starts a connect attempt that lives five minutes', async () => {
+        const { user } = await connecting();
+
+        const rows = await tokenRowsOf(user.id);
+        const row = rows.find(({ type }) => type === 'oauth-link');
+
+        // A literal, not the constant the code reads: the lifetime is what the consent flow promises.
+        expect(row && row.expiresAt.getTime() - row.sentAt.getTime()).toBe(5 * 60 * 1000);
+    });
+
     it('links the identity to the account that started it, whatever email the provider holds', async () => {
         const { user, token } = await connecting();
         const auditSpy = observePort(auditPort.emitAuditEvent);

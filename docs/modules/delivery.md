@@ -327,7 +327,7 @@ does two things, and only to fulfillment orders still `on_hold` for stock:
   notice since, asks the same question. The offer must go out no later than the promise (FTC
   435.2(b)(1)), so it goes out ahead of the date, never after. It is keyed on `expectedAt`, not `agreedAt`: after an accepted slip the agreed date
   is long gone and only the expected one can still be missed. `lastNoticeAt` is what stops a daily
-  repeat;
+  repeat. A backorder promised the 30-day default is asked like any other, on day 28;
 - one asked and not answered for 30 days is marked `consent: expired` and announced as
   `fulfillment_order.wait_expired`. [`returns`](./returns.md#a-wait-nobody-answered) cancels and refunds
   it. It is announced again each day until the cancel lands, so a failed cancel retries by itself.

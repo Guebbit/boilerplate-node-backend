@@ -163,6 +163,49 @@ describe('the statuses the order shows beside its own', () => {
     });
 });
 
+describe('goods excluded from the right of withdrawal', () => {
+    // The domain tests say excluded goods never hold the order back from `returned`; this runs it
+    // through the receive, where the status is actually written.
+    it('reads returned once the withdrawable goods are back, and keeps the delivery charge', async () => {
+        customers += 1;
+        const user = await createUser({ email: `buyer-${customers}@example.com` });
+        const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
+        const engraved = await createProduct({
+            title: 'Engraved mug',
+            price: 10,
+            onHand: 10,
+            noWithdrawal: true
+        });
+        const order = await createOrder(user, [toOrderItem(shirt, 1), toOrderItem(engraved, 1)], {
+            shippingMethod: 'standard',
+            shippingCost: 5
+        });
+        const orderId = String(order._id);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(shirt._id), quantity: 1 },
+            { productId: String(engraved._id), quantity: 1 }
+        ]);
+        const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
+        if (!intent.success) throw new Error('intent refused');
+        await paymentService.confirmPayment(
+            intent.data.id,
+            'pm_card_visa',
+            asCustomer(user.id),
+            testCallerContext
+        );
+        await carryOrderTo(orderId, 'delivered');
+        const id = await approvedReturn({ user, shirt, mug: engraved, orderId });
+
+        const result = await returnService.receiveReturn(id, {}, callerContextAs('admin'));
+
+        // Only the shirt: the engraved mug cannot be withdrawn, so the order is not wholly returned
+        // and the delivery charge stays with the shop.
+        expect(result.success && result.data.refundAmount).toBe(30);
+        const after = await wireOrder(orderId);
+        expect(after.returnStatus).toBe('returned');
+    });
+});
+
 describe('receiving a return', () => {
     it('puts the goods back on sale, refunds them, and closes the return', async () => {
         const fixture = await paidAndDelivered();

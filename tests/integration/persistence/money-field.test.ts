@@ -82,18 +82,15 @@ describe('a money field', () => {
         expect(toMinorUnits(row.total, 'EUR')).toBe(30);
     });
 
-    it('matches a query by value, whatever scale was stored', async () => {
-        await probeModel.create({ amount: 5 });
-
-        expect(await probeModel.countDocuments({ amount: 5 })).toBe(1);
-        expect(await probeModel.countDocuments({ amount: 5 })).toBe(1);
-    });
-
     it('refuses a negative amount where the field says so, and a non-finite one anywhere', async () => {
         await expect(probeModel.create({ amount: -1 })).rejects.toThrow(/non-negative/);
         await expect(probeModel.create({ amount: NaN })).rejects.toThrow();
+        // A nested `price` may be negative (a discount line), so only the finite check refuses this.
         await expect(
             probeModel.create({ amount: 1, lines: [{ price: -2 }] })
         ).resolves.toBeDefined();
+        await expect(
+            probeModel.create({ amount: 1, lines: [{ price: Infinity }] })
+        ).rejects.toThrow();
     });
 });

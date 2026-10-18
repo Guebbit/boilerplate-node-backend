@@ -371,6 +371,55 @@ describe('the breakdowns', () => {
         expect(stats.paidNotShipped).toBe(3);
     });
 
+    // Each case below seeds only what it reads, so it fails for its own reason.
+    it('counts a product in every category it belongs to', async () => {
+        const product = await createProduct({ price: 122, categories: ['shoes', 'sale'] });
+        await paidOrder({
+            user: await customer(),
+            product,
+            quantity: 1,
+            paidAt: '2026-03-10T10:00:00Z'
+        });
+
+        const { categories } = await statsService.getCategoryStats(
+            periodOf('2026-03-09', '2026-03-13')
+        );
+
+        expect(categories.map(({ category, netSales }) => [category, netSales]).toSorted()).toEqual(
+            [
+                ['sale', 100],
+                ['shoes', 100]
+            ]
+        );
+    });
+
+    it('ranks the top products by net sales, biggest first', async () => {
+        const small = await createProduct({ title: 'Small seller', price: 122 });
+        const big = await createProduct({ title: 'Big seller', price: 122 });
+        const user = await customer();
+        await paidOrder({ user, product: small, quantity: 1, paidAt: '2026-03-10T10:00:00Z' });
+        await paidOrder({ user, product: big, quantity: 3, paidAt: '2026-03-10T11:00:00Z' });
+
+        const { products } = await statsService.getProductStats(
+            periodOf('2026-03-09', '2026-03-13'),
+            10
+        );
+
+        expect(products.map(({ title }) => title)).toEqual(['Big seller', 'Small seller']);
+    });
+
+    it('counts a processing order as paid and not shipped', async () => {
+        const product = await createProduct({ price: 122 });
+        const user = await customer();
+        await createOrder(user, [toOrderItem(product, 1)], { status: OrderStatus.paid });
+        await createOrder(user, [toOrderItem(product, 1)], { status: OrderStatus.processing });
+        await createOrder(user, [toOrderItem(product, 1)], { status: OrderStatus.delivered });
+
+        const stats = await statsService.getPipelineStats();
+
+        expect(stats.paidNotShipped).toBe(2);
+    });
+
     it('leaves a deleted order out of the counts', async () => {
         const { product, firstCustomer } = await seedScenario();
         const gone = await createOrder(firstCustomer, [toOrderItem(product, 5)], {

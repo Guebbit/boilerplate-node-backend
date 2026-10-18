@@ -7,8 +7,6 @@
 
 import { FulfillmentConsent } from '@types';
 import {
-    CONSENT_WINDOW_DAYS,
-    SILENT_SLIP_DAYS,
     answerBy,
     expectedDateOf,
     hasWaitExpired,
@@ -27,8 +25,10 @@ const afterAgreed = (days: number): Date => new Date(AGREED.getTime() + days * D
 describe('judgeSlip', () => {
     it.each([
         ['a first slip of a few days', 0, 5, 'notify'],
-        ['a first slip of exactly 28 days', 0, SILENT_SLIP_DAYS, 'notify'],
-        ['a first slip of 29 days', 0, SILENT_SLIP_DAYS + 1, 'ask'],
+        // Literals, not the constant: 30 days is the FTC limit (16 CFR 435.2(b)(1)(ii)) less the
+        // two-day margin, so the number is the legal fact the test pins.
+        ['a first slip of exactly 28 days', 0, 28, 'notify'],
+        ['a first slip of 29 days', 0, 29, 'ask'],
         ['a second slip, however small', 1, 3, 'ask'],
         ['a third slip', 2, 40, 'ask']
     ])('%s', (_name, slips, days, expected) => {
@@ -141,10 +141,10 @@ describe('judgeMove', () => {
 });
 
 describe('answerBy', () => {
-    it('is the consent window after the question, and no earlier', () => {
+    it('is 30 days after the question, and no earlier', () => {
         const asked = new Date('2026-12-10T08:00:00Z');
 
-        expect(answerBy(asked).getTime() - asked.getTime()).toBe(CONSENT_WINDOW_DAYS * DAY);
+        expect(answerBy(asked).getTime() - asked.getTime()).toBe(30 * DAY);
     });
 });
 

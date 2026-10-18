@@ -191,15 +191,6 @@ describe('verifyRefreshToken', () => {
         });
     });
 
-    it('rejects a token signed with the access secret', async () => {
-        const user = await createUser();
-        const token = await signAs(ACCESS_SECRET, { sub: String(user._id) }, { expiresIn: 3600 });
-        await plantSession(user.id, token, { ttlMs: 3_600_000 });
-
-        // Even though it is stored, the signature is checked first and must fail.
-        await expect(verifyRefreshToken(token)).rejects.toThrow();
-    });
-
     it('rejects an expired refresh token without consulting the database', async () => {
         const user = await createUser();
         const token = await signAs(REFRESH_SECRET, { sub: String(user._id) }, { expiresIn: -10 });

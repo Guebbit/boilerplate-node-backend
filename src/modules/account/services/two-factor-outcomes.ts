@@ -169,9 +169,10 @@ export const armedEntries = (user: UserDocument) =>
  * and a signed-in caller's endpoint make, so their refusals and their cooldown cannot drift. The
  * caller finds the account (and answers its own 401); this does the rest.
  *
- * An unarmed method and an unknown one answer alike (422): a caller holding only a challenge must
- * not be able to enumerate what an account has enrolled. The cooldown is enforced here, not only
- * by the route's limiter, since these doors send mail on a caller's say-so.
+ * An unarmed method and an unknown one answer alike (422), so a wrong guess teaches nothing. An
+ * armed method that was used a moment ago answers the cooldown instead, so the caller does learn
+ * that one is armed. The cooldown is enforced here, not only by the route's limiter, since these
+ * doors send mail on a caller's say-so.
  *
  * @param user - the account, loaded with its factors
  * @param method - the wire name of the method to deliver through

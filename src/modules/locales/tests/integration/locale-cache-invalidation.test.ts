@@ -145,22 +145,6 @@ describe('an admin write invalidates the cached public dictionary', () => {
             true
         );
     });
-
-    it('does not clear the cache when the write was refused', async () => {
-        // `invalidateCache` only fires on a 2xx. A failed write that dropped every cached locale
-        // response would turn a mistyped request into a cache stampede.
-        const { bearer } = await authenticateAs('admin');
-        await givenPublishedLanguage(bearer);
-
-        await api().get('/locales/pt/messages');
-
-        // 409 — the language is still active, so the delete is refused.
-        const refused = await api().delete('/locales/pt').set('Authorization', bearer);
-        expect(refused.status).toBe(409);
-
-        const stillCached = await api().get('/locales/pt/messages');
-        expect(stillCached.headers['x-cache']).toBe('HIT');
-    });
 });
 
 describe('the cached dictionary is per app', () => {

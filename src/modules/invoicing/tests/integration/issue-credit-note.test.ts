@@ -19,9 +19,10 @@ import { yearInZone } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createOrder, timelineOf, toOrderItem } from '@modules/orders/tests/factories';
 import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/callers';
 import { eventually } from '@tests/eventually';
+import { setEnvironment } from '@tests/environment';
 import { creditNoteNumberCounterModel } from '../../model';
 import { decryptInvoiceParty } from '../../pii';
 import { invoicingRepository } from '../../repository';
@@ -196,6 +197,27 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         }
     });
 
+    // A credit note mirrors the invoice it corrects (Italy: AdE 427/2023; VAT Directive Art. 226(3)),
+    // so the seller is the one the sale was made under, not whoever the settings say today.
+    it('carries the invoice’s seller when the shop changed its details in between', async () => {
+        const { orderId, invoice } = await paidAndInvoiced();
+
+        setEnvironment({
+            NODE_SHOP_LEGAL_NAME: 'Renamed Holding Srl',
+            NODE_SHOP_VAT_NUMBER: 'IT99999999999'
+        });
+        const note = await invoicingService.issueCreditNote({
+            orderId,
+            refundId: 'refund-after-rename',
+            amount: 5,
+            full: false
+        });
+
+        // `toObject`: a stored subdocument is a Mongoose object, which `toEqual` cannot walk.
+        expect(note?.toObject().seller).toEqual(invoice.toObject().seller);
+        expect(note?.seller.legalName).toBe('Guebbit Demo Shop Srl');
+    });
+
     it('burns no number when two writers race to credit one refund', async () => {
         const { orderId } = await paidAndInvoiced();
         const year = yearInZone(new Date(), shopTimezone());
@@ -210,6 +232,9 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         expect(String(first?._id)).toBe(String(second?._id));
         const notes = await invoicingRepository.findCreditNotesByOrderId(orderId);
         expect(notes.filter((note) => note.refundId === 'refund-race')).toHaveLength(1);
+        // The timeline row commits with the note, so the loser's row aborted with its insert.
+        const issued = await timelineOf(orderId, 'credit_note_issued');
+        expect(issued.filter(({ data }) => data?.refundId === 'refund-race')).toHaveLength(1);
         const counter = await creditNoteNumberCounterModel.findById(year).lean().exec();
         expect(counter?.seq).toBe(notes.length);
     });

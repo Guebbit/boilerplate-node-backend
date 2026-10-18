@@ -46,9 +46,10 @@ describe('order serialization guards', () => {
         expect(serialized.totalPrice).toBe(0);
     });
 
-    it('leaves a line item whose product was not populated alone', () => {
-        // `item.product && typeof item.product === 'object'` — an unpopulated ref is an ObjectId
-        // or a string, and recursing into it is what the guard prevents.
+    it('leaves a line item with no product snapshot alone', () => {
+        // The schema does not require `product` on a line, so a stored line may carry none;
+        // `item.product && typeof item.product === 'object'` is what stops the transform
+        // recursing into nothing.
         const serialized: Record<string, unknown> = {
             items: [{ product: undefined, quantity: 1 }, { quantity: 2 }]
         };

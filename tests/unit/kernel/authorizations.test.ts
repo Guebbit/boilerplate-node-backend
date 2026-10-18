@@ -908,6 +908,26 @@ describe('requirePermission', () => {
         expect(unauthenticated.status).toHaveBeenCalledWith(401);
         expect(nonAdmin.status).toHaveBeenCalledWith(403);
     });
+
+    it('refuses an API-key credential a platform rule with 403, and audits why', () => {
+        // An api-key is tenant-scoped by construction, so it can never satisfy a platform rule.
+        const response = makeResponseStub();
+        const next = jest.fn();
+
+        requirePermission('read', 'ObservabilitySnapshot')(makeCredentialRequest(), response, next);
+
+        expect(response.status).toHaveBeenCalledWith(403);
+        expect(next).not.toHaveBeenCalled();
+        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: coreAuditActions.SECURITY_FORBIDDEN,
+                metadata: expect.objectContaining({
+                    reason: 'credential_wrong_scope',
+                    permission: expect.stringContaining('ObservabilitySnapshot')
+                })
+            })
+        );
+    });
 });
 
 /**

@@ -87,7 +87,7 @@ const mailResetLink = (user: UserDocument, context: CallerContext): Promise<bool
 
 /**
  * Issue a password-reset token and deliver it — or silently do nothing for an unregistered
- * address. The silence is the feature: `POST /account/reset-request` always answers 200, so the
+ * address. The silence is the feature: `POST /account/reset` always answers 200, so the
  * response can't be used to enumerate registered addresses.
  *
  * Audit:    `AUTH_PASSWORD_RESET_REQUESTED` fires unconditionally, for the same reason. A row

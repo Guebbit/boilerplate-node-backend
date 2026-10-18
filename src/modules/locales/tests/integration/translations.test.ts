@@ -61,14 +61,17 @@ describe('getEntityTranslations', () => {
         const product = await createProduct();
         const id = String(product._id);
         await givenLocale('it');
+        await givenLocale('de');
+        // Written in neither alphabetical nor reverse order, so only a real sort puts them right.
         await localeService.upsertEntityTranslations('product', id, {
+            it: { fields: { title: 'Cuccia' } },
             en: { fields: { title: 'Cozy Bed' } },
-            it: { fields: { title: 'Cuccia' } }
+            de: { fields: { title: 'Hundekorb' } }
         });
 
         const result = await localeService.getEntityTranslations('product', id);
 
-        expect(result.data?.translations.map((row) => row.locale)).toEqual(['en', 'it']);
+        expect(result.data?.translations.map((row) => row.locale)).toEqual(['de', 'en', 'it']);
     });
 });
 

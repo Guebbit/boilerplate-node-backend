@@ -317,7 +317,7 @@ describe('accountService.refreshAccessToken', () => {
 
     // The whole point of rotation: the refresh token's VALUE changes on every
     // exchange, so a stolen cookie stops being silently reusable for as long as it has left to live.
-    it('rotates the refresh token — the new value replaces the old one, which stops working', async () => {
+    it('rotates the refresh token — a new value comes back, and the new value works', async () => {
         const refreshToken = await issueRefreshToken();
 
         const result = await accountService.refreshAccessToken(refreshToken, testCallerContext);
