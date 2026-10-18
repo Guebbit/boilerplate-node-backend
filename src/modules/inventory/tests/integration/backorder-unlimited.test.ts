@@ -27,7 +27,7 @@ const claim = (productId: string, quantity: number) => ({
 
 /** A product with no stock whose cap is `limit`. */
 const productWithCap = async (limit: number | null) => {
-    const product = await createProduct({ onHand: 0 });
+    const product = await createProduct({ onHand: 0, allowBackorder: true });
     const productId = String(product._id);
     await inventoryService.setBackorderLimit(productId, limit);
     return productId;
@@ -64,6 +64,18 @@ describe('an unlimited backorder cap', () => {
         expect(items).toEqual([
             expect.objectContaining({ productId, backorderLimit: null, left: null })
         ]);
+    });
+
+    it('leaves the number out for a product that is neither a preorder nor open to backorder', async () => {
+        const product = await createProduct({ onHand: 0 });
+        const productId = String(product._id);
+        await inventoryService.setBackorderLimit(productId, null);
+
+        const { items } = await inventoryService.listPreorders();
+
+        expect(items).toEqual([expect.not.objectContaining({ left: expect.anything() })]);
+        expect(items[0]).toMatchObject({ productId, backorderLimit: null });
+        expect(items[0]).not.toHaveProperty('left');
     });
 
     it('can be capped again, and the cap then holds', async () => {

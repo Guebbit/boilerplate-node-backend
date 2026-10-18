@@ -7,4 +7,6 @@
 export { availableStock, stockFlags } from './stock';
 
 export { isPreorder, latestReleaseDate } from './preorder';
+export { isBackorder } from './backorder';
+export type { BackorderFacts } from './backorder';
 export type { PreorderFacts } from './preorder';

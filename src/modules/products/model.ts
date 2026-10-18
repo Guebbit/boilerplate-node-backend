@@ -35,8 +35,10 @@ export interface ProductRecord extends Omit<
     | 'inStock'
     | 'lowStock'
     | 'preorder'
+    | 'backorder'
     | 'currency'
     | 'releaseDate'
+    | 'restockDate'
     | 'createdAt'
     | 'updatedAt'
     | 'deletedAt'
@@ -45,6 +47,8 @@ export interface ProductRecord extends Omit<
     _id: Types.ObjectId;
     /** When it ships from; `preorder` is derived from it and never stored. */
     releaseDate?: Date;
+    /** When stock is expected back, for a product that allows backorder; `backorder` is derived. */
+    restockDate?: Date;
     /**
      * The preorder allowance and the units already claimed against it, copied from `inventory`
      * beside `onHand`/`reserved`. Internal: only a preorder's `available` is derived from them,
@@ -68,7 +72,14 @@ export interface ProductRecord extends Omit<
  */
 export type ProductSnapshot = Omit<
     ProductRecord,
-    'onHand' | 'reserved' | 'backorderLimit' | 'backordered' | 'active' | 'purchasable'
+    | 'onHand'
+    | 'reserved'
+    | 'backorderLimit'
+    | 'backordered'
+    | 'active'
+    | 'purchasable'
+    | 'allowBackorder'
+    | 'restockDate'
 >;
 
 /**
@@ -176,6 +187,26 @@ const refineReleaseDate = (
 };
 
 /**
+ * A restock date may sit at most one year ahead, like a release date. A past date is accepted: it
+ * reads sold out until staff set a new one or clear it. Shared by create, PUT and PATCH.
+ *
+ * @param restockDate - the date in the body; absent or `null` (a clear) always passes
+ * @param context - the Zod context to report into
+ */
+const refineRestockDate = (
+    restockDate: string | null | undefined,
+    context: z.RefinementCtx
+): void => {
+    if (restockDate === undefined || restockDate === null) return;
+    if (new Date(restockDate).getTime() > latestReleaseDate(new Date()).getTime())
+        context.addIssue({
+            code: 'custom',
+            message: t('products.field-restock-date-too-far'),
+            path: ['restockDate']
+        });
+};
+
+/**
  * A price may have no more decimal places than the shop currency's minor unit: 19.999 EUR would
  * be stored as typed and charged as 20.00. Shared by create, PUT and PATCH.
  *
@@ -203,6 +234,7 @@ const refinePricePlaces = (price: number | undefined, context: z.RefinementCtx):
 export const zodProductCreateSchema = CreateProductBody.superRefine((data, context) => {
     refineFallbackLocale(data.translations, context, true);
     refineReleaseDate(data.releaseDate, context);
+    refineRestockDate(data.restockDate, context);
     refinePricePlaces(data.price, context);
 });
 
@@ -214,6 +246,7 @@ export const zodProductCreateSchema = CreateProductBody.superRefine((data, conte
 export const zodProductReplaceSchema = ReplaceProductByIdBody.superRefine((data, context) => {
     refineFallbackLocale(data.translations, context, true);
     refineReleaseDate(data.releaseDate, context);
+    refineRestockDate(data.restockDate, context);
     refinePricePlaces(data.price, context);
 });
 
@@ -224,6 +257,7 @@ export const zodProductReplaceSchema = ReplaceProductByIdBody.superRefine((data,
 export const zodProductUpdateSchema = UpdateProductByIdBody.superRefine((data, context) => {
     refineFallbackLocale(data.translations, context, false);
     refineReleaseDate(data.releaseDate, context);
+    refineRestockDate(data.restockDate, context);
     refinePricePlaces(data.price, context);
 });
 
@@ -363,6 +397,23 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             type: Date
         },
         /*
+         * The backorder switch: a RELEASED product keeps selling while its shelf is empty, against
+         * the cap in `inventory`. Off by default. `backorder` on the wire is derived from it, never
+         * stored (`./domain/backorder`).
+         * See: docs/modules/products.md#backorder
+         */
+        allowBackorder: {
+            type: Boolean,
+            default: false
+        },
+        /*
+         * When stock is expected back. Optional: without one the shop promises "within 30 days". A
+         * passed one reads sold out until staff set a new date or clear it.
+         */
+        restockDate: {
+            type: Date
+        },
+        /*
          * Default `true`, matching `openapi.yaml`: most products are physical. `false` marks a
          * digital good — `cart` reads this to decide whether a checkout even needs a shipping
          * method, not this module's own concern.
@@ -443,7 +494,10 @@ const applyProductAvailability = (serialized: Record<string, unknown>) => {
                 typeof serialized.backordered === 'number' ? serialized.backordered : undefined,
             active: serialized.active === false ? false : undefined,
             purchasable: serialized.purchasable === false ? false : undefined,
-            releaseDate: serialized.releaseDate instanceof Date ? serialized.releaseDate : undefined
+            releaseDate:
+                serialized.releaseDate instanceof Date ? serialized.releaseDate : undefined,
+            allowBackorder: serialized.allowBackorder === true ? true : undefined,
+            restockDate: serialized.restockDate instanceof Date ? serialized.restockDate : undefined
         })
     );
     // Read above, never returned: the contract's `Product` does not carry the allowance.

@@ -48,7 +48,8 @@ const levelOf = (productId: string) =>
 
 /** A product with no stock and an allowance of `limit`, the shape a preorder is sold in. */
 const preorderProduct = async (limit: number) => {
-    const product = await createProduct({ onHand: 0 });
+    // Open to backorder, so its cap promises something and the board shows what is left of it.
+    const product = await createProduct({ onHand: 0, allowBackorder: true });
     const productId = String(product._id);
     await inventoryService.setBackorderLimit(productId, limit);
     return productId;

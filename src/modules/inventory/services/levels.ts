@@ -3,7 +3,7 @@
  * Level rows and the reads over them: the stock board, the low-stock gauge, the ledger.
  */
 
-import { productService } from '@modules/products';
+import { isPreorder, productService } from '@modules/products';
 import type { InventoryLevel, PreorderLevel, StockMovement } from '@types';
 import {
     normalizePagination,
@@ -91,18 +91,27 @@ export const listPreorders = async (
     const products = await productService.findManyByIds(items.map((item) => item.productId));
     const byId = new Map(products.map((product) => [String(product._id), product]));
 
+    const now = new Date();
     return {
         items: items.map((item) => {
             const product = byId.get(item.productId);
+            // The cap only promises something while the product is sold against it.
+            const sellsAgainstCap =
+                product !== undefined &&
+                (isPreorder(product, now) || product.allowBackorder === true);
             return {
                 ...item,
                 title: product?.title ?? item.productId,
                 ...(product?.releaseDate ? { releaseDate: product.releaseDate.toISOString() } : {}),
-                // `null` is the contract's way to say there is no cap, so no number is left.
-                left:
-                    item.backorderLimit === null
-                        ? null
-                        : Math.max(0, item.backorderLimit - item.backordered)
+                ...(sellsAgainstCap
+                    ? {
+                          // `null` is the contract's way to say there is no cap, so no number is left.
+                          left:
+                              item.backorderLimit === null
+                                  ? null
+                                  : Math.max(0, item.backorderLimit - item.backordered)
+                      }
+                    : {})
             };
         }),
         meta: buildPaginatedMeta(pagination, totalItems)

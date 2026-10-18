@@ -39,6 +39,7 @@ export const makeProduct = ({
     updatedAt,
     deletedAt,
     releaseDate,
+    restockDate,
     ...fields
 }: ProductOverrides = {}): ProductFixture => ({
     ...identityOf({ id, createdAt, updatedAt }),
@@ -47,6 +48,7 @@ export const makeProduct = ({
     ...stripUndefined({
         ...fields,
         deletedAt: toDate(deletedAt),
-        releaseDate: toDate(releaseDate)
+        releaseDate: toDate(releaseDate),
+        restockDate: toDate(restockDate)
     })
 });

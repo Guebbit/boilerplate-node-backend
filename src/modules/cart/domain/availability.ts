@@ -27,6 +27,8 @@ export interface AvailabilityProduct {
     deletedAt?: Date;
     /** On sale before its release date: `available` then counts what is left of its allowance. */
     preorder?: boolean;
+    /** Released and open to backorder with room under the cap: a line may spill past the shelf. */
+    backorder?: boolean;
 }
 
 /** The facts one line is judged on. */

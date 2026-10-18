@@ -610,6 +610,10 @@ components:
                     type: boolean
                 releaseDate:
                     $ref: '#/components/schemas/ReleaseDate'
+                allowBackorder:
+                    type: boolean
+                restockDate:
+                    $ref: '#/components/schemas/RestockDate'
                 # Derived, never stored: `active && purchasable && releaseDate > now`. Turns false by
                 # itself when the date passes, so nothing has to run on the release day.
                 preorder:
@@ -618,6 +622,14 @@ components:
                     description: >-
                         The product is on sale before its release date: buyers can order it now and it
                         ships from `releaseDate`.
+                # Derived, never stored: `allowBackorder` on a released, visible, buyable product whose
+                # restock date has not passed and whose cap has room.
+                backorder:
+                    type: boolean
+                    readOnly: true
+                    description: >-
+                        The product may be ordered while its shelf is empty: the units arrive by
+                        `restockDate`, or within 30 days when there is none. Always shown with that promise.
                 requiresShipping:
                     type: boolean
                     default: true
@@ -819,6 +831,11 @@ components:
                     default: true
                 releaseDate:
                     $ref: '#/components/schemas/ReleaseDate'
+                allowBackorder:
+                    type: boolean
+                    default: false
+                restockDate:
+                    $ref: '#/components/schemas/RestockDate'
                 # Default true: most products are physical. false is a digital good — checkout
                 # never needs a shipping method for a cart made entirely of these.
                 requiresShipping:
@@ -884,6 +901,13 @@ components:
                     type: string
                     allOf:
                         - $ref: '#/components/schemas/ReleaseDate'
+                allowBackorder:
+                    type: boolean
+                    default: false
+                restockDate:
+                    type: string
+                    allOf:
+                        - $ref: '#/components/schemas/RestockDate'
                 requiresShipping:
                     type: boolean
                     default: true
@@ -956,6 +980,12 @@ components:
                     oneOf:
                         - $ref: '#/components/schemas/ReleaseDate'
                         - type: 'null'
+                allowBackorder:
+                    type: boolean
+                restockDate:
+                    oneOf:
+                        - $ref: '#/components/schemas/RestockDate'
+                        - type: 'null'
                 requiresShipping:
                     type: boolean
                 # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
@@ -1016,6 +1046,12 @@ components:
                     type: string
                     allOf:
                         - $ref: '#/components/schemas/ReleaseDate'
+                allowBackorder:
+                    type: boolean
+                restockDate:
+                    type: string
+                    allOf:
+                        - $ref: '#/components/schemas/RestockDate'
                 requiresShipping:
                     type: boolean
                 # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
@@ -1083,6 +1119,12 @@ components:
                     oneOf:
                         - $ref: '#/components/schemas/ReleaseDate'
                         - type: 'null'
+                allowBackorder:
+                    type: boolean
+                restockDate:
+                    oneOf:
+                        - $ref: '#/components/schemas/RestockDate'
+                        - type: 'null'
                 requiresShipping:
                     type: boolean
                 # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
@@ -1148,6 +1190,12 @@ components:
                     type: string
                     allOf:
                         - $ref: '#/components/schemas/ReleaseDate'
+                allowBackorder:
+                    type: boolean
+                restockDate:
+                    type: string
+                    allOf:
+                        - $ref: '#/components/schemas/RestockDate'
                 requiresShipping:
                     type: boolean
                 # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
@@ -1235,6 +1283,16 @@ components:
                 future date that is active and purchasable is a preorder. At most one year ahead
                 (Google's `availability_date` rule); a date in the past is accepted and simply means
                 "released". Moving it later notifies the buyers who already paid (`delivery`).
+
+        RestockDate:
+            type: string
+            format: date-time
+            description: >-
+                When stock is expected back, as an ISO 8601 date-time with a zone, for a product that
+                allows backorder. At most one year ahead. Without one the shop promises delivery within
+                30 days. A date in the past is accepted and the product then reads sold out until staff
+                set a new date or clear it. Moving it later notifies the buyers who already paid
+                (`delivery`).
 
         # SH4: a stock-keeping unit, deliberately just a string — this deployment's own numbering
         # scheme, unvalidated beyond "not empty". Product VARIANTS (one SKU per size/colour) are
@@ -1343,6 +1401,10 @@ components:
                     default: true
                 releaseDate:
                     $ref: '#/components/schemas/ReleaseDate'
+                allowBackorder:
+                    type: boolean
+                restockDate:
+                    $ref: '#/components/schemas/RestockDate'
                 # Derived, never stored: `active && purchasable && releaseDate > now`. Turns false by
                 # itself when the date passes, so nothing has to run on the release day.
                 preorder:
@@ -1351,6 +1413,14 @@ components:
                     description: >-
                         The product is on sale before its release date: buyers can order it now and it
                         ships from `releaseDate`.
+                # Derived, never stored: `allowBackorder` on a released, visible, buyable product whose
+                # restock date has not passed and whose cap has room.
+                backorder:
+                    type: boolean
+                    readOnly: true
+                    description: >-
+                        The product may be ordered while its shelf is empty: the units arrive by
+                        `restockDate`, or within 30 days when there is none. Always shown with that promise.
                 # Default true: most products are physical. false is a digital good — checkout
                 # never needs a shipping method for a cart made entirely of these.
                 requiresShipping:

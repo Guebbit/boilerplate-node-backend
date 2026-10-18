@@ -9,7 +9,8 @@
 import type { Product } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { availableStock, preorderAllowanceLeft, stockFlags } from './domain/stock';
-import { isPreorder, type PreorderFacts } from './domain/preorder';
+import { isPreorder } from './domain/preorder';
+import { isBackorder, type BackorderFacts } from './domain/backorder';
 import { lowStockThreshold } from './config';
 import type { ProductDocument } from './model';
 import { shopCurrency } from '@modules/shop';
@@ -17,18 +18,16 @@ import { shopCurrency } from '@modules/shop';
 /**
  * The block of a product's response that is derived, never stored: `available` (the shelf, or for
  * a preorder what is left of its allowance), the `inStock` /
- * `lowStock` flags, `preorder` and the live `currency`. One place, because the document's own
+ * `lowStock` flags, `preorder`, `backorder` and the live `currency`. One place, because the document's own
  * serialisation and a presented document must agree on every one of them.
  *
  * @param facts - the stock counters, the preorder allowance and what decides a preorder
  * @returns the derived fields of a `Product`
  */
 export const derivedStockFields = (
-    facts: PreorderFacts & {
+    facts: BackorderFacts & {
         onHand?: number;
         reserved?: number;
-        backorderLimit?: number | null;
-        backordered?: number;
     }
 ) => {
     const preorder = isPreorder(facts, new Date());
@@ -45,6 +44,7 @@ export const derivedStockFields = (
         // A preorder waits for stock that does not exist yet: it is not "running low".
         ...(preorder ? { lowStock: false } : {}),
         preorder,
+        backorder: isBackorder(facts, new Date()),
         currency: shopCurrency()
     };
 };
@@ -72,6 +72,12 @@ export const presentProduct = (document: ProductDocument): Product => {
         ...(document.releaseDate === undefined
             ? {}
             : { releaseDate: document.releaseDate.toISOString() }),
+        ...(document.allowBackorder === undefined
+            ? {}
+            : { allowBackorder: document.allowBackorder }),
+        ...(document.restockDate === undefined
+            ? {}
+            : { restockDate: document.restockDate.toISOString() }),
         ...(document.requiresShipping === undefined
             ? {}
             : { requiresShipping: document.requiresShipping }),

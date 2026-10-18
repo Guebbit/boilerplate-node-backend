@@ -34,14 +34,18 @@ type ProductCreateData = Omit<
     | 'inStock'
     | 'lowStock'
     | 'preorder'
+    | 'backorder'
     | 'onHand'
     | 'releaseDate'
+    | 'restockDate'
     | 'createdAt'
     | 'updatedAt'
     | 'deletedAt'
 > & {
     /** ISO date-time the product ships from; a future one makes it a preorder. */
     releaseDate?: string;
+    /** ISO date-time stock is expected back, for a product that allows backorder. */
+    restockDate?: string;
     /** Set alongside the pending-image placeholder — see `readUploadedImage`. */
     pendingImageKey?: string;
 };
@@ -55,7 +59,17 @@ type ProductCreateData = Omit<
  * genuinely unset them.
  */
 type ProductUpdateData = Partial<
-    Omit<Product, 'id' | 'imageUrl' | 'weight' | 'taxClass' | 'rateType' | 'sku' | 'releaseDate'>
+    Omit<
+        Product,
+        | 'id'
+        | 'imageUrl'
+        | 'weight'
+        | 'taxClass'
+        | 'rateType'
+        | 'sku'
+        | 'releaseDate'
+        | 'restockDate'
+    >
 > & {
     /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
     pendingImageKey?: string;
@@ -66,6 +80,8 @@ type ProductUpdateData = Partial<
     sku?: string | null;
     /** ISO date-time; `null` clears it, so the product is no longer a preorder. */
     releaseDate?: string | null;
+    /** ISO date-time; `null` clears it, so the product promises "within 30 days". */
+    restockDate?: string | null;
     /**
      * The edit also wrote something OUTSIDE this document (translation rows). Moves
      * `updatedAt` so the row's version — its `ETag` — moves with the edit.
@@ -90,13 +106,14 @@ const enqueuePendingImage = (product: ProductDocument): Promise<ProductDocument>
     );
 
 /**
- * `data` without its `releaseDate`, which the write converts to a `Date` itself.
+ * `data` without its two dates, which the write converts to `Date`s itself.
  * @param data - the create body
  */
-const withoutReleaseDate = ({
+const withoutDates = ({
     releaseDate: _releaseDate,
+    restockDate: _restockDate,
     ...rest
-}: ProductCreateData): Omit<ProductCreateData, 'releaseDate'> => rest;
+}: ProductCreateData): Omit<ProductCreateData, 'releaseDate' | 'restockDate'> => rest;
 
 /**
  * Writes a product row and announces it — inside the caller's transaction.
@@ -118,11 +135,14 @@ export const insertProduct = (
     productRepository
         .create(
             {
-                ...withoutReleaseDate(data),
+                ...withoutDates(data),
                 // Mongoose casts an ISO string, but `create`'s input is typed with the stored `Date`.
                 ...(data.releaseDate === undefined
                     ? {}
                     : { releaseDate: new Date(data.releaseDate) }),
+                ...(data.restockDate === undefined
+                    ? {}
+                    : { restockDate: new Date(data.restockDate) }),
                 onHand: 0,
                 categories: sanitizeStringArray(data.categories),
                 tags: sanitizeStringArray(data.tags)
@@ -276,6 +296,12 @@ const applyUpdate = (
     if (data.purchasable !== undefined) product.purchasable = data.purchasable;
     // `null` clears the date back to unset — $unset on save, same as weight/taxClass.
     const releaseDateChange = applyReleaseDate(product, data.releaseDate);
+    if (data.allowBackorder !== undefined) product.allowBackorder = data.allowBackorder;
+    // `null` clears the date back to unset ("within 30 days") — $unset on save.
+    if (data.restockDate !== undefined)
+        product.restockDate = clearedOrValue(
+            data.restockDate === null ? null : new Date(data.restockDate)
+        );
     if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
     if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
     // `null` clears a recorded weight back to unset — $unset on save.

@@ -455,7 +455,7 @@ components:
         PreorderLevel:
             type: object
             additionalProperties: false
-            required: [productId, title, backorderLimit, backordered, held, paid, left, ordered]
+            required: [productId, title, backorderLimit, backordered, held, paid, ordered]
             properties:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -482,7 +482,7 @@ components:
                 left:
                     type: [integer, 'null']
                     minimum: 0
-                    description: '`backorderLimit - backordered`, never below zero: how many more may be ordered. `null` when there is no cap.'
+                    description: '`backorderLimit - backordered`, never below zero: how many more may be ordered. `null` when there is no cap. Absent while the product is neither a preorder nor open to backorder: its cap then promises nothing.'
                 ordered:
                     type: integer
                     minimum: 0

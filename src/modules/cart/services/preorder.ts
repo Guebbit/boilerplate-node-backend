@@ -11,7 +11,7 @@
  * See: docs/modules/cart.md#line-availability
  */
 
-import { isPreorder } from '@modules/products';
+import { isBackorder, isPreorder } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import type { Lean } from '@infrastructure/persistence/create-repository';
 import type { AvailabilityProduct } from '../domain';
@@ -35,7 +35,22 @@ export const preorderIdsOf = (
     );
 
 /**
- * A joined product as the availability rule reads it, with its preorder flag decided.
+ * The ids of the released products that may be bought on backorder right now.
+ *
+ * @param lines - anything carrying a product id and its joined product
+ * @returns the ids whose lines may spill past the shelf into the cap
+ */
+export const backorderIdsOf = (
+    lines: readonly { productId: string; product: JoinedProduct }[]
+): ReadonlySet<string> =>
+    new Set(
+        lines
+            .filter(({ product }) => product !== null && isBackorder(product, new Date()))
+            .map(({ productId }) => productId)
+    );
+
+/**
+ * A joined product as the availability rule reads it, with its preorder and backorder flags decided.
  *
  * @param product - the joined product, `null` for a hard-deleted one
  */
@@ -44,5 +59,6 @@ export const availabilityProductOf = (product: JoinedProduct): AvailabilityProdu
         active: product.active,
         purchasable: product.purchasable,
         deletedAt: product.deletedAt,
-        preorder: isPreorder(product, new Date())
+        preorder: isPreorder(product, new Date()),
+        backorder: isBackorder(product, new Date())
     };
