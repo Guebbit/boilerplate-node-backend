@@ -135,14 +135,14 @@ const passwordAndEpochWrite =
  *
  * @param user - the account, carrying its credential fields
  * @param password - the new password, already accepted
- * @param beforeSave - a caller's own mutation to ride along in the same write
+ * @param beforeSave - a caller's own mutation to ride along in the same write, or `undefined`
  * @param cause - which password event this is, and so what it announces and purges
  */
 export const writePassword = (
     user: UserDocument,
     password: string,
-    beforeSave?: (user: UserDocument) => void,
-    cause: PasswordCause = 'password-change'
+    beforeSave: ((user: UserDocument) => void) | undefined,
+    cause: PasswordCause
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     Promise.resolve()
         .then(() => {
