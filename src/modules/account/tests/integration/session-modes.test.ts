@@ -681,6 +681,27 @@ describe('cookie mode only', () => {
         expect(await statusOfBearer(third)).toBe(200);
     });
 
+    it('hands a bearer client a replacement `ses_` id when it removes one factor through its own door', async () => {
+        await createUser({ email: 'peel@example.com', verifiedAt: new Date() });
+        const login = await logIn('peel@example.com', { transport: 'bearer' });
+        const first = login.body.data.sessionToken as string;
+        const { confirm, secret } = await armTotp({ Authorization: `Bearer ${first}` });
+        const second = confirm.body.data.sessionToken as string;
+
+        const removed = await api()
+            .delete('/account/2fa/methods/totp')
+            .set('Authorization', `Bearer ${second}`)
+            .set('Origin', FRONTEND)
+            .send({ code: await codeFor(secret, 1) });
+
+        expect(removed.status).toBe(200);
+        const third = removed.body.data.sessionToken as string;
+        expect(third).toMatch(/^ses_[\w-]{43}$/);
+        expect(third).not.toBe(second);
+        expect(await statusOfBearer(second)).toBe(401);
+        expect(await statusOfBearer(third)).toBe(200);
+    });
+
     it('clears a refused cookie, so a browser left on the other mode stops sending it', async () => {
         await createUser({ email: 'switched@example.com', verifiedAt: new Date() });
         setEnvironment({ NODE_SESSION_MODE: 'jwt' });
