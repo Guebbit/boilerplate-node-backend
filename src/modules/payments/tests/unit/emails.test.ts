@@ -115,6 +115,14 @@ describe('the bank transfer mails', () => {
         expect(String(mail.data.deadline)).toContain('October');
     });
 
+    it('prints the deadline on the shop clock and names the zone', () => {
+        // 10:30Z in October is 12:30 CEST in Rome: a buyer abroad must not read it as their own.
+        const mail = transferInstructionsEmail('en', NAME, ORDER, INSTRUCTIONS, PAY_BY, ORDER_ID);
+
+        expect(String(mail.data.deadline)).toMatch(/12:30\s?PM|12:30/);
+        expect(String(mail.data.deadline)).toMatch(/GMT\+2|CEST/);
+    });
+
     it('carries the BIC when one is configured', () => {
         const mail = transferInstructionsEmail(
             'en',
