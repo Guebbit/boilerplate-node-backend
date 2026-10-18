@@ -142,6 +142,11 @@ flowchart LR
   already deleted the row), in `cookie` mode off a snapshot of the caller's row taken before the
   change. No cookie, a stranger's cookie or an expired one all read as "no tier": a session cookie,
   never a persistent one granted by accident.
+  A reauth from a `jwt` client that sends only its access token (no refresh cookie) still continues
+  its own family: the token's `sid` names it, and the newest live row of that family supplies its start and
+  end. Without that, the change would start a second family and leave the first one's refresh cookie
+  working. A change that ends every session (a factor change) does not follow the token: it dies
+  with the rest.
 
 ## The signing key is a ring, not a single secret
 

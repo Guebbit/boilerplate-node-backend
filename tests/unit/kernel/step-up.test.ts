@@ -18,7 +18,7 @@ import { asStub } from '@tests/stub';
 import { asCustomer, asAdmin } from '../../support/callers';
 import { callerInScope } from '@kernel/permissions';
 import type { AuthContext } from '@types';
-import { requirePermission } from '@kernel/middlewares/authorizations';
+import { requireFreshAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { withEnvironmentOverrides } from '@tests/environment';
 
 const emitAuditEvent = jest.fn();
@@ -187,5 +187,51 @@ describe('a key that does not demand step-up', () => {
         // A challenge people learn to dismiss protects nothing, which is why almost no key
         // carries one.
         expect(next).toHaveBeenCalledTimes(1);
+    });
+});
+
+/** The first audited row's reason, or `undefined` when nothing was audited. */
+const auditedReason = (): unknown =>
+    (emitAuditEvent.mock.calls[0]?.[0] as { metadata?: { reason?: unknown } } | undefined)?.metadata
+        ?.reason;
+
+describe('requireFreshAuth with no session on the request', () => {
+    it('refuses an API key as forbidden and audits why, since a key cannot step up', () => {
+        const response = makeResponse();
+        const next = jest.fn();
+
+        requireFreshAuth('critical')(
+            asStub<Request>({
+                caller: callerInScope(asAdmin('u1'), 'tenant'),
+                credentialId: 'key-1',
+                path: '/users/u1',
+                method: 'PUT',
+                headers: {}
+            }),
+            response,
+            asStub<NextFunction>(next)
+        );
+
+        expect(response.status).toHaveBeenCalledWith(403);
+        expect(response.json.mock.calls[0]?.[0]).toMatchObject({
+            errors: [{ code: 'FORBIDDEN' }]
+        });
+        expect(auditedReason()).toBe('credential_cannot_step_up');
+        expect(next).not.toHaveBeenCalled();
+    });
+
+    it('answers a request with no caller at all 401 and audits it as unauthenticated', () => {
+        const response = makeResponse();
+        const next = jest.fn();
+
+        requireFreshAuth('critical')(
+            asStub<Request>({ path: '/users/u1', method: 'PUT', headers: {} }),
+            response,
+            asStub<NextFunction>(next)
+        );
+
+        expect(response.status).toHaveBeenCalledWith(401);
+        expect(emitAuditEvent).toHaveBeenCalledTimes(1);
+        expect(next).not.toHaveBeenCalled();
     });
 });

@@ -101,6 +101,7 @@
         "reap:payments": "tsx scripts/ops/run-job.ts reap:payments",
         "sweep:payment-effects": "tsx scripts/ops/run-job.ts sweep:payment-effects",
         "reap:returns": "tsx scripts/ops/run-job.ts reap:returns",
+        "sweep:stock-alerts": "tsx scripts/ops/run-job.ts sweep:stock-alerts",
         "sweep:webhook-retries": "tsx scripts/ops/run-job.ts sweep:webhook-retries",
         "reencrypt": "tsx scripts/ops/reencrypt.ts",
         "refresh:breached-passwords": "tsx scripts/security/refresh-breached-passwords.ts",

@@ -13,6 +13,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { PRODUCT_BUYABLE_AGAIN, PRODUCT_DELETED } from '@modules/products';
+import { stockAlertsJobs } from './jobs';
 import { router } from './routes';
 import { stockAlertService } from './service';
 
@@ -21,6 +22,7 @@ export default {
     name: 'stock-alerts',
     basePath: '/stock-alerts',
     routes: router,
+    jobs: stockAlertsJobs,
     personalData: [
         {
             section: 'stockAlerts',

@@ -48,7 +48,8 @@ paths:
             summary: Ask to be told when a product is back
             description: >-
                 Records that the authenticated user wants one mail, and one inbox message, when the
-                product can be ordered again (shelf units, an open backorder, or back on sale). The
+                product can be ordered again (shelf units, an open backorder, a preorder with
+                allowance left, or back on sale). The
                 click is the consent for that single mail, so nothing else is ever sent on it and the
                 request is deleted when it is answered. Asking twice is the same request and answers
                 the same 200. Refused with `409 STOCK_ALERT_PRODUCT_BUYABLE` while the product can be

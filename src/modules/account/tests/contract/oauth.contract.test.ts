@@ -430,6 +430,19 @@ describe('a sign-in whose email matches an existing account', () => {
         expect(setCookie(response, '__Host-session')).toBeUndefined();
         expect(await linksOf(user.id)).toEqual([]);
     });
+
+    it('answers ?error=account_unverified when that account never proved its own address', async () => {
+        const user = await createUser({ email: 'oauth.demo@example.com', verifiedAt: undefined });
+
+        const response = await fakeLogin();
+
+        expect(response.status).toBe(302);
+        expect(new URL(response.headers.location).searchParams.get('error')).toBe(
+            'account_unverified'
+        );
+        expect(setCookie(response, '__Host-session')).toBeUndefined();
+        expect(await linksOf(user.id)).toEqual([]);
+    });
 });
 
 /** The connect start for `provider`, then the callback it leads to, with the cookies between. */

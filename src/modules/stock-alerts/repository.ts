@@ -1,7 +1,7 @@
 /**
  * @module
  * Stock alert repository: the writes a request takes. Ask (idempotent), cancel, list a user's own,
- * find who waits for a product, and the two cleanups owed to an erased account and a deleted
+ * find who waits for a product (or which products anyone waits for), and the two cleanups owed to an erased account and a deleted
  * product.
  *
  * See: docs/modules/stock-alerts.md
@@ -26,6 +26,7 @@ export const stockAlertRepository: Repository<StockAlertDocument, Wire<StockAler
     cancel: (userId: string, productId: string) => Promise<boolean>;
     findByUserId: (userId: string) => Promise<StockAlertDocument[]>;
     findByProductId: (productId: string, session?: ClientSession) => Promise<StockAlertDocument[]>;
+    distinctProductIds: () => Promise<string[]>;
     deleteById: (id: string, session: ClientSession) => Promise<boolean>;
     deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
     deleteByProductId: (productId: string) => Promise<void>;
@@ -74,6 +75,13 @@ export const stockAlertRepository: Repository<StockAlertDocument, Wire<StockAler
             .find({ productId: toObjectId(productId) })
             .session(session ?? null)
             .exec(),
+
+    /** Each product at least one request waits for, once. */
+    distinctProductIds: () =>
+        stockAlertModel
+            .distinct('productId')
+            .exec()
+            .then((ids) => ids.map(String)),
 
     /** Delete one request by id, in the caller's transaction; `false` when another run already did. */
     deleteById: (id, session) =>

@@ -67,4 +67,31 @@ describe('GET /shop', () => {
 
             expect(response.body.data).not.toHaveProperty('vatNumber');
         }));
+
+    it('reports the trade register and the registration number when the shop has them', () =>
+        withEnvironmentOverrides(
+            {
+                NODE_SHOP_TRADE_REGISTER: 'Registro Imprese di Bologna',
+                NODE_SHOP_REGISTRATION_NUMBER: 'BO-123456'
+            },
+            async () => {
+                const response = await api().get('/shop');
+
+                expect(response.body.data).toMatchObject({
+                    tradeRegister: 'Registro Imprese di Bologna',
+                    registrationNumber: 'BO-123456'
+                });
+            }
+        ));
+
+    it('leaves the trade register and the registration number out when the shop has none', () =>
+        withEnvironmentOverrides(
+            { NODE_SHOP_TRADE_REGISTER: '', NODE_SHOP_REGISTRATION_NUMBER: '' },
+            async () => {
+                const response = await api().get('/shop');
+
+                expect(response.body.data).not.toHaveProperty('tradeRegister');
+                expect(response.body.data).not.toHaveProperty('registrationNumber');
+            }
+        ));
 });

@@ -796,10 +796,25 @@ export const requireFreshAuth =
     (request: Request, response: Response, next: NextFunction) => {
         const maxAgeSeconds = reauthWindowSeconds(tier);
 
-        // Defensive, not the expected path: a route mounting this without `isAuth` first would
-        // otherwise read `undefined.authTime` and throw. Same shape as `requirePermission`'s guard above.
+        // No session to age. An API key can never step up (nobody types a password into a key), so
+        // it is refused as forbidden, not challenged: a 401 here would tell it to authenticate
+        // again, which it cannot do. With no caller at all a route mounted this guard without
+        // `isAuth` first, so it answers like any other unauthenticated request.
         if (!request.authContext) {
-            rejectResponse(response, 401);
+            if (isCredentialCaller(request)) {
+                auditRefusal(request, {
+                    action: coreAuditActions.SECURITY_FORBIDDEN,
+                    metadata: { reason: 'credential_cannot_step_up', tier }
+                });
+                rejectResponse(response, 403, [
+                    {
+                        code: ERROR_CODES.FORBIDDEN,
+                        message: t(errorLocaleKeyFor(ERROR_CODES.FORBIDDEN))
+                    }
+                ]);
+                return;
+            }
+            refuseUnauthenticated(request, response, cookieUnauthorizedErrors());
             return;
         }
 
@@ -836,16 +851,25 @@ export const requireFreshAuth =
  * predicate guard mounted before it reads an empty object and gates nothing. Mount this AFTER
  * whatever populates the body the predicate reads.
  *
- * @param predicate - reads the request and decides whether THIS one needs a fresh session
+ * @param predicate - reads the request and decides whether THIS one needs a fresh session; it may
+ *   answer later, and a rejection reaches the error handler
  * @param tier - passed through to {@link requireFreshAuth} when the predicate is true
  * @param options - passed through too: what the fresh session must additionally have proved
  */
 export const requireFreshAuthWhen =
-    (predicate: (request: Request) => boolean, tier: StepUpTier, options: FreshAuthOptions = {}) =>
+    (
+        predicate: (request: Request) => boolean | Promise<boolean>,
+        tier: StepUpTier,
+        options: FreshAuthOptions = {}
+    ) =>
     (request: Request, response: Response, next: NextFunction) => {
-        if (!predicate(request)) {
-            next();
-            return;
-        }
-        requireFreshAuth(tier, options)(request, response, next);
+        const dispatch = (needsFreshAuth: boolean): void => {
+            if (needsFreshAuth) requireFreshAuth(tier, options)(request, response, next);
+            else next();
+        };
+
+        // A predicate may need a read ("is this role actually changing?"), so it may answer later.
+        const answer = predicate(request);
+        if (typeof answer === 'boolean') dispatch(answer);
+        else answer.then(dispatch).catch(next);
     };

@@ -321,6 +321,34 @@ interface FamilyActivity {
 }
 
 /**
+ * The newest unexpired row of a session family: where a session is continued from when the
+ * request carries no refresh cookie but does carry the family's access token.
+ *
+ * @param userId - the account the access token names
+ * @param familyId - the access token's `sid` claim
+ * @param mode - the session mode the family was minted under
+ * @param now - the moment to compare expiry against
+ * @returns the row, or `undefined` once the family has no unexpired row
+ */
+const findLiveFamilyRow = (
+    userId: string,
+    familyId: string,
+    mode: SessionMode,
+    now: Date
+): Promise<SessionRow | undefined> =>
+    sessionModel
+        .findOne({
+            userId: toObjectId(userId),
+            familyId: toObjectId(familyId),
+            mode,
+            expiresAt: { $gt: now }
+        })
+        .sort({ startedAt: -1, _id: -1 })
+        .lean<SessionRow | null>()
+        .exec()
+        .then((row) => row ?? undefined);
+
+/**
  * A session family's clock, or `undefined` once it has no unexpired row — the check an access
  * token's `sid` claim and an open SSE stream are held to, and what the staff idle timeout reads.
  * ANY unexpired row counts, rotated-away or not: a rotation supersedes the old row before it
@@ -427,6 +455,7 @@ const removeAllSessions = (userId: string, session?: ClientSession): Promise<num
 export const sessionRepository: {
     insert: typeof insertSession;
     findByHash: typeof findSessionByHash;
+    findLiveFamilyRow: typeof findLiveFamilyRow;
     supersede: typeof supersedeSession;
     touch: typeof touchSession;
     listLive: typeof listLiveSessions;
@@ -440,6 +469,7 @@ export const sessionRepository: {
 } = {
     insert: insertSession,
     findByHash: findSessionByHash,
+    findLiveFamilyRow,
     supersede: supersedeSession,
     touch: touchSession,
     listLive: listLiveSessions,

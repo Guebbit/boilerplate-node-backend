@@ -188,7 +188,8 @@ describe('a key follows its minter', () => {
         await api().get('/webhooks/subscriptions').set('Authorization', banned.key).expect(200);
 
         // Demoted to a role that cannot read subscriptions, the key can no longer either; banned,
-        // the key holds nothing at all. Neither key was touched.
+        // the key no longer resolves at all, so it is refused as a credential (401), not as a
+        // caller who lacks the rule (403). Neither key was touched.
         await api()
             .patch(`/users/${demoted.user.id}`)
             .set('Authorization', admin)
@@ -201,6 +202,6 @@ describe('a key follows its minter', () => {
             .expect(200);
 
         await api().get('/webhooks/subscriptions').set('Authorization', demoted.key).expect(403);
-        await api().get('/webhooks/subscriptions').set('Authorization', banned.key).expect(403);
+        await api().get('/webhooks/subscriptions').set('Authorization', banned.key).expect(401);
     });
 });

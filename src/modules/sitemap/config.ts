@@ -23,6 +23,7 @@ export const STATIC_PAGES: readonly string[] = [
     'faq',
     'terms',
     'privacy',
+    'legal',
     'contact',
     'products'
 ];

@@ -62,6 +62,12 @@ decides it here and decides when to fire.
 made the product orderable, once per flip and never while it stays orderable. The flips: synced stock
 arriving, a backorder opening or its date moving on, the product shown or put back on sale.
 
+**One flip carries no write: a release date passing.** A preorder that becomes orderable because
+its date arrived is never saved, so nothing fires for it. `npm run sweep:stock-alerts` runs hourly
+and answers the waiting requests of every product that `isBuyable` now: it takes the distinct
+products anyone waits for, keeps the orderable ones and hands each to the same answer the signal
+uses. Running it again sends nothing, since an answered request is deleted.
+
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
