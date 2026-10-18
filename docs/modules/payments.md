@@ -228,7 +228,8 @@ flowchart LR
 ```
 
 - **The sweep.** Every unsettled payment holding a provider intent, untouched for
-  `NODE_PAYMENT_RECONCILE_MINUTES` (default 15), is asked about. A payment the webhook already
+  `NODE_PAYMENT_RECONCILE_MINUTES` (default 15), is asked about. An intent nobody attempted comes
+  back `open` and changes nothing: no hold is stretched, no decline is invented. A payment the webhook already
   settled is not asked at all, and every write inside the settlement is conditional, so the sweep
   racing a late webhook settles once.
 - **The cancel path.** Cancelling an order closes its open intent at the provider. A provider that
@@ -739,16 +740,17 @@ sequenceDiagram
 
 ### Status mapping
 
-The port speaks four words (`ProviderPaymentStatus`). An adapter maps its provider's own states
+The port speaks five words (`ProviderPaymentStatus`). An adapter maps its provider's own states
 onto them and nothing else is visible to the rest of the module.
 
-| Port word         | Stripe `PaymentIntent` status | Note                                                                    |
-| ----------------- | ----------------------------- | ----------------------------------------------------------------------- |
-| `requires_action` | `requires_action`             | The browser has a challenge (3-D Secure) to answer                      |
-| `processing`      | `processing`                  | Slow methods; extends the stock hold                                    |
-| `succeeded`       | `succeeded`                   | Report `amountReceived`, `currency`, `paymentId` and `cardLast4` too    |
-| `declined`        | `requires_payment_method`     | Stripe sends a refused attempt back to this state, so it is a decline   |
-| none              | `canceled`                    | No word exists for it today. Open: the vocabulary has not been extended |
+| Port word         | Stripe `PaymentIntent` status                                                      | Note                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `open`            | `requires_confirmation`, or `requires_payment_method` with no `last_payment_error` | Nobody has attempted it yet. Settlement writes nothing, and the sweep re-asks later |
+| `requires_action` | `requires_action`                                                                  | The browser has a challenge (3-D Secure) to answer                                  |
+| `processing`      | `processing`                                                                       | Slow methods; extends the stock hold                                                |
+| `succeeded`       | `succeeded`                                                                        | Report `amountReceived`, `currency`, `paymentId` and `cardLast4` too                |
+| `declined`        | `requires_payment_method` with a `last_payment_error`                              | Stripe sends a refused attempt back to this state, so it is a decline               |
+| none              | `canceled`                                                                         | No word exists for it today. Open: the vocabulary has not been extended             |
 
 A decline is an answer, not an error: `confirm` returns `declined` and throws only on transport
 failure. `succeeded` without `amountReceived` is treated as a mismatch, so convert minor units to

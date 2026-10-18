@@ -7,6 +7,7 @@
         "not-confirmable": "This payment is not awaiting confirmation.",
         "intent-conflict": "A payment for this order is already open. Reload and try again.",
         "declined": "The payment was declined by the card issuer.",
+        "requires_confirmation": "Waiting for the payment to be confirmed.",
         "requires_action": "Your bank needs to confirm this payment — follow the prompt to finish.",
         "processing": "The payment is going through — we will email you as soon as it settles.",
         "confirm-success": "Payment received — the order is paid.",

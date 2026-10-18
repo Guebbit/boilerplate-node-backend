@@ -199,7 +199,9 @@ export const fakePaymentProvider: PaymentProvider = {
     },
 
     retrieve: (providerRef) => {
-        const state = outcomes.get(providerRef) ?? { status: 'processing' as const };
+        // No outcome on record: the intent was prepared and never confirmed, which a real provider
+        // reports as an open intent, not as money in flight.
+        const state = outcomes.get(providerRef) ?? { status: 'open' as const };
         // Stryker disable next-line all
         logger.info(`[fake-psp] retrieve ${providerRef} → ${state.status}`);
         return Promise.resolve(withReceipt(providerRef, state));

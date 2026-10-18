@@ -7,6 +7,7 @@
         "not-confirmable": "Questo pagamento non è in attesa di conferma.",
         "intent-conflict": "Esiste già un pagamento aperto per questo ordine. Ricarica e riprova.",
         "declined": "Il pagamento è stato rifiutato dall'emittente della carta.",
+        "requires_confirmation": "In attesa che il pagamento venga confermato.",
         "requires_action": "La tua banca deve confermare questo pagamento — segui la richiesta per completarlo.",
         "processing": "Il pagamento è in corso — ti scriveremo appena sarà completato.",
         "confirm-success": "Pagamento ricevuto — l'ordine è pagato.",

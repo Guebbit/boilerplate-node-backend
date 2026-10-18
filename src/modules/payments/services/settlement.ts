@@ -355,6 +355,11 @@ export const settlePayment = (
     const orderId = String(payment.orderId);
     const extra = state.cardLast4 ? { cardLast4: state.cardLast4 } : {};
 
+    // No attempt on record at the provider: nothing happened, so nothing is written. The row stays
+    // `requires_confirmation` and the hold keeps the window it was given.
+    if (state.status === 'open')
+        return Promise.resolve({ payment, orderLost: false, transitioned: false });
+
     // Nothing has landed yet: record where the payment got to and stop. Both of these are states
     // the browser has more work to do in, and neither may touch the order.
     if (state.status !== 'succeeded' && state.status !== 'declined')

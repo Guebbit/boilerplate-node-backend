@@ -1245,8 +1245,8 @@ describe('applyWebhookSettlement', () => {
     });
 
     it('settles what the provider answers, not what a delivery might claim', async () => {
-        // Nobody confirmed: the provider has no outcome for this intent, so it says `processing`,
-        // which settles nothing. A body that claimed `succeeded` would have paid the order.
+        // Nobody confirmed: the provider has no outcome for this intent, so it says `open`, which
+        // settles nothing. A body that claimed `succeeded` would have paid the order.
         const { order, providerRef } = await unconfirmedIntent();
         const retrieve = jest.spyOn(fakePaymentProvider, 'retrieve');
 
@@ -1254,7 +1254,7 @@ describe('applyWebhookSettlement', () => {
 
         expect(retrieve).toHaveBeenCalledWith(providerRef);
         const payment = await paymentRepository.findByOrderId(String(order._id));
-        expect(payment!.status).toBe('processing');
+        expect(payment!.status).toBe('requires_confirmation');
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe('pending');
     });

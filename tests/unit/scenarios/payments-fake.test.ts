@@ -111,10 +111,10 @@ describe('fakePaymentProvider.retrieve', () => {
     });
 
     it('settles nothing for an intent it does not know', async () => {
-        // `processing` is the only status that moves no money in either direction, which is what
-        // an unknown reference — a restarted process, a second worker — must answer.
+        // `open` is the status that moves no money and asks nothing of the hold, which is what an
+        // unknown reference — never confirmed, a restarted process, a second worker — must answer.
         await expect(fakePaymentProvider.retrieve('fake_pi_unknown')).resolves.toMatchObject({
-            status: 'processing'
+            status: 'open'
         });
     });
 });

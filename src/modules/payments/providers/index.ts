@@ -28,8 +28,17 @@ export {
     WebhookRejected
 } from './webhook-signature';
 
-/** What the money is doing at the provider. `cancelled` and refund state are ours, not theirs. */
-export type ProviderPaymentStatus = 'requires_action' | 'processing' | 'succeeded' | 'declined';
+/**
+ * What the money is doing at the provider. `cancelled` and refund state are ours, not theirs.
+ * `open` is an intent nobody has attempted yet (Stripe's `requires_payment_method` /
+ * `requires_confirmation`): there is nothing to settle, so settlement writes nothing for it.
+ */
+export type ProviderPaymentStatus =
+    | 'open'
+    | 'requires_action'
+    | 'processing'
+    | 'succeeded'
+    | 'declined';
 
 /** What a provider says about one intent, whether asked directly or through a webhook. */
 export interface ProviderPaymentState {
