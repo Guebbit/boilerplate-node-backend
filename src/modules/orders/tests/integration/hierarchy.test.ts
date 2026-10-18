@@ -12,7 +12,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { callerContextAs, asRole } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
 import { orderService } from '@modules/orders/services';
 import { OrderStatus } from '@types';
 import { outboxEventModel } from '@kernel/outbox';
@@ -243,6 +243,8 @@ describe('no rank on an order', () => {
         const order = await orderOf('admin');
         const id = String(order._id);
         const moderator = callerContextAs('moderator', STAFF_ID);
+        // Only a cancelled order can be hidden.
+        await forceOrderStatus(id, 'cancelled');
 
         const results = [
             await orderService.updateById(id, { email: 'taken@over.test' }, moderator),

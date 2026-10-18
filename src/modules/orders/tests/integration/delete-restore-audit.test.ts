@@ -31,7 +31,7 @@ afterEach(() => jest.restoreAllMocks());
 describe('removeById', () => {
     it('audits ORDER_DELETED with hardDelete:false in metadata on a soft delete', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const order = await seedOrder(OrderStatus.pending);
+        const order = await seedOrder(OrderStatus.cancelled);
 
         await orderService.removeById(String(order._id), false, callerContextAs('admin'));
 
@@ -65,7 +65,7 @@ describe('removeById', () => {
 
     it('records no audit row when called with no context', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const order = await seedOrder(OrderStatus.pending);
+        const order = await seedOrder(OrderStatus.cancelled);
 
         await orderService.removeById(String(order._id));
 
@@ -76,7 +76,7 @@ describe('removeById', () => {
 describe('restoreById', () => {
     it('audits ORDER_RESTORED on a restore', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const order = await seedOrder(OrderStatus.pending);
+        const order = await seedOrder(OrderStatus.cancelled);
         await orderService.removeById(String(order._id));
 
         await orderService.restoreById(String(order._id), callerContextAs('admin'));
@@ -93,7 +93,7 @@ describe('restoreById', () => {
 
     it('records no audit row when called with no context', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const order = await seedOrder(OrderStatus.pending);
+        const order = await seedOrder(OrderStatus.cancelled);
         await orderService.removeById(String(order._id));
 
         await orderService.restoreById(String(order._id));

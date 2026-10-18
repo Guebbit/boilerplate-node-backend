@@ -510,6 +510,8 @@ export const driveShopHistory = async (
      * wrongly allow and an admin-owned row could never catch.
      */
     subjects['order.softDeleted'] = dated(await checkoutAndPay(customer, DOG_FOOD(1)));
+    // Only a cancelled order can be hidden: cancel it (which refunds it), then hide it.
+    await cancelOrder(owner, subjects['order.softDeleted']);
     await softDeleteOrder(owner, subjects['order.softDeleted']);
 
     // Money that arrived at the counter — recorded by hand, settled through the same path a card

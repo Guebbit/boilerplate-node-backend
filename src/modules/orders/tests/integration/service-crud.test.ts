@@ -26,7 +26,7 @@ import { remove } from '../../services/remove';
 import { orderRepository } from '../../repository';
 import { asReject, asSuccess } from '@tests/response';
 import { asCustomer, asAdmin, callerAs, callerContextAs, testCallerContext } from '@tests/callers';
-import type { CallerContext } from '@types';
+import { OrderStatus, type CallerContext } from '@types';
 import { MISSING_ID } from '@tests/ids';
 import { freezeDate } from '@tests/clock';
 import { userService } from '@modules/users';
@@ -656,16 +656,17 @@ describe('remove — the hard path', () => {
         await expect(orderRepository.count({})).resolves.toBe(1);
     });
 
-    it('still allows a soft delete on a paid order — the row survives either way', async () => {
+    it('refuses a soft delete on a paid order too: an open order is cancelled first', async () => {
         const { order } = await seedOrder();
         order.paidAt = new Date();
         await orderRepository.save(order);
 
         const result = await remove(order, false);
 
-        expect(result.success).toBe(true);
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELLED');
         const stored = await orderRepository.findById(String(order._id));
-        expect(stored!.deletedAt).toBeInstanceOf(Date);
+        expect(stored!.deletedAt).toBeUndefined();
     });
 });
 
@@ -697,7 +698,7 @@ describe('updateById', () => {
 
 describe('remove', () => {
     it('soft-deletes by default, keeping the row', async () => {
-        const { order } = await seedOrder();
+        const { order } = await seedCancelledOrder();
 
         const result = await remove(order);
 
@@ -711,7 +712,7 @@ describe('remove', () => {
 
     it('leaves an already soft-deleted order deleted when the delete is repeated', async () => {
         // DELETE must be safe to retry: a second one never brings the order back.
-        const { order } = await seedOrder();
+        const { order } = await seedCancelledOrder();
 
         await remove(order);
         await remove(order);
@@ -719,11 +720,26 @@ describe('remove', () => {
         const stored = await orderRepository.findById(String(order._id));
         expect(stored!.deletedAt).toBeInstanceOf(Date);
     });
+
+    it.each([OrderStatus.pending, OrderStatus.paid, OrderStatus.processing, OrderStatus.shipped])(
+        'refuses to hide an order that is still %s, leaving it visible to its buyer',
+        async (status) => {
+            const seeded = await seedOrder();
+            const order = (await forceOrderStatus(String(seeded.order._id), status))!;
+
+            const result = await remove(order);
+
+            expect(asReject(result).status).toBe(409);
+            expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELLED');
+            const stored = await orderRepository.findById(String(order._id));
+            expect(stored!.deletedAt).toBeUndefined();
+        }
+    );
 });
 
 describe('restoreById', () => {
     it('restores a soft-deleted order', async () => {
-        const { order } = await seedOrder();
+        const { order } = await seedCancelledOrder();
         await remove(order);
 
         const result = await orderService.restoreById(String(order._id));
@@ -746,7 +762,7 @@ describe('restoreById', () => {
 
 describe('removeById', () => {
     it('soft-deletes an existing order by default', async () => {
-        const { order } = await seedOrder();
+        const { order } = await seedCancelledOrder();
 
         const result = await orderService.removeById(String(order._id));
 
@@ -805,7 +821,7 @@ describe('getForCaller', () => {
 
 describe('callerScope hides soft-deleted orders', () => {
     it('excludes a soft-deleted order from its own owner, but not from an admin', async () => {
-        const { order } = await seedOrder();
+        const { order } = await seedCancelledOrder();
         const userId = String(order.userId);
 
         await orderService.removeById(String(order._id));

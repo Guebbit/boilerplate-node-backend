@@ -151,7 +151,7 @@ carries only `{ orderId }`, since "owed" is not "paid back", and a subscriber he
 when money actually moved.
 :::
 
-Each account reads back only its own orders; writing and soft-deleting is admin-only. The
+Each account reads back only its own orders; writing and soft-deleting is admin-only, and an order can be soft-deleted (hidden) only once it is `cancelled`. The
 `userId: 1, deletedAt: 1` index is what makes both of those cheap at once.
 
 Two scheduled jobs via `docker/crontab`. `npm run reap:orders`, nightly, replaces an order's

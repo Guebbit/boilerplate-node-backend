@@ -347,7 +347,7 @@ describe('POST /orders/{id}/status-override', () => {
 describe('POST /orders/{id}/restore', () => {
     it('brings a soft-deleted order back, matching the contract', async () => {
         const { bearer } = await authenticateAs('admin');
-        const order = await seedOrderFor(await createUser());
+        const order = await seedOrderFor(await createUser(), OrderStatus.cancelled);
         await api()
             .delete(`/orders/${String(order._id)}`)
             .set('Authorization', bearer);
@@ -501,7 +501,7 @@ describe('PATCH /orders/{id}', () => {
 describe('DELETE /orders and DELETE /orders/{id}/hard', () => {
     it('matches the contract for a soft delete with the id in the body', async () => {
         const { bearer, user } = await authenticateAs('admin');
-        const order = await seedOrderFor(user);
+        const order = await seedOrderFor(user, OrderStatus.cancelled);
 
         const response = await api()
             .delete('/orders')
