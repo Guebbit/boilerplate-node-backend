@@ -20,6 +20,8 @@
             "meta-title": "Ordine spedito",
             "greeting": "Ciao, {{name}}!",
             "body": "Buone notizie — una parte del tuo ordine ha lasciato il magazzino.",
+            "corrected-subject": "Il codice di tracciamento della tua spedizione è cambiato",
+            "corrected-body": "Ti avevamo inviato un codice di tracciamento sbagliato per una parte del tuo ordine. Questo è quello giusto.",
             "tracking": "Traccia il tuo pacco con il codice {{code}}.",
             "more": "Altri {{count}} articoli arriveranno con un'altra spedizione."
         },

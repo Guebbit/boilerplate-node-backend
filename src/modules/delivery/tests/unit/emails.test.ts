@@ -33,6 +33,18 @@ describe('shipmentShippedEmail', () => {
         expect(tracking).not.toContain('{{');
     });
 
+    it('says the code was corrected, with its own subject, in both languages', () => {
+        for (const locale of ['en', 'it']) {
+            const first = shipmentShippedEmail(locale, NAME, completing);
+            const fixed = shipmentShippedEmail(locale, NAME, { ...completing, corrected: true });
+
+            expect(fixed.subject).not.toBe(first.subject);
+            expect(fixed.data.body).not.toBe(first.data.body);
+            expect(fixed.data.tracking).toBe(first.data.tracking);
+            expect(JSON.stringify(fixed)).not.toMatch(/delivery\.email-shipped|\{\{/);
+        }
+    });
+
     it('leaves the tracking line out when the method carries no tracking', () => {
         const { data } = shipmentShippedEmail('en', NAME, {
             ...completing,

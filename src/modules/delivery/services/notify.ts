@@ -77,6 +77,31 @@ export const mailShipped = ({
 };
 
 /**
+ * Tell the buyer the tracking code of a shipment changed: the same mail as when it left, with its
+ * own subject and an apology for the earlier code. Best effort, after the fix was saved: a queue that
+ * is briefly down must not turn a corrected typo into an error.
+ *
+ * @param shipment - the shipment as it now stands, carrying the corrected code
+ */
+export const mailTrackingCorrected = (shipment: ShipmentDocument): Promise<void> =>
+    orderService
+        .mailBuyerOfOrder(String(shipment.orderId), (order, locale, name) => {
+            const mail = shipmentShippedEmail(locale, name, {
+                lines: emailLines(shipment),
+                trackingCode: shipment.trackingCode,
+                remainingUnits: 0,
+                corrected: true
+            });
+            void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
+        })
+        .catch((error: unknown) => {
+            logger.warn({
+                message: `Delivery: could not mail the corrected code of shipment ${String(shipment._id)}`,
+                error
+            });
+        });
+
+/**
  * Tell the buyer a shipment arrived. When it completed the order the mail also says until when they
  * may withdraw: the order's own frozen deadline, read fresh, because the listener runs after the
  * act's transaction wrote it.

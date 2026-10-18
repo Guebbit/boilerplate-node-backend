@@ -18,6 +18,7 @@ import { ERROR_CODES } from '@api/error-codes';
 import { deliveryAuditActions } from '../audit';
 import { shipmentRepository } from '../repository';
 import { viewShipment } from './actions';
+import { mailTrackingCorrected } from './notify';
 
 /**
  * Correct a shipment's tracking code.
@@ -58,7 +59,12 @@ export const editShipmentTracking = (
                     targetId: String(edited.orderId),
                     metadata: { shipmentId }
                 });
-                return generateSuccess(viewShipment(edited, order, authContext));
+                // Only a code that CHANGED is news: saving the same one again mails nobody.
+                if (found.trackingCode === edited.trackingCode)
+                    return generateSuccess(viewShipment(edited, order, authContext));
+                return mailTrackingCorrected(edited).then(() =>
+                    generateSuccess(viewShipment(edited, order, authContext))
+                );
             });
         });
     });

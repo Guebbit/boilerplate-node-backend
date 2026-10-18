@@ -24,6 +24,8 @@ export interface ShippedEmailInput {
     trackingCode?: string | undefined;
     /** Units of the order still to come in later shipments; `0` when this one completes it. */
     remainingUnits: number;
+    /** The mail corrects a code already sent: its own subject and an apology for the earlier one. */
+    corrected?: boolean | undefined;
 }
 
 /** What the delivered email says about this shipment. */
@@ -84,12 +86,20 @@ export const shipmentShippedEmail = (
     const t = translator(locale);
     return {
         template: 'delivery.shipment-shipped',
-        subject: t('delivery.email-shipped.subject'),
+        subject: t(
+            input.corrected
+                ? 'delivery.email-shipped.corrected-subject'
+                : 'delivery.email-shipped.subject'
+        ),
         data: {
             locale,
             pageMetaTitle: t('delivery.email-shipped.meta-title'),
             greeting: t('delivery.email-shipped.greeting', { name }),
-            body: t('delivery.email-shipped.body'),
+            body: t(
+                input.corrected
+                    ? 'delivery.email-shipped.corrected-body'
+                    : 'delivery.email-shipped.body'
+            ),
             lines: lineTexts(t, input.lines),
             tracking: input.trackingCode
                 ? t('delivery.email-shipped.tracking', { code: input.trackingCode })

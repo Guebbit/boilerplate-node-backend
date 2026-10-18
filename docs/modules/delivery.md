@@ -535,6 +535,8 @@ All are written through the outbox **in the act's transaction**. An order shippe
 **Emails**, one per shipment: _shipped_ (its lines, the tracking line when the method carries one, and
 "N more items to follow" while anything remains) when it leaves, and _delivered_ (its lines, and on
 the delivery that completes the order, the date until which the buyer may withdraw) when it arrives.
+Correcting a tracking code (`PATCH /delivery/shipments/{id}`) mails the buyer the same shipped mail with its own
+subject and an apology for the earlier code, only when the code actually changed; best effort, after the fix is saved.
 
 ## Your data
 

@@ -20,6 +20,8 @@
             "meta-title": "Order shipped",
             "greeting": "Hello, {{name}}!",
             "body": "Good news — part of your order has left the warehouse.",
+            "corrected-subject": "The tracking code of your shipment changed",
+            "corrected-body": "We sent you a tracking code for part of your order that was wrong. This is the right one.",
             "tracking": "Track your parcel with code {{code}}.",
             "more": "{{count}} more items will follow in another shipment."
         },

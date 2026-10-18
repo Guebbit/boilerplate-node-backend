@@ -557,7 +557,65 @@ describe('delivering', () => {
         expect(fixed.success && fixed.data.trackingCode).toBe('TRK-FIXED001');
         expect(asReject(late).status).toBe(409);
     });
+
+    describe('mailing a corrected code', () => {
+        it('tells the buyer the new code, in the corrected mail', async () => {
+            const { order, shipment } = await shippedWith('TRK-TYPO0001');
+
+            await deliveryService.editShipmentTracking(
+                String(shipment._id),
+                'TRK-FIXED001',
+                asAdmin(),
+                admin
+            );
+
+            const [[envelope, template, data]] = mockEnqueueEmail.mock.calls;
+            expect(envelope.to).toBe(order.email);
+            expect(template).toBe('delivery.shipment-shipped');
+            expect(String(data?.tracking)).toContain('TRK-FIXED001');
+            expect(envelope.subject).toBe('The tracking code of your shipment changed');
+        });
+
+        it('mails nobody when the code did not change', async () => {
+            const { shipment } = await shippedWith('TRK-SAME0001');
+
+            await deliveryService.editShipmentTracking(
+                String(shipment._id),
+                'TRK-SAME0001',
+                asAdmin(),
+                admin
+            );
+
+            expect(mockEnqueueEmail).not.toHaveBeenCalled();
+        });
+
+        it('still saves the code when the mail cannot be queued', async () => {
+            const { shipment } = await shippedWith('TRK-TYPO0002');
+            jest.spyOn(logger, 'error').mockImplementation(() => logger);
+            mockEnqueueEmail.mockImplementation(() => {
+                throw new Error('queue down');
+            });
+
+            const fixed = await deliveryService.editShipmentTracking(
+                String(shipment._id),
+                'TRK-FIXED002',
+                asAdmin(),
+                admin
+            );
+
+            expect(fixed.success && fixed.data.trackingCode).toBe('TRK-FIXED002');
+        });
+    });
 });
+
+/** A fresh order shipped with `code`, the mail it sent already cleared. */
+const shippedWith = async (code: string) => {
+    const { order } = await processingOrderOf();
+    await shipFrom(String(order._id), { trackingCode: code });
+    const [shipment] = await shipmentsOf(String(order._id));
+    mockEnqueueEmail.mockClear();
+    return { order, shipment };
+};
 
 describe('forced shipments', () => {
     it('lets an override holder ship from `paid` without `start`, and leaves a history row', async () => {
