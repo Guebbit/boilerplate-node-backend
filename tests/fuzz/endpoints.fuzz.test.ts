@@ -64,6 +64,8 @@ import { bodyArbitraryFor, queryArbitraryFor } from '@tests/spec-arbitraries';
 import { FUZZ_RUNS_PER_OPERATION } from '@tests/knobs';
 import { seedWorld, buildUrl, requiredHeadersOf, type World } from '@tests/spec-world';
 import { markServerListening } from '@infrastructure/runtime/readiness';
+import { settleInlineExports } from '@modules/account/services/export';
+import { emptyFileSandbox } from '@tests/file-sandbox';
 
 // No real Chromium here, and a missing browser is not what this suite hunts: the invoice route
 // with a REAL order renders, and the stub would answer every request 500. Same stand-in the
@@ -73,6 +75,10 @@ jest.mock('@infrastructure/adapters/pdf', () => ({
 }));
 
 setupTestDb();
+
+// A fuzzed `POST /account/export` as a real caller starts a build that writes its file after the
+// `202`. Wait for it, then empty the sandbox: teardown fails the run on any file a test caused.
+afterEach(() => settleInlineExports().then(emptyFileSandbox));
 
 // `GET /readyz` answers 503 until `src/app.ts`'s real boot marks the process listening, which
 // never runs under `NODE_ENV=test` (`tests/support/http.ts`). Marked ready once, here, so the
