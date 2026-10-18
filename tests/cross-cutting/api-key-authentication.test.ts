@@ -89,6 +89,23 @@ describe('an api key over the real chain', () => {
         expect(response.status).toBe(401);
     });
 
+    /** A public route refuses a bad `sk_` key too, instead of serving it as anonymous (RFC 6750 §3.1). */
+    it('refuses an unknown credential on a public route, naming the failure', async () => {
+        const response = await api()
+            .get('/products')
+            .set('Authorization', 'Bearer sk_not_a_real_credential_at_all');
+
+        expect(response.status).toBe(401);
+        expect(response.headers['www-authenticate']).toBe('Bearer error="invalid_token"');
+    });
+
+    /** Only an `sk_` key is refused: a stale session bearer still browses as anonymous. */
+    it('still serves a public route to an expired session bearer', async () => {
+        const response = await api().get('/products').set('Authorization', 'Bearer not.a.session');
+
+        expect(response.status).toBe(200);
+    });
+
     /**
      * Minting credentials stays a human act. `api-keys` reads no `authContext` and so passes the
      * mechanical test for opening up — it is closed by decision, because a credential that can

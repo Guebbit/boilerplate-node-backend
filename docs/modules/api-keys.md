@@ -64,6 +64,13 @@ that matters after the fact: demote the person who minted a key and every key th
 ban, soft-delete or erase them and every key is refused like a revoked one, and an unban or a
 restore brings the key back — without the credential document itself ever being touched.
 
+**A key that does not resolve is refused, not demoted to anonymous.** An `sk_...` token that is
+unknown, revoked, expired, malformed or whose minter is gone gets `401` with
+`WWW-Authenticate: Bearer error="invalid_token"` (RFC 6750 §3.1) on every route behind `getAuth`,
+public ones included — a caller who presents a credential is told it failed, as GitHub and Stripe
+do. A fake `Bearer sk_` header therefore buys nothing. An expired session bearer is different: it
+still browses as anonymous, because the SPA sends whatever it holds.
+
 **A key use counts as activity.** Each use stamps the key's own `lastUsedAt` and, at most once a
 day, the minter's `lastApiKeyUseAt` through the `users` service. The inactivity job reads that, so
 an account driven only through its keys is never minimised or reaped as idle
