@@ -238,20 +238,25 @@ export const setPreorderLimit = (
     productService.findByIdRaw(productId).then((product) => {
         if (!product) return generateReject(404, [t('inventory.product-not-found')]);
 
-        return stockLevelRepository
-            .setPreorderLimit(productId, preorderLimit)
-            .then(() => levelFor(productId, product.title))
-            .then((level) => {
-                if (!level) return generateReject(404, [t('inventory.product-not-found')]);
+        return (
+            stockLevelRepository
+                .setPreorderLimit(productId, preorderLimit)
+                // The catalogue's copy carries the allowance, which is what a preorder's `available`
+                // counts down from: bring it into step with the new limit.
+                .then(() => refreshStockCache(productId))
+                .then(() => levelFor(productId, product.title))
+                .then((level) => {
+                    if (!level) return generateReject(404, [t('inventory.product-not-found')]);
 
-                recordAudit(context, {
-                    action: inventoryAuditActions.ADMIN_PREORDER_LIMIT_SET,
-                    outcome: 'success',
-                    targetType: 'product',
-                    targetId: productId,
-                    metadata: { preorderLimit }
-                });
+                    recordAudit(context, {
+                        action: inventoryAuditActions.ADMIN_PREORDER_LIMIT_SET,
+                        outcome: 'success',
+                        targetType: 'product',
+                        targetId: productId,
+                        metadata: { preorderLimit }
+                    });
 
-                return generateSuccess(level, 200, t('inventory.preorder-limit-success'));
-            });
+                    return generateSuccess(level, 200, t('inventory.preorder-limit-success'));
+                })
+        );
     });

@@ -10,6 +10,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factories';
+import { productService } from '@modules/products';
 import { outboxEventModel } from '@kernel/outbox';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { StockMovementReason } from '@types';
@@ -367,6 +368,38 @@ describe('what a shopper may buy', () => {
 
         expect(sellable.get(productId)).toBe(3);
         expect(onTheShelf.get(productId)).toBe(50);
+    });
+});
+
+describe('what the catalogue shows for a preorder', () => {
+    it('counts the allowance down, and reads sold out the day it is full', async () => {
+        const product = await createProduct({
+            onHand: 0,
+            releaseDate: new Date(Date.now() + 30 * 86_400_000).toISOString()
+        });
+        const productId = String(product._id);
+        const read = () => productService.getById(productId);
+
+        expect(await read()).toMatchObject({ preorder: true, available: 0, inStock: false });
+
+        await inventoryService.setPreorderLimit(productId, 2);
+        expect(await read()).toMatchObject({ available: 2, inStock: true });
+
+        await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 2)]);
+        expect(await read()).toMatchObject({ available: 0, inStock: false });
+    });
+
+    it('keeps the allowance off the wire', async () => {
+        const product = await createProduct({
+            onHand: 0,
+            releaseDate: new Date(Date.now() + 30 * 86_400_000).toISOString()
+        });
+        await inventoryService.setPreorderLimit(String(product._id), 2);
+
+        const found = await productService.getById(String(product._id));
+
+        expect(found).not.toHaveProperty('preorderLimit');
+        expect(found).not.toHaveProperty('preordered');
     });
 });
 

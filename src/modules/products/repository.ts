@@ -33,6 +33,21 @@ const PUBLIC_SCOPE: Readonly<Record<string, unknown>> = {
     deletedAt: { $exists: false }
 };
 
+/**
+ * The stock numbers `inventory` copies onto a product, so a catalogue read needs no join: what is
+ * on the shelf and claimed, and the preorder allowance and what is claimed against it.
+ */
+export interface StockCounters {
+    /** Units that exist. */
+    onHand: number;
+    /** Units an open order has claimed. */
+    reserved: number;
+    /** How many units may be preordered at once; absent leaves the copy alone. */
+    preorderLimit?: number;
+    /** Units already claimed against that allowance. */
+    preordered?: number;
+}
+
 /** The catalogue's repository: base CRUD from the factory, extended with scoping, facets, and the stock-cache mirror. */
 export const productRepository: Repository<ProductDocument, Product> & {
     publicScope: () => Record<string, unknown>;
@@ -42,10 +57,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
     ) => Promise<ProductDocument | null>;
     findPublicById: (productId: string) => Promise<ProductDocument | null>;
     facets: () => Promise<{ categories: FacetCount[]; tags: FacetCount[] }>;
-    syncStockCache: (
-        productId: string,
-        counters: { onHand: number; reserved: number }
-    ) => Promise<void>;
+    syncStockCache: (productId: string, counters: StockCounters) => Promise<void>;
     translatable: TranslatableColumns;
     writebackImage: ImageWriteback;
 } = {
@@ -142,7 +154,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
      * @param productId - the product
      * @param counters - the values to write, verbatim
      */
-    syncStockCache: (productId: string, counters: { onHand: number; reserved: number }) =>
+    syncStockCache: (productId: string, counters: StockCounters) =>
         productModel
             .updateOne({ _id: toObjectId(productId) }, { $set: counters }, { timestamps: false })
             .exec()

@@ -18,6 +18,16 @@ export const availableStock = (onHand?: number, reserved?: number): number =>
     Math.max(0, (onHand ?? 0) - (reserved ?? 0));
 
 /**
+ * Units of a preorder still on offer: the allowance minus what is already claimed, clamped at zero
+ * (lowering the allowance below what is outstanding is allowed, so it can go negative).
+ * @param preorderLimit - the allowance; absent reads as zero, which closes preordering
+ * @param preordered - units already claimed against it; absent reads as zero
+ * @returns units a customer may still preorder, never below zero
+ */
+export const preorderAllowanceLeft = (preorderLimit?: number, preordered?: number): number =>
+    Math.max(0, (preorderLimit ?? 0) - (preordered ?? 0));
+
+/**
  * What a shopper may know about stock without learning the count: whether anything is for sale,
  * and whether what is left is running low. `lowStock` is only ever true while something is still
  * for sale — an empty shelf is `inStock: false`, not both.

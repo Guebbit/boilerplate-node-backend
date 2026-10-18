@@ -3,7 +3,7 @@
  * `availableStock` and `stockFlags` — `src/modules/products/domain/stock.ts`. Pure, no database: every case a
  * caller (`@modules/inventory`, `@modules/cart`) can hand it.
  */
-import { availableStock, stockFlags } from '../../domain/stock';
+import { availableStock, preorderAllowanceLeft, stockFlags } from '../../domain/stock';
 
 describe('availableStock', () => {
     it.each([
@@ -43,4 +43,16 @@ describe('stockFlags', () => {
             expect(stockFlags(available, threshold)).toEqual({ inStock, lowStock });
         }
     );
+});
+
+describe('preorderAllowanceLeft', () => {
+    it.each([
+        [10, 3, 7],
+        [10, 10, 0],
+        [3, 5, 0],
+        [undefined, undefined, 0],
+        [4, undefined, 4]
+    ])('allows %s with %s claimed to leave %s', (limit, claimed, expected) => {
+        expect(preorderAllowanceLeft(limit, claimed)).toBe(expected);
+    });
 });

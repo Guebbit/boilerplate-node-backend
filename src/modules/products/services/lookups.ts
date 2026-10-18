@@ -8,7 +8,7 @@ import { getFallbackLocale } from '@infrastructure/i18n';
 import { readAllTranslations } from '@kernel/translation';
 import type { ProductTranslationFields } from '@types';
 import type { ProductDocument } from '../model';
-import { productRepository } from '../repository';
+import { productRepository, type StockCounters } from '../repository';
 
 /**
  * The plain, untransformed document — `inventory` and `orders` read a product's live counters
@@ -79,7 +79,7 @@ export const countPublic = (
  * @param productId - the product whose cached counters are being brought into step
  * @param counters - the values `@modules/inventory` just committed as the source of truth
  */
-export const syncStockCache = (productId: string, counters: { onHand: number; reserved: number }) =>
+export const syncStockCache = (productId: string, counters: StockCounters) =>
     productRepository.syncStockCache(productId, counters);
 
 /**

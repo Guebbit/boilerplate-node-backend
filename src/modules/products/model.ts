@@ -45,6 +45,13 @@ export interface ProductRecord extends Omit<
     _id: Types.ObjectId;
     /** When it ships from; `preorder` is derived from it and never stored. */
     releaseDate?: Date;
+    /**
+     * The preorder allowance and the units already claimed against it, copied from `inventory`
+     * beside `onHand`/`reserved`. Internal: only a preorder's `available` is derived from them,
+     * and neither reaches the wire.
+     */
+    preorderLimit?: number;
+    preordered?: number;
     createdAt?: Date;
     updatedAt?: Date;
     deletedAt?: Date;
@@ -59,7 +66,10 @@ export interface ProductRecord extends Omit<
  * so the two counters are never even reachable to store), and its `OrderDocumentItem.product` is
  * typed by this, not by `ProductRecord`.
  */
-export type ProductSnapshot = Omit<ProductRecord, 'onHand' | 'reserved' | 'active' | 'purchasable'>;
+export type ProductSnapshot = Omit<
+    ProductRecord,
+    'onHand' | 'reserved' | 'preorderLimit' | 'preordered' | 'active' | 'purchasable'
+>;
 
 /**
  * Product Document interface — the stored fields, plus everything Mongoose adds.
@@ -273,6 +283,22 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             default: 0,
             min: 0
         },
+        /*
+         * The preorder allowance and what is claimed against it: a copy of `inventory`'s own
+         * counters, for the same reason `onHand` is one (the catalogue read must not call across).
+         * A preorder's `available` is what is left of the allowance, so the shelf stops selling
+         * the day it is full. Written only by `syncStockCache`, never returned.
+         */
+        preorderLimit: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        preordered: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
         description: {
             type: String,
             default: ''
@@ -409,11 +435,18 @@ const applyProductAvailability = (serialized: Record<string, unknown>) => {
         derivedStockFields({
             onHand: typeof serialized.onHand === 'number' ? serialized.onHand : undefined,
             reserved: typeof serialized.reserved === 'number' ? serialized.reserved : undefined,
+            preorderLimit:
+                typeof serialized.preorderLimit === 'number' ? serialized.preorderLimit : undefined,
+            preordered:
+                typeof serialized.preordered === 'number' ? serialized.preordered : undefined,
             active: serialized.active === false ? false : undefined,
             purchasable: serialized.purchasable === false ? false : undefined,
             releaseDate: serialized.releaseDate instanceof Date ? serialized.releaseDate : undefined
         })
     );
+    // Read above, never returned: the contract's `Product` does not carry the allowance.
+    delete serialized.preorderLimit;
+    delete serialized.preordered;
 };
 
 /**

@@ -1301,7 +1301,9 @@ components:
                     description: >-
                         Something is for sale. `false` renders as out of stock — the catalogue
                         still lists the product, and checkout is what refuses it
-                        (`CART_INSUFFICIENT_STOCK`).
+                        (`CART_INSUFFICIENT_STOCK`). For a `preorder` it reads the allowance, not
+                        the shelf: `true` while any of it is left, `false` the day it is full (or
+                        was never set).
                 lowStock:
                     type: boolean
                     readOnly: true
@@ -1325,7 +1327,10 @@ components:
                     type: integer
                     minimum: 0
                     readOnly: true
-                    description: Units a customer may actually buy, derived from the two counters above. Only for a caller holding `read:StockLevel`.
+                    description: >-
+                        Units a customer may actually buy, derived from the two counters above. For a
+                        `preorder` it is what is left of the preorder allowance instead (the shelf is
+                        empty by definition). Only for a caller holding `read:StockLevel`.
                 description:
                     type: string
                 active:

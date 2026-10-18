@@ -8,25 +8,35 @@
 
 import type { Product } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
-import { availableStock, stockFlags } from './domain/stock';
+import { availableStock, preorderAllowanceLeft, stockFlags } from './domain/stock';
 import { isPreorder, type PreorderFacts } from './domain/preorder';
 import { lowStockThreshold } from './config';
 import type { ProductDocument } from './model';
 import { shopCurrency } from '@modules/shop';
 
 /**
- * The block of a product's response that is derived, never stored: `available`, the `inStock` /
+ * The block of a product's response that is derived, never stored: `available` (the shelf, or for
+ * a preorder what is left of its allowance), the `inStock` /
  * `lowStock` flags, `preorder` and the live `currency`. One place, because the document's own
  * serialisation and a presented document must agree on every one of them.
  *
- * @param facts - the two stock counters and what decides a preorder
+ * @param facts - the stock counters, the preorder allowance and what decides a preorder
  * @returns the derived fields of a `Product`
  */
 export const derivedStockFields = (
-    facts: PreorderFacts & { onHand?: number; reserved?: number }
+    facts: PreorderFacts & {
+        onHand?: number;
+        reserved?: number;
+        preorderLimit?: number;
+        preordered?: number;
+    }
 ) => {
-    const available = availableStock(facts.onHand, facts.reserved);
     const preorder = isPreorder(facts, new Date());
+    // A preorder sells against its allowance, not the shelf: nothing exists yet. The day the
+    // allowance is full the product reads sold out, whatever the cached shelf says.
+    const available = preorder
+        ? preorderAllowanceLeft(facts.preorderLimit, facts.preordered)
+        : availableStock(facts.onHand, facts.reserved);
     const flags = stockFlags(available, lowStockThreshold());
 
     return {

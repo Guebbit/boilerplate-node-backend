@@ -171,6 +171,12 @@ stateDiagram-v2
 | allowance and allocation          | `inventory` | `preorderLimit` caps how many can be ordered; receipts allocate them |
 | the "ships from" promise          | `delivery`  | one fulfillment order per release day, on hold until stock arrives   |
 
+A preorder's `available` (and with it `inStock`) counts the **allowance**, not the shelf: what is
+left of `preorderLimit` after the units already claimed, so the product reads sold out the day the
+allowance is full, and out of stock until staff set one (a new product's allowance is 0). The two
+numbers are `inventory`'s, copied onto the product beside `onHand` and `reserved` by the same
+`syncStockCache` door, and never sent to a client.
+
 Moving the date announces `product.release_date_changed` through the outbox, in the edit's own
 transaction and only when the instant actually changed. `delivery` listens: buyers who already paid
 were promised the old date, and consumer law decides what they must be told (see
