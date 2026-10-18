@@ -641,31 +641,37 @@ userSchema.pre('save', function (this: UserDocument) {
 });
 
 /**
+ * The {@link UserRecord} fields that never leave the server: secrets, 2FA material and the
+ * reaper's own bookkeeping. One list feeds both the wire type ({@link UserWire}) and the
+ * serializer's strip ({@link applyUserTransform}), so neither can drift from the other.
+ */
+const WIRE_OMITTED_FIELDS = [
+    'password',
+    'pendingImageKey',
+    'inactivityWarnedAt',
+    'lastActiveAt',
+    'lastApiKeyUseAt',
+    'inactivityMinimisedAt',
+    'deletedBy',
+    'twoFactorMethods',
+    'twoFactorBackupCodes',
+    'twoFactorBackupCodeSalt',
+    'reauthCode',
+    'oauthAccounts',
+    'mfaFailures',
+    'mfaLockedUntil',
+    'tokensValidAfter',
+    'previousEmail'
+] as const;
+
+/**
  * What `search()` actually hands back: {@link UserRecord}, minus the same secrets and
  * document-only bookkeeping {@link applyUserTransform}'s `omit` strips. Real `Date`s, not the
  * ISO strings the `User` contract carries — `./presenter`'s `presentUser` is what narrows those,
  * and it accepts this shape (or a hydrated {@link UserDocument}, a superset of it) rather than the
  * document alone.
  */
-export type UserWire = Omit<
-    UserRecord,
-    | 'password'
-    | 'pendingImageKey'
-    | 'inactivityWarnedAt'
-    | 'lastActiveAt'
-    | 'lastApiKeyUseAt'
-    | 'inactivityMinimisedAt'
-    | 'deletedBy'
-    | 'twoFactorMethods'
-    | 'twoFactorBackupCodes'
-    | 'twoFactorBackupCodeSalt'
-    | 'reauthCode'
-    | 'oauthAccounts'
-    | 'mfaFailures'
-    | 'mfaLockedUntil'
-    | 'tokensValidAfter'
-    | 'previousEmail'
->;
+export type UserWire = Omit<UserRecord, (typeof WIRE_OMITTED_FIELDS)[number]>;
 
 /**
  * Normalizes a serialized user into the OpenAPI `User` contract: `id` from `_id`, `_id`/`__v`
@@ -685,24 +691,7 @@ export const applyUserTransform = applySerialization(userSchema, {
     // `twoFactorEnabledAt` alone is the `User` contract's business, same asymmetry as
     // the schema's own `select: false` split above. `oauthAccounts` gets the same treatment: not
     // part of the `User` contract, `select: false` on the schema already, this is defense in depth.
-    omit: [
-        'password',
-        'pendingImageKey',
-        'inactivityWarnedAt',
-        'lastActiveAt',
-        'lastApiKeyUseAt',
-        'inactivityMinimisedAt',
-        'deletedBy',
-        'twoFactorMethods',
-        'twoFactorBackupCodes',
-        'twoFactorBackupCodeSalt',
-        'reauthCode',
-        'oauthAccounts',
-        'mfaFailures',
-        'mfaLockedUntil',
-        'tokensValidAfter',
-        'previousEmail'
-    ]
+    omit: [...WIRE_OMITTED_FIELDS]
 });
 
 /** The compiled Mongoose model. */
