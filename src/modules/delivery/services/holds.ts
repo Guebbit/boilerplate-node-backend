@@ -46,6 +46,8 @@ export interface HoldInput {
 interface Changed {
     fulfillmentOrder: FulfillmentOrderDocument;
     order: OrderDocument;
+    /** The hold's reason code — the one just set, or the one a release ended. Never the note. */
+    reason?: FulfillmentHoldReason | undefined;
 }
 
 /**
@@ -108,7 +110,7 @@ const holdAct = async (
 
     await reportProgress(String(held.orderId), session);
     await announceHeld(held, order, session, actor);
-    return { fulfillmentOrder: held, order };
+    return { fulfillmentOrder: held, order, reason: input.reason };
 };
 
 /**
@@ -140,7 +142,8 @@ const releaseAct = async (
 
     await reportProgress(String(released.orderId), session);
     await announceReleased(released, session, actor);
-    return { fulfillmentOrder: released, order };
+    // The code is read from the record before the write: it is gone from `released`.
+    return { fulfillmentOrder: released, order, reason: fulfillmentOrder.holdReason };
 };
 
 /**
@@ -166,13 +169,15 @@ const guarded = (
 
             return runAct(act).then((result) => {
                 if (result.refused) return result.reject;
-                const { fulfillmentOrder } = result.value;
+                const { fulfillmentOrder, reason } = result.value;
                 recordAudit(context, {
                     action,
                     outcome: 'success',
                     targetType: 'order',
                     targetId: String(fulfillmentOrder.orderId),
-                    metadata: { fulfillmentOrderId }
+                    // The code only, never `holdNote`: free text the operator log has no business
+                    // holding (it reaches Loki unhashed).
+                    metadata: { fulfillmentOrderId, ...(reason ? { reason } : {}) }
                 });
                 return orderService
                     .getById(String(fulfillmentOrder.orderId))

@@ -133,7 +133,11 @@ export const deliverShipment = (
                         outcome: 'success',
                         targetType: 'order',
                         targetId: String(shipment.orderId),
-                        metadata: { shipmentId, forced: input.forced === true }
+                        // A forced arrival is a sanctioned bypass: its reason is the justification.
+                        metadata:
+                            input.forced === true
+                                ? { shipmentId, forced: true, reason: input.reason }
+                                : { shipmentId, forced: false }
                     });
                     return generateSuccess(viewShipment(shipment, result.value.order, authContext));
                 }

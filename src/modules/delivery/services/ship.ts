@@ -189,19 +189,24 @@ const shipAct = async (
  * What follows a committed shipment: the shelf's stock cache and the audit row. The buyer's mail
  * rides `shipment.shipped`.
  * @param shipped - what the act left
+ * @param reason - why the shipment was forced; carried to the audit row only when it was
  * @param context - the caller
  */
-const afterShipped = (shipped: Shipped, context: CallerContext): Promise<void> =>
+const afterShipped = (
+    shipped: Shipped,
+    reason: string | undefined,
+    context: CallerContext
+): Promise<void> =>
     orderService.refreshShelf(shipped.shipment.lines.map(({ productId }) => productId)).then(() => {
         recordAudit(context, {
             action: deliveryAuditActions.ADMIN_ORDER_SHIPPED,
             outcome: 'success',
             targetType: 'order',
             targetId: String(shipped.shipment.orderId),
-            metadata: {
-                shipmentId: String(shipped.shipment._id),
-                forced: shipped.shipment.forced
-            }
+            // A forced shipment is a sanctioned bypass: its reason is the justification.
+            metadata: shipped.shipment.forced
+                ? { shipmentId: String(shipped.shipment._id), forced: true, reason }
+                : { shipmentId: String(shipped.shipment._id), forced: false }
         });
     });
 
@@ -232,7 +237,7 @@ export const shipFulfillmentOrder = (
             return runAct((session) => shipAct(fulfillmentOrderId, input, context, session)).then(
                 (result) => {
                     if (result.refused) return result.reject;
-                    return afterShipped(result.value, context).then(() =>
+                    return afterShipped(result.value, input.reason, context).then(() =>
                         generateSuccess(
                             viewShipment(result.value.shipment, result.value.order, authContext),
                             201

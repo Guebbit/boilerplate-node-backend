@@ -31,6 +31,7 @@ import { fulfillmentOrdersOf, shipmentsOf } from '@modules/delivery/tests/factor
 import { asReject } from '@tests/response';
 import { asAdmin, asCustomer, asRole, callerContextAs } from '@tests/callers';
 import { inventoryService } from '@modules/inventory';
+import { registerAuditSink, type AuditEntry } from '@infrastructure/observability/audit';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
 import deliveryModule from '@modules/delivery/module';
@@ -679,6 +680,83 @@ describe('forced shipments', () => {
         expect(await lastOverrideOf(String(order._id))).toMatchObject({
             data: { from: OrderStatus.paid, to: OrderStatus.processing }
         });
+    });
+});
+
+/** Starts collecting the audit rows written from here on, for one test. */
+const collectAudit = (): AuditEntry[] => {
+    const audited: AuditEntry[] = [];
+    registerAuditSink((entry) => audited.push(entry));
+    return audited;
+};
+
+/** The metadata of the audit rows with this action, in order. */
+const metadataOf = (audited: AuditEntry[], action: string) =>
+    audited.filter((entry) => entry.action === action).map((entry) => entry.metadata);
+
+describe('what the audit rows carry', () => {
+    it('a forced ship names its reason, an ordinary one only says it was not forced', async () => {
+        const forcedOrder = await processingOrderOf([1], { status: OrderStatus.paid });
+        const plainOrder = await processingOrderOf([1], {}, 'plain@example.com');
+        const audited = collectAudit();
+
+        await shipFrom(String(forcedOrder.order._id), { forced: true, reason: 'no time to start' });
+        await shipFrom(String(plainOrder.order._id));
+
+        expect(metadataOf(audited, 'admin.order.shipped')).toEqual([
+            { shipmentId: expect.any(String), forced: true, reason: 'no time to start' },
+            { shipmentId: expect.any(String), forced: false }
+        ]);
+    });
+
+    it('a forced delivery names its reason, an ordinary one only says it was not forced', async () => {
+        const forcedOrder = await processingOrderOf();
+        const plainOrder = await processingOrderOf([1], {}, 'plain@example.com');
+        await shipFrom(String(forcedOrder.order._id));
+        await shipFrom(String(plainOrder.order._id));
+        const [forcedShipment] = await shipmentsOf(String(forcedOrder.order._id));
+        const [plainShipment] = await shipmentsOf(String(plainOrder.order._id));
+        const audited = collectAudit();
+
+        await deliveryService.deliverShipment(
+            String(forcedShipment._id),
+            { forced: true, reason: 'carrier confirmed by phone' },
+            asAdmin(),
+            admin
+        );
+        await deliveryService.deliverShipment(String(plainShipment._id), {}, asAdmin(), admin);
+
+        expect(metadataOf(audited, 'admin.order.delivered')).toEqual([
+            {
+                shipmentId: String(forcedShipment._id),
+                forced: true,
+                reason: 'carrier confirmed by phone'
+            },
+            { shipmentId: String(plainShipment._id), forced: false }
+        ]);
+    });
+
+    it('a hold carries its reason code and never its note; the release carries the code it ended', async () => {
+        const { order } = await processingOrderOf();
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+        const id = String(fulfillmentOrder._id);
+        const audited = collectAudit();
+
+        await deliveryService.holdFulfillmentOrder(
+            id,
+            { reason: 'high_risk', note: 'rang twice, sounded drunk' },
+            asAdmin(),
+            admin
+        );
+        await deliveryService.releaseFulfillmentOrder(id, asAdmin(), admin);
+
+        expect(metadataOf(audited, 'admin.fulfillment_order.held')).toEqual([
+            { fulfillmentOrderId: id, reason: 'high_risk' }
+        ]);
+        expect(metadataOf(audited, 'admin.fulfillment_order.released')).toEqual([
+            { fulfillmentOrderId: id, reason: 'high_risk' }
+        ]);
+        expect(JSON.stringify(audited)).not.toContain('sounded drunk');
     });
 });
 

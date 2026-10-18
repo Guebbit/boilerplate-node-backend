@@ -8,6 +8,11 @@
  * The doors staff writes through: starting fulfilment, cutting a shipment, recording an arrival,
  * fulfilling a digital fulfillment order, correcting a tracking code, and holding or releasing a
  * fulfillment order — and the one door a buyer writes through: "keep waiting" for a late preorder.
+ *
+ * Metadata, where it says more than the target:
+ * - shipped, delivered: `forced`, and the operator's `reason` when it was forced (a sanctioned
+ *   bypass; the reason is its justification).
+ * - held, released: the hold's reason code, never `holdNote` (free text, optional commentary).
  */
 export const deliveryAuditActions = {
     ADMIN_ORDER_FULFILMENT_STARTED: 'admin.order.fulfilment_started',

@@ -444,6 +444,13 @@ shipment leaves **nothing** remaining anywhere; until then it stays `processing`
 controller runs) and a `reason`. It leaves a `status_overridden` row on the order's [timeline](./orders.md#the-timeline) —
 `orderService.recordForcedFulfilment` appends it without a move of its own — and the shipment is stored with `forced: true`.
 
+The audit row of a forced ship or delivery carries the `reason` too (an ordinary one says `forced: false`
+and nothing else): forcing is a sanctioned bypass, and a record that cannot say why it was allowed
+cannot be investigated alone. The copy dies first — the audit trail keeps 90 days, the timeline text
+1095 ([retention](../theory/data-retention.md)) — and only operators read it. A hold's and a release's
+audit rows carry the hold's reason **code** (a release, the code of the hold it ended), never the
+`holdNote`: free commentary that has no business in the operator log.
+
 ## Delivering
 
 `POST /delivery/shipments/{id}/deliver` stamps the shipment. The order moves to `delivered` when this
