@@ -25,6 +25,8 @@ import { shopTimezone } from '@modules/shop';
  * @param session - the transaction that inserts the invoice. Required: a number taken outside it
  *   is a legal gap if the insert then fails
  * @returns the formatted invoice number for a new invoice
+ * @internal The step beneath the issuing path, which decides whether an invoice may be issued: a
+ *   number taken outside that path is a legal gap; it never leaves the barrel.
  */
 export const allocateInvoiceNumber = (issuedAt: Date, session: ClientSession): Promise<string> => {
     const year = yearInZone(issuedAt, shopTimezone());
@@ -39,6 +41,8 @@ export const allocateInvoiceNumber = (issuedAt: Date, session: ClientSession): P
  * @param issuedAt - the instant the document will carry as its issue date
  * @param session - the transaction that inserts the credit note. Required, for the same reason
  * @returns the formatted credit-note number for a new credit note
+ * @internal The step beneath the issuing path, for the same reason as
+ *   {@link allocateInvoiceNumber}; it never leaves the barrel.
  */
 export const allocateCreditNoteNumber = (
     issuedAt: Date,
