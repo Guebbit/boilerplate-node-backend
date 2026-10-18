@@ -12,7 +12,15 @@ import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { OrderStatus } from '@types';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import * as auditPort from '@infrastructure/observability/audit';
+import { observePort } from '@tests/ports';
+import { ordersAuditActions } from '../../audit';
 import { orderModel } from '../../model';
+
+/* Replaced, not spied on — see `tests/support/ports.ts` for why. */
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
 
 setupTestDb();
 
@@ -55,6 +63,24 @@ describe('PUT /orders/{id}/shipping-address', () => {
             .set('Authorization', bearer);
         expect(JSON.stringify(timeline.body)).toContain('address_corrected');
         expect(JSON.stringify(timeline.body)).not.toContain('Analytical');
+    });
+
+    it('audits the correction once, naming the order and never the address', async () => {
+        const { order } = await seedPaidOrder();
+        const { bearer } = await authenticateAsRole('admin');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await api()
+            .put(`/orders/${String(order._id)}/shipping-address`)
+            .set('Authorization', bearer)
+            .send(AFTER);
+
+        const rows = auditSpy.mock.calls
+            .map(([event]) => event)
+            .filter(({ action }) => action === ordersAuditActions.ADMIN_ORDER_ADDRESS_CORRECTED);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ targetType: 'order', targetId: String(order._id) });
+        expect(JSON.stringify(rows[0])).not.toContain('Analytical');
     });
 
     it('shows the buyer the new address on the order, and no row about the change', async () => {
