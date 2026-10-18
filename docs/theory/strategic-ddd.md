@@ -240,9 +240,15 @@ way a handle does. What it never publishes, no matter how convenient:
   Publishing it is a repository export one level up: the write goes through, the checks don't. A
   judgement call, not a file name, so a person marks the step `@internal` (TSDoc's own tag, with
   the one-line reason). `tests/cross-cutting/guarded-steps-stay-unpublished.test.ts` then refuses
-  any tagged step a barrel reaches, and the
+  any tagged step a barrel reaches (also when a service object bundles it as `{ x: ns.fn }`), and the
   `scripts/audit/reachability/SKILL.md` audit (see [AI Auditing](../tools/ai-auditing.md))
   hunts the ones nobody has tagged.
+
+    The same rule holds for the raw write a `…ById` door delegates to (`update(doc)`, `remove(doc)`):
+    the barrel publishes the door, not the write. When a sibling has a legitimate reason to hold the
+    loaded document, the module names a narrower door for it: `users` serves `account` through
+    `updateOwnProfile`, `eraseOwnAccount`, `softDeleteInactive` and `eraseInactive`, see
+    [users](../modules/users.md#the-doors-a-sibling-module-may-use).
 
 - **The model's runtime** — the mongoose schema, its `toJSON` transform, the model object itself.
   `export type * from './model'` still publishes every type the model declares; only the values
