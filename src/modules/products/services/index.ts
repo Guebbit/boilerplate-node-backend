@@ -23,6 +23,8 @@ import {
     findPublicById,
     findManyByIds,
     countPublic,
+    listPublicPage,
+    countListed,
     syncStockCache,
     titlesOf,
     titlesById
@@ -67,6 +69,8 @@ export const productService = {
     findPublicById,
     findManyByIds,
     countPublic,
+    listPublicPage,
+    countListed,
     syncStockCache,
     titlesOf,
     titlesById,

@@ -35,6 +35,14 @@ const PUBLIC_SCOPE: Readonly<Record<string, unknown>> = {
     deletedAt: { $exists: false }
 };
 
+/** What a sitemap needs of a public product: where it lives and when its content last changed. */
+export interface ListedProduct {
+    /** The product's id, as the path segment of its page. */
+    id: string;
+    /** When the product, or a translation of it, last changed; absent only on a row no write has touched. */
+    updatedAt?: Date;
+}
+
 /**
  * The stock numbers `inventory` copies onto a product, so a catalogue read needs no join: what is
  * on the shelf and claimed, and the preorder allowance and what is claimed against it.
@@ -59,6 +67,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
     ) => Promise<ProductDocument | null>;
     findPublicById: (productId: string) => Promise<ProductDocument | null>;
     facets: () => Promise<{ categories: FacetCount[]; tags: FacetCount[] }>;
+    listedPage: (skip: number, limit: number) => Promise<ListedProduct[]>;
     syncStockCache: (
         productId: string,
         counters: StockCounters,
@@ -114,6 +123,26 @@ export const productRepository: Repository<ProductDocument, Product> & {
      */
     findPublicById: (productId: string) =>
         productRepository.findByIdScoped(productId, PUBLIC_SCOPE),
+
+    /**
+     * One page of the public catalogue, oldest id first, as nothing but id and `updatedAt`.
+     *
+     * Skip/limit over the `_id` index: the order is stable while the catalogue grows at the end,
+     * and the two-field projection keeps a 50,000-row page small.
+     *
+     * @param skip - how many public products come before the page
+     * @param limit - the page size
+     */
+    listedPage: (skip: number, limit: number): Promise<ListedProduct[]> =>
+        productModel
+            .find(PUBLIC_SCOPE)
+            .select({ updatedAt: 1 })
+            .sort({ _id: 1 })
+            .skip(skip)
+            .limit(limit)
+            .lean()
+            .exec()
+            .then((rows) => rows.map((row) => ({ id: String(row._id), updatedAt: row.updatedAt }))),
 
     /**
      * Every category and tag the PUBLIC catalogue carries, counted.

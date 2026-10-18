@@ -12,7 +12,7 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { becameBuyable } from '../domain/buyable';
 import { PRODUCT_BUYABLE_AGAIN } from '../events';
-import { productRepository, type StockCounters } from '../repository';
+import { productRepository, type ListedProduct, type StockCounters } from '../repository';
 
 /**
  * The plain, untransformed document — `inventory` and `orders` read a product's live counters
@@ -151,3 +151,16 @@ export const titlesOf = (product: ProductDocument): Promise<Record<string, strin
  */
 export const titlesById = (productId: string): Promise<Record<string, string>> =>
     productRepository.findById(productId).then((product) => (product ? titlesOf(product) : {}));
+
+/**
+ * One page of the public catalogue for a sitemap: id and last-change date only, in a stable order.
+ *
+ * @param page - 1-based page number
+ * @param pageSize - how many products a page holds
+ */
+export const listPublicPage = (page: number, pageSize: number): Promise<ListedProduct[]> =>
+    productRepository.listedPage((page - 1) * pageSize, pageSize);
+
+/** How many products the public catalogue holds — a sitemap sizes its pages from it. */
+export const countListed = (): Promise<number> =>
+    productRepository.count(productRepository.publicScope());
