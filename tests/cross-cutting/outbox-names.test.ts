@@ -177,6 +177,7 @@ it('publishes the set the pair agreed on', () => {
         'account.reset-confirm',
         'account.reset-request',
         'account.setup-request',
+        'account.sign-in-method-changed',
         'account.two-factor-changed',
         'account.two-factor-code',
         'account.two-factor-locked',

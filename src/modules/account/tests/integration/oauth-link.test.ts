@@ -1,7 +1,7 @@
 /**
  * @module
- * `loginOrCreateFromOAuth`'s three branches (`services/oauth.ts`) — the find-or-create/link logic
- * behind every OAuth callback. Touches the real database (an identity lookup, a linking `$push`, a
+ * `loginOrCreateFromOAuth`'s branches and the signed-in connect (`services/oauth.ts`) — the
+ * find-or-create logic behind every OAuth callback, and the only door that links a provider. Touches the real database (an identity lookup, a linking `$push`, a
  * user creation), so it lives here rather than in `tests/unit` alongside the pure provider logic.
  */
 
@@ -14,11 +14,17 @@ import * as analyticsPort from '@infrastructure/observability/analytics';
 import { observePort } from '@tests/ports';
 import { rehostRemoteImage } from '@infrastructure/adapters/remote-image';
 import {
+    linkProviderToSignedInAccount,
     loginOrCreateFromOAuth,
     presentClaim,
+    startOAuthLink,
+    unlinkOAuthProvider,
+    OAuthAccountExistsError,
     OAuthEmailUnverifiedError,
     OAuthAccountUnverifiedError,
-    OAuthAccountUnavailableError
+    OAuthAccountUnavailableError,
+    OAuthIdentityTakenError,
+    OAuthLinkExpiredError
 } from '../../services/oauth';
 import { accountAuditActions } from '../../audit';
 import { accountAnalyticsEvents } from '../../analytics';
@@ -39,7 +45,25 @@ jest.mock('@infrastructure/adapters/remote-image', () => ({
     rehostRemoteImage: jest.fn().mockResolvedValue(undefined)
 }));
 
+/** Every queued mail, newest last. */
+const mockOutbox: { to?: string; template: string; data: Record<string, unknown> }[] = [];
+
+jest.mock('@infrastructure/adapters/mailer', () => ({
+    ...jest.requireActual<typeof import('@infrastructure/adapters/mailer')>(
+        '@infrastructure/adapters/mailer'
+    ),
+    enqueueEmail: jest.fn(
+        (envelope: { to?: string }, template: string, data: Record<string, unknown>) => {
+            mockOutbox.push({ to: envelope.to, template, data });
+            return Promise.resolve();
+        }
+    )
+}));
+
 setupTestDb();
+beforeEach(() => {
+    mockOutbox.length = 0;
+});
 afterEach(() => jest.clearAllMocks());
 
 /** A provider identity, verified by default — the shape `exchangeCode` hands the service. */
@@ -86,48 +110,39 @@ describe('loginOrCreateFromOAuth — case 1: an already-linked identity', () => 
 });
 
 describe('loginOrCreateFromOAuth — case 2: a verified email matching an existing account', () => {
-    it('links the new identity onto the account, audited with its real role', async () => {
+    /*
+     * NIST SP 800-63C-4 §3.8.1: linking needs an authenticated session with the account. A sign-in
+     * whose email merely matches is refused, however many proofs of the address both sides hold, and
+     * leaves the account exactly as it was (the owner connects the provider from their profile).
+     */
+    it('links nothing and audits nothing: the owner connects from a signed-in session', async () => {
         const user = await createUser({ email: identity().email, verifiedAt: new Date() }, 'admin');
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        const resolved = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
+        await expect(
+            loginOrCreateFromOAuth('google', identity(), testCallerContext)
+        ).rejects.toBeInstanceOf(OAuthAccountExistsError);
 
-        expect(resolved.outcome).toBe('link');
-        expect(resolved.user.id).toBe(user.id);
+        expect(await oauthAccountsOf(user.id)).toEqual([]);
         expect(await userRepository.count({})).toBe(1);
-        const linked = await oauthAccountsOf(user.id);
-        expect(linked).toHaveLength(1);
-        expect(linked[0]).toMatchObject({ provider: 'google', providerId: 'subject-1' });
-        // The link audit's role comes from the account, not a constant: an account that already
-        // holds 'admin' is the shape a first-ever OAuth link on an existing admin account takes.
-        expect(auditSpy).toHaveBeenCalledWith(
-            expect.objectContaining({
-                action: accountAuditActions.AUTH_OAUTH_LINKED,
-                actorUserId: user.id,
-                actorRole: 'admin'
-            })
-        );
+        expect(auditSpy).not.toHaveBeenCalled();
     });
 
-    it('still audits the link, but not as a completed login, when 2FA is armed', async () => {
+    it('leaves a 2FA account unlinked too: no link is saved before the challenge', async () => {
         const user = await createUser({
             email: identity().email,
             verifiedAt: new Date(),
             twoFactorEnabledAt: new Date().toISOString()
         });
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
 
-        const resolved = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
+        await expect(
+            loginOrCreateFromOAuth('google', identity(), testCallerContext)
+        ).rejects.toBeInstanceOf(OAuthAccountExistsError);
 
-        expect(resolved.user.id).toBe(user.id);
-        expect(auditSpy).toHaveBeenCalledWith(
-            expect.objectContaining({ action: accountAuditActions.AUTH_OAUTH_LINKED })
-        );
-        expect(analyticsSpy).not.toHaveBeenCalled();
+        expect(await oauthAccountsOf(user.id)).toEqual([]);
     });
 
-    it('refuses to link when the provider does not vouch for the email, and changes nothing', async () => {
+    it('refuses when the provider does not vouch for the email, and changes nothing', async () => {
         const user = await createUser({ email: identity().email, verifiedAt: new Date() });
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
@@ -141,11 +156,10 @@ describe('loginOrCreateFromOAuth — case 2: a verified email matching an existi
 
     /*
      * Pre-account-takeover. The attacker holds `victim@example.com` with their own password and
-     * cannot prove it; the victim arrives through the provider. Linking here would hand them an
-     * account the attacker still has the password to — so BOTH sides must have proved the
-     * address, and the victim's way in is the reset, which proves the same mailbox.
+     * cannot prove it; the victim arrives through the provider. The refusal names the remedy (the
+     * reset proves the same mailbox) instead of `account_exists`.
      */
-    it('refuses to link onto an account that never proved the address itself', async () => {
+    it('refuses an account that never proved the address itself, with its own error', async () => {
         const user = await createUser({ email: identity().email });
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
@@ -159,6 +173,156 @@ describe('loginOrCreateFromOAuth — case 2: a verified email matching an existi
         const refreshed = await userRepository.findById(user.id);
         expect(refreshed?.verifiedAt ?? null).toBeNull();
         expect(auditSpy).not.toHaveBeenCalled();
+    });
+});
+
+/** An account that started a connect attempt, and the token its callback redeems. */
+const connecting = async (overrides: Record<string, unknown> = {}) => {
+    const user = await createUser({
+        email: 'owner@example.com',
+        verifiedAt: new Date(),
+        ...overrides
+    });
+    return { user, token: await startOAuthLink(user.id) };
+};
+
+describe('connecting a provider from a signed-in session', () => {
+    it('links the identity to the account that started it, whatever email the provider holds', async () => {
+        const { user, token } = await connecting();
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        const linked = await linkProviderToSignedInAccount(
+            token,
+            'google',
+            identity({ email: 'a-different-address@example.com' }),
+            testCallerContext
+        );
+
+        expect(linked.id).toBe(user.id);
+        expect(await oauthAccountsOf(user.id)).toEqual([
+            expect.objectContaining({ provider: 'google', providerId: 'subject-1' })
+        ]);
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_OAUTH_LINKED,
+                actorUserId: user.id
+            })
+        );
+    });
+
+    it('mails the owner that a sign-in method was added, naming the provider and no link', async () => {
+        const { user, token } = await connecting();
+
+        await linkProviderToSignedInAccount(token, 'github', identity(), testCallerContext);
+
+        const mails = mockOutbox.filter(
+            ({ template }) => template === 'account.sign-in-method-changed'
+        );
+        const mail = mails[0];
+        expect(mails).toHaveLength(1);
+        expect(mail?.to).toBe(user.email);
+        expect(JSON.stringify(mail?.data)).toContain('github');
+        expect(JSON.stringify(mail?.data)).not.toMatch(/https?:\/\//);
+    });
+
+    it('spends the token: a replayed callback is an expired attempt, linking nothing twice', async () => {
+        const { user, token } = await connecting();
+        await linkProviderToSignedInAccount(token, 'google', identity(), testCallerContext);
+
+        await expect(
+            linkProviderToSignedInAccount(
+                token,
+                'github',
+                identity({ providerId: 'subject-2' }),
+                testCallerContext
+            )
+        ).rejects.toBeInstanceOf(OAuthLinkExpiredError);
+
+        expect(await oauthAccountsOf(user.id)).toHaveLength(1);
+    });
+
+    it('refuses a missing or unknown token as an expired attempt', async () => {
+        await expect(
+            linkProviderToSignedInAccount(undefined, 'google', identity(), testCallerContext)
+        ).rejects.toBeInstanceOf(OAuthLinkExpiredError);
+        await expect(
+            linkProviderToSignedInAccount('nope', 'google', identity(), testCallerContext)
+        ).rejects.toBeInstanceOf(OAuthLinkExpiredError);
+    });
+
+    it('refuses an identity another account already holds, and links nothing', async () => {
+        const owner = await createUser({ email: 'holder@example.com', verifiedAt: new Date() });
+        await userRepository.linkOAuthAccount(owner.id, {
+            provider: 'google',
+            providerId: 'subject-1',
+            connectedAt: new Date()
+        });
+        const { user, token } = await connecting();
+
+        await expect(
+            linkProviderToSignedInAccount(token, 'google', identity(), testCallerContext)
+        ).rejects.toBeInstanceOf(OAuthIdentityTakenError);
+
+        expect(await oauthAccountsOf(user.id)).toEqual([]);
+        expect(await oauthAccountsOf(owner.id)).toHaveLength(1);
+    });
+
+    it('does not audit or mail again when the account already holds this provider', async () => {
+        const { user, token } = await connecting();
+        await userRepository.linkOAuthAccount(user.id, {
+            provider: 'google',
+            providerId: 'older-subject',
+            connectedAt: new Date()
+        });
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await linkProviderToSignedInAccount(token, 'google', identity(), testCallerContext);
+
+        expect(await oauthAccountsOf(user.id)).toHaveLength(1);
+        expect(auditSpy).not.toHaveBeenCalled();
+        expect(mockOutbox).toEqual([]);
+    });
+
+    it('refuses an account that was banned while the attempt was out', async () => {
+        const { user, token } = await connecting();
+        await userRepository.updateMany({ _id: user.id }, { active: false });
+
+        await expect(
+            linkProviderToSignedInAccount(token, 'google', identity(), testCallerContext)
+        ).rejects.toBeInstanceOf(OAuthAccountUnavailableError);
+
+        expect(await oauthAccountsOf(user.id)).toEqual([]);
+    });
+
+    it('mails the owner when a provider is removed', async () => {
+        const user = await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
+        await userRepository.linkOAuthAccount(user.id, {
+            provider: 'google',
+            providerId: 'subject-1',
+            connectedAt: new Date()
+        });
+
+        const removed = await unlinkOAuthProvider(user.id, 'google', testCallerContext);
+
+        expect(removed).toBe(true);
+        const mail = mockOutbox.find(
+            ({ template }) => template === 'account.sign-in-method-changed'
+        );
+        expect(mail?.to).toBe(user.email);
+        expect(JSON.stringify(mail?.data)).toContain('google');
+    });
+
+    it('mails nobody for a provider that was never linked', async () => {
+        const user = await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
+
+        expect(await unlinkOAuthProvider(user.id, 'google', testCallerContext)).toBe(false);
+        expect(mockOutbox).toEqual([]);
+    });
+
+    it('does not mail an account made through a provider: nothing was added to an account', async () => {
+        await loginOrCreateFromOAuth('google', identity(), testCallerContext);
+
+        expect(mockOutbox).toEqual([]);
     });
 });
 
@@ -209,24 +373,6 @@ describe('loginOrCreateFromOAuth — an account that may not authenticate', () =
             expect(await oauthAccountsOf(user.id)).toHaveLength(1);
         }
     );
-});
-
-describe('loginOrCreateFromOAuth — a repeated link', () => {
-    it('does not grow the array or audit again when the provider is already linked', async () => {
-        const user = await createUser({ email: identity().email, verifiedAt: new Date() });
-        await userRepository.linkOAuthAccount(user.id, {
-            provider: 'google',
-            providerId: 'older-subject',
-            connectedAt: new Date()
-        });
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-
-        const resolved = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
-
-        expect(resolved.user.id).toBe(user.id);
-        expect(await oauthAccountsOf(user.id)).toHaveLength(1);
-        expect(auditSpy).not.toHaveBeenCalled();
-    });
 });
 
 describe('loginOrCreateFromOAuth — case 3: a never-seen identity and email', () => {

@@ -27,6 +27,9 @@ export const OAUTH_CONTINUE_COOKIE = 'oauth_continue';
 /** The saved `?locale=` cookie — same lifetime and clearing points as {@link OAUTH_STATE_COOKIE}. */
 export const OAUTH_LOCALE_COOKIE = 'oauth_locale';
 
+/** The connect-attempt cookie: present only when a SIGNED-IN account is linking a provider. */
+export const OAUTH_LINK_COOKIE = 'oauth_link';
+
 /** Minutes-scale on purpose: long enough to pick a Google account, short enough to bound reuse. */
 const OAUTH_COOKIE_TTL_MS = 5 * 60 * 1000;
 
@@ -74,6 +77,16 @@ export const createVerifierCookie = (response: Response, verifier: string): void
 /** Clear the verifier cookie — called at every point {@link destroyStateCookie} is. */
 export const destroyVerifierCookie = (response: Response): void => {
     response.clearCookie(OAUTH_VERIFIER_COOKIE, oauthCookieOptions());
+};
+
+/** Set the connect-attempt cookie: the `oauth-link` token that names the account connecting. */
+export const createLinkCookie = (response: Response, token: string): void => {
+    response.cookie(OAUTH_LINK_COOKIE, token, oauthCookieOptions());
+};
+
+/** Clear the connect-attempt cookie — called at every point {@link destroyStateCookie} is. */
+export const destroyLinkCookie = (response: Response): void => {
+    response.clearCookie(OAUTH_LINK_COOKIE, oauthCookieOptions());
 };
 
 /** Set the `continue` cookie for one login attempt — only ever called with an already-validated path. */

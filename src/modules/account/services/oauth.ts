@@ -3,11 +3,13 @@
  * OAuth login/signup — the OAuth counterpart to `./login.ts`'s `login` and `./signup.ts`'s `signup`, one
  * layer above `../oauth/`'s provider mechanics (which know nothing about `UserDocument` or
  * audit/analytics — see that folder's own files). Three outcomes only: an already-linked identity
- * logs in, an email BOTH sides call verified links a NEW identity onto an existing password
- * account, and anything else signs up a fresh, password-less user.
+ * logs in, an email that matches an existing account is refused (linking needs a signed-in
+ * session), and anything else signs up a fresh, password-less user. Connecting a provider to a
+ * signed-in account is its own pair of steps: `startOAuthLink`, then `linkProviderToSignedInAccount`.
  */
 
 import { getCurrentLocale } from '@infrastructure/i18n';
+import { logger } from '@infrastructure/adapters/logger';
 import { userService, isAuthenticatable, type UserDocument } from '@modules/users';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { rehostRemoteImage } from '@infrastructure/adapters/remote-image';
@@ -19,6 +21,11 @@ import { accountAuditActions } from '../audit';
 import { recordAccountAudit } from './caller';
 import type { OAuthIdentity } from '../oauth/providers/port';
 import { termsAcceptance } from '../consent-record';
+import { OAUTH_LINK_TOKEN_TYPE, OAUTH_LINK_TTL_MS } from '../token-types';
+import { greetableName, recipientLocale, signInMethodChangedEmail } from '../emails';
+import type { SignInMethodChange } from '../emails';
+import { sendAccountMail } from './mail';
+import { issueToken, redeemLiveToken } from './tokens';
 
 /**
  * The provider vouches for this identity, but its email matches an EXISTING account whose own
@@ -68,47 +75,137 @@ export class OAuthAccountUnavailableError extends Error {
 }
 
 /**
- * Link a NEW provider identity onto an existing, verified-match account — the case-2 tail.
- *
- * The link itself always audits — it genuinely happened, with the account's REAL role (an
- * account linking its first provider is not necessarily a plain `user`). The `USER_LOGGED_IN`
- * analytics event is suppressed when the account has 2FA armed: the callback does not mint a
- * session in that case, it issues a challenge instead (see `get-oauth-callback.ts`'s 1b
- * handling), so linking is not yet a completed login.
+ * The provider vouches for this identity and its email matches an existing, verified account — but
+ * nobody is signed in to that account. A sign-in does not link a provider by email match: NIST
+ * SP 800-63C-4 §3.8.1 says the relying party SHALL require an authenticated session with the
+ * subscriber account for every linking function. The caller signs in the way the account allows
+ * and connects the provider from their profile (`startOAuthLink`). The callback controller turns
+ * this into `?error=account_exists`.
  */
-const linkToExistingAccount = (
+export class OAuthAccountExistsError extends Error {
+    /** @param email - the address the provider asserted, for the log line. */
+    constructor(email: string) {
+        super(
+            `OAuth identity matches an existing account; linking needs a signed-in session: ${email}`
+        );
+        this.name = 'OAuthAccountExistsError';
+    }
+}
+
+/**
+ * A signed-in account tried to connect a provider identity that already belongs to another account.
+ * One provider account signs in to one account here (`users_oauth_identity` is unique), so the
+ * callback answers `?error=already_linked` and links nothing.
+ */
+export class OAuthIdentityTakenError extends Error {
+    /** @param provider - the registry name, for the log line. */
+    constructor(provider: string) {
+        super(`OAuth ${provider} identity already belongs to another account`);
+        this.name = 'OAuthIdentityTakenError';
+    }
+}
+
+/**
+ * The connect attempt's token is missing, spent or expired: the person took longer than the
+ * minutes the attempt lives, or the callback was replayed. The callback answers `?error=link_expired`.
+ */
+export class OAuthLinkExpiredError extends Error {
+    constructor() {
+        super('OAuth connect attempt expired or already used');
+        this.name = 'OAuthLinkExpiredError';
+    }
+}
+
+/**
+ * Tell the account holder, out of band, that a sign-in provider was connected or removed.
+ * Fire-and-forget: the change already happened, and a queue that is briefly down must not turn it
+ * into an error.
+ *
+ * @param user - the account, carrying its address and locale
+ * @param change - connected or removed
+ * @param provider - the registry name
+ * @param context - the caller, whose locale is the fallback
+ */
+const notifySignInMethod = (
     user: UserDocument,
+    change: SignInMethodChange,
+    provider: string,
+    context: CallerContext
+): void => {
+    void sendAccountMail(
+        user.email,
+        signInMethodChangedEmail(
+            recipientLocale(user.locale, context),
+            greetableName(user, user.email),
+            change,
+            provider
+        ),
+        'normal'
+    ).catch((error: unknown) => {
+        logger.warn({ message: 'Could not queue a sign-in method notice.', error });
+    });
+};
+
+/**
+ * Start connecting a provider to the SIGNED-IN account: a short-lived token the callback redeems to
+ * learn which account is connecting. The caller sets it as a cookie beside the state and verifier.
+ *
+ * @param userId - the signed-in account
+ * @returns the plaintext token
+ */
+export const startOAuthLink = (userId: string): Promise<string> =>
+    issueToken(userId, OAUTH_LINK_TOKEN_TYPE, OAUTH_LINK_TTL_MS);
+
+/**
+ * Finish connecting a provider to the account that started it. The identity links to THAT account
+ * whatever its email says; an identity another account already holds is refused.
+ *
+ * The link always audits — it genuinely happened — and mails the owner (NIST SP 800-63C-4 §3.8):
+ * a change made from a stolen session is otherwise silent. An account that already holds this
+ * provider simply stays connected, with nothing new to record.
+ *
+ * @param linkToken - the `oauth-link` token the start put in the cookie
+ * @param provider - the registry name
+ * @param identity - what the provider's token exchange resolved
+ * @param context - for the audit row and the mail's locale
+ * @returns the account that connected
+ * @throws {@link OAuthLinkExpiredError} for a missing, spent or expired token
+ * @throws {@link OAuthAccountUnavailableError} for an account that may no longer authenticate
+ * @throws {@link OAuthIdentityTakenError} for an identity another account holds
+ */
+export const linkProviderToSignedInAccount = (
+    linkToken: string | undefined,
     provider: string,
     identity: OAuthIdentity,
     context: CallerContext
 ): Promise<UserDocument> =>
-    userService
-        .linkOAuthAccount(user.id, {
-            provider,
-            providerId: identity.providerId,
-            connectedAt: new Date()
-        })
-        .then((linked) =>
-            // Only a link that landed is a fact: an account that already holds this provider is
-            // simply signed in, with nothing new to record.
-            (linked
-                ? recordAccountAudit(context, user.id, {
-                      action: accountAuditActions.AUTH_OAUTH_LINKED,
-                      outcome: 'success',
-                      metadata: { via: provider }
-                  })
-                : Promise.resolve()
-            ).then(() => {
-                if (!user.twoFactorEnabledAt) {
-                    emitAnalyticsEvent({
-                        ...buildAnalyticsBase(context),
-                        distinctId: user.id,
-                        event: accountAnalyticsEvents.USER_LOGGED_IN
+    redeemLiveToken(OAUTH_LINK_TOKEN_TYPE, linkToken ?? '').then((user) => {
+        if (!user) throw new OAuthLinkExpiredError();
+        if (!isAuthenticatable(user)) throw new OAuthAccountUnavailableError(user.id);
+
+        return userService.findByOAuthIdentity(provider, identity.providerId).then((owner) => {
+            if (owner && owner.id !== user.id) throw new OAuthIdentityTakenError(provider);
+
+            return userService
+                .linkOAuthAccount(user.id, {
+                    provider,
+                    providerId: identity.providerId,
+                    connectedAt: new Date()
+                })
+                .then((linked) => {
+                    if (!linked) return user;
+
+                    return recordAccountAudit(context, user.id, {
+                        action: accountAuditActions.AUTH_OAUTH_LINKED,
+                        outcome: 'success',
+                        metadata: { via: provider }
+                    }).then(() => {
+                        notifySignInMethod(user, 'linked', provider, context);
+                        return user;
                     });
-                }
-                return user;
-            })
-        );
+                });
+        });
+    });
 
 /**
  * A provider claim, or `undefined` when it is missing, blank or whitespace. OIDC Core §5.3.2 says
@@ -185,12 +282,12 @@ const signupFromOAuth = (
     );
 
 /**
- * Which of the three branches {@link loginOrCreateFromOAuth} took — the controller needs this to
- * decide whether IT still owes an `AUTH_LOGIN`: a login does, once a session actually exists to
- * record; a link or a signup already audited itself in full here, and recording a second,
- * generic "login" on top would double-count the event.
+ * Which branch {@link loginOrCreateFromOAuth} took — the controller needs this to decide whether
+ * IT still owes an `AUTH_LOGIN`: a login does, once a session actually exists to record; a signup
+ * already audited itself in full here, and recording a second, generic "login" on top would
+ * double-count the event.
  */
-export type OAuthOutcome = 'login' | 'link' | 'signup';
+export type OAuthOutcome = 'login' | 'signup';
 
 /**
  * Resolve an `OAuthIdentity` to a `UserDocument`, creating or linking as needed.
@@ -250,10 +347,8 @@ export const loginOrCreateFromOAuth = (
                 // `OAuthAccountUnverifiedError`.
                 if (!byEmail.verifiedAt) throw new OAuthAccountUnverifiedError(identity.email);
 
-                return linkToExistingAccount(byEmail, provider, identity, context).then((user) => ({
-                    user,
-                    outcome: 'link' as const
-                }));
+                // Never a silent link: the account's owner connects the provider from a session.
+                throw new OAuthAccountExistsError(identity.email);
             });
         });
 
@@ -313,12 +408,17 @@ export const unlinkOAuthProvider = (
     context: CallerContext
 ): Promise<boolean> =>
     userService.unlinkOAuthAccount(userId, provider).then((removed) => {
-        if (removed)
-            recordAudit(context, {
-                action: accountAuditActions.AUTH_OAUTH_UNLINKED,
-                actorUserId: userId,
-                outcome: 'success',
-                metadata: { via: provider }
-            });
-        return removed;
+        if (!removed) return removed;
+
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_OAUTH_UNLINKED,
+            actorUserId: userId,
+            outcome: 'success',
+            metadata: { via: provider }
+        });
+        // Told after the fact, like a connect: whoever removed it, the owner reads about it.
+        return userService.findByIdWithCredentials(userId).then((user) => {
+            if (user) notifySignInMethod(user, 'unlinked', provider, context);
+            return removed;
+        });
     });

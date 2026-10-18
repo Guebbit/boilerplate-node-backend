@@ -39,6 +39,17 @@ export const EMAIL_CHANGE_UNDO_TOKEN_TYPE = 'email-change-undo';
 /** The `type` of a login's second-factor challenge — see `./services/two-factor-challenge`. */
 export const MFA_CHALLENGE_TOKEN_TYPE = 'mfa-challenge';
 
+/**
+ * The `type` of the short-lived token a signed-in account holds while it is out at a provider
+ * connecting a sign-in method. It is the callback's proof WHICH account is connecting: the browser
+ * returns from the provider with cookies only, and a bare provider identity must never link itself
+ * to whatever account its email happens to match (NIST SP 800-63C-4 §3.8.1).
+ */
+export const OAUTH_LINK_TOKEN_TYPE = 'oauth-link';
+
+/** How long a connect attempt may take at the provider — the same minutes-scale as the OAuth cookies. */
+export const OAUTH_LINK_TTL_MS = 5 * 60 * 1000;
+
 /** How long the undo link works — 7 days, long enough for someone who reads their mail weekly. */
 export const EMAIL_CHANGE_UNDO_TTL_MS = 7 * DAY_MS;
 
@@ -52,7 +63,8 @@ export const VERIFICATION_TOKEN_TYPES = [
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
     EMAIL_CHANGE_UNDO_TOKEN_TYPE,
-    MFA_CHALLENGE_TOKEN_TYPE
+    MFA_CHALLENGE_TOKEN_TYPE,
+    OAUTH_LINK_TOKEN_TYPE
 ] as const;
 
 /** One of {@link VERIFICATION_TOKEN_TYPES}. */
@@ -61,12 +73,13 @@ export type VerificationTokenType = (typeof VERIFICATION_TOKEN_TYPES)[number];
 /**
  * The kinds an account holds at most ONE live link of: issuing a new one replaces the old. The
  * schema's partial unique index covers exactly these, so replacing is one atomic upsert and two
- * simultaneous requests cannot leave two working links. A delete confirmation and an MFA challenge
- * are not here: several may be in flight at once.
+ * simultaneous requests cannot leave two working links. A second connect attempt replaces the first.
+ * A delete confirmation and an MFA challenge are not here: several may be in flight at once.
  */
 export const ONE_LIVE_TOKEN_TYPES: readonly VerificationTokenType[] = [
     PASSWORD_RESET_TOKEN_TYPE,
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
-    EMAIL_CHANGE_UNDO_TOKEN_TYPE
+    EMAIL_CHANGE_UNDO_TOKEN_TYPE,
+    OAUTH_LINK_TOKEN_TYPE
 ];

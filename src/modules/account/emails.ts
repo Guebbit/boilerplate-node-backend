@@ -258,6 +258,36 @@ export const twoFactorChangedEmail = (
     });
 };
 
+/** What happened to the account's sign-in providers, for {@link signInMethodChangedEmail}. */
+export type SignInMethodChange = 'linked' | 'unlinked';
+
+/**
+ * Sign-in method notice: sent out of band when a provider is connected to an existing account or
+ * removed from it. A change made from a stolen session is otherwise silent, and NIST SP 800-63C-4
+ * §3.8 says the account holder SHALL be told when a federated identifier is added or removed.
+ * Carries no link that acts. Not sent for an account made through a provider: nothing was added to
+ * an account somebody already had.
+ *
+ * @param change - connected or removed
+ * @param provider - the registry name (`google`, `github`)
+ */
+export const signInMethodChangedEmail = (
+    locale: string,
+    name: string,
+    change: SignInMethodChange,
+    provider: string
+): EmailContent => {
+    return accountMail({
+        template: 'account.sign-in-method-changed',
+        locale,
+        name,
+        body: (t) => ({
+            body: t(`account.email.sign-in-method-changed.body-${change}`, { provider }),
+            advice: t('account.email.sign-in-method-changed.advice')
+        })
+    });
+};
+
 /**
  * Two-factor lock notice: sent once, when too many wrong codes lock the account's 2FA checks.
  * Someone is guessing codes; the owner is the one person who can tell whether it was them.

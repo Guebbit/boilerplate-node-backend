@@ -228,12 +228,15 @@ describe('two simultaneous OAuth signups for one identity', () => {
             result.status === 'fulfilled' ? [result.value] : []
         );
         expect(responses).toHaveLength(RACE_SIZE);
-        // Each answer is a redirect: a session, or the generic provider failure — never a 500.
+        // Each answer is a redirect: a session, or a refusal — never a 500. A loser either hits the
+        // unique index (`provider_error`) or finds the winner's account by email, which a sign-in
+        // never links (`account_exists`); the retry below finds the identity and logs in.
         for (const response of responses) {
             expect(response.status).toBe(302);
             const signedIn = setCookie(response, '__Host-session') !== undefined;
-            const failed =
-                new URL(response.headers.location).searchParams.get('error') === 'provider_error';
+            const failed = ['provider_error', 'account_exists'].includes(
+                new URL(response.headers.location).searchParams.get('error') ?? ''
+            );
             expect(signedIn || failed).toBe(true);
         }
         expect(await userRepository.count({ email: 'oauth.demo@example.com' })).toBe(1);

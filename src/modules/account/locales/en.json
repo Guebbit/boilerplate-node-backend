@@ -177,6 +177,14 @@
                 "body-disabled": "Two-factor authentication was turned off on your account.",
                 "advice": "If this was not you, change your password and sign out everywhere now."
             },
+            "sign-in-method-changed": {
+                "subject": "A sign-in method changed on your account",
+                "meta-title": "Sign-in method changed",
+                "greeting": "Hello, {{name}}!",
+                "body-linked": "{{provider}} was connected to your account as a way to sign in.",
+                "body-unlinked": "{{provider}} was removed from your account as a way to sign in.",
+                "advice": "If this was not you, reset your password, then remove any sign-in method you do not recognise from your profile."
+            },
             "two-factor-locked": {
                 "subject": "Your two-factor checks are locked",
                 "meta-title": "Two-factor checks locked",

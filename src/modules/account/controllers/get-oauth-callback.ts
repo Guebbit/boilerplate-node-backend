@@ -20,10 +20,12 @@ import {
     destroyVerifierCookie,
     destroyContinueCookie,
     destroyLocaleCookie,
+    destroyLinkCookie,
     isSameOriginPath,
     isLocaleTag,
     OAUTH_STATE_COOKIE,
     OAUTH_VERIFIER_COOKIE,
+    OAUTH_LINK_COOKIE,
     OAUTH_CONTINUE_COOKIE,
     OAUTH_LOCALE_COOKIE
 } from '../oauth/state';
@@ -38,7 +40,10 @@ import {
     twoFactorService,
     OAuthEmailUnverifiedError,
     OAuthAccountUnverifiedError,
-    OAuthAccountUnavailableError
+    OAuthAccountUnavailableError,
+    OAuthAccountExistsError,
+    OAuthIdentityTakenError,
+    OAuthLinkExpiredError
 } from '../services';
 import { issueSession } from '../session/session';
 import { recordLoginSuccess } from '../session/login-observability';
@@ -46,7 +51,7 @@ import { rememberDevice } from '../session/device-cookie';
 import { authOauthTotal } from '../metrics';
 
 /**
- * Clears all four single-attempt OAuth cookies — called at every outcome of one login attempt,
+ * Clears all five single-attempt OAuth cookies — called at every outcome of one login attempt,
  * success or failure, since none of the state, the verifier or the saved `continue` path and locale is any
  * use past this callback.
  */
@@ -55,12 +60,14 @@ const clearOAuthCookies = (response: Response): void => {
     destroyVerifierCookie(response);
     destroyContinueCookie(response);
     destroyLocaleCookie(response);
+    destroyLinkCookie(response);
 };
 
 /**
  * GET /account/oauth/:provider/callback
  * Validates the CSRF `state`, exchanges the code, then finds-or-creates the account and mints a
- * session exactly the way `postLogin`'s success tail does — minus the access token, which the
+ * session exactly the way `postLogin`'s success tail does (a connect attempt from a signed-in
+ * account links instead and mints nothing) — minus the access token, which the
  * frontend's `POST /account/refresh` bootstrap mints once it lands.
  */
 export const getOAuthCallback = (request: Request, response: Response) => {
@@ -132,6 +139,57 @@ export const getOAuthCallback = (request: Request, response: Response) => {
     // Read before the code exchange: a password changed while it runs must refuse this login.
     const provedAt = Date.now();
 
+    // A connect attempt carries its own cookie, set by the signed-in start. It never signs anyone in:
+    // the account that began it is already signed in, so the callback links the identity to THAT
+    // account and sends the browser back to where it was.
+    const linkToken = cookieOf(request, OAUTH_LINK_COOKIE);
+    if (typeof linkToken === 'string' && linkToken.length > 0) {
+        return provider
+            .exchangeCode(oauthCallbackUrl(provider.name, request.originalUrl), {
+                state: String(cookieOf(request, OAUTH_STATE_COOKIE)),
+                codeVerifier: verifier
+            })
+            .then((identity) =>
+                accountService.linkProviderToSignedInAccount(
+                    linkToken,
+                    provider.name,
+                    identity,
+                    context
+                )
+            )
+            .then(() => {
+                authOauthTotal.inc({ provider: providerName, status: 'success' });
+                clearOAuthCookies(response);
+                response.redirect(
+                    302,
+                    oauthFrontendCallbackUrl(undefined, continueTo, savedLocale(), provider.name)
+                );
+            })
+            .catch((error: unknown) => {
+                // The identity belongs to someone else: the person must disconnect it there first.
+                if (error instanceof OAuthIdentityTakenError) {
+                    failToFrontend('already_linked');
+                    return;
+                }
+                if (error instanceof OAuthLinkExpiredError) {
+                    failToFrontend('link_expired');
+                    return;
+                }
+                if (error instanceof OAuthAccountUnavailableError) {
+                    failToFrontend('provider_error');
+                    return;
+                }
+                // Stryker disable all
+                logger.error({
+                    message: 'OAuth connect callback failed',
+                    provider: providerName,
+                    error
+                });
+                // Stryker restore all
+                failToFrontend('provider_error');
+            });
+    }
+
     return provider
         .exchangeCode(oauthCallbackUrl(provider.name, request.originalUrl), {
             state: String(cookieOf(request, OAUTH_STATE_COOKIE)),
@@ -186,6 +244,12 @@ export const getOAuthCallback = (request: Request, response: Response) => {
         .catch((error: unknown) => {
             if (error instanceof OAuthEmailUnverifiedError) {
                 failToFrontend('email_unverified');
+                return;
+            }
+            // A matching account exists, but a sign-in does not link: the owner signs in the way
+            // the account allows and connects the provider from their profile.
+            if (error instanceof OAuthAccountExistsError) {
+                failToFrontend('account_exists');
                 return;
             }
             // A DIFFERENT code from the one above, because the remedy is different: there the

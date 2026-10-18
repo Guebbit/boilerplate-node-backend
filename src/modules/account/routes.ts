@@ -72,6 +72,7 @@ import { getSessionConfig } from './controllers/get-session-config';
 import { postSessionTouch } from './controllers/post-session-touch';
 import { getOAuthLinks } from './controllers/get-oauth-links';
 import { deleteOAuthLink } from './controllers/delete-oauth-link';
+import { postOAuthLinkStart } from './controllers/post-oauth-link-start';
 import { getOAuthStart } from './controllers/get-oauth-start';
 import { getOAuthCallback } from './controllers/get-oauth-callback';
 import { noStore } from '@infrastructure/http/middlewares/cache';
@@ -367,6 +368,11 @@ router.get('/oauth/providers', getOAuthProviders);
 // GET /account/oauth/links — the caller's connected providers. Registered ABOVE the `:provider`
 // route below, like `/oauth/providers`, so it is not swallowed by it.
 router.get('/oauth/links', isAuth, getOAuthLinks);
+
+// POST /account/oauth/links/:provider — connect a provider to the SIGNED-IN account. Sensitive
+// tier like the removal: it adds a way into the account, and a sign-in never links by email match
+// (NIST SP 800-63C-4 §3.8.1), so this is the only door. Answers the consent URL as JSON.
+router.post('/oauth/links/:provider', isAuth, requireFreshAuth('sensitive'), postOAuthLinkStart);
 
 // DELETE /account/oauth/links/:provider — disconnect one provider. Sensitive tier: it removes a way
 // into the account, an identity change like the email.

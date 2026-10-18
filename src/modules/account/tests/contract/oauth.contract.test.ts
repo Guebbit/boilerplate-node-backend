@@ -12,12 +12,16 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, bearerForCookie } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
 import { codeFor } from '@tests/totp';
-import { createUser, userRepository } from '@modules/users/tests/factories';
+import { createUser, userRepository, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { registerOAuthProvider } from '../../oauth/providers';
 import { fakeOAuthProvider } from '@scenarios/support/doubles/oauth-fake';
 import { claimedAmr } from './support';
+import { freezeDate, advanceDate } from '@tests/clock';
+import { reauthWindowSeconds } from '@kernel/config';
 
 setupTestDb();
+
+afterEach(() => jest.useRealTimers());
 
 /** The fake provider, but answering an address the provider itself has not verified. */
 const unverifiedOAuthProvider = {
@@ -399,5 +403,146 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
         const response = await api().post('/account/login/2fa').send({ code: '000000' });
 
         expect(response.status).toBe(401);
+    });
+});
+
+/** A password sign-in of `email`, as the bearer a signed-in client sends. */
+const signInAs = (email: string) =>
+    api()
+        .post('/account/login')
+        .send({ email, password: PLAIN_PASSWORD })
+        .then((login) => `Bearer ${login.body.data.token as string}`);
+
+/** The provider names linked to an account, straight from the database. */
+const linksOf = (userId: string) =>
+    userRepository
+        .findByIdWithCredentials(userId)
+        .then((user) => (user?.oauthAccounts ?? []).map(({ provider }) => provider));
+
+describe('a sign-in whose email matches an existing account', () => {
+    it('links nothing and signs nobody in: ?error=account_exists', async () => {
+        const user = await createUser({ email: 'oauth.demo@example.com', verifiedAt: new Date() });
+
+        const response = await fakeLogin();
+
+        expect(response.status).toBe(302);
+        expect(new URL(response.headers.location).searchParams.get('error')).toBe('account_exists');
+        expect(setCookie(response, '__Host-session')).toBeUndefined();
+        expect(await linksOf(user.id)).toEqual([]);
+    });
+});
+
+/** The connect start for `provider`, then the callback it leads to, with the cookies between. */
+const connect = async (bearer: string, provider = 'fake') => {
+    const start = await api()
+        .post(`/account/oauth/links/${provider}?continue=%2Fprofile`)
+        .set('Authorization', bearer);
+    const callbackUrl = new URL(start.body.data.authorizeUrl as string);
+    const callback = await api()
+        .get(callbackUrl.pathname + callbackUrl.search)
+        .set(
+            'Cookie',
+            cookieHeader(start, 'oauth_state', 'oauth_verifier', 'oauth_link', 'oauth_continue')
+        );
+    return { start, callback };
+};
+
+describe('POST /account/oauth/links/:provider', () => {
+    it('needs a signed-in caller', async () => {
+        const response = await api().post('/account/oauth/links/fake');
+
+        expect(response.status).toBe(401);
+    });
+
+    it('answers 404 for a provider this deployment never configured', async () => {
+        await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
+        const bearer = await signInAs('owner@example.com');
+
+        const response = await api()
+            .post('/account/oauth/links/not-a-real-provider')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('answers the consent URL and sets the state, verifier and connect cookies', async () => {
+        await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
+        const bearer = await signInAs('owner@example.com');
+
+        const response = await api().post('/account/oauth/links/fake').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.authorizeUrl).toContain('/account/oauth/fake/callback');
+        for (const name of ['oauth_state', 'oauth_verifier', 'oauth_link'])
+            expect(setCookie(response, name)).toMatch(/HttpOnly/i);
+    });
+
+    it('links the provider to the signed-in account, mints no session, and sends the browser back', async () => {
+        const user = await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
+        const bearer = await signInAs('owner@example.com');
+
+        const { callback } = await connect(bearer);
+
+        expect(callback.status).toBe(302);
+        const location = new URL(callback.headers.location);
+        expect(location.searchParams.get('linked')).toBe('fake');
+        expect(location.searchParams.get('continue')).toBe('/profile');
+        expect(location.searchParams.has('error')).toBe(false);
+        expect(setCookie(callback, '__Host-session')).toBeUndefined();
+        expect(setCookie(callback, 'oauth_link')).toMatch(/oauth_link=;/);
+        expect(await linksOf(user.id)).toEqual(['fake']);
+    });
+
+    it('refuses a provider account that already belongs to another account: ?error=already_linked', async () => {
+        const holder = await createUser({ email: 'holder@example.com', verifiedAt: new Date() });
+        await userRepository.linkOAuthAccount(holder.id, {
+            provider: 'fake',
+            providerId: 'fake-oauth-subject',
+            connectedAt: new Date()
+        });
+        const user = await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
+        const bearer = await signInAs('owner@example.com');
+
+        const { callback } = await connect(bearer);
+
+        expect(new URL(callback.headers.location).searchParams.get('error')).toBe('already_linked');
+        expect(await linksOf(user.id)).toEqual([]);
+    });
+
+    it('treats a replayed callback as an expired attempt: ?error=link_expired', async () => {
+        await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
+        const bearer = await signInAs('owner@example.com');
+        const start = await api().post('/account/oauth/links/fake').set('Authorization', bearer);
+        const callbackUrl = new URL(start.body.data.authorizeUrl as string);
+        const cookies = cookieHeader(start, 'oauth_state', 'oauth_verifier', 'oauth_link');
+        await api()
+            .get(callbackUrl.pathname + callbackUrl.search)
+            .set('Cookie', cookies);
+
+        const replay = await api()
+            .get(callbackUrl.pathname + callbackUrl.search)
+            .set('Cookie', cookies);
+
+        expect(new URL(replay.headers.location).searchParams.get('error')).toBe('link_expired');
+    });
+
+    it('needs a fresh session: a stale one is asked to prove itself again', async () => {
+        freezeDate();
+        await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
+        const login = await api()
+            .post('/account/login')
+            .send({ email: 'owner@example.com', password: PLAIN_PASSWORD });
+        advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
+        // The access token expired along the way; the refresh cookie mints one whose `auth_time` is old.
+        const refreshed = await api()
+            .post('/account/refresh')
+            .set('Cookie', cookieHeader(login, '__Host-session'));
+
+        const response = await api()
+            .post('/account/oauth/links/fake')
+            .set('Authorization', `Bearer ${refreshed.body.data.token as string}`);
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
     });
 });

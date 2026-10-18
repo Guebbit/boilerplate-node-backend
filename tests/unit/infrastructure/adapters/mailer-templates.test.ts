@@ -27,6 +27,7 @@ import {
     twoFactorCodeEmail,
     reauthCodeEmail,
     emailChangeNoticeEmail,
+    signInMethodChangedEmail,
     twoFactorChangedEmail,
     twoFactorLockedEmail,
     exportFailedEmail,
@@ -109,6 +110,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         'undo-token'
     ),
     'account.two-factor-changed': twoFactorChangedEmail(locale, 'Ada', 'enrolled', 'email'),
+    'account.sign-in-method-changed': signInMethodChangedEmail(locale, 'Ada', 'linked', 'google'),
     'account.two-factor-locked': twoFactorLockedEmail(locale, 'Ada', 15),
     'api-keys.minted': apiKeyMintedEmail(locale, 'ci', 'sk_abcd1234', 'October 13, 2026'),
     'api-keys.revoked': apiKeysRevokedEmail(locale, 'logout-all', ['ci (sk_abcd1234)']),

@@ -58,7 +58,10 @@ export { VERIFY_RESEND_SECONDS } from './verification';
 export {
     OAuthEmailUnverifiedError,
     OAuthAccountUnverifiedError,
-    OAuthAccountUnavailableError
+    OAuthAccountUnavailableError,
+    OAuthAccountExistsError,
+    OAuthIdentityTakenError,
+    OAuthLinkExpiredError
 } from './oauth';
 
 /**
@@ -108,6 +111,8 @@ export const accountService = {
     reapLapsedPreviousEmails: previousEmailCleanup.reapLapsedPreviousEmails,
     reapExpiredExports: exportRows.reapExpiredExports,
     loginOrCreateFromOAuth: oauth.loginOrCreateFromOAuth,
+    startOAuthLink: oauth.startOAuthLink,
+    linkProviderToSignedInAccount: oauth.linkProviderToSignedInAccount,
     recordOAuthFailure: oauth.recordOAuthFailure,
     listOAuthLinks: oauth.listOAuthLinks,
     unlinkOAuthProvider: oauth.unlinkOAuthProvider,

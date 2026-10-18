@@ -852,10 +852,61 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/oauth/links/{provider}:
+        post:
+            tags: [Auth]
+            summary: Connect a sign-in provider to the signed-in account
+            description: >-
+                The only way to add a provider to an account that already exists: a sign-in with a
+                provider whose email matches an account links nothing (`?error=account_exists` on the
+                callback), because linking needs an authenticated session with the account (NIST SP
+                800-63C-4 §3.8.1). Needs a fresh session (`401 REAUTH_REQUIRED`). Sets the short-lived
+                state, verifier and connect cookies and answers the provider's consent URL, which the
+                client navigates the browser to; the callback then links the identity to THIS account
+                and redirects to the frontend with `?linked=<provider>`. The owner is mailed that a
+                sign-in method was added. `continue` and `locale` ride the same cookies as a login.
+                Answers 404 for a provider this deployment never configured. A provider account that
+                already belongs to another account is refused at the callback (`?error=already_linked`).
+            operationId: startOAuthLink
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: provider
+                  in: path
+                  required: true
+                  schema:
+                      type: string
+                      maxLength: 32
+                  description: One of the `provider` names `GET /account/oauth/providers` lists.
+                - name: continue
+                  in: query
+                  required: false
+                  schema:
+                      type: string
+                      maxLength: 512
+                  description: A same-origin relative path to come back to; anything else is dropped.
+                - name: locale
+                  in: query
+                  required: false
+                  schema:
+                      type: string
+                      maxLength: 16
+                  description: The language tag the browser comes back in.
+            responses:
+                '200':
+                    description: Where to send the browser
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OAuthLinkStartEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Auth]
             summary: Disconnect a linked sign-in provider
-            description: Removes the link between the account and `provider`, so that provider can no longer sign in to it. Needs a fresh session (`401 REAUTH_REQUIRED`). There is no guard on removing the last sign-in method, by decision (forgot-password recovers an account that was left with none). Answers 404 when `provider` is not linked.
+            description: >-
+                Removes the link between the account and `provider`, so that provider can no longer sign in to it, and mails the owner that a sign-in method was removed. Nothing re-links it by email match, so reconnecting is `POST /account/oauth/links/{provider}` from a signed-in session. Needs a fresh session (`401 REAUTH_REQUIRED`). There is no guard on removing the last sign-in method, by decision (forgot-password recovers an account that was left with none). Answers 404 when `provider` is not linked.
             operationId: unlinkOAuthProvider
             security:
                 - bearerAuth: []
@@ -913,7 +964,7 @@ paths:
         get:
             tags: [Auth]
             summary: Complete an OAuth login
-            description: 'Browser-navigated only: where `provider` sends the browser back after consent. Validates `state`, exchanges the code, finds-or-creates the account, and redirects to the frontend with the session cookies set — or with `?error=<code>` on failure. When the account has two-factor authentication armed, no session is minted: the redirect instead carries `?mfaRequired=1&expiresAt=...&methods=...&defaultMethod=...` (the same fields MfaChallenge carries, minus the token itself), and the challenge token travels in a short-lived httpOnly cookie that POST /account/login/2fa and .../2fa/send read when their body omits `challenge`. Either success redirect also carries `?continue=<path>` when `GET /account/oauth/{provider}` saved one and it is still a valid same-origin path; every redirect, a failure''s included, carries `?locale=<tag>` likewise.'
+            description: 'Browser-navigated only: where `provider` sends the browser back after consent. Validates `state`, exchanges the code, finds-or-creates the account, and redirects to the frontend with the session cookies set — or with `?error=<code>` on failure. When the account has two-factor authentication armed, no session is minted: the redirect instead carries `?mfaRequired=1&expiresAt=...&methods=...&defaultMethod=...` (the same fields MfaChallenge carries, minus the token itself), and the challenge token travels in a short-lived httpOnly cookie that POST /account/login/2fa and .../2fa/send read when their body omits `challenge`. Either success redirect also carries `?continue=<path>` when `GET /account/oauth/{provider}` saved one and it is still a valid same-origin path; every redirect, a failure''s included, carries `?locale=<tag>` likewise. A provider whose verified email matches an existing account links nothing and signs nobody in: the redirect carries `?error=account_exists`, and the owner connects the provider from a signed-in session (`POST /account/oauth/links/{provider}`). That signed-in connect round trip comes back to this same callback, mints no session and redirects with `?linked=<provider>`, or `?error=already_linked` (the provider account belongs to another account) or `?error=link_expired` (the minutes the attempt lives ran out).'
             operationId: completeOAuthLogin
             security: []
             parameters:
@@ -1242,6 +1293,31 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/OAuthLinks'
+
+        OAuthLinkStart:
+            type: object
+            additionalProperties: false
+            required: [authorizeUrl]
+            properties:
+                authorizeUrl:
+                    type: string
+                    format: uri
+                    maxLength: 2048
+                    description: The provider's consent screen, with the state and PKCE challenge of this attempt. Navigate the browser to it.
+
+        OAuthLinkStartEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/OAuthLinkStart'
 
         OAuthProvidersEnvelope:
             type: object

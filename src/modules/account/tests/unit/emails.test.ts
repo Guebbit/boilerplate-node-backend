@@ -13,6 +13,7 @@ import {
     resetConfirmEmail,
     deleteRequestEmail,
     deleteConfirmEmail,
+    signInMethodChangedEmail,
     twoFactorChangedEmail,
     twoFactorLockedEmail,
     exportFailedEmail,
@@ -288,5 +289,39 @@ describe('greetableName — when the name may appear', () => {
     it('withholds it from any address that is not the account’s own', () => {
         expect(greetableName(user, 'someone-else@example.com')).toBe('');
         expect(greetableName(user, 'ada+tag@example.com')).toBe('');
+    });
+});
+
+describe('account emails — the sign-in method notice', () => {
+    it('renders its own template', () => {
+        expect(signInMethodChangedEmail('en', NAME, 'linked', 'google').template).toBe(
+            'account.sign-in-method-changed'
+        );
+    });
+
+    it.each(['linked', 'unlinked'] as const)(
+        'says %s in real copy, in both shipped languages, naming the provider and no raw keys',
+        (change) => {
+            for (const locale of ['en', 'it']) {
+                const { data, subject } = signInMethodChangedEmail(locale, NAME, change, 'github');
+
+                for (const value of [subject, data.greeting, data.body, data.advice]) {
+                    expect(typeof value).toBe('string');
+                    expect(value).not.toBe('');
+                    expect(value).not.toMatch(/^account\.email\./);
+                    expect(value).not.toContain('{{');
+                }
+                expect(data.body).toContain('github');
+                expect(data.greeting).toContain(NAME);
+            }
+        }
+    );
+
+    it('says a different sentence for a connect and a removal', () => {
+        const [linked, unlinked] = (['linked', 'unlinked'] as const).map(
+            (change) => signInMethodChangedEmail('en', NAME, change, 'google').data.body
+        );
+
+        expect(linked).not.toBe(unlinked);
     });
 });

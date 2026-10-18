@@ -188,6 +188,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "revoking one of the caller's own sessions"
     },
+    'account POST /oauth/links/:provider': {
+        requiresAuth: true,
+        reason: "connecting a sign-in provider to the caller's own account"
+    },
     'account DELETE /oauth/links/:provider': {
         requiresAuth: true,
         reason: "disconnecting one of the caller's own sign-in providers"

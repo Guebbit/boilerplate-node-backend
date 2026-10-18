@@ -281,14 +281,9 @@ const ARMED_ATTEMPTS: [name: string, attempt: () => Promise<Response>][] = [
             });
             return fakeLogin();
         }
-    ],
-    [
-        'OAuth link-by-email',
-        async () => {
-            await createUser({ email: FAKE_OAUTH_EMAIL, verifiedAt: new Date(), ...armed() });
-            return fakeLogin();
-        }
     ]
+    // No "link by email" row: a sign-in whose email matches links nothing (`account_exists`), so an
+    // armed account is never reached that way. `integration/oauth-link.test.ts` pins that.
 ];
 
 describe.each(ARMED_ATTEMPTS)('%s on an account with a second factor armed', (_name, attempt) => {

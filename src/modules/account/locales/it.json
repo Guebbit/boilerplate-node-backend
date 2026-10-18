@@ -177,6 +177,14 @@
                 "body-disabled": "La verifica in due passaggi è stata disattivata sul tuo account.",
                 "advice": "Se non sei stato tu, cambia la password ed esci da tutti i dispositivi adesso."
             },
+            "sign-in-method-changed": {
+                "subject": "Un metodo di accesso è cambiato sul tuo account",
+                "meta-title": "Metodo di accesso modificato",
+                "greeting": "Ciao, {{name}}!",
+                "body-linked": "{{provider}} è stato collegato al tuo account come modo per accedere.",
+                "body-unlinked": "{{provider}} è stato rimosso dal tuo account come modo per accedere.",
+                "advice": "Se non sei stato tu, reimposta la password e poi rimuovi dal tuo profilo ogni metodo di accesso che non riconosci."
+            },
             "two-factor-locked": {
                 "subject": "I controlli in due passaggi sono bloccati",
                 "meta-title": "Verifica in due passaggi bloccata",

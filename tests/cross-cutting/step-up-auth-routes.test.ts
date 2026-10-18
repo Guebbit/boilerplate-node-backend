@@ -72,6 +72,7 @@ const STEP_UP_ROUTES: Record<string, string[]> = {
     'account PATCH /': [`requireFreshAuthWhen(sensitive)`, `requireFreshAuthWhen(sensitive)`],
     'account POST /logout-all': [`requireFreshAuth(sensitive)`],
     // Disconnecting a provider removes a way into the account: an identity change, sensitive tier.
+    'account POST /oauth/links/:provider': [`requireFreshAuth(sensitive)`],
     'account DELETE /oauth/links/:provider': [`requireFreshAuth(sensitive)`],
     'account DELETE /sessions/:sessionId': [`requireFreshAuth(sensitive)`],
     // The data export adopts this same guard in place of a bespoke password check — see the

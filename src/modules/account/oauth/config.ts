@@ -139,14 +139,18 @@ const oauthFrontendCallbackBase = (): string => `${siteConfig().NODE_FRONTEND_UR
  *   does for a password login's `?continue=`.
  * @param locale - the saved `?locale=` tag, already validated by the caller against
  *   `oauth/state.ts#isLocaleTag`; the frontend opens its landing page in that language.
+ * @param linked - the provider a signed-in account just connected (`?linked=google`); the
+ *   frontend answers it with a confirmation instead of a sign-in.
  */
 export const oauthFrontendCallbackUrl = (
     errorCode?: string,
     continueTo?: string,
-    locale?: string
+    locale?: string,
+    linked?: string
 ): string => {
     const parameters = new URLSearchParams();
     if (errorCode) parameters.set('error', errorCode);
+    if (linked) parameters.set('linked', linked);
     if (continueTo) parameters.set('continue', continueTo);
     if (locale) parameters.set('locale', locale);
 

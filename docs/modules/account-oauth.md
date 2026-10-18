@@ -1,7 +1,7 @@
 # OAuth
 
 Signing in with somebody else's identity provider — the port, the CSRF handshake across the
-redirect, and the three outcomes a callback can have.
+redirect, and the outcomes a callback can have.
 [Web attack defences](../theory/defences/authentication.md#federated-login)
 carries the same three defences as attack rows — the `state` cookie, the server-derived URIs, and the
 linking rule — naming what each one stops. This page is the mechanism behind them.
@@ -164,7 +164,7 @@ names an origin, not a page: with no `continue` target and no saved language pre
 frontend has nothing else to tell an `/it/login` visitor from an `/en/login` one. A saved
 preference on the account still wins, exactly as it does for a password login.
 
-## Three outcomes, and the one that is a security decision
+## Outcomes, and the one that is a security decision
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 32, 'rankSpacing': 46}}}%%
@@ -175,22 +175,38 @@ flowchart TD
     Q3 -->|"no"| X["refuse —<br/>?error=email_unverified"]
     Q3 -->|"yes"| Q2{"an account with<br/>this email?"}
     Q2 -->|"no"| S["sign up, password-less<br/><i>case 3</i>"]
-    Q2 -->|"yes"| K["link the identity<br/><i>case 2</i>"]
+    Q2 -->|"yes"| K["link nothing —<br/>?error=account_exists<br/><i>case 2</i>"]
 
     classDef ok fill:#ccfbf1,stroke:#0f766e,color:#111827;
     classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
-    class L,S,K ok;
-    class X bad;
+    class L,S ok;
+    class X,K bad;
 ```
 
 ::: warning `providerId` is the identity key, never `email`
-An email match is consulted **only** when no identity is on file, and it only ever **links** — it
-never logs anyone in on its own. A provider's email can change while its subject id cannot, and
+An email match is consulted **only** when no identity is on file, and it never logs anyone in or
+links anything on its own: **a sign-in does not link a provider by email match.** NIST SP 800-63C-4
+§3.8.1 says the relying party SHALL require an authenticated session with the subscriber account for
+every linking function, so a match answers `?error=account_exists` ("sign in, then connect it from
+your profile") and writes nothing. A provider's email can change while its subject id cannot, and
 anyone able to register an OAuth app under a victim's address must not be able to walk into that
 account. `emailVerified` is the provider's own claim, and an unverified address is refused outright:
-it neither links to an account nor creates one, since a signup stamps the address as verified and
-would pre-hijack it.
+it neither matches an account nor creates one, since a signup stamps the address as verified and
+would pre-hijack it. It also closes an old gap: with 2FA armed, the link used to be saved before the
+second-factor challenge, so someone who failed the challenge still left a permanent link behind.
 :::
+
+### Connecting a provider, signed in
+
+The one door that links is `POST /account/oauth/links/:provider`, for a signed-in caller with a fresh
+session (sensitive tier). The browser comes back from the provider with cookies only, so the start
+issues a short-lived `oauth-link` token (5 minutes, spent on use) beside the state and verifier
+cookies: it is the callback's proof WHICH account is connecting. The same callback then links the
+identity to that account (whatever email the provider holds), mints no session, audits
+`AUTH_OAUTH_LINKED`, mails the owner and redirects with `?linked=<provider>`. A provider account that
+already belongs to another account is `?error=already_linked`; a missing, spent or expired token is
+`?error=link_expired`. Because removal is permanent and nothing re-links by email match, a provider
+the owner disconnected can never come back without them.
 
 Two identities minting the **same** never-before-seen account at once is the race the
 `users_oauth_identity` unique index exists for: the loser's `create` rejects with `E11000`, the
@@ -218,6 +234,9 @@ be read:
 | consent declined                   | `302 ?error=access_denied`    |
 | no `code`, or the exchange failed  | `302 ?error=provider_error`   |
 | email the provider won't vouch for | `302 ?error=email_unverified` |
+| email matches an existing account  | `302 ?error=account_exists`   |
+| connect: identity held elsewhere   | `302 ?error=already_linked`   |
+| connect: token missing or spent    | `302 ?error=link_expired`     |
 
 The success path calls the same `issueSession` [`postLogin`](./account-sessions.md) does, with
 `amr: [provider.name]` — so a Google login records **how** it was proved, and the freshness guards
@@ -229,10 +248,16 @@ read it like any other method. It returns no access token: the frontend's
 A linked provider is a way into the account, so its owner can see and remove it. Two routes, both
 for a signed-in caller, neither public:
 
-| Route                                   | Answers                                                           |
-| --------------------------------------- | ----------------------------------------------------------------- |
-| `GET /account/oauth/links`              | each linked provider and when it was connected, never its id      |
-| `DELETE /account/oauth/links/:provider` | removes the link; fresh session (sensitive tier); `404` if absent |
+| Route                                   | Answers                                                                |
+| --------------------------------------- | ---------------------------------------------------------------------- |
+| `GET /account/oauth/links`              | each linked provider and when it was connected, never its id           |
+| `POST /account/oauth/links/:provider`   | starts connecting one; fresh session (sensitive tier); the consent URL |
+| `DELETE /account/oauth/links/:provider` | removes the link; fresh session (sensitive tier); `404` if absent      |
+
+Both the connect and the removal mail the account's address (`account.sign-in-method-changed`, no link
+that acts): NIST SP 800-63C-4 §3.8 says the account holder SHALL be told when a federated identifier
+is added or removed, and a change made from a stolen session is otherwise silent. An account made
+through a provider gets no such mail, since nothing was added to an account somebody already had.
 
 There is **no guard on removing the last sign-in method**, by decision: forgot-password recovers a
 passwordless account, so a lock-out here is the owner's to repair, not a state to forbid. The
