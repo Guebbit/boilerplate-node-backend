@@ -563,6 +563,26 @@ describe('userService.updateById', () => {
         expect(imageStore.remove).not.toHaveBeenCalled();
     });
 
+    it('answers without the pending email address, which only the owner reads', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+        await userRepository.updateMany(
+            { _id: id },
+            { $set: { pendingEmail: 'next@example.com' } }
+        );
+
+        const result = await userService.updateById(
+            id,
+            { username: 'renamed' },
+            callerContextAs('admin')
+        );
+
+        expect((result as { data: UserDocument }).data.pendingEmail).toBeUndefined();
+        // Saving the plain document did not unset what it never loaded.
+        const owned = await userRepository.findByIdWithPendingEmail(id);
+        expect(owned!.pendingEmail).toBe('next@example.com');
+    });
+
     it('actually deactivates the account, not just the USER_DEACTIVATED event', async () => {
         const user = await createUser();
         const id = user._id.toString();

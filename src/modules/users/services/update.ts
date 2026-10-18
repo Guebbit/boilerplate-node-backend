@@ -414,7 +414,9 @@ export const updateById = (
     data: UpdateByIdData,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    userRepository.findByIdWithCredentials(id).then((user) => {
+    // The plain finder: an admin edit touches no credential, and the pending address is the
+    // owner's to read (`GET /account`), so it stays unloaded and out of the answer.
+    userRepository.findById(id).then((user) => {
         // Returned, not thrown: a thrown miss is indistinguishable from a genuine database error
         // at the `.catch()` that has to tell them apart.
         if (!user) return generateReject(404, [t('users.not-found')]);
