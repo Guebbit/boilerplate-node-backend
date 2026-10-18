@@ -27,8 +27,7 @@ import {
 } from './controllers/post-hold-fulfillment-order';
 import { patchShipment } from './controllers/patch-shipment';
 import { postConfirmWait } from './controllers/post-confirm-wait';
-import { getReleaseDateImpact } from './controllers/get-release-date-impact';
-import { getRestockDateImpact } from './controllers/get-restock-date-impact';
+import { getReleaseDateImpact, getRestockDateImpact } from './controllers/get-date-impact';
 import {
     getPreorderFulfillmentOrders,
     getPreorderSummary

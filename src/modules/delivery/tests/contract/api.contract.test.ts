@@ -23,6 +23,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
 import {
     fulfillmentOrdersOf,
+    paidBackorderOrder,
     paidPreorderOrder,
     shipEverything,
     shipmentsOf
@@ -783,5 +784,30 @@ describe('GET /delivery/fulfillment-orders/release-date-impact', () => {
         const response = await api().get(url).query({ productId }).set('Authorization', bearer);
 
         expect(response.status).toBe(403);
+    });
+});
+
+describe('GET /delivery/fulfillment-orders/restock-date-impact', () => {
+    const DAY = 86_400_000;
+    const url = '/delivery/fulfillment-orders/restock-date-impact';
+
+    it('matches the contract: one backordered buyer whose date is cleared is one buyer asked', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const { orderId, productId } = await paidBackorderOrder({
+            quantity: 1,
+            shelf: 0,
+            restockDate: new Date(Date.now() + 20 * DAY)
+        });
+
+        await fulfillmentOrdersOf(orderId);
+
+        const response = await api().get(url).query({ productId }).set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toEqual({
+            notify: 0,
+            ask: 1,
+            answerBy: expect.any(String)
+        });
     });
 });
