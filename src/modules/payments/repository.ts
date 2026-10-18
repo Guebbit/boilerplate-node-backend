@@ -150,6 +150,33 @@ export interface UpsertedPayment {
 }
 
 /**
+ * The answer both upserts give from a `findOneAndUpdate` run with `includeResultMetadata`: the row
+ * and whether this call inserted it. A duplicate-key collision is `null`, not an error: it means
+ * another writer inserted this order's row first, so the money already moved.
+ * @param query - the upsert, not yet run
+ */
+const upsertOutcome = (query: {
+    exec: () => Promise<{
+        value: PaymentDocument | null;
+        lastErrorObject?: { updatedExisting?: boolean } | undefined;
+    }>;
+}): Promise<UpsertedPayment | null> =>
+    query
+        .exec()
+        .then((result) =>
+            result.value
+                ? {
+                      payment: result.value,
+                      created: result.lastErrorObject?.updatedExisting === false
+                  }
+                : null
+        )
+        .catch((error: unknown) => {
+            if (isDuplicateKey(error)) return null;
+            throw error;
+        });
+
+/**
  * The mechanics {@link paymentRepository.upsertIntent} and {@link paymentRepository.upsertOffline}
  * share: the same filter — an order's row still sitting at a status nobody has paid past — the same
  * upsert options, and the same duplicate-key collision mapped to `null` rather than thrown, since
@@ -168,8 +195,8 @@ const upsertConfirmable = (
     changes: Record<string, unknown>,
     alsoTakes: Record<string, unknown>[] = []
 ): Promise<UpsertedPayment | null> =>
-    paymentModel
-        .findOneAndUpdate(
+    upsertOutcome(
+        paymentModel.findOneAndUpdate(
             {
                 orderId: toObjectId(orderId),
                 $or: [{ status: { $in: [...CONFIRMABLE_PAYMENT_STATUSES] } }, ...alsoTakes]
@@ -182,19 +209,7 @@ const upsertConfirmable = (
             // https://mongoosejs.com/docs/api/query.html#Query.prototype.findOneAndUpdate()
             { upsert: true, returnDocument: 'after', includeResultMetadata: true }
         )
-        .exec()
-        .then((result) =>
-            result.value
-                ? {
-                      payment: result.value,
-                      created: result.lastErrorObject?.updatedExisting === false
-                  }
-                : null
-        )
-        .catch((error: unknown) => {
-            if (isDuplicateKey(error)) return null;
-            throw error;
-        });
+    );
 
 /** The factory's CRUD, kept by name so the bespoke reads below can use `buildWhere`/`count`/`findAll`. */
 const base = createRepository<PaymentDocument, PaymentWire>(paymentModel, {
@@ -404,8 +419,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * as it is, and `created` says so.
      */
     openTransfer: (orderId, userId, data) =>
-        paymentModel
-            .findOneAndUpdate(
+        upsertOutcome(
+            paymentModel.findOneAndUpdate(
                 { orderId: toObjectId(orderId) },
                 {
                     $setOnInsert: {
@@ -418,19 +433,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 },
                 { upsert: true, returnDocument: 'after', includeResultMetadata: true }
             )
-            .exec()
-            .then((result) =>
-                result.value
-                    ? {
-                          payment: result.value,
-                          created: result.lastErrorObject?.updatedExisting === false
-                      }
-                    : null
-            )
-            .catch((error: unknown) => {
-                if (isDuplicateKey(error)) return null;
-                throw error;
-            }),
+        ),
 
     /**
      * The payment a bank-transfer reference names — the admin's lookup before recording a transfer.
