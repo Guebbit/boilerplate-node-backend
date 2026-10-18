@@ -16,6 +16,7 @@ import { accessService } from '@modules/access';
 import { keysInScope } from '@kernel/permissions';
 import { resolveCredential } from '@kernel/authentication';
 import { credentialOf } from '@tests/credentials';
+import { armAuthenticator } from '@tests/authenticator';
 import apiKeysModule from '@modules/api-keys/module';
 import { mint, revoke } from '@modules/api-keys/services/api-keys';
 import { apiKeyRepository } from '@modules/api-keys/repository';
@@ -64,6 +65,15 @@ const createRealUser = (id: string) =>
         email: `${id}@example.com`,
         username: id
     });
+
+/**
+ * Makes `userId` a tenant admin who can also lend that role to a key: a staff role grants nothing
+ * until an authenticator app is armed, and a key borrows the minter's staff rules only while one is.
+ */
+const makeArmedAdmin = (userId: string) =>
+    accessService
+        .assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin')
+        .then(() => armAuthenticator(userId));
 
 /** The `CallerContext` a mint call needs — a real user's id, with whatever permissions they currently hold. */
 const contextFor = (userId: string, permissions: readonly string[]): TenantCallerContext => ({
@@ -178,7 +188,7 @@ describe('an own-rows rule is not a staff rule', () => {
     it('shrinks a minted display:Order to nothing once its minter holds no staff role', async () => {
         const user = await createRealUser('wide-then-narrow');
         const userId = String(user._id);
-        await accessService.assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
+        await makeArmedAdmin(userId);
         const minted = await mint(
             { name: 'wide read', permissions: ['display:Order'], expiresAt: IN_A_WEEK },
             contextFor(userId, keysInScope('admin', 'tenant', 'customer'))
@@ -196,7 +206,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
     it("shrinks a key's reach the moment its minter is demoted, with the document never touched", async () => {
         const user = await createRealUser('demoted-minter');
         const userId = String(user._id);
-        await accessService.assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
+        await makeArmedAdmin(userId);
 
         const mintContext = contextFor(userId, keysInScope('admin', 'tenant', 'customer'));
         const minted = await mint(
@@ -226,7 +236,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
     it('refuses a key whose minter was deactivated, and the key itself is untouched', async () => {
         const user = await createRealUser('banned-minter');
         const userId = String(user._id);
-        await accessService.assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
+        await makeArmedAdmin(userId);
         const minted = await mint(
             {
                 name: 'about to lose its minter',
@@ -486,7 +496,7 @@ describe('touchLastUsed', () => {
         // Resolve re-floors against what the minter holds NOW (`currentCallerOf`), not the mint
         // context's own claimed permissions — needs a real membership row, same as the
         // demoted-minter case above.
-        await accessService.assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
+        await makeArmedAdmin(userId);
         const context = contextFor(userId, ['read:WebhookSubscription']);
         const minted = await mint(
             {
