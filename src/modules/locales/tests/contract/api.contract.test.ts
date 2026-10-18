@@ -799,7 +799,7 @@ describe('PUT vs PATCH /locales/:locale/apps/:app/entries', () => {
         expect(dictionary.body.data.messages).toEqual({ cart: { title: 'O seu carrinho' } });
     });
 
-    it('PATCH does not', async () => {
+    it('PATCH keeps what was not sent', async () => {
         const { bearer } = await authenticateAs('admin');
         await seedTwoKeys(bearer);
 
