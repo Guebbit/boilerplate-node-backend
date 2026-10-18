@@ -44,7 +44,7 @@ export const describeSchedule = (schedule: string): string => {
  *
  * @param job - the declaration
  */
-export const scriptLine = (job: JobDeclaration): string =>
+const scriptLine = (job: JobDeclaration): string =>
     `        "${job.name}": "${RUNNER} ${job.name}",`;
 
 /** Everything above the entries in `docker/crontab`. */

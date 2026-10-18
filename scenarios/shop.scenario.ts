@@ -39,7 +39,7 @@ const seedShop = (): Promise<SeedOutcome[]> =>
  * Only `products` pins a row here: every other guarantee names a row the flows produce, and
  * those ids exist only once a process has actually run them.
  */
-export const SHOP_SUBJECTS: Readonly<Record<string, string>> = {
+const SHOP_SUBJECTS: Readonly<Record<string, string>> = {
     'product.softDeleted': SEED_PRODUCT_IDS.heaterSoftDeleted,
     'product.inactive': SEED_PRODUCT_IDS.bundleInactive,
     'product.offSale': SEED_PRODUCT_IDS.bedOffSale,

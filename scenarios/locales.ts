@@ -221,7 +221,7 @@ export const localeEntryFixtures = LOCALE_ENTRIES.map(([id, locale, app, key, va
  * Languages first: an entry names its language by tag, and landing entries before
  * their language would publish a dictionary the manifest doesn't list.
  */
-export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
+const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
     const languages = await Promise.all(
         localeFixtures.map((language) => insertIfAbsent(localeRepository, language))
     );
@@ -244,7 +244,7 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
  * and a deployed dictionary file, so this write is a real override rather than a stray one.
  * @param owner - the signed-in operator driving the demo history
  */
-export const driveLocaleEntryEdit = (owner: Caller): Promise<void> =>
+const driveLocaleEntryEdit = (owner: Caller): Promise<void> =>
     owner
         .call(
             'PUT',

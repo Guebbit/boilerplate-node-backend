@@ -100,7 +100,7 @@ const addressBookFixtures = [
  * Keyed on the owner even though these fixtures do pin an `_id`: `userId` is the unique column and
  * the one every query here reaches a book through.
  */
-export const seedAddressBooksCollection = (): Promise<SeedOutcome[]> =>
+const seedAddressBooksCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(
         addressBookFixtures.map((book) => insertIfAbsentForOwner(addressBookRepository, book))
     );

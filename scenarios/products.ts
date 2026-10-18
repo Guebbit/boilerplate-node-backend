@@ -507,7 +507,7 @@ const writeSeedTranslations = (productId: string): Promise<void> => {
  * Depends on `./locales` having already seeded the fallback and `it` locale rows — `scenarios/apply.ts`
  * seeds `locales` before every other module for exactly this reason.
  */
-export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
+const seedProductsCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(productFixtures.map((product) => insertIfAbsent(productRepository, product))).then(
         (outcomes) =>
             Promise.all(

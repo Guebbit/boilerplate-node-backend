@@ -67,7 +67,7 @@ const exampleFixtures: PinnedExample[] = [
 ];
 
 /** Seed this collection. Declared in `./shop-modules`'s table; walked by `seedShop`. */
-export const seedExampleCollection = (): Promise<SeedOutcome[]> =>
+const seedExampleCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(exampleFixtures.map((fixture) => insertIfAbsent(exampleRepository, fixture)));
 
 /**

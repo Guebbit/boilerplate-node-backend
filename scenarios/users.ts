@@ -310,7 +310,7 @@ const userFixtures = [...namedUsers, ...customerUsers];
  * own upsert: re-running this against an already-seeded database changes nothing.
  * Declared in `./index`'s `shopModules`; walked by `seedShop`.
  */
-export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
+const seedUsersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(userFixtures.map((user) => insertIfAbsent(userRepository, user)));
 
 /**
