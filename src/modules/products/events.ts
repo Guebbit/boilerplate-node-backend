@@ -65,6 +65,14 @@ declare module '@kernel/events' {
          * fulfillment order what they are owed. Same shape and the same transaction as the edit.
          */
         'product.restock_date_changed': { productId: string; from?: string; to?: string };
+
+        /**
+         * A product that could not be ordered can be again: shelf units arrived, a backorder opened
+         * or its date moved on, or it was made visible and buyable. Fires once per flip, never while
+         * it stays buyable, in the same transaction as the write that caused it. `stock-alerts`
+         * listens and tells the buyers who asked.
+         */
+        'product.buyable_again': { productId: string };
     }
 }
 
@@ -79,6 +87,9 @@ export const PRODUCT_CREATED = 'product.created';
 
 /** See {@link DomainEventMap}'s `'product.release_date_changed'` for what listens and why. */
 export const PRODUCT_RELEASE_DATE_CHANGED = 'product.release_date_changed';
+
+/** See {@link DomainEventMap}'s `'product.buyable_again'` for what listens and why. */
+export const PRODUCT_BUYABLE_AGAIN = 'product.buyable_again';
 
 /** See {@link DomainEventMap}'s `'product.restock_date_changed'` for what listens and why. */
 export const PRODUCT_RESTOCK_DATE_CHANGED = 'product.restock_date_changed';

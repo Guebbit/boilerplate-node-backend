@@ -21,6 +21,7 @@ import { afterCommit } from '@infrastructure/runtime/after-commit';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { productsAuditActions } from '../audit';
 import {
+    PRODUCT_BUYABLE_AGAIN,
     PRODUCT_CREATED,
     PRODUCT_RELEASE_DATE_CHANGED,
     PRODUCT_RESTOCK_DATE_CHANGED
@@ -28,6 +29,7 @@ import {
 import type { ProductDocument } from '../model';
 import { productRepository } from '../repository';
 import { sanitizeStringArray } from './validation';
+import { isBuyable } from '../domain/buyable';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 
 /** What `insertProduct` accepts: the product's fields, plus the pending-image placeholder's key. */
@@ -306,6 +308,8 @@ const applyUpdate = (
 ): Promise<ProductUpdateOutcome> => {
     // Read before the fields below overwrite what it compares against.
     const changes = moneyChangesOf(product, data);
+    // What a shopper could do before the edit, to tell whether it made the product orderable.
+    const wasBuyable = isBuyable(product, new Date());
     // Applying `updatedAt` itself is the timestamps hook's job; this only makes the save non-empty.
     if (data.touch) product.markModified('updatedAt');
     // Apply incoming field changes
@@ -364,6 +368,16 @@ const applyUpdate = (
                         String(updated._id),
                         session
                     )
+                )
+                .then(() =>
+                    !wasBuyable && isBuyable(updated, new Date())
+                        ? enqueueOutboxEvent(
+                              PRODUCT_BUYABLE_AGAIN,
+                              { productId: String(updated._id) },
+                              String(updated._id),
+                              session
+                          )
+                        : undefined
                 )
                 .then(() => updated)
         )

@@ -8,6 +8,10 @@ import { getFallbackLocale } from '@infrastructure/i18n';
 import { readAllTranslations } from '@kernel/translation';
 import type { ProductTranslationFields } from '@types';
 import type { ProductDocument } from '../model';
+import { withTransaction } from '@infrastructure/runtime/database';
+import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
+import { becameBuyable } from '../domain/buyable';
+import { PRODUCT_BUYABLE_AGAIN } from '../events';
 import { productRepository, type StockCounters } from '../repository';
 
 /**
@@ -79,8 +83,19 @@ export const countPublic = (
  * @param productId - the product whose cached counters are being brought into step
  * @param counters - the values `@modules/inventory` just committed as the source of truth
  */
-export const syncStockCache = (productId: string, counters: StockCounters) =>
-    productRepository.syncStockCache(productId, counters);
+export const syncStockCache = (productId: string, counters: StockCounters): Promise<void> =>
+    withTransaction(async (session) => {
+        const before = await productRepository.syncStockCache(productId, counters, session);
+        if (!before) return false;
+
+        // The copy changes, so the flip is judged on what the write left behind.
+        const flipped = becameBuyable(before, { ...before, ...counters }, new Date());
+        if (flipped)
+            await enqueueOutboxEvent(PRODUCT_BUYABLE_AGAIN, { productId }, productId, session);
+        return flipped;
+    }).then((flipped) => {
+        if (flipped) nudgeOutbox();
+    });
 
 /**
  * A product's title and description in every language it has them in, locale → fields.

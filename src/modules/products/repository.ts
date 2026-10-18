@@ -12,8 +12,10 @@ import type { ProductDocument } from './model';
 import {
     createRepository,
     toObjectId,
+    type Lean,
     type Repository
 } from '@infrastructure/persistence/create-repository';
+import type { ClientSession } from 'mongoose';
 import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 import { imageWritebackFor } from '@infrastructure/persistence/image-writeback';
 import {
@@ -57,7 +59,11 @@ export const productRepository: Repository<ProductDocument, Product> & {
     ) => Promise<ProductDocument | null>;
     findPublicById: (productId: string) => Promise<ProductDocument | null>;
     facets: () => Promise<{ categories: FacetCount[]; tags: FacetCount[] }>;
-    syncStockCache: (productId: string, counters: StockCounters) => Promise<void>;
+    syncStockCache: (
+        productId: string,
+        counters: StockCounters,
+        session?: ClientSession
+    ) => Promise<Lean<ProductDocument> | null>;
     translatable: TranslatableColumns;
     writebackImage: ImageWriteback;
 } = {
@@ -153,12 +159,18 @@ export const productRepository: Repository<ProductDocument, Product> & {
      *
      * @param productId - the product
      * @param counters - the values to write, verbatim
+     * @param session - the transaction the write joins, when the caller announces in it
+     * @returns the product as it stood BEFORE the write, `null` when there is none
      */
-    syncStockCache: (productId: string, counters: StockCounters) =>
+    syncStockCache: (productId, counters, session) =>
         productModel
-            .updateOne({ _id: toObjectId(productId) }, { $set: counters }, { timestamps: false })
-            .exec()
-            .then(() => undefined),
+            .findOneAndUpdate(
+                { _id: toObjectId(productId) },
+                { $set: counters },
+                { timestamps: false, returnDocument: 'before', session }
+            )
+            .lean<Lean<ProductDocument> | null>()
+            .exec(),
 
     /**
      * The image digest pipeline's writeback for the `products` collection — see `ImageTarget` in
