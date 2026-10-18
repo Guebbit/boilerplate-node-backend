@@ -60,8 +60,8 @@ const target = (symbol: ts.Symbol): ts.Symbol =>
     symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
 
 /**
- * The symbols an object literal bundles by reference (`{ settlePayment }`, `{ run: settlePayment }`),
- * so a service object cannot carry a step out under another name.
+ * The symbols an object literal bundles by reference (`{ settlePayment }`, `{ run: settlePayment }`,
+ * `{ run: steps.settlePayment }`), so a service object cannot carry a step out under another name.
  * @param declaration - a declaration that may be `const x = { … }`
  */
 const bundledSymbols = (declaration: ts.Declaration): { name: string; symbol: ts.Symbol }[] => {
@@ -74,7 +74,10 @@ const bundledSymbols = (declaration: ts.Declaration): { name: string; symbol: ts
             ? checker.getShorthandAssignmentValueSymbol(property)
             : ts.isPropertyAssignment(property) && ts.isIdentifier(property.initializer)
               ? checker.getSymbolAtLocation(property.initializer)
-              : undefined;
+              : ts.isPropertyAssignment(property) &&
+                  ts.isPropertyAccessExpression(property.initializer)
+                ? checker.getSymbolAtLocation(property.initializer.name)
+                : undefined;
         return symbol ? [{ name: property.name?.getText() ?? '?', symbol }] : [];
     });
 };
