@@ -64,30 +64,70 @@ describe('resolveInLiveFamily', () => {
     });
 
     it('ends a staff family idle past the limit, revoking it', async () => {
-        store.familyActivity.mockResolvedValue({ lastActiveAt: ago(1801) });
+        store.familyActivity.mockResolvedValue({ startedAt: ago(100), lastActiveAt: ago(1801) });
 
         await expect(resolve(STAFF)).resolves.toEqual({ miss: 'idle' });
         expect(store.removeFamily).toHaveBeenCalledWith('u1', 'f1');
     });
 
+    it('ends a staff family signed in past the lifetime cap even when it is busy', async () => {
+        store.familyActivity.mockResolvedValue({
+            startedAt: ago(86_401),
+            lastActiveAt: ago(5)
+        });
+
+        await expect(resolve(STAFF)).resolves.toEqual({ miss: 'expired' });
+        expect(store.removeFamily).toHaveBeenCalledWith('u1', 'f1');
+    });
+
+    it('lets a busy staff family inside the cap, and any family once the cap is off', async () => {
+        store.familyActivity.mockResolvedValue({ startedAt: ago(86_000), lastActiveAt: ago(5) });
+        await expect(resolve(STAFF)).resolves.toEqual({ ok: STAFF });
+
+        setEnvironment({ NODE_SESSION_LIFETIME_STAFF: '0' });
+        store.familyActivity.mockResolvedValue({
+            startedAt: ago(10_000_000),
+            lastActiveAt: ago(5)
+        });
+        await expect(resolve(STAFF)).resolves.toEqual({ ok: STAFF });
+    });
+
+    it('never ends a shopper’s family for age, however old', async () => {
+        store.familyActivity.mockResolvedValue({
+            startedAt: ago(10_000_000),
+            lastActiveAt: ago(5)
+        });
+
+        await expect(resolve(SHOPPER)).resolves.toEqual({ ok: SHOPPER });
+        expect(store.removeFamily).not.toHaveBeenCalled();
+    });
+
     it('never ends a shopper’s family, however idle', async () => {
-        store.familyActivity.mockResolvedValue({ lastActiveAt: ago(100_000) });
+        store.familyActivity.mockResolvedValue({ startedAt: ago(100), lastActiveAt: ago(100_000) });
 
         await expect(resolve(SHOPPER)).resolves.toEqual({ ok: SHOPPER });
         expect(store.removeFamily).not.toHaveBeenCalled();
     });
 
     it('stamps a request that was never stamped, and one stamped over a minute ago', async () => {
-        store.familyActivity.mockResolvedValue({ lastActiveAt: ago(5) });
+        store.familyActivity.mockResolvedValue({ startedAt: ago(100), lastActiveAt: ago(5) });
         await resolve(STAFF);
-        store.familyActivity.mockResolvedValue({ lastActiveAt: ago(90), stampedAt: ago(90) });
+        store.familyActivity.mockResolvedValue({
+            startedAt: ago(100),
+            lastActiveAt: ago(90),
+            stampedAt: ago(90)
+        });
         await resolve(STAFF);
 
         expect(store.touchFamily).toHaveBeenCalledTimes(2);
     });
 
     it('does not stamp a request already stamped within the minute', async () => {
-        store.familyActivity.mockResolvedValue({ lastActiveAt: ago(10), stampedAt: ago(10) });
+        store.familyActivity.mockResolvedValue({
+            startedAt: ago(100),
+            lastActiveAt: ago(10),
+            stampedAt: ago(10)
+        });
 
         await resolve(STAFF);
 
@@ -95,14 +135,22 @@ describe('resolveInLiveFamily', () => {
     });
 
     it('judges a passive request but never stamps it', async () => {
-        store.familyActivity.mockResolvedValue({ lastActiveAt: ago(120), stampedAt: ago(120) });
+        store.familyActivity.mockResolvedValue({
+            startedAt: ago(100),
+            lastActiveAt: ago(120),
+            stampedAt: ago(120)
+        });
 
         await expect(resolve(STAFF, true)).resolves.toEqual({ ok: STAFF });
         expect(store.touchFamily).not.toHaveBeenCalled();
     });
 
     it('still answers when the stamp fails', async () => {
-        store.familyActivity.mockResolvedValue({ lastActiveAt: ago(120), stampedAt: ago(120) });
+        store.familyActivity.mockResolvedValue({
+            startedAt: ago(100),
+            lastActiveAt: ago(120),
+            stampedAt: ago(120)
+        });
         store.touchFamily.mockRejectedValue(new Error('store down'));
 
         await expect(resolve(STAFF)).resolves.toEqual({ ok: STAFF });

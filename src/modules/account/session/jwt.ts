@@ -559,7 +559,7 @@ const reissueRotated = (
                 () => resolveProof(claims.sub, { authTime: claims.auth_time, amr: claims.amr }),
                 { passive: true }
             );
-            if ('miss' in liveness) throw new TokenRejection(liveness.miss, 'Session idle');
+            if ('miss' in liveness) throw new TokenRejection(liveness.miss, 'Session ended');
 
             return signRefreshToken(claims, Math.ceil(remainingMs / 1000)).then((newRefreshToken) =>
                 storeSuccessor(previous, newRefreshToken, claims, remainingMs)

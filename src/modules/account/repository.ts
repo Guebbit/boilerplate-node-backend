@@ -316,6 +316,8 @@ interface FamilyActivity {
     lastActiveAt: Date;
     /** The newest `lastUsedAt` alone; absent until the family has been stamped as used once. */
     stampedAt?: Date;
+    /** The family's sign-in, which every rotation keeps — what the staff lifetime cap reads. */
+    startedAt: Date;
 }
 
 /**
@@ -358,6 +360,7 @@ const sessionFamilyActivity = (
                 lastActiveAt: new Date(
                     Math.max(...rows.map((row) => (row.lastUsedAt ?? row.startedAt).getTime()))
                 ),
+                startedAt: new Date(Math.min(...rows.map((row) => row.startedAt.getTime()))),
                 ...(stampedAt && { stampedAt })
             };
         });

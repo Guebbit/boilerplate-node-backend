@@ -1104,7 +1104,8 @@ paths:
                 `Referer` header, and a sibling subdomain cannot overwrite it. A refresh is passive:
                 it never counts as activity. A staff family idle past `NODE_SESSION_IDLE_TIME_STAFF`
                 answers 401 `SESSION_IDLE` and the family is removed, so the next call starts at the
-                sign-in screen.
+                sign-in screen. A staff family signed in longer ago than
+                `NODE_SESSION_LIFETIME_STAFF` answers an ordinary 401 and is removed the same way.
             operationId: refreshToken
             security: []
             responses:

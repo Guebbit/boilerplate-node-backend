@@ -29,7 +29,7 @@ import { createSessionCookie } from './cookies';
 import { RefreshTokenExpiryTime, getExpiryTimeMilliseconds } from './config';
 import { describeDevice } from './device-label';
 import { listSessions } from './listing';
-import { hasIdledOut } from './idle';
+import { hasIdledOut, hasOutlivedStaffCap } from './idle';
 import { resolveInLiveFamily } from './family-liveness';
 import { assertProofCurrent, assertSecondFactor } from './mint-guard';
 import { looksLikeJwt, looksLikeSessionId, newSessionId } from './session-id';
@@ -243,6 +243,11 @@ const resolveSession = (
                     return sessionRepository
                         .removeFamily(String(row.userId), String(row.familyId))
                         .then((): Resolution<AuthContext | undefined> => ({ miss: 'idle' }));
+
+                if (ok && hasOutlivedStaffCap(row.startedAt, ok.roles))
+                    return sessionRepository
+                        .removeFamily(String(row.userId), String(row.familyId))
+                        .then((): Resolution<AuthContext | undefined> => ({ miss: 'expired' }));
 
                 // Housekeeping, off the request's path: a lost stamp costs a stale reading only. The
                 // throttle is checked on the row already in hand, so a busy tab costs no extra query.

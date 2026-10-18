@@ -134,6 +134,25 @@ What counts as activity is a real request. What does not: a request sent with
 a refresh, which renews a token and carries the clock over unchanged. A refresh is still judged: a staff family idle past the limit gets `401 SESSION_IDLE` from `POST /account/refresh` and the family is removed. `POST /account/session/touch`
 counts and answers the clock, which is how a client asks "still there?" from server numbers.
 
+## The staff lifetime cap
+
+An idle timeout does not bound a stolen session that is kept in use: a script that polls every few
+minutes lives the full 7 or 30 days. So a staff or admin session also ends `NODE_SESSION_LIFETIME_STAFF`
+seconds after sign-in (24 hours by default, `0` switches it off), however busy it is. The next
+request answers an ordinary `401`, the family is removed, and the person signs in again.
+
+| Source                          | Rule                                                                          |
+| ------------------------------- | ----------------------------------------------------------------------------- |
+| NIST SP 800-63B-4 §2.2.3 (AAL2) | reauthentication SHOULD be at most 24 hours; idle at most an hour             |
+| OWASP ASVS 5.0 7.1.1 / 7.3.2    | document both limits and justify a deviation from NIST                        |
+| Google Workspace                | an admin sets a fixed reauthentication of 1 to 24 hours for the Cloud console |
+
+A shopper keeps the 1, 7 and 30-day tiers: a shopper session is password-only (AAL1, 30 days at
+most) and the shop's money acts already ask for a fresh login. The cap is read on every request from
+the account's stored roles, so a customer promoted mid-session is capped from the next request, and
+the session list shows the earlier end. An everyday cost of the cap is nearly zero, since the idle
+timeout already signs out anyone away for half an hour.
+
 ## What each defends against
 
 | Threat                              | `jwt`                                                                                                                                      | `cookie`                                                                                          |

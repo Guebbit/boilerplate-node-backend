@@ -4,14 +4,14 @@
  * differ only in which rows are theirs and how a request names its own.
  */
 
-import type { Session } from '@types';
+import type { AuthContext, Session } from '@types';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { userService } from '@modules/users';
 import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { sessionRepository, type SessionRow } from '../repository';
 import { predatesSessionEpoch } from './epoch';
-import { hasIdledOut } from './idle';
+import { hasIdledOut, hasOutlivedStaffCap, staffCapEndsAt } from './idle';
 import type { SessionMode } from '../session-mode';
 
 /**
@@ -38,11 +38,21 @@ export const newestPerFamily = (rows: readonly SessionRow[]): SessionRow[] => {
  *
  * @param row - the family's newest live row
  * @param currentFamilies - the families the caller's own credential belongs to, to mark `current`
+ * @param roles - the caller's roles, since the staff lifetime cap can end a session before its row expires
  */
-const toSession = (row: SessionRow, currentFamilies: ReadonlySet<string>): Session => ({
+const toSession = (
+    row: SessionRow,
+    currentFamilies: ReadonlySet<string>,
+    roles: AuthContext['roles']
+): Session => ({
     id: String(row.familyId),
     createdAt: row.startedAt.toISOString(),
-    expiration: row.expiresAt.toISOString(),
+    expiration: new Date(
+        Math.min(
+            row.expiresAt.getTime(),
+            staffCapEndsAt(row.startedAt, roles)?.getTime() ?? Infinity
+        )
+    ).toISOString(),
     // Absent until this session has been used at least once — an unused session reads as unused
     // rather than as one that happens to share the moment it was issued.
     ...(row.lastUsedAt ? { lastUsedAt: row.lastUsedAt.toISOString() } : {}),
@@ -69,17 +79,18 @@ export const listSessions = (
         accessService.rolesOf(userId, DEPLOYMENT_TENANT_ID)
     ]).then(([allRows, user, roles]) => {
         // A ban moves the account's epoch and deletes no row, and a staff session past its idle
-        // limit is only ended when someone next presents it: neither signs anyone in, so neither
-        // is a session. A row stamped before `authTime` existed has no epoch to judge.
+        // limit or lifetime cap is only ended when someone next presents it: neither signs anyone
+        // in, so neither is a session. A row stamped before `authTime` existed has no epoch to judge.
         const rows = allRows.filter(
             (row) =>
                 (row.authTime === undefined ||
                     !predatesSessionEpoch(row.authTime, user?.tokensValidAfter)) &&
-                !hasIdledOut(row.lastUsedAt ?? row.startedAt, roles)
+                !hasIdledOut(row.lastUsedAt ?? row.startedAt, roles) &&
+                !hasOutlivedStaffCap(row.startedAt, roles)
         );
         const digest = credential === undefined ? undefined : hashToken(credential);
         const current = new Set(
             rows.filter((row) => row.tokenHash === digest).map((row) => String(row.familyId))
         );
-        return newestPerFamily(rows).map((row) => toSession(row, current));
+        return newestPerFamily(rows).map((row) => toSession(row, current, roles));
     });

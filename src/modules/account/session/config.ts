@@ -77,6 +77,8 @@ export const sessionConfig = defineConfig({
         NODE_SESSION_TIME_LONG: int({ default: 2_592_000, min: 1 }),
         // Staff only: a shopper's session never idles out. 0 switches the timeout off.
         NODE_SESSION_IDLE_TIME_STAFF: int({ default: 1800, min: 0 }),
+        // Staff only: the longest a session lives from sign-in, however busy. 0 switches it off.
+        NODE_SESSION_LIFETIME_STAFF: int({ default: 86_400, min: 0 }),
         NODE_TOKEN_ACCESS_TIME: int({ default: 600, min: 1 }),
         NODE_TOKEN_ACCESS: keyRing({
             required: {
@@ -175,6 +177,14 @@ export const getExpiryTimeMilliseconds = (remember?: RefreshTokenExpiryTime) =>
 export const getStaffIdleTimeSeconds = () => sessionConfig().NODE_SESSION_IDLE_TIME_STAFF;
 
 /**
+ * The longest a staff or admin session lives from sign-in, in seconds, however busy it is. NIST SP
+ * 800-63B AAL2 asks for at most 24 hours; a shopper's session keeps the 1 / 7 / 30-day tiers.
+ *
+ * @returns seconds, `0` when the cap is off
+ */
+export const getStaffLifetimeSeconds = () => sessionConfig().NODE_SESSION_LIFETIME_STAFF;
+
+/**
  * Lifetime in seconds of an ACCESS token. Deliberately separate from {@link getExpiryTime}: an
  * access token is short-lived whatever the session tier, so it must never inherit the refresh
  * fallback.
@@ -260,7 +270,7 @@ export const getRotationGraceMilliseconds = () => sessionConfig().NODE_TOKEN_ROT
  *          not next week.
  * Cost:    an active client rotates about every access-token lifetime
  *          (`NODE_TOKEN_ACCESS_TIME`, 600s), so 24h is roughly 144 retained entries per session.
- *          A full refresh-token lifetime instead would reach ~52,500 on the one-year tier,
+ *          A full refresh-token lifetime instead would reach ~4,300 on the 30-day tier,
  *          against Mongo's 16 MB document ceiling.
  * Past it: an ordinary 401, no revocation — a real limit, chosen rather than stumbled into.
  *

@@ -11,6 +11,8 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { sessionModel } from '../../model';
 import { sessionRowsOf } from '../factories';
 import { cookieHeader } from '@tests/cookies';
+import { accessService } from '@modules/access';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 setupTestDb();
 
@@ -164,5 +166,104 @@ describe('the staff idle timeout at POST /account/refresh (jwt mode)', () => {
         const response = await api().post('/account/refresh').set('Cookie', cookie);
 
         expect(response.status).toBe(200);
+    });
+});
+
+/** The staff lifetime cap these cases run under, in seconds. */
+const CAP = 86_400;
+
+/** Pretends the account signed in `seconds` ago and has been busy ever since. */
+const signedInFor = (userId: string, seconds: number) =>
+    sessionModel
+        .updateMany(
+            { userId },
+            { $set: { startedAt: new Date(Date.now() - seconds * 1000), lastUsedAt: new Date() } }
+        )
+        .exec();
+
+describe.each(MODES)('the staff lifetime cap in %s mode', (mode) => {
+    beforeEach(() => {
+        setEnvironment({ NODE_SESSION_MODE: mode, NODE_SESSION_LIFETIME_STAFF: String(CAP) });
+    });
+
+    it('ends a busy staff session signed in past the cap: a plain 401, the session revoked', async () => {
+        const { user, bearer } = await signInAs('editor');
+        await signedInFor(user.id, CAP + 60);
+
+        const response = await api().get('/account').set('Authorization', bearer);
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).not.toBe('SESSION_IDLE');
+        expect(await sessionRowsOf(user.id)).toEqual([]);
+    });
+
+    it('lets a staff session inside the cap carry on', async () => {
+        const { user, bearer } = await signInAs('editor');
+        await signedInFor(user.id, CAP - 600);
+
+        const response = await api().get('/account').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+    });
+
+    it('never caps a shopper, however old the sign-in', async () => {
+        const { user, bearer } = await signInAs('customer');
+        await signedInFor(user.id, CAP * 20);
+
+        const response = await api().get('/account').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+    });
+
+    it('does not cap anyone while the cap is switched off', async () => {
+        setEnvironment({ NODE_SESSION_LIFETIME_STAFF: '0' });
+        const { user, bearer } = await signInAs('editor');
+        await signedInFor(user.id, CAP * 20);
+
+        const response = await api().get('/account').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+    });
+
+    it('caps a customer promoted to staff mid-session, from the next request', async () => {
+        const { user, bearer } = await signInAs('customer');
+        await signedInFor(user.id, CAP + 60);
+        await api().get('/account').set('Authorization', bearer).expect(200);
+
+        await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'editor');
+        const response = await api().get('/account').set('Authorization', bearer);
+
+        expect(response.status).toBe(401);
+    });
+
+    it('shows the cap as the end of a staff session in the list, not the row’s later expiry', async () => {
+        const { user, bearer } = await signInAs('editor');
+        await signedInFor(user.id, CAP - 3600);
+
+        const response = await api().get('/account/sessions').set('Authorization', bearer);
+
+        const [session] = response.body.data.sessions as {
+            createdAt: string;
+            expiration: string;
+        }[];
+        const lived = Date.parse(session.expiration) - Date.parse(session.createdAt);
+        expect(lived).toBe(CAP * 1000);
+    });
+});
+
+describe('the staff lifetime cap at POST /account/refresh (jwt mode)', () => {
+    beforeEach(() => {
+        setEnvironment({ NODE_SESSION_MODE: 'jwt', NODE_SESSION_LIFETIME_STAFF: String(CAP) });
+    });
+
+    it('refuses a refresh of a staff family past the cap with a plain 401, and removes it', async () => {
+        const { user, cookie } = await signInStaff();
+        await signedInFor(user.id, CAP + 60);
+
+        const response = await api().post('/account/refresh').set('Cookie', cookie);
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).not.toBe('SESSION_IDLE');
+        expect(await sessionRowsOf(user.id)).toEqual([]);
     });
 });
