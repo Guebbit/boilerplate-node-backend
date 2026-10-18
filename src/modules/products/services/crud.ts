@@ -205,12 +205,40 @@ interface FieldChange<TValue> {
     to: TValue | null;
 }
 
-/** The money-affecting fields an update actually moved, for the audit row. */
-interface ProductChanges {
-    price?: FieldChange<number>;
-    taxClass?: FieldChange<TaxClass>;
-    rateType?: FieldChange<RateType>;
-}
+/**
+ * The scalar fields an update is audited for as `{ from, to }`: what a buyer pays (`price`, VAT),
+ * what a basket costs to ship (`weight`, `requiresShipping`), the legal right of withdrawal
+ * (`noWithdrawal`), whether the product is published or on sale, and its identity (`sku`).
+ */
+const AUDITED_SCALARS = [
+    'price',
+    'taxClass',
+    'rateType',
+    'active',
+    'purchasable',
+    'allowBackorder',
+    'weight',
+    'requiresShipping',
+    'noWithdrawal',
+    'sku'
+] as const;
+
+/** The lists audited the same way: set-like catalogue labels, compared in order. */
+const AUDITED_LISTS = ['categories', 'tags'] as const;
+
+/** Free text and the picture: audited by NAME only, so the trail never copies catalogue prose. */
+const AUDITED_BY_NAME = ['title', 'description'] as const;
+
+/** The fields an update actually moved, for the audit row. */
+type ProductChanges = Partial<
+    Record<
+        | (typeof AUDITED_SCALARS)[number]
+        | (typeof AUDITED_LISTS)[number]
+        | 'releaseDate'
+        | 'restockDate',
+        FieldChange<unknown>
+    >
+>;
 
 /** What a transactional update leaves for after the commit. */
 export interface ProductUpdateOutcome {
@@ -218,30 +246,56 @@ export interface ProductUpdateOutcome {
     updated: ProductDocument;
     /** The image url it replaced, to delete once the commit is durable. */
     oldImageUrl: string | undefined;
-    /** What the price, tax class and rate type moved from and to; empty when none did. */
+    /** What moved, as `{ from, to }`; empty when nothing audited did. */
     changes: ProductChanges;
+    /** The free-text fields and the image that changed, by name only. */
+    changedFields: string[];
 }
 
 /**
- * The price, tax class and rate type an update would move, with their old and new values. These
- * three set what a buyer pays and what VAT is charged, so the audit row says what changed: a
- * "lower, sell, restore" is otherwise rebuilt only by comparing frozen order lines.
+ * Whether two values of an audited field differ, treating an unset field and `null` alike.
+ *
+ * @param before - the stored value
+ * @param after - the requested value
+ */
+const differs = (before: unknown, after: unknown): boolean =>
+    JSON.stringify(before ?? null) !== JSON.stringify(after ?? null);
+
+/**
+ * The fields an update would move, with their old and new values: every non-text field, so a new
+ * one is covered by default (the shape Stripe's `previous_attributes` gives). A value sent
+ * unchanged, or a field left out, writes nothing.
  *
  * @param product - the fetched document, BEFORE the change is applied
  * @param data - the changes
  * @returns only the fields whose value actually differs
  */
-const moneyChangesOf = (product: ProductDocument, data: ProductUpdateData): ProductChanges => ({
-    ...(data.price !== undefined && data.price !== product.price
-        ? { price: { from: product.price, to: data.price } }
-        : {}),
-    ...(data.taxClass !== undefined && data.taxClass !== (product.taxClass ?? null)
-        ? { taxClass: { from: product.taxClass ?? null, to: data.taxClass } }
-        : {}),
-    ...(data.rateType !== undefined && data.rateType !== (product.rateType ?? null)
-        ? { rateType: { from: product.rateType ?? null, to: data.rateType } }
-        : {})
-});
+const fieldChangesOf = (product: ProductDocument, data: ProductUpdateData): ProductChanges => {
+    const changes: ProductChanges = {};
+    for (const field of AUDITED_SCALARS) {
+        const requested = data[field];
+        if (requested !== undefined && differs(product[field], requested))
+            changes[field] = { from: product[field] ?? null, to: requested };
+    }
+    for (const field of AUDITED_LISTS) {
+        const requested = data[field];
+        if (requested === undefined) continue;
+        const after = sanitizeStringArray(requested);
+        if (differs(product[field], after)) changes[field] = { from: product[field], to: after };
+    }
+    return changes;
+};
+
+/**
+ * The free-text fields an update changes, by name.
+ *
+ * @param product - the fetched document, BEFORE the change is applied
+ * @param data - the changes
+ */
+const changedTextOf = (product: ProductDocument, data: ProductUpdateData): string[] =>
+    AUDITED_BY_NAME.filter(
+        (field) => data[field] !== undefined && differs(product[field], data[field])
+    );
 
 /** What moved when one of a product's two dates did: ISO strings, absent for none. */
 interface DateChange {
@@ -307,7 +361,9 @@ const applyUpdate = (
     session: ClientSession
 ): Promise<ProductUpdateOutcome> => {
     // Read before the fields below overwrite what it compares against.
-    const changes = moneyChangesOf(product, data);
+    const changes = fieldChangesOf(product, data);
+    const changedFields = changedTextOf(product, data);
+    const imageBefore = product.imageUrl;
     // What a shopper could do before the edit, to tell whether it made the product orderable.
     const wasBuyable = isBuyable(product, new Date());
     // Applying `updatedAt` itself is the timestamps hook's job; this only makes the save non-empty.
@@ -330,9 +386,19 @@ const applyUpdate = (
     if (data.purchasable !== undefined) product.purchasable = data.purchasable;
     // `null` clears the date back to unset — $unset on save, same as weight/taxClass.
     const releaseDateChange = applyDate(product, 'releaseDate', data.releaseDate);
+    if (releaseDateChange)
+        changes.releaseDate = {
+            from: releaseDateChange.from ?? null,
+            to: releaseDateChange.to ?? null
+        };
     if (data.allowBackorder !== undefined) product.allowBackorder = data.allowBackorder;
     // `null` clears the date back to unset ("within 30 days") — $unset on save.
     const restockDateChange = applyDate(product, 'restockDate', data.restockDate);
+    if (restockDateChange)
+        changes.restockDate = {
+            from: restockDateChange.from ?? null,
+            to: restockDateChange.to ?? null
+        };
     if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
     if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
     // `null` clears a recorded weight back to unset — $unset on save.
@@ -351,6 +417,7 @@ const applyUpdate = (
     // `applyImageWriteback`'s own docblock for the gate shared with `users`' own `update`.
     // `imageUrl: null` unsets the field; the old-image deletion after the commit covers it too.
     const oldImageUrl = applyImageWriteback(product, data);
+    if (differs(imageBefore, product.imageUrl)) changedFields.push('image');
 
     return productRepository
         .save(product, session)
@@ -381,7 +448,7 @@ const applyUpdate = (
                 )
                 .then(() => updated)
         )
-        .then((updated) => ({ updated, oldImageUrl, changes }));
+        .then((updated) => ({ updated, oldImageUrl, changes, changedFields }));
 };
 
 /**
@@ -447,8 +514,17 @@ export const finishUpdateById = (
                 outcome: 'success',
                 targetType: 'product',
                 targetId: id,
-                ...(Object.keys(outcome.changes).length > 0
-                    ? { metadata: { changes: outcome.changes } }
+                ...(Object.keys(outcome.changes).length > 0 || outcome.changedFields.length > 0
+                    ? {
+                          metadata: {
+                              ...(Object.keys(outcome.changes).length > 0
+                                  ? { changes: outcome.changes }
+                                  : {}),
+                              ...(outcome.changedFields.length > 0
+                                  ? { changedFields: outcome.changedFields }
+                                  : {})
+                          }
+                      }
                     : {})
             }),
         undefined,

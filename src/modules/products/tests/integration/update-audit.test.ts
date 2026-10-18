@@ -1,8 +1,10 @@
 /**
  * @module
- * What `ADMIN_PRODUCT_UPDATED` says about money: the price, tax class and rate type an update
- * actually moved, as `{ from, to }`. The three set what a buyer pays and what VAT is charged, so a
- * "lower, sell, restore" has to be readable from the audit trail, not rebuilt from frozen order lines.
+ * What `ADMIN_PRODUCT_UPDATED` says about an edit: every non-text field it actually moved, as
+ * `{ from, to }` (what a buyer pays, what VAT is charged, what shipping weighs, the right of
+ * withdrawal, whether it is published or on sale), and the free-text fields and picture by name
+ * only. A "lower, sell, restore" has to be readable from the audit trail, not rebuilt from frozen
+ * order lines.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -70,16 +72,79 @@ describe('productService.updateById — the audit row of a money edit', () => {
         });
     });
 
-    it('names only what moved: a price sent unchanged, or an edit to other fields, writes no changes', async () => {
+    it('carries from and to for the rights, shipping and publishing fields too', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const product = await createProduct({
+            price: 10,
+            active: true,
+            purchasable: true,
+            requiresShipping: true,
+            noWithdrawal: false,
+            weight: 500,
+            sku: 'OLD-1',
+            categories: ['mugs'],
+            tags: ['red']
+        });
+
+        await productService.updateById(
+            String(product._id),
+            {
+                active: false,
+                purchasable: false,
+                requiresShipping: false,
+                noWithdrawal: true,
+                weight: null,
+                sku: 'NEW-1',
+                categories: ['cups'],
+                tags: ['red']
+            },
+            callerContextAs('admin')
+        );
+
+        expect(updatedRowMetadata(auditSpy)).toEqual({
+            changes: {
+                active: { from: true, to: false },
+                purchasable: { from: true, to: false },
+                requiresShipping: { from: true, to: false },
+                noWithdrawal: { from: false, to: true },
+                weight: { from: 500, to: null },
+                sku: { from: 'OLD-1', to: 'NEW-1' },
+                categories: { from: ['mugs'], to: ['cups'] }
+            }
+        });
+    });
+
+    it('records a moved release date, and names a changed title without copying it', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const product = await createProduct({ title: 'Old title' });
+
+        await productService.updateById(
+            String(product._id),
+            {
+                translations: { en: { title: 'A different title' } },
+                releaseDate: '2031-01-01T00:00:00.000Z'
+            },
+            callerContextAs('admin')
+        );
+
+        const metadata = updatedRowMetadata(auditSpy);
+        expect(metadata).toEqual({
+            changes: { releaseDate: { from: null, to: '2031-01-01T00:00:00.000Z' } },
+            changedFields: ['title']
+        });
+        expect(JSON.stringify(metadata)).not.toContain('different title');
+    });
+
+    it('names only what moved: a price or a scalar sent unchanged writes no changes, and a rename is a name only', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({ price: 10 });
 
         await productService.updateById(
             String(product._id),
-            { price: 10, translations: { en: { title: 'Renamed' } } },
+            { price: 10, active: true, translations: { en: { title: 'Renamed' } } },
             callerContextAs('admin')
         );
 
-        expect(updatedRowMetadata(auditSpy)).toBeUndefined();
+        expect(updatedRowMetadata(auditSpy)).toEqual({ changedFields: ['title'] });
     });
 });

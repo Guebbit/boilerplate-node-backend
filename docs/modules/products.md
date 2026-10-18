@@ -88,11 +88,17 @@ leaves a ledger row and needs `create:StockMovement`. The product form of a call
 creates the product and then receives the opening count with an `Idempotency-Key`; if the second
 call fails the product stays at zero, a valid state, and the page says to add stock from Inventory.
 
-**A money edit says what it changed.** `admin.product.updated` carries `metadata.changes` with
-`{ from, to }` for each of `price`, `taxClass` and `rateType` that an update (PUT or PATCH) actually
-moved, `null` meaning unset. The three set what a buyer pays and what VAT is charged, so a "lower,
-sell, restore" is readable from the audit trail instead of rebuilt from frozen order lines. An edit
-to other fields, or a value sent unchanged, writes no `changes`.
+**An edit says what it changed.** `admin.product.updated` carries `metadata.changes` with `{ from, to }`
+for every non-text field an update (PUT or PATCH) actually moved, `null` meaning unset: `price`,
+`taxClass`, `rateType`, `active`, `purchasable`, `allowBackorder`, `weight`, `requiresShipping`,
+`noWithdrawal`, `sku`, `categories`, `tags`, `releaseDate` and `restockDate`. Those decide what a
+buyer pays, what VAT is charged, what shipping weighs, the buyer's right of withdrawal and whether
+the product is published or on sale, so "who removed the withdrawal right on Tuesday" and "lower,
+sell, restore" are readable from the audit trail instead of rebuilt from frozen order lines.
+Free text and the picture are recorded by name only, as `metadata.changedFields` (`title`,
+`description`, `image`): the trail never copies catalogue prose. The rule is the same for every
+non-text field, so a field added later is covered by default. A value sent unchanged, or a field
+left out, writes nothing.
 
 Deletion is soft by default: it stamps `deletedAt` (and leaves `active` alone), with a restore route, because an order that
 embedded a product still has to render months later. An admin can still ask for a hard delete
