@@ -165,14 +165,14 @@ stateDiagram-v2
     Preorder --> OnSale: releaseDate passes<br/>(derived, no job)
 ```
 
-| Piece                             | Owner       | What it does                                                         |
-| --------------------------------- | ----------- | -------------------------------------------------------------------- |
-| `releaseDate`, derived `preorder` | `products`  | the catalogue fact; a preorder is never "running low"                |
-| allowance and allocation          | `inventory` | `preorderLimit` caps how many can be ordered; receipts allocate them |
-| the "ships from" promise          | `delivery`  | one fulfillment order per release day, on hold until stock arrives   |
+| Piece                             | Owner       | What it does                                                          |
+| --------------------------------- | ----------- | --------------------------------------------------------------------- |
+| `releaseDate`, derived `preorder` | `products`  | the catalogue fact; a preorder is never "running low"                 |
+| allowance and allocation          | `inventory` | `backorderLimit` caps how many can be ordered; receipts allocate them |
+| the "ships from" promise          | `delivery`  | one fulfillment order per release day, on hold until stock arrives    |
 
 A preorder's `available` (and with it `inStock`) counts the **allowance**, not the shelf: what is
-left of `preorderLimit` after the units already claimed, so the product reads sold out the day the
+left of `backorderLimit` after the units already claimed, so the product reads sold out the day the
 allowance is full, and out of stock until staff set one (a new product's allowance is 0). The two
 numbers are `inventory`'s, copied onto the product beside `onHand` and `reserved` by the same
 `syncStockCache` door, and never sent to a client.

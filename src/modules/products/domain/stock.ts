@@ -20,12 +20,12 @@ export const availableStock = (onHand?: number, reserved?: number): number =>
 /**
  * Units of a preorder still on offer: the allowance minus what is already claimed, clamped at zero
  * (lowering the allowance below what is outstanding is allowed, so it can go negative).
- * @param preorderLimit - the allowance; absent reads as zero, which closes preordering
- * @param preordered - units already claimed against it; absent reads as zero
+ * @param backorderLimit - the allowance; absent reads as zero, which closes preordering
+ * @param backordered - units already claimed against it; absent reads as zero
  * @returns units a customer may still preorder, never below zero
  */
-export const preorderAllowanceLeft = (preorderLimit?: number, preordered?: number): number =>
-    Math.max(0, (preorderLimit ?? 0) - (preordered ?? 0));
+export const preorderAllowanceLeft = (backorderLimit?: number, backordered?: number): number =>
+    Math.max(0, (backorderLimit ?? 0) - (backordered ?? 0));
 
 /**
  * What a shopper may know about stock without learning the count: whether anything is for sale,

@@ -46,7 +46,7 @@ import { StockMovementReason, type StockMovement } from '@types';
  *
  * @param reason - the transition
  * @param quantity - how many units; signed only for `adjust`
- * @param kind - what the units are; a preorder claim is released against `preordered`, not `reserved`
+ * @param kind - what the units are; a preorder claim is released against `backordered`, not `reserved`
  * @returns the Mongo condition `applyDelta` must match for the transition to apply
  */
 const conditionFor = (
@@ -63,25 +63,25 @@ const conditionFor = (
         }
         case StockMovementReason.release:
         case StockMovementReason.expire: {
-            return kind === 'preorder'
-                ? { preordered: { $gte: quantity } }
+            return kind === 'backorder'
+                ? { backordered: { $gte: quantity } }
                 : { reserved: { $gte: quantity } };
         }
         // The cap is the real ceiling, checked in the write's own filter like every other guard.
         // `$ifNull`: a level written before preorders existed has neither field.
-        case StockMovementReason.preorder: {
+        case StockMovementReason.backorder: {
             return {
                 $expr: {
                     $lte: [
-                        { $add: [{ $ifNull: ['$preordered', 0] }, quantity] },
-                        { $ifNull: ['$preorderLimit', 0] }
+                        { $add: [{ $ifNull: ['$backordered', 0] }, quantity] },
+                        { $ifNull: ['$backorderLimit', 0] }
                     ]
                 }
             };
         }
         // The arrived units must exist and the claim must be there to convert.
         case StockMovementReason.allocate: {
-            return { preordered: { $gte: quantity }, available: { $gte: quantity } };
+            return { backordered: { $gte: quantity }, available: { $gte: quantity } };
         }
         case StockMovementReason.receive:
         case StockMovementReason.restock: {
@@ -104,15 +104,15 @@ export interface StockLevelRow {
     onHand: number;
     reserved: number;
     available: number;
-    preorderLimit: number;
-    preordered: number;
+    backorderLimit: number;
+    backordered: number;
 }
 
 /** One row of the preorder board — counters only; the title and date are `products`' to give. */
 export interface PreorderLevelRow {
     productId: string;
-    preorderLimit: number;
-    preordered: number;
+    backorderLimit: number;
+    backordered: number;
     /** Lifetime units claimed, from the ledger's `preorder` rows. */
     ordered: number;
     /** Outstanding units on unpaid (`held`) holds. */
@@ -138,10 +138,10 @@ const toReservationItems = (
 
 /**
  * Lifetime preorder units per product, from the ledger's `preorder` rows. Counts every claim, given
- * back or not: this is "how many were ever ordered", where `preordered` is "how many are still owed".
+ * back or not: this is "how many were ever ordered", where `backordered` is "how many are still owed".
  *
  * @param productIds - the products on the page
- * @returns units by product id; absent for a product never preordered
+ * @returns units by product id; absent for a product never backordered
  */
 const orderedByProduct = (productIds: readonly Types.ObjectId[]): Promise<Map<string, number>> =>
     stockMovementModel
@@ -149,8 +149,8 @@ const orderedByProduct = (productIds: readonly Types.ObjectId[]): Promise<Map<st
             _id: Types.ObjectId;
             total: number;
         }>([
-            { $match: { productId: { $in: productIds }, reason: StockMovementReason.preorder } },
-            { $group: { _id: '$productId', total: { $sum: '$preorderedDelta' } } }
+            { $match: { productId: { $in: productIds }, reason: StockMovementReason.backorder } },
+            { $group: { _id: '$productId', total: { $sum: '$backorderedDelta' } } }
         ])
         .then((rows) => new Map(rows.map((row) => [String(row._id), row.total])));
 
@@ -176,7 +176,7 @@ const outstandingByProduct = (
                 }
             },
             { $unwind: '$items' },
-            { $match: { 'items.kind': 'preorder', 'items.productId': { $in: productIds } } },
+            { $match: { 'items.kind': 'backorder', 'items.productId': { $in: productIds } } },
             {
                 $group: {
                     _id: { productId: '$items.productId', status: '$status' },
@@ -217,7 +217,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
         session?: ClientSession,
         kind?: HoldKind
     ) => Promise<boolean>;
-    setPreorderLimit: (productId: string, preorderLimit: number) => Promise<boolean>;
+    setBackorderLimit: (productId: string, backorderLimit: number) => Promise<boolean>;
     preorderBoard: (options: {
         skip: number;
         limit: number;
@@ -254,8 +254,8 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                         onHand: 0,
                         reserved: 0,
                         available: 0,
-                        preorderLimit: 0,
-                        preordered: 0
+                        backorderLimit: 0,
+                        backordered: 0
                     }
                 },
                 { upsert: true, session }
@@ -327,7 +327,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                     $inc: {
                         onHand: delta.onHandDelta,
                         reserved: delta.reservedDelta,
-                        preordered: delta.preorderedDelta,
+                        backordered: delta.backorderedDelta,
                         available: delta.onHandDelta - delta.reservedDelta
                     }
                 },
@@ -367,8 +367,8 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                 onHand: row.onHand,
                 reserved: row.reserved,
                 available: row.available,
-                preorderLimit: row.preorderLimit,
-                preordered: row.preordered
+                backorderLimit: row.backorderLimit,
+                backordered: row.backordered
             })),
             totalItems
         }));
@@ -380,16 +380,16 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * yet, so a limit can be set before the first receipt.
      *
      * @param productId - the product
-     * @param preorderLimit - the new allowance
+     * @param backorderLimit - the new allowance
      * @returns whether a level was written
      */
-    setPreorderLimit: (productId, preorderLimit) =>
+    setBackorderLimit: (productId, backorderLimit) =>
         stockLevelModel
             .updateOne(
                 { productId: toObjectId(productId) },
                 {
-                    $set: { preorderLimit },
-                    $setOnInsert: { onHand: 0, reserved: 0, available: 0, preordered: 0 }
+                    $set: { backorderLimit },
+                    $setOnInsert: { onHand: 0, reserved: 0, available: 0, backordered: 0 }
                 },
                 { upsert: true }
             )
@@ -406,13 +406,13 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      */
     preorderBoard: ({ skip, limit }) => {
         const where: QueryFilter<StockLevelDocument> = {
-            $or: [{ preorderLimit: { $gt: 0 } }, { preordered: { $gt: 0 } }]
+            $or: [{ backorderLimit: { $gt: 0 } }, { backordered: { $gt: 0 } }]
         };
 
         return Promise.all([
             stockLevelModel
                 .find(where)
-                .sort({ preordered: -1, _id: 1 })
+                .sort({ backordered: -1, _id: 1 })
                 .skip(skip)
                 .limit(limit)
                 .lean<Lean<StockLevelDocument>[]>()
@@ -426,8 +426,8 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                         const id = String(row.productId);
                         return {
                             productId: id,
-                            preorderLimit: row.preorderLimit,
-                            preordered: row.preordered,
+                            backorderLimit: row.backorderLimit,
+                            backordered: row.backordered,
                             ordered: ordered.get(id) ?? 0,
                             held: outstanding.get(id)?.held ?? 0,
                             paid: outstanding.get(id)?.paid ?? 0
@@ -639,7 +639,7 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
         reservationModel
             .find({
                 status: 'committed',
-                items: { $elemMatch: { productId: toObjectId(productId), kind: 'preorder' } }
+                items: { $elemMatch: { productId: toObjectId(productId), kind: 'backorder' } }
             })
             .sort({ committedAt: 1, _id: 1 })
             .session(session)

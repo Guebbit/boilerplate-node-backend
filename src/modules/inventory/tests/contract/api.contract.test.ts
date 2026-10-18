@@ -239,9 +239,9 @@ describe('GET /inventory/preorders', () => {
             releaseDate: new Date(Date.now() + 86_400_000).toISOString()
         });
         await api()
-            .put(`/inventory/levels/${String(product._id)}/preorder-limit`)
+            .put(`/inventory/levels/${String(product._id)}/backorder-limit`)
             .set('Authorization', bearer)
-            .send({ preorderLimit: 6 });
+            .send({ backorderLimit: 6 });
 
         const response = await api().get('/inventory/preorders').set('Authorization', bearer);
 
@@ -249,8 +249,8 @@ describe('GET /inventory/preorders', () => {
         expect(response.body.data.items).toMatchObject([
             {
                 productId: String(product._id),
-                preorderLimit: 6,
-                preordered: 0,
+                backorderLimit: 6,
+                backordered: 0,
                 held: 0,
                 paid: 0,
                 left: 6,
@@ -261,39 +261,39 @@ describe('GET /inventory/preorders', () => {
     });
 });
 
-describe('PUT /inventory/levels/:productId/preorder-limit', () => {
+describe('PUT /inventory/levels/:productId/backorder-limit', () => {
     it('matches the contract and answers the level with its new allowance', async () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct({ onHand: 3 });
 
         const response = await api()
-            .put(`/inventory/levels/${String(product._id)}/preorder-limit`)
+            .put(`/inventory/levels/${String(product._id)}/backorder-limit`)
             .set('Authorization', bearer)
-            .send({ preorderLimit: 8 });
+            .send({ backorderLimit: 8 });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ onHand: 3, preorderLimit: 8, preordered: 0 });
+        expect(response.body.data).toMatchObject({ onHand: 3, backorderLimit: 8, backordered: 0 });
     });
 
     it('matches the error contract for an unknown product', async () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
-            .put(`/inventory/levels/${MISSING_ID}/preorder-limit`)
+            .put(`/inventory/levels/${MISSING_ID}/backorder-limit`)
             .set('Authorization', bearer)
-            .send({ preorderLimit: 8 });
+            .send({ backorderLimit: 8 });
 
         expect(response.status).toBe(404);
     });
 
-    it.each([{ preorderLimit: -1 }, { preorderLimit: 1.5 }, {}])(
+    it.each([{ backorderLimit: -1 }, { backorderLimit: 1.5 }, {}])(
         'matches the error contract for the body %j',
         async (body) => {
             const { bearer } = await authenticateAs('admin');
             const product = await createProduct();
 
             const response = await api()
-                .put(`/inventory/levels/${String(product._id)}/preorder-limit`)
+                .put(`/inventory/levels/${String(product._id)}/backorder-limit`)
                 .set('Authorization', bearer)
                 .send(body);
 

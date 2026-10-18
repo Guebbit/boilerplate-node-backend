@@ -3,7 +3,7 @@
  * Handing arrived stock to the paid preorders waiting for it, oldest payment first.
  *
  * Runs in the receipt's own transaction, so the units never look sellable to a stranger between
- * arriving and being allocated. A paid preorder's claim (`preordered`) becomes a real hold
+ * arriving and being allocated. A paid preorder's claim (`backordered`) becomes a real hold
  * (`reserved`) on a real unit: `available` drops by what was allocated, the shelf count does not
  * move, and the order's hold now carries those units as ordinary `stock` — they ship, restock and
  * release like any other.
@@ -47,9 +47,9 @@ const withAllocated = (
         const id = String(item.productId);
         if (id !== productId) {
             next.push({ productId: id, quantity: item.quantity, kind: item.kind ?? 'stock' });
-        } else if (item.kind === 'preorder') {
+        } else if (item.kind === 'backorder') {
             if (item.quantity > quantity)
-                next.push({ productId: id, quantity: item.quantity - quantity, kind: 'preorder' });
+                next.push({ productId: id, quantity: item.quantity - quantity, kind: 'backorder' });
         } else {
             stock += item.quantity;
         }
@@ -70,7 +70,7 @@ const allocateProduct = async (
     session: ClientSession
 ): Promise<Allocation[]> => {
     const level = await stockLevelRepository.findByProductId(productId, session);
-    if (!level || level.preordered <= 0 || level.available <= 0) return [];
+    if (!level || level.backordered <= 0 || level.available <= 0) return [];
 
     const done: Allocation[] = [];
     let free = level.available;
@@ -78,7 +78,7 @@ const allocateProduct = async (
         if (free <= 0) break;
         const orderId = String(hold.orderId);
         const waiting = hold.items
-            .filter((item) => String(item.productId) === productId && item.kind === 'preorder')
+            .filter((item) => String(item.productId) === productId && item.kind === 'backorder')
             .reduce((sum, item) => sum + item.quantity, 0);
         const quantity = Math.min(waiting, free);
         if (quantity <= 0) continue;
@@ -107,7 +107,7 @@ const allocateProduct = async (
 };
 
 /**
- * Allocate the given products, in the caller's transaction, and write one `preorder_allocated`
+ * Allocate the given products, in the caller's transaction, and write one `backorder_allocated`
  * event per order and product served.
  *
  * @param productIds - the products to serve

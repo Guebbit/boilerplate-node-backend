@@ -50,8 +50,8 @@ export interface ProductRecord extends Omit<
      * beside `onHand`/`reserved`. Internal: only a preorder's `available` is derived from them,
      * and neither reaches the wire.
      */
-    preorderLimit?: number;
-    preordered?: number;
+    backorderLimit?: number;
+    backordered?: number;
     createdAt?: Date;
     updatedAt?: Date;
     deletedAt?: Date;
@@ -68,7 +68,7 @@ export interface ProductRecord extends Omit<
  */
 export type ProductSnapshot = Omit<
     ProductRecord,
-    'onHand' | 'reserved' | 'preorderLimit' | 'preordered' | 'active' | 'purchasable'
+    'onHand' | 'reserved' | 'backorderLimit' | 'backordered' | 'active' | 'purchasable'
 >;
 
 /**
@@ -289,12 +289,12 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
          * A preorder's `available` is what is left of the allowance, so the shelf stops selling
          * the day it is full. Written only by `syncStockCache`, never returned.
          */
-        preorderLimit: {
+        backorderLimit: {
             type: Number,
             default: 0,
             min: 0
         },
-        preordered: {
+        backordered: {
             type: Number,
             default: 0,
             min: 0
@@ -435,18 +435,20 @@ const applyProductAvailability = (serialized: Record<string, unknown>) => {
         derivedStockFields({
             onHand: typeof serialized.onHand === 'number' ? serialized.onHand : undefined,
             reserved: typeof serialized.reserved === 'number' ? serialized.reserved : undefined,
-            preorderLimit:
-                typeof serialized.preorderLimit === 'number' ? serialized.preorderLimit : undefined,
-            preordered:
-                typeof serialized.preordered === 'number' ? serialized.preordered : undefined,
+            backorderLimit:
+                typeof serialized.backorderLimit === 'number'
+                    ? serialized.backorderLimit
+                    : undefined,
+            backordered:
+                typeof serialized.backordered === 'number' ? serialized.backordered : undefined,
             active: serialized.active === false ? false : undefined,
             purchasable: serialized.purchasable === false ? false : undefined,
             releaseDate: serialized.releaseDate instanceof Date ? serialized.releaseDate : undefined
         })
     );
     // Read above, never returned: the contract's `Product` does not carry the allowance.
-    delete serialized.preorderLimit;
-    delete serialized.preordered;
+    delete serialized.backorderLimit;
+    delete serialized.backordered;
 };
 
 /**

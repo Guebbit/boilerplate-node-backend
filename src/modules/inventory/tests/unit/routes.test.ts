@@ -16,7 +16,7 @@ describe('inventory routes', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /levels',
             'GET /preorders',
-            'PUT /levels/:productId/preorder-limit',
+            'PUT /levels/:productId/backorder-limit',
             'GET /movements',
             'POST /receipts',
             'POST /adjustments',
@@ -27,7 +27,7 @@ describe('inventory routes', () => {
     it.each([
         'GET /levels',
         'GET /preorders',
-        'PUT /levels/:productId/preorder-limit',
+        'PUT /levels/:productId/backorder-limit',
         'GET /movements',
         'POST /receipts',
         'POST /adjustments',

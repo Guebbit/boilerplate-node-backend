@@ -47,7 +47,7 @@ export const removeLevel = (productId: string): Promise<void> =>
  * a refused checkout moves no stock. A level that never existed reads as nothing available.
  *
  * A product the caller names in `preorderIds` is sold against its allowance, not the shelf: what
- * is left of `preorderLimit`, because its units do not exist yet.
+ * is left of `backorderLimit`, because its units do not exist yet.
  *
  * @param productIds - the products to look up
  * @param preorderIds - the ones that are preorders right now (the catalogue decides, not this module)
@@ -65,7 +65,7 @@ export const availableFor = (
                     levels.map((level) => [
                         String(level.productId),
                         preorderIds.has(String(level.productId))
-                            ? Math.max(0, level.preorderLimit - level.preordered)
+                            ? Math.max(0, level.backorderLimit - level.backordered)
                             : level.available
                     ])
                 )
@@ -99,7 +99,7 @@ export const listPreorders = async (
                 ...item,
                 title: product?.title ?? item.productId,
                 ...(product?.releaseDate ? { releaseDate: product.releaseDate.toISOString() } : {}),
-                left: Math.max(0, item.preorderLimit - item.preordered)
+                left: Math.max(0, item.backorderLimit - item.backordered)
             };
         }),
         meta: buildPaginatedMeta(pagination, totalItems)

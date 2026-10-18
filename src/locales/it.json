@@ -130,7 +130,7 @@
             "paymentStatus": "stato del pagamento",
             "permissions": "permessi",
             "phone": "numero di telefono",
-            "preorderLimit": "limite di preordine",
+            "backorderLimit": "limite di preordine",
             "price": "prezzo",
             "productId": "prodotto",
             "provider": "fornitore",

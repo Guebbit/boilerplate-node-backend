@@ -27,15 +27,15 @@ export const derivedStockFields = (
     facts: PreorderFacts & {
         onHand?: number;
         reserved?: number;
-        preorderLimit?: number;
-        preordered?: number;
+        backorderLimit?: number;
+        backordered?: number;
     }
 ) => {
     const preorder = isPreorder(facts, new Date());
     // A preorder sells against its allowance, not the shelf: nothing exists yet. The day the
     // allowance is full the product reads sold out, whatever the cached shelf says.
     const available = preorder
-        ? preorderAllowanceLeft(facts.preorderLimit, facts.preordered)
+        ? preorderAllowanceLeft(facts.backorderLimit, facts.backordered)
         : availableStock(facts.onHand, facts.reserved);
     const flags = stockFlags(available, lowStockThreshold());
 

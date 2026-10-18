@@ -1233,8 +1233,8 @@ paths:
     # ---------- inventory ----------
     /inventory/levels:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1levels'
-    /inventory/levels/{productId}/preorder-limit:
-        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1levels~1{productId}~1preorder-limit'
+    /inventory/levels/{productId}/backorder-limit:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1levels~1{productId}~1backorder-limit'
     /inventory/preorders:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1preorders'
     /inventory/movements:

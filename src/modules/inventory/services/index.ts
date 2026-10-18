@@ -35,7 +35,7 @@ import {
     listMovements,
     listPreorders
 } from './levels';
-import { receive, adjust, setPreorderLimit } from './admin';
+import { receive, adjust, setBackorderLimit } from './admin';
 
 export type {
     StockLine,
@@ -66,7 +66,7 @@ export const inventoryService = {
     removeLevel,
     receive,
     adjust,
-    setPreorderLimit,
+    setBackorderLimit,
     listLevels,
     listPreorders,
     lowStockCount,

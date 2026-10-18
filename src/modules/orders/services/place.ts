@@ -136,7 +136,7 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
         input.lines.map(({ item }, index) => ({
             productId: item.productId,
             quantity: item.quantity,
-            ...(orderItems[index]?.product.preorder ? { kind: 'preorder' as const } : {})
+            ...(orderItems[index]?.product.preorder ? { kind: 'backorder' as const } : {})
         })),
         input.shipping?.holdMinutes
     );

@@ -48,7 +48,7 @@ paths:
             tags: [Inventory]
             summary: Preorder allowances
             description: |
-                Every product with a preorder allowance or an outstanding preorder, for the admin's preorder board: the cap, what is outstanding against it and how that splits between orders still unpaid and orders already paid. `preordered` is OUTSTANDING units, not units ever sold: it falls when stock arrives and is allocated, and when an order is cancelled or expires. `ordered` is the lifetime count, read off the ledger.
+                Every product with a preorder allowance or an outstanding preorder, for the admin's preorder board: the cap, what is outstanding against it and how that splits between orders still unpaid and orders already paid. `backordered` is OUTSTANDING units, not units ever sold: it falls when stock arrives and is allocated, and when an order is cancelled or expires. `ordered` is the lifetime count, read off the ledger.
 
                 The release date and the title come from the catalogue. Never public: exact counts are what a competitor wants.
             operationId: listPreorderLevels
@@ -70,15 +70,15 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /inventory/levels/{productId}/preorder-limit:
+    /inventory/levels/{productId}/backorder-limit:
         put:
             tags: [Inventory]
             summary: Set a product's preorder limit
             description: |
-                Sets how many units of the product may be preordered at once: the allowance an order claims when it is placed. `0` closes preordering. Lowering it below what is already outstanding is allowed and leaves those orders alone; only new ones are refused. Absolute and idempotent, so a retry is safe.
+                Sets how many units of the product may be backordered at once: the allowance an order claims when it is placed. `0` closes preordering. Lowering it below what is already outstanding is allowed and leaves those orders alone; only new ones are refused. Absolute and idempotent, so a retry is safe.
 
                 Not a stock movement: nothing on the shelf changes, so it leaves no ledger row (it is audited).
-            operationId: setPreorderLimit
+            operationId: setBackorderLimit
             security:
                 - bearerAuth: []
                 - apiKeyAuth: []
@@ -93,7 +93,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PreorderLimitRequest'
+                            $ref: '#/components/schemas/BackorderLimitRequest'
             responses:
                 '200':
                     description: The counters after the change
@@ -245,7 +245,7 @@ components:
         # `domain/transitions.ts`, which is the one place that mapping is written.
         StockMovementReason:
             type: string
-            enum: [reserve, ship, release, expire, receive, adjust, restock, preorder, allocate]
+            enum: [reserve, ship, release, expire, receive, adjust, restock, backorder, allocate]
             description: |
                 * `reserve` — an order claimed units. `reserved` up, `onHand` unchanged.
                 * `ship` — the parcel left (or a digital order was fulfilled). Both down: the units are off the shelf.
@@ -254,17 +254,17 @@ components:
                 * `receive` — a supplier delivery. `onHand` up.
                 * `adjust` — a stocktake correction, signed. `onHand` moves either way.
                 * `restock` — returned goods were received back on the shelf. `onHand` up.
-                * `preorder` — an order claimed units that do not exist yet. `preordered` up; the shelf is untouched.
-                * `allocate` — stock arrived for a paid preorder. `preordered` down, `reserved` up: the claim is now a real hold. Written in the receipt's own transaction, oldest payment first.
+                * `preorder` — an order claimed units that do not exist yet. `backordered` up; the shelf is untouched.
+                * `allocate` — stock arrived for a paid preorder. `backordered` down, `reserved` up: the claim is now a real hold. Written in the receipt's own transaction, oldest payment first.
 
-                `release` and `expire` of a preorder claim give back the allowance (`preordered` down) instead of `reserved`.
+                `release` and `expire` of a preorder claim give back the allowance (`backordered` down) instead of `reserved`.
 
         # One row of the ledger. Append-only: there is no update path, and a wrong row is
         # corrected by the next movement, the way accountants do it.
         StockMovement:
             type: object
             additionalProperties: false
-            required: [id, productId, reason, onHandDelta, reservedDelta, preorderedDelta]
+            required: [id, productId, reason, onHandDelta, reservedDelta, backorderedDelta]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -280,7 +280,7 @@ components:
                     type: integer
                 reservedDelta:
                     type: integer
-                preorderedDelta:
+                backorderedDelta:
                     type: integer
                 reference:
                     type: string
@@ -327,7 +327,7 @@ components:
         InventoryLevel:
             type: object
             additionalProperties: false
-            required: [productId, title, onHand, reserved, available, preorderLimit, preordered]
+            required: [productId, title, onHand, reserved, available, backorderLimit, backordered]
             properties:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -343,11 +343,11 @@ components:
                 available:
                     type: integer
                     minimum: 0
-                preorderLimit:
+                backorderLimit:
                     type: integer
                     minimum: 0
-                    description: How many units may be preordered at once. `0` means preordering is closed.
-                preordered:
+                    description: How many units may be backordered at once. `0` means preordering is closed.
+                backordered:
                     type: integer
                     minimum: 0
                     description: Preorder units outstanding against the limit, paid or not, until stock arrives and is allocated to them.
@@ -455,7 +455,7 @@ components:
         PreorderLevel:
             type: object
             additionalProperties: false
-            required: [productId, title, preorderLimit, preordered, held, paid, left, ordered]
+            required: [productId, title, backorderLimit, backordered, held, paid, left, ordered]
             properties:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -463,10 +463,10 @@ components:
                     type: string
                 releaseDate:
                     $ref: '../products/openapi.yaml#/components/schemas/ReleaseDate'
-                preorderLimit:
+                backorderLimit:
                     type: integer
                     minimum: 0
-                preordered:
+                backordered:
                     type: integer
                     minimum: 0
                     description: Outstanding units, `held + paid`. Drops when stock is allocated, so it is not "units sold".
@@ -481,7 +481,7 @@ components:
                 left:
                     type: integer
                     minimum: 0
-                    description: '`preorderLimit - preordered`, never below zero: how many more may be ordered.'
+                    description: '`backorderLimit - backordered`, never below zero: how many more may be ordered.'
                 ordered:
                     type: integer
                     minimum: 0
@@ -513,12 +513,12 @@ components:
                 data:
                     $ref: '#/components/schemas/PreorderLevelsResponse'
 
-        PreorderLimitRequest:
+        BackorderLimitRequest:
             type: object
             additionalProperties: false
-            required: [preorderLimit]
+            required: [backorderLimit]
             properties:
-                preorderLimit:
+                backorderLimit:
                     type: integer
                     minimum: 0
                     description: The new allowance. `0` closes preordering.

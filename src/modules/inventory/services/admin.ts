@@ -37,8 +37,8 @@ const levelFor = (productId: string, title: string): Promise<InventoryLevel | nu
                   onHand: level.onHand,
                   reserved: level.reserved,
                   available: level.available,
-                  preorderLimit: level.preorderLimit,
-                  preordered: level.preordered
+                  backorderLimit: level.backorderLimit,
+                  backordered: level.backordered
               }
             : null
     );
@@ -221,18 +221,18 @@ export const adjust = (
     });
 
 /**
- * Set how many units of a product may be preordered at once. Not a stock movement — nothing on the
+ * Set how many units of a product may be backordered at once. Not a stock movement — nothing on the
  * shelf changes — so it writes no ledger row; it is audited. Lowering it below what is outstanding
  * is allowed: those orders stand and only new ones are refused.
  *
  * @param productId - the product
- * @param preorderLimit - the new allowance; `0` closes preordering
- * @param context - audit context for `ADMIN_PREORDER_LIMIT_SET`; tests omit it to skip the emit
+ * @param backorderLimit - the new allowance; `0` closes preordering
+ * @param context - audit context for `ADMIN_BACKORDER_LIMIT_SET`; tests omit it to skip the emit
  * @returns the counters after the change, or 404 if the product is unknown
  */
-export const setPreorderLimit = (
+export const setBackorderLimit = (
     productId: string,
-    preorderLimit: number,
+    backorderLimit: number,
     context?: CallerContext
 ): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> =>
     productService.findByIdRaw(productId).then((product) => {
@@ -240,7 +240,7 @@ export const setPreorderLimit = (
 
         return (
             stockLevelRepository
-                .setPreorderLimit(productId, preorderLimit)
+                .setBackorderLimit(productId, backorderLimit)
                 // The catalogue's copy carries the allowance, which is what a preorder's `available`
                 // counts down from: bring it into step with the new limit.
                 .then(() => refreshStockCache(productId))
@@ -249,14 +249,14 @@ export const setPreorderLimit = (
                     if (!level) return generateReject(404, [t('inventory.product-not-found')]);
 
                     recordAudit(context, {
-                        action: inventoryAuditActions.ADMIN_PREORDER_LIMIT_SET,
+                        action: inventoryAuditActions.ADMIN_BACKORDER_LIMIT_SET,
                         outcome: 'success',
                         targetType: 'product',
                         targetId: productId,
-                        metadata: { preorderLimit }
+                        metadata: { backorderLimit }
                     });
 
-                    return generateSuccess(level, 200, t('inventory.preorder-limit-success'));
+                    return generateSuccess(level, 200, t('inventory.backorder-limit-success'));
                 })
         );
     });

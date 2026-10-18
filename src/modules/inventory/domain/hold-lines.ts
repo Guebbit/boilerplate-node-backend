@@ -70,7 +70,7 @@ export const takeFromHold = (items: readonly HoldLine[], lines: readonly HoldLin
     const taken = new Map<string, number>();
     for (const line of lines) {
         const claimed = takeOf(held, taken, keyOf(line), line.quantity);
-        if (line.kind === 'preorder')
+        if (line.kind === 'backorder')
             takeOf(held, taken, keyOf({ ...line, kind: 'stock' }), line.quantity - claimed);
     }
 
@@ -80,7 +80,7 @@ export const takeFromHold = (items: readonly HoldLine[], lines: readonly HoldLin
             .map(([key, quantity]) => {
                 const [productId = '', kind] = key.split('|', 2);
                 // `stock` is the default, so only a preorder line says so.
-                return { productId, quantity, ...(kind === 'preorder' ? { kind } : {}) };
+                return { productId, quantity, ...(kind === 'backorder' ? { kind } : {}) };
             });
 
     return { remaining: toLines(held), taken: toLines(taken) };

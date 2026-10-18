@@ -31,7 +31,7 @@ declare module '@kernel/events' {
          * whatever it holds beyond `waiting` and, the second time, finds nothing beyond it. `0`
          * means the order's preorder units of that product are all covered.
          */
-        'inventory.preorder_allocated': { orderId: string; productId: string; waiting: number };
+        'inventory.backorder_allocated': { orderId: string; productId: string; waiting: number };
     }
 }
 
@@ -41,5 +41,5 @@ declare module '@kernel/events' {
  */
 export const RESERVATION_EXPIRED = 'inventory.reservation_expired';
 
-/** See `DomainEventMap['inventory.preorder_allocated']` above for what it carries and who listens. */
-export const PREORDER_ALLOCATED = 'inventory.preorder_allocated';
+/** See `DomainEventMap['inventory.backorder_allocated']` above for what it carries and who listens. */
+export const PREORDER_ALLOCATED = 'inventory.backorder_allocated';

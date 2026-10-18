@@ -66,7 +66,7 @@ export const stockMovementSchema = new Schema<StockMovementDocument>(
             default: 0
         },
         // The third column, for units that do not exist yet. Same reasoning as the other two.
-        preorderedDelta: {
+        backorderedDelta: {
             type: Number,
             default: 0
         },
@@ -126,14 +126,14 @@ export interface StockLevelDocument extends Document {
      * — see `./repository`'s `stockBoard`.
      */
     available: number;
-    /** How many units may be preordered at once; `0` closes preordering. Set by an admin. */
-    preorderLimit: number;
+    /** How many units may be backordered at once; `0` closes preordering. Set by an admin. */
+    backorderLimit: number;
     /**
-     * Preorder units outstanding against {@link StockLevelDocument.preorderLimit}: claimed by an
+     * Preorder units outstanding against {@link StockLevelDocument.backorderLimit}: claimed by an
      * order (paid or still held) and not yet allocated stock. Written only through
      * `applyTransition`, like the other counters — a preorder hold moves this and never `reserved`.
      */
-    preordered: number;
+    backordered: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -170,14 +170,14 @@ export const stockLevelSchema = new Schema<StockLevelDocument>(
             type: Number,
             default: 0
         },
-        // Same as the counters above: `preordered` only moves through `$inc` in `applyDelta`, whose
-        // guard (`preordered + n <= preorderLimit`) is the real ceiling.
-        preorderLimit: {
+        // Same as the counters above: `backordered` only moves through `$inc` in `applyDelta`, whose
+        // guard (`backordered + n <= backorderLimit`) is the real ceiling.
+        backorderLimit: {
             type: Number,
             default: 0,
             min: 0
         },
-        preordered: {
+        backordered: {
             type: Number,
             default: 0
         }
@@ -190,8 +190,8 @@ export const stockLevelSchema = new Schema<StockLevelDocument>(
 /* The stock board's own query: scarcest first. */
 stockLevelSchema.index({ available: 1, _id: 1 }, { name: 'stocklevels_available__id' });
 /* The preorder board lists products with an allowance or something outstanding: two clauses of an `$or`. */
-stockLevelSchema.index({ preorderLimit: -1 }, { name: 'stocklevels_preorderLimit' });
-stockLevelSchema.index({ preordered: -1 }, { name: 'stocklevels_preordered' });
+stockLevelSchema.index({ backorderLimit: -1 }, { name: 'stocklevels_backorderLimit' });
+stockLevelSchema.index({ backordered: -1 }, { name: 'stocklevels_backordered' });
 
 /** `_id` → `id`, dates to ISO strings. */
 export const applyStockLevelTransform = applySerialization(stockLevelSchema);
@@ -259,7 +259,7 @@ const reservationItemSchema = new Schema<ReservationItem>(
         },
         kind: {
             type: String,
-            enum: ['stock', 'preorder'],
+            enum: ['stock', 'backorder'],
             default: 'stock'
         }
     },

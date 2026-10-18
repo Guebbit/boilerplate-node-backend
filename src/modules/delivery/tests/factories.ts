@@ -163,10 +163,10 @@ export const paidPreorderOrder = async (
     const lines = products.map((product, index) => ({
         productId: String(product._id),
         quantity: wanted[index].quantity,
-        kind: 'preorder' as const
+        kind: 'backorder' as const
     }));
     for (const { productId, quantity } of lines)
-        await inventoryService.setPreorderLimit(productId, quantity);
+        await inventoryService.setBackorderLimit(productId, quantity);
     await inventoryService.reserveForOrder(orderId, lines);
     await inventoryService.commitForOrder(orderId);
     return { user, orderId, productIds: lines.map(({ productId }) => productId) };

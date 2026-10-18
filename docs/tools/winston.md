@@ -183,8 +183,8 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `infrastructure` | `SECURITY_TOKEN_INVALID_SIGNATURE`           | `security.token.invalid_signature`           | —                      |
 | `infrastructure` | `SECURITY_TOKEN_MALFORMED`                   | `security.token.malformed`                   | —                      |
 | `infrastructure` | `SECURITY_UNAUTHORIZED`                      | `security.unauthorized`                      | —                      |
+| `inventory`      | `ADMIN_BACKORDER_LIMIT_SET`                  | `admin.backorder.limit.set`                  | `product`              |
 | `inventory`      | `ADMIN_COMMIT_ORPHANED`                      | `admin.commit.orphaned`                      | `order`                |
-| `inventory`      | `ADMIN_PREORDER_LIMIT_SET`                   | `admin.preorder.limit.set`                   | `product`              |
 | `inventory`      | `ADMIN_RESERVATIONS_SWEPT`                   | `admin.reservations.swept`                   | `reservation`          |
 | `inventory`      | `ADMIN_STOCK_ADJUSTED`                       | `admin.stock.adjusted`                       | —                      |
 | `inventory`      | `ADMIN_STOCK_RECEIVED`                       | `admin.stock.received`                       | —                      |

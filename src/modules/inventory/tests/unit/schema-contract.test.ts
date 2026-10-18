@@ -52,7 +52,7 @@ describe('stockMovementSchema — the ledger', () => {
             'receive',
             'adjust',
             'restock',
-            'preorder',
+            'backorder',
             'allocate'
         ]);
     });

@@ -17,7 +17,7 @@ export const inventoryAuditActions = {
     ADMIN_STOCK_ADJUSTED: 'admin.stock.adjusted',
     ADMIN_RESERVATIONS_SWEPT: 'admin.reservations.swept',
     ADMIN_COMMIT_ORPHANED: 'admin.commit.orphaned',
-    ADMIN_PREORDER_LIMIT_SET: 'admin.preorder.limit.set'
+    ADMIN_BACKORDER_LIMIT_SET: 'admin.backorder.limit.set'
 } as const;
 
 /** Registers this module's actions into the app-wide `AuditActionMap` union. */

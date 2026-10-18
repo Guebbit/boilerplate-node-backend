@@ -42,10 +42,10 @@ export interface StockCounters {
     onHand: number;
     /** Units an open order has claimed. */
     reserved: number;
-    /** How many units may be preordered at once; absent leaves the copy alone. */
-    preorderLimit?: number;
+    /** How many units may be backordered at once; absent leaves the copy alone. */
+    backorderLimit?: number;
     /** Units already claimed against that allowance. */
-    preordered?: number;
+    backordered?: number;
 }
 
 /** The catalogue's repository: base CRUD from the factory, extended with scoping, facets, and the stock-cache mirror. */

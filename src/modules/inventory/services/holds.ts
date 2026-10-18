@@ -101,7 +101,7 @@ const commitWithin = async (
     if (hold) {
         // Paid preorder units wait for stock; stock that already arrived serves them now.
         const preorderProducts = hold.items
-            .filter((item) => item.kind === 'preorder')
+            .filter((item) => item.kind === 'backorder')
             .map((item) => String(item.productId));
         const allocations =
             preorderProducts.length > 0 ? await allocateWithin(preorderProducts, session) : [];
@@ -201,7 +201,7 @@ const takeLines = (
             hold.items.map(({ productId, quantity, kind }) => ({
                 productId: String(productId),
                 quantity,
-                ...(kind === 'preorder' ? { kind } : {})
+                ...(kind === 'backorder' ? { kind } : {})
             })),
             lines
         );

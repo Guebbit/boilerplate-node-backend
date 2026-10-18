@@ -14,7 +14,7 @@ import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { getInventoryLevels } from './controllers/get-inventory-levels';
 import { getStockMovements } from './controllers/get-stock-movements';
 import { getPreorderLevels } from './controllers/get-preorder-levels';
-import { putPreorderLimit } from './controllers/put-preorder-limit';
+import { putBackorderLimit } from './controllers/put-backorder-limit';
 import { postReceipt } from './controllers/post-receipt';
 import { postAdjustment } from './controllers/post-adjustment';
 import { postReservationsSweep } from './controllers/post-reservations-sweep';
@@ -38,13 +38,13 @@ router.get('/levels', requirePermission('read', 'StockLevel'), getInventoryLevel
 // GET /inventory/preorders — the preorder board: allowance, outstanding, paid vs unpaid
 router.get('/preorders', requirePermission('read', 'StockLevel'), getPreorderLevels);
 
-// PUT /inventory/levels/:productId/preorder-limit — how many units may be preordered at once.
+// PUT /inventory/levels/:productId/backorder-limit — how many units may be backordered at once.
 // `create:StockMovement`, the warehouse's own key: it is a promise about stock that does not exist
 // yet, and absolute, so a retried request is harmless without an idempotency key.
 router.put(
-    '/levels/:productId/preorder-limit',
+    '/levels/:productId/backorder-limit',
     requirePermission('create', 'StockMovement'),
-    putPreorderLimit
+    putBackorderLimit
 );
 
 // GET /inventory/movements — the ledger, newest first

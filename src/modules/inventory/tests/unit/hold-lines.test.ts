@@ -74,16 +74,16 @@ describe('takeFromHold, with preorder claims', () => {
     // The same product held under both kinds, as it is once part of a preorder is allocated.
     const mixed = [
         { productId: 'a', quantity: 2 },
-        { productId: 'a', quantity: 3, kind: 'preorder' as const }
+        { productId: 'a', quantity: 3, kind: 'backorder' as const }
     ];
 
     it('takes from the kind it is asked for and leaves the other alone', () => {
-        expect(takeFromHold(mixed, [{ productId: 'a', quantity: 2, kind: 'preorder' }])).toEqual({
+        expect(takeFromHold(mixed, [{ productId: 'a', quantity: 2, kind: 'backorder' }])).toEqual({
             remaining: [
                 { productId: 'a', quantity: 2 },
-                { productId: 'a', quantity: 1, kind: 'preorder' }
+                { productId: 'a', quantity: 1, kind: 'backorder' }
             ],
-            taken: [{ productId: 'a', quantity: 2, kind: 'preorder' }]
+            taken: [{ productId: 'a', quantity: 2, kind: 'backorder' }]
         });
     });
 
@@ -91,7 +91,7 @@ describe('takeFromHold, with preorder claims', () => {
         const { remaining, taken } = takeFromHold(mixed, [{ productId: 'a', quantity: 9 }]);
 
         expect(taken).toEqual([{ productId: 'a', quantity: 2 }]);
-        expect(remaining).toEqual([{ productId: 'a', quantity: 3, kind: 'preorder' }]);
+        expect(remaining).toEqual([{ productId: 'a', quantity: 3, kind: 'backorder' }]);
     });
 
     it('lets a preorder line fall back on the shelf units that replaced its claim', () => {
@@ -100,7 +100,7 @@ describe('takeFromHold, with preorder claims', () => {
         const allocated = [{ productId: 'a', quantity: 2 }];
 
         expect(
-            takeFromHold(allocated, [{ productId: 'a', quantity: 2, kind: 'preorder' }])
+            takeFromHold(allocated, [{ productId: 'a', quantity: 2, kind: 'backorder' }])
         ).toEqual({
             remaining: [],
             taken: [{ productId: 'a', quantity: 2 }]
@@ -109,18 +109,18 @@ describe('takeFromHold, with preorder claims', () => {
 
     it('takes the claim first and the shelf units only for what the claim lacks', () => {
         const { remaining, taken } = takeFromHold(mixed, [
-            { productId: 'a', quantity: 4, kind: 'preorder' }
+            { productId: 'a', quantity: 4, kind: 'backorder' }
         ]);
 
         expect(taken).toEqual([
-            { productId: 'a', quantity: 3, kind: 'preorder' },
+            { productId: 'a', quantity: 3, kind: 'backorder' },
             { productId: 'a', quantity: 1 }
         ]);
         expect(remaining).toEqual([{ productId: 'a', quantity: 1 }]);
     });
 
     it('never lets a shelf line take a claim', () => {
-        const claimOnly = [{ productId: 'a', quantity: 2, kind: 'preorder' as const }];
+        const claimOnly = [{ productId: 'a', quantity: 2, kind: 'backorder' as const }];
 
         expect(takeFromHold(claimOnly, [{ productId: 'a', quantity: 2 }])).toEqual({
             remaining: claimOnly,

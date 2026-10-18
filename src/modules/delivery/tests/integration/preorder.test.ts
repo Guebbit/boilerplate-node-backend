@@ -163,9 +163,9 @@ describe('stock arriving for a paid preorder', () => {
         );
         const orderId = String(order._id);
         const productId = String(product._id);
-        await inventoryService.setPreorderLimit(productId, 3);
+        await inventoryService.setBackorderLimit(productId, 3);
         await inventoryService.reserveForOrder(orderId, [
-            { productId, quantity: 3, kind: 'preorder' }
+            { productId, quantity: 3, kind: 'backorder' }
         ]);
         await inventoryService.commitForOrder(orderId);
         await fulfillmentOrdersOf(orderId);

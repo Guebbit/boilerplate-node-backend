@@ -55,9 +55,9 @@ it('cancels and refunds the unanswered preorder, and leaves the shipped line', a
     const { user: admin } = await authenticateAs('admin');
     const staffBefore = await loginBearer(admin.email);
     await api()
-        .put(`/inventory/levels/${preorderId}/preorder-limit`)
+        .put(`/inventory/levels/${preorderId}/backorder-limit`)
         .set('Authorization', staffBefore)
-        .send({ preorderLimit: 5 })
+        .send({ backorderLimit: 5 })
         .expect(200);
 
     // Paid for both lines; the normal one ships, the preorder waits for its date.

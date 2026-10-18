@@ -80,7 +80,7 @@ const inLockOrder = (lines: readonly StockLine[]): StockLine[] =>
  * @param line - the line being held
  */
 const takeReasonFor = (line: StockLine): StockMovementReason =>
-    line.kind === 'preorder' ? StockMovementReason.preorder : StockMovementReason.reserve;
+    line.kind === 'backorder' ? StockMovementReason.backorder : StockMovementReason.reserve;
 
 /**
  * How many units of this line the product could still have given, read back after a refusal: shelf
@@ -89,8 +89,8 @@ const takeReasonFor = (line: StockLine): StockMovementReason =>
  * @param level - the product's level, or `null` when it has none
  */
 const leftFor = (line: StockLine, level: StockLevelDocument | null): number =>
-    line.kind === 'preorder'
-        ? Math.max(0, (level?.preorderLimit ?? 0) - (level?.preordered ?? 0))
+    line.kind === 'backorder'
+        ? Math.max(0, (level?.backorderLimit ?? 0) - (level?.backordered ?? 0))
         : (level?.available ?? 0);
 
 /**

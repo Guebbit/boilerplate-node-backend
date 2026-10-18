@@ -155,7 +155,7 @@ const cancelUnderLock = (
         await inventoryService.releaseLinesForOrder(
             orderId,
             cancelled.waitingForStock
-                ? cancelled.lines.map((line) => ({ ...line, kind: 'preorder' as const }))
+                ? cancelled.lines.map((line) => ({ ...line, kind: 'backorder' as const }))
                 : cancelled.lines,
             session
         );

@@ -34,7 +34,7 @@ flowchart LR
     inventory --> products
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
-    inventory -. "inventory.preorder_allocated" .-> delivery
+    inventory -. "inventory.backorder_allocated" .-> delivery
     inventory -. "inventory.reservation_expired" .-> orders
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;

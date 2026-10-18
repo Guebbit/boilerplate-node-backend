@@ -2,7 +2,7 @@
  * @module
  * Inventory rules. Pure: data in, verdict out — no status codes, no i18n, no database. A product
  * carries two counters, `onHand` (units that exist) and `reserved` (units an open order has
- * claimed), and a third, `preordered`, for units that do not exist yet and are only promised.
+ * claimed), and a third, `backordered`, for units that do not exist yet and are only promised.
  * Nine transitions move those counters, and this file is the one place that says what each does — an
  * tenth is one entry here plus one enum value in `openapi.yaml`. What a customer
  * may actually buy from those two counters is `@modules/products`'s `availableStock`
@@ -15,9 +15,9 @@ import { StockMovementReason } from '@types';
 
 /**
  * What a hold's units are: `stock` units exist and sit on the shelf; `preorder` units do not exist
- * yet and are only a claim on the product's preorder allowance (`preorderLimit`).
+ * yet and are only a claim on the product's preorder allowance (`backorderLimit`).
  */
-export type HoldKind = 'stock' | 'preorder';
+export type HoldKind = 'stock' | 'backorder';
 
 /**
  * What one transition does to the counters. All signed, any possibly zero.
@@ -30,7 +30,7 @@ export interface CounterDelta {
     onHandDelta: number;
     reservedDelta: number;
     /** Units claimed against the preorder allowance and not yet allocated. */
-    preorderedDelta: number;
+    backorderedDelta: number;
 }
 
 /**
@@ -52,42 +52,42 @@ export const counterDeltaFor = (
     switch (reason) {
         // A hold. The units stay where they are and stop being sellable.
         case StockMovementReason.reserve: {
-            return { onHandDelta: 0, reservedDelta: quantity, preorderedDelta: 0 };
+            return { onHandDelta: 0, reservedDelta: quantity, backorderedDelta: 0 };
         }
 
         // The parcel leaves: the units are off the shelf and no longer spoken for.
         case StockMovementReason.ship: {
-            return { onHandDelta: -quantity, reservedDelta: -quantity, preorderedDelta: 0 };
+            return { onHandDelta: -quantity, reservedDelta: -quantity, backorderedDelta: 0 };
         }
 
         // The hold is given up — cancelled, or timed out. The units become sellable again.
         case StockMovementReason.release:
         case StockMovementReason.expire: {
             // A preorder claim never touched `reserved`, so giving it up gives back the allowance.
-            return kind === 'preorder'
-                ? { onHandDelta: 0, reservedDelta: 0, preorderedDelta: -quantity }
-                : { onHandDelta: 0, reservedDelta: -quantity, preorderedDelta: 0 };
+            return kind === 'backorder'
+                ? { onHandDelta: 0, reservedDelta: 0, backorderedDelta: -quantity }
+                : { onHandDelta: 0, reservedDelta: -quantity, backorderedDelta: 0 };
         }
 
         // A preorder: the units do not exist yet, so only the allowance moves.
-        case StockMovementReason.preorder: {
-            return { onHandDelta: 0, reservedDelta: 0, preorderedDelta: quantity };
+        case StockMovementReason.backorder: {
+            return { onHandDelta: 0, reservedDelta: 0, backorderedDelta: quantity };
         }
 
         // Stock arrived for a paid preorder: the claim becomes a real hold on a real unit.
         case StockMovementReason.allocate: {
-            return { onHandDelta: 0, reservedDelta: quantity, preorderedDelta: -quantity };
+            return { onHandDelta: 0, reservedDelta: quantity, backorderedDelta: -quantity };
         }
 
         // A delivery. The only transition that can create units.
         case StockMovementReason.receive: {
-            return { onHandDelta: quantity, reservedDelta: 0, preorderedDelta: 0 };
+            return { onHandDelta: quantity, reservedDelta: 0, backorderedDelta: 0 };
         }
 
         // Returned goods are received back on the shelf. `reserved` is untouched: `ship` already
         // took it down, and nothing reserved these units again in the meantime.
         case StockMovementReason.restock: {
-            return { onHandDelta: quantity, reservedDelta: 0, preorderedDelta: 0 };
+            return { onHandDelta: quantity, reservedDelta: 0, backorderedDelta: 0 };
         }
 
         /*
@@ -96,7 +96,7 @@ export const counterDeltaFor = (
          * directions instead of a second `write-off` reason saying the same thing.
          */
         case StockMovementReason.adjust: {
-            return { onHandDelta: quantity, reservedDelta: 0, preorderedDelta: 0 };
+            return { onHandDelta: quantity, reservedDelta: 0, backorderedDelta: 0 };
         }
     }
 };

@@ -132,7 +132,7 @@ First match wins. The wishlist asks the same function without a quantity, so it 
 A preorder product (`active && purchasable && releaseDate > now`, see
 [products](./products.md#preorder)) is judged against its **allowance**, not the shelf: the cart
 tells `inventory` which products are preorders (`availableFor(ids, preorderIds)`) and gets back what
-is left of `preorderLimit`. So `out_of_stock` on a preorder line means the allowance is full, however
+is left of `backorderLimit`. So `out_of_stock` on a preorder line means the allowance is full, however
 much sits on the shelf, and `insufficient_stock` means it has fewer left than the line wants. Nothing
 else changes: a basket may mix a preorder with goods in stock, since the order splits into fulfillment
 orders by release date (see [delivery](./delivery.md)).

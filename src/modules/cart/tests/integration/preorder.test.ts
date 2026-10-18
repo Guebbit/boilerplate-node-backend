@@ -33,7 +33,7 @@ const nextMonth = () => new Date(Date.now() + 30 * 86_400_000).toISOString();
 /** A preorder product: no stock on the shelf, an allowance of `limit`. */
 const preorderProduct = async (limit: number, onHand = 0) => {
     const product = await createProduct({ onHand, releaseDate: nextMonth() });
-    await inventoryService.setPreorderLimit(String(product._id), limit);
+    await inventoryService.setBackorderLimit(String(product._id), limit);
     return product;
 };
 
@@ -107,7 +107,7 @@ describe('checking out a preorder', () => {
         expect(line?.product.releaseDate?.toISOString()).toBe(product.releaseDate?.toISOString());
         const levels = await inventoryService.listPreorders();
         expect(levels.items).toMatchObject([
-            { productId, preordered: 2, held: 2, paid: 0, left: 3 }
+            { productId, backordered: 2, held: 2, paid: 0, left: 3 }
         ]);
         const shelf = await inventoryService.availableFor([productId]);
         expect(shelf.get(productId)).toBe(0);

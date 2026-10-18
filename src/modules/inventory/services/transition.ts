@@ -34,8 +34,8 @@ export const refreshStockCache = (productId: string): Promise<void> =>
                       .syncStockCache(productId, {
                           onHand: level.onHand,
                           reserved: level.reserved,
-                          preorderLimit: level.preorderLimit,
-                          preordered: level.preordered
+                          backorderLimit: level.backorderLimit,
+                          backordered: level.backordered
                       })
                       .then(() => invalidateCacheTagsLogged(['products']))
                 : undefined
@@ -75,7 +75,7 @@ export const refreshStockCacheForProducts = async (
  * @param productId - the product whose counters move
  * @param quantity - how many units; signed only for `adjust`
  * @param context - what to record on the row beyond the deltas; `kind` is not recorded, it only
- *   decides which counter a `release`/`expire` gives back (`preordered` for a preorder claim)
+ *   decides which counter a `release`/`expire` gives back (`backordered` for a preorder claim)
  * @param session - the caller's transaction. Given one, every read and write joins it, and the
  *   catalogue's stock cache is NOT synced here: that write leaves this module and cannot roll
  *   back, so the caller runs {@link refreshStockCacheForOrder} once its transaction commits
@@ -99,7 +99,7 @@ export const applyTransition = async (
          * nothing available (see `reserve.ts`), so the hold is refused, never reported as taken.
          * A `preorder` against no row has no allowance to claim, for the same reason.
          */
-        if (reason === StockMovementReason.reserve || reason === StockMovementReason.preorder)
+        if (reason === StockMovementReason.reserve || reason === StockMovementReason.backorder)
             return false;
 
         /*
@@ -166,7 +166,7 @@ export const applyToEveryLine = async (
         const id = String(productId);
         // Units that do not exist yet cannot leave the shelf: refusing here rolls the caller's
         // transaction back instead of taking real units for an allowance.
-        if (reason === StockMovementReason.ship && kind === 'preorder')
+        if (reason === StockMovementReason.ship && kind === 'backorder')
             throw new Error(
                 `Inventory: cannot ship ${quantity} of product ${id} for order ${context.reference} — they are still a preorder claim`
             );

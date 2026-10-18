@@ -32,7 +32,7 @@ flowchart LR
     delivery --> orders
     delivery --> products
     delivery --> shop
-    inventory -. "inventory.preorder_allocated" .-> delivery
+    inventory -. "inventory.backorder_allocated" .-> delivery
     orders -. "order.cancelled" .-> delivery
     orders -. "order.status_changed" .-> delivery
     orders -. "order.status_overridden" .-> delivery
@@ -214,7 +214,7 @@ sequenceDiagram
     participant D as delivery
     A->>I: POST /inventory/receipts
     I->>I: receive, then allocate oldest payment first (one transaction)
-    I->>O: inventory.preorder_allocated {orderId, productId, waiting}
+    I->>O: inventory.backorder_allocated {orderId, productId, waiting}
     O->>D: at least once
     D->>D: ensure the fulfillment orders exist
     D->>D: held beyond `waiting`? split that many out, earliest promise first

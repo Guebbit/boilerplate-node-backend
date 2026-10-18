@@ -1000,7 +1000,7 @@ const shirtShippedPreorderWaiting = async ({ shipShirt = true } = {}) => {
         releaseDate: new Date(Date.now() + 30 * 86_400_000).toISOString()
     });
     const gameId = String(game._id);
-    await inventoryService.setPreorderLimit(gameId, 5);
+    await inventoryService.setBackorderLimit(gameId, 5);
     const order = await createOrder(user, [toOrderItem(shirt, 1), toOrderItem(game, 2)], {
         shippingMethod: 'standard',
         shippingCost: 5
@@ -1008,7 +1008,7 @@ const shirtShippedPreorderWaiting = async ({ shipShirt = true } = {}) => {
     const orderId = String(order._id);
     await inventoryService.reserveForOrder(orderId, [
         { productId: String(shirt._id), quantity: 1 },
-        { productId: gameId, quantity: 2, kind: 'preorder' }
+        { productId: gameId, quantity: 2, kind: 'backorder' }
     ]);
     const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
     if (!intent.success) throw new Error('intent refused');
@@ -1054,7 +1054,7 @@ describe('cancelling a preorder that is still waiting for stock', () => {
         const cancellation = created(outcome);
         expect(cancellation.refundAmount).toBe(20);
         const board = await inventoryService.listPreorders();
-        expect(board.items).toMatchObject([{ productId: gameId, preordered: 0, left: 5 }]);
+        expect(board.items).toMatchObject([{ productId: gameId, backordered: 0, left: 5 }]);
         expect(await countersOf(gameId)).toMatchObject({ onHand: 0, reserved: 0 });
     });
 });
@@ -1090,7 +1090,7 @@ describe('a preorder wait nobody answered', () => {
         });
         expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: 20 }]);
         const board = await inventoryService.listPreorders();
-        expect(board.items).toMatchObject([{ preordered: 0, left: 5 }]);
+        expect(board.items).toMatchObject([{ backordered: 0, left: 5 }]);
         const [, waiting] = await fulfillmentOrdersOf(fixture.orderId);
         expect([waiting.status, waiting.cancelReason]).toEqual(['cancelled', 'no_answer']);
     });
@@ -1156,14 +1156,14 @@ describe('a preorder wait nobody answered', () => {
             releaseDate: new Date(Date.now() + 30 * DAY).toISOString()
         });
         const gameId = String(game._id);
-        await inventoryService.setPreorderLimit(gameId, 5);
+        await inventoryService.setBackorderLimit(gameId, 5);
         const order = await createOrder(user, [toOrderItem(game, 2)], {
             shippingMethod: 'standard',
             shippingCost: 5
         });
         const orderId = String(order._id);
         await inventoryService.reserveForOrder(orderId, [
-            { productId: gameId, quantity: 2, kind: 'preorder' }
+            { productId: gameId, quantity: 2, kind: 'backorder' }
         ]);
         const intent = await paymentService.createIntent(orderId, asCustomer(user.id));
         if (!intent.success) throw new Error('intent refused');
@@ -1183,7 +1183,7 @@ describe('a preorder wait nobody answered', () => {
         const stored = await readOrder(orderId);
         expect(stored?.status).toBe(OrderStatus.cancelled);
         const board = await inventoryService.listPreorders();
-        expect(board.items).toMatchObject([{ preordered: 0 }]);
+        expect(board.items).toMatchObject([{ backordered: 0 }]);
         expect(await refundsOf(orderId)).toMatchObject([{ amount: 25 }]);
         // The fulfillment orders follow the order's cancel through the outbox.
         await settleOutboxNudges();
