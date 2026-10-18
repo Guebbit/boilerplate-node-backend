@@ -19,6 +19,33 @@ import { applyToEveryLine, refreshStockCacheForProducts } from './transition';
 import { allocateWithin } from './allocate';
 
 /**
+ * Units a hold gives back are sellable again: the paid buyers waiting for stock are served from
+ * them first, in the same transaction, so a stranger can never take what a queue is owed.
+ * Only a release or an expiry frees shelf units; a shipment and a payment free nothing.
+ *
+ * @param reason - the movement just applied
+ * @param lines - the hold's lines that moved
+ * @param session - the transaction the movement runs in
+ * @returns how many orders were served; the caller owes a `nudgeOutbox` after its commit
+ */
+const serveQueueAfter = (
+    reason: StockMovementReason,
+    lines: readonly { productId: unknown; kind?: string }[],
+    session: ClientSession
+): Promise<number> => {
+    if (reason !== StockMovementReason.release && reason !== StockMovementReason.expire)
+        return Promise.resolve(0);
+
+    // A backorder claim given back frees allowance, not shelf units.
+    const freed = lines
+        .filter(({ kind }) => kind !== 'backorder')
+        .map((line) => String(line.productId));
+    return freed.length === 0
+        ? Promise.resolve(0)
+        : allocateWithin(freed, session).then((allocations) => allocations.length);
+};
+
+/**
  * Claim a hold and move its counters as ONE unit: both land, or neither does.
  *
  * The claim makes the move at-most-once; the transaction makes it all-or-nothing. A write that
@@ -41,19 +68,21 @@ const claimAndApply = (
     reason: StockMovementReason,
     session?: ClientSession
 ): Promise<boolean> => {
-    const claimAndMove = (active: ClientSession): Promise<boolean> =>
+    const claimAndMove = (active: ClientSession): Promise<{ claimed: boolean; served: number }> =>
         reservationRepository.claimStatus(orderId, from, to, active).then((hold) => {
-            if (!hold) return false;
-            return applyToEveryLine(reason, hold.items, { reference: orderId }, active).then(
-                () => true
-            );
+            if (!hold) return { claimed: false, served: 0 };
+            return applyToEveryLine(reason, hold.items, { reference: orderId }, active)
+                .then(() => serveQueueAfter(reason, hold.items, active))
+                .then((served) => ({ claimed: true, served }));
         });
 
-    if (session) return claimAndMove(session);
+    if (session) return claimAndMove(session).then(({ claimed }) => claimed);
 
-    return withTransaction(claimAndMove).then((claimed) =>
-        claimed ? refreshStockCacheForOrder(orderId).then(() => true) : false
-    );
+    return withTransaction(claimAndMove).then(({ claimed, served }) => {
+        if (!claimed) return false;
+        if (served > 0) nudgeOutbox();
+        return refreshStockCacheForOrder(orderId).then(() => true);
+    });
 };
 
 /**
@@ -209,9 +238,9 @@ const takeLines = (
             .replaceItems(orderId, remaining, remaining.length === 0 ? endsAs : undefined, session)
             .then((replaced) => {
                 if (!replaced) return false;
-                return applyToEveryLine(reason, taken, { reference: orderId }, session).then(
-                    () => true
-                );
+                return applyToEveryLine(reason, taken, { reference: orderId }, session)
+                    .then(() => serveQueueAfter(reason, taken, session))
+                    .then(() => true);
             });
     });
 

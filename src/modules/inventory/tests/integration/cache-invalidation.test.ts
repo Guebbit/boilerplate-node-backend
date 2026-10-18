@@ -8,6 +8,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factories';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { inventoryService } from '../../services';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 
@@ -67,10 +68,13 @@ describe('the products cache tag, cleared where stock is written', () => {
         const product = await createProduct({ onHand: 5 });
         const productId = String(product._id);
 
-        await inventoryService.restockReturnedLines([{ productId, quantity: 1 }], {
-            reference: anOrderId(),
-            note: 'return'
-        });
+        await withTransaction((session) =>
+            inventoryService.restockReturnedLines(
+                [{ productId, quantity: 1 }],
+                { reference: anOrderId(), note: 'return' },
+                session
+            )
+        );
         await inventoryService.refreshStockCacheForProducts([productId]);
 
         expect(invalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);

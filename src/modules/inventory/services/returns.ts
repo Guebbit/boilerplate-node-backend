@@ -6,6 +6,7 @@
 import type { ClientSession } from 'mongoose';
 import { StockMovementReason } from '@types';
 import { applyToEveryLine } from './transition';
+import { allocateWithin } from './allocate';
 
 /**
  * Put returned goods back on the shelf — units a customer sent back and staff received. This
@@ -18,11 +19,21 @@ import { applyToEveryLine } from './transition';
  *
  * @param lines - what came back
  * @param context - `reference` names the order; `note` names the return
- * @param session - the caller's transaction; see `refreshStockCacheForProducts` in `./transition`
+ * @param session - the caller's transaction; see `refreshStockCacheForProducts` in `./transition`.
+ *   The caller announces in it too, so the `backorder_allocated` rows it may write go out with its own nudge
  * @throws {Error} when a line's counters refuse the restock
  */
 export const restockReturnedLines = (
     lines: readonly { productId: string; quantity: number }[],
     context: { reference: string; note: string },
-    session?: ClientSession
-): Promise<void> => applyToEveryLine(StockMovementReason.restock, lines, context, session);
+    session: ClientSession
+): Promise<void> =>
+    applyToEveryLine(StockMovementReason.restock, lines, context, session)
+        // The restocked units are sellable: whoever paid and waits is served from them first.
+        .then(() =>
+            allocateWithin(
+                lines.map(({ productId }) => productId),
+                session
+            )
+        )
+        .then(() => undefined);

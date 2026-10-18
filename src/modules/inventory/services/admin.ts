@@ -44,24 +44,26 @@ const levelFor = (productId: string, title: string): Promise<InventoryLevel | nu
     );
 
 /**
- * A delivery and the preorders it serves, as ONE transaction: the units arrive and are allocated
+ * A delivery (or a stocktake that finds units) and the owed units it serves, as ONE transaction: the units arrive and are allocated
  * to the paid preorders waiting for them oldest payment first, so they never look sellable in
  * between. Everything that cannot roll back — waking the outbox relay, the catalogue's stock
  * cache — waits for the commit.
  *
+ * @param reason - `receive`, or a positive `adjust`: both raise `available`
  * @param productId - the product the delivery is for
  * @param quantity - how many units arrived
  * @param note - the operator's words for the ledger row
  * @returns whether the delivery landed
  */
 const receiveAndAllocate = (
+    reason: StockMovementReason,
     productId: string,
     quantity: number,
     note: string | undefined
 ): Promise<boolean> =>
     withTransaction((session) =>
         applyTransition(
-            StockMovementReason.receive,
+            reason,
             productId,
             quantity,
             note === undefined ? {} : { note },
@@ -91,7 +93,7 @@ interface AdminStockTransition {
      * tell which one refused and answers 409 for the rule.
      */
     onFailure?: (productId: string) => Promise<ResponseReject>;
-    /** Whether the write also serves the paid preorders waiting for stock — only a receipt does. */
+    /** Whether the write also serves the paid buyers waiting for stock — whatever raises `available` does. */
     allocates?: boolean;
     auditAction: (typeof inventoryAuditActions)[keyof typeof inventoryAuditActions];
     buildAuditMetadata: (level: InventoryLevel) => Record<string, unknown>;
@@ -121,7 +123,7 @@ const applyAdminStockTransition = ({
         if (!product) return generateReject(404, [t('inventory.product-not-found')]);
 
         const applied = allocates
-            ? receiveAndAllocate(productId, amount, note)
+            ? receiveAndAllocate(reason, productId, amount, note)
             : applyTransition(reason, productId, amount, note === undefined ? {} : { note });
 
         return applied.then((moved) => {
@@ -198,6 +200,8 @@ export const adjust = (
         amount: delta,
         note,
         context,
+        // Units a stocktake finds are sellable: the paid buyer who waits comes first.
+        allocates: delta > 0,
         /*
          * The write's guard covers two things at once — the product existing and the correction
          * fitting above what is reserved — so `false` alone can't say which refused. Re-reading
