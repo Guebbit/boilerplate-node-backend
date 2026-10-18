@@ -28,6 +28,9 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 }));
 const mockEnqueueEmail = jest.mocked(enqueueEmail);
 
+/** One day, in milliseconds. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 setupTestDb();
 
 beforeEach(() => {
@@ -66,9 +69,30 @@ describe('POST /stock-alerts/:productId', () => {
         expect(await stockAlertModel.countDocuments()).toBe(1);
     });
 
-    it('is refused while the product can be ordered now', async () => {
+    it.each([
+        ['shelf units', () => createProduct({ onHand: 5 })],
+        [
+            'an open backorder',
+            async () => {
+                const product = await createProduct({ onHand: 0, allowBackorder: true });
+                await inventoryService.setBackorderLimit(String(product._id), null);
+                return product;
+            }
+        ],
+        [
+            'a preorder with allowance left',
+            async () => {
+                const product = await createProduct({
+                    onHand: 0,
+                    releaseDate: new Date(Date.now() + 10 * DAY_MS).toISOString()
+                });
+                await inventoryService.setBackorderLimit(String(product._id), 5);
+                return product;
+            }
+        ]
+    ])('is refused while the product can be ordered now: %s', async (_name, make) => {
         const { bearer } = await shopper();
-        const product = await createProduct({ onHand: 5 });
+        const product = await make();
 
         const response = await api()
             .post(`/stock-alerts/${String(product._id)}`)
@@ -79,15 +103,19 @@ describe('POST /stock-alerts/:productId', () => {
         expect(await stockAlertModel.countDocuments()).toBe(0);
     });
 
-    it('answers 404 for a hidden product', async () => {
+    it.each([
+        ['hidden', { active: false }],
+        ['soft-deleted', { deletedAt: new Date() }]
+    ])('answers 404 for a %s product', async (_name, overrides) => {
         const { bearer } = await shopper();
-        const product = await createProduct({ onHand: 0, active: false });
+        const product = await createProduct({ onHand: 0, ...overrides });
 
         const response = await api()
             .post(`/stock-alerts/${String(product._id)}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
+        expect(await stockAlertModel.countDocuments()).toBe(0);
     });
 });
 
@@ -107,15 +135,21 @@ describe('DELETE /stock-alerts/:productId and GET /stock-alerts', () => {
         expect(listed.body.data.items).toEqual([]);
     });
 
-    it('lists only the caller’s own requests', async () => {
+    it('lists only the caller’s own requests, newest first', async () => {
         const mine = await shopper();
         const theirs = await authenticateAsRole('support');
-        const productId = await soldOut();
-        await api().post(`/stock-alerts/${productId}`).set('Authorization', theirs.bearer);
+        const first = await soldOut();
+        const second = await soldOut();
+        const others = await soldOut();
+        await api().post(`/stock-alerts/${first}`).set('Authorization', mine.bearer);
+        await api().post(`/stock-alerts/${second}`).set('Authorization', mine.bearer);
+        await api().post(`/stock-alerts/${others}`).set('Authorization', theirs.bearer);
 
         const listed = await api().get('/stock-alerts').set('Authorization', mine.bearer);
 
-        expect(listed.body.data.items).toEqual([]);
+        expect(
+            listed.body.data.items.map(({ productId }: { productId: string }) => productId)
+        ).toEqual([second, first]);
     });
 });
 
