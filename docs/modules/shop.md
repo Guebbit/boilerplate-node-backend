@@ -26,6 +26,7 @@ flowchart LR
     delivery["delivery"]
     invoicing["invoicing"]
     orders["orders"]
+    payments["payments"]
     products["products"]
     returns["returns"]
     stats["stats"]
@@ -34,6 +35,7 @@ flowchart LR
     delivery --> shop
     invoicing --> shop
     orders --> shop
+    payments --> shop
     products --> shop
     returns --> shop
     stats --> shop
@@ -43,7 +45,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
-    class delivery,invoicing,returns,stats supporting;
+    class delivery,invoicing,payments,returns,stats supporting;
     class shop centre;
 ```
 

@@ -188,7 +188,7 @@ belongs to its reason:
 | Reason                    | Deadline                                                                          | Art. 16 exclusion |
 | ------------------------- | --------------------------------------------------------------------------------- | ----------------- |
 | `withdrawal`, `other`     | `withdrawUntil`: the shop's period (`NODE_WITHDRAWAL_PERIOD_DAYS`, 30 by default) | applies           |
-| `defective`, `wrong_item` | `conformityUntil`: two years from delivery                                        | does not apply    |
+| `defective`, `wrong_item` | `conformityUntil`: two years from delivery, plus one UTC day of margin            | does not apply    |
 
 The second row is the legal guarantee of conformity (Directive 2019/771 Art. 10(1), Art. 21: not
 waivable). Art. 16 CRD only takes the right of **withdrawal** away, so a made-to-order item that

@@ -12,6 +12,7 @@
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 import { orderFrontendLink, orderTotal, type OrderLines } from '@modules/orders';
+import { shopTimezone } from '@modules/shop';
 
 /**
  * An amount in a currency, spelled the way the recipient's locale writes money.
@@ -114,7 +115,8 @@ export interface TransferInstructions {
  * The instructions and deadline for a `bank_transfer` order, sent when its transfer payment opens.
  * The order-placed mail confirms the order; this one says what is still to do. `payBy` is
  * formatted with `Intl.DateTimeFormat` in the recipient's own language, the same `node:`
- * standard-library-first rule that keeps this repo away from a date-formatting dependency.
+ * standard-library-first rule that keeps this repo away from a date-formatting dependency, on the
+ * shop's wall clock with the zone named (a buyer abroad must not read it as their own time).
  *
  * @param locale - the recipient's language
  * @param name - the greeting's name
@@ -148,8 +150,15 @@ export const transferInstructionsEmail = (
             reference: instructions.reference,
             deadline: t('payments.email-transfer.deadline', {
                 payBy: new Intl.DateTimeFormat(locale, {
-                    dateStyle: 'long',
-                    timeStyle: 'short'
+                    // Spelled out field by field: `dateStyle`/`timeStyle` refuse a `timeZoneName`.
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    // The shop's zone, and its short name after the time ("CEST").
+                    timeZone: shopTimezone(),
+                    timeZoneName: 'short'
                 }).format(payBy)
             }),
             total: t('payments.email-transfer.total', {

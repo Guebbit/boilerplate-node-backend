@@ -168,7 +168,9 @@ The preorder flag and the date are read from the snapshot frozen at checkout, ne
 at payment time: a bank transfer can be paid a week after it was ordered. `agreedAt` is the date the
 buyer was shown, and it never moves; `expectedAt` starts equal to it and is rewritten if the date
 slips. A group of one day leaves together, so it is promised for the latest release instant among
-its lines. A product line that carries neither flag simply lands in #1.
+its lines. "One day" is the shop's calendar day (`NODE_SHOP_TIMEZONE`): staff type a date on the shop's
+wall clock, so two instants UTC splits can still be the same day. The emails print those dates in the
+same zone, so the day staff typed is the day the buyer reads. A product line that carries neither flag simply lands in #1.
 
 ### Holds
 

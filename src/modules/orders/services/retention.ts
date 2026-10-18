@@ -16,7 +16,7 @@ import { clearTimelineActor } from './timeline';
 /**
  * The `personalData.erase` hook. Unsets `userId` on every order this account placed and
  * marks each for `reap:orders` to scrub after `NODE_ORDER_PII_RETENTION_DAYS`
- * (default 3650, ~10 years — the outer edge of common commercial record-keeping periods) FROM ITS
+ * (default 3653, ten calendar years with their leap days — the outer edge of common commercial record-keeping periods) FROM ITS
  * OWN `createdAt`, not from today — see `orderRepository.detachUserId`'s own per-order clock, which
  * scrubs a never-paid order AT ONCE instead: it never became the invoice this retention exists
  * for. The orders themselves are never touched here: they are invoices, kept under
