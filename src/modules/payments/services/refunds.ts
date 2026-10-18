@@ -41,6 +41,7 @@ import {
     toMinorUnits,
     toDecimalAmount,
     addMoney,
+    minMoney,
     subtractMoney,
     type Money
 } from '@domain-primitives/money';
@@ -752,8 +753,7 @@ export const refundForReturn = (
         if (payment?.status !== REFUNDABLE_PAYMENT_STATUS) return null;
 
         const wanted = toMinorUnits(input.amount, payment.currency);
-        // `Math.min` returns a plain number; both operands are `Money`, so the result still is.
-        const amount = Math.min(wanted, remainingOf(payment)) as Money;
+        const amount = minMoney(wanted, remainingOf(payment));
         if (amount <= 0) return null;
 
         return performRefund(orderId, context, {

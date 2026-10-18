@@ -19,6 +19,7 @@
 
 import {
     addMoney,
+    minMoney,
     NO_MONEY,
     scaleMoney,
     subtractMoney,
@@ -83,8 +84,7 @@ const refundableShipping = (inputs: RefundInputs): Money => {
     if (inputs.reason === 'defective' || inputs.reason === 'wrong_item') return paid;
 
     const cheapest = toMinorUnits(inputs.cheapestStandardShipping, inputs.currency);
-    // `as`: Math.min returns a bare number; both operands are Money, so the smaller one is too.
-    return Math.min(paid, cheapest) as Money;
+    return minMoney(paid, cheapest);
 };
 
 /**

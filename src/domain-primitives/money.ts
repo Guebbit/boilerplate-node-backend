@@ -134,6 +134,15 @@ export const addMoney = (...amounts: readonly Money[]): Money => {
 };
 
 /**
+ * The smallest of some amounts — a refund capped at what is left to refund.
+ * @param first - one amount
+ * @param rest - the others
+ * @returns the smallest
+ */
+export const minMoney = (first: Money, ...rest: readonly Money[]): Money =>
+    asMoney(Math.min(first, ...rest));
+
+/**
  * Read a quantity as a whole, finite count, defaulting to 0 for anything unusable.
  * @param count - a quantity, or anything at all
  * @returns the nearest whole number, or 0
