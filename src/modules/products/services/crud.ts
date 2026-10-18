@@ -28,9 +28,14 @@ import {
 } from '../events';
 import type { ProductDocument } from '../model';
 import { productRepository } from '../repository';
-import { sanitizeStringArray } from './validation';
 import { isBuyable } from '../domain/buyable';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
+
+/** Trim, drop blanks, and de-duplicate a category/tag list; `null`/non-array input becomes empty. */
+const sanitizeStringArray = (values?: string[] | null): string[] => {
+    if (!Array.isArray(values)) return [];
+    return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+};
 
 /** What `insertProduct` accepts: the product's fields, plus the pending-image placeholder's key. */
 type ProductCreateData = Omit<
