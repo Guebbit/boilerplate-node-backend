@@ -283,6 +283,8 @@ type FieldOverride = (world: World, payload: Record<string, unknown>) => unknown
 const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
     // `role` is a plain string to the schema, because roles are data a deployment may add to.
     createUser: { role: () => 'editor' },
+    replaceUserById: { role: () => 'editor' },
+    updateUserById: { role: () => 'editor' },
     // `translations` is a `Record<locale, ...>` to the schema: it cannot say the key must be the
     // deployment's fallback locale, whose row must exist.
     createProduct: { translations: () => ({ en: { title: 'Generated Product Title' } }) },
