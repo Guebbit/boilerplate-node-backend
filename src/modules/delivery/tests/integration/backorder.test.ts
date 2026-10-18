@@ -16,6 +16,7 @@ import { testCallerContext } from '@tests/callers';
 import { productService } from '@modules/products';
 import { inventoryService } from '@modules/inventory';
 import { fulfillmentOrdersOf, paidBackorderOrder } from '@modules/delivery/tests/factories';
+import { deliveryService } from '@modules/delivery/services';
 import deliveryModule from '@modules/delivery/module';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
@@ -107,6 +108,27 @@ describe('grouping a paid backorder', () => {
         const all = await fulfillmentOrdersOf(orderId);
 
         expect(all.map(({ status }) => status)).toEqual(['open']);
+    });
+});
+
+describe('the daily sweep', () => {
+    it('asks a buyer promised the 30-day default two days before it, and not earlier', async () => {
+        const { orderId } = await paidBackorderOrder({ quantity: 1, shelf: 0 });
+        await waitingOf(orderId);
+
+        const early = await deliveryService.runPreorderSweep(inDays(27));
+        const due = await deliveryService.runPreorderSweep(inDays(28.5));
+        await settleOutboxNudges();
+
+        expect([early, due]).toEqual([
+            { asked: 0, expired: 0 },
+            { asked: 1, expired: 0 }
+        ]);
+        const waiting = await waitingOf(orderId);
+        expect(waiting.consent).toBe('awaiting');
+        expect(await delayedEvents()).toMatchObject([
+            { orderId, reason: 'due', needsAnswer: true }
+        ]);
     });
 });
 
