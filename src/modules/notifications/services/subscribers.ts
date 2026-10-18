@@ -87,8 +87,8 @@ export const onFulfillmentOrderDelayed = (
               {
                   userId: new Types.ObjectId(delayed.userId),
                   code: delayed.needsAnswer
-                      ? 'notifications.preorder-confirm-wait'
-                      : 'notifications.preorder-delayed',
+                      ? 'notifications.fulfillment-confirm-wait'
+                      : 'notifications.fulfillment-delayed',
                   severity: 'warning',
                   params: {
                       orderId: delayed.orderId,

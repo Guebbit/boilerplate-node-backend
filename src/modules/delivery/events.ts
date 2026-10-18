@@ -98,8 +98,8 @@ declare module '@kernel/events' {
         /**
          * A waiting preorder's buyer was told its date moved or passed (PRODUCT_STATES P5). Written
          * in the same transaction as the change to the fulfillment order. `notifications` turns it
-         * into an inbox row, `preorder-delayed` or, when the buyer must answer,
-         * `preorder-confirm-wait`; the email is sent by this module from the same event.
+         * into an inbox row, `fulfillment-delayed` or, when the buyer must answer,
+         * `fulfillment-confirm-wait`; the email is sent by this module from the same event.
          */
         'fulfillment_order.delayed': FulfillmentOrderDelayed;
 

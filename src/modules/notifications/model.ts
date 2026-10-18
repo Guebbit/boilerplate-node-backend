@@ -14,7 +14,7 @@ import type {
     CartLineRemovedParams,
     CartMergeRefusedParams,
     FulfillmentHeldParams,
-    PreorderDelayedParams
+    FulfillmentDelayedParams
 } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
@@ -23,8 +23,8 @@ export const NOTIFICATION_CODES = [
     'notifications.cart-line-removed',
     'notifications.wishlist-item-removed',
     'notifications.cart-merge-refused',
-    'notifications.preorder-delayed',
-    'notifications.preorder-confirm-wait',
+    'notifications.fulfillment-delayed',
+    'notifications.fulfillment-confirm-wait',
     'notifications.fulfillment-held'
 ] as const;
 
@@ -39,8 +39,8 @@ export interface NotificationParametersByCode {
     'notifications.cart-line-removed': CartLineRemovedParams;
     'notifications.wishlist-item-removed': CartLineRemovedParams;
     'notifications.cart-merge-refused': CartMergeRefusedParams;
-    'notifications.preorder-delayed': PreorderDelayedParams;
-    'notifications.preorder-confirm-wait': PreorderDelayedParams;
+    'notifications.fulfillment-delayed': FulfillmentDelayedParams;
+    'notifications.fulfillment-confirm-wait': FulfillmentDelayedParams;
     'notifications.fulfillment-held': FulfillmentHeldParams;
 }
 

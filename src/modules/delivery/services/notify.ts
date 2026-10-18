@@ -15,7 +15,7 @@ import { orderService } from '@modules/orders';
 import { orderFrontendLink } from '@modules/orders';
 import {
     holdNoticeEmail,
-    preorderDelayedEmail,
+    fulfillmentDelayedEmail,
     shipmentDeliveredEmail,
     shipmentShippedEmail
 } from '../emails';
@@ -150,7 +150,7 @@ export const mailDelivered = ({
  */
 export const mailDelayed = (delayed: FulfillmentOrderDelayed): Promise<void> =>
     orderService.mailBuyerOfOrder(delayed.orderId, (order, locale, name) => {
-        const mail = preorderDelayedEmail(locale, name, {
+        const mail = fulfillmentDelayedEmail(locale, name, {
             titles: delayed.titles,
             agreedAt: new Date(delayed.agreedAt),
             ...(delayed.expectedAt ? { expectedAt: new Date(delayed.expectedAt) } : {}),

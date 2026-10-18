@@ -1089,8 +1089,8 @@ components:
                     items:
                         $ref: '#/components/schemas/CartMergeRefusedLinePayload'
             additionalProperties: false
-        PreorderDelayedParamsPayload:
-            title: PreorderDelayedParamsPayload
+        FulfillmentDelayedParamsPayload:
+            title: FulfillmentDelayedParamsPayload
             type: object
             required:
                 - orderId
@@ -1170,8 +1170,8 @@ components:
                     type: string
                     format: date-time
             additionalProperties: false
-        NotificationPreorderDelayedPayload:
-            title: NotificationPreorderDelayedPayload
+        NotificationFulfillmentDelayedPayload:
+            title: NotificationFulfillmentDelayedPayload
             type: object
             required:
                 - id
@@ -1185,9 +1185,9 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.preorder-delayed
+                        - notifications.fulfillment-delayed
                 params:
-                    $ref: '#/components/schemas/PreorderDelayedParamsPayload'
+                    $ref: '#/components/schemas/FulfillmentDelayedParamsPayload'
                 severity:
                     type: string
                     enum:
@@ -1203,8 +1203,8 @@ components:
                     type: string
                     format: date-time
             additionalProperties: false
-        NotificationPreorderConfirmWaitPayload:
-            title: NotificationPreorderConfirmWaitPayload
+        NotificationFulfillmentConfirmWaitPayload:
+            title: NotificationFulfillmentConfirmWaitPayload
             type: object
             required:
                 - id
@@ -1218,9 +1218,9 @@ components:
                 code:
                     type: string
                     enum:
-                        - notifications.preorder-confirm-wait
+                        - notifications.fulfillment-confirm-wait
                 params:
-                    $ref: '#/components/schemas/PreorderDelayedParamsPayload'
+                    $ref: '#/components/schemas/FulfillmentDelayedParamsPayload'
                 severity:
                     type: string
                     enum:
@@ -1341,8 +1341,8 @@ components:
                 - $ref: '#/components/schemas/NotificationCartLineRemovedPayload'
                 - $ref: '#/components/schemas/NotificationWishlistItemRemovedPayload'
                 - $ref: '#/components/schemas/NotificationCartMergeRefusedPayload'
-                - $ref: '#/components/schemas/NotificationPreorderDelayedPayload'
-                - $ref: '#/components/schemas/NotificationPreorderConfirmWaitPayload'
+                - $ref: '#/components/schemas/NotificationFulfillmentDelayedPayload'
+                - $ref: '#/components/schemas/NotificationFulfillmentConfirmWaitPayload'
                 - $ref: '#/components/schemas/NotificationFulfillmentHeldPayload'
             # A plain property name here, unlike OpenAPI's `{ propertyName }` object.
             discriminator: code

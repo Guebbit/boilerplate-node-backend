@@ -62,14 +62,14 @@ backend keeps no copy in step with the UI.
 
 `Notification` is a discriminated union on `code`, and each variant types its own `params`:
 
-| `code`                                | `params`                                                         |
-| ------------------------------------- | ---------------------------------------------------------------- |
-| `notifications.cart-line-removed`     | `{ productId, titles }`                                          |
-| `notifications.wishlist-item-removed` | `{ productId, titles }`                                          |
-| `notifications.cart-merge-refused`    | `{ lines: [{ productId, requested, titles }] }`                  |
-| `notifications.preorder-delayed`      | `{ orderId, fulfillmentOrderId, titles, agreedAt, expectedAt? }` |
-| `notifications.preorder-confirm-wait` | the same, plus `answerBy`                                        |
-| `notifications.fulfillment-held`      | `{ orderId, fulfillmentOrderId, notice, message? }`              |
+| `code`                                   | `params`                                                         |
+| ---------------------------------------- | ---------------------------------------------------------------- |
+| `notifications.cart-line-removed`        | `{ productId, titles }`                                          |
+| `notifications.wishlist-item-removed`    | `{ productId, titles }`                                          |
+| `notifications.cart-merge-refused`       | `{ lines: [{ productId, requested, titles }] }`                  |
+| `notifications.fulfillment-delayed`      | `{ orderId, fulfillmentOrderId, titles, agreedAt, expectedAt? }` |
+| `notifications.fulfillment-confirm-wait` | the same, plus `answerBy`                                        |
+| `notifications.fulfillment-held`         | `{ orderId, fulfillmentOrderId, notice, message? }`              |
 
 The last two are a late preorder's notice ([delivery](./delivery.md#preorders-and-a-moved-date)): the
 first only informs and offers the cancel, the second needs an answer by `answerBy` or silence cancels.

@@ -303,7 +303,7 @@ flowchart LR
 Every notice is one transaction with the state it leaves on the fulfillment order and one outbox
 event, `fulfillment_order.delayed`; the email follows the commit and links to the buyer's order
 page, where the cancel button already is. [`notifications`](./notifications.md) turns the event into an
-inbox row, `notifications.preorder-delayed` when it only informs and `notifications.preorder-confirm-wait`
+inbox row, `notifications.fulfillment-delayed` when it only informs and `notifications.fulfillment-confirm-wait`
 when the buyer must answer.
 
 #### The daily sweep

@@ -36,8 +36,8 @@ export interface DeliveredEmailInput {
     withdrawUntil?: Date | undefined;
 }
 
-/** What the preorder-delayed email says about one waiting fulfillment order. */
-export interface PreorderDelayedEmailInput {
+/** What the fulfillment-delayed email says about one waiting fulfillment order. */
+export interface FulfillmentDelayedEmailInput {
     /** The waiting products' titles, as the order froze them. */
     titles: readonly string[];
     /** The date promised when ordering. */
@@ -193,7 +193,7 @@ export const holdNoticeEmail = (
 };
 
 /**
- * "Your preorder will be late" — sent when a waiting preorder's date moved or passed. Three
+ * "Part of your order will be late" — sent when a waiting fulfillment order's date moved or passed. Three
  * wordings, one per thing the buyer is owed: a short slip (the new date, and cancel is open;
  * silence keeps waiting), a long or repeated one (the new date and a question), and a date that
  * came with no stock (a question with no new date). A question always says by when to answer and
@@ -203,32 +203,32 @@ export const holdNoticeEmail = (
  * @param name - the buyer's name, for the greeting
  * @param input - what changed and what the buyer may do about it
  */
-export const preorderDelayedEmail = (
+export const fulfillmentDelayedEmail = (
     locale: string,
     name: string,
-    input: PreorderDelayedEmailInput
+    input: FulfillmentDelayedEmailInput
 ): EmailContent => {
     const t = translator(locale);
     const variant = input.needsAnswer ? (input.expectedAt ? 'ask-moved' : 'ask-passed') : 'moved';
     return {
-        template: 'delivery.preorder-delayed',
-        subject: t(`delivery.email-preorder-delayed.${variant}.subject`),
+        template: 'delivery.fulfillment-delayed',
+        subject: t(`delivery.email-fulfillment-delayed.${variant}.subject`),
         data: {
             locale,
-            pageMetaTitle: t('delivery.email-preorder-delayed.meta-title'),
-            greeting: t('delivery.email-preorder-delayed.greeting', { name }),
-            body: t(`delivery.email-preorder-delayed.${variant}.body`, {
+            pageMetaTitle: t('delivery.email-fulfillment-delayed.meta-title'),
+            greeting: t('delivery.email-fulfillment-delayed.greeting', { name }),
+            body: t(`delivery.email-fulfillment-delayed.${variant}.body`, {
                 agreed: longDate(locale, input.agreedAt),
                 expected: input.expectedAt ? longDate(locale, input.expectedAt) : ''
             }),
             lines: [...input.titles],
             answer:
                 input.needsAnswer && input.answerBy
-                    ? t('delivery.email-preorder-delayed.answer', {
+                    ? t('delivery.email-fulfillment-delayed.answer', {
                           date: longDate(locale, input.answerBy)
                       })
-                    : t('delivery.email-preorder-delayed.cancel-any-time'),
-            linkLabel: t('delivery.email-preorder-delayed.link-label'),
+                    : t('delivery.email-fulfillment-delayed.cancel-any-time'),
+            linkLabel: t('delivery.email-fulfillment-delayed.link-label'),
             linkUrl: input.orderUrl,
             footer: t('email.footer')
         }

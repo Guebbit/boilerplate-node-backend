@@ -240,14 +240,14 @@ describe('the module subscriptions', () => {
             return placed;
         };
 
-        it('tells the buyer of a short slip with preorder-delayed, naming the dates and the product', async () => {
+        it('tells the buyer of a short slip with fulfillment-delayed, naming the dates and the product', async () => {
             const { user, orderId } = await moved(40);
 
             const [message, ...rest] = await inboxOf(user.id);
 
             expect(rest).toEqual([]);
             expect(message).toMatchObject({
-                code: 'notifications.preorder-delayed',
+                code: 'notifications.fulfillment-delayed',
                 severity: 'warning',
                 params: { orderId, titles: [expect.any(String)] }
             });
@@ -256,12 +256,12 @@ describe('the module subscriptions', () => {
             expect(message?.params).not.toHaveProperty('answerBy');
         });
 
-        it('asks a long slip with preorder-confirm-wait, carrying the deadline', async () => {
+        it('asks a long slip with fulfillment-confirm-wait, carrying the deadline', async () => {
             const { user } = await moved(90);
 
             const [message] = await inboxOf(user.id);
 
-            expect(message?.code).toBe('notifications.preorder-confirm-wait');
+            expect(message?.code).toBe('notifications.fulfillment-confirm-wait');
             expect(message?.params).toHaveProperty('answerBy');
         });
 

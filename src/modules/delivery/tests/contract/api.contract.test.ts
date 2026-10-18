@@ -577,7 +577,7 @@ describe('GET /delivery/fulfillment-orders — the preorder board', () => {
         const { bearer, orderId, user } = await adminWithPreorder();
 
         const response = await api()
-            .get('/delivery/fulfillment-orders?preorder=true')
+            .get('/delivery/fulfillment-orders?cause=any')
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);

@@ -19,8 +19,8 @@ export const getPreorderFulfillmentOrders = createListController({
         page: pageSchema,
         pageSize: pageSizeSchema
     }).partial(),
-    // `preorder` and `late` are booleans, and `dueWithin` a number, which a query string carries as text.
-    input: { booleans: ['preorder', 'late'], numbers: ['dueWithin'] },
+    // `late` is a boolean, and `dueWithin` a number, which a query string carries as text.
+    input: { booleans: ['late'], numbers: ['dueWithin'] },
     runList: (parsed, request) =>
         deliveryService.listPreorderFulfillmentOrders(parsed, request.authContext)
 });

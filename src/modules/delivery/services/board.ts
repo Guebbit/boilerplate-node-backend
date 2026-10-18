@@ -35,7 +35,7 @@ import { presentPreorderFulfillmentOrder, presentProductSummary } from '../prese
 
 /** What the list route accepts, beyond the page. */
 export interface BoardQuery extends PaginationInput {
-    preorder?: boolean | undefined;
+    cause?: 'preorder' | 'backorder' | 'any' | undefined;
     state?: PreorderFulfillmentState | undefined;
     productId?: string | undefined;
     late?: boolean | undefined;

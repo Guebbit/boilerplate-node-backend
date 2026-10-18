@@ -32,8 +32,8 @@ import { DAY_MS } from '@domain-primitives/time';
 
 /** What the preorder board filters by. */
 export interface BoardFilters {
-    /** `true` keeps fulfillment orders made from a preorder line (they carry an agreed date). */
-    preorder?: boolean | undefined;
+    /** Why it waits: `preorder`, `backorder`, or `any` dated wait (they carry an agreed date). */
+    cause?: 'preorder' | 'backorder' | 'any' | undefined;
     state?: PreorderFulfillmentState | undefined;
     productId?: string | undefined;
     /** Expected date passed with units remaining. */
@@ -110,7 +110,11 @@ const stateCondition = (state: PreorderFulfillmentState): QueryFilter<Fulfillmen
  */
 const boardWhere = (filters: BoardFilters, now: Date): QueryFilter<FulfillmentOrderDocument> => {
     const all: QueryFilter<FulfillmentOrderDocument>[] = [];
-    if (filters.preorder !== undefined) all.push({ agreedAt: { $exists: filters.preorder } });
+    if (filters.cause === 'any') all.push({ agreedAt: { $exists: true } });
+    // A preorder wait made before backorder existed carries no cause, hence `$ne`.
+    if (filters.cause === 'preorder')
+        all.push({ agreedAt: { $exists: true }, cause: { $ne: 'backorder' } });
+    if (filters.cause === 'backorder') all.push({ cause: 'backorder' });
     if (filters.state) all.push(stateCondition(filters.state));
     if (filters.productId) all.push({ 'lines.productId': filters.productId });
     if (filters.late)
@@ -402,7 +406,7 @@ export const fulfillmentOrderRepository: Repository<
         const sumWhere = (condition: unknown) => ({
             $sum: { $cond: [condition, remaining, 0] }
         });
-        const match = boardWhere({ ...filters, preorder: true }, now);
+        const match = boardWhere({ ...filters, cause: 'any' }, now);
 
         return (
             fulfillmentOrderModel

@@ -118,7 +118,7 @@ paths:
             description: |
                 One row per fulfillment order, with the buyer and when the order was paid, for the admin's preorder
                 board: the fulfillment orders of preorders, where they stand with their buyer, and which are late.
-                `preorder=true` keeps those made from a preorder line (the ones that carry an agreed date).
+                `cause` keeps one kind of wait: `preorder`, `backorder`, or `any` that carries an agreed date.
 
                 `late=true` is the Late view: the expected date has passed and units remain, whether still waiting
                 for stock, allocated and not yet shipped, or part shipped. `dueWithin=N` is its warning: still
@@ -133,12 +133,13 @@ paths:
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
-                - name: preorder
+                - name: cause
                   in: query
                   required: false
                   schema:
-                      type: boolean
-                  description: '`true` keeps fulfillment orders made from a preorder line, `false` the others; absent keeps both.'
+                      type: string
+                      enum: [preorder, backorder, any]
+                  description: 'Why it waits: `preorder` (not released yet), `backorder` (out of stock), or `any` wait that carries a promised date; absent keeps all.'
                 - name: state
                   in: query
                   required: false

@@ -16,6 +16,7 @@ import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
 import {
     deliverEverything,
     fulfillmentOrdersOf,
+    paidBackorderOrder,
     paidPreorderOrder,
     shipEverything
 } from '@modules/delivery/tests/factories';
@@ -246,5 +247,26 @@ describe('who may read which rows', () => {
         const { items } = await deliveryService.listPreorderFulfillmentOrders({}, undefined);
 
         expect(items).toEqual([]);
+    });
+});
+
+describe('the cause filter', () => {
+    it('tells a preorder wait from a backorder wait, and `any` keeps both', async () => {
+        const preorder = await placed(1, 30, 'pre@example.com');
+        const backorder = await paidBackorderOrder(
+            { quantity: 1, shelf: 0, restockDate: inDays(20) },
+            'back@example.com'
+        );
+        await fulfillmentOrdersOf(backorder.orderId);
+
+        const [pre, back, any] = await Promise.all([
+            board({ cause: 'preorder' }),
+            board({ cause: 'backorder' }),
+            board({ cause: 'any' })
+        ]);
+
+        expect(orderIdsOf(pre)).toEqual([preorder.orderId]);
+        expect(orderIdsOf(back)).toEqual([backorder.orderId]);
+        expect(orderIdsOf(any)).toEqual(orderIdsOf([preorder, backorder]));
     });
 });

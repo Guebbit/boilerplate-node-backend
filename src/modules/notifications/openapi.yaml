@@ -178,14 +178,14 @@ components:
                             titles:
                                 $ref: '#/components/schemas/ProductTitles'
 
-        PreorderDelayedParams:
+        FulfillmentDelayedParams:
             type: object
             additionalProperties: false
             required: [orderId, fulfillmentOrderId, titles, agreedAt]
             description: >-
                 What the buyer needs to read a late-preorder notice: which order and fulfillment order,
                 what is waiting, the date they were promised, the date now expected (absent when there
-                is none) and, for `notifications.preorder-confirm-wait`, by when silence cancels.
+                is none) and, for `notifications.fulfillment-confirm-wait`, by when silence cancels.
             properties:
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -249,7 +249,7 @@ components:
                     type: string
                     format: date-time
 
-        NotificationPreorderDelayed:
+        NotificationFulfillmentDelayed:
             type: object
             additionalProperties: false
             description: A preorder the caller paid for will arrive later than promised; cancelling is open and silence keeps waiting.
@@ -259,9 +259,9 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 code:
                     type: string
-                    enum: [notifications.preorder-delayed]
+                    enum: [notifications.fulfillment-delayed]
                 params:
-                    $ref: '#/components/schemas/PreorderDelayedParams'
+                    $ref: '#/components/schemas/FulfillmentDelayedParams'
                 severity:
                     $ref: '#/components/schemas/NotificationSeverity'
                 readAt:
@@ -272,7 +272,7 @@ components:
                     type: string
                     format: date-time
 
-        NotificationPreorderConfirmWait:
+        NotificationFulfillmentConfirmWait:
             type: object
             additionalProperties: false
             description: A preorder the caller paid for is late and the shop needs an answer — keep waiting, or cancel; silence until `answerBy` cancels and refunds.
@@ -282,9 +282,9 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 code:
                     type: string
-                    enum: [notifications.preorder-confirm-wait]
+                    enum: [notifications.fulfillment-confirm-wait]
                 params:
-                    $ref: '#/components/schemas/PreorderDelayedParams'
+                    $ref: '#/components/schemas/FulfillmentDelayedParams'
                 severity:
                     $ref: '#/components/schemas/NotificationSeverity'
                 readAt:
@@ -369,8 +369,8 @@ components:
                 - $ref: '#/components/schemas/NotificationCartLineRemoved'
                 - $ref: '#/components/schemas/NotificationWishlistItemRemoved'
                 - $ref: '#/components/schemas/NotificationCartMergeRefused'
-                - $ref: '#/components/schemas/NotificationPreorderDelayed'
-                - $ref: '#/components/schemas/NotificationPreorderConfirmWait'
+                - $ref: '#/components/schemas/NotificationFulfillmentDelayed'
+                - $ref: '#/components/schemas/NotificationFulfillmentConfirmWait'
                 - $ref: '#/components/schemas/NotificationFulfillmentHeld'
             discriminator:
                 propertyName: code
@@ -378,8 +378,8 @@ components:
                     notifications.cart-line-removed: '#/components/schemas/NotificationCartLineRemoved'
                     notifications.wishlist-item-removed: '#/components/schemas/NotificationWishlistItemRemoved'
                     notifications.cart-merge-refused: '#/components/schemas/NotificationCartMergeRefused'
-                    notifications.preorder-delayed: '#/components/schemas/NotificationPreorderDelayed'
-                    notifications.preorder-confirm-wait: '#/components/schemas/NotificationPreorderConfirmWait'
+                    notifications.fulfillment-delayed: '#/components/schemas/NotificationFulfillmentDelayed'
+                    notifications.fulfillment-confirm-wait: '#/components/schemas/NotificationFulfillmentConfirmWait'
                     notifications.fulfillment-held: '#/components/schemas/NotificationFulfillmentHeld'
 
         NotificationsResponse:

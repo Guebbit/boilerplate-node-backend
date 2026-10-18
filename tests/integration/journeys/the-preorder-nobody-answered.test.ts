@@ -90,7 +90,7 @@ it('cancels and refunds the unanswered preorder, and leaves the shipped line', a
         .send({ releaseDate: new Date(Date.now() + 75 * DAY_MS).toISOString() })
         .expect(200);
     await drain();
-    expect(mailsTo(email, 'delivery.preorder-delayed')).toHaveLength(1);
+    expect(mailsTo(email, 'delivery.fulfillment-delayed')).toHaveLength(1);
 
     // Thirty-one days with no answer; everybody signs in again.
     advanceDate(31 * DAY_MS);

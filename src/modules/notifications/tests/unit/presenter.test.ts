@@ -67,7 +67,7 @@ describe('presentNotification, per code', () => {
             }
         },
         {
-            code: 'notifications.preorder-delayed',
+            code: 'notifications.fulfillment-delayed',
             params: {
                 orderId: 'o1',
                 fulfillmentOrderId: 'f1',
@@ -77,7 +77,7 @@ describe('presentNotification, per code', () => {
             }
         },
         {
-            code: 'notifications.preorder-confirm-wait',
+            code: 'notifications.fulfillment-confirm-wait',
             params: {
                 orderId: 'o2',
                 fulfillmentOrderId: 'f2',
