@@ -50,12 +50,12 @@ type AsyncSectionName = string;
 /** The suffix an internal-queue section's name carries — see {@link internalSections}. */
 const INTERNAL_SUFFIX = '-internal';
 
-/** Every module folder with a top-level `asyncapi.yaml` (never `.internal.yaml`), discovered from disk. */
-const modulesWithAsyncapi = (): string[] => modulesWith(MODULES_ROOT, 'asyncapi.yaml');
-
-/** Which modules contribute a public section, in {@link MODULE_ASYNC_ORDER}'s order. */
+/**
+ * Which modules contribute a public section, in {@link MODULE_ASYNC_ORDER}'s order: every module
+ * folder with a top-level `asyncapi.yaml` (never `.internal.yaml`), discovered from disk.
+ */
 const resolveModuleAsyncSections = (): readonly ModuleAsyncSection[] =>
-    orderSections(MODULE_ASYNC_ORDER, modulesWithAsyncapi());
+    orderSections(MODULE_ASYNC_ORDER, modulesWith(MODULES_ROOT, 'asyncapi.yaml'));
 
 /**
  * Every module with its own `asyncapi.internal.yaml` — a queue that module owns, discovered

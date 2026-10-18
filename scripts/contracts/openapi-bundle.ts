@@ -70,13 +70,13 @@ const MODULE_ORDER: readonly string[] = [
 /** A module folder's name. */
 type ModuleSection = string;
 
-/** Every module folder that ships its own standalone `openapi.yaml`, discovered from disk. */
-const modulesWithOpenapi = (): string[] => modulesWith(MODULES_ROOT, 'openapi.yaml');
-
-/** The modules contributing a standalone document, in the order the contract is assembled in. */
+/**
+ * The modules contributing a standalone document, in the order the contract is assembled in: every
+ * module folder that ships its own `openapi.yaml`, discovered from disk.
+ */
 export const MODULE_SECTIONS: readonly ModuleSection[] = orderSections(
     MODULE_ORDER,
-    modulesWithOpenapi()
+    modulesWith(MODULES_ROOT, 'openapi.yaml')
 );
 
 /**
