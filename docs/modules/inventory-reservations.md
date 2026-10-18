@@ -164,7 +164,7 @@ database. The outcome returns the owed count per line for [`orders`](./orders.md
 
 **No cap.** `backorderLimit: null` is no cap; `0` is closed and is the default. A level row without the
 field reads as closed, never as unlimited. The room left is `Infinity`, never `null`: callers do
-arithmetic on it, and a `null` would read as sold out.
+arithmetic on it, and a `null` would read as sold out. The shopper-facing `available` of an uncapped product reads `999999` instead: the contract wants an integer, and no buyer is ever told the count.
 
 **Every arrival serves the queue.** The claims of buyers who paid are served oldest `committedAt`
 first by every write that raises `available`, in that write's own transaction, not only by a receipt:
