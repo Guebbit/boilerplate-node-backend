@@ -12,6 +12,7 @@ import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { reauthWindowSeconds } from '@kernel/config';
+import { credentialHolding } from '@tests/credentials';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { USER_SETUP_REQUESTED } from '../../events';
@@ -679,12 +680,13 @@ describe('the step-up on naming a role', () => {
     });
 
     it.each([false, true])(
-        '401s REAUTH_REQUIRED for a stale role manager setting active to %s, and writes nothing',
+        '401s REAUTH_REQUIRED for a stale role manager flipping active to %s, and writes nothing',
         async (active) => {
             freezeDate();
             const { bearer } = await authenticateAsRole('admin');
+            // The flip is the change: the account holds the opposite of what is asked.
             const target = await createUser(
-                { email: 'stale3@target.test', username: 'stalethree' },
+                { email: 'stale3@target.test', username: 'stalethree', active: !active },
                 'support'
             );
             advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
@@ -699,6 +701,42 @@ describe('the step-up on naming a role', () => {
         }
     );
 
+    it('lets a stale role manager PUT an account unchanged: the role and active it carries are what is stored', async () => {
+        freezeDate();
+        const { bearer } = await authenticateAsRole('admin');
+        const target = await createUser(
+            { email: 'stale5@target.test', username: 'stalefive' },
+            'support'
+        );
+        advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
+
+        const response = await api()
+            .put(`/users/${target.id}`)
+            .set('Authorization', bearer)
+            .send({ username: 'renamedfive', role: 'support', active: true });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.role).toBe('support');
+    });
+
+    it('still asks a stale role manager once the PUT changes the role', async () => {
+        freezeDate();
+        const { bearer } = await authenticateAsRole('admin');
+        const target = await createUser(
+            { email: 'stale6@target.test', username: 'stalesix' },
+            'support'
+        );
+        advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
+
+        const response = await api()
+            .put(`/users/${target.id}`)
+            .set('Authorization', bearer)
+            .send({ username: 'stalesix', role: 'manager', active: true });
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+    });
+
     it('lets a stale moderator ban a customer, since a moderator manages no staff', async () => {
         freezeDate();
         const { bearer } = await authenticateAsRole('moderator');
@@ -711,6 +749,37 @@ describe('the step-up on naming a role', () => {
             .send({ active: false });
 
         expect(response.status).toBe(200);
+    });
+});
+
+/**
+ * An API key never holds `assign:Role`, so a `PUT /users/{id}` from one is never challenged: it
+ * edits a profile, and a role change is refused with the audited 403 every non-granter gets.
+ */
+describe('PUT /users/{id} from an API key', () => {
+    it('edits an account that keeps its role, instead of a bare 401', async () => {
+        const secret = await credentialHolding(['update:User']);
+        const target = await createUser({ email: 'keyed@target.test', username: 'keyedtarget' });
+
+        const response = await api()
+            .put(`/users/${target.id}`)
+            .set('Authorization', `Bearer ${secret}`)
+            .send({ username: 'keyedrenamed', role: null, active: true });
+
+        expect(response.status).toBe(200);
+    });
+
+    it('403s ROLE_MANAGEMENT_REQUIRED when it names a different role', async () => {
+        const secret = await credentialHolding(['update:User']);
+        const target = await createUser({ email: 'keyed2@target.test', username: 'keyedtwo' });
+
+        const response = await api()
+            .put(`/users/${target.id}`)
+            .set('Authorization', `Bearer ${secret}`)
+            .send({ username: 'keyedtwo', role: 'support', active: true });
+
+        expect(response.status).toBe(403);
+        expect(response.body.errors[0].code).toBe('ROLE_MANAGEMENT_REQUIRED');
     });
 });
 

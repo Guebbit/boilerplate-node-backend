@@ -104,6 +104,16 @@ export const update = (
 type RoleChange = { grant: string } | { revoke: string } | undefined;
 
 /**
+ * Whether `requested` differs from the tenant role held. Held roles are stored lower-cased and
+ * trimmed (the membership schema's own normalisation), so the request is compared that way too.
+ *
+ * @param held - the tenant role held now, `null` for none
+ * @param requested - the role the request names, `null` for "no staff role"
+ */
+const roleDiffers = (held: string | null, requested: string | null): boolean =>
+    held !== (requested?.trim().toLowerCase() ?? null);
+
+/**
  * The role change an update actually makes, or `undefined` when it changes nothing.
  *
  * A PUT carries `role` every time (RFC 9110 §9.3.4), so "present" is not "changed". Re-granting
@@ -119,11 +129,38 @@ const changedRole = (user: UserDocument, requested?: string | null): Promise<Rol
     requested === undefined
         ? Promise.resolve(undefined)
         : accessService.rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then(({ tenant }) => {
-              // Stored lower-cased and trimmed — the membership schema's own normalisation.
-              if (tenant === (requested?.trim().toLowerCase() ?? null)) return undefined;
+              if (!roleDiffers(tenant, requested)) return undefined;
 
               return requested === null ? { revoke: tenant ?? '' } : { grant: requested };
           });
+
+/**
+ * Whether an edit would change who holds powers: the staff role, or a ban or unban. Judged on the
+ * id and the body alone, the way the route asks BEFORE the controller runs, to decide whether the
+ * caller owes a fresh login. The same comparison {@link changedRole} makes, so the two cannot
+ * disagree. A PUT carries `role` and `active` every time, so only a value that differs from the
+ * stored one counts.
+ *
+ * @param id - the account about to be edited
+ * @param body - `role` and `active` as the request sent them
+ * @returns `false` for nothing sent or nothing different (and for an unknown account, which the
+ *   controller answers 404); `true` for a role granted or removed, or an active flag flipped
+ */
+export const powersChangeRequested = (
+    id: string,
+    body: { role?: string | null; active?: boolean | string } | undefined
+): Promise<boolean> =>
+    userRepository.findById(id).then((user) => {
+        if (!user) return false;
+        // A multipart body is read before validation turns its strings into booleans.
+        const active = typeof body?.active === 'string' ? body.active === 'true' : body?.active;
+        if (active !== undefined && active !== user.active) return true;
+        if (body?.role === undefined) return false;
+
+        return accessService
+            .rolesOf(id, DEPLOYMENT_TENANT_ID)
+            .then(({ tenant }) => roleDiffers(tenant, body.role!));
+    });
 
 /**
  * The membership half of {@link saveAndGrant}: grant the role, take it away, or do nothing.

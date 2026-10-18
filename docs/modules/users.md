@@ -100,6 +100,13 @@ and resending what the account already has is no ban and no role change (`role: 
 customer). The same protection covers soft delete, hard delete and restore. A refused attempt on a
 staff account is audited as `security.forbidden` with `metadata.reason: role_protected`.
 
+**The fresh-login step-up** asks only a caller holding `assign:Role`, and only when the write changes
+who holds powers: a role that differs from the stored one, or an `active` flag that flips. A `PUT`
+that resends what is stored is not challenged. A caller without `assign:Role` is never asked, and
+the service refuses a role change with the audited `403 ROLE_MANAGEMENT_REQUIRED` instead. An API
+key can never step up, so a key reaching a step-up guard is refused `403 FORBIDDEN` (audited as
+`credential_cannot_step_up`), not told to log in again.
+
 ### Creating and updating with a role
 
 An account and its role live in two collections (`users`, and `access`' memberships), and an admin

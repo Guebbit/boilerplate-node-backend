@@ -16,6 +16,7 @@ import {
 } from '@kernel/middlewares/authorizations';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
+import { powersChangeRequested } from './services/update';
 import { getUsers } from './controllers/get-users';
 import { createUser } from './controllers/create-user';
 import { replaceUser, updateUser } from './controllers/update-user';
@@ -26,29 +27,35 @@ import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache'
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
 /**
- * Whether this request names a staff role — handing one out, changing it, or taking it away
- * (`role: null`). Changing a person's powers is the one admin act a stolen session must not be
- * able to do quietly, so it asks for a fresh session at the tier minting an API key does. A
- * client that leaves `role` out (an edit that did not touch it) is not asked. Read from the
- * body, so this guard comes after `upload.image()`, which populates it for a multipart request.
+ * Whether this write changes who holds powers, and the caller manages staff: a role that actually
+ * changes (handing one out, taking it away with `role: null`), or a ban or unban. Changing a
+ * person's powers is the one admin act a stolen session must not do quietly, so it asks for a
+ * fresh session at the tier minting an API key does.
+ *
+ * Only a caller holding `assign:Role` is asked. Anyone else is refused by the service with an
+ * audited 403 `ROLE_MANAGEMENT_REQUIRED`, which is the better answer than a login they could
+ * never use. A PUT carries `role` every time, so "named" is not "changed": the stored role is
+ * compared, as the service does. A ban keeps the role, so unbanning a banned administrator hands
+ * every power back and banning every other administrator locks the shop out. A moderator who bans
+ * a customer holds no `assign:Role` and is never asked.
+ *
+ * Read from the body, so this guard comes after `upload.image()`, which populates it for a
+ * multipart request.
  */
-const namesARole = (request: Request): boolean =>
-    (request.body as { role?: unknown } | undefined)?.role !== undefined;
+const changesPowers = (request: Request): Promise<boolean> => {
+    if (!request.caller || !holds(request.caller, 'assign', 'Role')) return Promise.resolve(false);
 
-/**
- * Whether this request bans or unbans, and the caller manages staff. A ban keeps the role, so
- * unbanning a banned administrator hands every power back and banning every other administrator
- * locks the shop out: both need the same fresh session as the grant. A moderator who bans a
- * customer holds no `assign:Role` and is never asked.
- */
-const bansAsRoleManager = (request: Request): boolean =>
-    (request.body as { active?: unknown } | undefined)?.active !== undefined &&
-    request.caller !== undefined &&
-    holds(request.caller, 'assign', 'Role');
+    const body = request.body as { role?: string | null; active?: boolean | string } | undefined;
 
-/** Whether this write changes who holds powers: a role named, or a ban by a role manager. */
-const changesPowers = (request: Request): boolean =>
-    namesARole(request) || bansAsRoleManager(request);
+    // No stored account to compare on a create: naming a role, or a ban flag, is the change.
+    if (typeof request.params.id !== 'string')
+        return Promise.resolve(
+            body?.role != null || body?.active === false || body?.active === 'false'
+        );
+
+    // A failed read cannot prove "no change", so it asks.
+    return powersChangeRequested(request.params.id, body).catch(() => true);
+};
 
 /** Express router for user management (admin only). */
 export const router = Router();
