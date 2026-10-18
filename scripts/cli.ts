@@ -14,17 +14,12 @@ import { parseArgs } from 'node:util';
  * The value a string flag was given.
  *
  * @param flag - the flag name, without its dashes
- * @param argv - the arguments; the script's own by default
  * @returns the value, or `undefined` when the flag is absent or has none
  */
-export const flagValue = (
-    flag: string,
-    argv: readonly string[] = process.argv.slice(2)
-): string | undefined => {
+export const flagValue = (flag: string): string | undefined => {
     // Node: https://nodejs.org/api/util.html#utilparseargsconfig — `strict: false` keeps unknown
-    // flags and positionals from throwing; `args` replaces the process's own.
+    // flags and positionals from throwing; `args` defaults to the script's own arguments.
     const { values } = parseArgs({
-        args: [...argv],
         options: { [flag]: { type: 'string' } },
         strict: false,
         allowPositionals: true
