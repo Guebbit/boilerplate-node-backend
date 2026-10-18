@@ -75,7 +75,9 @@ const CONFORMITY_YEARS = 2;
 
 /**
  * When the legal guarantee of conformity ends, counted from delivery: two calendar years, to the
- * end of that UTC day. A defect or a wrong item is the buyer's right until then, whatever the
+ * end of the UTC day AFTER that date. The extra day is the margin the withdrawal window carries
+ * too: a delivery marked between local midnight and the zone's UTC offset still gets its two
+ * full years, and the guarantee cannot be waived downward (Directive 2019/771 Art. 21). A defect or a wrong item is the buyer's right until then, whatever the
  * shop's own (shorter) withdrawal period says — and made-to-order goods are covered too, since
  * Art. 16 CRD only takes the right of WITHDRAWAL away.
  * @param deliveredAt - when the goods arrived
@@ -86,7 +88,7 @@ export const conformityUntilFrom = (deliveredAt: Date): Date =>
         Date.UTC(
             deliveredAt.getUTCFullYear() + CONFORMITY_YEARS,
             deliveredAt.getUTCMonth(),
-            deliveredAt.getUTCDate() + 1
+            deliveredAt.getUTCDate() + 2
         ) - 1
     );
 
