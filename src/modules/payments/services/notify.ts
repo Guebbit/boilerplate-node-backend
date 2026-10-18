@@ -61,28 +61,10 @@ const completesPayment = (payment: PaymentDocument, refund: RefundRecord): boole
 export const mailPaymentReceived = ({
     orderId
 }: DomainEventMap['payment.succeeded']): Promise<void> =>
-    orderService
-        .getById(orderId)
-        .then((order) =>
-            order
-                ? orderService.mailBuyer(order, (locale, name) => {
-                      const mail = paymentReceivedEmail(locale, name, order, orderId);
-                      void enqueueEmail(
-                          { to: order.email, subject: mail.subject },
-                          mail.template,
-                          mail.data
-                      );
-                  })
-                : undefined
-        )
-        .catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Payments: could not mail the payment confirmation for order ${orderId}`,
-                error
-            });
-            // Stryker restore all
-        });
+    orderService.mailBuyerOfOrder(orderId, (order, locale, name) => {
+        const mail = paymentReceivedEmail(locale, name, order, orderId);
+        void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
+    });
 
 /**
  * Tell the buyer their money went back, when it went back outside a return. A return's refund is
@@ -172,25 +154,7 @@ export const mailTransferInstructions = (
  * @param orderId - the order that was cancelled
  */
 export const mailTransferExpired = (orderId: string): Promise<void> =>
-    orderService
-        .getById(orderId)
-        .then((order) =>
-            order
-                ? orderService.mailBuyer(order, (locale) => {
-                      const mail = transferExpiredEmail(locale, order);
-                      void enqueueEmail(
-                          { to: order.email, subject: mail.subject },
-                          mail.template,
-                          mail.data
-                      );
-                  })
-                : undefined
-        )
-        .catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Payments: could not mail the transfer-expired notice for order ${orderId}`,
-                error
-            });
-            // Stryker restore all
-        });
+    orderService.mailBuyerOfOrder(orderId, (order, locale) => {
+        const mail = transferExpiredEmail(locale, order);
+        void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
+    });
