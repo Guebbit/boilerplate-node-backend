@@ -166,43 +166,32 @@ const refineFallbackLocale = (
         });
 };
 
-/**
- * A release date may sit at most one year ahead. A past date is fine: it simply reads as released.
- * Shared by create, PUT and PATCH, like {@link refineFallbackLocale}.
- *
- * @param releaseDate - the date in the body; absent or `null` (a clear) always passes
- * @param context - the Zod context to report into
- */
-const refineReleaseDate = (
-    releaseDate: string | null | undefined,
-    context: z.RefinementCtx
-): void => {
-    if (releaseDate === undefined || releaseDate === null) return;
-    if (new Date(releaseDate).getTime() > latestReleaseDate(new Date()).getTime())
-        context.addIssue({
-            code: 'custom',
-            message: t('products.field-release-date-too-far'),
-            path: ['releaseDate']
-        });
-};
+/** The refusal text for each date a product carries, keyed by the field it sits on. */
+const DATE_TOO_FAR_MESSAGES = {
+    releaseDate: 'products.field-release-date-too-far',
+    restockDate: 'products.field-restock-date-too-far'
+} as const;
 
 /**
- * A restock date may sit at most one year ahead, like a release date. A past date is accepted: it
- * reads sold out until staff set a new one or clear it. Shared by create, PUT and PATCH.
+ * A release or restock date may sit at most one year ahead. A past date is fine: a release date
+ * simply reads as released, and a restock date reads sold out until staff set a new one or clear
+ * it. Shared by create, PUT and PATCH, like {@link refineFallbackLocale}.
  *
- * @param restockDate - the date in the body; absent or `null` (a clear) always passes
+ * @param field - which date this is; it names the issue's path and picks the refusal text
+ * @param value - the date in the body; absent or `null` (a clear) always passes
  * @param context - the Zod context to report into
  */
-const refineRestockDate = (
-    restockDate: string | null | undefined,
+const refineDateWithinYear = (
+    field: keyof typeof DATE_TOO_FAR_MESSAGES,
+    value: string | null | undefined,
     context: z.RefinementCtx
 ): void => {
-    if (restockDate === undefined || restockDate === null) return;
-    if (new Date(restockDate).getTime() > latestReleaseDate(new Date()).getTime())
+    if (value === undefined || value === null) return;
+    if (new Date(value).getTime() > latestReleaseDate(new Date()).getTime())
         context.addIssue({
             code: 'custom',
-            message: t('products.field-restock-date-too-far'),
-            path: ['restockDate']
+            message: t(DATE_TOO_FAR_MESSAGES[field]),
+            path: [field]
         });
 };
 
@@ -227,38 +216,55 @@ const refinePricePlaces = (price: number | undefined, context: z.RefinementCtx):
         });
 };
 
+/** The body fields the product business refinements read; every generated body is a superset. */
+interface RefinableProduct {
+    translations?: Record<string, unknown>;
+    releaseDate?: string | null;
+    restockDate?: string | null;
+    price?: number;
+}
+
+/**
+ * Every business refinement a product body gets, in one place for create, PUT and PATCH.
+ *
+ * @param data - the parsed body
+ * @param context - the Zod context to report into
+ * @param mustBePresent - whether the fallback locale must be in `translations` (create and PUT)
+ */
+const refineProduct = (
+    data: RefinableProduct,
+    context: z.RefinementCtx,
+    mustBePresent: boolean
+): void => {
+    refineFallbackLocale(data.translations, context, mustBePresent);
+    refineDateWithinYear('releaseDate', data.releaseDate, context);
+    refineDateWithinYear('restockDate', data.restockDate, context);
+    refinePricePlaces(data.price, context);
+};
+
 /**
  * Zod schema for a product CREATE: the generated `CreateProductBody`, which already carries every
- * field rule, plus the two business refinements it cannot express.
+ * field rule, plus the four business refinements it cannot express ({@link refineProduct}).
  */
 export const zodProductCreateSchema = CreateProductBody.superRefine((data, context) => {
-    refineFallbackLocale(data.translations, context, true);
-    refineReleaseDate(data.releaseDate, context);
-    refineRestockDate(data.restockDate, context);
-    refinePricePlaces(data.price, context);
+    refineProduct(data, context, true);
 });
 
 /**
- * Zod schema for a product PUT: the generated `ReplaceProductByIdBody` plus the same two
+ * Zod schema for a product PUT: the generated `ReplaceProductByIdBody` plus the same four
  * refinements. `mustBePresent: true`, as on create: a PUT's `translations` is the whole set, so a
  * locale it omits is deleted — and the fallback one can never be.
  */
 export const zodProductReplaceSchema = ReplaceProductByIdBody.superRefine((data, context) => {
-    refineFallbackLocale(data.translations, context, true);
-    refineReleaseDate(data.releaseDate, context);
-    refineRestockDate(data.restockDate, context);
-    refinePricePlaces(data.price, context);
+    refineProduct(data, context, true);
 });
 
 /**
- * Zod schema for a product PATCH: the generated `UpdateProductByIdBody` plus the same two
+ * Zod schema for a product PATCH: the generated `UpdateProductByIdBody` plus the same four
  * refinements; the fallback-locale guard stays a refusal even though the field is optional.
  */
 export const zodProductUpdateSchema = UpdateProductByIdBody.superRefine((data, context) => {
-    refineFallbackLocale(data.translations, context, false);
-    refineReleaseDate(data.releaseDate, context);
-    refineRestockDate(data.restockDate, context);
-    refinePricePlaces(data.price, context);
+    refineProduct(data, context, false);
 });
 
 /**
