@@ -263,7 +263,7 @@ export const accountIdOf = (request: Request): string => request.authContext!.id
 
 /** `keyedBy` label for a budget bucketed on a hashed challenge string, falling back to the address block. */
 export const KEYED_BY_CHALLENGE =
-    'the challenge string, hashed (falls back to address block when absent)';
+    'the challenge string, hashed: from the body, else the OAuth continuation cookie (falls back to address block when absent)';
 
 /**
  * One string field off a JSON request body — undefined when the body isn't an object, the field
