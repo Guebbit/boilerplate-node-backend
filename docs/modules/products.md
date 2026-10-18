@@ -225,6 +225,8 @@ left alone, whatever the catalogue does.
 
 `product.buyable_again` is the signal [`stock-alerts`](./stock-alerts.md) listens to: it fires once when
 the product flips from not orderable to orderable, in the transaction of the write that caused it.
+A preorder whose release date passes is never written to, so no signal fires for it: the hourly
+`sweep:stock-alerts` job in `stock-alerts` answers its waiting requests instead.
 
 ## The pipeline
 

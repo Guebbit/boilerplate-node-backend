@@ -11,7 +11,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { createProduct } from '@modules/products/tests/factories';
+import { createProduct, readProduct, saveProduct } from '@modules/products/tests/factories';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { inventoryService } from '@modules/inventory';
 import { registerModules } from '@kernel/registry';
@@ -209,6 +209,50 @@ describe('the signal', () => {
         await settleOutboxNudges();
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+    });
+});
+
+/** Stock on the shelf but a release date ahead: not orderable until the date passes. */
+const unreleased = () =>
+    createProduct({
+        onHand: 5,
+        releaseDate: new Date(Date.now() + DAY_MS).toISOString()
+    }).then((product) => String(product._id));
+
+/** Moves the release date into the past without any write announcing it, as time does. */
+const letTheDatePass = async (productId: string) => {
+    const product = await readProduct(productId);
+    product!.releaseDate = new Date(Date.now() - DAY_MS);
+    await saveProduct(product!);
+};
+
+describe('the hourly sweep', () => {
+    it('answers a request once a release date passes, and a second run sends nothing', async () => {
+        const { bearer } = await shopper();
+        const productId = await unreleased();
+        await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        await letTheDatePass(productId);
+
+        const first = await stockAlertService.sweepBuyable(new Date());
+        const second = await stockAlertService.sweepBuyable(new Date());
+        await settleOutboxNudges();
+
+        expect([first, second]).toEqual([1, 0]);
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        expect(await sentEvents()).toMatchObject([{ productId }]);
+        expect(await stockAlertModel.countDocuments()).toBe(0);
+    });
+
+    it('leaves a request for a product that still cannot be ordered', async () => {
+        const { bearer } = await shopper();
+        const waiting = await unreleased();
+        await api().post(`/stock-alerts/${waiting}`).set('Authorization', bearer);
+
+        const answered = await stockAlertService.sweepBuyable(new Date());
+
+        expect(answered).toBe(0);
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+        expect(await stockAlertModel.countDocuments()).toBe(1);
     });
 });
 

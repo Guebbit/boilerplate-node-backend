@@ -186,6 +186,26 @@ const onBuyableAgain = async (productId: string): Promise<void> => {
         await answerOne({ id: String(alert._id), userId: String(alert.userId), productId }, titles);
 };
 
+/**
+ * Answer every waiting request whose product can be ordered now. The "buyable again" signal fires
+ * only on a write, and a preorder whose release date passes is never written to, so this pass is
+ * what answers it. A run that finds nothing to answer is harmless, and a request answered here is
+ * gone, so a second run sends nothing.
+ *
+ * @param now - the instant of the sweep
+ * @returns how many products had their waiting requests answered
+ */
+const sweepBuyable = async (now: Date): Promise<number> => {
+    let answered = 0;
+    for (const productId of await stockAlertRepository.distinctProductIds()) {
+        const product = await productService.findPublicById(productId);
+        if (!product || !isBuyable(product, now)) continue;
+        await onBuyableAgain(productId);
+        answered += 1;
+    }
+    return answered;
+};
+
 /** The module's one service handle. */
 export const stockAlertService = {
     list,
@@ -194,5 +214,6 @@ export const stockAlertService = {
     exportRows,
     removeByUserId,
     removeByProductId,
-    onBuyableAgain
+    onBuyableAgain,
+    sweepBuyable
 };
