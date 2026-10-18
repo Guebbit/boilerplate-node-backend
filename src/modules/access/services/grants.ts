@@ -18,7 +18,7 @@ import { auditRoleChange } from './role-audit';
  * The one permission that protects people: whoever holds it may hand out a staff role and change an
  * account that already holds one. Declared in this module's `authorization.yaml`.
  */
-export const ASSIGN_RULE = 'assign:Role';
+const ASSIGN_RULE = 'assign:Role';
 
 /**
  * Raised when a write would assign a role nothing declares, or grant more than the granter holds.

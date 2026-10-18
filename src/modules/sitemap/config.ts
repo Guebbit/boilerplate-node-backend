@@ -11,7 +11,7 @@ import { defineConfig } from '@infrastructure/config/define';
 import { int, text } from '@infrastructure/config/fields';
 
 /** The sitemaps.org ceiling on `<url>` entries in one sitemap file. */
-export const SITEMAP_URL_LIMIT = 50_000;
+const SITEMAP_URL_LIMIT = 50_000;
 
 /**
  * The public pages of the paired frontend that take no id, as paths under `/<locale>/`. `''` is

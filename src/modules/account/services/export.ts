@@ -50,7 +50,7 @@ import { removeRow } from './export-rows';
  * ever. The build itself is not killed at the limit: a late finish finds its row gone and deletes
  * its own file.
  */
-export const EXPORT_BUILD_LIMIT_MS = 30 * 60 * 1000;
+const EXPORT_BUILD_LIMIT_MS = 30 * 60 * 1000;
 
 /** What `POST /account/export` answers, and what a request resolves to. */
 export interface AccountExportRequestResult {

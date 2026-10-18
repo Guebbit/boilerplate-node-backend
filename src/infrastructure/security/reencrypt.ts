@@ -143,7 +143,7 @@ const planPage = <TDocument extends Document>(
  * @param cursor - the last `_id` already handled; internal, for the recursion over pages
  * @param report - the running tally; internal
  */
-export const reencryptCollection = <TDocument extends Document>(
+const reencryptCollection = <TDocument extends Document>(
     job: ReencryptJob<TDocument>,
     dryRun = false,
     cursor?: Types.ObjectId,

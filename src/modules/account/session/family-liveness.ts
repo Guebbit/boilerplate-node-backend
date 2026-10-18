@@ -14,7 +14,7 @@ import type { SessionMode } from '../session-mode';
 import { hasIdledOut, hasOutlivedStaffCap } from './idle';
 
 /** How often a busy session may write its activity stamp. */
-export const ACTIVITY_STAMP_INTERVAL_MS = 60_000;
+const ACTIVITY_STAMP_INTERVAL_MS = 60_000;
 
 /**
  * Resolve a family's caller, ending the session when it has idled out or outlived the staff cap,

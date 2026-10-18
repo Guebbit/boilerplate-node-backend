@@ -21,7 +21,7 @@ export const availableStock = (onHand?: number, reserved?: number): number =>
  * What `available` shows for an allowance without a cap: the contract wants an integer, and no
  * buyer is ever told the count.
  */
-export const UNLIMITED_ALLOWANCE_SHOWN = 999_999;
+const UNLIMITED_ALLOWANCE_SHOWN = 999_999;
 
 /**
  * Units of a preorder still on offer: the allowance minus what is already claimed, clamped at zero

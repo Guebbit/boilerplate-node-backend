@@ -28,7 +28,7 @@ import { verifyDeliveredCode } from '../delivered-code-verify';
  * mailbox, not enough for anyone else to learn an address from. Masked here rather than in a
  * client, so two clients cannot redact the same address two different ways.
  */
-export const maskEmail = (email: string): string => {
+const maskEmail = (email: string): string => {
     const [local = '', domain = ''] = email.split('@', 2);
     if (local.length <= 2) return `${'*'.repeat(local.length)}@${domain}`;
     return `${local[0]}***${local.at(-1)}@${domain}`;
