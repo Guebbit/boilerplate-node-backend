@@ -54,6 +54,7 @@ import {
     shipmentShippedEmail
 } from '@modules/delivery/emails';
 import { returnNoticeEmail } from '@modules/returns';
+import { backInStockEmail } from '@modules/stock-alerts';
 import { subscriptionDisabledEmail } from '@modules/webhooks';
 import { apiKeyMintedEmail, apiKeysRevokedEmail } from '@modules/api-keys/emails';
 
@@ -195,6 +196,10 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         needsAnswer: true,
         answerBy: new Date(Date.UTC(2027, 0, 20)),
         orderUrl: 'https://shop.example/orders/an-order-id'
+    }),
+    'stock-alerts.back-in-stock': backInStockEmail(locale, 'Ada', {
+        title: 'Widget',
+        productUrl: 'https://shop.example/products/a-product-id'
     }),
     'returns.notice': returnNoticeEmail('withdrawal-acknowledged', locale, 'Ada', {
         orderRef: '2026-000041',

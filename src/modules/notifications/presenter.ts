@@ -23,6 +23,7 @@ const bodyOf = (notification: NotificationDocument): NotificationBody => {
             return { code: notification.code, params: notification.params };
         }
         case 'notifications.cart-line-removed':
+        case 'notifications.stock-alert':
         case 'notifications.wishlist-item-removed': {
             return { code: notification.code, params: notification.params };
         }

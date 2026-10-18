@@ -198,6 +198,7 @@ it('publishes the set the pair agreed on', () => {
         'payments.transfer-expired',
         'payments.transfer-instructions',
         'returns.notice',
+        'stock-alerts.back-in-stock',
         'webhooks.subscription-disabled'
     ];
     // A name's first segment is the module that publishes it, so deleting a module (`demo:remove`)

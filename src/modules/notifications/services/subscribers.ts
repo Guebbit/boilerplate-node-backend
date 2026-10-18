@@ -34,6 +34,21 @@ export const onWishlistItemsRemoved = (
     payload: DomainEventMap['wishlist.items_removed']
 ): Promise<void> => notificationsCreate(removedFor('notifications.wishlist-item-removed', payload));
 
+/** A product the user asked about can be ordered again. */
+export const onStockAlertSent = ({
+    userId,
+    productId,
+    titles
+}: DomainEventMap['stock_alert.sent']): Promise<void> =>
+    notificationsCreate([
+        {
+            userId: new Types.ObjectId(userId),
+            code: 'notifications.stock-alert',
+            severity: 'info',
+            params: { productId, titles }
+        }
+    ]);
+
 /** A guest-cart merge could not add some lines at all: one message listing all of them. */
 export const onCartMergeRefused = ({
     userId,

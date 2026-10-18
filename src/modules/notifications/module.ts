@@ -17,6 +17,7 @@ import { onDomainEvent } from '@kernel/events';
 import { CART_LINES_REMOVED, CART_MERGE_REFUSED } from '@modules/cart';
 import { FULFILLMENT_ORDER_DELAYED, FULFILLMENT_ORDER_HOLD_NOTICED } from '@modules/delivery';
 import { WISHLIST_ITEMS_REMOVED } from '@modules/wishlist';
+import { STOCK_ALERT_SENT } from '@modules/stock-alerts';
 import { notificationsConfig } from './config';
 import { router } from './routes';
 import { notificationsService } from './services';
@@ -41,6 +42,7 @@ export default {
         onDomainEvent(WISHLIST_ITEMS_REMOVED, notificationsService.onWishlistItemsRemoved);
         onDomainEvent(CART_MERGE_REFUSED, notificationsService.onCartMergeRefused);
         onDomainEvent(FULFILLMENT_ORDER_DELAYED, notificationsService.onFulfillmentOrderDelayed);
+        onDomainEvent(STOCK_ALERT_SENT, notificationsService.onStockAlertSent);
         onDomainEvent(
             FULFILLMENT_ORDER_HOLD_NOTICED,
             notificationsService.onFulfillmentOrderHoldNoticed

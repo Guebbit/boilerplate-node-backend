@@ -11,6 +11,7 @@ import {
     onWishlistItemsRemoved,
     onCartMergeRefused,
     onFulfillmentOrderDelayed,
+    onStockAlertSent,
     onFulfillmentOrderHoldNoticed
 } from './subscribers';
 import { streamNotifications, publishToUser, openStreamCount } from './stream';
@@ -30,5 +31,6 @@ export const notificationsService = {
     onWishlistItemsRemoved,
     onCartMergeRefused,
     onFulfillmentOrderDelayed,
+    onStockAlertSent,
     onFulfillmentOrderHoldNoticed
 };

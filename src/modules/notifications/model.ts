@@ -25,7 +25,8 @@ export const NOTIFICATION_CODES = [
     'notifications.cart-merge-refused',
     'notifications.fulfillment-delayed',
     'notifications.fulfillment-confirm-wait',
-    'notifications.fulfillment-held'
+    'notifications.fulfillment-held',
+    'notifications.stock-alert'
 ] as const;
 
 /** One of {@link NOTIFICATION_CODES}. */
@@ -42,6 +43,7 @@ export interface NotificationParametersByCode {
     'notifications.fulfillment-delayed': FulfillmentDelayedParams;
     'notifications.fulfillment-confirm-wait': FulfillmentDelayedParams;
     'notifications.fulfillment-held': FulfillmentHeldParams;
+    'notifications.stock-alert': CartLineRemovedParams;
 }
 
 /**

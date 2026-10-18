@@ -23,6 +23,7 @@ flowchart LR
     cart["cart"]
     example["example"]
     orders["orders"]
+    stock_alerts["stock-alerts"]
     webhooks["webhooks"]
 
     account --> users
@@ -30,6 +31,7 @@ flowchart LR
     cart --> users
     example --> users
     orders --> users
+    stock_alerts --> users
     webhooks --> users
     users --> access
     users -. "user.setup-requested" .-> account
@@ -39,6 +41,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
+    class stock_alerts supporting;
     class access,account,api_keys,example,webhooks generic;
     class users centre;
 ```

@@ -1,0 +1,17 @@
+{
+    "stock-alerts": {
+        "asked": "Ti avviseremo quando questo prodotto sarà di nuovo disponibile.",
+        "cancelled": "Richiesta annullata.",
+        "product-not-found": "Il prodotto richiesto non è stato trovato",
+        "not-found": "Non hai una richiesta per questo prodotto.",
+        "already-buyable": "Questo prodotto si può ordinare adesso.",
+        "email-back-in-stock": {
+            "meta-title": "Di nuovo disponibile",
+            "subject": "{{title}} è di nuovo disponibile",
+            "greeting": "Ciao, {{name}}!",
+            "body": "{{title}}, di cui hai chiesto, si può ordinare di nuovo.",
+            "once": "Ci avevi chiesto di avvisarti una sola volta, quindi questo è l'unico messaggio che riceverai.",
+            "link-label": "Vedi il prodotto"
+        }
+    }
+}

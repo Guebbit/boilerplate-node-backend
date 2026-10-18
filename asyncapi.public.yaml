@@ -1036,6 +1036,39 @@ components:
                     type: string
                     format: date-time
             additionalProperties: false
+        NotificationStockAlertPayload:
+            title: NotificationStockAlertPayload
+            type: object
+            required:
+                - id
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                code:
+                    type: string
+                    enum:
+                        - notifications.stock-alert
+                params:
+                    $ref: '#/components/schemas/CartLineRemovedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
         NotificationFulfillmentDelayedPayload:
             title: NotificationFulfillmentDelayedPayload
             type: object
@@ -1210,6 +1243,7 @@ components:
                 - $ref: '#/components/schemas/NotificationFulfillmentDelayedPayload'
                 - $ref: '#/components/schemas/NotificationFulfillmentConfirmWaitPayload'
                 - $ref: '#/components/schemas/NotificationFulfillmentHeldPayload'
+                - $ref: '#/components/schemas/NotificationStockAlertPayload'
             # A plain property name here, unlike OpenAPI's `{ propertyName }` object.
             discriminator: code
         NotificationCreatedPayload:

@@ -1,0 +1,7 @@
+summary: 'Back-in-stock requests: a signed-in buyer asks to be told once when a product they cannot order can be again.'
+subdomain: supporting
+group: shop
+dependsOn:
+    - products # a request names a product, and the product announces when it is orderable again
+    - users # the mail goes to the account's own address and language
+noAudit: "Saves and clears a person's own request for one courtesy mail: no money, stock or identity attached."

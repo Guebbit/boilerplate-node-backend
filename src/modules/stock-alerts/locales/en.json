@@ -1,0 +1,17 @@
+{
+    "stock-alerts": {
+        "asked": "You will be told when this product is back.",
+        "cancelled": "Request cancelled.",
+        "product-not-found": "The requested product was not found",
+        "not-found": "You have no request for this product.",
+        "already-buyable": "This product can be ordered now.",
+        "email-back-in-stock": {
+            "meta-title": "Back in stock",
+            "subject": "{{title}} is back",
+            "greeting": "Hello, {{name}}!",
+            "body": "{{title}}, which you asked about, can be ordered again.",
+            "once": "You asked us to tell you once, so this is the only message you will get about it.",
+            "link-label": "See the product"
+        }
+    }
+}

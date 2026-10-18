@@ -58,6 +58,10 @@ describe('presentNotification, per code', () => {
             params: { productId: 'p2', titles: { en: 'Red mug', it: 'Tazza rossa' } }
         },
         {
+            code: 'notifications.stock-alert',
+            params: { productId: 'p5', titles: { en: 'Red lamp' } }
+        },
+        {
             code: 'notifications.cart-merge-refused',
             params: {
                 lines: [

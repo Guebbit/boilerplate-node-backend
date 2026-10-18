@@ -19,15 +19,18 @@ flowchart LR
     notifications["notifications<br/><i>this module</i>"]
     cart["cart"]
     delivery["delivery"]
+    stock_alerts["stock-alerts"]
     wishlist["wishlist"]
 
     notifications --> cart
     notifications --> delivery
+    notifications --> stock_alerts
     notifications --> wishlist
     cart -. "cart.lines_removed" .-> notifications
     cart -. "cart.merge_refused" .-> notifications
     delivery -. "fulfillment_order.delayed" .-> notifications
     delivery -. "fulfillment_order.hold_noticed" .-> notifications
+    stock_alerts -. "stock_alert.sent" .-> notifications
     wishlist -. "wishlist.items_removed" .-> notifications
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -35,7 +38,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart core;
-    class delivery,wishlist supporting;
+    class delivery,stock_alerts,wishlist supporting;
     class notifications centre;
 ```
 

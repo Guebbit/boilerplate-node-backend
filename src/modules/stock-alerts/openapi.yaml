@@ -1,0 +1,130 @@
+openapi: 3.1.0
+info:
+    title: stock-alerts — module contract
+    version: '0.1.0'
+
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: StockAlerts
+      description: Requests to be told once when a product the caller cannot order can be again.
+
+x-error-codes:
+    STOCK_ALERT_PRODUCT_BUYABLE: { status: 409, description: 'The product can be ordered now, so there is nothing to wait for. The button is only offered while it cannot.' }
+
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    stockAlerts:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/StockAlert'
+
+paths:
+    /stock-alerts:
+        get:
+            tags: [StockAlerts]
+            summary: List my back-in-stock requests
+            description: >-
+                Returns the authenticated user's open requests, newest first. A request is used once:
+                when it is answered it is deleted, so an answered one never appears here. Absence and
+                emptiness are the same state, so this never answers 404.
+            operationId: listStockAlerts
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The caller's open requests
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/StockAlertsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /stock-alerts/{productId}:
+        post:
+            tags: [StockAlerts]
+            summary: Ask to be told when a product is back
+            description: >-
+                Records that the authenticated user wants one mail, and one inbox message, when the
+                product can be ordered again (shelf units, an open backorder, or back on sale). The
+                click is the consent for that single mail, so nothing else is ever sent on it and the
+                request is deleted when it is answered. Asking twice is the same request and answers
+                the same 200. Refused with `409 STOCK_ALERT_PRODUCT_BUYABLE` while the product can be
+                ordered now; a hidden or deleted product answers 404.
+            operationId: createStockAlert
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/ProductIdPathParam'
+            responses:
+                '200':
+                    description: The caller's open requests, including this one
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/StockAlertsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [StockAlerts]
+            summary: Cancel a back-in-stock request
+            description: >-
+                Cancels the caller's own request before it is answered. A request the caller does not
+                hold is a 404, because the client's view is stale and it needs to know.
+            operationId: deleteStockAlert
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/ProductIdPathParam'
+            responses:
+                '200':
+                    description: The caller's remaining open requests
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/StockAlertsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # One open request: who asked is the caller, so only the product and when.
+        StockAlert:
+            type: object
+            additionalProperties: false
+            required: [productId, createdAt]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                createdAt:
+                    type: string
+                    format: date-time
+
+        StockAlertsResponse:
+            type: object
+            additionalProperties: false
+            required: [items]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/StockAlert'
+
+        StockAlertsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/StockAlertsResponse'

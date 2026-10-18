@@ -14,6 +14,9 @@ import { fulfillmentOrdersOf, paidPreorderOrder } from '@modules/delivery/tests/
 import { cartService } from '@modules/cart';
 import { wishlistService } from '@modules/wishlist';
 import { notificationsService } from '@modules/notifications/services';
+import { stockAlertService } from '@modules/stock-alerts';
+import { inventoryService } from '@modules/inventory';
+import { api, authenticateAs } from '@tests/http';
 import { userService } from '@modules/users';
 import { registerModules } from '@kernel/registry';
 import { emitDomainEvent, resetDomainEvents } from '@kernel/events';
@@ -220,6 +223,27 @@ describe('the module subscriptions', () => {
         await userService.removeById(user.id, true, callerContextAs('admin'));
 
         await expect(inboxOf(user.id)).resolves.toEqual([]);
+    });
+
+    describe('a back-in-stock request', () => {
+        it('tells the asker once, naming the product, when it can be ordered again', async () => {
+            const { user: asker, bearer } = await authenticateAs();
+            const product = await createProduct({ title: 'Red lamp', onHand: 0 });
+            const productId = String(product._id);
+            await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
+
+            await inventoryService.receive(productId, 2);
+            await settleOutboxNudges();
+            await stockAlertService.onBuyableAgain(productId);
+            await settleOutboxNudges();
+
+            const [message, ...rest] = await inboxOf(asker.id);
+            expect(rest).toEqual([]);
+            expect(message).toMatchObject({
+                code: 'notifications.stock-alert',
+                params: { productId, titles: expect.any(Object) }
+            });
+        });
     });
 
     describe('a late preorder', () => {

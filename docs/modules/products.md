@@ -23,12 +23,14 @@ flowchart LR
     inventory["inventory"]
     orders["orders"]
     shop["shop"]
+    stock_alerts["stock-alerts"]
     wishlist["wishlist"]
 
     cart --> products
     delivery --> products
     inventory --> products
     orders --> products
+    stock_alerts --> products
     wishlist --> products
     products --> shop
     products -. "product.deleted" .-> cart
@@ -36,6 +38,8 @@ flowchart LR
     products -. "product.restock_date_changed" .-> delivery
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
+    products -. "product.buyable_again" .-> stock_alerts
+    products -. "product.deleted" .-> stock_alerts
     products -. "product.deleted" .-> wishlist
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -43,7 +47,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class delivery,inventory,shop,wishlist supporting;
+    class delivery,inventory,shop,stock_alerts,wishlist supporting;
     class products centre;
 ```
 

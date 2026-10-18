@@ -249,6 +249,29 @@ components:
                     type: string
                     format: date-time
 
+        NotificationStockAlert:
+            type: object
+            additionalProperties: false
+            description: A product the caller asked to be told about can be ordered again. Sent once, then the request is gone.
+            required: [id, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                code:
+                    type: string
+                    enum: [notifications.stock-alert]
+                params:
+                    $ref: '#/components/schemas/CartLineRemovedParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
         NotificationFulfillmentDelayed:
             type: object
             additionalProperties: false
@@ -372,6 +395,7 @@ components:
                 - $ref: '#/components/schemas/NotificationFulfillmentDelayed'
                 - $ref: '#/components/schemas/NotificationFulfillmentConfirmWait'
                 - $ref: '#/components/schemas/NotificationFulfillmentHeld'
+                - $ref: '#/components/schemas/NotificationStockAlert'
             discriminator:
                 propertyName: code
                 mapping:
@@ -381,6 +405,7 @@ components:
                     notifications.fulfillment-delayed: '#/components/schemas/NotificationFulfillmentDelayed'
                     notifications.fulfillment-confirm-wait: '#/components/schemas/NotificationFulfillmentConfirmWait'
                     notifications.fulfillment-held: '#/components/schemas/NotificationFulfillmentHeld'
+                    notifications.stock-alert: '#/components/schemas/NotificationStockAlert'
 
         NotificationsResponse:
             type: object

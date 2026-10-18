@@ -240,6 +240,14 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "removing a product from the caller's own wishlist"
     },
+    'stock-alerts POST /:productId': {
+        requiresAuth: true,
+        reason: "asking to be told when a product is back, on the caller's own account"
+    },
+    'stock-alerts DELETE /:productId': {
+        requiresAuth: true,
+        reason: "cancelling the caller's own back-in-stock request"
+    },
     'payments POST /webhook': {
         requiresAuth: false,
         reason: 'the payment provider reporting an outcome — a machine with no account, which authenticates by signing the raw body instead'
