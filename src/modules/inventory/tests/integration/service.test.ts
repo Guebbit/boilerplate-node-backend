@@ -114,7 +114,7 @@ describe('reserveForOrder', () => {
         const first = await inventoryService.reserveForOrder(orderId, lines);
         const second = await inventoryService.reserveForOrder(orderId, lines);
 
-        expect(first).toEqual({ held: true, expiresAt: expect.any(Date) });
+        expect(first).toEqual({ held: true, expiresAt: expect.any(Date), owed: [] });
         // The retry reports the FIRST call's own expiry, never a fresh guess it never wrote.
         expect(second).toEqual(first);
 

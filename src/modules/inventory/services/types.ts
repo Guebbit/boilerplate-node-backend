@@ -9,7 +9,7 @@ import type { PaginationInput } from '@infrastructure/persistence/search';
 
 /**
  * A line being held or given back. Ids as strings — the repository converts. `kind` says whether
- * the units are on the shelf (`stock`, the default) or an allowance claim (`preorder`): a hold can
+ * the units are on the shelf (`stock`, the default) or an allowance claim (`backorder`): a hold can
  * carry the same product under both once part of a preorder is allocated, so a caller giving back
  * or shipping a line names which.
  */
@@ -17,6 +17,11 @@ export interface StockLine {
     productId: string;
     quantity: number;
     kind?: HoldKind;
+    /**
+     * Only a reserve reads it: take the shelf units there are and claim the rest against the cap,
+     * for a released product open to backorder. The catalogue decides, never this module.
+     */
+    spill?: boolean;
 }
 
 /**
@@ -37,7 +42,12 @@ export interface StockShortfall {
  * deadline, never a second figure a caller computes on its own from the same `holdMinutes`.
  */
 export type ReserveOutcome =
-    | { held: true; expiresAt: Date }
+    | {
+          held: true;
+          expiresAt: Date;
+          /** Per product, how many units of its line are owed rather than on the shelf; empty when none. */
+          owed: { productId: string; quantity: number }[];
+      }
     | { held: false; shortfalls: StockShortfall[] };
 
 /** What a stock-board read accepts. */

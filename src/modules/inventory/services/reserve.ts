@@ -4,6 +4,7 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { productService } from '@modules/products';
 import { StockMovementReason } from '@types';
 import { reservationTtlMinutes } from '../config';
@@ -11,7 +12,7 @@ import { roomOn } from '../domain';
 import { stockLevelRepository, reservationRepository } from '../repository';
 import type { ReservationDocument, StockLevelDocument } from '../model';
 import type { StockLine, StockShortfall, ReserveOutcome } from './types';
-import { applyTransition } from './transition';
+import { applyTransition, refreshStockCache } from './transition';
 
 /**
  * Give back every line already taken for a reserve that will not complete, and delete the hold
@@ -85,12 +86,129 @@ const takeReasonFor = (line: StockLine): StockMovementReason =>
 
 /**
  * How many units of this line the product could still have given, read back after a refusal: shelf
- * units for a stock line, what is left of the allowance for a preorder line.
+ * units for a stock line, what is left of the allowance for a preorder line, both together for a
+ * line that may spill.
  * @param line - the refused line
  * @param level - the product's level, or `null` when it has none
  */
-const leftFor = (line: StockLine, level: StockLevelDocument | null): number =>
-    line.kind === 'backorder' ? roomOn(level) : (level?.available ?? 0);
+const leftFor = (line: StockLine, level: StockLevelDocument | null): number => {
+    if (line.kind === 'backorder') return roomOn(level);
+    return line.spill ? (level?.available ?? 0) + roomOn(level) : (level?.available ?? 0);
+};
+
+/** Thrown inside a spilling line's transaction to abort it when the cap cannot take the owed part. */
+class OwedRefused extends Error {}
+
+/**
+ * Take a line that may spill, as ONE transaction: the whole line from the shelf when it fits;
+ * otherwise the shelf part and a claim on the cap for the rest, and the hold rewritten to say
+ * which is which. A crash anywhere inside leaves nothing taken, and a claim the cap refuses gives
+ * the shelf part back by aborting.
+ *
+ * @param orderId - the order the hold belongs to
+ * @param line - the line, asked for as shelf units
+ * @returns the parts actually taken (the shelf part, then the owed part), or `null` when the
+ *   shelf and the cap together cannot cover it
+ */
+const takeSpillLine = async (orderId: string, line: StockLine): Promise<StockLine[] | null> => {
+    const parts = await withTransaction(async (session): Promise<StockLine[]> => {
+        const fits = await applyTransition(
+            StockMovementReason.reserve,
+            line.productId,
+            line.quantity,
+            { reference: orderId },
+            session
+        );
+        if (fits) return [line];
+
+        // Read inside the transaction: the figure the take below is judged against.
+        const level = await stockLevelRepository.findByProductId(line.productId, session);
+        const shelf = Math.min(level?.available ?? 0, line.quantity);
+        const shelfPart: StockLine[] =
+            shelf > 0 ? [{ productId: line.productId, quantity: shelf }] : [];
+        if (
+            shelf > 0 &&
+            !(await applyTransition(
+                StockMovementReason.reserve,
+                line.productId,
+                shelf,
+                { reference: orderId },
+                session
+            ))
+        )
+            throw new OwedRefused();
+        const owed: StockLine = {
+            productId: line.productId,
+            quantity: line.quantity - shelf,
+            kind: 'backorder'
+        };
+        const claimed = await applyTransition(
+            StockMovementReason.backorder,
+            owed.productId,
+            owed.quantity,
+            { reference: orderId },
+            session
+        );
+        if (!claimed) throw new OwedRefused();
+
+        const hold = await reservationRepository.findOpenByOrderId(orderId, session);
+        const others = (hold?.items ?? [])
+            .filter((item) => String(item.productId) !== line.productId)
+            .map(({ productId, quantity, kind }) => ({
+                productId: String(productId),
+                quantity,
+                kind
+            }));
+        await reservationRepository.replaceItems(
+            orderId,
+            [...others, ...shelfPart, owed],
+            undefined,
+            session
+        );
+        return [...shelfPart, owed];
+    }).catch((error: unknown) => {
+        // The shelf part rolled back with the transaction; nothing of this line is taken.
+        if (error instanceof OwedRefused) return null;
+        throw error;
+    });
+
+    // Written outside the transaction by design: the catalogue's copy cannot roll back.
+    if (parts) await refreshStockCache(line.productId);
+    return parts;
+};
+
+/**
+ * The owed units a line ended up with: the parts it was taken as that are claims, when it was
+ * asked for as shelf units. A line asked for as a claim from the start is a preorder's, not owed.
+ *
+ * @param line - the line as it was asked for
+ * @param parts - what it was taken as
+ */
+const owedPartsOf = (
+    line: StockLine,
+    parts: readonly StockLine[]
+): { productId: string; quantity: number }[] =>
+    line.kind === 'backorder'
+        ? []
+        : parts
+              .filter(({ kind }) => kind === 'backorder')
+              .map(({ productId, quantity }) => ({ productId, quantity }));
+
+/**
+ * Take one line of a hold.
+ *
+ * @param orderId - the order the hold belongs to
+ * @param line - what to take
+ * @returns the parts taken (one, or two for a spilling line), or `null` when the counters refused
+ */
+const takeLine = async (orderId: string, line: StockLine): Promise<StockLine[] | null> => {
+    if (line.spill && line.kind !== 'backorder') return takeSpillLine(orderId, line);
+
+    const held = await applyTransition(takeReasonFor(line), line.productId, line.quantity, {
+        reference: orderId
+    });
+    return held ? [line] : null;
+};
 
 /**
  * Hold every line for an order, or hold none of it.
@@ -122,17 +240,16 @@ export const reserveForOrder = async (
     // ITS expiry, not the fresh guess this attempt computed but never actually wrote.
     if (!hold) {
         const existing = await reservationRepository.findByOrderId(orderId);
-        return { held: true, expiresAt: existing?.expiresAt ?? expiresAt };
+        return { held: true, expiresAt: existing?.expiresAt ?? expiresAt, owed: [] };
     }
 
     const taken: StockLine[] = [];
+    const owed: { productId: string; quantity: number }[] = [];
     // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback: a thrown error partway through must give back only the lines actually taken, then rethrow, so no safe wrapper covers this
     try {
         for (const line of inLockOrder(lines)) {
-            const held = await applyTransition(takeReasonFor(line), line.productId, line.quantity, {
-                reference: orderId
-            });
-            if (!held) {
+            const parts = await takeLine(orderId, line);
+            if (!parts) {
                 /*
                  * Read the blocker back before unwinding, so the reported number is the one that
                  * actually refused this line, not what a pre-flight saw earlier. Read from this
@@ -159,7 +276,8 @@ export const reserveForOrder = async (
                 );
                 return { held: false, shortfalls: [shortfall] };
             }
-            taken.push(line);
+            taken.push(...parts);
+            owed.push(...owedPartsOf(line, parts));
         }
     } catch (error) {
         await giveBackAndDeleteHold(
@@ -171,5 +289,5 @@ export const reserveForOrder = async (
         throw error;
     }
 
-    return { held: true, expiresAt };
+    return { held: true, expiresAt, owed };
 };
