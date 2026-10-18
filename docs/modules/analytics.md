@@ -42,7 +42,7 @@ sequenceDiagram
 
 **The answer never says whether it was recorded.** A `204` follows a recorded event and a dropped
 one alike, so a page learns nothing about its own measurement. Consent is read the way every other
-emit reads it: the account's stored choice, or the `X-Analytics-Consent` header for a guest.
+emit reads it: a stored answer, yes or no, always wins; a caller with none (a guest, or an account never asked) takes the `X-Analytics-Consent` header.
 
 **The events belong to the modules that own them.** A module reporting an event ships two things: its
 request shape in `src/modules/<m>/openapi.browser-events.yaml`, and an `AppModule.browserEvents` entry

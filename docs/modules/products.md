@@ -135,7 +135,9 @@ stateDiagram-v2
     OnSale --> Removed: soft delete
     OffSale --> Removed: soft delete
     Hidden --> Removed: soft delete
-    Removed --> OnSale: restore
+    Removed --> OnSale: restore (as it was)
+    Removed --> OffSale: restore (as it was)
+    Removed --> Hidden: restore (as it was)
     Removed --> [*]: hard delete
     note right of OnSale
         stock decides in_stock / out_of_stock,

@@ -263,6 +263,19 @@ const continueWithCookie = (request: Request, response: Response, next: NextFunc
 const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
+ * The 401 for an `sk_...` key that does not resolve (unknown, revoked, expired, its minter gone).
+ * A key is a credential somebody chose to present, so a bad one is told so — as GitHub and Stripe
+ * do — instead of quietly browsing as anonymous. `WWW-Authenticate` per RFC 6750 §3.1.
+ * https://www.rfc-editor.org/rfc/rfc6750#section-3.1
+ *
+ * @param response - answered here
+ */
+const refuseInvalidApiKey = (response: Response): void => {
+    response.setHeader('WWW-Authenticate', 'Bearer error="invalid_token"');
+    rejectResponse(response, 401, cookieUnauthorizedErrors());
+};
+
+/**
  * Resolve `request.authContext` from a session credential when one is present, then continue. This
  * sits in front of routes that work for both anonymous and authenticated callers.
  *
@@ -273,9 +286,9 @@ const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
  * Outage:     a resolver failure meaning Mongo/Redis was unreachable goes to `next(error)`, so the
  *             global handler answers 503, never "your credentials are wrong" (RFC 9110 §15.5.2;
  *             see `infrastructure/http/errors.ts#isInfrastructureError`).
- * Credential: `sk_...` (resolved by `@modules/api-keys` when present) gets the same treatment,
- *             plus `apiKeyLimiter`'s 429 for one over its own request budget — refused here, not
- *             at the route.
+ * Credential: `sk_...` (resolved by `@modules/api-keys` when present) that does not resolve is
+ *             refused here with a 401 and `WWW-Authenticate: Bearer error="invalid_token"`; a
+ *             valid one also gets `apiKeyLimiter`'s 429 for one over its own request budget.
  *
  * @param request - populated with `authContext` (a session) or `caller`/`credentialId` (credential) on success
  * @param response - answers 429 on the credential path's own rate limit, 403 on a cookie-authenticated
@@ -309,7 +322,7 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
             .then((resolution) => {
                 if ('miss' in resolution) {
                     noteMiss(request, 'api_key', resolution.miss);
-                    next();
+                    refuseInvalidApiKey(response);
                     return;
                 }
                 request.caller = resolution.ok.caller;

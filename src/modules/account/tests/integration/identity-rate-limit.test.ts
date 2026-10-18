@@ -106,6 +106,25 @@ describe('credentialLimiters on a public route', () => {
         expect(await statusOf(badToken('203.0.113.77'))).toBe(401);
     });
 
+    it('does not count a blank email either: it names nobody, like an absent one', async () => {
+        const credentialLimiters = await withAccountRateLimits(
+            {
+                NODE_AUTH_RATE_LIMIT_MAX: '2',
+                NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '50',
+                NODE_AUTH_RATE_LIMIT_BLOCK_MAX: '50'
+            },
+            (module) => module.credentialLimiters
+        );
+
+        const app = appAnswering(401, true, ...credentialLimiters);
+        const blank = (ip: string) =>
+            supertest(app).post('/route').set('X-Forwarded-For', ip).send({ email: '' });
+
+        for (let attempt = 0; attempt < 5; attempt += 1)
+            expect(await statusOf(blank('203.0.113.5'))).toBe(401);
+        expect(await statusOf(blank('203.0.113.77'))).toBe(401);
+    });
+
     it('still keys an unauthenticated attempt on the email it names', async () => {
         const credentialLimiters = await withAccountRateLimits(
             {

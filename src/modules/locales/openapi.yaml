@@ -81,6 +81,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/LocaleCapabilitiesEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         post:
             tags: [Locales]
@@ -316,6 +317,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/LocaleMessagesEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # A malformed `app`: repeated, empty, or not an app id.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
