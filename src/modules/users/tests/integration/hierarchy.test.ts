@@ -18,6 +18,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseReject } from '@infrastructure/http/response';
 import { userService } from '@modules/users/services';
 import { createUser, userRepository } from '@modules/users/tests/factories';
+import { seedMembership } from '@modules/access/tests/factories';
 
 // The audit port is replaced, not spied on — see `tests/support/ports.ts`.
 jest.mock('@infrastructure/observability/audit', () =>
@@ -186,7 +187,7 @@ describe('the protection of staff accounts', () => {
 
     it('refuses every role but a role manager the platform operator’s account', async () => {
         const operator = await accountHolding('customer', 'operator-account');
-        await accessService.assignRole(operator.id, null, 'platform', 'operator');
+        await seedMembership(operator.id, null, 'platform', 'operator');
 
         const results = await Promise.all(
             ['support', 'moderator', 'admin'].map((role) =>
@@ -205,7 +206,7 @@ describe('the protection of staff accounts', () => {
 
     it('protects an account holding a role in either scope', async () => {
         const both = await accountHolding('support', 'both-roles');
-        await accessService.assignRole(both.id, null, 'platform', 'operator');
+        await seedMembership(both.id, null, 'platform', 'operator');
 
         const result = await userService.updateById(
             both.id,

@@ -28,6 +28,7 @@ import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/respo
 import { presentUser } from '../../presenter';
 import type { UserDocument } from '../../model';
 import { logger } from '@infrastructure/adapters/logger';
+import { seedMembership } from '@modules/access/tests/factories';
 
 // See `tests/support/ports.ts`: the namespace import above must resolve a plain `jest.fn()`,
 // not the real (non-configurable) export, for `observePort` to be able to clear and hand it out.
@@ -883,11 +884,11 @@ describe('userService.removeById', () => {
             const id = user._id.toString();
             // A second platform operator, so the platform row below is not itself the last one
             // administering the installation — this test is about the erasure gap, not that invariant.
-            await accessService.assignRole('another-operator', null, 'platform', 'operator');
+            await seedMembership('another-operator', null, 'platform', 'operator');
             // A tenant seat AND a platform seat — the erasure gap a single tenant-scoped revoke leaves
             // behind if the platform row is not swept too, surviving the user it points at.
-            await accessService.assignRole(id, DEPLOYMENT_TENANT_ID, 'tenant', 'support');
-            await accessService.assignRole(id, null, 'platform', 'operator');
+            await seedMembership(id, DEPLOYMENT_TENANT_ID, 'tenant', 'support');
+            await seedMembership(id, null, 'platform', 'operator');
             // This suite builds no app, so the erase hooks a deployment registers are not there:
             // install `access`'s own, the one under test.
             setPersonalDataErasers([accessService.eraseMemberships]);

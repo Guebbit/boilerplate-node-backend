@@ -13,7 +13,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { membershipRepository, tenantRepository } from '../repository';
 import type { MembershipDocument, TenantDocument } from '../model';
 import { accessAuditActions } from '../audit';
-import { validateGrant } from './grants';
+import { assertCanRevoke, validateGrant } from './grants';
 import { auditRoleAssigned, auditRoleChange, auditRoleRevoked } from './role-audit';
 
 /**
@@ -40,10 +40,11 @@ export const membershipIn = (
 /**
  * Give somebody a role in a place. See {@link validateGrant} for what this refuses.
  *
- * @param granter - the keys the person MAKING the grant holds, or `undefined` for a seeder, a
- *   migration or an operator on the console — the three callers with nobody to escalate from
+ * @param granter - the keys the person MAKING the grant holds. Required: there is no "skip the
+ *   check" value. A seeder or a test fixture with nobody to escalate from writes the membership
+ *   through this module's `factories.ts` instead.
  * @param context - the caller context to audit this grant (or its refusal) against. `undefined`
- *   for a seeder or system caller with no request to attribute it to. An
+ *   for a system caller with no request to attribute it to. An
  *   escalation attempt is audited as a FAILURE, not skipped: it is the single most useful entry
  *   this vocabulary can produce.
  * @param session - the caller's transaction, when the grant must commit or roll back with other
@@ -60,7 +61,7 @@ export const assignRole = (
     tenantId: string | null,
     scope: AuthorizationScope,
     roleName: string,
-    granter?: readonly string[],
+    granter: readonly string[],
     context?: CallerContext,
     session?: ClientSession
 ): Promise<MembershipDocument> => {
@@ -98,18 +99,20 @@ export const assignRole = (
  * Allowed even when it removes a place's last administrator, on purpose: an operator who does that
  * knows what they are doing, and a new administrator is one database write away.
  *
- * @param context - the caller to audit this revoke against, or `undefined` for a system caller
- *   with no request to attribute it to (e.g. the account-deletion cascade in `users/services/remove.ts`'s
- *   `remove`, which has no `CallerContext` to pass — see {@link assignRole}'s own docblock).
+ * Refused unless the caller is the system actor or holds `assign:Role` (see {@link assertCanRevoke}),
+ * and the refusal is audited as a failed revoke, like an escalation attempt on {@link assignRole}.
+ *
+ * @param context - the caller making the revoke, required: it is who is asked, and who is audited
  * @param session - the caller's transaction, when the revoke must commit or roll back with other
  *   writes. Given one, only failures are audited here; the caller records the success with
  *   {@link auditRoleRevoked} once it has committed.
+ * @throws AccessInvariantError as a REJECTION when the caller may not revoke
  */
 export const revokeRole = (
     userId: string,
     tenantId: string | null,
     scope: AuthorizationScope,
-    context?: CallerContext,
+    context: CallerContext,
     session?: ClientSession
 ): Promise<void> => {
     // Set once a membership is found, read by BOTH branches below — the failure branch needs it
@@ -117,16 +120,19 @@ export const revokeRole = (
     // `auditRoleChange`'s own docblock).
     let revokedRole: string | undefined;
 
-    const attempt = membershipIn(userId, tenantId, scope).then((membership) => {
-        if (!membership) {
-            return undefined;
-        }
-        revokedRole = membership.role;
+    const attempt = Promise.resolve()
+        .then(() => assertCanRevoke(context))
+        .then(() => membershipIn(userId, tenantId, scope))
+        .then((membership) => {
+            if (!membership) {
+                return undefined;
+            }
+            revokedRole = membership.role;
 
-        return membershipRepository.deleteById(membership._id, session).then(() => membership.role);
-    });
-
-    if (!context) return attempt.then(() => undefined);
+            return membershipRepository
+                .deleteById(membership._id, session)
+                .then(() => membership.role);
+        });
 
     return attempt.then(
         (role) => {
@@ -156,12 +162,14 @@ export const revokeRole = (
  * {@link membershipsOf} rather than assuming the single tenant row most callers care about, since
  * a platform operator can hold both at once. A hard delete does not use it: it erases through
  * {@link eraseMemberships}, inside its own transaction.
+ *
+ * @param context - the caller, asked once per role by {@link revokeRole}
  */
-export const revokeAllOf = (userId: string): Promise<void> =>
+export const revokeAllOf = (userId: string, context: CallerContext): Promise<void> =>
     membershipsOf(userId).then((memberships) =>
-        Promise.all(memberships.map((one) => revokeRole(userId, one.tenantId, one.scope))).then(
-            () => undefined
-        )
+        Promise.all(
+            memberships.map((one) => revokeRole(userId, one.tenantId, one.scope, context))
+        ).then(() => undefined)
     );
 
 /**

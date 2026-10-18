@@ -11,6 +11,7 @@
 
 import { accessService } from '@modules/access';
 import { seedPasswordsConfig } from './config';
+import { seedMembership } from '@modules/access/tests/factories';
 
 /** The demo owner's id — 24-char hex, and a real ObjectId: its leading bytes date it to February 2024. */
 export const SEED_ADMIN_ID = '65dd2bdb923652b7800fe180';
@@ -230,25 +231,15 @@ export const seedAccessModel = (): Promise<void> =>
         .bootstrapAccess('The Demo Shop')
         .then((tenant) =>
             Promise.all([
-                accessService.assignRole(SEED_ADMIN_ID, String(tenant._id), 'tenant', 'admin'),
-                accessService.assignRole(SEED_ADMIN_ID, null, 'platform', 'operator'),
-                accessService.assignRole(SEED_EDITOR_ID, String(tenant._id), 'tenant', 'editor'),
-                accessService.assignRole(
-                    SEED_MODERATOR_ID,
-                    String(tenant._id),
-                    'tenant',
-                    'moderator'
-                ),
-                accessService.assignRole(SEED_MANAGER_ID, String(tenant._id), 'tenant', 'manager'),
-                accessService.assignRole(
-                    SEED_WAREHOUSE_ID,
-                    String(tenant._id),
-                    'tenant',
-                    'warehouse'
-                ),
-                accessService.assignRole(SEED_SUPPORT_ID, String(tenant._id), 'tenant', 'support'),
+                seedMembership(SEED_ADMIN_ID, String(tenant._id), 'tenant', 'admin'),
+                seedMembership(SEED_ADMIN_ID, null, 'platform', 'operator'),
+                seedMembership(SEED_EDITOR_ID, String(tenant._id), 'tenant', 'editor'),
+                seedMembership(SEED_MODERATOR_ID, String(tenant._id), 'tenant', 'moderator'),
+                seedMembership(SEED_MANAGER_ID, String(tenant._id), 'tenant', 'manager'),
+                seedMembership(SEED_WAREHOUSE_ID, String(tenant._id), 'tenant', 'warehouse'),
+                seedMembership(SEED_SUPPORT_ID, String(tenant._id), 'tenant', 'support'),
                 // Platform role only: no shop membership, so it holds no shop's keys.
-                accessService.assignRole(SEED_OPERATOR_ID, null, 'platform', 'operator')
+                seedMembership(SEED_OPERATOR_ID, null, 'platform', 'operator')
             ])
         )
         .then(() => undefined);

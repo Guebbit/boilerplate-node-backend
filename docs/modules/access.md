@@ -78,6 +78,12 @@ Given a session, `assignRole` and `revokeRole` audit only their failures; the su
 with `auditRoleAssigned` / `auditRoleRevoked` once the caller has committed, and a grant refused before the account even
 exists is audited by `grantRefusalAudited`, which answers the HTTP path with the rule that failed: a granter without `assign:Role` gets `403 ROLE_MANAGEMENT_REQUIRED` (judged first, so it learns nothing about role names), an unknown or never-granted name a translated `422` on `role`.
 
+Both writers ask who is acting, and neither has a "skip the check" value: `assignRole` takes the
+granter's keys as a required argument, and `revokeRole` takes the caller and refuses unless it is the
+system actor or holds `assign:Role` (audited as a failed revoke). A seeder or a test fixture, which
+has nobody to escalate from, writes its membership through `tests/factories.ts`'s `seedMembership`
+instead, so an omitted argument can never mean "no check".
+
 Every invariant here is a refusal, not a comment: a granter cannot hand over a role they do not
 themselves hold, and `customer`, `unverified` and `guest` are not roles at all — an audience is
 computed from the session and `verifiedAt` (see

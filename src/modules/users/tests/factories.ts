@@ -11,11 +11,11 @@
 
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
-import { accessService } from '@modules/access';
 import { isAudienceName } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { makeUser } from '../factories';
 import type { UserOverrides } from '../factories';
+import { seedMembership } from '@modules/access/tests/factories';
 
 export { makeUser, PLAIN_PASSWORD, type UserOverrides } from '../factories';
 
@@ -62,9 +62,7 @@ export const createUser = (overrides: UserOverrides = {}, role?: string): Promis
         .then((user) =>
             role === undefined || isAudienceName(role)
                 ? user
-                : accessService
-                      .assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', role)
-                      .then(() => user)
+                : seedMembership(user.id, DEPLOYMENT_TENANT_ID, 'tenant', role).then(() => user)
         );
 
 /**
@@ -86,6 +84,4 @@ export const createAdminUser = (overrides: UserOverrides = {}): Promise<UserDocu
             ...overrides
         },
         'admin'
-    ).then((user) =>
-        accessService.assignRole(user.id, null, 'platform', 'operator').then(() => user)
-    );
+    ).then((user) => seedMembership(user.id, null, 'platform', 'operator').then(() => user));

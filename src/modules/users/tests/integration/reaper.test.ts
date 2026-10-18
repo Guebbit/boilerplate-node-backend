@@ -7,12 +7,12 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { accessService } from '@modules/access';
 import { userModel } from '../../model';
 import { userService } from '@modules/users/services';
 import { createUser } from '@modules/users/tests/factories';
 import { systemCallerContext } from '@kernel/permissions';
 import { callerContextAs } from '@tests/callers';
+import { seedMembership } from '@modules/access/tests/factories';
 
 setupTestDb();
 
@@ -38,7 +38,7 @@ const makeInactive = (id: string, extra: Record<string, unknown> = {}) =>
 /** An inactive account holding `role`, plus a platform-only operator when asked. */
 const inactiveAccount = async (name: string, role?: string, platformRole?: string) => {
     const user = await createUser({ email: `${name}@reaper.test`, username: name }, role);
-    if (platformRole) await accessService.assignRole(user.id, null, 'platform', platformRole);
+    if (platformRole) await seedMembership(user.id, null, 'platform', platformRole);
     await makeInactive(user.id);
 
     return user;

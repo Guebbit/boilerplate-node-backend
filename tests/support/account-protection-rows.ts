@@ -9,9 +9,9 @@
  * {@link UNOWNED_WRITES}, and the sweep fails until it is.
  */
 
-import { accessService } from '@modules/access';
 import { createUser } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
+import { seedMembership } from '@modules/access/tests/factories';
 
 /** A person the request is aimed at: their account and the staff role they hold, if any. */
 export interface Owner {
@@ -99,7 +99,7 @@ export const createOwner = async (
         { email: `${name}@owners.test`, username: name, verifiedAt: new Date() },
         role ?? undefined
     );
-    if (platformRole) await accessService.assignRole(user.id, null, 'platform', platformRole);
+    if (platformRole) await seedMembership(user.id, null, 'platform', platformRole);
 
     return { user, role };
 };

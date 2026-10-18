@@ -26,6 +26,7 @@ import { registerModules } from '@kernel/registry';
 import { resetDomainEvents, emitDomainEvent } from '@kernel/events';
 import { ACCOUNT_SESSIONS_REVOKED } from '@modules/account';
 import { enabledModules } from '../../../../modules';
+import { seedMembership } from '@modules/access/tests/factories';
 
 /**
  * Every mail the app queued, newest last. Named `mock*` because `jest.mock` is hoisted above the
@@ -71,9 +72,7 @@ const createRealUser = (id: string) =>
  * until an authenticator app is armed, and a key borrows the minter's staff rules only while one is.
  */
 const makeArmedAdmin = (userId: string) =>
-    accessService
-        .assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin')
-        .then(() => armAuthenticator(userId));
+    seedMembership(userId, TEST_TENANT_ID, 'tenant', 'admin').then(() => armAuthenticator(userId));
 
 /** The `CallerContext` a mint call needs — a real user's id, with whatever permissions they currently hold. */
 const contextFor = (userId: string, permissions: readonly string[]): TenantCallerContext => ({
@@ -195,7 +194,7 @@ describe('an own-rows rule is not a staff rule', () => {
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
 
-        await accessService.revokeRole(userId, TEST_TENANT_ID, 'tenant');
+        await accessService.revokeRole(userId, TEST_TENANT_ID, 'tenant', callerContextAs('admin'));
 
         const resolved = await credentialOf(minted.data.secret);
         expect(resolved?.caller.permissions).not.toContain('display:Order');
@@ -223,7 +222,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         expect(beforeDemotion?.caller.permissions).toContain('read:WebhookSubscription');
 
         // `customer` holds none of the api-keys keys — the demotion this test is about.
-        await accessService.revokeRole(userId, TEST_TENANT_ID, 'tenant');
+        await accessService.revokeRole(userId, TEST_TENANT_ID, 'tenant', callerContextAs('admin'));
 
         const afterDemotion = await credentialOf(minted.data.secret);
         // Still a real, resolvable credential (not revoked, not expired) — just holding nothing
@@ -319,7 +318,7 @@ describe('revoke across administrators', () => {
     it('lets an administrator revoke another administrator’s key — revoking only takes access away', async () => {
         const minter = await createRealUser('admin-minter');
         const minterId = String(minter._id);
-        await accessService.assignRole(minterId, TEST_TENANT_ID, 'tenant', 'admin');
+        await seedMembership(minterId, TEST_TENANT_ID, 'tenant', 'admin');
         const minted = await mint(
             { name: 'leaked', permissions: ['read:WebhookSubscription'], expiresAt: IN_A_WEEK },
             contextFor(minterId, keysInScope('admin', 'tenant', 'customer'))
@@ -327,7 +326,7 @@ describe('revoke across administrators', () => {
         if (!minted.data) throw new Error('setup failed: mint was refused');
         const other = await createRealUser('admin-revoker');
         const otherId = String(other._id);
-        await accessService.assignRole(otherId, TEST_TENANT_ID, 'tenant', 'admin');
+        await seedMembership(otherId, TEST_TENANT_ID, 'tenant', 'admin');
 
         const result = await revoke(
             minted.data.id,

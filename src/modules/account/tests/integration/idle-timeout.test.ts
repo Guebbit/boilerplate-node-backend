@@ -11,8 +11,8 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { sessionModel } from '../../model';
 import { sessionRowsOf } from '../factories';
 import { cookieHeader } from '@tests/cookies';
-import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { seedMembership } from '@modules/access/tests/factories';
 
 setupTestDb();
 
@@ -230,7 +230,7 @@ describe.each(MODES)('the staff lifetime cap in %s mode', (mode) => {
         await signedInFor(user.id, CAP + 60);
         await api().get('/account').set('Authorization', bearer).expect(200);
 
-        await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'editor');
+        await seedMembership(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'editor');
         const response = await api().get('/account').set('Authorization', bearer);
 
         expect(response.status).toBe(401);

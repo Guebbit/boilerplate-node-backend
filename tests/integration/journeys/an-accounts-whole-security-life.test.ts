@@ -11,7 +11,6 @@
  */
 import '@tests/contract';
 import { ListAuditEntries200Response } from '@api/schemas.zod';
-import { accessService } from '@modules/access';
 import { settleInlineExports } from '@modules/account/services/export';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -23,6 +22,7 @@ import { advanceDate, freezeDate } from '@tests/clock';
 import { runJob } from '@tests/drain';
 import { mailsTo, useOutboxMail, waitForMail } from '@tests/journey-mail';
 import { codeFor } from '@tests/totp';
+import { seedMembership } from '@modules/access/tests/factories';
 
 setupTestDb();
 
@@ -83,12 +83,7 @@ it('keeps the account safe from signup to the last lapsed link', async () => {
         .expect(201);
     const verification = await waitForMail(ACCOUNT.email, 'account.verify-request');
     await api().post('/account/verify-confirm').send({ token: verification.token }).expect(200);
-    await accessService.assignRole(
-        String(signup.body.data.id),
-        DEPLOYMENT_TENANT_ID,
-        'tenant',
-        'admin'
-    );
+    await seedMembership(String(signup.body.data.id), DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
 
     // Arm TOTP. Arming ends the session that did it, so the account signs in again, with a code.
     // The role came after the signup, so the account has no app yet: it enrols the real way.
