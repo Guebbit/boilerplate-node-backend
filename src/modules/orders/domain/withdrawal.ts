@@ -74,12 +74,20 @@ export const withdrawUntilFrom = (start: Date, days: number): Date => {
 const CONFORMITY_YEARS = 2;
 
 /**
+ * Days of margin the guarantee carries past its two years. Regulation 1182/71 Art. 3(4) moves a
+ * period that ends on a weekend or holiday to the next working day; seven days cover the longest
+ * such run, and the guarantee is a minimum, so offering more is never wrong.
+ */
+const CONFORMITY_MARGIN_DAYS = 7;
+
+/**
  * When the legal guarantee of conformity ends, counted from delivery: two calendar years, to the
- * end of the UTC day AFTER that date. The extra day is the margin the withdrawal window carries
- * too: a delivery marked between local midnight and the zone's UTC offset still gets its two
- * full years, and the guarantee cannot be waived downward (Directive 2019/771 Art. 21). A defect or a wrong item is the buyer's right until then, whatever the
- * shop's own (shorter) withdrawal period says — and made-to-order goods are covered too, since
- * Art. 16 CRD only takes the right of WITHDRAWAL away.
+ * end of the UTC day {@link CONFORMITY_MARGIN_DAYS} after that date. The margin absorbs both the
+ * UTC offset (a delivery marked just after local midnight still gets its two full years) and the
+ * weekend roll-over, and the guarantee cannot be waived downward (Directive 2019/771 Art. 21). A
+ * defect or a wrong item is the buyer's right until then, whatever the shop's own (shorter)
+ * withdrawal period says — and made-to-order goods are covered too, since Art. 16 CRD only takes
+ * the right of WITHDRAWAL away.
  * @param deliveredAt - when the goods arrived
  * @returns the last instant a defect or wrong item can still be reported
  */
@@ -88,7 +96,7 @@ export const conformityUntilFrom = (deliveredAt: Date): Date =>
         Date.UTC(
             deliveredAt.getUTCFullYear() + CONFORMITY_YEARS,
             deliveredAt.getUTCMonth(),
-            deliveredAt.getUTCDate() + 2
+            deliveredAt.getUTCDate() + CONFORMITY_MARGIN_DAYS + 1
         ) - 1
     );
 

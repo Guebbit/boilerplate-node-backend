@@ -157,7 +157,7 @@ describe('markDelivered', () => {
 
         const updated = await markDelivered(String(order._id), new Date('2026-03-01T10:00:00Z'));
 
-        expect(updated?.conformityUntil?.toISOString()).toBe('2028-03-02T23:59:59.999Z');
+        expect(updated?.conformityUntil?.toISOString()).toBe('2028-03-08T23:59:59.999Z');
     });
 
     it('honours the shortest period a deployment may offer', () =>
