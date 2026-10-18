@@ -11,6 +11,7 @@ import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
 import { isBuyer, isExcludedFromWithdrawal } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
+import { OrderStatus } from '@types';
 import type { AuthContext } from '@types';
 import type { ProductQuantity } from '../domain';
 
@@ -20,8 +21,10 @@ export type CancelRefusal = 'window-closed' | 'excluded' | 'no-key';
 /**
  * The first reason this caller may not cancel this remainder, or `undefined` when they may.
  *
- * The order's buyer exercises their withdrawal (within its window, never on goods Art. 16
- * excludes), even when they are staff. Anyone else needs the refund key (`create:Refund`).
+ * The order's buyer exercises their withdrawal within its window, even when they are staff. A group
+ * holding goods Art. 16 excludes (made to order) may only go while the shop has not started on the
+ * order — `paid`; once it is `processing` that group is the shop's work and stays. Anyone else
+ * needs the refund key (`create:Refund`).
  *
  * @param order - the order
  * @param authContext - the caller
@@ -38,6 +41,10 @@ export const cancelRefusalOf = (
             : 'no-key';
 
     if (order.withdrawUntil && Date.now() > order.withdrawUntil.getTime()) return 'window-closed';
+
+    const shopHasStarted =
+        order.status !== OrderStatus.paid && order.status !== OrderStatus.pending;
+    if (!shopHasStarted) return undefined;
 
     const excluded = new Set(
         order.items

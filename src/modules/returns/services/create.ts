@@ -21,9 +21,15 @@ import { generateReject } from '@infrastructure/http/response';
 import type { ClientSession } from 'mongoose';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { nudgeOutbox } from '@kernel/outbox';
-import { orderService, isBeforeDispatch, isExcludedFromWithdrawal } from '@modules/orders';
+import {
+    orderService,
+    isBeforeDispatch,
+    isExcludedFromWithdrawal,
+    withdrawalRefusalOf
+} from '@modules/orders';
 import { deliveryService } from '@modules/delivery';
 import type { OrderDocument } from '@modules/orders';
+import { WithdrawBlockedReason } from '@types';
 import type { AuthContext, CallerContext } from '@types';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
@@ -200,9 +206,10 @@ const openReturn = (
         if (!isReasonOpen(order, input.reason, new Date()))
             return windowClosed(isGuaranteeReason(input.reason));
 
-        // Art. 16: goods the product marks as excluded cannot be withdrawn from. A cancel before
-        // dispatch takes the whole order, so one such line keeps the whole withdrawal out. A defect
-        // or a wrong item is the guarantee, not the withdrawal: made-to-order goods are covered.
+        // Art. 16: goods the product marks as excluded cannot be withdrawn from. Before dispatch the
+        // withdrawal takes the eligible goods (`withdraw.ts`), so only an order made wholly of
+        // excluded goods is refused. A defect or a wrong item is the guarantee, not the
+        // withdrawal: made-to-order goods are covered.
         const excluded = new Set(
             isGuaranteeReason(input.reason)
                 ? []
@@ -211,7 +218,7 @@ const openReturn = (
                       .map((item) => String(item.product._id))
         );
         if (input.reason === 'withdrawal' && isBeforeDispatch(order))
-            return excluded.size > 0
+            return withdrawalRefusalOf(order, new Date()) === WithdrawBlockedReason.all_excluded
                 ? badLines('excluded')
                 : withdrawBeforeDispatch(order, input, authContext, context, () =>
                       openReturn(input, authContext, context)

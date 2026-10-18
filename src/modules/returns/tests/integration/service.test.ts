@@ -14,7 +14,6 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import {
     createOrder,
-    forceOrderStatus,
     readOrder,
     setConformityUntil,
     setWithdrawUntil,
@@ -267,6 +266,17 @@ const orderWithExcluded = async (carriedTo: 'delivered' | null = 'delivered') =>
     mockEnqueueEmail.mockClear();
     await setWithdrawUntil(orderId, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
     return { user, shirt, engraved, orderId };
+};
+
+/** A paid order made wholly of one excluded engraved mug, nothing shipped. */
+const onlyExcludedOrder = async () => {
+    customers += 1;
+    const user = await createUser({ email: `customer-${customers}@example.com` });
+    const engraved = await createProduct({ title: 'Engraved mug', price: 10, noWithdrawal: true });
+    const order = await createOrder(user, [toOrderItem(engraved, 1)], {
+        status: OrderStatus.paid
+    });
+    return { user, orderId: String(order._id) };
 };
 
 describe('goods excluded from the right of withdrawal (Art. 16)', () => {
@@ -927,10 +937,9 @@ describe('what a refusal says', () => {
         });
     });
 
-    it('says the goods are excluded, whether the lines are named or a whole order is withdrawn from', async () => {
+    it('says the goods are excluded, whether the lines are named or a whole order of them is withdrawn from', async () => {
         const named = await orderWithExcluded();
-        const whole = await orderWithExcluded(null);
-        await forceOrderStatus(whole.orderId, OrderStatus.paid);
+        const whole = await onlyExcludedOrder();
         const excludedMessage = 'Some of these goods are excluded from the right of withdrawal.';
 
         const byLine = await returnService.createReturn(

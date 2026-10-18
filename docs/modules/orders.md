@@ -332,7 +332,8 @@ The per-status half (rows 1 and 4) is the `fulfillment` trait in [the status tra
 answer: the filter and the value a row serializes with cannot disagree, and a unit test holds them to
 each other.
 
-The summary is also why `cancel` and `withdraw` read the order, not its status: a whole-order cancel
+The summary is also why `cancel` and `withdraw` read the order, not its status (and `withdrawBlocked`
+carries the reason a withdrawal is refused, so a client disables the button instead of hiding it): a whole-order cancel
 refuses once any shipment left (`actions.cancel` is `false`, and the write itself is conditional on
 `fulfillment.shipped`), and `isBeforeDispatch` reads `fulfillment.shipped`, not `processing` — a
 withdrawal after shipment 1 would otherwise refund goods the buyer already holds. What has not shipped

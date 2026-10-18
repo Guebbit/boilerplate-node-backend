@@ -33,6 +33,12 @@ export interface GroupableLine {
     preorder?: boolean;
     /** Frozen at checkout: when a preorder line is expected. Only meaningful with `preorder`. */
     releaseDate?: Date;
+    /**
+     * Frozen at checkout: the line is goods Art. 16 CRD takes the right of withdrawal from (made to
+     * order, perishable). Such a line gets a fulfillment order of its own, so the buyer can cancel
+     * the rest without it and the shop's work on it is never cancelled by accident.
+     */
+    noWithdrawal?: boolean;
 }
 
 /** A fulfillment order as the grouping rule makes it, before it is stored. */
@@ -97,15 +103,19 @@ const promisedAt = (group: readonly GroupableLine[]): Date =>
 /**
  * Split an order's lines into fulfillment orders — the rule that runs when an order is paid.
  *
- * - every line that is not a preorder goes in ONE fulfillment order, `open`, `physical` if any of
- *   its lines ships and `digital` otherwise (digital lines of a mixed order ship with the
- *   physical ones);
- * - preorder lines get one fulfillment order per distinct release day, `on_hold` for
- *   `awaiting_stock`, with `agreedAt` and `expectedAt` both the group's promised instant (the
- *   latest release date among its lines).
+ * - every line that is neither a preorder nor `noWithdrawal` goes in ONE fulfillment order, `open`,
+ *   `physical` if any of its lines ships and `digital` otherwise (digital lines of a mixed order
+ *   ship with the physical ones);
+ * - the `noWithdrawal` lines that ship now get one `open` fulfillment order of their own;
+ * - preorder lines get one fulfillment order per distinct release day and per `noWithdrawal` value,
+ *   `on_hold` for `awaiting_stock`, with `agreedAt` and `expectedAt` both the group's promised
+ *   instant (the latest release date among its lines).
  *
- * Numbered 1.. in that order: the one that ships now first, then the preorders by date. A preorder
- * line without a date is treated as an ordinary line: with nothing to wait for it cannot be held.
+ * Numbered 1.. in that order: the ordinary group that ships now first, then the made-to-order one,
+ * then the preorders by date. A preorder line without a date is treated as an ordinary line: with
+ * nothing to wait for it cannot be held. Keeping the made-to-order lines apart is what lets the
+ * buyer cancel the ordinary rest on its own (S4 of the Q-W2 decision) while the shop's work on the
+ * bespoke goods stands.
  *
  * @param lines - the order's lines with the facts frozen on them
  * @returns at least one fulfillment order for any non-empty order
@@ -113,23 +123,30 @@ const promisedAt = (group: readonly GroupableLine[]): Date =>
 export const groupOrderLines = (lines: readonly GroupableLine[]): FulfillmentOrderDraft[] => {
     const waiting = lines.filter(({ preorder, releaseDate }) => preorder === true && releaseDate);
     const now = lines.filter((line) => !waiting.includes(line));
+    const nowOrdinary = now.filter(({ noWithdrawal }) => noWithdrawal !== true);
+    const nowBespoke = now.filter(({ noWithdrawal }) => noWithdrawal === true);
 
+    // Key: the release day, then 0 for ordinary and 1 for bespoke, so a day's ordinary group sorts first.
     const byDay = new Map<string, GroupableLine[]>();
     for (const line of waiting) {
-        const key = dayKey(line.releaseDate!);
+        const key = `${dayKey(line.releaseDate!)}|${line.noWithdrawal === true ? 1 : 0}`;
         byDay.set(key, [...(byDay.get(key) ?? []), line]);
     }
 
-    const drafts: Omit<FulfillmentOrderDraft, 'number'>[] = [
-        ...(now.length > 0
+    const openGroup = (group: readonly GroupableLine[]): Omit<FulfillmentOrderDraft, 'number'>[] =>
+        group.length > 0
             ? [
                   {
-                      kind: kindOf(now),
+                      kind: kindOf(group),
                       status: FulfillmentOrderStatus.open,
-                      lines: now.map((line) => toFulfillmentLine(line))
+                      lines: group.map((line) => toFulfillmentLine(line))
                   }
               ]
-            : []),
+            : [];
+
+    const drafts: Omit<FulfillmentOrderDraft, 'number'>[] = [
+        ...openGroup(nowOrdinary),
+        ...openGroup(nowBespoke),
         ...[...byDay]
             .toSorted(([a], [b]) => a.localeCompare(b))
             .map(([, group]) => ({

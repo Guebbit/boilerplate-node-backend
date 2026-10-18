@@ -108,8 +108,11 @@ says the money went back.
 
 ## The withdrawal button
 
-The button is **server-driven**: `OrderActions.withdraw` says whether to show it and
-`OrderActions.withdrawUntil` says until when. `OrderActions`' own description states the doctrine — a
+The button is **server-driven**: `OrderActions.withdraw` says whether it is offered,
+`OrderActions.withdrawBlocked` says why not (`all_excluded`, `window_closed` or `nothing_left`, the
+first that applies, from `withdrawalRefusalOf` in `orders/domain/withdrawal.ts` — the same function
+the door asks, so the two cannot disagree) and `OrderActions.withdrawUntil` says until when. A
+client shows the button **disabled with the reason**, never hidden. `OrderActions`' own description states the doctrine — a
 client must not re-implement the lifecycle, because "a second copy in a separately deployed client is
 how the two come to disagree". The frontend never counts the days. The clock itself is
 [`orders`'](./orders.md#the-withdrawal-window).
@@ -205,9 +208,17 @@ so changing the product later cannot rewrite what a customer was sold.
 - A withdrawal that names no lines leaves excluded lines out of what comes back.
 - A `withdrawal` or `other` return that names an excluded line is refused (422,
   `RETURN_LINES_INVALID`); a `defective` or `wrong_item` one is not ([the two deadlines](#the-two-deadlines)).
-- A withdrawal **before dispatch** takes the whole order, so one excluded line keeps it out (422); the
-  ordinary cancel is the shop's own policy and is unaffected.
-- `OrderActions.withdraw` is `false` on an order made only of excluded goods.
+- A withdrawal **before dispatch** takes the eligible goods; only an order made wholly of excluded
+  goods is refused (422, `all_excluded` on the button). The ordinary cancel is the shop's own policy
+  and is unaffected.
+    - While the order is `pending` or `paid` the shop has not started, so the whole order is cancelled,
+      the excluded line included (the buyer re-orders what they still want).
+    - Once it is `processing` the excluded line is the shop's work: only the other shipment groups are
+      cancelled (a `kind: cancellation` return each) and the made-to-order group stays, with the order.
+    - An edge the flag cannot see: when the eligible groups are already cancelled, the button still
+      shows (the order's lines are frozen) and a second withdrawal answers `RETURN_NOTHING_TO_CANCEL`.
+- `OrderActions.withdraw` is `false` on an order made only of excluded goods (`withdrawBlocked:
+all_excluded`).
 - Excluded units never come back, so they never keep the order from reading `returned` — and a
   return that leaves them behind is never a "full" return, so delivery is not refunded with it.
 
@@ -368,7 +379,12 @@ re-authenticated. The order is read as the caller may read it: a stranger's orde
 
 Refused: `RETURN_CANCELLATION_INVALID` (422) — no `fulfillmentOrderId`, `lines` sent, a return that
 names one, or a reason that does not fit the caller (above); `RETURN_NOTHING_TO_CANCEL` (409) —
-nothing has shipped (cancel the order instead), or nothing is left on that fulfillment order.
+nothing is left on that fulfillment order, or nothing has shipped and no other fulfillment order has
+units (that one is the whole order: cancel the order instead).
+
+**Before anything ships**, a fulfillment order may be cancelled alone as long as another stays live.
+Made-to-order goods have a group of their own (`delivery`'s [grouping rule](./delivery.md#the-grouping-rule)),
+which the buyer may cancel while the order is `paid` and not once it is `processing`.
 
 ### A wait nobody answered
 
@@ -423,7 +439,8 @@ has **shipped** and is not already coming back, empty while `reasons` is, with e
 `withdrawable` flag (false for Art. 16 goods, which only a defect or a wrong item may name); `cancellable` lists each fulfillment order with a
 remainder and the exact refund cancelling it would owe (the delivery included when it takes the last
 unit), each with `cancel`: whether THIS caller may cancel it. The buyer may inside the window and
-when the remainder holds no excluded goods; anyone else when they hold the refund key. It is the
+unless the remainder holds excluded goods and the shop has started on the order; anyone else when
+they hold the refund key. It is the
 door's own rule (`cancelRefusalOf`), so a button is never offered that the door then refuses. The
 owner reads their own order's, staff holding `read:Return` any. The cancel recomputes
 under the lock, so what was quoted is what is refunded unless something moved in between.

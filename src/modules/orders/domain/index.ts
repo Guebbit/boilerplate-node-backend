@@ -47,6 +47,7 @@ export {
     deliveryClockFor,
     isExcludedFromWithdrawal,
     withdrawUntilFrom,
+    withdrawalRefusalOf,
     withdrawalStartFor
 } from './withdrawal';
 export type {

@@ -29,6 +29,7 @@ const groupableLinesOf = (order: OrderDocument): GroupableLine[] =>
         title: item.product.title,
         quantity: item.quantity,
         ships: isShippedItem(item),
+        ...(item.product.noWithdrawal ? { noWithdrawal: true } : {}),
         ...(item.product.preorder ? { preorder: true } : {}),
         ...(item.product.releaseDate ? { releaseDate: item.product.releaseDate } : {})
     }));

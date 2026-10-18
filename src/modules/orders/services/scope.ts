@@ -20,6 +20,7 @@ import {
     isPayable,
     canCorrectAddress,
     canWithdraw,
+    withdrawalRefusalOf,
     shipsAwaitedStock,
     isBuyer
 } from '../domain';
@@ -181,25 +182,28 @@ const holdsCheckout = (authContext: AuthContext | undefined): boolean =>
 
 /**
  * The withdrawal button, decided here so no client counts days: offered to the order's own buyer
- * while the order is withdrawable and the window, if it has started, is still open. An operator
- * reading someone else's order is not offered it — the right is the consumer's to exercise.
- * `withdrawUntil` rides along only once the clock has started, so a client can say "until 12 June"
- * without ever computing it.
+ * while nothing refuses it (`withdrawalRefusalOf`: a made-to-order-only order, a closed window, a
+ * return that took everything back). The refusal rides along as `withdrawBlocked` so a client shows
+ * the button disabled with the reason instead of hiding it. An operator reading someone else's
+ * order is not offered it — the right is the consumer's to exercise. `withdrawUntil` rides along
+ * only once the clock has started, so a client can say "until 12 June" without ever computing it.
  * @param order - the order being served
  * @param authContext - the caller, or `undefined` for no request behind this read
  */
 const withdrawalActions = (
     order: OrderDocument,
     authContext: AuthContext | undefined
-): Pick<OrderActions, 'withdraw' | 'withdrawUntil'> => ({
-    // Nothing left to send back once every unit has: `returnStatus` is the projection `returns`
-    // stamps, the only way this module can know.
-    withdraw:
-        isBuyer(order, authContext) &&
-        canWithdraw(order, new Date()) &&
-        order.returnStatus !== 'returned',
-    ...(order.withdrawUntil ? { withdrawUntil: order.withdrawUntil.toISOString() } : {})
-});
+): Pick<OrderActions, 'withdraw' | 'withdrawBlocked' | 'withdrawUntil'> => {
+    const buyer = isBuyer(order, authContext);
+    const now = new Date();
+    const refusal = buyer ? withdrawalRefusalOf(order, now) : undefined;
+
+    return {
+        withdraw: buyer && canWithdraw(order, now),
+        ...(refusal ? { withdrawBlocked: refusal } : {}),
+        ...(order.withdrawUntil ? { withdrawUntil: order.withdrawUntil.toISOString() } : {})
+    };
+};
 
 /**
  * The actions as the caller's standing allows them: the status-derived moves for the order's buyer

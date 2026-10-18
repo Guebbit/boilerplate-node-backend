@@ -103,6 +103,43 @@ describe('groupOrderLines', () => {
         expect(drafts[2].agreedAt).toEqual(new Date('2026-12-20T00:00:00Z'));
     });
 
+    it('gives made-to-order lines a fulfillment order of their own, after the ordinary one', () => {
+        const drafts = groupOrderLines([
+            groupable('engraved', 1, { noWithdrawal: true }),
+            groupable('shirt', 2)
+        ]);
+
+        expect(drafts.map(({ number, status }) => [number, status])).toEqual([
+            [1, 'open'],
+            [2, 'open']
+        ]);
+        expect(drafts[0].lines.map(({ productId }) => productId)).toEqual(['shirt']);
+        expect(drafts[1].lines.map(({ productId }) => productId)).toEqual(['engraved']);
+    });
+
+    it('makes one fulfillment order of an order made only of made-to-order lines', () => {
+        const drafts = groupOrderLines([
+            groupable('a', 1, { noWithdrawal: true }),
+            groupable('b', 1, { noWithdrawal: true })
+        ]);
+
+        expect(drafts).toHaveLength(1);
+        expect(drafts[0].lines).toHaveLength(2);
+    });
+
+    it('keeps a release day’s made-to-order preorder apart from its ordinary one', () => {
+        const releaseDate = new Date('2026-12-12T00:00:00Z');
+        const drafts = groupOrderLines([
+            groupable('bespoke', 1, { preorder: true, releaseDate, noWithdrawal: true }),
+            groupable('plain', 1, { preorder: true, releaseDate })
+        ]);
+
+        expect(drafts.map(({ lines }) => lines.map(({ productId }) => productId))).toEqual([
+            ['plain'],
+            ['bespoke']
+        ]);
+    });
+
     it('numbers an order of preorders alone from 1, with no open fulfillment order', () => {
         const drafts = groupOrderLines([
             groupable('a', 1, { preorder: true, releaseDate: new Date('2026-12-12T00:00:00Z') })

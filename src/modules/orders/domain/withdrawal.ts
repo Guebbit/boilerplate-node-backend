@@ -9,7 +9,7 @@
  */
 
 import { DAY_MS } from '@domain-primitives/time';
-import { OrderStatus } from '@types';
+import { OrderStatus, WithdrawBlockedReason } from '@types';
 import type { FulfillmentSummary } from './fulfillment';
 import { ORDER_STATUS_TRAITS } from './status-traits';
 import { isDigitalOnlyOrder, type ShippableLineCandidate } from './rules';
@@ -146,22 +146,49 @@ export interface WithdrawableLine {
 export const isExcludedFromWithdrawal = (line: WithdrawableLine): boolean =>
     line.product?.noWithdrawal === true;
 
-/** What {@link canWithdraw} needs to know about an order. */
+/** What {@link withdrawalRefusalOf} and {@link canWithdraw} need to know about an order. */
 export interface WithdrawalCandidate {
     status: OrderStatus;
     /** The lines; when given, an order made only of excluded goods offers no withdrawal. */
     items?: readonly WithdrawableLine[];
     /** Frozen when the clock started; absent while it has not. */
     withdrawUntil?: Date;
+    /** What `returns` last stamped; `returned` means every unit is already back. */
+    returnStatus?: string | null | undefined;
 }
 
 /**
- * Whether the withdrawal button is offered: the order is in a withdrawable status and the window,
- * if it has started, is still open.
- * @param order - the order's status and its frozen deadline
+ * The first reason a withdrawal is refused on an order that is otherwise in a withdrawable status,
+ * or `undefined` when it is open. The one answer the button (`OrderActions.withdrawBlocked`) and
+ * the door (`POST /returns`) both read, so they cannot disagree:
+ *
+ * | Reason | When |
+ * | --- | --- |
+ * | `all_excluded` | every line is goods Art. 16 takes the right away from |
+ * | `window_closed` | the frozen period ended |
+ * | `nothing_left` | every unit is already back with the shop |
+ *
+ * A status that offers no withdrawal (cancelled) has no reason: there is no button to explain.
+ * @param order - the order's status, lines, frozen deadline and return status
+ * @param now - the moment being asked about
+ */
+export const withdrawalRefusalOf = (
+    order: WithdrawalCandidate,
+    now: Date
+): WithdrawBlockedReason | undefined => {
+    if (!ORDER_STATUS_TRAITS[order.status].withdrawable) return undefined;
+    if (order.items?.every((line) => isExcludedFromWithdrawal(line)))
+        return WithdrawBlockedReason.all_excluded;
+    if (order.withdrawUntil !== undefined && now.getTime() > order.withdrawUntil.getTime())
+        return WithdrawBlockedReason.window_closed;
+    return order.returnStatus === 'returned' ? WithdrawBlockedReason.nothing_left : undefined;
+};
+
+/**
+ * Whether the withdrawal button is offered: the order is in a withdrawable status and nothing
+ * refuses it ({@link withdrawalRefusalOf}).
+ * @param order - the order's status, lines, frozen deadline and return status
  * @param now - the moment being asked about
  */
 export const canWithdraw = (order: WithdrawalCandidate, now: Date): boolean =>
-    ORDER_STATUS_TRAITS[order.status].withdrawable &&
-    (order.items === undefined || order.items.some((line) => !isExcludedFromWithdrawal(line))) &&
-    (order.withdrawUntil === undefined || now.getTime() <= order.withdrawUntil.getTime());
+    ORDER_STATUS_TRAITS[order.status].withdrawable && withdrawalRefusalOf(order, now) === undefined;

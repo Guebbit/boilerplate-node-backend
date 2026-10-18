@@ -83,6 +83,32 @@ let customers = 0;
  * units held and sold for real — and only the shirts shipped. The mug is the remainder.
  */
 const partlyShipped = async (mugOverrides: Parameters<typeof createProduct>[0] = {}) => {
+    const { user, shirt, mug, orderId } = await paidMixed(mugOverrides);
+    const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
+    const shipped = await deliveryService.shipFulfillmentOrder(
+        String(fulfillmentOrder._id),
+        { lines: [{ productId: String(shirt._id), quantity: 2 }] },
+        asAdmin(),
+        callerContextAs('admin')
+    );
+    if (!shipped.success) throw new Error('ship refused');
+    return {
+        user,
+        shirt,
+        mug,
+        orderId,
+        fulfillmentOrderId: String(fulfillmentOrder._id)
+    };
+};
+
+/**
+ * The same order before anything shipped: two shirts and a mug, 75.00 with delivery, paid by card
+ * and `processing`. A mug that is `noWithdrawal` gets a fulfillment order of its own.
+ */
+const paidMixed = async (
+    mugOverrides: Parameters<typeof createProduct>[0] = {},
+    status: OrderStatus = OrderStatus.processing
+) => {
     customers += 1;
     const user = await createUser({ email: `cancel-${customers}@example.com` });
     const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
@@ -104,22 +130,8 @@ const partlyShipped = async (mugOverrides: Parameters<typeof createProduct>[0] =
         asCustomer(user.id),
         testCallerContext
     );
-    await forceOrderStatus(orderId, OrderStatus.processing);
-    const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
-    const shipped = await deliveryService.shipFulfillmentOrder(
-        String(fulfillmentOrder._id),
-        { lines: [{ productId: String(shirt._id), quantity: 2 }] },
-        asAdmin(),
-        callerContextAs('admin')
-    );
-    if (!shipped.success) throw new Error('ship refused');
-    return {
-        user,
-        shirt,
-        mug,
-        orderId,
-        fulfillmentOrderId: String(fulfillmentOrder._id)
-    };
+    await forceOrderStatus(orderId, status);
+    return { user, shirt, mug, orderId };
 };
 
 type Fixture = Awaited<ReturnType<typeof partlyShipped>>;
@@ -352,8 +364,13 @@ describe('the buyer cancelling what has not shipped', () => {
 
     it('refuses goods Art. 16 excludes — an engraved mug that has not shipped is the shop’s to keep', async () => {
         const fixture = await partlyShipped({ noWithdrawal: true });
+        // The mug has its own fulfillment order, numbered after the shirts that shipped.
+        const [, mugGroup] = await fulfillmentOrdersOf(fixture.orderId);
 
-        const outcome = await buyerCancels(fixture);
+        const outcome = await buyerCancels({
+            ...fixture,
+            fulfillmentOrderId: String(mugGroup._id)
+        });
 
         expect(!outcome.success && outcome.errors[0].code).toBe('RETURN_LINES_INVALID');
         expect(await refundsOf(fixture.orderId)).toEqual([]);
@@ -387,6 +404,146 @@ const staffCancels = (fixture: Fixture, role: 'moderator' | 'warehouse') =>
         role === 'moderator' ? asModerator() : asWarehouse(),
         callerContextAs(role)
     );
+
+/** The shirts' group and the mug's, in that order, of an order whose mug is made to order. */
+const bespokeOrder = async (status: OrderStatus) => {
+    const fixture = await paidMixed({ noWithdrawal: true }, status);
+    const [shirts, mug] = await fulfillmentOrdersOf(fixture.orderId);
+    return { ...fixture, shirtsGroup: String(shirts._id), mugGroup: String(mug._id) };
+};
+
+/** The buyer's request to cancel one group of an order. */
+const cancelGroup = (
+    fixture: { orderId: string; user: { id: string } },
+    fulfillmentOrderId: string
+) =>
+    returnService.createReturn(
+        {
+            orderId: fixture.orderId,
+            reason: 'withdrawal',
+            kind: 'cancellation',
+            fulfillmentOrderId
+        },
+        asCustomer(fixture.user.id),
+        testCallerContext
+    );
+
+/** A paid order of two shirts and a made-to-order mug, nothing shipped, then withdrawn from. */
+const withdrawsFrom = async (status: OrderStatus) => {
+    const fixture = await paidMixed({ noWithdrawal: true }, status);
+    // The fulfillment orders are made on first read here, as the paid event would make them.
+    await fulfillmentOrdersOf(fixture.orderId);
+    const outcome = await returnService.createReturn(
+        { orderId: fixture.orderId, reason: 'withdrawal' },
+        asCustomer(fixture.user.id),
+        testCallerContext
+    );
+    return { fixture, outcome };
+};
+
+describe('cancelling one fulfillment order before anything ships', () => {
+    it('keeps made-to-order goods in a fulfillment order of their own', async () => {
+        const fixture = await bespokeOrder(OrderStatus.paid);
+        const groups = await fulfillmentOrdersOf(fixture.orderId);
+
+        expect(groups.map(({ lines }) => lines.map(({ productId }) => productId))).toEqual([
+            [String(fixture.shirt._id)],
+            [String(fixture.mug._id)]
+        ]);
+    });
+
+    it('cancels the ordinary group alone while the made-to-order one stays live', async () => {
+        const fixture = await bespokeOrder(OrderStatus.processing);
+
+        const cancellation = created(await cancelGroup(fixture, fixture.shirtsGroup));
+
+        // Two shirts at 30.00; the delivery stays with the order, which still has the mug to send.
+        expect(cancellation).toMatchObject({ status: 'closed', kind: 'cancellation' });
+        expect(cancellation.refundAmount).toBe(60);
+        expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: 60 }]);
+        const stored = await readOrder(fixture.orderId);
+        expect(stored?.status).toBe(OrderStatus.processing);
+        expect(await countersOf(fixture.shirt._id)).toMatchObject({ reserved: 0, available: 10 });
+        expect(await countersOf(fixture.mug._id)).toMatchObject({ reserved: 1 });
+    });
+
+    it('lets the buyer cancel the made-to-order group while the order is only paid', async () => {
+        const fixture = await bespokeOrder(OrderStatus.paid);
+
+        const cancellation = created(await cancelGroup(fixture, fixture.mugGroup));
+
+        expect(cancellation.refundAmount).toBe(10);
+    });
+
+    it('refuses the made-to-order group once the shop has started on the order', async () => {
+        const fixture = await bespokeOrder(OrderStatus.processing);
+
+        const outcome = await cancelGroup(fixture, fixture.mugGroup);
+
+        expect(!outcome.success && outcome.errors[0].code).toBe('RETURN_LINES_INVALID');
+        expect(await refundsOf(fixture.orderId)).toEqual([]);
+    });
+
+    it('does not cancel the last live group alone: that is the whole order', async () => {
+        const fixture = await paidMixed({}, OrderStatus.processing);
+        const [only] = await fulfillmentOrdersOf(fixture.orderId);
+
+        const outcome = await cancelGroup(fixture, String(only._id));
+
+        expect(!outcome.success && outcome.errors[0].code).toBe('RETURN_NOTHING_TO_CANCEL');
+        expect(await refundsOf(fixture.orderId)).toEqual([]);
+    });
+
+    it('offers each live group to cancel only while another keeps something to ship', async () => {
+        const split = await bespokeOrder(OrderStatus.processing);
+        const whole = await paidMixed({}, OrderStatus.processing);
+
+        const offeredSplit = await returnService.getReturnOptions(
+            split.orderId,
+            asCustomer(split.user.id)
+        );
+        const offeredWhole = await returnService.getReturnOptions(
+            whole.orderId,
+            asCustomer(whole.user.id)
+        );
+
+        expect(offeredSplit.success && offeredSplit.data.cancellable).toHaveLength(2);
+        expect(offeredWhole.success && offeredWhole.data.cancellable).toEqual([]);
+    });
+});
+
+describe('withdrawing from an order that holds made-to-order goods', () => {
+    it('cancels the whole order, the mug included, while the shop has not started on it', async () => {
+        const { fixture, outcome } = await withdrawsFrom(OrderStatus.paid);
+
+        expect(outcome.success).toBe(true);
+        const stored = await readOrder(fixture.orderId);
+        expect(stored?.status).toBe(OrderStatus.cancelled);
+    });
+
+    it('cancels only the eligible groups once the order is processing: the mug stays', async () => {
+        const { fixture, outcome } = await withdrawsFrom(OrderStatus.processing);
+
+        expect(outcome.success).toBe(true);
+        const stored = await readOrder(fixture.orderId);
+        expect(stored?.status).toBe(OrderStatus.processing);
+        expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: 60 }]);
+        const groups = await fulfillmentOrdersOf(fixture.orderId);
+        expect(groups.map(({ status }) => status)).toEqual(['cancelled', 'open']);
+    });
+
+    it('answers a second withdrawal with nothing left to cancel', async () => {
+        const { fixture } = await withdrawsFrom(OrderStatus.processing);
+
+        const again = await returnService.createReturn(
+            { orderId: fixture.orderId, reason: 'withdrawal' },
+            asCustomer(fixture.user.id),
+            testCallerContext
+        );
+
+        expect(!again.success && again.errors[0].code).toBe('RETURN_NOTHING_TO_CANCEL');
+    });
+});
 
 describe('the order timeline of a cancelled remainder', () => {
     it('says the remainder was cancelled, and leaves the return rows to the returns it is not', async () => {

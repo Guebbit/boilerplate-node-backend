@@ -93,30 +93,31 @@ export interface RemainderOption {
 }
 
 /**
- * Every fulfillment order of an order with units still to cancel — only once something has shipped:
- * until then the whole order is cancelled instead, so there is no remainder to offer.
+ * Every fulfillment order of an order with units still to cancel. Once something has shipped each
+ * one is a remainder. Before that, a group can be cancelled alone only while ANOTHER group stays
+ * live (the order keeps something to ship); the last live group is the whole order, and that is
+ * cancelled as an order instead.
  *
  * @param orderId - the order
  * @param shipped - whether anything has shipped from the order (`order.fulfillment.shipped`)
  */
 export const remainderOptions = (orderId: string, shipped: boolean): Promise<RemainderOption[]> =>
-    shipped
-        ? fulfillmentOrderRepository.findByOrderId(orderId).then((all) =>
-              all
-                  .filter(({ lines }) => remainderLines(lines).length > 0)
-                  .map((fulfillmentOrder) => ({
-                      fulfillmentOrderId: String(fulfillmentOrder._id),
-                      number: fulfillmentOrder.number,
-                      lines: fulfillmentOrder.lines
-                          .filter((line) => remainingOfLine(line) > 0)
-                          .map((line) => ({
-                              productId: line.productId,
-                              title: line.title,
-                              quantity: remainingOfLine(line)
-                          }))
-                  }))
-          )
-        : Promise.resolve([]);
+    fulfillmentOrderRepository.findByOrderId(orderId).then((all) => {
+        const live = all.filter(({ lines }) => remainderLines(lines).length > 0);
+        if (!shipped && live.length < 2) return [];
+
+        return live.map((fulfillmentOrder) => ({
+            fulfillmentOrderId: String(fulfillmentOrder._id),
+            number: fulfillmentOrder.number,
+            lines: fulfillmentOrder.lines
+                .filter((line) => remainingOfLine(line) > 0)
+                .map((line) => ({
+                    productId: line.productId,
+                    title: line.title,
+                    quantity: remainingOfLine(line)
+                }))
+        }));
+    });
 
 /**
  * Every shipment behind a set of orders — for the account data export, called with the caller's

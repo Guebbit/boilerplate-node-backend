@@ -36,14 +36,17 @@ export type RemainderCancel =
           ok: false;
           /**
            * `not-found`: no such fulfillment order on this order. `nothing-shipped`: nothing has
-           * left the order, so the whole order is cancelled instead. `nothing-to-cancel`: no
+           * left the order and no other fulfillment order has units, so the whole order is
+           * cancelled instead. `nothing-to-cancel`: no
            * remainder is left on it.
            */
           reason: 'not-found' | 'nothing-shipped' | 'nothing-to-cancel';
       };
 
 /**
- * Cancel what has not shipped yet on one fulfillment order, inside the CALLER's transaction. Every
+ * Cancel what has not shipped yet on one fulfillment order, inside the CALLER's transaction. With
+ * nothing shipped it only goes while another fulfillment order still has units; the last live one
+ * is the whole order, which is cancelled as an order. Every
  * refusal is decided before the first write and answered as `ok: false`; a failure after the first
  * write throws, aborting the caller's whole transaction — returning there would commit a claim
  * with nothing around it.
@@ -75,10 +78,19 @@ export const cancelRemainder = async (
 
     const order = await orderService.readOrder(orderId, session);
     if (!order) return { ok: false, reason: 'not-found' };
-    if (order.fulfillment?.shipped !== true) return { ok: false, reason: 'nothing-shipped' };
 
     const lines = remainderLines(fulfillmentOrder.lines);
     if (lines.length === 0) return { ok: false, reason: 'nothing-to-cancel' };
+
+    // Nothing has shipped: a group may go alone only while another keeps something to ship.
+    if (order.fulfillment?.shipped !== true) {
+        const others = await fulfillmentOrderRepository.findByOrderId(orderId, session);
+        const otherLive = others.some(
+            (other) =>
+                String(other._id) !== fulfillmentOrderId && remainderLines(other.lines).length > 0
+        );
+        if (!otherLive) return { ok: false, reason: 'nothing-shipped' };
+    }
     const waitingForStock =
         fulfillmentOrder.status === FulfillmentOrderStatus.on_hold &&
         fulfillmentOrder.holdReason === FulfillmentHoldReason.awaiting_stock;

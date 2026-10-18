@@ -10,16 +10,25 @@
 
 import { withTransaction } from '@infrastructure/runtime/database';
 import { nudgeOutbox } from '@kernel/outbox';
-import { orderService, orderTotal, isBeforeDispatch } from '@modules/orders';
+import { deliveryService } from '@modules/delivery';
+import {
+    orderService,
+    orderTotal,
+    isBeforeDispatch,
+    isExcludedFromWithdrawal
+} from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { returnPostagePayer } from '@modules/shop';
+import { OrderStatus } from '@types';
 import type { AuthContext, CallerContext } from '@types';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
+import { createCancellation } from './cancel-remainder';
 import { ownOrder } from './ownership';
 import {
     enqueueClosed,
     enqueueRequested,
+    nothingToCancel,
     opened,
     recordOpened,
     type CreateReturnInput,
@@ -77,11 +86,60 @@ const writeWithdrawalRecord = (
 };
 
 /**
+ * A withdrawal from an order the shop has started on, when some of it is goods Art. 16 excludes
+ * (made to order): the eligible shipment groups are cancelled, one `kind: cancellation` return
+ * each, and the made-to-order group stays — the shop's work on it is not the buyer's to cancel
+ * (S4 of the Q-W2 decision). The order itself stays `processing`.
+ *
+ * @param order - the order being withdrawn from
+ * @param authContext - the buyer
+ * @param context - for audit
+ * @returns the last cancellation written, the first refusal, or nothing-to-cancel when no
+ *   eligible group is left live
+ */
+const withdrawEligibleGroups = async (
+    order: OrderDocument,
+    authContext: AuthContext,
+    context: CallerContext
+): Promise<CreateReturnOutcome> => {
+    const orderId = String(order._id);
+    const excluded = new Set(
+        order.items
+            .filter((item) => isExcludedFromWithdrawal(item))
+            .map((item) => String(item.product._id))
+    );
+    const groups = await deliveryService.remainderOptions(orderId, false);
+    const eligible = groups.filter(({ lines }) =>
+        lines.every(({ productId }) => !excluded.has(productId))
+    );
+
+    let outcome: CreateReturnOutcome = nothingToCancel();
+    // One after another: each cancel takes the order's lock row.
+    for (const group of eligible) {
+        outcome = await createCancellation(
+            {
+                orderId,
+                reason: 'withdrawal',
+                kind: 'cancellation',
+                fulfillmentOrderId: group.fulfillmentOrderId
+            },
+            authContext,
+            context
+        );
+        if (!outcome.success) return outcome;
+    }
+    return outcome;
+};
+
+/**
  * A withdrawal before dispatch: cancel the order, refund it in full, record the withdrawal as a
  * return closed at birth, and acknowledge it. The acknowledgement is the one mail about the
  * withdrawal itself, with no postage line since no goods are expected; the refund's own
  * `order-refunded` mail follows when the money settles. `return-closed` is for a return whose
  * goods came back.
+ *
+ * Once the shop has started on an order that holds made-to-order goods (`processing`), only the
+ * eligible shipment groups are cancelled instead: see {@link withdrawEligibleGroups}.
  *
  * A shipment can land between the read that said "before dispatch" and the cancel; the cancel then
  * refuses, and the withdrawal is opened again on what the order now is — a return, never a full
@@ -99,8 +157,13 @@ export const withdrawBeforeDispatch = (
     authContext: AuthContext,
     context: CallerContext,
     openAsReturn: () => Promise<CreateReturnOutcome>
-): Promise<CreateReturnOutcome> =>
-    orderService.withdrawById(String(order._id), authContext, context).then((cancelled) => {
+): Promise<CreateReturnOutcome> => {
+    const bespokeAndStarted =
+        order.status === OrderStatus.processing &&
+        order.items.some((item) => isExcludedFromWithdrawal(item));
+    if (bespokeAndStarted) return withdrawEligibleGroups(order, authContext, context);
+
+    return orderService.withdrawById(String(order._id), authContext, context).then((cancelled) => {
         if (!cancelled.success)
             return ownOrder(input.orderId, authContext).then((fresh) =>
                 fresh && !isBeforeDispatch(fresh) ? openAsReturn() : cancelled
@@ -108,3 +171,4 @@ export const withdrawBeforeDispatch = (
 
         return writeWithdrawalRecord(order, context).then(opened);
     });
+};

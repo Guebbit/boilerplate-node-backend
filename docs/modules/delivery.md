@@ -156,10 +156,11 @@ stateDiagram-v2
 
 Pure, in `domain/fulfillment.ts`, over the order's **frozen** line snapshot:
 
-| Lines                             | Fulfillment order                                                                                                         |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| everything that is not a preorder | #1, `open`. `physical` if any line ships, `digital` otherwise. Digital lines of a mixed order ship with the physical ones |
-| preorder lines, release day D     | one per distinct day, `on_hold` for `awaiting_stock`, `agreedAt = expectedAt =` the latest release date of its lines      |
+| Lines                                                          | Fulfillment order                                                                                                                                 |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| everything that is neither a preorder nor `noWithdrawal`       | #1, `open`. `physical` if any line ships, `digital` otherwise. Digital lines of a mixed order ship with the physical ones                         |
+| `noWithdrawal` lines (made to order, perishable) that ship now | the next one, `open`, on their own — the shop's work on them is not cancelled with the rest                                                       |
+| preorder lines, release day D                                  | one per distinct day and per `noWithdrawal` value, `on_hold` for `awaiting_stock`, `agreedAt = expectedAt =` the latest release date of its lines |
 
 The preorder flag and the date are read from the snapshot frozen at checkout, never from the product
 at payment time: a bank transfer can be paid a week after it was ordered. `agreedAt` is the date the
@@ -469,8 +470,9 @@ ship goods the ledger never counted out.
 ## Cancelling what has not shipped
 
 A cancel of the whole order is only possible while nothing has shipped; this module hears
-`order.cancelled` and cancels every fulfillment order. Once anything has shipped, what remains is
-cancelled **one fulfillment order at a time**, by [`returns`](./returns.md#cancelling-what-has-not-shipped)
+`order.cancelled` and cancels every fulfillment order. Once anything has shipped — or before, while
+another fulfillment order still has units to send — what remains is cancelled **one fulfillment order
+at a time**, by [`returns`](./returns.md#cancelling-what-has-not-shipped)
 (a Return of `kind: cancellation`) — it moves the money, the stock and the shipping rule, and is the
 only module that already reaches all of them. This module only marks the lines:
 `cancelRemainder(fulfillmentOrderId, orderId, session, reason)`, called inside `returns`' own
