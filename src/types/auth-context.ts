@@ -126,9 +126,9 @@ export interface TenantCaller {
     /** The permission keys the caller's role in that scope holds. */
     permissions: readonly string[];
     /**
-     * Holds every key this scope declares — `kernel/permissions.ts`'s `isUnrestricted`, computed
-     * once where the caller is built rather than re-derived (and re-imported past the kernel
-     * boundary) at every call site that needs "is this an admin" for something other than a
+     * Holds every key this scope declares — `kernel/permissions.ts`'s `holdsEveryDeclaredRule`,
+     * computed once where the caller is built rather than re-derived (and re-imported past the
+     * kernel boundary) at every call site that needs "is this an admin" for something other than a
      * permission check, e.g. the audit trail's `actorRole`.
      */
     unrestricted: boolean;

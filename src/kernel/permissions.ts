@@ -644,8 +644,9 @@ const declaredRulesOfScope = new Map<AuthorizationScope, readonly string[]>(
 /**
  * Holds every rule a scope declares — the property "unrestricted" actually tests, independent of
  * any particular `Caller` shape. `callerInScope` calls this directly (a `Caller` isn't built yet
- * at that point — this is what its own `unrestricted` field is filled from); {@link isUnrestricted}
- * is the same question asked of one already built.
+ * at that point — this is what its own `unrestricted` field is filled from). Role names are data a
+ * deployment may rename, so this is what `requirePermission` and the domain actor ask through
+ * `caller.unrestricted` rather than comparing a name.
  */
 const holdsEveryDeclaredRule = (
     scope: AuthorizationScope,
@@ -657,20 +658,6 @@ const holdsEveryDeclaredRule = (
     // vacuously true, which would mark every caller in it as an admin.
     return declared.length > 0 && declared.every((key) => held.has(key));
 };
-
-/**
- * Does this caller hold EVERY declared rule in their own scope — unrestricted, within that scope
- * only.
- *
- * Role names are data a deployment may rename or add to; "holds every rule" is a property of the
- * permission model itself, which is why `requirePermission` and the domain actor ask this rather
- * than comparing a name. There is no single token for it: `admin` is unrestricted because
- * `authorization-roles.yaml` lists every tenant rule by name, not because it holds a shortcut that
- * means the same thing — see `authorization-keys.yaml`'s closing note. Equivalent to reading
- * `caller.unrestricted`, kept for callers that only have a permission list without a full `Caller`.
- */
-export const isUnrestricted = (caller: Pick<Caller, 'scope' | 'permissions'>): boolean =>
-    holdsEveryDeclaredRule(caller.scope, caller.permissions);
 
 /**
  * The application acting on nobody's behalf — a sweep, a job, a domain event with no request
