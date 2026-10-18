@@ -75,9 +75,13 @@ describe('GET /sitemap/pages.xml', () => {
 
         expect(urls).toEqual(expect.arrayContaining([`${FRONTEND}/en`, `${FRONTEND}/it`]));
         expect(urls).toEqual(
-            expect.arrayContaining([`${FRONTEND}/en/about`, `${FRONTEND}/it/faq`])
+            expect.arrayContaining([
+                `${FRONTEND}/en/about`,
+                `${FRONTEND}/it/faq`,
+                `${FRONTEND}/en/legal`
+            ])
         );
-        expect(urls).toHaveLength(14);
+        expect(urls).toHaveLength(16);
 
         const about = entries.find(({ url }) => url === `${FRONTEND}/it/about`);
         expect(about?.links).toEqual([
