@@ -68,9 +68,16 @@ const TRAILS = [
         'updatedAt',
         'deletedAt',
         'withdrawUntil',
-        'conformityUntil',
-        'fulfillment.lastDeliveredAt'
+        'conformityUntil'
     ]),
+    // Only an order that carries the date: a pipeline `$set` on a dotted path would otherwise
+    // create an empty `fulfillment` object on one that has none, and the next save would fail on
+    // the summary's required fields.
+    mover(
+        orderModel,
+        (orderId) => ({ _id: orderId, 'fulfillment.lastDeliveredAt': { $exists: true } }),
+        ['fulfillment.lastDeliveredAt']
+    ),
     mover(paymentModel, (orderId) => ({ orderId }), ['createdAt', 'updatedAt', 'receivedAt']),
     mover(fulfillmentOrderModel, (orderId) => ({ orderId }), [
         'createdAt',
