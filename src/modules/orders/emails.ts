@@ -10,8 +10,7 @@ import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 import { orderFrontendLink, withdrawalPeriodDays } from './config';
 import { isExcludedFromWithdrawal, isShippedItem, orderTotal } from './domain';
-import type { ShopAddress } from '@types';
-import { returnAddress, returnPostagePayer, shopIdentity } from '@modules/shop';
+import { addressLine, returnAddress, returnPostagePayer, shopIdentity } from '@modules/shop';
 
 /**
  * The minimum either document needs from an order: a title and a price per line.
@@ -74,15 +73,6 @@ export interface WithdrawalNotice {
  */
 const money = (locale: string, amount: number, currency: string): string =>
     new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
-
-/**
- * A postal address on one line, skipping whatever is absent.
- * @param address - the address to print
- */
-export const addressLine = (address: ShopAddress): string =>
-    [address.name, address.street, `${address.zip} ${address.city}`, address.country]
-        .filter(Boolean)
-        .join(', ');
 
 /**
  * Which clock the notice describes: `goods` when a withdrawable line ships (period from receipt),

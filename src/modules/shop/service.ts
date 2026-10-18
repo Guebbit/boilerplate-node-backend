@@ -112,6 +112,16 @@ export const returnAddress = (): ShopAddress => {
 };
 
 /**
+ * A postal address on one line, skipping whatever is absent — how a mail prints the shop's own
+ * address (the return address, the legal one).
+ * @param address - the address to print
+ */
+export const addressLine = (address: ShopAddress): string =>
+    [address.name, address.street, `${address.zip} ${address.city}`, address.country]
+        .filter(Boolean)
+        .join(', ');
+
+/**
  * Who bears the direct cost of returning the goods. The consumer by default — Consumer Rights
  * Directive Art. 14(1) permits it, IF they were told beforehand, which is why this value also
  * drives the wording of the placed-order email and the withdrawal acknowledgement. A deployment
