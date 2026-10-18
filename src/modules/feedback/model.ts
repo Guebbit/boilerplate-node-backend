@@ -11,7 +11,7 @@
 
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { FeedbackRequestStatus } from '@types';
+import { FeedbackCategory, FeedbackRequestStatus } from '@types';
 import type { FeedbackRequest } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { feedbackConfig } from './config';
@@ -53,6 +53,13 @@ export const feedbackRequestSchema = new Schema<FeedbackRequestDocument, Feedbac
         message: {
             type: String,
             required: true
+        },
+        category: {
+            type: String,
+            enum: Object.values(FeedbackCategory)
+        },
+        orderNumber: {
+            type: String
         },
         status: {
             type: String,

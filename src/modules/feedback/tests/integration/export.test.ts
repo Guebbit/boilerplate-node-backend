@@ -46,6 +46,20 @@ describe('the feedback section of an export', () => {
         expect(section.map((ticket) => ticket.message)).toEqual(['my private complaint']);
     });
 
+    it('exports the category and order number the filer gave: their own words', async () => {
+        await feedbackRequestService.create({
+            email: 'victim@example.com',
+            subject: 'About my order',
+            message: 'where is it',
+            category: 'order',
+            orderNumber: 'ORD-7'
+        });
+
+        const section = await collect(subject(true));
+
+        expect(section?.[0]).toMatchObject({ category: 'order', orderNumber: 'ORD-7' });
+    });
+
     it('exports status and respondedAt but never the staff-only adminNotes', async () => {
         const ticket = await fileTicket();
         await feedbackRequestService.updateStatusById(String(ticket._id), {

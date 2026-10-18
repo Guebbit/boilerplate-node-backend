@@ -83,6 +83,8 @@ const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestDocument
                 email,
                 subject: payload.subject.trim(),
                 message: payload.message.trim(),
+                ...(payload.category ? { category: payload.category } : {}),
+                ...(payload.orderNumber?.trim() ? { orderNumber: payload.orderNumber.trim() } : {}),
                 status: initialFeedbackStatus(suspectedSpam)
             })
             .then((created) => {
@@ -150,10 +152,14 @@ const search = (
     items: FeedbackRequest[];
     meta: PaginatedMeta;
 }> =>
-    // `status` is declared as a scope rather than on the repository's own search spec: it is a
-    // closed enum with its own collection-wide meaning, not a per-field text/exact match.
+    // `status` and `category` are declared as a scope rather than on the repository's own search
+    // spec: each is a closed enum with its own collection-wide meaning, not a per-field text/exact
+    // match.
     feedbackRequestRepository
-        .search(filters, filters.status ? { status: filters.status } : {})
+        .search(filters, {
+            ...(filters.status ? { status: filters.status } : {}),
+            ...(filters.category ? { category: filters.category } : {})
+        })
         .then((result) => {
             recordAudit(context, {
                 action: feedbackAuditActions.ADMIN_FEEDBACK_VIEWED,
@@ -269,6 +275,8 @@ const toExportFeedback = (ticket: Lean<FeedbackRequestDocument>): ExportFeedback
     email: ticket.email,
     subject: ticket.subject,
     message: ticket.message,
+    ...(ticket.category ? { category: ticket.category } : {}),
+    ...(ticket.orderNumber ? { orderNumber: ticket.orderNumber } : {}),
     status: ticket.status,
     ...(ticket.respondedAt ? { respondedAt: ticket.respondedAt.toISOString() } : {}),
     ...(ticket.createdAt ? { createdAt: ticket.createdAt.toISOString() } : {})

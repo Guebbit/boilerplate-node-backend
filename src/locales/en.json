@@ -116,6 +116,7 @@
             "note": "Note",
             "notes": "Notes",
             "orderId": "Order",
+            "orderNumber": "Order number",
             "origin": "Origin",
             "otp": "Code",
             "page": "Page",

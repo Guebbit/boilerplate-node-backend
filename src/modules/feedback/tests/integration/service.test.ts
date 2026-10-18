@@ -94,6 +94,24 @@ describe('create', () => {
         expect(feedback.name).toBeUndefined();
     });
 
+    it('keeps the category and the order number the visitor gave, trimmed', async () => {
+        const feedback = await feedbackRequestService.create({
+            ...makePayload(),
+            category: 'cancellation',
+            orderNumber: '  ORD-1042  '
+        });
+
+        expect(feedback.category).toBe('cancellation');
+        expect(feedback.orderNumber).toBe('ORD-1042');
+    });
+
+    it('leaves both absent when the visitor chose neither', async () => {
+        const feedback = await feedbackRequestService.create(makePayload());
+
+        expect(feedback.category).toBeUndefined();
+        expect(feedback.orderNumber).toBeUndefined();
+    });
+
     it('keeps a name that is only whitespace-padded', async () => {
         const feedback = await feedbackRequestService.create(makePayload({ name: ' A ' }));
 
@@ -232,6 +250,17 @@ describe('search', () => {
 
         expect(items).toHaveLength(1);
         expect(items[0].email).toBe('alan@example.com');
+    });
+
+    it('filters by category', async () => {
+        await feedbackRequestService.create({ ...makePayload(), category: 'privacy' });
+        await feedbackRequestService.create({ ...makePayload(), category: 'order' });
+        await feedbackRequestService.create(makePayload());
+
+        const { items } = await feedbackRequestService.search({ category: 'privacy' });
+
+        expect(items).toHaveLength(1);
+        expect(items[0].category).toBe('privacy');
     });
 
     it('filters by email fragment', async () => {

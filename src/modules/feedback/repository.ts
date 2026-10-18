@@ -11,8 +11,9 @@ import { createRepository } from '@infrastructure/persistence/create-repository'
 import type { FeedbackRequest } from '@types';
 
 /**
- * `status` is deliberately absent from the search spec: it is a closed enum, and mapping a raw
- * string onto it is a domain decision the service makes before handing the result down as a scope.
+ * `status` and `category` are deliberately absent from the search spec: each is a closed enum, and
+ * mapping a raw string onto it is a domain decision the service makes before handing the result
+ * down as a scope.
  */
 export const feedbackRequestRepository = createRepository<FeedbackRequestDocument, FeedbackRequest>(
     feedbackRequestModel,

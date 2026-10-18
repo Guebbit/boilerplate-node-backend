@@ -21,6 +21,12 @@ who have no account. That one decision explains everything else about this modul
 from [`users`](./users.md), deleting an account leaves that person's feedback standing, and the
 public write route is the only unauthenticated write in the application.
 
+A message may carry a **category** (`order`, `cancellation`, `return`, `payment`, `account`,
+`privacy`, `other`) and the order number the visitor typed (`orderNumber`, free text, never checked
+against an order). Both are optional and the inbox filters on `category`; an order page links to
+`/contact?category=cancellation&order=<number>` so the form arrives filled in. Both are the filer's
+own words, so the export includes them.
+
 The status enum _is_ the triage workflow: `new → in_progress → resolved`, with `spam` as the exit
 that is neither. `adminNotes` is the operator's side of the record: it is served to staff only and
 left out of the data export (Art. 15(4) protects whoever wrote the note). `status` and `respondedAt`

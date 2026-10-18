@@ -47,6 +47,23 @@ describe('POST /feedback/contact', () => {
         expect(response.body.data.status).toBe('new');
     });
 
+    it('keeps the category and order number a visitor chose, and echoes them back', async () => {
+        const response = await api()
+            .post('/feedback/contact')
+            .send({ ...CONTACT_PAYLOAD, category: 'privacy', orderNumber: 'ORD-9' });
+
+        expect(response.status).toBe(201);
+        expect(response.body.data).toMatchObject({ category: 'privacy', orderNumber: 'ORD-9' });
+    });
+
+    it('422s a category outside the list', async () => {
+        const response = await api()
+            .post('/feedback/contact')
+            .send({ ...CONTACT_PAYLOAD, category: 'refunds-please' });
+
+        expect(response.status).toBe(422);
+    });
+
     it('matches the contract without the optional name', async () => {
         const { name: _name, ...withoutName } = CONTACT_PAYLOAD;
         const response = await api().post('/feedback/contact').send(withoutName);
@@ -139,6 +156,22 @@ describe('GET /feedback', () => {
             expect(response.body.success).toBe(false);
         }
     );
+
+    it('filters by category', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await api()
+            .post('/feedback/contact')
+            .send({ ...CONTACT_PAYLOAD, category: 'privacy', email: 'one@example.com' });
+        await api()
+            .post('/feedback/contact')
+            .send({ ...CONTACT_PAYLOAD, category: 'order', email: 'two@example.com' });
+
+        const response = await api().get('/feedback?category=privacy').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.data.items[0].category).toBe('privacy');
+    });
 
     it('422s a status outside the enum instead of matching every row', async () => {
         const { bearer } = await authenticateAs('admin');
