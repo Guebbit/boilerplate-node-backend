@@ -91,7 +91,7 @@ flowchart LR
 frozen unit price, frozen VAT rate, frozen rate type), the VAT breakdown `orderTaxBreakdown`
 computes from them, the order's own `billingAddress` as the Art. 226 buyer address (every checkout
 order carries one, chosen at checkout — "same as shipping" by default, so a digital-only order,
-which has no ship-to address at all, is still invoiced to someone), the seller's own identity (`config.ts`), and the order's own frozen
+which has no ship-to address at all, is still invoiced to someone), the seller's own identity (`shopIdentity()` from the [`shop`](./shop.md) module), and the order's own frozen
 `currency`/`orderNumber`/`locale`.
 `issueCreditNote` (`services/issue-credit-note.ts`) freezes one credit note per REFUND
 (`PAYMENT_REFUNDED` carries `refundId`, this refund's `amount`, `full`, and — for a return — the
@@ -211,9 +211,10 @@ aborts both, so each document leaves exactly one row.
 | `NODE_INVOICE_PDF_RETENTION_DAYS` | `30`                    | Days a rendered PDF is kept for the next download; `0` stores nothing                            |
 | `NODE_DOCUMENT_STORE_PATH`        | `tmp/storage/documents` | Where those PDFs live — private, plaintext, regenerable; mount a volume                          |
 
-The seller's identity (legal name, VAT number, address) is [`orders`'s](./orders.md#shop-identity):
-the withdrawal notice prints it too, and `orders` cannot import this module. Every getter is read
-fresh per call, so a correction needs no restart.
+The seller's identity (legal name, VAT number, address) is [`shop`'s](./shop.md#the-story): the
+withdrawal notice prints it too, and `orders` cannot import this module. Every getter is read fresh
+per call, so a correction needs no restart. It reaches only the documents issued after it: an
+invoice keeps the seller it was issued with, and a credit note copies the invoice's.
 
 ## VAT rounding and the net unit price
 
