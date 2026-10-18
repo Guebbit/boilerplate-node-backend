@@ -215,6 +215,13 @@ address or method, cart pre-flight and clearing — stays with the caller; `plac
 what it needs to hold and write. See [Checkout](./cart-checkout.md#the-sequence) for the storefront
 path in full.
 
+A line the shelf only half covered carries what it owes, frozen like the rest of it: `backorderedQuantity`
+(how many of `quantity` were owed), `promisedAt` (the product's restock date, else the day it was
+placed plus 30 days) and `promiseDated` (whether that was a date the product named). The confirmation
+email prints each line's promise, "ships from <date>" for a preorder and "<n> to arrive by <date>" or
+"within 30 days" for owed units (CRD Art. 8(7)(a)); `delivery` reads the same frozen fields to make a
+fulfillment order of the owed part.
+
 Two frozen addresses ride on the order, both snapshots like the lines (an order keeps where it went
 and whom it was billed to, not what the address book says today):
 

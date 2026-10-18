@@ -40,18 +40,18 @@ cancelled first, `released`. Shelf count (`onHand`) drops at dispatch, not at pa
 Shopify, Magento MSI, Saleor and Medusa share — so a stocktake counts the same number `onHand`
 says, and `available` is identical in both models at every moment.
 
-| Transition                 | Called by                                                                                            | Counters                        | Ledger `reason` |
-| -------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------- | --------------- |
-| `reserveForOrder`          | [checkout](./cart-checkout.md), admin order create                                                   | `reserved` +n                   | `reserve`       |
-| `commitForOrder`           | [`payments`](./payments.md) on confirm                                                               | none                            | none            |
-| `shipLinesForOrder`        | [`delivery`](./delivery.md) (through `orders`), in the transaction of each shipment — only ITS units | `onHand` −n, `reserved` −n      | `ship`          |
-| `shipForOrder`             | [`orders`](./orders.md), in the transaction of an admin override past dispatch — whatever is left    | `onHand` −n, `reserved` −n      | `ship`          |
-| `releaseLinesForOrder`     | [`returns`](./returns.md), in the transaction of a remainder cancel — only the cancelled units       | `reserved` −n                   | `release`       |
-| `releaseForOrder`          | [`orders`](./orders.md) on cancel                                                                    | `reserved` −n                   | `release`       |
-| `releaseForOrder`          | the sweep                                                                                            | `reserved` −n                   | `expire`        |
-| `releaseCommittedForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing (a paid, unshipped order)   | `reserved` −n                   | `release`       |
-| `reserveForOrder`          | checkout, for a [preorder](#preorders) line                                                          | `backordered` +n                | `preorder`      |
-| `receive`                  | `POST /inventory/receipts`, for the paid preorders waiting                                           | `backordered` −n, `reserved` +n | `allocate`      |
+| Transition                 | Called by                                                                                               | Counters                        | Ledger `reason` |
+| -------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------- |
+| `reserveForOrder`          | [checkout](./cart-checkout.md), admin order create                                                      | `reserved` +n                   | `reserve`       |
+| `commitForOrder`           | [`payments`](./payments.md) on confirm                                                                  | none                            | none            |
+| `shipLinesForOrder`        | [`delivery`](./delivery.md) (through `orders`), in the transaction of each shipment — only ITS units    | `onHand` −n, `reserved` −n      | `ship`          |
+| `shipForOrder`             | [`orders`](./orders.md), in the transaction of an admin override past dispatch — whatever is left       | `onHand` −n, `reserved` −n      | `ship`          |
+| `releaseLinesForOrder`     | [`returns`](./returns.md), in the transaction of a remainder cancel — only the cancelled units          | `reserved` −n                   | `release`       |
+| `releaseForOrder`          | [`orders`](./orders.md) on cancel                                                                       | `reserved` −n                   | `release`       |
+| `releaseForOrder`          | the sweep                                                                                               | `reserved` −n                   | `expire`        |
+| `releaseCommittedForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing (a paid, unshipped order)      | `reserved` −n                   | `release`       |
+| `reserveForOrder`          | checkout, for a [preorder](#preorders) line, or the owed part of a [backorder](#backorders) line        | `backordered` +n                | `backorder`     |
+| `receive`                  | `POST /inventory/receipts`, for the paid claims waiting (every write that raises `available` does this) | `backordered` −n, `reserved` +n | `allocate`      |
 
 **`releaseCommittedForOrder` is never merged into `releaseForOrder`**, on purpose: the sweep only
 ever releases a stale HOLD, and folding the paid case into that same function would let it put a
@@ -87,17 +87,19 @@ directly.
 
 ## Preorders
 
+Owed units live in one counter, whatever phase of the product claimed them: a preorder, or a released product out of stock ([below](#backorders)). The names say so: `backorderLimit`, `backordered`, kind and reason `backorder`. The product state keeps "preorder".
+
 A preorder is sold before its units exist, so it claims an **allowance** instead of a shelf unit. The
 stock level gains two counters, a third ledger column and two `reason` values; the hold's lines gain
-a `kind` (`stock` or `preorder`).
+a `kind` (`stock` or `backorder`).
 
 | Counter / column   | Meaning                                                                                       |
 | ------------------ | --------------------------------------------------------------------------------------------- |
-| `backorderLimit`   | how many units may be backordered at once; set by an admin, `0` closes preordering            |
+| `backorderLimit`   | how many units may be owed at once; set by an admin, `0` closes it, `null` is no cap          |
 | `backordered`      | units claimed against it and not yet allocated stock, paid or not                             |
 | `backorderedDelta` | the ledger column that makes `backordered` replayable, like `onHandDelta` and `reservedDelta` |
 
-A claim is a `preorder` movement (`backordered` +n, nothing else), guarded in the write's own filter by
+A claim is a `backorder` movement (`backordered` +n, nothing else), guarded in the write's own filter by
 `backordered + n <= backorderLimit`. The shelf is never read: 50 units on hand do not widen the
 allowance, and an allowance of 5 does not need one unit to exist. The cap counts from the moment the
 order is placed (decided 2026-10-11): a buyer who then pays a week later by bank transfer is never
@@ -126,7 +128,7 @@ rises by the same number, so `available` drops by what was allocated and the uni
 sellable to a stranger in between. From then on those units ship, release and restock like any
 others; the hold keeps the same product under both kinds while part of it still waits, and every
 caller that takes lines out of a hold (`shipLinesForOrder`, `releaseLinesForOrder`) names the kind.
-A preorder claim cannot ship: `ship` of a `preorder` line throws and rolls its transaction back.
+A claim cannot ship: `ship` of a `backorder` line throws and rolls its transaction back.
 
 Oldest payment first, not oldest order: the key is the moment the buyer's money was in, so a bank
 transfer is still served, after the cards that paid earlier. It is the hold's own `committedAt`
@@ -145,8 +147,40 @@ board's `lowOnly` view is unchanged, since a restocker wants to see it.
 
 `GET /inventory/preorders` is the preorder board's read: per product the cap, `backordered`, its split
 between `held` (unpaid, frees itself) and `paid`, `left`, and `ordered`, the lifetime count read off the
-ledger's `preorder` rows. `PUT /inventory/levels/{productId}/backorder-limit` sets the allowance under
+ledger's `backorder` rows. `PUT /inventory/levels/{productId}/backorder-limit` sets the allowance under
 `create:StockMovement`; it is not a stock movement and leaves no ledger row, only an audit entry.
+
+## Backorders
+
+A released product the shop keeps selling while the shelf is empty owes units the same way a preorder
+does, from the same counter. `allowBackorder` on the product ([`products`](./products.md#backorder))
+switches it on and the catalogue tells this module which lines may spill; the cap stays here.
+
+**A line the shelf covers half.** `reserveForOrder` takes a line with `spill` whole from the shelf when
+it fits. Otherwise, in one transaction, it takes the shelf units there are, claims the rest against the
+cap and rewrites the hold to say which is which. A crash anywhere inside leaves nothing taken; a claim
+the cap refuses gives the shelf part back; two checkouts racing the last unit resolve inside the
+database. The outcome returns the owed count per line for [`orders`](./orders.md) to freeze.
+
+**No cap.** `backorderLimit: null` is no cap; `0` is closed and is the default. A level row without the
+field reads as closed, never as unlimited. The room left is `Infinity`, never `null`: callers do
+arithmetic on it, and a `null` would read as sold out.
+
+**Every arrival serves the queue.** The claims of buyers who paid are served oldest `committedAt`
+first by every write that raises `available`, in that write's own transaction, not only by a receipt:
+
+| Raises `available`                    | Allocates                               |
+| ------------------------------------- | --------------------------------------- |
+| receipt, positive stocktake `adjust`  | yes                                     |
+| return restock                        | yes                                     |
+| unpaid hold expiring (the sweep)      | yes                                     |
+| order cancel, paid or not             | yes                                     |
+| remainder cancel                      | yes                                     |
+| a claim given back (`backorder` kind) | no: it frees allowance, not shelf units |
+
+Without this, a hold that expires would hand its units to the next stranger while a buyer who paid
+last week keeps waiting. An allocation is not undone: a typo (+50 for +5) allocates, and the correcting
+−45 is refused as `INVENTORY_BELOW_RESERVED`.
 
 ## Exactly-once, without a lock
 

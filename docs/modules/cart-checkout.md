@@ -109,7 +109,7 @@ the whole basket is what keeps `inventory` from ever learning what a cart is.
 ## Which lines are refused, and as what
 
 Checkout judges every line with the cart's [availability rule](./cart.md#line-availability) and
-refuses everything that is neither `in_stock` nor `preorder`. The code depends on the line's value, so a client can
+refuses everything that is not `in_stock`, `preorder` or `backorder`. The code depends on the line's value, so a client can
 word each case differently:
 
 | `availability`       | Error code                 | Status | `details.lines[]` carries                                |
@@ -119,7 +119,7 @@ word each case differently:
 | `out_of_stock`       | `CART_INSUFFICIENT_STOCK`  | 409    | `productId`, `title`, `requested`, `availability`        |
 | `insufficient_stock` | `CART_INSUFFICIENT_STOCK`  | 409    | `productId`, `title`, `requested`, `availability`        |
 
-A `preorder` line passes: it claims the product's allowance when the order is placed, not a shelf
+A `backorder` line passes too: `reserveForOrder` takes the shelf units there are and claims the rest against the cap in one transaction ([the spill](./inventory-reservations.md#backorders)), and the order freezes `backorderedQuantity` and `promisedAt` (the product's `restockDate`, else the day it was placed plus 30 days) on the line before it is written. A `preorder` line passes: it claims the product's allowance when the order is placed, not a shelf
 unit, and the order freezes `preorder` and the promised `releaseDate` onto the line. An off-sale product is "stock 0" with its own message, so it joins the stock refusal. A removed
 line outranks the rest: one hidden line answers `CART_PRODUCT_UNAVAILABLE` even when another line is also short. Every refusal is a 409: the request conflicts with the product's current state, whether it is gone or only short.
 `CART_INSUFFICIENT_STOCK` lists every refused line at once, never the number left. The same

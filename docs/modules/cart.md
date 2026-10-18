@@ -117,16 +117,18 @@ refuses is checkout.
 One derived value on every cart line, wishlist line and merge result. The names are Google's feed
 vocabulary.
 
-| `availability`       | Means                                                    | Shopper copy (frontend)               | Checkout |
-| -------------------- | -------------------------------------------------------- | ------------------------------------- | -------- |
-| `in_stock`           | buyable, enough stock                                    | none                                  | ok       |
-| `preorder`           | buyable before its release date, the allowance covers it | "Preorder, ships from {date}"         | ok       |
-| `insufficient_stock` | some left, fewer than the line wants (cart lines only)   | "Only fewer left, lower the quantity" | refused  |
-| `out_of_stock`       | none left                                                | "Sold out"                            | refused  |
-| `unavailable`        | taken off sale (`purchasable: false`)                    | "Not available right now"             | refused  |
-| `removed`            | hidden (`active: false`), or deleted and not yet pulled  | "No longer available", no title       | refused  |
+| `availability`       | Means                                                                                            | Shopper copy (frontend)               | Checkout |
+| -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------- | -------- |
+| `in_stock`           | buyable, enough stock                                                                            | none                                  | ok       |
+| `preorder`           | buyable before its release date, the allowance covers it                                         | "Preorder, ships from {date}"         | ok       |
+| `backorder`          | released, out of stock, kept on sale: the shelf covers less than the line asks, the rest is owed | "Backorder", always with its promise  | ok       |
+| `insufficient_stock` | some left, fewer than the line wants (cart lines only)                                           | "Only fewer left, lower the quantity" | refused  |
+| `out_of_stock`       | none left                                                                                        | "Sold out"                            | refused  |
+| `unavailable`        | taken off sale (`purchasable: false`)                                                            | "Not available right now"             | refused  |
+| `removed`            | hidden (`active: false`), or deleted and not yet pulled                                          | "No longer available", no title       | refused  |
 
-First match wins. The wishlist asks the same function without a quantity, so it never yields
+First match wins, in this order: removed, unavailable, out_of_stock, insufficient_stock, preorder,
+backorder, in_stock. The wishlist asks the same function without a quantity, so it never yields
 `insufficient_stock`.
 
 A preorder product (`active && purchasable && releaseDate > now`, see
@@ -136,6 +138,23 @@ is left of `backorderLimit`. So `out_of_stock` on a preorder line means the allo
 much sits on the shelf, and `insufficient_stock` means it has fewer left than the line wants. Nothing
 else changes: a basket may mix a preorder with goods in stock, since the order splits into fulfillment
 orders by release date (see [delivery](./delivery.md)).
+
+A released product the shop keeps selling while it is out of stock (`allowBackorder`, see
+[products](./products.md#backorder)) is judged against the shelf **and** the room under the cap
+together. `availableFor` answers two numbers per product, what can be sold and what is on the shelf,
+and the rule needs both:
+
+| Shelf | Room on the cap | The line asks | Reads                | Why                                |
+| ----- | --------------- | ------------- | -------------------- | ---------------------------------- |
+| 5     | any             | 3             | `in_stock`           | the shelf covers it                |
+| 2     | 10              | 3             | `backorder`          | two now, one owed                  |
+| 0     | 10              | 3             | `backorder`          | all owed                           |
+| 0     | 2               | 3             | `insufficient_stock` | shelf and room together fall short |
+| 0     | 0               | 1             | `out_of_stock`       | nothing to sell                    |
+| any   | 5               | wishlist      | `backorder` at 0     | a wishlist line has no quantity    |
+
+The cart shows the bare label, never "2 now, 1 later": buyers are not told a stock number, and "2
+now" is one. After ordering, the order page's fulfillment orders show what ships when.
 
 ```mermaid
 flowchart TD
@@ -151,7 +170,9 @@ flowchart TD
     F -- yes --> I[insufficient_stock]
     F -- no --> P{preorder?}
     P -- yes --> PO[preorder]
-    P -- no --> S[in_stock]
+    P -- no --> K{backorder product,<br/>quantity > shelf?}
+    K -- yes --> BO[backorder]
+    K -- no --> S[in_stock]
 ```
 
 Adding a hidden product stays a 404 (`POST /cart`, a wishlist add, `PUT /cart/{id}`): a new add

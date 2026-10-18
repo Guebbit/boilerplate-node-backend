@@ -157,11 +157,12 @@ stateDiagram-v2
 
 Pure, in `domain/fulfillment.ts`, over the order's **frozen** line snapshot:
 
-| Lines                                                          | Fulfillment order                                                                                                                                 |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| everything that is neither a preorder nor `noWithdrawal`       | #1, `open`. `physical` if any line ships, `digital` otherwise. Digital lines of a mixed order ship with the physical ones                         |
-| `noWithdrawal` lines (made to order, perishable) that ship now | the next one, `open`, on their own — the shop's work on them is not cancelled with the rest                                                       |
-| preorder lines, release day D                                  | one per distinct day and per `noWithdrawal` value, `on_hold` for `awaiting_stock`, `agreedAt = expectedAt =` the latest release date of its lines |
+| Lines                                                          | Fulfillment order                                                                                                                                       |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| everything that is neither a preorder nor `noWithdrawal`       | #1, `open`. `physical` if any line ships, `digital` otherwise. Digital lines of a mixed order ship with the physical ones                               |
+| `noWithdrawal` lines (made to order, perishable) that ship now | the next one, `open`, on their own — the shop's work on them is not cancelled with the rest                                                             |
+| preorder lines, release day D                                  | one per distinct day and per `noWithdrawal` value, `on_hold` for `awaiting_stock`, `agreedAt = expectedAt =` the latest release date of its lines       |
+| the owed part of a line the shelf half covered, promised day D | the shelf part ships in #1; the owed part is its own group per day, cause and `noWithdrawal` value, `on_hold`, dated by the promise frozen on the order |
 
 The preorder flag and the date are read from the snapshot frozen at checkout, never from the product
 at payment time: a bank transfer can be paid a week after it was ordered. `agreedAt` is the date the
@@ -227,6 +228,15 @@ the second time there is nothing beyond it. If one order holds the same product 
 dates, the earliest `agreedAt` is served first.
 
 ### Preorders and a moved date
+
+The same flow serves a **backorder**: the owed part of a line waits on hold, dated by the promise
+frozen on the order. A group carries its `cause` (`preorder` or `backorder`) and, when the promise was
+the 30-day default, `defaulted`: a later change to the catalogue's date leaves such a group alone,
+because the buyer was never promised a date. `product.restock_date_changed` is the backorder's twin of
+the release-date event, and `GET /delivery/fulfillment-orders/restock-date-impact` its staff preview.
+A delay is worded without the word preorder (`delivery.fulfillment-delayed`,
+`notifications.fulfillment-delayed`): late is late whatever the cause, and a preorder still waiting
+after release is a backorder in all but name.
 
 The buyer of a preorder was promised a date, and that promise is law: the date shown when ordering
 is the agreed one (CRD Art. 18), and a seller who cannot keep a mail-order date must tell the buyer
@@ -311,8 +321,9 @@ when the buyer must answer.
 `npm run sweep:preorders` (02:20 UTC, under a lease; [scheduled jobs](../reference/ops.md#scheduled-jobs))
 does two things, and only to fulfillment orders still `on_hold` for stock:
 
-- a fulfillment order whose **current** `expectedAt` has passed with no stock, and no notice since, asks
-  the same question. It is keyed on `expectedAt`, not `agreedAt`: after an accepted slip the agreed date
+- a fulfillment order whose **current** `expectedAt` is two days away, or past, with no stock and no
+  notice since, asks the same question. The offer must go out no later than the promise (FTC
+  435.2(b)(1)), so it goes out ahead of the date, never after. It is keyed on `expectedAt`, not `agreedAt`: after an accepted slip the agreed date
   is long gone and only the expected one can still be missed. `lastNoticeAt` is what stops a daily
   repeat;
 - one asked and not answered for 30 days is marked `consent: expired` and announced as
@@ -335,7 +346,7 @@ reason all live on it, and `orders → delivery` is forbidden, so `orders` could
 | `GET /delivery/fulfillment-orders/summary`             | per product, in units: paid, waiting, awaiting a yes, allocated, shipped, cancelled, late               |
 | `GET /delivery/fulfillment-orders/release-date-impact` | orders a release-date move would notify or ask, before it is saved (`update:Product` + `display:Order`) |
 
-Filters on the list: `preorder` (made from a preorder line, the ones that carry an agreed date),
+Filters on the list: `cause` (`preorder`, `backorder`, or `any` wait that carries an agreed date),
 `state`, `productId`, `late` and `dueWithin`.
 
 | `state`        | The fulfillment order is...                                                                          |

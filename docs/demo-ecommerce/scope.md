@@ -43,8 +43,7 @@ Decided, or partly built, but not the whole story yet:
 - **Discounts and coupons**, once returns and the invoice lifecycle are settled — a discount has to
   net out of the same VAT breakdown both of those already touch.
 - **Guest checkout**, and editing an order as a draft rather than a separate follow-up action.
-- **Gift cards and store credit**, authorise-then-capture payments, split shipments, backorders and
-  pre-orders, compare-at ("was/now") pricing, a category tree, and product bundles — real shop
+- **Gift cards and store credit**, authorise-then-capture payments, compare-at ("was/now") pricing, a category tree, and product bundles — real shop
   features, not built yet.
 
 ## Genuinely out of scope

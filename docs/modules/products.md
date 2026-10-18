@@ -199,6 +199,24 @@ Not stored; how these states translate if a feed or JSON-LD is ever emitted.
 | off sale           | `OutOfStock`              | `out_of_stock`        |
 | hidden / removed   | (not emitted)             | removed from the feed |
 
+## Backorder
+
+A released product the shop keeps selling while it is out of stock. Three fields and one derived flag:
+
+| Field            | Meaning                                                                                        |
+| ---------------- | ---------------------------------------------------------------------------------------------- |
+| `allowBackorder` | the switch, off by default                                                                     |
+| `restockDate`    | optional, at most a year ahead; without it the shop promises "within 30 days"                  |
+| `backorder`      | derived, never stored: switch on, released, visible and buyable, date not passed, cap has room |
+
+**A passed restock date reads sold out**, until staff set a new date or clear it. A missed date is
+evidence the shop lacks a basis to promise another one. Moving the date later tells the buyers who
+were promised it, by the same rule as a moved release date; a buyer promised the 30-day default is
+left alone, whatever the catalogue does.
+
+`product.buyable_again` is the signal [`stock-alerts`](./stock-alerts.md) listens to: it fires once when
+the product flips from not orderable to orderable, in the transaction of the write that caused it.
+
 ## The pipeline
 
 A delete is the interesting path, because it is the one that has to reach back into modules this
