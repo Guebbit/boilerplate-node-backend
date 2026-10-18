@@ -6,7 +6,7 @@
  *
  * `@opentelemetry/sdk-trace`'s `BatchSpanProcessor` takes one options object (`{ exporter, ... }`)
  * — a real, silent-until-flush break from the deprecated `sdk-trace-base` two-argument form
- * `@opentelemetry/sdk-trace-node` re-exported: passing the exporter positionally leaves
+ * that `@opentelemetry/sdk-node`'s `node` namespace re-exports: passing the exporter positionally leaves
  * `options.exporter` `undefined`, so a span queues fine and the failure only surfaces later,
  * inside `_flushAll()`, when it tries `undefined.export(...)`. `ts-check` catches the shape going
  * forward; this pins that a span really does reach a real exporter's `export()` at runtime too.
@@ -24,7 +24,7 @@ import {
     trace,
     type Span
 } from '@opentelemetry/api';
-import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
+import { node } from '@opentelemetry/sdk-node';
 import type { ReadableSpan } from '@opentelemetry/sdk-trace';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { asStub } from '@tests/stub';
@@ -134,7 +134,7 @@ describe('otel-sdk — publicEndpointPropagator', () => {
     });
 
     it('still injects traceparent on an outgoing call', () => {
-        const provider = new NodeTracerProvider();
+        const provider = new node.NodeTracerProvider();
         const span = provider.getTracer('test').startSpan('outgoing');
         const carrier: Record<string, string> = {};
 
@@ -149,7 +149,7 @@ describe('otel-sdk — publicEndpointPropagator', () => {
 
     it('still yields a sampled root span when the caller sent an unsampled traceparent', () => {
         // The attack the propagator closes: a `-00` flag must not switch our tracing off.
-        const provider = new NodeTracerProvider();
+        const provider = new node.NodeTracerProvider();
         const extracted = propagator.extract(
             context.active(),
             { traceparent: traceparent('00') },

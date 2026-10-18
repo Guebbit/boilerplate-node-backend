@@ -12,11 +12,8 @@
 
 import { trace, context, ROOT_CONTEXT } from '@opentelemetry/api';
 import { setEnvironment } from '@tests/environment';
-import {
-    InMemorySpanExporter,
-    SimpleSpanProcessor,
-    NodeTracerProvider
-} from '@opentelemetry/sdk-trace-node';
+import { node } from '@opentelemetry/sdk-node';
+import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace';
 import {
     getTracer,
     withSpan,
@@ -31,14 +28,14 @@ import {
 // Each describe block sets up and tears down its own provider to stay isolated.
 const setupTestProvider = () => {
     const exporter = new InMemorySpanExporter();
-    const provider = new NodeTracerProvider({
-        spanProcessors: [new SimpleSpanProcessor(exporter)]
+    const provider = new node.NodeTracerProvider({
+        spanProcessors: [new SimpleSpanProcessor({ exporter })]
     });
     provider.register(); // registers as the global tracer provider
     return { exporter, provider };
 };
 
-const teardownTestProvider = async (provider: NodeTracerProvider) => {
+const teardownTestProvider = async (provider: node.NodeTracerProvider) => {
     await provider.shutdown();
     trace.disable();
 };
@@ -72,7 +69,7 @@ describe('getTracer', () => {
 
 describe('withSpan — success', () => {
     let exporter: InMemorySpanExporter;
-    let provider: NodeTracerProvider;
+    let provider: node.NodeTracerProvider;
 
     beforeEach(() => {
         ({ exporter, provider } = setupTestProvider());
@@ -100,7 +97,7 @@ describe('withSpan — success', () => {
 
 describe('withSpan — error', () => {
     let exporter: InMemorySpanExporter;
-    let provider: NodeTracerProvider;
+    let provider: node.NodeTracerProvider;
 
     beforeEach(() => {
         ({ exporter, provider } = setupTestProvider());
@@ -172,7 +169,7 @@ describe('withSpan — error', () => {
 // ---------------------------------------------------------------------------
 
 describe('getActiveSpanContext', () => {
-    let provider: NodeTracerProvider;
+    let provider: node.NodeTracerProvider;
 
     beforeEach(() => {
         ({ provider } = setupTestProvider());
@@ -204,7 +201,7 @@ describe('getActiveSpanContext', () => {
 
 describe('recordErrorOnActiveSpan', () => {
     let exporter: InMemorySpanExporter;
-    let provider: NodeTracerProvider;
+    let provider: node.NodeTracerProvider;
 
     beforeEach(() => {
         ({ exporter, provider } = setupTestProvider());
