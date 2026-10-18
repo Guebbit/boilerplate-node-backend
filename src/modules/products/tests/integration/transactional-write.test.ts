@@ -87,6 +87,28 @@ describe('productService.create is one transaction', () => {
     });
 });
 
+describe('productService.create after its commit', () => {
+    it('still answers the created product when the re-read that follows fails', async () => {
+        jest.spyOn(productRepository, 'findById').mockRejectedValueOnce(
+            new Error('read replica down')
+        );
+
+        const result = (await productService.create(
+            productService.zodProductCreateSchema.parse({
+                price: 12,
+                translations: { [FALLBACK]: { title: 'Standing Desk' } }
+            }),
+            callerContextAs('admin')
+        )) as ResponseSuccess<ProductDocument>;
+
+        // The row is durable; only the nicety of re-reading it back failed, and is not the buyer's
+        // (or the admin's) problem: the document the transaction wrote is the answer.
+        expect(result.success).toBe(true);
+        expect(await productRepository.count({})).toBe(1);
+        jest.restoreAllMocks();
+    });
+});
+
 describe('productService.updateById is one transaction', () => {
     it('keeps the old row when the translation write fails', async () => {
         const product = await createProduct({ title: 'Standing Desk', price: 10, active: true });
