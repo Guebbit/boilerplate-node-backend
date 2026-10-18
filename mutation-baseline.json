@@ -67,7 +67,6 @@
         "src/modules/account/services/authentication.ts": 0,
         "src/modules/account/services/index.ts": 100,
         "src/modules/account/services/profile.ts": 0,
-        "src/modules/account/services/token-cleanup.ts": 100,
         "src/modules/account/services/verification.ts": 0,
         "src/modules/account/session/config.ts": 100,
         "src/modules/account/session/cookies.ts": 96.67,

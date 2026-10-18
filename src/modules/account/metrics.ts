@@ -124,17 +124,6 @@ export const authEmailChangeUndoTotal = new Counter({
 });
 
 /**
- * Expired-token cleanup runs (admin endpoint).
- * Note: no `labelNames` — a maintenance job either ran or did not, so there is no outcome
- * dimension worth slicing by. Useful mainly to confirm the job is still running at all.
- */
-export const authTokenCleanupTotal = new Counter({
-    name: 'auth_token_cleanup_total',
-    help: 'Total expired-token cleanup operations.',
-    registers: [metricsRegistry]
-});
-
-/**
  * Account deletion request attempts.
  * A churn signal, and one with regulatory weight (GDPR erasure requests).
  */
