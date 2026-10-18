@@ -51,6 +51,7 @@ import {
     type JoinedCartLine
 } from './view';
 import { availabilityProductOf, backorderIdsOf, preorderIdsOf } from './preorder';
+import { shippingMethodNotFound } from './errors';
 import { ERROR_CODES } from '@api/error-codes';
 import { shipToCountries, shopCurrency } from '@modules/shop';
 
@@ -169,15 +170,7 @@ const resolveShipping = async (
     const shippingMethod =
         shippingMethodId === undefined ? undefined : findShippingMethod(shippingMethodId);
     if (shippingMethodId !== undefined && !shippingMethod)
-        return {
-            ok: false,
-            reject: generateReject(404, [
-                {
-                    code: ERROR_CODES.CART_SHIPPING_METHOD_NOT_FOUND,
-                    message: t('cart.shipping-method-not-found')
-                }
-            ])
-        };
+        return { ok: false, reject: shippingMethodNotFound() };
 
     // A physical basket with no method is refused later as `CART_SHIPPING_METHOD_REQUIRED`;
     // until then there is simply no address to resolve.

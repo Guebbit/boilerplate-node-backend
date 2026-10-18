@@ -27,6 +27,7 @@ import { cartRepository, QUANTITY_LIMIT } from '../repository';
 import { cartLineMax } from '../config';
 import { readCartLines, toCartView, isJoined, type CartLine, type CartView } from './view';
 import { ERROR_CODES } from '@api/error-codes';
+import { shippingMethodNotFound } from './errors';
 
 /**
  * Get user cart, each line joined with its product.
@@ -268,15 +269,7 @@ export const cartShippingMethodSet = (
             .then((view) => generateSuccess(view));
 
     const method = findShippingMethod(shippingMethodId);
-    if (!method)
-        return Promise.resolve(
-            generateReject(404, [
-                {
-                    code: ERROR_CODES.CART_SHIPPING_METHOD_NOT_FOUND,
-                    message: t('cart.shipping-method-not-found')
-                }
-            ])
-        );
+    if (!method) return Promise.resolve(shippingMethodNotFound());
 
     return cartRepository
         .findByUserId(userId)
