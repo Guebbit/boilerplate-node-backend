@@ -48,6 +48,7 @@ import {
     callerContextAs
 } from '@tests/callers';
 import { payByCard } from '@modules/payments/tests/factories';
+import { reservationRepository } from '@modules/inventory/tests/factories';
 
 // The audit port is replaced, not spied on — see `tests/support/ports.ts`.
 jest.mock('@infrastructure/observability/audit', () =>
@@ -751,6 +752,36 @@ describe('the confirm commits the order’s held units', () => {
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
         const movements = await inventoryService.listMovements({ productId: String(product._id) });
         expect(movements.items.map((row) => row.reason)).toEqual(['reserve']);
+    });
+
+    it('settles a payment whose order is already paid: the hold commits, nothing is refunded', async () => {
+        // The replay branch: the payment write lands but `markPaid` matches nothing, because the
+        // order moved to `paid` while the card was being charged, and left its hold `held`.
+        const { user, order } = await placedOrder(10, 3);
+        const orderId = String(order._id);
+        const intent = await paymentService.createIntent(orderId, auth(user));
+        const originalConfirm = fakePaymentProvider.confirm;
+        jest.spyOn(fakePaymentProvider, 'confirm').mockImplementationOnce(
+            async (providerRef, methodRef) => {
+                await forceOrderStatus(orderId, 'paid');
+                return originalConfirm(providerRef, methodRef);
+            }
+        );
+
+        const result = await paymentService.confirmPayment(
+            String(intent.success && intent.data?.id),
+            GOOD_METHOD,
+            auth(user),
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+        const payment = await paymentRepository.findByOrderId(orderId);
+        expect(payment!.status).toBe('succeeded');
+        expect(payment!.refunds).toHaveLength(0);
+        expect((await orderService.getById(orderId))!.status).toBe('paid');
+        const hold = await reservationRepository.findByOrderId(orderId);
+        expect(hold?.status).toBe('committed');
     });
 
     it('commits once when the webhook and the browser settle the same payment', async () => {

@@ -8,8 +8,8 @@
 import type { Types } from 'mongoose';
 import { stockLevelModel } from '../model';
 
-/** The stock rows themselves — a sibling's own assertion on what the ledger holds. */
-export { stockLevelRepository } from '../repository';
+/** The stock rows and holds themselves — a sibling's own assertion on what the ledger holds. */
+export { stockLevelRepository, reservationRepository } from '../repository';
 
 /**
  * Overwrite a level row's counters, bypassing every stock rule and leaving the catalogue's cached

@@ -248,7 +248,8 @@ const settleWithin = async (
     );
     if (!moved) {
         // The write matched nothing: either the order is already past payment, or it is gone.
-        const current = await orderService.getById(orderId);
+        // Read inside the settlement's own snapshot, the one `markPaid` judged, never a fresh one.
+        const current = await orderService.readOrder(orderId, session);
         if (!current || !paymentSettled(current.status)) {
             await openRefund(succeeded, CANCELLATION_REQUEST, undefined, session);
             return { kind: 'lost', payment: succeeded };
