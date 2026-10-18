@@ -2,8 +2,35 @@
  * @module
  * The one place "a day in milliseconds" is spelled. Retention windows, cooldowns and lifetimes
  * across the codebase are written in terms of it, so a window reads as `7 * DAY_MS`. It lives here,
- * below every tier, so `domain/` files can count whole UTC days with it as well.
+ * below every tier, so `domain/` files can count whole UTC days with it as well. The shop-day key
+ * sits beside it for the same reason: a rule that groups by day needs it without importing a module.
  */
 
 /** One day, in milliseconds. */
 export const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The calendar day an instant falls in, on the wall clock of `timeZone`, as `YYYY-MM-DD`.
+ *
+ * Why not `toISOString().slice(0, 10)`: 00:30 on the 5th in Rome is still the 4th in UTC, and a
+ * day a staff member typed is the shop's day, not the server's.
+ * @param instant - the moment
+ * @param timeZone - canonical IANA zone name, e.g. `Europe/Rome`
+ * @returns the day, sortable as text
+ */
+export const dayInZone = (instant: Date, timeZone: string): string => {
+    // Intl: `2-digit` month and day keep the key sortable; `gregory` and `latn` pin the calendar
+    // and digits; the parts come back in the host locale's order, so each is read by its type.
+    // https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
+    const parts = new Intl.DateTimeFormat('en', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        calendar: 'gregory',
+        numberingSystem: 'latn'
+    }).formatToParts(instant);
+    const field = (type: Intl.DateTimeFormatPartTypes): string =>
+        parts.find((part) => part.type === type)?.value ?? '';
+    return `${field('year')}-${field('month')}-${field('day')}`;
+};

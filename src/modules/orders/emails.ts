@@ -10,7 +10,13 @@ import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 import { orderFrontendLink, withdrawalPeriodDays } from './config';
 import { isExcludedFromWithdrawal, isShippedItem, orderTotal } from './domain';
-import { addressLine, returnAddress, returnPostagePayer, shopIdentity } from '@modules/shop';
+import {
+    addressLine,
+    returnAddress,
+    returnPostagePayer,
+    shopIdentity,
+    shopTimezone
+} from '@modules/shop';
 
 /**
  * The minimum either document needs from an order: a title and a price per line.
@@ -191,14 +197,14 @@ export const withdrawalNotice = (
 };
 
 /**
- * The date a delivery date is printed as, in the recipient's language. UTC days, like every date
- * rule that decides them.
+ * The date a delivery date is printed as, in the recipient's language and on the shop's calendar:
+ * staff type a day on the shop's wall clock, and UTC would print the evening before it.
  *
  * @param locale - the recipient's language
  * @param date - the date
  */
 const longDate = (locale: string, date: Date): string =>
-    new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(date);
+    new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: shopTimezone() }).format(date);
 
 /**
  * What a line promises about delivery, when it is not "ready now": a preorder ships from its date,

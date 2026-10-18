@@ -51,7 +51,7 @@ const groupable = (
 
 describe('groupOrderLines', () => {
     it('makes one open physical fulfillment order of an ordinary order', () => {
-        const drafts = groupOrderLines([groupable('a', 2), groupable('b', 1)]);
+        const drafts = groupOrderLines([groupable('a', 2), groupable('b', 1)], 'UTC');
 
         expect(drafts).toHaveLength(1);
         expect(drafts[0]).toMatchObject({ number: 1, kind: 'physical', status: 'open' });
@@ -63,13 +63,16 @@ describe('groupOrderLines', () => {
     });
 
     it('makes a digital-only order one digital fulfillment order', () => {
-        const drafts = groupOrderLines([groupable('a', 1, { ships: false })]);
+        const drafts = groupOrderLines([groupable('a', 1, { ships: false })], 'UTC');
 
         expect(drafts).toMatchObject([{ number: 1, kind: 'digital', status: 'open' }]);
     });
 
     it('keeps the digital lines of a mixed order in the one physical fulfillment order', () => {
-        const drafts = groupOrderLines([groupable('a', 1), groupable('b', 1, { ships: false })]);
+        const drafts = groupOrderLines(
+            [groupable('a', 1), groupable('b', 1, { ships: false })],
+            'UTC'
+        );
 
         expect(drafts).toHaveLength(1);
         expect(drafts[0].kind).toBe('physical');
@@ -77,18 +80,24 @@ describe('groupOrderLines', () => {
     });
 
     it('gives each preorder release day its own on_hold fulfillment order, after #1, by date', () => {
-        const drafts = groupOrderLines([
-            groupable('late', 1, { preorder: true, releaseDate: new Date('2026-12-20T00:00:00Z') }),
-            groupable('now', 1),
-            groupable('early', 2, {
-                preorder: true,
-                releaseDate: new Date('2026-12-12T09:30:00Z')
-            }),
-            groupable('early-too', 1, {
-                preorder: true,
-                releaseDate: new Date('2026-12-12T18:00:00Z')
-            })
-        ]);
+        const drafts = groupOrderLines(
+            [
+                groupable('late', 1, {
+                    preorder: true,
+                    releaseDate: new Date('2026-12-20T00:00:00Z')
+                }),
+                groupable('now', 1),
+                groupable('early', 2, {
+                    preorder: true,
+                    releaseDate: new Date('2026-12-12T09:30:00Z')
+                }),
+                groupable('early-too', 1, {
+                    preorder: true,
+                    releaseDate: new Date('2026-12-12T18:00:00Z')
+                })
+            ],
+            'UTC'
+        );
 
         expect(drafts.map(({ number, status }) => [number, status])).toEqual([
             [1, 'open'],
@@ -103,12 +112,38 @@ describe('groupOrderLines', () => {
         expect(drafts[2].agreedAt).toEqual(new Date('2026-12-20T00:00:00Z'));
     });
 
+    it('groups two release instants of one shop day together, though UTC splits them', () => {
+        // 23:00Z on the 11th is midnight on the 12th in Rome (winter, UTC+1), and 08:00Z on the 12th is the same day.
+        const drafts = groupOrderLines(
+            [
+                groupable('late-night', 1, {
+                    preorder: true,
+                    releaseDate: new Date('2026-12-11T23:00:00Z')
+                }),
+                groupable('morning', 1, {
+                    preorder: true,
+                    releaseDate: new Date('2026-12-12T08:00:00Z')
+                })
+            ],
+            'Europe/Rome'
+        );
+
+        expect(drafts).toHaveLength(1);
+        expect(drafts[0].lines.map(({ productId }) => productId)).toEqual([
+            'late-night',
+            'morning'
+        ]);
+    });
+
     it('ships the shelf part of a half-covered line now and holds the owed part for its promise', () => {
         const promisedAt = new Date('2026-12-20T00:00:00Z');
-        const drafts = groupOrderLines([
-            groupable('half', 3, { backorder: { quantity: 1, promisedAt, dated: true } }),
-            groupable('plain', 1)
-        ]);
+        const drafts = groupOrderLines(
+            [
+                groupable('half', 3, { backorder: { quantity: 1, promisedAt, dated: true } }),
+                groupable('plain', 1)
+            ],
+            'UTC'
+        );
 
         expect(drafts.map(({ number, status }) => [number, status])).toEqual([
             [1, 'open'],
@@ -131,9 +166,10 @@ describe('groupOrderLines', () => {
     it('holds a line the shelf did not cover at all, and opens nothing for it', () => {
         const promisedAt = new Date('2026-12-20T00:00:00Z');
 
-        const drafts = groupOrderLines([
-            groupable('none', 2, { backorder: { quantity: 2, promisedAt, dated: true } })
-        ]);
+        const drafts = groupOrderLines(
+            [groupable('none', 2, { backorder: { quantity: 2, promisedAt, dated: true } })],
+            'UTC'
+        );
 
         expect(drafts).toHaveLength(1);
         expect(drafts[0]).toMatchObject({ number: 1, status: 'on_hold', cause: 'backorder' });
@@ -141,10 +177,13 @@ describe('groupOrderLines', () => {
 
     it('marks a group promised the 30-day default, and keeps it apart from a dated one', () => {
         const promisedAt = new Date('2026-12-20T09:00:00Z');
-        const drafts = groupOrderLines([
-            groupable('dated', 1, { backorder: { quantity: 1, promisedAt, dated: true } }),
-            groupable('default', 1, { backorder: { quantity: 1, promisedAt, dated: false } })
-        ]);
+        const drafts = groupOrderLines(
+            [
+                groupable('dated', 1, { backorder: { quantity: 1, promisedAt, dated: true } }),
+                groupable('default', 1, { backorder: { quantity: 1, promisedAt, dated: false } })
+            ],
+            'UTC'
+        );
 
         expect(drafts).toHaveLength(2);
         expect(drafts.filter(({ defaulted }) => defaulted === true)).toHaveLength(1);
@@ -153,19 +192,22 @@ describe('groupOrderLines', () => {
 
     it('keeps a preorder and a backorder due the same day in groups of their own', () => {
         const date = new Date('2026-12-20T00:00:00Z');
-        const drafts = groupOrderLines([
-            groupable('pre', 1, { preorder: true, releaseDate: date }),
-            groupable('back', 1, { backorder: { quantity: 1, promisedAt: date, dated: true } })
-        ]);
+        const drafts = groupOrderLines(
+            [
+                groupable('pre', 1, { preorder: true, releaseDate: date }),
+                groupable('back', 1, { backorder: { quantity: 1, promisedAt: date, dated: true } })
+            ],
+            'UTC'
+        );
 
         expect(drafts.map(({ cause }) => cause).toSorted()).toEqual(['backorder', 'preorder']);
     });
 
     it('gives made-to-order lines a fulfillment order of their own, after the ordinary one', () => {
-        const drafts = groupOrderLines([
-            groupable('engraved', 1, { noWithdrawal: true }),
-            groupable('shirt', 2)
-        ]);
+        const drafts = groupOrderLines(
+            [groupable('engraved', 1, { noWithdrawal: true }), groupable('shirt', 2)],
+            'UTC'
+        );
 
         expect(drafts.map(({ number, status }) => [number, status])).toEqual([
             [1, 'open'],
@@ -176,10 +218,10 @@ describe('groupOrderLines', () => {
     });
 
     it('makes one fulfillment order of an order made only of made-to-order lines', () => {
-        const drafts = groupOrderLines([
-            groupable('a', 1, { noWithdrawal: true }),
-            groupable('b', 1, { noWithdrawal: true })
-        ]);
+        const drafts = groupOrderLines(
+            [groupable('a', 1, { noWithdrawal: true }), groupable('b', 1, { noWithdrawal: true })],
+            'UTC'
+        );
 
         expect(drafts).toHaveLength(1);
         expect(drafts[0].lines).toHaveLength(2);
@@ -187,10 +229,13 @@ describe('groupOrderLines', () => {
 
     it('keeps a release day’s made-to-order preorder apart from its ordinary one', () => {
         const releaseDate = new Date('2026-12-12T00:00:00Z');
-        const drafts = groupOrderLines([
-            groupable('bespoke', 1, { preorder: true, releaseDate, noWithdrawal: true }),
-            groupable('plain', 1, { preorder: true, releaseDate })
-        ]);
+        const drafts = groupOrderLines(
+            [
+                groupable('bespoke', 1, { preorder: true, releaseDate, noWithdrawal: true }),
+                groupable('plain', 1, { preorder: true, releaseDate })
+            ],
+            'UTC'
+        );
 
         expect(drafts.map(({ lines }) => lines.map(({ productId }) => productId))).toEqual([
             ['plain'],
@@ -199,21 +244,22 @@ describe('groupOrderLines', () => {
     });
 
     it('numbers an order of preorders alone from 1, with no open fulfillment order', () => {
-        const drafts = groupOrderLines([
-            groupable('a', 1, { preorder: true, releaseDate: new Date('2026-12-12T00:00:00Z') })
-        ]);
+        const drafts = groupOrderLines(
+            [groupable('a', 1, { preorder: true, releaseDate: new Date('2026-12-12T00:00:00Z') })],
+            'UTC'
+        );
 
         expect(drafts).toMatchObject([{ number: 1, status: 'on_hold' }]);
     });
 
     it('treats a preorder line with no date as an ordinary one: with nothing to wait for it cannot be held', () => {
-        const drafts = groupOrderLines([groupable('a', 1, { preorder: true })]);
+        const drafts = groupOrderLines([groupable('a', 1, { preorder: true })], 'UTC');
 
         expect(drafts).toMatchObject([{ number: 1, status: 'open' }]);
     });
 
     it('makes nothing of an order with no lines', () => {
-        expect(groupOrderLines([])).toEqual([]);
+        expect(groupOrderLines([], 'UTC')).toEqual([]);
     });
 });
 

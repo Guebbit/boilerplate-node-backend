@@ -10,6 +10,7 @@
 
 import { OrderStatus } from '@types';
 import { orderService, isShippedItem } from '@modules/orders';
+import { shopTimezone } from '@modules/shop';
 import type { OrderDocument } from '@modules/orders';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { groupOrderLines, type GroupableLine } from '../domain';
@@ -68,7 +69,7 @@ export const ensureFulfillmentOrders = (orderId: string): Promise<void> =>
         return fulfillmentOrderRepository.findByOrderId(orderId).then((existing) => {
             if (existing.length > 0) return undefined;
 
-            const drafts = groupOrderLines(groupableLinesOf(order));
+            const drafts = groupOrderLines(groupableLinesOf(order), shopTimezone());
             return withTransaction(async (session) => {
                 // One after another: a transaction's session does not take parallel operations.
                 for (const draft of drafts) {

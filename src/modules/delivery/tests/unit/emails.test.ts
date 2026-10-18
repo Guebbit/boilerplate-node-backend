@@ -6,7 +6,11 @@
  * interpolated wrong turns "your parcel is on its way" into a message with no way to act on it.
  */
 
-import { shipmentDeliveredEmail, shipmentShippedEmail } from '@modules/delivery/emails';
+import {
+    fulfillmentDelayedEmail,
+    shipmentDeliveredEmail,
+    shipmentShippedEmail
+} from '@modules/delivery/emails';
 
 const NAME = 'Ada Lovelace';
 const CODE = 'TRK-99887766';
@@ -122,5 +126,23 @@ describe('shipmentDeliveredEmail', () => {
             expect(value).not.toBe('');
             expect(value).not.toMatch(/^delivery\./);
         }
+    });
+});
+
+describe('fulfillmentDelayedEmail', () => {
+    it("prints the dates on the shop's calendar, so a day staff typed does not slip a day", () => {
+        // Local midnight in Rome is 23:00Z the evening before (winter, UTC+1).
+        const mail = fulfillmentDelayedEmail('en', NAME, {
+            titles: ['Analytical Engine'],
+            agreedAt: new Date('2026-12-11T23:00:00Z'),
+            expectedAt: new Date('2026-12-19T23:00:00Z'),
+            needsAnswer: true,
+            answerBy: new Date('2026-12-17T23:00:00Z'),
+            orderUrl: 'https://shop.example/en/orders/1'
+        });
+
+        expect(String(mail.data.body)).toContain('December 12, 2026');
+        expect(String(mail.data.body)).toContain('December 20, 2026');
+        expect(String(mail.data.answer)).toContain('December 18, 2026');
     });
 });
