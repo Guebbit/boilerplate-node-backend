@@ -14,7 +14,7 @@ import {
     hasWaitExpired,
     judgeMove,
     judgeSlip,
-    needsDatePassedNotice,
+    needsDueNotice,
     slippedDays
 } from '../../domain';
 
@@ -148,7 +148,7 @@ describe('answerBy', () => {
     });
 });
 
-describe('needsDatePassedNotice', () => {
+describe('needsDueNotice', () => {
     const now = new Date('2026-12-20T00:00:00Z');
 
     it.each([
@@ -164,6 +164,19 @@ describe('needsDatePassedNotice', () => {
             false
         ],
         ['a date still ahead', { expectedAt: afterAgreed(30) }, false],
+        ['a date a day ahead, inside the two-day margin', { expectedAt: afterAgreed(20) }, true],
+        ['a date exactly two days ahead', { expectedAt: afterAgreed(21) }, true],
+        ['a date three days ahead, outside the margin', { expectedAt: afterAgreed(22) }, false],
+        [
+            'a date noticed before the margin opened',
+            { expectedAt: afterAgreed(21), lastNoticeAt: afterAgreed(18.5) },
+            true
+        ],
+        [
+            'a date noticed after the margin opened',
+            { expectedAt: afterAgreed(21), lastNoticeAt: afterAgreed(19.5) },
+            false
+        ],
         ['no expected date at all', {}, false],
         [
             'a buyer already being asked',
@@ -176,7 +189,7 @@ describe('needsDatePassedNotice', () => {
             true
         ]
     ])('%s', (_name, facts, expected) => {
-        expect(needsDatePassedNotice(facts, now)).toBe(expected);
+        expect(needsDueNotice(facts, now)).toBe(expected);
     });
 });
 

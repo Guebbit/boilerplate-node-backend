@@ -353,7 +353,7 @@ describe('the buyer saying keep waiting', () => {
 });
 
 describe('the daily sweep', () => {
-    it('asks the buyer once about a date that passed with no stock, and not again', async () => {
+    it('asks the buyer once about a date that came with no stock, and not again', async () => {
         const { orderId } = await preorder(30);
         await waitingOf(orderId);
         const later = inDays(31);
@@ -367,8 +367,23 @@ describe('the daily sweep', () => {
             { asked: 0, expired: 0 }
         ]);
         expect(await consentOf(orderId)).toBe('awaiting');
-        expect(await delayedEvents()).toMatchObject([{ reason: 'passed', needsAnswer: true }]);
+        expect(await delayedEvents()).toMatchObject([{ reason: 'due', needsAnswer: true }]);
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks two days BEFORE the date, never after: the offer must not come later than the promise', async () => {
+        const { orderId } = await preorder(30);
+        await waitingOf(orderId);
+
+        const early = await deliveryService.runPreorderSweep(inDays(27.5));
+        const margin = await deliveryService.runPreorderSweep(inDays(28.5));
+        await settleOutboxNudges();
+
+        expect([early, margin]).toEqual([
+            { asked: 0, expired: 0 },
+            { asked: 1, expired: 0 }
+        ]);
+        expect(await consentOf(orderId)).toBe('awaiting');
     });
 
     it('leaves a date still ahead alone', async () => {

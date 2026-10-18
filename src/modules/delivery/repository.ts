@@ -14,6 +14,7 @@ import {
     applyShipmentTransform
 } from './model';
 import type { FulfillmentOrderDocument, ShipmentDocument } from './model';
+import { ASK_BEFORE_DAYS } from './domain';
 import type { FulfillmentOrderDraft, WaitCause } from './domain';
 import {
     FulfillmentConsent,
@@ -188,7 +189,7 @@ export const fulfillmentOrderRepository: Repository<
         productId: string,
         cause: WaitCause
     ) => Promise<FulfillmentOrderDocument[]>;
-    findDatePassed: (now: Date) => Promise<FulfillmentOrderDocument[]>;
+    findDateNear: (now: Date) => Promise<FulfillmentOrderDocument[]>;
     findWaitsExpired: (now: Date) => Promise<FulfillmentOrderDocument[]>;
     searchBoard: (
         filters: BoardFilters,
@@ -316,16 +317,17 @@ export const fulfillmentOrderRepository: Repository<
             .exec(),
 
     /**
-     * The waiting fulfillment orders whose expected date has come, for the sweep to judge against
-     * their last notice (a date alone cannot say whether the buyer was already told).
+     * The waiting fulfillment orders whose expected date is near (within the margin the question
+     * goes out ahead of it) or past, for the sweep to judge against their last notice (a date alone
+     * cannot say whether the buyer was already told).
      * @param now - the instant of the sweep
      */
-    findDatePassed: (now) =>
+    findDateNear: (now) =>
         fulfillmentOrderModel
             .find({
                 status: FulfillmentOrderStatus.on_hold,
                 holdReason: FulfillmentHoldReason.awaiting_stock,
-                expectedAt: { $lte: now }
+                expectedAt: { $lte: new Date(now.getTime() + ASK_BEFORE_DAYS * DAY_MS) }
             })
             .exec(),
 

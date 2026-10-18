@@ -42,8 +42,8 @@ export interface FulfillmentOrderDelayed {
     agreedAt: string;
     /** The date now expected, absent when there is none (the date was cleared). */
     expectedAt?: string;
-    /** `moved`: the date was changed. `passed`: the expected date came and there is still no stock. */
-    reason: 'moved' | 'passed';
+    /** `moved`: the date was changed. `due`: the expected date is two days away (or past) and there is still no stock. */
+    reason: 'moved' | 'due';
     /** Whether silence cancels: the buyer must say "keep waiting" by `answerBy`. */
     needsAnswer: boolean;
     /** When silence turns into a cancel (ISO 8601); present exactly when `needsAnswer`. */

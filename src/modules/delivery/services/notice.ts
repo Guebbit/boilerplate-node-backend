@@ -21,13 +21,13 @@ import { announceDelayed } from './announce';
 
 /** What a notice says, once the caller has decided it. */
 export interface NoticeInput {
-    /** `moved` for an admin's edit, `passed` for the sweep. */
+    /** `moved` for an admin's edit, `due` for the sweep. */
     reason: FulfillmentOrderDelayed['reason'];
     /** The date now expected; `null` removes it (the date was cleared), absent leaves it alone. */
     expectedAt?: Date | null | undefined;
     /** Whether silence cancels — the buyer must say "keep waiting". */
     needsAnswer: boolean;
-    /** Whether this counts as a slip the buyer was told about (the sweep's `passed` does not). */
+    /** Whether this counts as a slip the buyer was told about (the sweep's `due` does not). */
     countsAsSlip: boolean;
 }
 

@@ -29,6 +29,13 @@ import { remainingOf, remainingOfLine, type FulfillmentLine } from './fulfillmen
 /** The longest first slip a buyer's silence may stand for: the FTC's 30 days, less a margin. */
 export const SILENT_SLIP_DAYS = 28;
 
+/**
+ * How many days before the expected date the buyer is asked, if the goods are still not there. The
+ * FTC wants the offer to go out "in no event later than" the promised time (435.2 (b)(1)): two days
+ * for time zones and day counting, the same margin as the 28 of 30 above.
+ */
+export const ASK_BEFORE_DAYS = 2;
+
 /** How long a buyer has to say "keep waiting" before silence cancels: the FTC's 30 days. */
 export const CONSENT_WINDOW_DAYS = 30;
 
@@ -156,18 +163,24 @@ export interface SweepFacts {
 }
 
 /**
- * Has the expected date passed with the buyer never told? Keyed on the CURRENT expected date: after
- * an accepted slip the agreed date is long gone, and only the expected one can still be missed. A
- * notice sent since it passed (or at the moment it was moved) is what stops a daily repeat.
+ * Is the expected date close (or past) with the buyer not told since? Keyed on the CURRENT expected
+ * date: after an accepted slip the agreed date is long gone, and only the expected one can still be
+ * missed. The question goes out {@link ASK_BEFORE_DAYS} before it, because the offer must not come
+ * later than the promise. A notice sent since then (or at the moment the date was moved) is what
+ * stops a daily repeat.
  *
  * @param facts - the fulfillment order's dates and last notice
  * @param now - the instant of the sweep
  */
-export const needsDatePassedNotice = (facts: SweepFacts, now: Date): boolean =>
-    facts.expectedAt !== undefined &&
-    facts.expectedAt.getTime() <= now.getTime() &&
-    facts.consent !== FulfillmentConsent.awaiting &&
-    (facts.lastNoticeAt === undefined || facts.lastNoticeAt.getTime() < facts.expectedAt.getTime());
+export const needsDueNotice = (facts: SweepFacts, now: Date): boolean => {
+    if (facts.expectedAt === undefined || facts.consent === FulfillmentConsent.awaiting)
+        return false;
+    const dueAt = facts.expectedAt.getTime() - ASK_BEFORE_DAYS * DAY_MS;
+    return (
+        dueAt <= now.getTime() &&
+        (facts.lastNoticeAt === undefined || facts.lastNoticeAt.getTime() < dueAt)
+    );
+};
 
 /**
  * Has the buyer been asked and let the window close in silence? Either the sweep already said so

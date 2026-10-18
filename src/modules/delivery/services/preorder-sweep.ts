@@ -2,9 +2,10 @@
  * @module
  * The daily sweep over waiting preorders (PRODUCT_STATES P5). Two jobs, one pass:
  *
- * - a fulfillment order whose CURRENT expected date has passed with no stock and no notice since
- *   gets the same question a long slip does: keep waiting, or cancel (an indefinite delay,
- *   FTC 16 CFR 435.2 (b)(1)(iii)(B));
+ * - a fulfillment order whose CURRENT expected date is two days away (or past) with no stock and no
+ *   notice since gets the same question a long slip does: keep waiting, or cancel (an indefinite
+ *   delay, FTC 16 CFR 435.2 (b)(1)(iii)(B)). Asked ahead of the date, never after: the offer must go
+ *   out no later than the promise;
  * - one whose buyer was asked and let the 30 days pass in silence is marked `expired` and
  *   announced, and `returns` cancels and refunds it. It is announced again each day until the
  *   cancel lands.
@@ -20,7 +21,7 @@
  */
 
 import { FulfillmentConsent, FulfillmentHoldReason, FulfillmentOrderStatus } from '@types';
-import { hasWaitExpired, needsDatePassedNotice } from '../domain';
+import { hasWaitExpired, needsDueNotice } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
 import { announceWaitExpired } from './announce';
 import { runAct } from './act';
@@ -28,14 +29,14 @@ import { recordNotice, type SentNotice } from './notice';
 
 /** What one sweep did. */
 export interface PreorderSweepResult {
-    /** Buyers asked because an expected date passed. */
+    /** Buyers asked because an expected date was near or past. */
     asked: number;
     /** Fulfillment orders announced as expired. */
     expired: number;
 }
 
 /**
- * Ask the buyer of one fulfillment order whose date passed, in a transaction. Re-read there, so a
+ * Ask the buyer of one fulfillment order whose date is near or past, in a transaction. Re-read there, so a
  * notice another run (or an allocation) already settled is not sent twice.
  *
  * @param fulfillmentOrderId - the fulfillment order
@@ -51,13 +52,13 @@ const askOne = (fulfillmentOrderId: string, now: Date): Promise<SentNotice | und
         if (
             fulfillmentOrder?.status !== FulfillmentOrderStatus.on_hold ||
             fulfillmentOrder.holdReason !== FulfillmentHoldReason.awaiting_stock ||
-            !needsDatePassedNotice(fulfillmentOrder, now)
+            !needsDueNotice(fulfillmentOrder, now)
         )
             return undefined;
 
         return recordNotice(
             fulfillmentOrder,
-            { reason: 'passed', needsAnswer: true, countsAsSlip: false },
+            { reason: 'due', needsAnswer: true, countsAsSlip: false },
             now,
             session
         );
@@ -105,7 +106,7 @@ export const runPreorderSweep = async (now: Date = new Date()): Promise<Preorder
 
     // One after another: each is a transaction over its own fulfillment order, and the buyer's mail
     // rides each commit's event.
-    for (const fulfillmentOrder of await fulfillmentOrderRepository.findDatePassed(now)) {
+    for (const fulfillmentOrder of await fulfillmentOrderRepository.findDateNear(now)) {
         const sent = await askOne(String(fulfillmentOrder._id), now);
         if (sent) result.asked += 1;
     }
