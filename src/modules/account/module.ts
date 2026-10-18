@@ -26,12 +26,13 @@ import { type AppModule, resolvePersonalDataSections } from '@kernel/registry';
 import { WORKER_CHANNELS, AccountExportJobPayloadSchema } from '@types';
 import { registerAuthResolver } from '@kernel/authentication';
 import { onDomainEvent } from '@kernel/events';
-import { userService, USER_SETUP_REQUESTED } from '@modules/users';
+import { userService, USER_SETUP_REQUESTED, USER_DEACTIVATED } from '@modules/users';
 import { accountAuthResolver } from './session/resolver';
 import { accountConfig } from './config';
 import { sessionConfig } from './session/config';
 import { oauthConfig } from './oauth/config';
 import { requestAccountSetup } from './services/password-reset-request';
+import { revokeFor } from './services/revocation';
 import { router } from './routes';
 import { accountRateLimits } from './rate-limits';
 import { setPersonalDataSections } from './services/personal-data-registry';
@@ -114,6 +115,11 @@ export default {
         onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) =>
             userService.getById(userId).then((user) => user && requestAccountSetup(user))
         );
+        /*
+         * A ban ends the sessions in `users`' own save; the one-time links (a reset, an email
+         * change) outlive that save and must not stay spendable: "a ban ends every credential".
+         */
+        onDomainEvent(USER_DEACTIVATED, ({ userId }) => revokeFor('deactivation', userId));
     },
     locales: path.join(__dirname, 'locales'),
     templates: path.join(__dirname, 'templates')

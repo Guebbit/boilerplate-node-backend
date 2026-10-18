@@ -17,6 +17,7 @@ import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { rearmPrecondition } from '@infrastructure/persistence/versioning';
 import { withTransaction } from '@infrastructure/runtime/database';
+import { announceWithin, nudgeOutbox } from '@kernel/outbox';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { auditForbidden } from '@infrastructure/observability/forbidden';
@@ -28,6 +29,7 @@ import { phoneAad, type UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { usersAnalyticsEvents } from '../analytics';
 import { usersAuditActions } from '../audit';
+import { USER_DEACTIVATED } from '../events';
 import { markSessionsEnded } from './credentials';
 import { enqueueIfPending } from './image';
 import { roleRefusalReject } from './role-refusal';
@@ -60,13 +62,15 @@ export const update = (
     /** {@link changedRole}'s answer: the role to grant, `null` to take it away, `undefined` for no change. */
     role?: RoleChange
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    let banned = false;
     if (data.username !== undefined) user.username = data.username;
     // `role` is not written here — there is no column, only the membership,
     // written below in `saveWithRole` once the rest of the document has saved.
     if (data.active !== undefined) {
         // A ban ends every session in the SAME save: the `active` gate alone would let the old
         // tokens back in the moment someone unbans the account.
-        if (!data.active && user.active) markSessionsEnded(user);
+        banned = !data.active && Boolean(user.active);
+        if (banned) markSessionsEnded(user);
         user.active = data.active;
     }
     // The old url is captured before the overwrite so the save can delete it once
@@ -90,7 +94,7 @@ export const update = (
         user.analyticsConsentAt = new Date();
     }
 
-    return saveWithRole(user, { active: data.active, role }, context, oldImageUrl);
+    return saveWithRole(user, { active: data.active, banned, role }, context, oldImageUrl);
 };
 
 /**
@@ -156,12 +160,14 @@ const writeRole = (
  *
  * @param user - the loaded, already-mutated document
  * @param role - {@link changedRole}'s answer, never the raw request's
+ * @param banned - whether this save is the ban, which commits `user.deactivated` with it
  * @param context - the caller, whose keys bound the role they may grant
  * @param session - the transaction both writes join
  */
 const saveAndGrant = (
     user: UserDocument,
     role: RoleChange,
+    banned: boolean,
     context: CallerContext,
     session: ClientSession
 ): Promise<UserDocument> => {
@@ -175,14 +181,31 @@ const saveAndGrant = (
     // fence the write, so two admins holding the same tag cannot both change the role.
     if (role !== undefined) user.markModified('updatedAt');
 
-    return userRepository
-        .save(user, session)
-        .then((saved) => writeRole(String(saved._id), role, context, session).then(() => saved));
+    return announceWithin(
+        session,
+        () =>
+            userRepository
+                .save(user, session)
+                .then((saved) =>
+                    writeRole(String(saved._id), role, context, session).then(() => saved)
+                ),
+        // The ban commits with its announcement or not at all, so the links are purged exactly when
+        // the sessions died. An ordinary edit announces nothing.
+        (saved) =>
+            banned
+                ? {
+                      name: USER_DEACTIVATED,
+                      payload: { userId: String(saved._id) },
+                      aggregateId: String(saved._id)
+                  }
+                : []
+    );
 };
 
 /**
  * What follows a committed update: the new avatar's cleanup and the role grant's audit row. A ban
- * ends every session in the update's own save (`markSessionsEnded`), so there is nothing to revoke here.
+ * ends every session in the update's own save (`markSessionsEnded`); the one-time links it leaves
+ * are purged by `account`, on `user.deactivated`.
  *
  * @param savedUser - the committed document
  * @param data - `role` here is {@link changedRole}'s answer; `active` the request's
@@ -229,7 +252,7 @@ const finishUpdate = (
  */
 const saveWithRole = (
     user: UserDocument,
-    data: Pick<UpdateUserByIdRequest, 'active'> & { role: RoleChange },
+    data: Pick<UpdateUserByIdRequest, 'active'> & { banned: boolean; role: RoleChange },
     context: CallerContext,
     oldImageUrl?: string
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
@@ -250,8 +273,16 @@ const saveWithRole = (
     if (refusal) return Promise.resolve(roleRefusalReject(refusal));
 
     return Promise.resolve()
-        .then(() => withTransaction((session) => saveAndGrant(user, data.role, context, session)))
-        .then((savedUser) => finishUpdate(savedUser, data, context, oldImageUrl));
+        .then(() =>
+            withTransaction((session) =>
+                saveAndGrant(user, data.role, data.banned, context, session)
+            )
+        )
+        .then((savedUser) => {
+            // After the commit, never inside: the relay reads what the transaction wrote.
+            if (data.banned) nudgeOutbox();
+            return finishUpdate(savedUser, data, context, oldImageUrl);
+        });
 };
 
 /**

@@ -34,6 +34,7 @@ flowchart LR
     stock_alerts --> users
     webhooks --> users
     users --> access
+    users -. "user.deactivated" .-> account
     users -. "user.setup-requested" .-> account
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;

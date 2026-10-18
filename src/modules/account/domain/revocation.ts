@@ -69,6 +69,14 @@ export const REVOCATION = {
         callerKeeps: true,
         modes: 'both'
     },
+    // A ban moves the epoch in `users`' own save; this cause only purges the links it left behind.
+    deactivation: {
+        epoch: 'with-write',
+        pending: true,
+        announce: false,
+        callerKeeps: false,
+        modes: 'both'
+    },
     'refresh-reuse': {
         epoch: 'own',
         pending: false,

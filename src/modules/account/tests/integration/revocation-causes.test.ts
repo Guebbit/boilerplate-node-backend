@@ -6,7 +6,7 @@
  * table without a trigger here does not compile.
  */
 
-import { api } from '@tests/http';
+import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import { codeFor } from '@tests/totp';
@@ -184,6 +184,22 @@ const viaTwoFactorConfirm: Trigger = async () => {
     };
 };
 
+/** deactivation: an administrator bans the account through the real door. */
+const viaBan: Trigger = async () => {
+    const { user, victim } = await accountWithVictim('banned@example.com');
+    const admin = await authenticateAs('admin');
+    return {
+        userId: user.id,
+        victim: victim.bearer,
+        fire: () =>
+            api()
+                .patch(`/users/${user.id}`)
+                .set('Authorization', admin.bearer)
+                .send({ active: false })
+                .then(() => undefined)
+    };
+};
+
 /** refresh-reuse: the real door. */
 const viaRefreshReuse: Trigger = async () => {
     const { user, victim } = await accountWithVictim('reuse@example.com');
@@ -208,6 +224,7 @@ const TRIGGERS: Record<RevocationCause, Trigger> = {
     'email-change-confirm': viaEmailConfirm,
     'email-change-undo': viaEmailUndo,
     'two-factor-change': viaTwoFactorConfirm,
+    deactivation: viaBan,
     'refresh-reuse': viaRefreshReuse
 };
 
