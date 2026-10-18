@@ -126,8 +126,11 @@ export interface StockLevelDocument extends Document {
      * — see `./repository`'s `stockBoard`.
      */
     available: number;
-    /** How many units may be backordered at once; `0` closes preordering. Set by an admin. */
-    backorderLimit: number;
+    /**
+     * How many units may be backordered at once. `0` closes it (the default, and what a row
+     * without the field reads as); `null` is no cap at all. Set by an admin.
+     */
+    backorderLimit: number | null;
     /**
      * Preorder units outstanding against {@link StockLevelDocument.backorderLimit}: claimed by an
      * order (paid or still held) and not yet allocated stock. Written only through

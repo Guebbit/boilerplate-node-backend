@@ -27,7 +27,7 @@ export const derivedStockFields = (
     facts: PreorderFacts & {
         onHand?: number;
         reserved?: number;
-        backorderLimit?: number;
+        backorderLimit?: number | null;
         backordered?: number;
     }
 ) => {

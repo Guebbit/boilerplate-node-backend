@@ -42,8 +42,8 @@ export interface StockCounters {
     onHand: number;
     /** Units an open order has claimed. */
     reserved: number;
-    /** How many units may be backordered at once; absent leaves the copy alone. */
-    backorderLimit?: number;
+    /** How many units may be backordered at once; `null` is no cap; absent leaves the copy alone. */
+    backorderLimit?: number | null;
     /** Units already claimed against that allowance. */
     backordered?: number;
 }

@@ -226,13 +226,13 @@ export const adjust = (
  * is allowed: those orders stand and only new ones are refused.
  *
  * @param productId - the product
- * @param backorderLimit - the new allowance; `0` closes preordering
+ * @param backorderLimit - the new allowance; `0` closes it, `null` removes the cap
  * @param context - audit context for `ADMIN_BACKORDER_LIMIT_SET`; tests omit it to skip the emit
  * @returns the counters after the change, or 404 if the product is unknown
  */
 export const setBackorderLimit = (
     productId: string,
-    backorderLimit: number,
+    backorderLimit: number | null,
     context?: CallerContext
 ): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> =>
     productService.findByIdRaw(productId).then((product) => {

@@ -7,6 +7,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { productService } from '@modules/products';
 import { StockMovementReason } from '@types';
 import { reservationTtlMinutes } from '../config';
+import { roomOn } from '../domain';
 import { stockLevelRepository, reservationRepository } from '../repository';
 import type { ReservationDocument, StockLevelDocument } from '../model';
 import type { StockLine, StockShortfall, ReserveOutcome } from './types';
@@ -89,9 +90,7 @@ const takeReasonFor = (line: StockLine): StockMovementReason =>
  * @param level - the product's level, or `null` when it has none
  */
 const leftFor = (line: StockLine, level: StockLevelDocument | null): number =>
-    line.kind === 'backorder'
-        ? Math.max(0, (level?.backorderLimit ?? 0) - (level?.backordered ?? 0))
-        : (level?.available ?? 0);
+    line.kind === 'backorder' ? roomOn(level) : (level?.available ?? 0);
 
 /**
  * Hold every line for an order, or hold none of it.

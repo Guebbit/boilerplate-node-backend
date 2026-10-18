@@ -68,15 +68,22 @@ const conditionFor = (
                 : { reserved: { $gte: quantity } };
         }
         // The cap is the real ceiling, checked in the write's own filter like every other guard.
-        // `$ifNull`: a level written before preorders existed has neither field.
+        // An explicit `null` limit is no cap. A MISSING field is not: `$type: 'null'` matches only
+        // the stored null, where `{ backorderLimit: null }` would also match an absent one, and
+        // `$ifNull` below reads that absent field as zero, closed.
         case StockMovementReason.backorder: {
             return {
-                $expr: {
-                    $lte: [
-                        { $add: [{ $ifNull: ['$backordered', 0] }, quantity] },
-                        { $ifNull: ['$backorderLimit', 0] }
-                    ]
-                }
+                $or: [
+                    { backorderLimit: { $type: 'null' } },
+                    {
+                        $expr: {
+                            $lte: [
+                                { $add: [{ $ifNull: ['$backordered', 0] }, quantity] },
+                                { $ifNull: ['$backorderLimit', 0] }
+                            ]
+                        }
+                    }
+                ]
             };
         }
         // The arrived units must exist and the claim must be there to convert.
@@ -104,14 +111,14 @@ export interface StockLevelRow {
     onHand: number;
     reserved: number;
     available: number;
-    backorderLimit: number;
+    backorderLimit: number | null;
     backordered: number;
 }
 
 /** One row of the preorder board — counters only; the title and date are `products`' to give. */
 export interface PreorderLevelRow {
     productId: string;
-    backorderLimit: number;
+    backorderLimit: number | null;
     backordered: number;
     /** Lifetime units claimed, from the ledger's `preorder` rows. */
     ordered: number;
@@ -217,7 +224,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
         session?: ClientSession,
         kind?: HoldKind
     ) => Promise<boolean>;
-    setBackorderLimit: (productId: string, backorderLimit: number) => Promise<boolean>;
+    setBackorderLimit: (productId: string, backorderLimit: number | null) => Promise<boolean>;
     preorderBoard: (options: {
         skip: number;
         limit: number;
@@ -380,7 +387,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * yet, so a limit can be set before the first receipt.
      *
      * @param productId - the product
-     * @param backorderLimit - the new allowance
+     * @param backorderLimit - the new allowance; `null` removes the cap
      * @returns whether a level was written
      */
     setBackorderLimit: (productId, backorderLimit) =>
@@ -406,7 +413,12 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      */
     preorderBoard: ({ skip, limit }) => {
         const where: QueryFilter<StockLevelDocument> = {
-            $or: [{ backorderLimit: { $gt: 0 } }, { backordered: { $gt: 0 } }]
+            // An unlimited row (`null`) is on the board as well as one with room or a queue.
+            $or: [
+                { backorderLimit: { $gt: 0 } },
+                { backorderLimit: { $type: 'null' } },
+                { backordered: { $gt: 0 } }
+            ]
         };
 
         return Promise.all([

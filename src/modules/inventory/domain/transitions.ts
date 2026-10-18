@@ -100,3 +100,18 @@ export const counterDeltaFor = (
         }
     }
 };
+
+/**
+ * How many more units a product's cap lets through: `Infinity` when it has none (`null`), never
+ * `null` itself, which the callers' arithmetic would read as sold out. A level that does not exist
+ * reads as closed, like a field that was never written.
+ *
+ * @param level - the cap and the claims against it, or `null` for a product without a level row
+ * @returns the room left; may be `Infinity`, never below zero
+ */
+export const roomOn = (
+    level: { backorderLimit?: number | null; backordered?: number } | null
+): number =>
+    level?.backorderLimit === null
+        ? Infinity
+        : Math.max(0, (level?.backorderLimit ?? 0) - (level?.backordered ?? 0));

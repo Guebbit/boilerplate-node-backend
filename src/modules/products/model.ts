@@ -50,7 +50,7 @@ export interface ProductRecord extends Omit<
      * beside `onHand`/`reserved`. Internal: only a preorder's `available` is derived from them,
      * and neither reaches the wire.
      */
-    backorderLimit?: number;
+    backorderLimit?: number | null;
     backordered?: number;
     createdAt?: Date;
     updatedAt?: Date;
@@ -436,7 +436,7 @@ const applyProductAvailability = (serialized: Record<string, unknown>) => {
             onHand: typeof serialized.onHand === 'number' ? serialized.onHand : undefined,
             reserved: typeof serialized.reserved === 'number' ? serialized.reserved : undefined,
             backorderLimit:
-                typeof serialized.backorderLimit === 'number'
+                typeof serialized.backorderLimit === 'number' || serialized.backorderLimit === null
                     ? serialized.backorderLimit
                     : undefined,
             backordered:

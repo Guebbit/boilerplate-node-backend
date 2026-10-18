@@ -12,6 +12,7 @@ import {
 } from '@infrastructure/persistence/search';
 import { lowStockThreshold } from '../config';
 import { stockLevelRepository, stockMovementRepository } from '../repository';
+import { roomOn } from '../domain';
 import type { PaginationInput } from '@infrastructure/persistence/search';
 import type { LevelFilters, MovementFilters } from './types';
 
@@ -64,9 +65,7 @@ export const availableFor = (
                 new Map(
                     levels.map((level) => [
                         String(level.productId),
-                        preorderIds.has(String(level.productId))
-                            ? Math.max(0, level.backorderLimit - level.backordered)
-                            : level.available
+                        preorderIds.has(String(level.productId)) ? roomOn(level) : level.available
                     ])
                 )
         );
@@ -99,7 +98,11 @@ export const listPreorders = async (
                 ...item,
                 title: product?.title ?? item.productId,
                 ...(product?.releaseDate ? { releaseDate: product.releaseDate.toISOString() } : {}),
-                left: Math.max(0, item.backorderLimit - item.backordered)
+                // `null` is the contract's way to say there is no cap, so no number is left.
+                left:
+                    item.backorderLimit === null
+                        ? null
+                        : Math.max(0, item.backorderLimit - item.backordered)
             };
         }),
         meta: buildPaginatedMeta(pagination, totalItems)

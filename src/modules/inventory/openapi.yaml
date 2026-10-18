@@ -75,7 +75,7 @@ paths:
             tags: [Inventory]
             summary: Set a product's preorder limit
             description: |
-                Sets how many units of the product may be backordered at once: the allowance an order claims when it is placed. `0` closes preordering. Lowering it below what is already outstanding is allowed and leaves those orders alone; only new ones are refused. Absolute and idempotent, so a retry is safe.
+                Sets how many units of the product may be backordered at once: the allowance an order claims when it is placed. `0` closes it; `null` removes the cap, so the shop keeps selling whatever the date promises. Lowering it below what is already outstanding is allowed and leaves those orders alone; only new ones are refused. Absolute and idempotent, so a retry is safe.
 
                 Not a stock movement: nothing on the shelf changes, so it leaves no ledger row (it is audited).
             operationId: setBackorderLimit
@@ -344,9 +344,9 @@ components:
                     type: integer
                     minimum: 0
                 backorderLimit:
-                    type: integer
+                    type: [integer, 'null']
                     minimum: 0
-                    description: How many units may be backordered at once. `0` means preordering is closed.
+                    description: How many units may be backordered at once. `0` means it is closed; `null` means there is no cap.
                 backordered:
                     type: integer
                     minimum: 0
@@ -464,8 +464,9 @@ components:
                 releaseDate:
                     $ref: '../products/openapi.yaml#/components/schemas/ReleaseDate'
                 backorderLimit:
-                    type: integer
+                    type: [integer, 'null']
                     minimum: 0
+                    description: The cap on owed units. `null` means there is no cap.
                 backordered:
                     type: integer
                     minimum: 0
@@ -479,9 +480,9 @@ components:
                     minimum: 0
                     description: Outstanding units on paid orders, waiting for stock oldest payment first.
                 left:
-                    type: integer
+                    type: [integer, 'null']
                     minimum: 0
-                    description: '`backorderLimit - backordered`, never below zero: how many more may be ordered.'
+                    description: '`backorderLimit - backordered`, never below zero: how many more may be ordered. `null` when there is no cap.'
                 ordered:
                     type: integer
                     minimum: 0
@@ -519,6 +520,6 @@ components:
             required: [backorderLimit]
             properties:
                 backorderLimit:
-                    type: integer
+                    type: [integer, 'null']
                     minimum: 0
-                    description: The new allowance. `0` closes preordering.
+                    description: 'The new allowance. `0` closes it. `null` removes the cap: set a cap equal to the incoming quantity if the date must hold for everyone.'

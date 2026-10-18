@@ -18,14 +18,25 @@ export const availableStock = (onHand?: number, reserved?: number): number =>
     Math.max(0, (onHand ?? 0) - (reserved ?? 0));
 
 /**
+ * What `available` shows for an allowance without a cap: the contract wants an integer, and no
+ * buyer is ever told the count.
+ */
+export const UNLIMITED_ALLOWANCE_SHOWN = 999_999;
+
+/**
  * Units of a preorder still on offer: the allowance minus what is already claimed, clamped at zero
  * (lowering the allowance below what is outstanding is allowed, so it can go negative).
- * @param backorderLimit - the allowance; absent reads as zero, which closes preordering
+ * @param backorderLimit - the allowance; absent reads as zero, which closes it; `null` is no cap
  * @param backordered - units already claimed against it; absent reads as zero
  * @returns units a customer may still preorder, never below zero
  */
-export const preorderAllowanceLeft = (backorderLimit?: number, backordered?: number): number =>
-    Math.max(0, (backorderLimit ?? 0) - (backordered ?? 0));
+export const preorderAllowanceLeft = (
+    backorderLimit?: number | null,
+    backordered?: number
+): number =>
+    backorderLimit === null
+        ? UNLIMITED_ALLOWANCE_SHOWN
+        : Math.max(0, (backorderLimit ?? 0) - (backordered ?? 0));
 
 /**
  * What a shopper may know about stock without learning the count: whether anything is for sale,

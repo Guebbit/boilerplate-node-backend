@@ -8,7 +8,7 @@
  * See: docs/theory/domain-layer.md
  */
 
-export { counterDeltaFor } from './transitions';
+export { counterDeltaFor, roomOn } from './transitions';
 export type { CounterDelta, HoldKind } from './transitions';
 
 export { takeFromHold } from './hold-lines';
