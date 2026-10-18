@@ -22,7 +22,7 @@ import { RETURN_POSTAGE_PAYERS } from './domain';
  *
  * The legal name, address, email and phone are required at boot: the invoice and the withdrawal
  * notice both print them, and a notice with no address on it is not one (CRD Art. 6(1)(c)). The VAT
- * number and the return address stay optional.
+ * number, the trade register, the registration number and the return address stay optional.
  */
 export const shopConfig = defineConfig({
     name: 'shop',
@@ -31,6 +31,8 @@ export const shopConfig = defineConfig({
         NODE_SHOP_TIMEZONE: timeZone({ required: { minLength: 1 } }),
         NODE_SHOP_LEGAL_NAME: text({ required: { minLength: 1 } }),
         NODE_SHOP_VAT_NUMBER: text(),
+        NODE_SHOP_TRADE_REGISTER: text(),
+        NODE_SHOP_REGISTRATION_NUMBER: text(),
         NODE_SHOP_STREET: text({ required: { minLength: 1 } }),
         NODE_SHOP_CITY: text({ required: { minLength: 1 } }),
         NODE_SHOP_ZIP: text({ required: { minLength: 1 } }),

@@ -70,8 +70,8 @@ time zone (an operator's fact, not a visitor's), and the bank-transfer details, 
 each order and stay with `payments`.
 
 **Required at boot, because a notice without an address is not one.** The legal name, street,
-city, zip, country, email, phone and time zone refuse to boot when unset; the VAT number and the
-return address stay optional. A return address that is only partly set reads as none and falls back
+city, zip, country, email, phone and time zone refuse to boot when unset; the VAT number, the trade
+register, the registration number and the return address stay optional. A return address that is only partly set reads as none and falls back
 to the legal address, rather than telling a customer to post a parcel to "Via Roma, ".
 
 **One currency, no per-product override.** `NODE_DEFAULT_CURRENCY` is read here and nowhere else.
@@ -80,13 +80,14 @@ the same variable.
 
 ## Configuration
 
-| Variable                                             | Meaning                                                                 |
-| ---------------------------------------------------- | ----------------------------------------------------------------------- |
-| `NODE_SHOP_LEGAL_NAME`, `_STREET`, `_CITY`, `_ZIP`   | The seller's name and address (required)                                |
-| `NODE_SHOP_COUNTRY`                                  | The country VAT is charged in (required)                                |
-| `NODE_SHOP_EMAIL`, `NODE_SHOP_PHONE`                 | How a customer reaches the shop (required)                              |
-| `NODE_SHOP_VAT_NUMBER`                               | VAT identification number; absent below the registration threshold      |
-| `NODE_SHOP_TIMEZONE`                                 | The IANA zone whose calendar numbering series and reports follow        |
-| `NODE_RETURN_ADDRESS_*`, `NODE_RETURN_POSTAGE_PAYER` | Where returns go (default: the legal address) and who pays the postage  |
-| `NODE_SHIP_TO_COUNTRIES`                             | Countries a physical order ships to (default: the shop's own country)   |
-| `NODE_DEFAULT_CURRENCY`                              | The one ISO-4217 currency, `EUR` by default; an unknown code is refused |
+| Variable                                             | Meaning                                                                            |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `NODE_SHOP_LEGAL_NAME`, `_STREET`, `_CITY`, `_ZIP`   | The seller's name and address (required)                                           |
+| `NODE_SHOP_COUNTRY`                                  | The country VAT is charged in (required)                                           |
+| `NODE_SHOP_EMAIL`, `NODE_SHOP_PHONE`                 | How a customer reaches the shop (required)                                         |
+| `NODE_SHOP_VAT_NUMBER`                               | VAT identification number; absent below the registration threshold                 |
+| `NODE_SHOP_TRADE_REGISTER`, `_REGISTRATION_NUMBER`   | The commercial register and the seller's number in it; absent for a seller in none |
+| `NODE_SHOP_TIMEZONE`                                 | The IANA zone whose calendar numbering series and reports follow                   |
+| `NODE_RETURN_ADDRESS_*`, `NODE_RETURN_POSTAGE_PAYER` | Where returns go (default: the legal address) and who pays the postage             |
+| `NODE_SHIP_TO_COUNTRIES`                             | Countries a physical order ships to (default: the shop's own country)              |
+| `NODE_DEFAULT_CURRENCY`                              | The one ISO-4217 currency, `EUR` by default; an unknown code is refused            |
