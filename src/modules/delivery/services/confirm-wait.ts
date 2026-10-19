@@ -4,7 +4,7 @@
  * that is not a cancel. It clears the window after which silence would cancel and refund.
  *
  * Only the order's own buyer answers: a staff member cannot say yes for them, and the consent law
- * (FTC 16 CFR 435.2, CRD Art. 18) is about what the buyer agreed to.
+ * (FTC 16 CFR 435.2 (b)(1)(iii), (b)(2)) is about what the buyer agreed to.
  *
  * See: docs/modules/delivery.md#preorders-and-a-moved-date
  */

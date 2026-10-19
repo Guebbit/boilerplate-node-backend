@@ -5,9 +5,11 @@ The privacy policy, the cookie banner, the terms of sale and the withdrawal word
 are examples. **A real shop has them written, or checked, by a lawyer** who knows the countries it
 sells to. Nothing on this page is legal advice.
 
-The shipped Terms and Privacy pages are **placeholder text** (mostly Lorem Ipsum) with no seller
-identity and no cookie section. Replace the `static-pages.terms` and `static-pages.privacy` copy in
-the frontend's `src/locales/en.json` and `it.json` before any real order.
+The shipped Terms and Privacy pages carry **no legal wording**. Each opens with a warning that the
+text is missing and a checklist of the sections the real text must cover. Replace the
+`static-pages.terms` and `static-pages.privacy` copy in the frontend's `src/locales/en.json` and
+`it.json` (or edit it at runtime from the admin dictionary) before any real order, and write the
+Privacy page's cookie section.
 :::
 
 This page is for someone opening a real shop on top of the demo. It lists what the software cannot

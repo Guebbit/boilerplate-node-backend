@@ -313,6 +313,14 @@ describe('each subject names a row that really has the property', () => {
         expect(shipment).toBeNull();
     });
 
+    it('every backdated order can still be saved: an order nobody reported on carries no half-built summary', async () => {
+        // The pass that dates an order must not invent a `fulfillment` object for one that has none:
+        // a save would then fail on the summary's required fields, a soft delete included.
+        const orders = await orderModel.find().exec();
+        expect(orders.length).toBeGreaterThan(0);
+        await Promise.all(orders.map((order) => order.validate()));
+    });
+
     it('order.partiallyFulfilled has shipped one unit of three, so it is still processing', async () => {
         const order = await orderModel.findById(subjects['order.partiallyFulfilled']).exec();
         expect(order?.status).toBe('processing');

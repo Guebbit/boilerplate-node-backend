@@ -57,15 +57,15 @@ describe('withdrawUntilFrom', () => {
 });
 
 describe('conformityUntilFrom', () => {
-    it('ends with the last hour of the day after the same day two years on', () => {
+    it('ends with the last hour of the seventh day after the same day two years on', () => {
         expect(conformityUntilFrom(new Date('2026-03-01T10:00:00Z')).toISOString()).toBe(
-            '2028-03-02T23:59:59.999Z'
+            '2028-03-08T23:59:59.999Z'
         );
     });
 
-    it('lets a 29 February delivery run to the second of March', () => {
+    it('lets a 29 February delivery run to the eighth of March', () => {
         expect(conformityUntilFrom(new Date('2028-02-29T10:00:00Z')).toISOString()).toBe(
-            '2030-03-02T23:59:59.999Z'
+            '2030-03-08T23:59:59.999Z'
         );
     });
 });
@@ -78,7 +78,7 @@ describe('deliveryClockFor', () => {
         const goods = deliveryClockFor({ items: [], paidAt }, at, 30);
 
         expect(goods.withdrawUntil.toISOString()).toBe('2026-03-31T23:59:59.999Z');
-        expect(goods.conformityUntil.toISOString()).toBe('2028-03-02T23:59:59.999Z');
+        expect(goods.conformityUntil.toISOString()).toBe('2028-03-08T23:59:59.999Z');
     });
 });
 

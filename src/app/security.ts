@@ -38,17 +38,23 @@ const jsonBodyLimit = (): string => appConfig().NODE_JSON_BODY_LIMIT;
  * would cost a map and a flat on every JSON body the API receives.
  */
 const RAW_BODY_PATHS = enabledModules.flatMap((appModule) =>
-    (appModule.rawBodyPaths ?? []).map((path) => `${appModule.basePath ?? ''}${path}`)
+    (appModule.rawBodyPaths ?? []).map((path) => `${appModule.basePath ?? ''}${path}`.toLowerCase())
 );
 
 /**
  * Whether this url is one of them — matched at a segment boundary, never as a bare prefix, so
  * `/payments/webhook-test` is not mistaken for `/payments/webhook`.
+ *
+ * Compared lowercased on both sides: Express routes regardless of case, so `/Payments/webhook`
+ * reaches the handler and must arrive with its raw body too.
  */
-const isRawBodyPath = (url: string): boolean =>
-    RAW_BODY_PATHS.some(
-        (path) => url === path || url.startsWith(`${path}?`) || url.startsWith(`${path}/`)
+const isRawBodyPath = (url: string): boolean => {
+    const lowered = url.toLowerCase();
+    return RAW_BODY_PATHS.some(
+        (path) =>
+            lowered === path || lowered.startsWith(`${path}?`) || lowered.startsWith(`${path}/`)
     );
+};
 
 /**
  * Bound how long a client may take to SEND a request, which Node's own defaults barely do.

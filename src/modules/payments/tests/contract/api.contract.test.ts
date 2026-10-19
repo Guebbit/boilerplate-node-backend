@@ -341,10 +341,10 @@ describe('POST /payments/{id}/sync', () => {
 });
 
 /** Posts a body with the signature a provider would have sent over those exact bytes. */
-const deliver = (event: unknown, signature?: string) => {
+const deliver = (event: unknown, signature?: string, path = '/payments/webhook') => {
     const body = JSON.stringify(event);
     return api()
-        .post('/payments/webhook')
+        .post(path)
         .set('Content-Type', 'application/json')
         .set(WEBHOOK_SIGNATURE_HEADER, signature ?? signWebhookPayload(body))
         .send(body);
@@ -404,6 +404,23 @@ describe('POST /payments/webhook', () => {
         setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
 
         const response = await deliver({ id: `evt_${paymentId}`, providerRef });
+
+        expect(response.status).toBe(200);
+        const settled = await paymentRepository.findById(paymentId);
+        expect(settled!.status).toBe('succeeded');
+    });
+
+    it('verifies the signature over the raw body whatever the case of the path', async () => {
+        // Express routes `/Payments/Webhook` to the same handler; the raw-body allowlist must match
+        // it too, or the handler sees no raw body and refuses a delivery that is validly signed.
+        const { paymentId, providerRef } = await preparedPayment();
+        setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
+
+        const response = await deliver(
+            { id: `evt_case_${paymentId}`, providerRef },
+            undefined,
+            '/Payments/Webhook'
+        );
 
         expect(response.status).toBe(200);
         const settled = await paymentRepository.findById(paymentId);

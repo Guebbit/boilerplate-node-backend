@@ -552,7 +552,7 @@ flowchart LR
     shipped -- "remainder cancelled after every arrival" --> late["delivered<br/><i>withdrawUntil = from the cancellation, the later date</i>"]
 ```
 
-- **`conformityUntil` is frozen beside it**, two calendar years from the arrival plus one UTC day of margin (the legal guarantee of conformity); `returns` judges a defect or a wrong item by it, see [the two deadlines](./returns.md#the-two-deadlines).
+- **`conformityUntil` is frozen beside it**, two calendar years from the arrival plus seven days of margin, to the end of that UTC day (the legal guarantee of conformity); `returns` judges a defect or a wrong item by it, see [the two deadlines](./returns.md#the-two-deadlines).
 - **`withdrawUntil` is frozen, never recomputed** — the same "freeze the fact at the moment it
   happens" rule `shippingCost` and `currency` follow, so a config change cannot move a promise
   already made. Goods count from delivery (Art. 9(2)(b)); digital content from the conclusion of the
@@ -580,6 +580,18 @@ flowchart LR
     | minimum, a day to spare                                            | 21   |
 
     The default is 30, a common return window.
+
+- **The guarantee carries its own margin.** `conformityUntil` is two calendar years from the
+  arrival, to the end of the UTC day seven days later. It is a minimum that cannot be waived
+  (Directive 2019/771 Art. 21), so extra time is never wrong; the same Art. 3(4) roll-over applies:
+
+    |                                                          | days |
+    | -------------------------------------------------------- | ---- |
+    | the legal period                                         | 2 y  |
+    | longest weekend + holiday run in any EU country (Easter) | +5   |
+    | UTC day counting                                         | +1   |
+    | a day to spare                                           | +1   |
+    | margin carried                                           | 7    |
 
 - **Before either has happened the window has no end** — the right exists from the moment the
   contract is concluded, so `withdrawUntil` is absent, not far in the future.

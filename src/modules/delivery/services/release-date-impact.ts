@@ -20,7 +20,7 @@ import {
 } from '@infrastructure/http/response';
 import { productService } from '@modules/products';
 import type { ReleaseDateImpact } from '@types';
-import { answerBy, expectedDateOfWaiting, judgeMove } from '../domain';
+import { expectedDateOfWaiting, judgeMove, latestAnswerBy } from '../domain';
 import type { SlipVerdict, WaitCause } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
 import type { FulfillmentOrderDocument } from '../model';
@@ -101,7 +101,7 @@ const tally = (verdicts: readonly [string, SlipVerdict][]): Omit<ReleaseDateImpa
  * @param productId - the product whose date would move
  * @param cause - which date: `preorder` for the release date, `backorder` for the restock date
  * @param date - the date to preview; absent means cleared
- * @param now - the instant a question would be asked, for `answerBy`
+ * @param now - the instant a question would be asked, for `answerBy` (the latest it could be)
  * @returns the counts, or a 404 for an unknown product
  */
 export const previewDateImpact = (
@@ -113,7 +113,8 @@ export const previewDateImpact = (
     productService.findByIdRaw(productId).then((product) => {
         if (!product) return generateReject(404, [t('products.not-found')]);
 
-        const deadline = answerBy(now).toISOString();
+        // At most: each question's own deadline is cut back to what its buyer was already owed.
+        const deadline = latestAnswerBy(now).toISOString();
         // Saving the date it already has emits nothing, so nobody hears anything.
         if (sameDate(dateFor(product, cause), date))
             return generateSuccess({ ...NOBODY, answerBy: deadline });

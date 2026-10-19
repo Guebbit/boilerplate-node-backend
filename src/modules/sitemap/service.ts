@@ -10,7 +10,6 @@
  */
 
 import type { SitemapItemLoose } from 'sitemap';
-import { getDefaultLocale } from '@infrastructure/i18n';
 import { siteConfig } from '@infrastructure/http/config';
 import { localeService } from '@modules/locales';
 import { productService } from '@modules/products';
@@ -20,20 +19,22 @@ import { STATIC_PAGES, sitemapConfig } from './config';
 interface Languages {
     /** Every active language tag. */
     tags: string[];
-    /** The deployment's default language. */
+    /** The tag `x-default` points at: the default language when it is active, else the first active one. */
     fallback: string;
 }
 
 /**
  * The active languages, never fewer than the default: a deployment with no language row still
- * serves its default.
+ * serves its default. `x-default` is the default language while it is active, otherwise the first
+ * active one: a hreflang target must be a page the same sitemap lists.
  */
 const activeLanguages = (): Promise<Languages> =>
     localeService
         .listCapabilities(localeService.callerScope())
         .then(({ locales, default: fallback }) => {
-            const tags = locales.filter(({ active }) => active).map(({ tag }) => tag);
-            return { tags: tags.length > 0 ? tags : [fallback || getDefaultLocale()], fallback };
+            const active = locales.filter(({ active: isActive }) => isActive).map(({ tag }) => tag);
+            const tags = active.length > 0 ? active : [fallback];
+            return { tags, fallback: tags.includes(fallback) ? fallback : tags[0] };
         });
 
 /**

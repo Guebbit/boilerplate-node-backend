@@ -64,7 +64,7 @@ const payloadOf = (
 /**
  * Record a notice on a fulfillment order and announce it, inside the caller's transaction.
  *
- * A notice that needs an answer opens the window (`consent: awaiting`, deadline 30 days on); one
+ * A notice that needs an answer opens the window (`consent: awaiting`, deadline at most 30 days on); one
  * that does not leaves the consent alone. Both stamp `lastNoticeAt`, which is what stops the sweep
  * repeating itself. The write is conditional on the revision the caller read, so a ship or an
  * allocation racing it wins and the notice is simply not sent.
@@ -84,7 +84,9 @@ export const recordNotice = async (
     const order = await orderService.readOrder(String(fulfillmentOrder.orderId), session);
     if (!order) return undefined;
 
-    const deadline = input.needsAnswer ? answerBy(now) : undefined;
+    // `fulfillmentOrder` is still as it was before the patch: the cap reads the state the buyer was
+    // last told, not the one this very notice writes.
+    const deadline = input.needsAnswer ? answerBy(now, fulfillmentOrder) : undefined;
     const patch: FulfillmentOrderPatch = {
         lastNoticeAt: now,
         ...(input.expectedAt ? { expectedAt: input.expectedAt } : {}),
