@@ -70,7 +70,7 @@ rg -c "\bexpect\(" <paths>                               # a file whose count is
 
 Add the two priors, in this order:
 
-- every `mutation.json` under `tmp/reports/` (step 3 lists where) — a test that
+- `tmp/reports/mutation/mutation.json` (step 3 says what it holds) — a test that
   covers a line whose mutants all **survive** is the strongest candidate there is. A survived
   mutant on a covered line is, by definition, a line some test runs and none checks.
 - `git log -p --follow -- <test file>` — for **Bent to fit**: a commit that changes only an
@@ -106,23 +106,17 @@ working tree. With `coverageAnalysis: "perTest"` (`stryker.json`), its report re
 mutant which tests ran it (`coveredBy`) and which failed on it (`killedBy`). Read that report;
 never edit `src/` to check.
 
-- Runs land in more than one place. Search them all, never just the default path:
-
-    | Where                                         | Written by                         |
-    | --------------------------------------------- | ---------------------------------- |
-    | `tmp/reports/mutation/mutation.json`          | `npm run mutation`, the diff run   |
-    | `tmp/reports/mutation-shards/<size>/<shard>/` | `npm run mutation:full`, the sweep |
-    | `tmp/reports/mutation-<name>/`                | a run given its own report folder  |
-    | `tmp/reports/audit/*/**/mutation.json`        | a scoped run another audit made    |
-
-    `find tmp/reports -name mutation.json` lists them. Use the newest report whose `files` holds
-    the source file under audit. A file's entry is stale when that source changed after the report
-    was written (`git log -1 --format=%cI -- <file>` against the report's date): say so in the row.
-
+- The report is `tmp/reports/mutation/mutation.json` — see
+  `docs/tools/mutation-testing.md#which-file-is-what`. After `npm run mutation:pull` it holds the
+  whole GitHub sweep; after `npm run mutation`, the changed files' fresh results laid over it.
+  A local `npm run mutation:full` keeps one report per shard under
+  `tmp/reports/mutation-shards/<size>/<shard>/` instead.
+- A file's entry is stale when that source changed after the report was written
+  (`git log -1 --format=%cI -- <file>` against the report's date): say so in the row.
 - No usable report: `npm run mutation` re-runs Stryker for the branch's changed files and writes
-  only under the gitignored `tmp/reports/`. Never `mutation:pull` or `mutation:full` — they write
-  over the tracked `mutation-baseline.json`, and `pull` fetches scores, not a report. If nothing
-  covers the scope, say so at the top and mark every row UNVERIFIED.
+  only under the gitignored `tmp/reports/`. Never run `mutation:pull` or `mutation:full` yourself —
+  they write the tracked `mutation-baseline.json`. Ask the user to pull instead. If nothing covers
+  the scope, say so at the top and mark every row UNVERIFIED.
 
 - Match each break to a mutant: same location, same effect — a `ConditionalExpression` forced to
   `true` for a deleted guard, an emptied `BlockStatement` for a deleted call, an `EqualityOperator`
