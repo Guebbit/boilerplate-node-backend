@@ -89,8 +89,7 @@ the audit page, not the order page.
 
 ## The catalogue
 
-Adding, editing and removing what the shop sells. Products can be changed one at a time or in
-bulk.
+Adding, editing and removing what the shop sells, one product at a time.
 
 **Deleting a product does not really delete it.** It disappears from the shop immediately, but the
 record stays:
@@ -137,7 +136,9 @@ The demo has one of each, which is why the shop shows 136 products but the manag
 reason — a delivery arrived, or a count was corrected. That is deliberate, and it is
 [the warehouse's page](./warehouse.md).
 
-The one exception is creating a brand-new product, which can start with an opening quantity.
+The one exception is creating a brand-new product, where an administrator can give an opening
+quantity. It is not typed into the product either: the product is made first and the count is
+recorded as its first delivery.
 
 **You can see an order's payment, but you cannot return money by hand.** That is the moderator's and
 the admin's job; cancelling a paid order still refunds it.
@@ -222,6 +223,5 @@ Nobody can turn this off from inside the application, which is the point.
 | **Switched off** | Not deleted, just not currently for sale.                                                                    |
 | **Refund**       | Money returned. Happens automatically when a paid order is cancelled. → [`payments`](../modules/payments.md) |
 | **Audit log**    | The 90-day record of who did what. → [`audit-logs`](../modules/audit-logs.md)                                |
-| **Bulk**         | The same change applied to many rows at once.                                                                |
 | **Webhook**      | A message the shop sends to another system when something happens. → [`webhooks`](../modules/webhooks.md)    |
 | **Secret**       | The one-time-shown key that proves a webhook message came from this shop.                                    |

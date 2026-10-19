@@ -8,8 +8,8 @@ Log in as `warehouse@example.com`. The password is on [Test it yourself](./test-
 
 **Nobody types a stock number in directly.** Not the manager, not the shop, not anyone.
 
-Stock only ever moves because something happened, and that something is always recorded. There are
-six ways a number can change and no seventh:
+Stock only ever moves because something happened, and that something is always recorded. A number only
+changes in one of these ways:
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 28, 'rankSpacing': 55}}}%%
@@ -17,14 +17,16 @@ flowchart LR
     A["a delivery arrives"] -->|"more stock"| L["the stock diary<br/><i>every movement, with its reason</i>"]
     B["you count the shelf<br/>and it disagrees"] -->|"corrected"| L
     C["a customer checks out"] -->|"set aside"| L
-    D["they pay"] -->|"sold"| L
+    D["they pay"] -->|"claim settled,<br/>still on the shelf"| L
+    G["the parcel leaves"] -->|"off the shelf"| L
     E["they cancel"] -->|"back on the shelf"| L
     F["they never paid<br/><i>15 minutes passed</i>"] -->|"back on the shelf"| L
+    R["a returned parcel<br/>is received"] -->|"back on the shelf"| L
 
     classDef you fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef auto fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef book fill:#ede9fe,stroke:#7c3aed,color:#111827;
-    class A,B you;
+    class A,B,G,R you;
     class C,D,E,F auto;
     class L book;
 ```
@@ -47,7 +49,7 @@ Every product carries two figures, and confusing them is the classic warehouse m
 | Figure        | Means                                                      |
 | ------------- | ---------------------------------------------------------- |
 | **On hand**   | Physically on the shelf right now                          |
-| **Set aside** | Of those, how many are already promised to unpaid orders   |
+| **Set aside** | Of those, how many are promised to orders not yet shipped  |
 | **Available** | On hand minus set aside — what a customer can actually buy |
 
 A product with 10 on hand and 4 set aside sells to 6 more people, not 10.
