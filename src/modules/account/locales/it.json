@@ -84,6 +84,7 @@
         },
         "email": {
             "greeting-anonymous": "Ciao!",
+            "footer-support": "Inviata dal nostro team. Domande su questa notifica: {{email}}",
             "verify-request": {
                 "subject": "Conferma il tuo indirizzo email",
                 "meta-title": "Verifica email",
@@ -114,7 +115,15 @@
                 "greeting": "Ciao, {{name}}!",
                 "body": "La tua password è stata reimpostata.",
                 "providers": "Questi metodi di accesso sono ancora collegati al tuo account: {{providers}}. Reimpostare la password non li scollega; se non ne riconosci uno, rimuovilo dal tuo profilo.",
-                "providers-none": "Nessun accesso con Google o GitHub è collegato al tuo account."
+                "providers-none": "Nessun accesso con Google o GitHub è collegato al tuo account.",
+                "advice": "Se non sei stato tu, reimposta di nuovo la password e contattaci."
+            },
+            "password-changed": {
+                "subject": "La tua password è stata cambiata",
+                "meta-title": "Password cambiata",
+                "greeting": "Ciao, {{name}}!",
+                "body": "La tua password è stata cambiata.",
+                "advice": "Se non sei stato tu, reimposta subito la password con \"Password dimenticata\" nella pagina di accesso. Una reimpostazione disconnette tutti i dispositivi e revoca le tue chiavi API."
             },
             "delete-request": {
                 "subject": "Conferma l'eliminazione dell'account",
@@ -175,6 +184,7 @@
                 "body-enrolled": "Un secondo passaggio di accesso ({{method}}) è stato aggiunto o sostituito sul tuo account.",
                 "body-removed": "Il secondo passaggio di accesso ({{method}}) è stato rimosso dal tuo account.",
                 "body-disabled": "La verifica in due passaggi è stata disattivata sul tuo account.",
+                "body-codes-regenerated": "I tuoi codici di backup sono stati sostituiti. Quelli vecchi non funzionano più.",
                 "advice": "Se non sei stato tu, cambia la password ed esci da tutti i dispositivi adesso."
             },
             "sign-in-method-changed": {

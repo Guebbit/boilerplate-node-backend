@@ -465,6 +465,22 @@ describe('telling the account holder their factors changed', () => {
         expect(mailsOf('account.two-factor-changed')[0]?.data.body).toContain('turned off');
     });
 
+    it('mails that the backup codes were replaced', async () => {
+        const { bearer } = await authenticateVerified();
+        const { secret } = await enrollTotp(bearer);
+        mockOutbox.length = 0;
+
+        await api()
+            .post('/account/2fa/backup-codes')
+            .set('Authorization', bearer)
+            .send({ code: await codeFor(secret, 1) });
+        await forgetSessionEpoch(bearer);
+
+        const [mail, ...rest] = mailsOf('account.two-factor-changed');
+        expect(rest).toEqual([]);
+        expect(mail?.data.body).toContain('backup codes');
+    });
+
     it('mails nothing for a refused change', async () => {
         const { bearer } = await authenticateVerified();
         await enrollTotp(bearer);

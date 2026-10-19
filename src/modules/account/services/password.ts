@@ -19,6 +19,7 @@ import {
     type ResponseErrorItem,
     validationErrors
 } from '@infrastructure/http/response';
+import { logger } from '@infrastructure/adapters/logger';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { SignupBody } from '@api/schemas.zod';
@@ -26,7 +27,9 @@ import { userService, type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
+import { greetableName, passwordChangedEmail, recipientLocale } from '../emails';
 import { verifyOwnPassword } from './login';
+import { sendAccountMail } from './mail';
 
 /**
  * Validate a new-password pair without touching the user.
@@ -161,6 +164,23 @@ export const writePassword = (
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
 /**
+ * Tell the account holder, out of band, that their password just changed. Fire-and-forget: the
+ * change already happened, and a queue that is briefly down must not turn it into an error.
+ */
+const notifyPasswordChanged = (user: UserDocument, context: CallerContext): void => {
+    void sendAccountMail(
+        user.email,
+        passwordChangedEmail(
+            recipientLocale(user.locale, context),
+            greetableName(user, user.email)
+        ),
+        'normal'
+    ).catch((error: unknown) => {
+        logger.warn({ message: 'Could not queue a password-change notice.', error });
+    });
+};
+
+/**
  * Change the password of a live session, gated on the current one.
  * A wrong current password is a 422 with translated copy, NOT a 401 — a 401 here reads as
  * "session expired" to client interceptors and would log out a perfectly valid session.
@@ -192,6 +212,7 @@ export const passwordChangeWithCurrent = (
             action: accountAuditActions.AUTH_PASSWORD_CHANGED,
             outcome: result.success ? 'success' : 'failure'
         });
+        if (result.success) notifyPasswordChanged(result.data, context);
         return result;
     });
 };

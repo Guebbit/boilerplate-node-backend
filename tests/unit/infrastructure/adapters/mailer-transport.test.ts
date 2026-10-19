@@ -51,6 +51,7 @@ const transportOptions = async (
         greeting: '',
         body: '',
         providers: '',
+        advice: '',
         lines: [],
         total: '',
         linkLabel: '',

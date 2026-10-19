@@ -84,6 +84,7 @@
         },
         "email": {
             "greeting-anonymous": "Hello!",
+            "footer-support": "Sent by our team. Questions about this notice: {{email}}",
             "verify-request": {
                 "subject": "Confirm your email address",
                 "meta-title": "Email verification",
@@ -114,7 +115,15 @@
                 "greeting": "Hello, {{name}}!",
                 "body": "Your password has been reset.",
                 "providers": "These sign-in methods are still connected to your account: {{providers}}. A password reset does not disconnect them; if you do not recognise one, remove it from your profile.",
-                "providers-none": "No Google or GitHub sign-in is connected to your account."
+                "providers-none": "No Google or GitHub sign-in is connected to your account.",
+                "advice": "If this was not you, reset your password again and contact us."
+            },
+            "password-changed": {
+                "subject": "Your password was changed",
+                "meta-title": "Password changed",
+                "greeting": "Hello, {{name}}!",
+                "body": "Your password was changed.",
+                "advice": "If this was not you, reset your password now with \"Forgot password\" on the sign-in page. A reset signs every device out and revokes your API keys."
             },
             "delete-request": {
                 "subject": "Confirm account deletion",
@@ -175,6 +184,7 @@
                 "body-enrolled": "A second sign-in step ({{method}}) was added or replaced on your account.",
                 "body-removed": "The second sign-in step ({{method}}) was removed from your account.",
                 "body-disabled": "Two-factor authentication was turned off on your account.",
+                "body-codes-regenerated": "Your backup codes were replaced. The old ones no longer work.",
                 "advice": "If this was not you, change your password and sign out everywhere now."
             },
             "sign-in-method-changed": {

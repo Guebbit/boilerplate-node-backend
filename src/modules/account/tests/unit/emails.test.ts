@@ -11,6 +11,8 @@ import {
     resetRequestEmail,
     setupRequestEmail,
     resetConfirmEmail,
+    passwordChangedEmail,
+    emailChangeNoticeEmail,
     deleteRequestEmail,
     deleteConfirmEmail,
     signInMethodChangedEmail,
@@ -21,6 +23,7 @@ import {
     greetableName
 } from '@modules/account/emails';
 import { accountExportLink, accountFrontendLink } from '@modules/account/config';
+import { setEnvironment } from '@tests/environment';
 
 const NAME = 'Ada Lovelace';
 const TOKEN = 'a1b2c3d4e5f6';
@@ -221,7 +224,7 @@ describe('account emails — the two-factor change notice', () => {
         );
     });
 
-    it.each(['enrolled', 'removed', 'disabled'] as const)(
+    it.each(['enrolled', 'removed', 'disabled', 'codes-regenerated'] as const)(
         'says %s in real copy, in both shipped languages, with the name and no raw keys',
         (change) => {
             for (const locale of ['en', 'it']) {
@@ -239,13 +242,13 @@ describe('account emails — the two-factor change notice', () => {
     );
 
     it('names the factor for an add and a removal, and a different sentence for each change', () => {
-        const bodies = (['enrolled', 'removed', 'disabled'] as const).map(
+        const bodies = (['enrolled', 'removed', 'disabled', 'codes-regenerated'] as const).map(
             (change) => twoFactorChangedEmail('en', NAME, change, 'totp').data.body as string
         );
 
         expect(bodies[0]).toContain('totp');
         expect(bodies[1]).toContain('totp');
-        expect(new Set(bodies).size).toBe(3);
+        expect(new Set(bodies).size).toBe(4);
     });
 });
 
@@ -323,5 +326,70 @@ describe('account emails — the sign-in method notice', () => {
         );
 
         expect(linked).not.toBe(unlinked);
+    });
+});
+
+describe('account emails — the password-change notice', () => {
+    it('renders its own template', () => {
+        expect(passwordChangedEmail('en', NAME).template).toBe('account.password-changed');
+    });
+
+    it.each(['en', 'it'])('says what happened and what to do, in real copy in %s', (locale) => {
+        const { data, subject } = passwordChangedEmail(locale, NAME);
+
+        for (const value of [subject, data.greeting, data.body, data.advice]) {
+            expect(typeof value).toBe('string');
+            expect(value).not.toBe('');
+            expect(value).not.toMatch(/^account\.email\./);
+            expect(value).not.toContain('{{');
+        }
+        expect(data.greeting).toContain(NAME);
+    });
+
+    it('carries no link that acts', () => {
+        expect(passwordChangedEmail('en', NAME).data).not.toHaveProperty('linkUrl');
+    });
+});
+
+describe('account emails — the reset confirmation advice', () => {
+    it.each(['en', 'it'])('tells the reader what to do if it was not them, in %s', (locale) => {
+        const { data } = resetConfirmEmail(locale, NAME);
+
+        expect(typeof data.advice).toBe('string');
+        expect(data.advice).not.toBe('');
+        expect(data.advice).not.toMatch(/^account\.email\./);
+    });
+});
+
+/** One built email of every kind that is a notice about the account's own security. */
+const securityNotices = (): Record<string, unknown>[] => [
+    passwordChangedEmail('en', NAME).data,
+    resetConfirmEmail('en', NAME).data,
+    twoFactorChangedEmail('en', NAME, 'enrolled', 'totp').data,
+    twoFactorLockedEmail('en', NAME, 15).data,
+    signInMethodChangedEmail('en', NAME, 'linked', 'google').data,
+    emailChangeNoticeEmail('en', NAME, 'new@example.com', TOKEN).data
+];
+
+describe('account emails — the support address in a security notice', () => {
+    const SUPPORT = 'help@example.com';
+
+    it('names the configured address in every security notice, in both languages', () => {
+        setEnvironment({ NODE_ACCOUNT_SUPPORT_EMAIL: SUPPORT });
+
+        for (const data of securityNotices()) expect(data.footer).toContain(SUPPORT);
+        expect(passwordChangedEmail('it', NAME).data.footer).toContain(SUPPORT);
+    });
+
+    it('keeps the plain footer when none is configured', () => {
+        setEnvironment({ NODE_ACCOUNT_SUPPORT_EMAIL: undefined });
+
+        for (const data of securityNotices()) expect(data.footer).toBe('Sent by our team.');
+    });
+
+    it('leaves a mail that is not a security notice on the plain footer', () => {
+        setEnvironment({ NODE_ACCOUNT_SUPPORT_EMAIL: SUPPORT });
+
+        expect(verifyRequestEmail('en', NAME, TOKEN).data.footer).toBe('Sent by our team.');
     });
 });
