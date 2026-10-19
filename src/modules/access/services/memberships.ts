@@ -158,21 +158,6 @@ export const revokeRole = (
 };
 
 /**
- * Take away every role a person holds, in every place, one revoke at a time. Walks
- * {@link membershipsOf} rather than assuming the single tenant row most callers care about, since
- * a platform operator can hold both at once. A hard delete does not use it: it erases through
- * {@link eraseMemberships}, inside its own transaction.
- *
- * @param context - the caller, asked once per role by {@link revokeRole}
- */
-export const revokeAllOf = (userId: string, context: CallerContext): Promise<void> =>
-    membershipsOf(userId).then((memberships) =>
-        Promise.all(
-            memberships.map((one) => revokeRole(userId, one.tenantId, one.scope, context))
-        ).then(() => undefined)
-    );
-
-/**
  * The `personalData.erase` hook of this module's `roles` section: every role the person holds,
  * in every place, goes in the same transaction as the account itself. Once the account is gone no
  * membership row may keep pointing at its dead id, a tenant seat OR a platform one; and because it

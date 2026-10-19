@@ -17,7 +17,6 @@ import {
     eraseMemberships,
     membershipIn,
     membershipsOf,
-    revokeAllOf,
     revokeRole,
     rolesOf,
     rolesOfMany
@@ -50,7 +49,6 @@ export const accessService = {
     eraseMemberships,
     membershipIn,
     membershipsOf,
-    revokeAllOf,
     revokeRole,
     rolesOf,
     rolesOfMany,

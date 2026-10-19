@@ -475,18 +475,6 @@ describe('grantRefusalAudited', () => {
     });
 });
 
-describe('revokeAllOf', () => {
-    it('clears every membership a person holds, tenant and platform alike', async () => {
-        const shop = await accessService.ensureTenant('shop', 'The Shop');
-        await seedMembership('person-1', String(shop._id), 'tenant', 'admin');
-        await seedMembership('person-1', null, 'platform', 'operator');
-
-        await accessService.revokeAllOf('person-1', callerContextAs('admin'));
-
-        expect(await accessService.membershipsOf('person-1')).toEqual([]);
-    });
-});
-
 describe('eraseMemberships', () => {
     it('removes every membership one person holds, and nobody else’s', async () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
