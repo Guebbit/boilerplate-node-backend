@@ -2,7 +2,7 @@
 name: audit-test-honesty
 description: Report tests that pass without proving anything — coverage padding, mocked subjects, swallowed failures, lying titles, degenerate inputs
 argument-hint: <module|path|--diff>  (default: modules touched by the working tree)
-allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(git log:*), Bash(ls:*), Bash(rg:*), Bash(npm run mutation:*)
+allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(git log:*), Bash(ls:*), Bash(rg:*), Bash(find tmp/reports:*), Bash(npm run mutation)
 ---
 
 Read `scripts/audit/test-honesty/SKILL.md` and follow it. The scope is: $ARGUMENTS
