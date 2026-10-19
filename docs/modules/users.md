@@ -161,9 +161,14 @@ four named doors instead, each narrower than the write beneath it:
 | Door                 | Who calls it                                | What it cannot do                                                  |
 | -------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
 | `updateOwnProfile`   | the owner, `PUT`/`PATCH /account`           | take `active` or `role`: a profile edit cannot ban its own account |
-| `eraseOwnAccount`    | the owner, `DELETE /account/delete-confirm` | none; the route is anonymous, so no rank check can apply           |
-| `softDeleteInactive` | the inactivity reaper                       | none; its read already returns customers only                      |
+| `eraseOwnAccount`    | the owner, `DELETE /account/delete-confirm` | take a bare document: it asks for the spent deletion link's proof  |
+| `softDeleteInactive` | the inactivity reaper                       | take an account never warned, or one that holds a staff role (409) |
 | `eraseInactive`      | the inactivity reaper                       | erase a row the reaper did not soft-delete itself (409)            |
+
+`eraseOwnAccount` takes a `RedeemedOwner`, which `userService.redeemedOwner(user)` mints from the
+document the deletion link just resolved. The route is anonymous, so the spent link is the only thing
+that says the person asking owns the account; the type makes a caller say so out loud, and a test or
+a reviewer can see who claims it. No rank check applies, so a staff member may erase themselves.
 
 `updateById` and `removeById` stay the doors for an admin: they load by id and ask first.
 

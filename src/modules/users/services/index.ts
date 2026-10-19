@@ -24,6 +24,7 @@ import { updateById } from './update';
 import { restoreById, removeById } from './remove';
 import {
     updateOwnProfile,
+    redeemedOwner,
     eraseOwnAccount,
     softDeleteInactive,
     eraseInactive
@@ -79,12 +80,13 @@ import {
 
 export { isAuthenticatable } from '../authenticatable';
 export type { TwoFactorSecretRing } from './reencrypt';
+export type { RedeemedOwner } from './own-account';
 
 /**
  * The service's public surface — the controllers call through this, never the bare functions.
  * `updateById` and `removeById` load by id and ask the ban and staff-role questions first. The four
  * named doors take an already-loaded document for the one caller that holds the record and the
- * right to change it: the owner (`updateOwnProfile`, `eraseOwnAccount`) and the inactivity reaper
+ * right to change it: the owner (`updateOwnProfile`, and `eraseOwnAccount`, which asks for the spent deletion link's proof, `redeemedOwner`) and the inactivity reaper
  * (`softDeleteInactive`, `eraseInactive`). The raw `update` and `remove` beneath them are not here.
  */
 export const userService = {
@@ -98,6 +100,7 @@ export const userService = {
     removeById,
     restoreById,
     updateOwnProfile,
+    redeemedOwner,
     eraseOwnAccount,
     softDeleteInactive,
     eraseInactive,

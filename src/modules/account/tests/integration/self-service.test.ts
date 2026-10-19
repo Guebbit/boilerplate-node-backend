@@ -1,3 +1,5 @@
+import { findLiveToken, spendLiveToken } from '@modules/account/services/tokens';
+import { removeOwnAccount } from '@modules/account/services/self-delete';
 /**
  * @module
  * The self-service account surface — profile update, password change, session revocation, email
@@ -31,6 +33,7 @@ import { accountAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
 import { MISSING_ID } from '@tests/ids';
 import { accessService } from '@modules/access';
+import { userService } from '@modules/users';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { logger } from '@infrastructure/adapters/logger';
 import { imageStore } from '@infrastructure/adapters/image-store';
@@ -348,7 +351,7 @@ describe("`verify` and `email-change` tokens do not do each other's work", () =>
         await plantToken(user.id, EMAIL_VERIFY_TOKEN_TYPE, 'shared-value', { ttlMs: 3_600_000 });
 
         await expect(
-            accountService.findLiveToken(EMAIL_CHANGE_TOKEN_TYPE, 'shared-value')
+            findLiveToken(EMAIL_CHANGE_TOKEN_TYPE, 'shared-value')
         ).resolves.toBeUndefined();
     });
 
@@ -357,7 +360,7 @@ describe("`verify` and `email-change` tokens do not do each other's work", () =>
         await plantToken(user.id, EMAIL_CHANGE_TOKEN_TYPE, 'shared-value', { ttlMs: 3_600_000 });
 
         await expect(
-            accountService.findLiveToken(EMAIL_VERIFY_TOKEN_TYPE, 'shared-value')
+            findLiveToken(EMAIL_VERIFY_TOKEN_TYPE, 'shared-value')
         ).resolves.toBeUndefined();
     });
 
@@ -842,7 +845,7 @@ describe('removeOwnAccount', () => {
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUser();
 
-        const result = await accountService.removeOwnAccount(user, testCallerContext);
+        const result = await removeOwnAccount(userService.redeemedOwner(user), testCallerContext);
 
         expect(result.success).toBe(true);
         expect(await userRepository.findById(user.id)).toBeNull();
@@ -1178,7 +1181,7 @@ describe('findLiveToken', () => {
         const user = await createUser();
         await plantToken(user.id, 'password', 'live-reset', { ttlMs: 3_600_000 });
 
-        const found = await accountService.findLiveToken('password', 'live-reset');
+        const found = await findLiveToken('password', 'live-reset');
 
         expect(found?.id).toBe(user.id);
     });
@@ -1187,9 +1190,7 @@ describe('findLiveToken', () => {
         const user = await createUser();
         await plantToken(user.id, 'delete', 'delete-token', { ttlMs: 3_600_000 });
 
-        await expect(
-            accountService.findLiveToken('password', 'delete-token')
-        ).resolves.toBeUndefined();
+        await expect(findLiveToken('password', 'delete-token')).resolves.toBeUndefined();
     });
 
     it('refuses an expired token', async () => {
@@ -1201,15 +1202,13 @@ describe('findLiveToken', () => {
         const user = await createUser();
         await plantToken(user.id, 'password', 'stale-reset', { ttlMs: -1000 });
 
-        await expect(
-            accountService.findLiveToken('password', 'stale-reset')
-        ).resolves.toBeUndefined();
+        await expect(findLiveToken('password', 'stale-reset')).resolves.toBeUndefined();
     });
 
     it('refuses a token that never existed', async () => {
         await createUser();
 
-        await expect(accountService.findLiveToken('password', 'invented')).resolves.toBeUndefined();
+        await expect(findLiveToken('password', 'invented')).resolves.toBeUndefined();
     });
 });
 
@@ -1222,16 +1221,16 @@ describe('spendLiveToken', () => {
         const user = await createUser();
         await plantToken(user.id, 'password', 'one-shot', { ttlMs: 3_600_000 });
 
-        await expect(accountService.spendLiveToken('password', 'one-shot')).resolves.toBe(true);
-        await expect(accountService.spendLiveToken('password', 'one-shot')).resolves.toBe(false);
+        await expect(spendLiveToken('password', 'one-shot')).resolves.toBe(true);
+        await expect(spendLiveToken('password', 'one-shot')).resolves.toBe(false);
     });
 
     it('leaves a spent token unfindable', async () => {
         const user = await createUser();
         await plantToken(user.id, 'password', 'burn-me', { ttlMs: 3_600_000 });
-        await accountService.spendLiveToken('password', 'burn-me');
+        await spendLiveToken('password', 'burn-me');
 
-        await expect(accountService.findLiveToken('password', 'burn-me')).resolves.toBeUndefined();
+        await expect(findLiveToken('password', 'burn-me')).resolves.toBeUndefined();
     });
 });
 
@@ -1281,7 +1280,7 @@ describe('completePasswordReset', () => {
         );
 
         expect(refused.status).toBe(422);
-        await expect(accountService.findLiveToken('password', 'typo-link')).resolves.toBeDefined();
+        await expect(findLiveToken('password', 'typo-link')).resolves.toBeDefined();
     });
 
     it('spends the link: a second use of it is refused like a link that never existed', async () => {

@@ -6,6 +6,8 @@
         "restored": "User restored. Their sessions stay signed out.",
         "not-deleted": "This user is not deleted.",
         "not-reaper-deleted": "Only an account the inactivity reaper deleted can be erased by it.",
+        "not-warned": "This account was never warned about its inactivity, so the reaper cannot delete it.",
+        "inactive-staff-account": "An account that holds a staff role is never deleted by the inactivity reaper.",
         "role-not-assignable": "This role does not exist or cannot be given to an account."
     }
 }

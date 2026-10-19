@@ -14,6 +14,7 @@ import { mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promi
 import { text } from 'node:stream/consumers';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
 import { asReject } from '@tests/response';
@@ -544,8 +545,12 @@ describe('a build that fails', () => {
 
         await requestFor();
         // The account vanishes between the failed build and the notice: nobody is left to tell.
-        // Set after the request, which reads the user itself.
-        jest.spyOn(userService, 'getById').mockResolvedValueOnce(undefined);
+        // Set after the request, which reads the user itself. The job's first read (to build)
+        // is the real one; the second (to mail the notice) finds nobody.
+        const readUser = userService.getById;
+        jest.spyOn(userService, 'getById')
+            .mockImplementationOnce(readUser)
+            .mockResolvedValueOnce(undefined);
         await settleInlineExports();
 
         expect(await failedCount()).toBe(before + 1);
@@ -560,8 +565,12 @@ describe('a build that fails', () => {
         ]);
 
         const { user } = await requestFor();
-        // Set after the request, which reads the user itself.
-        jest.spyOn(userService, 'getById').mockRejectedValueOnce(new Error('mongo still away'));
+        // Set after the request, which reads the user itself. The job reads the account twice: once
+        // to build (this must work) and once to mail the notice (this one fails).
+        const readUser = userService.getById;
+        jest.spyOn(userService, 'getById')
+            .mockImplementationOnce(readUser)
+            .mockRejectedValueOnce(new Error('mongo still away'));
         await settleInlineExports();
 
         await expect(accountExportRepository.findByUserId(user.id)).resolves.toMatchObject({
@@ -601,6 +610,34 @@ describe('a build that fails', () => {
     });
 });
 
+describe('a job for an account that is gone', () => {
+    it('fails the row and mails nobody: the message names no address to fall back on', async () => {
+        jest.spyOn(logger, 'error').mockReturnValue(undefined);
+        setPersonalDataSections(basicSections());
+        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
+        const rowId = new Types.ObjectId();
+        await accountExportRepository.insert({
+            _id: rowId,
+            userId: user._id,
+            status: 'building',
+            file: `${String(rowId)}.json`,
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 60_000)
+        });
+        // The account vanishes between the request and the run.
+        jest.spyOn(userService, 'getById').mockResolvedValue(undefined);
+
+        await expect(
+            runExportJob({ exportId: String(rowId), userId: user.id, locale: 'en' })
+        ).resolves.toBe(true);
+
+        await expect(accountExportRepository.findById(String(rowId))).resolves.toMatchObject({
+            status: 'failed'
+        });
+        expect(mockOutbox).toEqual([]);
+    });
+});
+
 describe('running a job twice', () => {
     it('builds and mails once: only the run that settles the row announces it', async () => {
         const { held, release } = gate();
@@ -610,8 +647,6 @@ describe('running a job twice', () => {
         const job = {
             exportId: String(requested.data?.id),
             userId: user.id,
-            email: user.email,
-            emailVerified: false,
             locale: 'en'
         };
 
@@ -632,8 +667,6 @@ describe('running a job twice', () => {
         const job = {
             exportId: result.data.id,
             userId: user.id,
-            email: user.email,
-            emailVerified: true,
             locale: 'en'
         };
 
@@ -730,7 +763,7 @@ describe('erasing the account', () => {
         setPersonalDataSections(originalSections);
         const stored = await userService.getById(user.id);
 
-        const removed = await userService.eraseOwnAccount(stored!);
+        const removed = await userService.eraseOwnAccount(userService.redeemedOwner(stored!));
 
         expect(removed.success).toBe(true);
         await expect(accountExportRepository.findById(result.data.id)).resolves.toBeNull();

@@ -30,6 +30,7 @@ import { generateReject, type ResponseReject } from '@infrastructure/http/respon
  * @param ttlMs - how long it works
  * @param amr - an MFA challenge only: how the first factor was proven
  * @returns the plaintext token
+ * @internal Mints a credential for any account; only this module's flows may, so it stays off `accountService`.
  */
 export const issueToken = (
     userId: string,
@@ -102,6 +103,7 @@ export const findLiveTokenEntry = (
  * @param type - which kind of token the link claims to carry
  * @param token - the token value from the link the user followed
  * @returns the holder, or `undefined` for every kind of refusal
+ * @internal Resolves a link to its account; only this module's confirm flows may, so it stays off `accountService`.
  */
 export const findLiveToken = (
     type: VerificationTokenType,
@@ -118,6 +120,7 @@ export const findLiveToken = (
  * @returns `true` only for the request whose own write removed the row. A `false` here is the
  *   loser of a race between two simultaneous uses of one link, and is answered exactly like a
  *   token that never existed.
+ * @internal Burns a link; only this module's confirm flows may, so it stays off `accountService`.
  */
 export const spendLiveToken = (type: VerificationTokenType, token: string): Promise<boolean> =>
     verificationTokenRepository.spend(type, hashToken(token));
@@ -132,6 +135,7 @@ export const spendLiveToken = (type: VerificationTokenType, token: string): Prom
  * @param token - the token value from the link the user followed
  * @returns the holder, once THIS request's spend removed the row — `undefined` for every kind of
  *   refusal, including the losing side of a race between two uses of one link
+ * @internal Turns a link into its account; only this module's confirm flows may, so it stays off `accountService`.
  */
 export const redeemLiveToken = (
     type: VerificationTokenType,

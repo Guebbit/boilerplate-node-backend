@@ -1557,7 +1557,7 @@ describe('deleteByUserId', () => {
         const product = await createProduct();
         await cartService.setItemById(user.id, String(product._id), 2);
 
-        await userService.eraseOwnAccount(user);
+        await userService.eraseOwnAccount(userService.redeemedOwner(user));
 
         await expect(cartRepository.findByUserId(user.id)).resolves.toBeNull();
     });

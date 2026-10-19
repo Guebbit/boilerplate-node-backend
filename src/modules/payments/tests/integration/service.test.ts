@@ -479,7 +479,7 @@ describe('refund on cancel', () => {
         const { providerRef } = (await paymentRepository.findByOrderId(String(order._id)))!;
         const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
 
-        await userService.eraseOwnAccount(user);
+        await userService.eraseOwnAccount(userService.redeemedOwner(user));
         // The cancel's listeners run off the outbox relay, after the erasure returns.
         await settleOutboxNudges();
 

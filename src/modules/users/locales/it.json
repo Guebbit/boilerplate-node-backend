@@ -6,6 +6,8 @@
         "restored": "Utente ripristinato. Le sue sessioni restano disconnesse.",
         "not-deleted": "Questo utente non è eliminato.",
         "not-reaper-deleted": "Solo un account eliminato dal processo di inattività può essere cancellato da esso.",
+        "not-warned": "Questo account non è mai stato avvisato dell'inattività, quindi il processo non può eliminarlo.",
+        "inactive-staff-account": "Un account con un ruolo di staff non viene mai eliminato dal processo di inattività.",
         "role-not-assignable": "Questo ruolo non esiste o non può essere assegnato a un account."
     }
 }
