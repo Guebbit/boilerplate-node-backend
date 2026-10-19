@@ -8,7 +8,7 @@
  * the window has no end yet, which is why `withdrawUntil` is absent until then.
  */
 
-import { DAY_MS } from '@domain-primitives/time';
+import { DAY_MS, endOfUtcDay } from '@domain-primitives/time';
 import { OrderStatus, WithdrawBlockedReason } from '@types';
 import type { FulfillmentSummary } from './fulfillment';
 import { ORDER_STATUS_TRAITS } from './status-traits';
@@ -61,14 +61,8 @@ export const canCorrectAddress = (order: AddressCandidate): boolean =>
  * @param days - the withdrawal period (14 by law, 21 at least here, 30 by default)
  * @returns the last instant a withdrawal is still valid
  */
-export const withdrawUntilFrom = (start: Date, days: number): Date => {
-    const startOfEventDay = Date.UTC(
-        start.getUTCFullYear(),
-        start.getUTCMonth(),
-        start.getUTCDate()
-    );
-    return new Date(startOfEventDay + (days + 1) * DAY_MS - 1);
-};
+export const withdrawUntilFrom = (start: Date, days: number): Date =>
+    endOfUtcDay(new Date(start.getTime() + days * DAY_MS));
 
 /** The statutory guarantee of conformity, in years (Directive 2019/771 Art. 10(1), 2019/770 Art. 11(2)). */
 const CONFORMITY_YEARS = 2;

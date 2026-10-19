@@ -10,6 +10,20 @@
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * The last millisecond of the UTC day an instant falls in.
+ *
+ * A deadline that is printed as a date must not fall before the end of that date, or a buyer reading
+ * "until the 5th" is cut off at the 5th's first hour. Withdrawal windows and answer deadlines both
+ * end this way.
+ * @param instant - any moment of the day
+ * @returns `23:59:59.999` UTC of that day
+ */
+export const endOfUtcDay = (instant: Date): Date =>
+    new Date(
+        Date.UTC(instant.getUTCFullYear(), instant.getUTCMonth(), instant.getUTCDate() + 1) - 1
+    );
+
+/**
  * The calendar day an instant falls in, on the wall clock of `timeZone`, as `YYYY-MM-DD`.
  *
  * Why not `toISOString().slice(0, 10)`: 00:30 on the 5th in Rome is still the 4th in UTC, and a

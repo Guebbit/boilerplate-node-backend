@@ -12,6 +12,7 @@ import {
     hasWaitExpired,
     judgeMove,
     judgeSlip,
+    latestAnswerBy,
     needsDueNotice,
     slippedDays
 } from '../../domain';
@@ -141,10 +142,61 @@ describe('judgeMove', () => {
 });
 
 describe('answerBy', () => {
-    it('is 30 days after the question, and no earlier', () => {
+    // Literals throughout: every date is a legal fact. Silence cancels at the promised date + 30
+    // days (16 CFR 435.2 (b)(1)(iii)) or, for a renewed question, at the date the buyer accepted
+    // ((b)(2)(ii)); the repo keeps 2 days of margin, so the promised-date cap is A + 28.
+    const agreedAt = new Date('2026-12-01T00:00:00Z');
+
+    it.each([
+        ['a first question two days before the promise', '2026-11-29T08:00:00Z', {}, '2026-12-29'],
+        ['a late move ten days after the promise', '2026-12-11T08:00:00Z', {}, '2026-12-29'],
+        ['a question forty days before the promise', '2026-10-22T08:00:00Z', {}, '2026-11-21'],
+        [
+            'a re-ask, which never extends the open window',
+            '2026-12-20T08:00:00Z',
+            {
+                consent: FulfillmentConsent.awaiting,
+                consentDeadline: new Date('2026-12-25T23:59:59.999Z')
+            },
+            '2026-12-25'
+        ],
+        [
+            'a renewed question, which cancels at the date accepted',
+            '2027-01-05T08:00:00Z',
+            { consent: FulfillmentConsent.confirmed, expectedAt: new Date('2027-01-19T00:00:00Z') },
+            '2027-01-19'
+        ],
+        [
+            'a question with no date expected',
+            '2026-12-11T08:00:00Z',
+            { expectedAt: undefined, agreedAt: undefined },
+            '2027-01-10'
+        ]
+    ])('%s', (_name, asked, facts, lastDay) => {
+        const deadline = answerBy(new Date(asked), {
+            agreedAt,
+            expectedAt: new Date('2026-12-05T00:00:00Z'),
+            ...facts
+        });
+
+        expect(deadline.toISOString()).toBe(`${lastDay}T23:59:59.999Z`);
+    });
+
+    it('is never a deadline that has already gone', () => {
+        const asked = new Date('2027-02-10T08:00:00Z');
+
+        expect(
+            answerBy(asked, {
+                agreedAt,
+                expectedAt: new Date('2026-12-05T00:00:00Z')
+            }).toISOString()
+        ).toBe('2027-02-10T23:59:59.999Z');
+    });
+
+    it('counts the preview as at most 30 days, to the millisecond', () => {
         const asked = new Date('2026-12-10T08:00:00Z');
 
-        expect(answerBy(asked).getTime() - asked.getTime()).toBe(30 * DAY);
+        expect(latestAnswerBy(asked).getTime() - asked.getTime()).toBe(30 * DAY);
     });
 });
 
@@ -187,6 +239,21 @@ describe('needsDueNotice', () => {
             'a buyer who said keep waiting, with the date passed again',
             { expectedAt: afterAgreed(10), consent: FulfillmentConsent.confirmed },
             true
+        ],
+        [
+            'a renewed question, fourteen days before the date',
+            { expectedAt: afterAgreed(33), consent: FulfillmentConsent.confirmed },
+            true
+        ],
+        [
+            'a renewed question, fifteen days before the date',
+            { expectedAt: afterAgreed(34), consent: FulfillmentConsent.confirmed },
+            false
+        ],
+        [
+            'a first question still waits for two days before the date',
+            { expectedAt: afterAgreed(33) },
+            false
         ]
     ])('%s', (_name, facts, expected) => {
         expect(needsDueNotice(facts, now)).toBe(expected);

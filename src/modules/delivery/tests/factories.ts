@@ -16,6 +16,7 @@ import { OrderStatus } from '@types';
 import type { Shipment } from '@types';
 import { deliveryService } from '../services';
 import { fulfillmentOrderRepository, shipmentRepository } from '../repository';
+import { fulfillmentOrderModel } from '../model';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 
 /** What a test may pass to {@link shipEverything}. */
@@ -35,6 +36,23 @@ export const fulfillmentOrdersOf = (orderId: string): Promise<FulfillmentOrderDo
     deliveryService
         .ensureFulfillmentOrders(orderId)
         .then(() => fulfillmentOrderRepository.findByOrderId(orderId));
+
+/**
+ * Set a fulfillment order's dates and consent to a state a test needs to start from — a promise
+ * long past, a date the buyer already accepted — which only the clock reaches through the doors.
+ * @param fulfillmentOrderId - the fulfillment order
+ * @param fields - the fields to set
+ */
+export const setFulfillmentOrderState = (
+    fulfillmentOrderId: string,
+    fields: Partial<
+        Pick<
+            FulfillmentOrderDocument,
+            'agreedAt' | 'expectedAt' | 'consent' | 'lastNoticeAt' | 'slips'
+        >
+    >
+): Promise<unknown> =>
+    fulfillmentOrderModel.updateOne({ _id: fulfillmentOrderId }, { $set: fields }).exec();
 
 /**
  * The order's shipments, in the order they were cut.

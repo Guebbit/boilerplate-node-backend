@@ -17,12 +17,17 @@ import { registerAuditSink, type AuditEntry } from '@infrastructure/observabilit
 import { asReject } from '@tests/response';
 import { productService } from '@modules/products';
 import { timelineOf } from '@modules/orders/tests/factories';
-import { fulfillmentOrdersOf, paidPreorderOrder } from '@modules/delivery/tests/factories';
+import {
+    fulfillmentOrdersOf,
+    paidPreorderOrder,
+    setFulfillmentOrderState
+} from '@modules/delivery/tests/factories';
 import { deliveryService } from '@modules/delivery/services';
 import { confirmWait } from '@modules/delivery/services/confirm-wait';
 import deliveryModule from '@modules/delivery/module';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
+import { endOfUtcDay } from '@domain-primitives/time';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -117,10 +122,25 @@ describe('a release date that moves', () => {
 
         const waiting = await waitingOf(orderId);
         expect([waiting.consent, waiting.slips]).toEqual(['awaiting', 1]);
+        // 30 days on, to the end of that UTC day: never less, and under 31.
         const days = (waiting.consentDeadline!.getTime() - Date.now()) / DAY;
         expect(days).toBeGreaterThan(29.9);
-        expect(days).toBeLessThanOrEqual(30);
+        expect(days).toBeLessThan(31);
         expect(await delayedEvents()).toMatchObject([{ needsAnswer: true }]);
+    });
+
+    it('keeps the answer deadline at 28 days past the promise when the move comes after it', async () => {
+        const { orderId, productIds } = await preorder(30);
+        const promised = inDays(-10);
+        await setFulfillmentOrderState(await waitingIdOf(orderId), { agreedAt: promised });
+
+        await moveDate(productIds[0], inDays(75));
+
+        const waiting = await waitingOf(orderId);
+        expect(waiting.consent).toBe('awaiting');
+        expect(waiting.consentDeadline).toEqual(
+            endOfUtcDay(new Date(promised.getTime() + 28 * DAY))
+        );
     });
 
     it('asks again on a second slip, however small', async () => {
@@ -418,6 +438,26 @@ describe('the daily sweep', () => {
             asked: 0,
             expired: 0
         });
+    });
+
+    it('asks a renewed question 14 days ahead, and silence cancels at the date the buyer accepted', async () => {
+        const { orderId } = await preorder(30);
+        const waitingId = await waitingIdOf(orderId);
+        const accepted = inDays(20);
+        await setFulfillmentOrderState(waitingId, {
+            agreedAt: inDays(-40),
+            expectedAt: accepted,
+            consent: 'confirmed',
+            lastNoticeAt: inDays(-30)
+        });
+
+        const early = await deliveryService.runPreorderSweep(inDays(5));
+        const renewed = await deliveryService.runPreorderSweep(inDays(7));
+
+        expect([early.asked, renewed.asked]).toEqual([0, 1]);
+        const waiting = await waitingOf(orderId);
+        expect(waiting.consent).toBe('awaiting');
+        expect(waiting.consentDeadline).toEqual(endOfUtcDay(accepted));
     });
 
     it('announces a wait that ran 30 days without an answer, and only then', async () => {

@@ -258,7 +258,22 @@ old date, unless the admin moves it after the date has passed; the daily sweep c
 | a longer slip, **or** any second one                  | a question: keep waiting, or cancel                    | FTC (b)(1)(iii), (b)(2)(ii): silence is a cancel  |
 | none: the date was cleared                            | the same question, with no new date to offer, once     | an indefinite delay                               |
 
-A question opens a 30-day window (`consent: awaiting`, `consentDeadline`). The buyer answers
+A question opens a window of **at most 30 days** (`consent: awaiting`, `consentDeadline`), to the end
+of the UTC day the mail prints. Silence cancels and refunds, so a question never buys time past what
+the buyer was already owed (FTC (b)(1)(iii), (b)(2)(ii)): the deadline is cut back to a cap, read from
+the fulfillment order as it stood BEFORE the question wrote its own state (`answerBy` in
+`domain/preorder.ts`).
+
+| The buyer's state before the question    | The deadline is the earlier of 30 days on and...  |
+| ---------------------------------------- | ------------------------------------------------- |
+| a question is already open (`awaiting`)  | that open window: asking again never extends it   |
+| a dated delay was accepted (`confirmed`) | the date accepted (`expectedAt`)                  |
+| nothing accepted yet                     | the agreed date plus 28 days (FTC's 30, less two) |
+| no date expected                         | nothing: 30 days on                               |
+
+A cap that has already passed is held at today, so a buyer is never handed a deadline that is gone.
+The preview's `answerBy` below is the 30-day ceiling, since it cannot know whom a question would
+reach. The buyer answers
 `POST /delivery/fulfillment-orders/{id}/confirm-wait` (`consent: confirmed`), cancels (the existing
 cancel or remainder cancel), or says nothing. The fulfillment order carries the whole state: `slips`
 (later dates already told), `consent`, `consentDeadline`, `lastNoticeAt` and `cancelReason`. Moving a
@@ -278,8 +293,8 @@ stateDiagram-v2
     Waiting --> Asked: longer slip, second slip,<br/>no date, or the date passed
     Noticed --> Asked: another slip, or the date passes
     Asked --> Confirmed: buyer says keep waiting
-    Confirmed --> Asked: a newer date moves or passes
-    Asked --> Expired: 30 days of silence (sweep)
+    Confirmed --> Asked: a newer date moves, or 14 days before the accepted one
+    Asked --> Expired: silence until the deadline (sweep)
     Expired --> Cancelled: returns cancels and refunds
     Waiting --> Allocated: stock arrives
     Noticed --> Allocated: stock arrives
@@ -324,7 +339,9 @@ when the buyer must answer.
 does two things, and only to fulfillment orders still `on_hold` for stock:
 
 - a fulfillment order whose **current** `expectedAt` is two days away, or past, with no stock and no
-  notice since, asks the same question. The offer must go out no later than the promise (FTC
+  notice since, asks the same question. A **renewed** question (the buyer accepted a date before)
+  goes out 14 days ahead instead, because silence on it cancels at that date and two days would be
+  too little to answer in. The offer must go out no later than the promise (FTC
   435.2(b)(1)), so it goes out ahead of the date, never after. It is keyed on `expectedAt`, not `agreedAt`: after an accepted slip the agreed date
   is long gone and only the expected one can still be missed. `lastNoticeAt` is what stops a daily
   repeat. A backorder promised the 30-day default is asked like any other, on day 28;
