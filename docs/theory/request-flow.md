@@ -352,6 +352,16 @@ that declared status (400/413/415), never the library's own message; a driver fa
 is 500. A middleware that already has the `Response` in hand — file upload validation, for one —
 answers `rejectResponse` directly instead of throwing something for this handler to translate.
 
+### A status-only failure is still translated
+
+A refusal that carries no text of its own (a bare 404 from the catch-all, a 409, a 412) answers
+`errors[0].message` from one `generic.*` locale key per status, in the caller's `Accept-Language`.
+The top-level `message` stays the English reason phrase on purpose: it is the developer-facing
+label, `errors[]` is what a person reads (AIP-193 splits them the same way). The locale is
+negotiated before request parsing, so the global limiter's 429 and a parser's 400 / 413 / 415
+speak the caller's language and carry `Content-Language` too. A `MulterError` keeps its `code`,
+and its English text is replaced by `generic.error-upload-refused`.
+
 ### The database branch is a safety net, not a substitute
 
 Every controller ends its chain with a `.catch()` that calls `rejectDatabaseError`, so nothing

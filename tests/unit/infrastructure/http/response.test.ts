@@ -27,6 +27,7 @@ import {
 } from '@infrastructure/http/response';
 import { makeResponseStub } from '@tests/express';
 import type { ErrorCode } from '@api/error-codes';
+import { t, translator } from '@infrastructure/i18n';
 
 /** Express response stub with a chainable status().json(). */
 
@@ -121,13 +122,17 @@ describe('generateReject', () => {
 
         expect(response.status).toBe(400);
         expect(response.message).toBe('Bad Request');
-        expect(response.errors).toEqual([{ code: 'BAD_REQUEST', message: 'Bad Request' }]);
+        expect(response.errors).toEqual([
+            { code: 'BAD_REQUEST', message: t('generic.error-bad-request') }
+        ]);
     });
 
     it('synthesises an item when no errors are supplied', () => {
         const response = generateReject(404);
 
-        expect(response.errors).toEqual([{ code: 'NOT_FOUND', message: 'Not Found' }]);
+        expect(response.errors).toEqual([
+            { code: 'NOT_FOUND', message: t('generic.error-nothing-found') }
+        ]);
     });
 
     /*
@@ -157,6 +162,38 @@ describe('generateReject', () => {
         expect(resolveErrorMessage(status)).toBe(message);
     });
 
+    /*
+     * `errors[0].message` is what a person reads, so a status-only failure is translated: one
+     * `generic.*` key per status, while the top-level `message` above stays English (AIP-193).
+     */
+    it.each([
+        [400, 'generic.error-bad-request'],
+        [401, 'generic.error-unauthorized'],
+        [403, 'generic.error-forbidden'],
+        [404, 'generic.error-nothing-found'],
+        [409, 'generic.error-conflict'],
+        [412, 'generic.error-precondition-failed'],
+        [422, 'generic.error-invalid-data'],
+        [429, 'generic.error-rate-limited'],
+        [500, 'generic.error-internal'],
+        [502, 'generic.error-internal'],
+        [418, 'generic.error-unknown']
+    ])('%i answers its fallback item from %s, in the active language', (status, key) => {
+        expect(generateReject(status).errors[0]?.message).toBe(t(key));
+    });
+
+    it('answers the fallback item in Italian inside an Italian request', () => {
+        const italian = translator('it');
+
+        // Every mapped status has an Italian text of its own, not the English one reused.
+        for (const key of [
+            'generic.error-nothing-found',
+            'generic.error-conflict',
+            'generic.error-precondition-failed'
+        ])
+            expect(italian(key)).not.toBe(t(key));
+    });
+
     it('uses the same wording whatever the caller passed as errors', () => {
         expect(generateReject(404, ['anything']).message).toBe(generateReject(404).message);
     });
@@ -164,7 +201,7 @@ describe('generateReject', () => {
     it('falls back to the status wording for the synthesised error item too', () => {
         // `normalizeErrors` reuses it when `errors` is empty, so the two cannot drift apart.
         expect(generateReject(429).errors).toEqual([
-            { code: 'REQUEST_ERROR', message: 'Too Many Requests' }
+            { code: 'REQUEST_ERROR', message: t('generic.error-rate-limited') }
         ]);
     });
 
@@ -232,7 +269,10 @@ describe('generateReject', () => {
     it('fills a structured item missing its message from the envelope message', () => {
         const response = generateReject(409, [{ code: 'DUPLICATE' as ErrorCode, message: '' }]);
 
-        expect(response.errors[0]).toEqual({ code: 'DUPLICATE', message: 'Conflict' });
+        expect(response.errors[0]).toEqual({
+            code: 'DUPLICATE',
+            message: t('generic.error-conflict')
+        });
     });
 
     it('omits details entirely rather than serialising it as undefined', () => {

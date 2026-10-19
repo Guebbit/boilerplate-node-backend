@@ -251,8 +251,9 @@ roles:
       description: >-
           Runs the installation: health, metrics, and the incidents in the operational audit
           (security events, failed logins, worker failures — never a customer's orders or accounts,
-          and IP addresses pseudonymised). Explicitly NOT a super-admin — holds no tenant rule and
-          therefore cannot read a single shop's orders, customers or messages. Only a holder of
+          and IP addresses pseudonymised). Explicitly NOT a super-admin — holds no staff rule in the
+          shop and, like every account, is a customer of it, so it cannot read a single shop's
+          orders, customers or messages. Only a holder of
           `assign:Role` can change this account, which no shop role is but the administrator.
           The conformance suite asserts both halves of that.
       sets:

@@ -185,3 +185,54 @@ describe('generated-schema validation answers in the negotiated language', () =>
         for (const message of italianMessages) expect(message).not.toMatch(/^\w+(?:\.[\w-]+)+$/);
     });
 });
+
+/**
+ * Refusals nobody wrote a message for: an unknown route, and a body the parser refused.
+ *
+ * The parser's 400 / 413 are answered BEFORE the routes, so they only speak the caller's language
+ * if `attachLocale` is mounted ahead of request parsing in `createApp`. The global limiter's 429 sits
+ * in that same group, so the order covers it too; a test cannot build a second app with a small
+ * budget without re-loading the i18n module, which the reload leaves unbooted. These drive the real
+ * app, in Italian, and expect the status's own `generic.*` text and the header.
+ */
+describe('a failure with no message of its own', () => {
+    const italian = translator('it');
+
+    it('answers an unknown route in the caller’s language', async () => {
+        const response = await api().get('/no/such/route').set('Accept-Language', 'it');
+
+        expect(response.status).toBe(404);
+        expect(response.headers['content-language']).toBe('it');
+        expect(messagesOf(response.body)).toEqual([italian('generic.error-nothing-found')]);
+    });
+
+    it('answers a malformed JSON body in the caller’s language', async () => {
+        const response = await api()
+            .post('/account/login')
+            .set('Accept-Language', 'it')
+            .set('Content-Type', 'application/json')
+            .send('{"email":');
+
+        expect(response.status).toBe(400);
+        expect(response.headers['content-language']).toBe('it');
+        expect(messagesOf(response.body)).toEqual([italian('generic.error-bad-request')]);
+    });
+
+    it('answers an oversized body in the caller’s language', async () => {
+        const response = await api()
+            .post('/account/login')
+            .set('Accept-Language', 'it')
+            .set('Content-Type', 'application/json')
+            .send(JSON.stringify({ email: 'a'.repeat(200_000) }));
+
+        expect(response.status).toBe(413);
+        expect(response.headers['content-language']).toBe('it');
+        expect(messagesOf(response.body)).toEqual([italian('generic.error-payload-too-large')]);
+    });
+
+    it('keeps the top-level message in English while errors[] is translated', async () => {
+        const response = await api().get('/no/such/route').set('Accept-Language', 'it');
+
+        expect(response.body.message).toBe('Not Found');
+    });
+});

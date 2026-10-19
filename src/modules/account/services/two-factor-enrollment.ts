@@ -425,12 +425,13 @@ export const regenerateBackupCodes = (
             const salt = generateBackupCodeSalt();
             user.twoFactorBackupCodeSalt = salt;
             user.twoFactorBackupCodes = hashBackupCodes(backupCodes, salt);
-            return userService.persistTwoFactorMethods(user).then(() =>
-                generateSuccess({
+            return userService.persistTwoFactorMethods(user).then(() => {
+                notifyChange(user, 'codes-regenerated', '', context);
+                return generateSuccess({
                     backupCodes,
                     backupCodesRemaining: user.twoFactorBackupCodes.length
-                })
-            );
+                });
+            });
         }
     );
 

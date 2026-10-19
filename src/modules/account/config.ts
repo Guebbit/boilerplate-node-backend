@@ -8,7 +8,7 @@
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { int, text } from '@infrastructure/config/fields';
+import { email, int, text } from '@infrastructure/config/fields';
 import { frontendLink } from '@infrastructure/http/frontend-link';
 import { DAY_MS } from '@domain-primitives/time';
 
@@ -38,7 +38,8 @@ export const accountConfig = defineConfig({
         NODE_INACTIVE_MINIMISE_DAYS: int({ default: 1095, min: 0 }),
         NODE_EMAIL_VERIFY_TTL_MS: int({ default: DAY_MS, min: 1 }),
         NODE_ACCOUNT_EXPORT_TTL_DAYS: int({ default: 7, min: 1 }),
-        NODE_TERMS_VERSION: text({ default: '1' })
+        NODE_TERMS_VERSION: text({ default: '1' }),
+        NODE_ACCOUNT_SUPPORT_EMAIL: email()
     }
 });
 

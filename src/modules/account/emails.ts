@@ -9,7 +9,12 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale, translator } from '@infrastructure/i18n';
-import { accountExportLink, accountFrontendLink, type AccountLinkKind } from './config';
+import {
+    accountConfig,
+    accountExportLink,
+    accountFrontendLink,
+    type AccountLinkKind
+} from './config';
 import type { CallerContext } from '@types';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 
@@ -54,13 +59,15 @@ export const greetableName = (
  * @param mail - `template`: the outbox name, `account.<flow>`, which also names the
  *   `account.email.<flow>.*` copy keys; `locale`: the recipient's language; `name`: the display
  *   name for the greeting, or `''` (see {@link greetableName}); `body`: the flow's own copy slots,
- *   from the translator bound to `locale`
+ *   from the translator bound to `locale`; `security`: a notice about the account's own security,
+ *   whose footer names the support address when `NODE_ACCOUNT_SUPPORT_EMAIL` is set
  */
 const accountMail = ({
     template,
     locale,
     name,
-    body
+    body,
+    security = false
 }: {
     // `readonly`: the cross-cutting sweeps read every line that starts `template:` as a published
     // name, and this is a type, not one.
@@ -68,9 +75,11 @@ const accountMail = ({
     locale: string;
     name: string;
     body: (t: ReturnType<typeof translator>) => Record<string, unknown>;
+    security?: boolean;
 }): EmailContent => {
     const t = translator(locale);
     const copy = `account.email.${template.slice('account.'.length)}`;
+    const support = security ? accountConfig().NODE_ACCOUNT_SUPPORT_EMAIL : undefined;
     return {
         template,
         subject: t(`${copy}.subject`),
@@ -79,7 +88,9 @@ const accountMail = ({
             pageMetaTitle: t(`${copy}.meta-title`),
             greeting: greetingFor(t, `${copy}.greeting`, name),
             ...body(t),
-            footer: t('email.footer')
+            footer: support
+                ? t('account.email.footer-support', { email: support })
+                : t('email.footer')
         }
     };
 };
@@ -133,7 +144,8 @@ export const emailChangeNoticeEmail = (
             body: t('account.email.email-change-notice.body', { newEmail }),
             linkLabel: t('account.email.email-change-notice.link-label'),
             linkUrl: accountFrontendLink('email-undo', { locale, token: undoToken })
-        })
+        }),
+        security: true
     });
 };
 
@@ -231,15 +243,15 @@ export const reauthCodeEmail = (
 };
 
 /** What happened to the account's second factors, for {@link twoFactorChangedEmail}. */
-export type TwoFactorChange = 'enrolled' | 'removed' | 'disabled';
+export type TwoFactorChange = 'enrolled' | 'removed' | 'disabled' | 'codes-regenerated';
 
 /**
  * Two-factor change notice: sent out of band the moment a factor is added or replaced, removed, or
- * 2FA is turned off. A change made from a stolen session is otherwise silent — the owner's only
+ * 2FA is turned off, or the backup codes are replaced. A change made from a stolen session is otherwise silent — the owner's only
  * warning is this mail (OWASP MFA Cheat Sheet, "Changing MFA Factors"). Carries no link that acts.
  *
  * @param change - `'enrolled'` covers an added and a replaced factor alike
- * @param method - the wire name of the factor concerned; ignored for `'disabled'`
+ * @param method - the wire name of the factor concerned; ignored for `'disabled'` and `'codes-regenerated'`
  */
 export const twoFactorChangedEmail = (
     locale: string,
@@ -254,7 +266,8 @@ export const twoFactorChangedEmail = (
         body: (t) => ({
             body: t(`account.email.two-factor-changed.body-${change}`, { method }),
             advice: t('account.email.two-factor-changed.advice')
-        })
+        }),
+        security: true
     });
 };
 
@@ -284,7 +297,8 @@ export const signInMethodChangedEmail = (
         body: (t) => ({
             body: t(`account.email.sign-in-method-changed.body-${change}`, { provider }),
             advice: t('account.email.sign-in-method-changed.advice')
-        })
+        }),
+        security: true
     });
 };
 
@@ -307,7 +321,8 @@ export const twoFactorLockedEmail = (
         body: (t) => ({
             body: t('account.email.two-factor-locked.body', { minutes }),
             advice: t('account.email.two-factor-locked.advice')
-        })
+        }),
+        security: true
     });
 };
 
@@ -339,8 +354,30 @@ export const resetConfirmEmail = (
                               )
                               .join(', ')
                       })
-                    : t('account.email.reset-confirm.providers-none')
-        })
+                    : t('account.email.reset-confirm.providers-none'),
+            advice: t('account.email.reset-confirm.advice')
+        }),
+        security: true
+    });
+};
+
+/**
+ * Password-change notice: sent out of band after a signed-in password change, the one change a
+ * stolen session can make with the current password in hand. A reset keeps its own
+ * {@link resetConfirmEmail}. Carries no link that acts and no timestamp: the advice points at the
+ * sign-in page's own "Forgot password", which signs every device out and revokes API keys
+ * (NIST SP 800-63B-4 §4.6, ASVS 5.0 6.3.7).
+ */
+export const passwordChangedEmail = (locale: string, name: string): EmailContent => {
+    return accountMail({
+        template: 'account.password-changed',
+        locale,
+        name,
+        body: (t) => ({
+            body: t('account.email.password-changed.body'),
+            advice: t('account.email.password-changed.advice')
+        }),
+        security: true
     });
 };
 

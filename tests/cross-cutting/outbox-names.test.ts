@@ -155,7 +155,8 @@ it('publishes the set the pair agreed on', () => {
      * `orders.order-card-expired` (a `card` hold's own expiry notice, the twin of
      * `payments.transfer-expired` for the other payment method) — both new here. So is
      * `account.two-factor-changed`, the notice that a second factor was added, replaced or removed. So is
-     * `account.two-factor-locked`, the notice that wrong codes locked the checks. So are
+     * `account.two-factor-locked`, the notice that wrong codes locked the checks. So is
+     * `account.password-changed`, the notice that a signed-in password change happened. So are
      * `api-keys.minted` and `api-keys.revoked`, the notices that a credential was created or revoked
      * wholesale: the twin has no api-keys module at all yet. So is
      * `account.reauth-code`, the step-up code an account with no password passes with. So are
@@ -174,6 +175,7 @@ it('publishes the set the pair agreed on', () => {
         'account.export-failed',
         'account.export-ready',
         'account.inactivity-warning',
+        'account.password-changed',
         'account.reauth-code',
         'account.reset-confirm',
         'account.reset-request',

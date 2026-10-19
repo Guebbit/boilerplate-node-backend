@@ -113,7 +113,9 @@ describe('requireId', () => {
         requireId(makeRequest({ params: { id: 'abc' } }), response, { notFound: null });
 
         expect(sent.status).toBe(404);
-        expect(errorsOf(sent)).toEqual([{ code: 'NOT_FOUND', message: 'Not Found' }]);
+        expect(errorsOf(sent)).toEqual([
+            { code: 'NOT_FOUND', message: t('generic.error-nothing-found') }
+        ]);
     });
 
     it('builds the copy through a function where it names the id', () => {

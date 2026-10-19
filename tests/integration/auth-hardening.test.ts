@@ -1,6 +1,7 @@
 import express from 'express';
 import supertest from 'supertest';
 import { handleUncaughtError } from '@app/error-handling';
+import { t } from '@infrastructure/i18n';
 
 /**
  * The global error handler is the one hardening property here that is genuinely system-wide:
@@ -97,19 +98,18 @@ describe('the 500 handler', () => {
     });
 
     /**
-     * The other side of the rule: an error whose text was CHOSEN is still returned. Losing that
-     * would turn every deliberate rejection into a blank 500. `MulterError` is the one throw
-     * shape this handler still translates by hand — everything else answers `rejectResponse`
-     * directly instead of unwinding through here.
+     * The other side of the rule: a deliberate refusal is still answered as a 400 and not a blank
+     * 500. `MulterError` is the one throw shape this handler still translates by hand: its `code`
+     * names the limit, and its English text is replaced by one translated sentence.
      */
-    it('still returns the copy a deliberate error carries', async () => {
+    it('answers a deliberate error with its code and a translated sentence', async () => {
         const multer = await import('multer');
 
         const response = await answerFor(new multer.MulterError('LIMIT_FILE_SIZE', 'avatar'));
 
         expect(response.status).toBe(400);
-        expect(response.body.errors).toContainEqual(
-            expect.objectContaining({ message: 'File too large' })
-        );
+        expect(response.body.errors).toEqual([
+            { code: 'LIMIT_FILE_SIZE', message: t('generic.error-upload-refused') }
+        ]);
     });
 });

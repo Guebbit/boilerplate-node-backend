@@ -28,6 +28,7 @@ const DATA = {
     greeting: '',
     body: '',
     providers: '',
+    advice: '',
     lines: [],
     total: '',
     linkLabel: '',
