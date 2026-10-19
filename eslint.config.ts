@@ -1350,6 +1350,46 @@ export default tseslint.config(
     },
 
     /**
+     * Friends-only service members: a write exactly one other module must call. The barrel has to
+     * publish it (the friend sits in another module), so the barrel cannot be the door; this is.
+     * `account` writes `users`' credentials and the email-verification state, `payments` moves an
+     * order to paid. Tests and factories reach them as they always did, so they are left out.
+     * See `docs/theory/strategic-ddd.md` §5.
+     */
+    {
+        files: ['src/modules/**/*.ts'],
+        ignores: ['src/**/tests/**', 'src/**/factories.ts'],
+        rules: {
+            'local/friend-members': [
+                'error',
+                {
+                    entries: [
+                        {
+                            handle: 'userService',
+                            owner: 'users',
+                            members: [
+                                'setPassword',
+                                'linkOAuthAccount',
+                                'persistTwoFactorWrite',
+                                'applyEmailChange',
+                                'markEmailVerified',
+                                'minimiseInactive'
+                            ],
+                            friends: ['account']
+                        },
+                        {
+                            handle: 'orderService',
+                            owner: 'orders',
+                            members: ['markPaid'],
+                            friends: ['payments']
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+
+    /**
      * What the domain layer may not TOUCH, as opposed to which tier it may reach.
      *
      * Left with `no-restricted-imports` on purpose: `mongoose` and `express` are external
