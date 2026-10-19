@@ -1,7 +1,8 @@
 /**
  * @module
  * Folds every shard's Stryker report from a GitHub sweep into ONE report — one HTML page, one
- * `mutation.json` for the ratchet, one summary on the run page.
+ * `mutation.json` for the ratchet, one summary on the run page. Also lays a local partial run over
+ * a whole report ({@link overlayReport}).
  *
  * Sliced files: each slice's report holds every mutant of the file, the others' marked
  *   {@link SLICE_IGNORE_REASON}. A mutant takes the result of whichever report actually ran it.
@@ -202,6 +203,44 @@ export const mergeReports = (
         report: { ...top, files, testFiles },
         incomplete: [...incomplete].toSorted()
     };
+};
+
+/**
+ * A whole report with a partial run laid over it: each file the partial run measured takes its
+ * new result, every other file keeps the whole report's.
+ *
+ * What `npm run mutation` does after a diff run, so the one report on disk stays whole.
+ * Test and mutant ids are renumbered as in {@link mergeReports}: each report numbered its own.
+ *
+ * @param whole the report already on disk — a pulled sweep's, or an earlier run's
+ * @param partial the run that just finished
+ */
+export const overlayReport = (whole: StrykerReport, partial: StrykerReport): StrykerReport => {
+    // The partial run first, so a test both reports know keeps its newer entry.
+    const { testFiles, idMaps } = mergeTests([partial, whole]);
+    const remap = (index: number, ids?: string[]) => ids?.map((id) => idMaps[index].get(id) ?? id);
+    const kept = Object.entries(whole.files).filter(([file]) => !(file in partial.files));
+
+    let nextId = 0;
+    const files = Object.fromEntries(
+        [
+            ...kept.map(([file, entry]) => ({ file, entry, index: 1 })),
+            ...Object.entries(partial.files).map(([file, entry]) => ({ file, entry, index: 0 }))
+        ].map(({ file, entry, index }) => [
+            file,
+            {
+                ...entry,
+                mutants: entry.mutants.map((mutant) => ({
+                    ...mutant,
+                    id: String(nextId++),
+                    coveredBy: remap(index, mutant.coveredBy),
+                    killedBy: remap(index, mutant.killedBy)
+                }))
+            }
+        ])
+    );
+
+    return { ...whole, files, testFiles };
 };
 
 /**

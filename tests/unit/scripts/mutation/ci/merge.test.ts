@@ -9,6 +9,7 @@ import {
     formatSummary,
     incompleteFiles,
     mergeReports,
+    overlayReport,
     renderHtml,
     tally
 } from '../../../../../scripts/mutation/ci/merge';
@@ -149,6 +150,71 @@ describe('mergeReports', () => {
 
     it("drops the first shard's config, which names only that shard's files", () => {
         expect(mergeReports(halves(), SCOPE).report).not.toHaveProperty('config');
+    });
+});
+
+/** A report of `files`, each `[file, mutants]`, with one test file holding `[id, name]` tests. */
+const reportOf = (
+    files: [string, ReturnType<typeof mutant>[]][],
+    tests: [string, string][]
+): StrykerReport => ({
+    ...report([], tests),
+    files: Object.fromEntries(files.map(([file, mutants]) => [file, { mutants }]))
+});
+
+/** Every mutant of `file` in `merged`. */
+const mutantsOf = (merged: StrykerReport, file: string) => merged.files[file].mutants;
+
+/** The name of the test `id` stands for in `merged`. */
+const testName = (merged: StrykerReport, id: string | undefined) =>
+    merged.testFiles?.['tests/a.test.ts'].tests.find((test) => test.id === id)?.name;
+
+describe('overlayReport', () => {
+    it('takes the files the partial run measured from it, and every other file from the whole', () => {
+        const whole = reportOf(
+            [
+                ['src/a.ts', [mutant('0', 1, 'Survived')]],
+                ['src/b.ts', [mutant('1', 1, 'NoCoverage')]]
+            ],
+            []
+        );
+        const partial = reportOf([['src/a.ts', [mutant('0', 1, 'Killed')]]], []);
+
+        const merged = overlayReport(whole, partial);
+
+        expect(mutantsOf(merged, 'src/a.ts').map(({ status }) => status)).toEqual(['Killed']);
+        expect(mutantsOf(merged, 'src/b.ts').map(({ status }) => status)).toEqual(['NoCoverage']);
+    });
+
+    it('keeps each mutant pointing at its own test when both reports numbered a test 0', () => {
+        const whole = reportOf(
+            [['src/b.ts', [mutant('0', 1, 'Survived', ['0'])]]],
+            [['0', 'an old test']]
+        );
+        const partial = reportOf(
+            [['src/a.ts', [mutant('0', 1, 'Survived', ['0'])]]],
+            [['0', 'a new test']]
+        );
+
+        const merged = overlayReport(whole, partial);
+
+        expect(testName(merged, mutantsOf(merged, 'src/b.ts')[0].coveredBy?.[0])).toBe(
+            'an old test'
+        );
+        expect(testName(merged, mutantsOf(merged, 'src/a.ts')[0].coveredBy?.[0])).toBe(
+            'a new test'
+        );
+    });
+
+    it('gives every mutant its own id, though both reports started counting at 0', () => {
+        const whole = reportOf([['src/b.ts', [mutant('0', 1, 'Killed')]]], []);
+        const partial = reportOf([['src/a.ts', [mutant('0', 1, 'Killed')]]], []);
+
+        const ids = Object.values(overlayReport(whole, partial).files).flatMap(({ mutants }) =>
+            mutants.map(({ id }) => id)
+        );
+
+        expect(new Set(ids).size).toBe(2);
     });
 });
 

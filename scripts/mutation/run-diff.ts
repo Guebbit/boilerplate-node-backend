@@ -6,6 +6,9 @@
  * files, not lines), then the ordinary per-file ratchet (`scripts/mutation/check-baseline.ts`).
  * It never records: `--update` is not forwarded, so a partial report cannot erase the baseline.
  *
+ * Graded on its own files, then laid over the report already on disk (`overlayReport`), so a
+ * pulled sweep stays whole with this branch's files refreshed.
+ *
  * Why whole files, why it cannot fail you for old debt:
  * docs/tools/mutation-testing.md#the-diff-run-and-why-it-can-fail-when-the-full-sweep-cannot
  *
@@ -15,6 +18,10 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { REPORT_PATH } from './baseline';
+import { overlayReport, renderHtml, type StrykerReport } from './ci/merge';
 import { runStryker } from './stryker-run';
 import { changedMutable, mutableFiles } from './mutate-scope';
 import { mergeBase } from '../git-base';
@@ -71,6 +78,38 @@ const grade = (): number => {
     return check.status ?? 2;
 };
 
+/** The report Stryker writes. */
+const reportFile = path.join(REPO_ROOT, REPORT_PATH);
+
+/** Stryker's HTML page, beside the report. */
+const pageFile = path.join(path.dirname(reportFile), 'index.html');
+
+/** Reads a Stryker JSON report. */
+const readStrykerReport = (file: string): StrykerReport =>
+    JSON.parse(readFileSync(file, 'utf8')) as StrykerReport;
+
+/** The report on disk before this run — a pulled sweep's, or an earlier run's — and when it was written. */
+const previous = existsSync(reportFile)
+    ? { report: readStrykerReport(reportFile), writtenAt: statSync(reportFile).mtimeMs }
+    : undefined;
+
+/**
+ * Lays this run's report over the one that was on disk, and redraws the page from the result.
+ *
+ * Skipped when there was none (a fresh checkout, CI), or when Stryker wrote no new report.
+ */
+const keepReportWhole = (): void => {
+    if (!previous || statSync(reportFile).mtimeMs === previous.writtenAt) return;
+
+    const merged = overlayReport(previous.report, readStrykerReport(reportFile));
+    writeFileSync(reportFile, JSON.stringify(merged));
+    writeFileSync(pageFile, renderHtml(readFileSync(pageFile, 'utf8'), merged));
+    console.log(
+        `[mutation-diff] ${REPORT_PATH}: ${files.length} file(s) refreshed, ` +
+            `${Object.keys(merged.files).length} in the report.`
+    );
+};
+
 /*
  * Through `runStryker`, not a bare `npx stryker`: this run needs the same per-worker heap cap and
  * concurrency as every other entry point. Calling Stryker directly is how it silently ran without
@@ -79,4 +118,10 @@ const grade = (): number => {
 void runStryker({
     label: `diff (${files.length} files)`,
     args: ['stryker.json', '--mutate', files.join(','), '--force']
-}).then(({ abortedForOom }) => process.exit(abortedForOom ? 1 : grade()));
+}).then(({ abortedForOom }) => {
+    if (abortedForOom) process.exit(1);
+    // Graded before the overlay, so the verdict judges this branch's files alone.
+    const verdict = grade();
+    keepReportWhole();
+    process.exit(verdict);
+});

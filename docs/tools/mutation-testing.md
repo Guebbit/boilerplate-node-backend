@@ -60,6 +60,37 @@ Coverage thresholds used to exist and no longer do; mutation testing is the one 
 
 The one that actually gates day-to-day work is the **last row** — the ratchet. `break` is a single global number, which means one strong file can hide one collapsing file behind the average; the ratchet can't be fooled that way because it checks every file against itself. See [The per-file ratchet](#the-per-file-ratchet) for how that comparison works, with a diagram.
 
+### Which file is what {#which-file-is-what}
+
+Three files matter. One is the source; the other two are made from it.
+
+| File                                   | What it is                                                                                      | Tracked | Made by                           |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------- | ------- | --------------------------------- |
+| `stryker.json`                         | The settings: what to mutate, which tests run, where the results go                             | yes     | a person                          |
+| `tmp/reports/mutation/mutation.json`   | **The source.** Every mutant, its status, and per test which mutants it ran and which it caught | no      | a run, or `npm run mutation:pull` |
+| `mutation-baseline.json`               | One score per file, nothing else: the bar a file must not drop below                            | yes     | folded from `mutation.json`       |
+| `tmp/reports/mutation/index.html`      | A viewer: `mutation.json` drawn as a page. Disposable                                           | no      | drawn from `mutation.json`        |
+| `tmp/reports/stryker-incremental.json` | A cache, so the next local run skips unchanged mutants. Speed only — never read as a result     | no      | Stryker                           |
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
+flowchart LR
+    GH["GitHub sweep<br/><i>mutation-report artifact</i>"] -->|npm run mutation:pull| J
+    Local["npm run mutation<br/><i>the changed files</i>"] -->|laid over it| J
+    J["mutation.json<br/><b>the source</b>"] --> H["index.html<br/><i>viewer</i>"]
+    J -->|folded| B["mutation-baseline.json<br/><i>committed scores</i>"]
+
+    classDef src fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef run fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef out fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class J src;
+    class GH,Local run;
+    class H,B out;
+```
+
+The local full sweep, `npm run mutation:full`, keeps one `mutation.json` per shard under
+`tmp/reports/mutation-shards/` instead — see [Why the full sweep is sharded](#why-the-full-sweep-is-sharded).
+
 ## Glossary
 
 Read this first. The rest of the page uses these words precisely, and several of them mean something narrower than they sound.
@@ -1267,7 +1298,7 @@ traces back to one row of the table above:
 | 30 shards: "ran out of memory" in 10–20 minutes, before any mutant ran        | Memory. The initial test run of a widely imported file (`users/model.ts`) loads most of the suite into one process; 4 GB is not enough, the desktop's 8 GB is.       | 12 GB heap, one worker so it fits, swap; `preflight` proves it before the sweep starts |
 | 11 shards killed at 350 minutes — `queue.ts` alone at 264 of 272 mutants      | Time. 600 lines is an evening on the desktop, where a shard can take as long as it needs; on a runner it overran the 6-hour cap, and the work was lost with the job. | 200-line shards, big files sliced, a shard out of time split in four and run again     |
 | The 39 that finished took 129–338 minutes — several within minutes of the cap | Same: the size was never measured on a runner.                                                                                                                       | Sized from that run: 0.43 min per line at two workers, so ~0.9 at one                  |
-| The baseline was not saved                                                    | Not a machine issue: the commit step ran only when no file regressed, and 8 had.                                                                                     | The new baseline is uploaded whatever the verdict                                      |
+| The baseline was not saved                                                    | Not a machine issue: the commit step ran only when no file regressed, and 8 had.                                                                                     | The report is uploaded whatever the verdict, and the baseline is folded from it        |
 
 The lesson generalises to any heavy job moved to CI: **measure it on the runner, and design for the
 job being killed**. A desktop run fails slowly and visibly; a runner kills the job and keeps nothing.
@@ -1280,7 +1311,7 @@ job being killed**. A desktop run fails slowly and visibly; a runner kills the j
   file you touched scored below its baseline.
 - **To refresh every score** — the monthly GitHub sweep then `npm run mutation:pull`, or
   `npm run mutation:full` on the desktop over a few evenings. Either one ends in the same
-  `mutation-baseline.json`.
+  `mutation-baseline.json`; the pull also brings the sweep's whole `mutation.json` home.
 - **To check the GitHub setup still fits** — _Run workflow_ with **check-only**: the 20-minute
   preflight alone.
 
@@ -1336,13 +1367,14 @@ the cut ran in both halves.
 **Reading the result.**
 
 - **Run page:** the summary — score, mutants by status, the weakest files, anything not measured.
-- **`mutation-report` artifact:** one `index.html` for the whole sweep (Stryker's own viewer, the
-  shards merged into it) and the merged JSON report. Kept 90 days.
-- **`mutation-baseline` artifact:** the new `mutation-baseline.json`. `npm run mutation:pull`
-  writes it into your checkout; review the diff and commit it. Kept 90 days.
+- **`mutation-report` artifact:** the merged `mutation.json`, its `index.html` (Stryker's own
+  viewer, the shards merged into it) and the run page's `summary.md`. Kept 90 days.
+  `npm run mutation:pull` puts the first two in `tmp/reports/mutation/` and folds
+  `mutation-baseline.json` from the report — the same fold the merge job runs. Review the
+  baseline's diff and commit it.
 - **Red run:** exactly one of two things — a file could not be measured in any wave, or a file
   scored below its baseline. A red _shard_ inside a wave is not a failure: it is a retry being
-  scheduled. The new baseline is uploaded either way.
+  scheduled. The report is uploaded either way.
 - **On demand:** Actions tab → Mutation → Run workflow. A new run queues behind one in progress
   instead of cancelling it.
 
@@ -1350,11 +1382,11 @@ the cut ran in both halves.
 package in the tree runs with whatever token the job holds. A token that can push to `main`, next to
 hundreds of packages' install scripts, is the supply-chain shape GitHub's own hardening guide warns
 against ([GitHub Security Lab](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)).
-So every job is `contents: read`, every checkout sets `persist-credentials: false`, and the new
-baseline leaves as the `mutation-baseline` artifact. Bringing it home is one command and a commit:
+So every job is `contents: read`, every checkout sets `persist-credentials: false`, and the result
+leaves as the `mutation-report` artifact. Bringing it home is one command and a commit:
 
 ```bash
-npm run mutation:pull     # newest unexpired baseline from a sweep of main
+npm run mutation:pull     # newest unexpired report from a sweep of main, baseline folded from it
 git diff mutation-baseline.json
 ```
 
@@ -1405,6 +1437,27 @@ The monthly sweep owns the baseline.
 npm run mutation                  # against origin/main
 npm run mutation -- --base=HEAD~3
 ```
+
+**Where its result goes.** It is graded on the changed files alone. Then its results are laid over
+the `mutation.json` already on disk (`overlayReport` in `scripts/mutation/ci/merge.ts`): the changed
+files take the new result, every other file keeps the one that was there. `index.html` is redrawn
+from the result. On a fresh checkout, and in the `mutation-diff` job, there is nothing to lay it
+over, and the report holds the changed files alone.
+
+::: warning When GitHub runs your mutations
+After `npm run mutation`, the report on disk is no longer GitHub's sweep. It is a mix:
+
+- **the files you changed** — this run, on your machine, against your uncommitted or unpushed code
+- **every other file** — the sweep, as pulled, against the code `main` had on the sweep's day
+
+`mutation-baseline.json` is not touched: the diff run never records. So:
+
+- **Pull first, then run.** `npm run mutation:pull` before `npm run mutation`, or the mix is laid
+  over an older sweep, or over nothing.
+- **Never commit a baseline made from the mix.** The baseline only ever comes from a whole sweep:
+  `mutation:pull`, or a closed `mutation:full`.
+- **To get GitHub's sweep back**, pull again. It replaces the mix.
+  :::
 
 **Cost.** Whole-file scope makes this minutes, not seconds: a four-file diff measured 402 mutants,
 and `products/repository.ts` alone is 196. Budget tens of minutes on a PR that touches a large
@@ -1532,37 +1585,37 @@ covered file's real score, never as a grade.
 
 ## File map
 
-| Path                                   | Contents                                                                                                     |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `stryker.json`                         | Scope (`mutate`), the narrowed Jest config (integration included), thresholds, concurrency, reporters        |
-| `jest.config.mutation.js`              | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication)               |
-| `mutation-baseline.json`               | Per-file scores. Committed. The ratchet's memory — see [pending reseed](#baseline-status-pending-a-reseed).  |
-| `scripts/mutation/stryker-run.ts`      | One Stryker invocation, sized for this machine — concurrency, the heap cap, the scratch sweep, the OOM abort |
-| `scripts/mutation/run-diff.ts`         | `npm run mutation` — the files a branch changed, graded against the ratchet                                  |
-| `scripts/mutation/run-shards.ts`       | `npm run mutation:full` — the whole scope, one shard at a time, resumable, merges once closed                |
-| `scripts/mutation/local-policy.ts`     | Which shards a local sweep runs next, given what previous evenings already recorded                          |
-| `scripts/mutation/mutate-scope.ts`     | The real mutate scope, read off the tree — every `.ts` file `stryker.json` declares mutable                  |
-| `scripts/mutation/sharding.ts`         | Bin-packing by line count for a local sweep                                                                  |
-| `scripts/mutation/ci/`                 | The GitHub sweep only — wave planner, slice ignorer, report merge, and the CLI the workflows call            |
-| `scripts/mutation/baseline.ts`         | Ratchet logic — scoring, comparison, the "never lower" rule, and the merge variant of both                   |
-| `scripts/mutation/check-baseline.ts`   | CLI for the commands below                                                                                   |
-| `scripts/mutation/pull-baseline.ts`    | `npm run mutation:pull` — the newest baseline a sweep uploaded, written over `mutation-baseline.json`        |
-| `scripts/mutation/github-artifacts.ts` | Which uploaded baseline that is: the newest unexpired one from a sweep of `main`                             |
-| `.github/workflows/mutation.yml`       | Monthly schedule + dispatch, eight waves and the merge job, the PR diff job, the failure issue               |
-| `.github/workflows/mutation-wave.yml`  | One wave: plan it, then run its shards as a matrix                                                           |
-| `tmp/reports/mutation/index.html`      | Human-readable report (generated per run)                                                                    |
-| `tmp/reports/mutation/mutation.json`   | Machine-readable report the ratchet reads                                                                    |
+| Path                                   | Contents                                                                                                                   |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `stryker.json`                         | Scope (`mutate`), the narrowed Jest config (integration included), thresholds, concurrency, reporters                      |
+| `jest.config.mutation.js`              | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication)                             |
+| `mutation-baseline.json`               | Per-file scores. Committed. The ratchet's memory — see [pending reseed](#baseline-status-pending-a-reseed).                |
+| `scripts/mutation/stryker-run.ts`      | One Stryker invocation, sized for this machine — concurrency, the heap cap, the scratch sweep, the OOM abort               |
+| `scripts/mutation/run-diff.ts`         | `npm run mutation` — the files a branch changed, graded against the ratchet                                                |
+| `scripts/mutation/run-shards.ts`       | `npm run mutation:full` — the whole scope, one shard at a time, resumable, merges once closed                              |
+| `scripts/mutation/local-policy.ts`     | Which shards a local sweep runs next, given what previous evenings already recorded                                        |
+| `scripts/mutation/mutate-scope.ts`     | The real mutate scope, read off the tree — every `.ts` file `stryker.json` declares mutable                                |
+| `scripts/mutation/sharding.ts`         | Bin-packing by line count for a local sweep                                                                                |
+| `scripts/mutation/ci/`                 | The GitHub sweep only — wave planner, slice ignorer, report merge, and the CLI the workflows call                          |
+| `scripts/mutation/baseline.ts`         | Ratchet logic — scoring, comparison, the "never lower" rule, and the merge variant of both                                 |
+| `scripts/mutation/check-baseline.ts`   | CLI for the commands below                                                                                                 |
+| `scripts/mutation/pull-report.ts`      | `npm run mutation:pull` — the newest sweep's report into `tmp/reports/mutation/`, the baseline folded from it              |
+| `scripts/mutation/github-artifacts.ts` | Which uploaded report that is: the newest unexpired one from a sweep of `main`                                             |
+| `.github/workflows/mutation.yml`       | Monthly schedule + dispatch, eight waves and the merge job, the PR diff job, the failure issue                             |
+| `.github/workflows/mutation-wave.yml`  | One wave: plan it, then run its shards as a matrix                                                                         |
+| `tmp/reports/mutation/index.html`      | Human-readable report, drawn from `mutation.json`                                                                          |
+| `tmp/reports/mutation/mutation.json`   | The source: every mutant, per-test results. The ratchet and the audits read it — [which file is what](#which-file-is-what) |
 
 ## Commands
 
-| Command                                               | Effect                                                                                                                                   |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run mutation`                                    | The files a branch changed, graded against the ratchet. `--base=<ref>` to compare against something other than `origin/main`.            |
-| `npm run mutation:full`                               | The whole scope locally, one shard at a time, resumable across evenings. `--list`, `--limit=n`, `--only=`, `--force`, `--shard-lines=n`. |
-| `npm run mutation:check`                              | Compare the last report against the per-file baseline. Fails naming what regressed.                                                      |
-| `npm run mutation:check -- --update`                  | Record the last full-scope run (improvements only). Use when `mutate` changed, and say why.                                              |
-| `npm run mutation:check -- --merge --merge-dir=<dir>` | Fold a sharded sweep's reports into the baseline — see `mutate-scope.ts`'s `readReportsUnder`. What `mutation-merge` runs in CI.         |
-| `npm run mutation:pull`                               | Download the newest baseline the GitHub sweep uploaded into `mutation-baseline.json`. Needs `gh auth login`. Review, then commit.        |
+| Command                                               | Effect                                                                                                                                                           |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run mutation`                                    | The files a branch changed, graded against the ratchet, then laid over the report on disk. `--base=<ref>` to compare against something other than `origin/main`. |
+| `npm run mutation:full`                               | The whole scope locally, one shard at a time, resumable across evenings. `--list`, `--limit=n`, `--only=`, `--force`, `--shard-lines=n`.                         |
+| `npm run mutation:check`                              | Compare the last report against the per-file baseline. Fails naming what regressed.                                                                              |
+| `npm run mutation:check -- --update`                  | Record the last full-scope run (improvements only). Use when `mutate` changed, and say why.                                                                      |
+| `npm run mutation:check -- --merge --merge-dir=<dir>` | Fold a sharded sweep's reports into the baseline — see `mutate-scope.ts`'s `readReportsUnder`. What `mutation-merge` runs in CI.                                 |
+| `npm run mutation:pull`                               | Download the newest GitHub sweep's report into `tmp/reports/mutation/` and fold `mutation-baseline.json` from it. Needs `gh auth login`. Review, then commit.    |
 
 ## Related pages
 

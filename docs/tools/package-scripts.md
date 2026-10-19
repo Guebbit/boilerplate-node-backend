@@ -67,24 +67,24 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 
 ## Test scripts
 
-| Script               | Job                                                                                                                              | Read more                                                  |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `test`               | run unit, cross-cutting, integration, contract, then fuzz                                                                        | [Testing & Docs](./testing-and-docs.md)                    |
-| `test:module`        | one module's suites, every layer it owns — `-- src/modules/<name>`; serialised because contract and integration share a database | [Quick Start](./testing-quickstart.md)                     |
-| `test:unit:report`   | the unit and cross-cutting runs again, writing `tmp/reports/test-report.json` for the reader below                               | [Quick Start](./testing-quickstart.md)                     |
-| `test:report`        | per-module rollup, slowest suites, failures named by module                                                                      | [Quick Start](./testing-quickstart.md)                     |
-| `test:unit`          | `tests/unit` plus each module's own `tests/unit` — logic below HTTP                                                              | [Testing & Docs](./testing-and-docs.md)                    |
-| `test:cross-cutting` | repo-wide invariants: locale parity, no hardcoded user text, every controller catches                                            | [Testing & Docs](./testing-and-docs.md)                    |
-| `test:integration`   | HTTP integration suite against a real database                                                                                   | [Integration Testing](./integration-testing.md)            |
-| `test:contract`      | validate real responses against `openapi.yaml`                                                                                   | [Contract Testing](./contract-testing.md)                  |
-| `test:fuzz`          | property/fuzz suite — a small pass in the gate, a deep pass in the nightly workflow                                              | [Fuzz Testing](./fuzz-testing.md)                          |
-| `test:order-random`  | integration, contract and fuzz in one process with `--randomize --showSeed` — hunts order dependence                             | [Testing & Docs](./testing-and-docs.md)                    |
-| `test:prism`         | run a quick Prism mock smoke test from `openapi.yaml`                                                                            | [OpenAPI Workflow](../api/openapi-workflow.md)             |
-| `mutation`           | Stryker, scoped to the files this branch changed, graded against the baseline — every pull request                               | [Mutation Testing](./mutation-testing.md)                  |
-| `mutation:full`      | the whole repo, sharded, resumable across evenings — monthly in CI, or by hand                                                   | [Mutation Testing](./mutation-testing.md)                  |
-| `mutation:check`     | grade the last report against the committed per-file baseline; `-- --update` to record it                                        | [Mutation Testing](./mutation-testing.md)                  |
-| `mutation:pull`      | fetch the newest baseline the GitHub sweep uploaded into `mutation-baseline.json` (needs `gh auth login`)                        | [Mutation Testing](./mutation-testing.md#the-github-sweep) |
-| `measure:scaffold`   | scaffold a module in a scratch copy and run the gate on it                                                                       | [Module scaffolder](./module-scaffolder.md)                |
+| Script               | Job                                                                                                                                            | Read more                                                  |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `test`               | run unit, cross-cutting, integration, contract, then fuzz                                                                                      | [Testing & Docs](./testing-and-docs.md)                    |
+| `test:module`        | one module's suites, every layer it owns — `-- src/modules/<name>`; serialised because contract and integration share a database               | [Quick Start](./testing-quickstart.md)                     |
+| `test:unit:report`   | the unit and cross-cutting runs again, writing `tmp/reports/test-report.json` for the reader below                                             | [Quick Start](./testing-quickstart.md)                     |
+| `test:report`        | per-module rollup, slowest suites, failures named by module                                                                                    | [Quick Start](./testing-quickstart.md)                     |
+| `test:unit`          | `tests/unit` plus each module's own `tests/unit` — logic below HTTP                                                                            | [Testing & Docs](./testing-and-docs.md)                    |
+| `test:cross-cutting` | repo-wide invariants: locale parity, no hardcoded user text, every controller catches                                                          | [Testing & Docs](./testing-and-docs.md)                    |
+| `test:integration`   | HTTP integration suite against a real database                                                                                                 | [Integration Testing](./integration-testing.md)            |
+| `test:contract`      | validate real responses against `openapi.yaml`                                                                                                 | [Contract Testing](./contract-testing.md)                  |
+| `test:fuzz`          | property/fuzz suite — a small pass in the gate, a deep pass in the nightly workflow                                                            | [Fuzz Testing](./fuzz-testing.md)                          |
+| `test:order-random`  | integration, contract and fuzz in one process with `--randomize --showSeed` — hunts order dependence                                           | [Testing & Docs](./testing-and-docs.md)                    |
+| `test:prism`         | run a quick Prism mock smoke test from `openapi.yaml`                                                                                          | [OpenAPI Workflow](../api/openapi-workflow.md)             |
+| `mutation`           | Stryker, scoped to the files this branch changed, graded against the baseline — every pull request                                             | [Mutation Testing](./mutation-testing.md)                  |
+| `mutation:full`      | the whole repo, sharded, resumable across evenings — monthly in CI, or by hand                                                                 | [Mutation Testing](./mutation-testing.md)                  |
+| `mutation:check`     | grade the last report against the committed per-file baseline; `-- --update` to record it                                                      | [Mutation Testing](./mutation-testing.md)                  |
+| `mutation:pull`      | fetch the newest GitHub sweep's `mutation.json` into `tmp/reports/mutation/` and fold `mutation-baseline.json` from it (needs `gh auth login`) | [Mutation Testing](./mutation-testing.md#the-github-sweep) |
+| `measure:scaffold`   | scaffold a module in a scratch copy and run the gate on it                                                                                     | [Module scaffolder](./module-scaffolder.md)                |
 
 ## Audit scripts
 
