@@ -155,6 +155,27 @@ describe('writing a product through a multipart body', () => {
         expect(response.body.data.requiresShipping).toBe(false);
     });
 
+    it('decodes allowBackorder on a create and on an update', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const created = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .field('translations', JSON.stringify({ en: { title: 'Backorderable from a form' } }))
+            .field('price', '5')
+            // The string 'false' is truthy, and an edit form sends this field on every save.
+            .field('allowBackorder', 'true');
+        const updated = await api()
+            .patch(`/products/${created.body.data.id}`)
+            .set('Authorization', bearer)
+            .field('allowBackorder', 'false');
+
+        expect(created.status).toBe(201);
+        expect(created.body.data.allowBackorder).toBe(true);
+        expect(updated.status).toBe(200);
+        expect(updated.body.data.allowBackorder).toBe(false);
+    });
+
     it('defaults active to true when the form omits it', async () => {
         const { bearer } = await authenticateAs('admin');
 
