@@ -67,7 +67,8 @@ submits"). The line is written by the frontend only when indexing is switched on
 - **Always an index.** The address `robots.txt` names never changes as the catalogue grows
   (Shopify and Yoast do the same).
 - **One `<url>` per language,** each with `xhtml:link rel="alternate"` for every active language and
-  an `x-default` pointing at the default language. Only active languages are listed.
+  an `x-default` pointing at the default language while it is active, otherwise at the first active
+  one (a hreflang target must be a page the same sitemap lists). Only active languages are listed.
 - **A file never passes 50,000 `<url>`** (the sitemaps.org limit). Each product counts once per
   language, so a run holds `⌊limit ÷ languages⌋` products.
 - **`lastmod` is `updatedAt`** because it is accurate: a translation edit writes the product with

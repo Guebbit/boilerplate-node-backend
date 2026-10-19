@@ -93,6 +93,20 @@ describe('GET /sitemap/pages.xml', () => {
         expect(entries.every(({ lastmod }) => lastmod === undefined)).toBe(true);
     });
 
+    it('points x-default at the first active language when the default one is deactivated', () =>
+        withEnvironmentOverrides({ NODE_DEFAULT_LOCALE: 'de' }, async () => {
+            await givenLocale('de', { active: false });
+
+            const entries = await entriesOf('/sitemap/pages.xml');
+
+            const about = entries.find(({ url }) => url === `${FRONTEND}/it/about`);
+            expect(about?.links).toEqual([
+                { lang: 'en', url: `${FRONTEND}/en/about` },
+                { lang: 'it', url: `${FRONTEND}/it/about` },
+                { lang: 'x-default', url: `${FRONTEND}/en/about` }
+            ]);
+        }));
+
     it('lists a newly registered active language, and leaves an inactive one out', async () => {
         await localeService.createLanguage({ tag: 'de', name: 'German', nativeName: 'Deutsch' });
         await localeService.createLanguage({

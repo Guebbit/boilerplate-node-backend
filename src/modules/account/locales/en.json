@@ -10,7 +10,7 @@
         "signup": {
             "email-already-used": "Email was already used.",
             "password-dont-match": "Confirmation password must be the same of password.",
-            "terms-not-accepted": "You must accept the Terms of Service and Privacy Policy to register."
+            "terms-not-accepted": "You must accept the Terms of Service and confirm you have read the Privacy Policy to register."
         },
         "reset": {
             "token-not-found": "Invalid or expired token, please try again.",
