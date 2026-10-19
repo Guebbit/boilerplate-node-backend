@@ -4,7 +4,6 @@
  * powers and can enrol, the staff-only door says so in its own code, enrolling unlocks the role on
  * the next request, and losing the app takes the keys minted under it away.
  */
-import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { mint } from '@modules/api-keys/services/api-keys';
@@ -16,6 +15,7 @@ import { armAuthenticator, TEST_AUTHENTICATOR_SECRET } from '@tests/authenticato
 import { credentialOf } from '@tests/credentials';
 import { forgetSessionEpoch } from '@tests/session-epoch';
 import { codeFor } from '@tests/totp';
+import { seedMembership } from '@modules/access/tests/factories';
 
 setupTestDb();
 
@@ -61,7 +61,7 @@ describe('a staff role without an authenticator app', () => {
             .post('/account/login')
             .send({ email: user.email, password: PLAIN_PASSWORD });
         const bearer = `Bearer ${login.body.data.token as string}`;
-        await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
+        await seedMembership(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
 
         const response = await api().get('/orders/export').set('Authorization', bearer);
 
@@ -70,7 +70,7 @@ describe('a staff role without an authenticator app', () => {
 
     it('gates an operator’s platform door the same way', async () => {
         const user = await createUser({ verifiedAt: new Date() }, 'customer');
-        await accessService.assignRole(user.id, null, 'platform', 'operator');
+        await seedMembership(user.id, null, 'platform', 'operator');
         const login = await api()
             .post('/account/login')
             .send({ email: user.email, password: PLAIN_PASSWORD });

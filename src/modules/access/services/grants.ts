@@ -8,6 +8,7 @@
  */
 
 import type { AuthorizationScope, CallerContext } from '@types';
+import { holds } from '@kernel/ability';
 import { findRole, PRESET_ROLES } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { ConflictError } from '@infrastructure/http/errors';
@@ -18,7 +19,7 @@ import { auditRoleChange } from './role-audit';
  * The one permission that protects people: whoever holds it may hand out a staff role and change an
  * account that already holds one. Declared in this module's `authorization.yaml`.
  */
-const ASSIGN_RULE = 'assign:Role';
+export const ASSIGN_RULE = 'assign:Role';
 
 /**
  * Raised when a write would assign a role nothing declares, or grant more than the granter holds.
@@ -66,19 +67,20 @@ type GrantVerdict = { lowered: string } | { refusal: GrantRefusal };
  *     widens a person's powers, so it has one permission of its own instead of being implied by
  *     the keys of the roles being handed out.
  *
- * @param granter - the keys the person MAKING the grant holds, or `undefined` for a seeder, a
- *   migration or an operator on the console — the three callers with nobody to escalate from
+ * @param granter - the keys the person MAKING the grant holds. Required: a missing one would have to
+ *   mean "no check", and a protection that fails open on an omitted argument is no protection. A
+ *   seeder, which has nobody to escalate from, writes through `factories.ts` instead.
  */
 const checkGrant = (
     scope: AuthorizationScope,
     roleName: string,
-    granter?: readonly string[]
+    granter: readonly string[]
 ): GrantVerdict => {
     const lowered = roleName.toLowerCase();
 
     // The permission is judged FIRST: whoever may not hand out roles is told so, and learns
     // nothing about which role names exist.
-    if (granter && !granter.includes(ASSIGN_RULE)) {
+    if (!granter.includes(ASSIGN_RULE)) {
         return {
             refusal: {
                 kind: 'not_granter',
@@ -126,7 +128,7 @@ const checkGrant = (
 export const validateGrant = (
     scope: AuthorizationScope,
     roleName: string,
-    granter?: readonly string[]
+    granter: readonly string[]
 ): string => {
     const verdict = checkGrant(scope, roleName, granter);
     if ('refusal' in verdict) throw new AccessInvariantError(verdict.refusal.message);
@@ -159,7 +161,7 @@ export const grantableRoles = (scope: AuthorizationScope, granter: readonly stri
 export const assertCanGrant = (
     scope: AuthorizationScope,
     roleName: string,
-    granter?: readonly string[]
+    granter: readonly string[]
 ): void => {
     validateGrant(scope, roleName, granter);
 };
@@ -178,7 +180,7 @@ export const assertCanGrant = (
 export const grantRefusalAudited = (
     scope: AuthorizationScope,
     roleName: string,
-    granter: readonly string[] | undefined,
+    granter: readonly string[],
     context: CallerContext,
     userId?: string
 ): GrantRefusal | undefined => {
@@ -195,4 +197,20 @@ export const grantRefusalAudited = (
         scope
     );
     return verdict.refusal;
+};
+
+/**
+ * Refuse a revoke unless the caller may take a role away: the system actor, or a holder of
+ * {@link ASSIGN_RULE}. The mirror of {@link validateGrant} for the other half of the same act —
+ * taking a staff role off a person narrows them as surely as handing one out widens them.
+ *
+ * @param context - the caller making the revoke
+ * @throws AccessInvariantError when the caller is neither the system actor nor a holder of `assign:Role`
+ */
+export const assertCanRevoke = (context: CallerContext): void => {
+    if (context.caller.system || holds(context.caller, 'assign', 'Role')) return;
+
+    throw new AccessInvariantError(
+        `[access] cannot revoke a role: the caller does not hold ${ASSIGN_RULE}.`
+    );
 };

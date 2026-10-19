@@ -41,7 +41,7 @@ const inDays = (days: number): Date => new Date(Date.now() + days * DAY);
 
 /** Deliver `quantity` units of a product and let the outbox carry what it announces. */
 const receiveAndSettle = async (productId: string, quantity: number) => {
-    await inventoryService.receive(productId, quantity);
+    await inventoryService.receive(productId, quantity, undefined, testCallerContext);
     await settleOutboxNudges();
 };
 

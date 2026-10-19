@@ -23,6 +23,7 @@ import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/callers';
 import { eventually } from '@tests/eventually';
 import { payByCard } from '@modules/payments/tests/factories';
+import { paymentRepository } from '../../repository';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -129,6 +130,67 @@ describe('a refund outside a return mails the buyer', () => {
     });
 });
 
+/** What the payment has given back so far, in decimal units. */
+const refundedOf = (orderId: string) =>
+    paymentRepository.findByOrderId(orderId).then((payment) => payment?.amountRefunded ?? 0);
+
+describe('who may return money for a return', () => {
+    const RETURN = { returnId: '64b64c4f4f4f4f4f4f4f4f4f', amount: 50, lines: [], shipping: 0 };
+
+    it.each([
+        ['an anonymous caller', testCallerContext],
+        ['a customer who is not staff', callerContextAs('customer', 'a-stranger')]
+    ])('refuses %s, and no money moves', async (_who, context) => {
+        const { orderId } = await paidOrder();
+
+        await expect(paymentService.refundForReturn(orderId, RETURN, context)).rejects.toThrow(
+            /may not return money/
+        );
+
+        expect(await refundedOf(orderId)).toBe(0);
+    });
+
+    it('refuses a buyer for a goods return, which only staff receive', async () => {
+        const { user, orderId } = await paidOrder();
+
+        await expect(
+            paymentService.refundForReturn(orderId, RETURN, callerContextAs('customer', user.id))
+        ).rejects.toThrow(/may not return money/);
+    });
+
+    it("lets the order's own buyer cancel the remainder, which is their withdrawal", async () => {
+        const { user, orderId } = await paidOrder();
+
+        const refunded = await paymentService.refundForReturn(
+            orderId,
+            { ...RETURN, reason: 'cancellation' },
+            callerContextAs('customer', user.id)
+        );
+
+        expect(refunded).not.toBeNull();
+    });
+
+    it("refuses another customer's cancellation of the remainder", async () => {
+        const { orderId } = await paidOrder();
+
+        await expect(
+            paymentService.refundForReturn(
+                orderId,
+                { ...RETURN, reason: 'cancellation' },
+                callerContextAs('customer', 'a-stranger')
+            )
+        ).rejects.toThrow(/may not return money/);
+    });
+
+    it('lets staff who receive returns do it', async () => {
+        const { orderId } = await paidOrder();
+
+        await expect(
+            paymentService.refundForReturn(orderId, RETURN, callerContextAs('manager'))
+        ).resolves.not.toBeNull();
+    });
+});
+
 describe('a refund that must not mail', () => {
     it("is silent for a return's refund — `returns` closes it with its own notice", async () => {
         const { orderId } = await paidOrder();
@@ -136,7 +198,7 @@ describe('a refund that must not mail', () => {
         await paymentService.refundForReturn(
             orderId,
             { returnId: '64b64c4f4f4f4f4f4f4f4f4f', amount: 50, lines: [], shipping: 0 },
-            testCallerContext
+            callerContextAs('manager')
         );
         await settleOutboxNudges();
 

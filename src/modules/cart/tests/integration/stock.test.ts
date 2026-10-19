@@ -17,6 +17,7 @@ import { cartService } from '../../services';
 import { orderService } from '@modules/orders';
 import { orderRepository, readOrder, countOrders } from '@modules/orders/tests/factories';
 import { inventoryService } from '@modules/inventory';
+import { removeLevel } from '@modules/inventory/tests/factories';
 import { cartRepository } from '@modules/cart/repository';
 import { logger } from '@infrastructure/adapters/logger';
 import { resetDomainEvents } from '@kernel/events';
@@ -525,7 +526,7 @@ describe('the expiry sweep', () => {
 /** A sellable product (the catalogue cache says 10 on hand) whose level row is gone. */
 const productWithoutLevelRow = async () => {
     const product = await createProduct({ onHand: 10 });
-    await inventoryService.removeLevel(String(product._id));
+    await removeLevel(String(product._id));
     return product;
 };
 

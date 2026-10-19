@@ -5,7 +5,7 @@
 
 import { deleteConfirmEmail, greetableName, recipientLocale } from '../emails';
 import { sendAccountMail } from './mail';
-import { userService, type UserDocument } from '@modules/users';
+import { userService, type RedeemedOwner } from '@modules/users';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -27,9 +27,10 @@ import { ACCOUNT_DELETE_TOKEN_TYPE } from '../token-types';
  * reports its own `ADMIN_USER_ERASED`, and this event's `actorUserId`/`actorRole` are the deleted
  * account's own, correct for a self-delete but backwards for an admin's. No context is passed on
  * for the same reason: the row it would record is the admin one.
+ * @internal Erases the document it is given; only `confirmAccountDeletion` may call it, after the link is spent.
  */
 export const removeOwnAccount = (
-    user: UserDocument,
+    user: RedeemedOwner,
     context: CallerContext
 ): ReturnType<typeof userService.eraseOwnAccount> => {
     /*
@@ -84,7 +85,7 @@ export const confirmAccountDeletion = (
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     redeemLiveToken(ACCOUNT_DELETE_TOKEN_TYPE, token).then((user) =>
         user
-            ? removeOwnAccount(user, context).then(() =>
+            ? removeOwnAccount(userService.redeemedOwner(user), context).then(() =>
                   generateSuccess(undefined, 200, t('account.delete.success'))
               )
             : refuseLink(context, 'account_delete', 'account.delete.token-not-found')

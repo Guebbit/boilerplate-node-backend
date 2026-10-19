@@ -19,7 +19,7 @@ import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { PRODUCT_CREATED, PRODUCT_DELETED } from '@modules/products';
 import { router } from './routes';
-import { inventoryService } from './services';
+import { openLevel, removeLevel } from './services/levels';
 import './events';
 // Registers the two domain gauges with the metrics registry at module load.
 import './metrics';
@@ -42,11 +42,11 @@ export default {
      * `ADMIN_PRODUCT_CREATED` for this row.
      */
     subscribe: () => {
-        onDomainEvent(PRODUCT_CREATED, ({ productId }) => inventoryService.openLevel(productId));
+        onDomainEvent(PRODUCT_CREATED, ({ productId }) => openLevel(productId));
         // Only the HARD half — a soft delete (or its restore) must leave the counters exactly
         // where a restore has to come back to them. See `removeLevel`'s own docblock.
         onDomainEvent(PRODUCT_DELETED, ({ productId, hardDelete }) =>
-            hardDelete ? inventoryService.removeLevel(productId) : undefined
+            hardDelete ? removeLevel(productId) : undefined
         );
     },
     /*

@@ -53,8 +53,6 @@ components:
             required:
                 - exportId
                 - userId
-                - email
-                - emailVerified
                 - locale
             properties:
                 exportId:
@@ -65,17 +63,10 @@ components:
                         Check, EIP: the row is the source of truth for the rest).
                 userId:
                     type: string
-                    description: The account the export is about.
-                email:
-                    type: string
                     description: >-
-                        The address the request saw. The mailbox the link goes to, and the key the
-                        `feedback` section matches by.
-                emailVerified:
-                    type: boolean
-                    description: >-
-                        Whether the account had proved `email` when it asked. A section that matches
-                        by address answers only when this is true (GDPR Art. 12(6)).
+                        The account the export is about. The job reads that account's address from
+                        the account itself: a message names a person, never the mailbox their data
+                        is sent to.
                 locale:
                     type: string
                     description: The language the mail is written in.

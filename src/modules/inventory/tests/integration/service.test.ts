@@ -23,6 +23,7 @@ import { reservationModel, stockLevelModel } from '../../model';
 import { inventoryAuditActions } from '../../audit';
 import * as auditPort from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
+import { testCallerContext } from '@tests/callers';
 
 /*
  * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
@@ -741,7 +742,12 @@ describe('receive', () => {
     it('raises what exists and makes it available immediately', async () => {
         const product = await createProduct({ onHand: 0 });
 
-        const result = await inventoryService.receive(String(product._id), 12, 'pallet 42');
+        const result = await inventoryService.receive(
+            String(product._id),
+            12,
+            'pallet 42',
+            testCallerContext
+        );
 
         expect(result.success).toBe(true);
         expect(result.data).toMatchObject({ onHand: 12, reserved: 0, available: 12 });
@@ -753,7 +759,12 @@ describe('receive', () => {
             { productId: String(product._id), quantity: 5 }
         ]);
 
-        const result = await inventoryService.receive(String(product._id), 10);
+        const result = await inventoryService.receive(
+            String(product._id),
+            10,
+            undefined,
+            testCallerContext
+        );
 
         // The hold is untouched; the delivery is what becomes sellable.
         expect(result.data).toMatchObject({ onHand: 15, reserved: 5, available: 10 });
@@ -761,8 +772,8 @@ describe('receive', () => {
 
     it('writes the ledger newest first', async () => {
         const product = await createProduct({ onHand: 0 });
-        await inventoryService.receive(String(product._id), 1, 'first');
-        await inventoryService.receive(String(product._id), 2, 'second');
+        await inventoryService.receive(String(product._id), 1, 'first', testCallerContext);
+        await inventoryService.receive(String(product._id), 2, 'second', testCallerContext);
 
         const { items } = await inventoryService.listMovements({ productId: String(product._id) });
 
@@ -770,7 +781,12 @@ describe('receive', () => {
     });
 
     it('404s for a product that does not exist', async () => {
-        const result = await inventoryService.receive('c'.repeat(24), 5);
+        const result = await inventoryService.receive(
+            'c'.repeat(24),
+            5,
+            undefined,
+            testCallerContext
+        );
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -781,10 +797,20 @@ describe('adjust', () => {
     it('applies a correction in either direction', async () => {
         const product = await createProduct({ onHand: 10 });
 
-        const down = await inventoryService.adjust(String(product._id), -3, 'damaged');
+        const down = await inventoryService.adjust(
+            String(product._id),
+            -3,
+            'damaged',
+            testCallerContext
+        );
         expect(down.data).toMatchObject({ onHand: 7 });
 
-        const up = await inventoryService.adjust(String(product._id), 2, 'miscount');
+        const up = await inventoryService.adjust(
+            String(product._id),
+            2,
+            'miscount',
+            testCallerContext
+        );
         expect(up.data).toMatchObject({ onHand: 9 });
     });
 
@@ -794,7 +820,12 @@ describe('adjust', () => {
             { productId: String(product._id), quantity: 8 }
         ]);
 
-        const result = await inventoryService.adjust(String(product._id), -5, 'stocktake');
+        const result = await inventoryService.adjust(
+            String(product._id),
+            -5,
+            'stocktake',
+            testCallerContext
+        );
 
         /*
          * Eight units are promised to an order that exists. Letting this through would make
@@ -823,7 +854,12 @@ describe('adjust', () => {
 
         // `onHand` is the shelf count until dispatch, so the paid units are still inside it and
         // still promised: a correction cutting below them is refused.
-        const result = await inventoryService.adjust(String(product._id), -8, 'stocktake');
+        const result = await inventoryService.adjust(
+            String(product._id),
+            -8,
+            'stocktake',
+            testCallerContext
+        );
 
         expect(result.status).toBe(409);
         expect(await countersOf(String(product._id))).toMatchObject({ onHand: 10, reserved: 3 });
@@ -835,7 +871,12 @@ describe('adjust', () => {
             { productId: String(product._id), quantity: 8 }
         ]);
 
-        const result = await inventoryService.adjust(String(product._id), -2, 'stocktake');
+        const result = await inventoryService.adjust(
+            String(product._id),
+            -2,
+            'stocktake',
+            testCallerContext
+        );
 
         // The boundary is inclusive: onHand may equal reserved, it may not fall below it.
         expect(result.success).toBe(true);
@@ -843,7 +884,12 @@ describe('adjust', () => {
     });
 
     it('404s for a product that does not exist', async () => {
-        const result = await inventoryService.adjust('c'.repeat(24), -1);
+        const result = await inventoryService.adjust(
+            'c'.repeat(24),
+            -1,
+            undefined,
+            testCallerContext
+        );
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -873,7 +919,7 @@ describe('adjust', () => {
                 return false;
             });
 
-        const result = await inventoryService.adjust(productId, -1, 'stocktake');
+        const result = await inventoryService.adjust(productId, -1, 'stocktake', testCallerContext);
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);

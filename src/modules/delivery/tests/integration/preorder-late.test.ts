@@ -270,7 +270,7 @@ describe('a release date that moves', () => {
         const { orderId, productIds } = await preorder(30);
         await waitingOf(orderId);
         const { inventoryService } = await import('@modules/inventory');
-        await inventoryService.receive(productIds[0], 2);
+        await inventoryService.receive(productIds[0], 2, undefined, testCallerContext);
         await settleOutboxNudges();
 
         await moveDate(productIds[0], inDays(90));
@@ -419,7 +419,7 @@ describe('the daily sweep', () => {
         const { orderId, productIds } = await preorder(30);
         await waitingOf(orderId);
         const { inventoryService } = await import('@modules/inventory');
-        await inventoryService.receive(productIds[0], 2);
+        await inventoryService.receive(productIds[0], 2, undefined, testCallerContext);
         await settleOutboxNudges();
 
         expect(await deliveryService.runPreorderSweep(inDays(40))).toEqual({

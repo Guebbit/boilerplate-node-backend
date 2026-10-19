@@ -87,6 +87,7 @@ type PasswordCause = Extract<RevocationCause, 'password-change' | 'password-rese
  *   that can be guaranteed is here, next to the `save`.
  * @param cause - which password event this is; a cause that announces also writes
  *   `account.sessions-revoked` through the outbox, in the write's own transaction
+ * @internal Writes a new password with no check of the current one; only `passwordChangeWithCurrent` and the reset flow may reach it.
  */
 export const passwordChange = (
     user: UserDocument,

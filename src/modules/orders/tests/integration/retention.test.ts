@@ -48,7 +48,7 @@ describe('orders — detach on account erasure', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         await markOrderPaidAt(String(order._id), new Date());
 
-        await userService.eraseOwnAccount(user);
+        await userService.eraseOwnAccount(userService.redeemedOwner(user));
 
         const reloaded = await orderRepository.findById(String(order._id));
         expect(reloaded!.userId).toBeUndefined();
@@ -70,7 +70,7 @@ describe('orders — detach on account erasure', () => {
         });
         await markOrderPaidAt(String(order._id), fiveDaysAgo);
 
-        await userService.eraseOwnAccount(user);
+        await userService.eraseOwnAccount(userService.redeemedOwner(user));
 
         const reloaded = await orderRepository.findById(String(order._id));
         const daysAhead =
@@ -89,7 +89,7 @@ describe('orders — detach on account erasure', () => {
         });
         await markOrderPaidAt(String(order._id), twentyDaysAgo);
 
-        await userService.eraseOwnAccount(user);
+        await userService.eraseOwnAccount(userService.redeemedOwner(user));
 
         const reloaded = await orderRepository.findById(String(order._id));
         // `$max(now, createdAt + days)` — an order already past its window lands at "now", never
@@ -102,7 +102,7 @@ describe('orders — detach on account erasure', () => {
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
 
-        await userService.eraseOwnAccount(user);
+        await userService.eraseOwnAccount(userService.redeemedOwner(user));
 
         await expect(orderRepository.findById(String(order._id))).resolves.not.toBeNull();
     });
@@ -125,7 +125,7 @@ describe('orders — detach on account erasure', () => {
         const product = await createProduct();
         const order = await createOrder(untouched, [toOrderItem(product, 1)]);
 
-        await userService.eraseOwnAccount(erased);
+        await userService.eraseOwnAccount(userService.redeemedOwner(erased));
 
         const reloaded = await orderRepository.findById(String(order._id));
         expect(String(reloaded!.userId)).toBe(untouched._id.toString());
@@ -149,7 +149,7 @@ describe('orders — a never-paid order is due for anonymization AT ONCE', () =>
             createdAt: fiveDaysAgo
         });
 
-        await userService.eraseOwnAccount(user);
+        await userService.eraseOwnAccount(userService.redeemedOwner(user));
 
         const reloaded = await orderRepository.findById(String(order._id));
         expect(reloaded!.anonymizeAfter!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
@@ -162,7 +162,7 @@ describe('orders — a never-paid order is due for anonymization AT ONCE', () =>
             status: OrderStatus.cancelled
         });
 
-        await userService.eraseOwnAccount(user);
+        await userService.eraseOwnAccount(userService.redeemedOwner(user));
 
         const reloaded = await orderRepository.findById(String(order._id));
         expect(reloaded!.anonymizeAfter!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
@@ -179,7 +179,7 @@ describe('orders — a never-paid order is due for anonymization AT ONCE', () =>
         });
         await markOrderPaidAt(String(order._id), new Date());
 
-        await userService.eraseOwnAccount(user);
+        await userService.eraseOwnAccount(userService.redeemedOwner(user));
 
         const reloaded = await orderRepository.findById(String(order._id));
         const daysAhead =

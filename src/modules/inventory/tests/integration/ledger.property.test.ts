@@ -16,6 +16,7 @@ import { StockMovementReason } from '@types';
 import { inventoryService } from '../../services';
 import { stockMovementRepository } from '../../repository';
 import { stockMovementModel } from '../../model';
+import { testCallerContext } from '@tests/callers';
 
 setupTestDb();
 
@@ -83,11 +84,21 @@ const play = async (productId: string, steps: readonly Step[]): Promise<void> =>
     for (const current of steps)
         switch (current.kind) {
             case 'receive': {
-                await inventoryService.receive(productId, current.quantity);
+                await inventoryService.receive(
+                    productId,
+                    current.quantity,
+                    undefined,
+                    testCallerContext
+                );
                 break;
             }
             case 'adjust': {
-                await inventoryService.adjust(productId, current.delta);
+                await inventoryService.adjust(
+                    productId,
+                    current.delta,
+                    undefined,
+                    testCallerContext
+                );
                 break;
             }
             case 'reserve': {

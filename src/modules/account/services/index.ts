@@ -71,7 +71,6 @@ export {
  * part of this object — see this file's own docblock above.
  */
 export const accountService = {
-    issueToken: tokens.issueToken,
     signup: signup.signup,
     login: login.login,
     logoutEverywhere: logout.logoutEverywhere,
@@ -85,13 +84,11 @@ export const accountService = {
     reauthMethods: reauth.reauthMethods,
     sendReauthCode: reauth.sendReauthCode,
     validatePasswordChange: password.validatePasswordChange,
-    passwordChange: password.passwordChange,
     passwordChangeWithCurrent: password.passwordChangeWithCurrent,
     completePasswordReset: passwordReset.completePasswordReset,
     updateProfile: profile.updateProfile,
     cancelPendingEmailChange: emailChange.cancelPendingEmailChange,
     getOwnProfile: profile.getOwnProfile,
-    removeOwnAccount: selfDelete.removeOwnAccount,
     sendVerificationEmail: verification.sendVerificationEmail,
     requestEmailVerification: verification.requestEmailVerification,
     requestEmailVerificationFor: verification.requestEmailVerificationFor,
@@ -103,9 +100,6 @@ export const accountService = {
     completeEmailVerification: verification.completeEmailVerification,
     completeEmailChange: verification.completeEmailChange,
     undoEmailChange: verification.undoEmailChange,
-    findLiveToken: tokens.findLiveToken,
-    spendLiveToken: tokens.spendLiveToken,
-    redeemLiveToken: tokens.redeemLiveToken,
     recordOneTimeTokenRejected: tokens.recordOneTimeTokenRejected,
     sessionsList: sessions.sessionsList,
     reapLapsedPreviousEmails: previousEmailCleanup.reapLapsedPreviousEmails,

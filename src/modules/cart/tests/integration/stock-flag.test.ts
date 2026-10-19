@@ -54,7 +54,7 @@ describe('GET /cart’s line availability', () => {
         await cartService.addItemById(user.id, String(product._id), 4);
         await expect(flagOf(user.id)).resolves.toBe('in_stock');
 
-        await inventoryService.adjust(String(product._id), -2, 'stocktake');
+        await inventoryService.adjust(String(product._id), -2, 'stocktake', testCallerContext);
 
         await expect(flagOf(user.id)).resolves.toBe('insufficient_stock');
     });

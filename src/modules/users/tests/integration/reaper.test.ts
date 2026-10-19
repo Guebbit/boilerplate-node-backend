@@ -7,12 +7,12 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { accessService } from '@modules/access';
 import { userModel } from '../../model';
 import { userService } from '@modules/users/services';
 import { createUser } from '@modules/users/tests/factories';
 import { systemCallerContext } from '@kernel/permissions';
 import { callerContextAs } from '@tests/callers';
+import { seedMembership } from '@modules/access/tests/factories';
 
 setupTestDb();
 
@@ -38,10 +38,19 @@ const makeInactive = (id: string, extra: Record<string, unknown> = {}) =>
 /** An inactive account holding `role`, plus a platform-only operator when asked. */
 const inactiveAccount = async (name: string, role?: string, platformRole?: string) => {
     const user = await createUser({ email: `${name}@reaper.test`, username: name }, role);
-    if (platformRole) await accessService.assignRole(user.id, null, 'platform', platformRole);
+    if (platformRole) await seedMembership(user.id, null, 'platform', platformRole);
     await makeInactive(user.id);
 
     return user;
+};
+
+/** An account the reaper has warned, as a stored document so the warning is on it. */
+const warnedUser = async (overrides: Parameters<typeof createUser>[0], role?: string) => {
+    const user = await createUser(overrides, role);
+    await userModel
+        .updateOne({ _id: user.id }, { $set: { inactivityWarnedAt: new Date() } })
+        .exec();
+    return userModel.findById(user.id).orFail().exec();
 };
 
 /** The moment `days` days before now. */
@@ -170,7 +179,10 @@ const markerOf = (id: string) =>
 
 describe('who soft-deleted the account', () => {
     it('marks the reaper’s own soft delete, and nobody else’s', async () => {
-        const byReaper = await createUser({ email: 'by-reaper@reaper.test', username: 'byreaper' });
+        const byReaper = await warnedUser({
+            email: 'by-reaper@reaper.test',
+            username: 'byreaper'
+        });
         const byStaff = await createUser({ email: 'by-staff@reaper.test', username: 'bystaff' });
 
         await userService.softDeleteInactive(byReaper, systemCallerContext('User'));
@@ -181,7 +193,10 @@ describe('who soft-deleted the account', () => {
     });
 
     it('clears the marker when the account is restored', async () => {
-        const user = await createUser({ email: 'restored@reaper.test', username: 'restored' });
+        const user = await warnedUser({
+            email: 'restored@reaper.test',
+            username: 'restored'
+        });
         await userService.softDeleteInactive(user, systemCallerContext('User'));
 
         await userService.restoreById(user.id, callerContextAs('admin'));
@@ -190,9 +205,38 @@ describe('who soft-deleted the account', () => {
     });
 });
 
+describe('the reaper’s soft delete refusals', () => {
+    it('refuses an account nobody warned: the warning is what makes the deletion fair', async () => {
+        const unwarned = await createUser({ email: 'unwarned@reaper.test', username: 'unwarned' });
+
+        const result = await userService.softDeleteInactive(unwarned, systemCallerContext('User'));
+
+        expect(result.success).toBe(false);
+        expect(await markerOf(unwarned.id)).toBeUndefined();
+        expect(await userModel.findById(unwarned.id).exec()).toMatchObject({
+            deletedAt: undefined
+        });
+    });
+
+    it('refuses an account holding a staff role, warned or not', async () => {
+        const staff = await warnedUser(
+            { email: 'staff@reaper.test', username: 'staffer' },
+            'support'
+        );
+
+        const result = await userService.softDeleteInactive(staff, systemCallerContext('User'));
+
+        expect(result.success).toBe(false);
+        expect(await markerOf(staff.id)).toBeUndefined();
+    });
+});
+
 describe('the reaper’s hard delete', () => {
     it('erases an account the reaper soft-deleted itself', async () => {
-        const user = await createUser({ email: 'erase-own@reaper.test', username: 'eraseown' });
+        const user = await warnedUser({
+            email: 'erase-own@reaper.test',
+            username: 'eraseown'
+        });
         await userService.softDeleteInactive(user, systemCallerContext('User'));
         const marked = await userModel.findById(user.id).exec();
 

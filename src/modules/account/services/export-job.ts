@@ -21,7 +21,7 @@ import {
     writeExport,
     type AppendExport
 } from '@infrastructure/adapters/export-store';
-import { userService } from '@modules/users';
+import { userService, type UserDocument } from '@modules/users';
 import type { AccountExportJobPayload } from '@types';
 import type { PersonalDataSection, PersonalDataSubject } from '@kernel/registry';
 import { exportRetentionMs } from '../config';
@@ -33,6 +33,17 @@ import { sendAccountMail } from './mail';
 
 /** The section every export must hold: an export with no profile is not an answer to anyone. */
 const PROFILE_SECTION = 'profile';
+
+/**
+ * Who an export is about, read off the stored account.
+ *
+ * @param user - the account being exported
+ */
+const subjectOf = (user: UserDocument): PersonalDataSubject => ({
+    userId: String(user._id),
+    email: user.email,
+    emailVerified: Boolean(user.verifiedAt)
+});
 
 /**
  * Collect every section in turn and append it to the file as one `"name": value` member of a JSON
@@ -72,10 +83,11 @@ const appendSections = async (
 
 /**
  * Mail the requester about their export, when there is still someone to mail: the account may have
- * been erased between the request and now. The greeting names the account only when the mail goes
- * to its verified address (`greetableName`).
+ * been erased between the request and now. The address is the account's own, read here: a queue
+ * message names an account, never the mailbox a person's data is sent to. The greeting names the
+ * account only when the mail goes to its verified address (`greetableName`).
  *
- * @param job - the job, for the address and the language
+ * @param job - the job, for the account and the language
  * @param build - the mail's copy for the greeting name
  */
 const mailRequester = (
@@ -86,8 +98,7 @@ const mailRequester = (
         // Erased in the meantime: nobody is left to tell.
         if (!user) return;
 
-        const name = job.emailVerified ? greetableName(user, job.email) : '';
-        return sendAccountMail(job.email, build(name), 'high');
+        return sendAccountMail(user.email, build(greetableName(user, user.email)), 'high');
     });
 
 /**
@@ -104,30 +115,23 @@ const mailLink = (job: AccountExportJobPayload, row: AccountExportRow): Promise<
 /**
  * Build the file, then move the row to `ready`.
  *
- * @param job - the queue message
+ * @param subject - who the export is about, taken from the stored account and not from the queue
+ *   message: the `feedback` section matches by this address, so it must be the account's own
  * @param row - the `building` row this job fills in
  * @returns the settled row, or `null` when the row was replaced or erased while this ran
  */
 const buildAndSettle = (
-    job: AccountExportJobPayload,
+    subject: PersonalDataSubject,
     row: AccountExportRow
-): Promise<AccountExportRow | null> => {
-    const subject: PersonalDataSubject = {
-        userId: job.userId,
-        email: job.email,
-        emailVerified: job.emailVerified
-    };
-
-    return writeExport(row.file, (append) =>
-        appendSections(personalDataSections(), subject, append)
-    ).then(() =>
-        accountExportRepository.settleBuilding(
-            String(row._id),
-            'ready',
-            new Date(Date.now() + exportRetentionMs())
-        )
+): Promise<AccountExportRow | null> =>
+    writeExport(row.file, (append) => appendSections(personalDataSections(), subject, append)).then(
+        () =>
+            accountExportRepository.settleBuilding(
+                String(row._id),
+                'ready',
+                new Date(Date.now() + exportRetentionMs())
+            )
     );
-};
 
 /**
  * Delete a run's file only when its row no longer exists. A row that is gone was replaced or
@@ -221,12 +225,18 @@ export const runExportJob = (job: AccountExportJobPayload): Promise<boolean> =>
         // Replaced, erased or already settled: nothing to build.
         if (row?.status !== 'building') return true;
 
-        // Two-argument `then`, not `then().catch()`: a failure AFTER the row is ready (the mail)
-        // must not reach `fail`, which would delete a good file.
-        return buildAndSettle(job, row)
-            .then(
-                (settled) => afterBuild(job, row, settled),
-                (error: unknown) => fail(job, row, error)
-            )
-            .then(() => true);
+        return userService.getById(job.userId).then((user) => {
+            // Erased since the request: there is no account to export, and the job's own address
+            // is not trusted to stand in for one.
+            if (!user) return fail(job, row, new Error('The account is gone.')).then(() => true);
+
+            // Two-argument `then`, not `then().catch()`: a failure AFTER the row is ready (the mail)
+            // must not reach `fail`, which would delete a good file.
+            return buildAndSettle(subjectOf(user), row)
+                .then(
+                    (settled) => afterBuild(job, row, settled),
+                    (error: unknown) => fail(job, row, error)
+                )
+                .then(() => true);
+        });
     });

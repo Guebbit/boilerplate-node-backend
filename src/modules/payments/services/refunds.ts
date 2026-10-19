@@ -46,6 +46,8 @@ import {
     type Money
 } from '@domain-primitives/money';
 import { orderService } from '@modules/orders';
+import { holds } from '@kernel/ability';
+import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { ownOrderFlag } from '@modules/access';
 import { paymentsAuditActions } from '../audit';
 import { PaymentProviderError, providerNamed } from '../providers';
@@ -704,6 +706,8 @@ const hasOpenRefund = (payment: PaymentDocument): boolean =>
  * A hand-paid order opens its record and waits for an operator (`leaveForOperator`).
  *
  * @param orderId - the order that was cancelled
+ * @internal The `order.cancelled` listener's refund, which has no caller of its own to check: only
+ *   this module's `subscribe` may run it, so it is not on `paymentService`.
  */
 export const refundForOrder = (orderId: string): Promise<void> =>
     performRefund(orderId)
@@ -719,6 +723,28 @@ export const refundForOrder = (orderId: string): Promise<void> =>
                 // Stryker restore all
             })
         );
+
+/**
+ * May this caller return money for a return? Three kinds of caller: the system actor; staff who
+ * receive returns (`receive:Return`) or refund (`create:Refund`, the key a staff remainder cancel
+ * runs under); and, for a `cancellation` only, the buyer of the order, whose withdrawal is theirs
+ * to make (CRD recital 40) and which `returns` has already judged.
+ *
+ * @param payment - the payment the money would come off
+ * @param reason - `return` or `cancellation`
+ * @param context - the caller
+ */
+const mayReturnMoney = (
+    payment: PaymentDocument,
+    reason: 'return' | 'cancellation',
+    context: CallerContext
+): boolean =>
+    context.caller.system ||
+    holds(context.caller, 'receive', 'Return') ||
+    holds(context.caller, 'create', 'Refund') ||
+    (reason === 'cancellation' &&
+        payment.userId !== undefined &&
+        context.caller.id === String(payment.userId));
 
 /**
  * Give back the money for goods a customer returned, or for a remainder cancelled before it
@@ -737,6 +763,9 @@ export const refundForOrder = (orderId: string): Promise<void> =>
  * @param context - the staff member who received the goods, audited on the refund
  * @returns the payment as it now stands, or `null` when there is nothing to return — no succeeded
  *   payment, nothing left of it, or a zero amount
+ * @throws Error when money would move and the caller is not one {@link mayReturnMoney} allows; the
+ *   refusal is audited as `security.forbidden`. The amount is the caller's word, so the caller must
+ *   be one that already judged the return.
  */
 export const refundForReturn = (
     orderId: string,
@@ -752,13 +781,25 @@ export const refundForReturn = (
     paymentRepository.findByOrderId(orderId).then((payment) => {
         if (payment?.status !== REFUNDABLE_PAYMENT_STATUS) return null;
 
+        const reason = input.reason ?? 'return';
+        if (!mayReturnMoney(payment, reason, context)) {
+            auditForbidden(context, {
+                targetType: 'payment',
+                targetId: String(payment._id),
+                metadata: { reason: 'missing_permission', permission: 'receive:Return' }
+            });
+            throw new Error(
+                '[payments] refundForReturn: the caller may not return money for a return.'
+            );
+        }
+
         const wanted = toMinorUnits(input.amount, payment.currency);
         const amount = minMoney(wanted, remainingOf(payment));
         if (amount <= 0) return null;
 
         return performRefund(orderId, context, {
             amount: toDecimalAmount(amount, payment.currency),
-            reason: input.reason ?? 'return',
+            reason,
             returnId: input.returnId,
             lines: input.lines,
             shipping: input.shipping

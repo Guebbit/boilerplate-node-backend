@@ -146,7 +146,7 @@ describe('POST /cart/checkout and the total the buyer was shown', () => {
     it('checks the stock first: a short line is told its own refusal, not a price one', async () => {
         const { bearer, product } = await shopperWith(10, 2);
         await productService.updateById(String(product._id), { price: 12 }, testCallerContext);
-        await inventoryService.adjust(String(product._id), -9, 'stocktake');
+        await inventoryService.adjust(String(product._id), -9, 'stocktake', testCallerContext);
 
         const response = await checkoutAs(bearer, {
             expectedTotal: { amount: 2000, currency: 'EUR' }

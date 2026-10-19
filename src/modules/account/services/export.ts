@@ -208,13 +208,9 @@ export const requestExport = (
                     ...(created ? {} : { metadata: { reused: true } })
                 });
 
-                // `email` is the key the `feedback` section matches by, handed to the job together
-                // with whether the account has proved it, since an unproven address is anyone's.
                 const job: AccountExportJobPayload = {
                     exportId: String(row._id),
                     userId,
-                    email: user.email,
-                    emailVerified: Boolean(user.verifiedAt),
                     locale: recipientLocale(user.locale, context)
                 };
 

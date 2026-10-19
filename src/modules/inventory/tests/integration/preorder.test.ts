@@ -23,7 +23,7 @@ import {
 import { PREORDER_ALLOCATED } from '../../events';
 import { inventoryAuditActions } from '../../audit';
 import { observePort } from '@tests/ports';
-import { callerContextAs } from '@tests/callers';
+import { callerContextAs, testCallerContext } from '@tests/callers';
 import * as auditPort from '@infrastructure/observability/audit';
 
 /* The audit port is replaced, not spied on — see `tests/support/ports.ts`. */
@@ -217,7 +217,7 @@ describe('paying for a preorder', () => {
         const orderId = anOrderId();
         await inventoryService.reserveForOrder(orderId, [claim(productId, 2)]);
         // The receipt finds only unpaid holds, so nothing is allocated yet.
-        await inventoryService.receive(productId, 4);
+        await inventoryService.receive(productId, 4, undefined, testCallerContext);
         expect(await levelOf(productId)).toMatchObject({ reserved: 0, backordered: 2 });
 
         await inventoryService.commitForOrder(orderId);
@@ -238,7 +238,7 @@ describe('a receipt serving the queue', () => {
         await inventoryService.commitForOrder(second);
         await inventoryService.commitForOrder(first);
 
-        await inventoryService.receive(productId, 2);
+        await inventoryService.receive(productId, 2, undefined, testCallerContext);
 
         expect(await announced()).toEqual([{ orderId: second, productId, waiting: 0 }]);
         const served = await reservationRepository.findByOrderId(second);
@@ -253,7 +253,7 @@ describe('a receipt serving the queue', () => {
         await inventoryService.reserveForOrder(orderId, [claim(productId, 3)]);
         await inventoryService.commitForOrder(orderId);
 
-        await inventoryService.receive(productId, 2);
+        await inventoryService.receive(productId, 2, undefined, testCallerContext);
 
         const hold = await reservationRepository.findByOrderId(orderId);
         expect(hold?.items).toMatchObject([
@@ -270,7 +270,7 @@ describe('a receipt serving the queue', () => {
         await inventoryService.reserveForOrder(orderId, [claim(productId, 2)]);
         await inventoryService.commitForOrder(orderId);
 
-        await inventoryService.receive(productId, 2);
+        await inventoryService.receive(productId, 2, undefined, testCallerContext);
 
         const level = await stockLevelRepository.findByProductId(productId);
         expect(level?.available).toBe(0);
@@ -290,7 +290,7 @@ describe('a receipt serving the queue', () => {
         await inventoryService.reserveForOrder(orderId, [claim(productId, 2)]);
         await inventoryService.commitForOrder(orderId);
 
-        await inventoryService.receive(productId, 5);
+        await inventoryService.receive(productId, 5, undefined, testCallerContext);
 
         const level = await stockLevelRepository.findByProductId(productId);
         expect(level?.available).toBe(3);
@@ -300,7 +300,7 @@ describe('a receipt serving the queue', () => {
         const productId = await preorderProduct(10);
         await inventoryService.reserveForOrder(anOrderId(), [claim(productId, 2)]);
 
-        await inventoryService.receive(productId, 5);
+        await inventoryService.receive(productId, 5, undefined, testCallerContext);
 
         expect(await announced()).toEqual([]);
         expect(await levelOf(productId)).toMatchObject({ onHand: 5, reserved: 0, backordered: 2 });
@@ -309,7 +309,7 @@ describe('a receipt serving the queue', () => {
     it('is a plain receipt when nothing is waiting', async () => {
         const product = await createProduct({ onHand: 1 });
 
-        await inventoryService.receive(String(product._id), 4);
+        await inventoryService.receive(String(product._id), 4, undefined, testCallerContext);
 
         expect(await announced()).toEqual([]);
         expect(await levelOf(String(product._id))).toMatchObject({ onHand: 5, reserved: 0 });
@@ -320,7 +320,7 @@ describe('a receipt serving the queue', () => {
         const orderId = anOrderId();
         await inventoryService.reserveForOrder(orderId, [claim(productId, 3)]);
         await inventoryService.commitForOrder(orderId);
-        await inventoryService.receive(productId, 2);
+        await inventoryService.receive(productId, 2, undefined, testCallerContext);
 
         await withTransaction((session) =>
             inventoryService.shipLinesForOrder(orderId, [{ productId, quantity: 2 }], session)

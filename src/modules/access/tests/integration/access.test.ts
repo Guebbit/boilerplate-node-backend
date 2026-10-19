@@ -29,6 +29,7 @@ import { observePort } from '@tests/ports';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { testCallerContext, callerContextAs } from '@tests/callers';
 import { accessAuditActions } from '../../audit';
+import { seedMembership } from '../factories';
 
 /* Replaced, not spied on — see `tests/support/ports.ts` for why. */
 jest.mock('@infrastructure/observability/audit', () =>
@@ -54,8 +55,8 @@ describe('membership across tenants', () => {
         const north = await accessService.ensureTenant('north', 'North Shop');
         const south = await accessService.ensureTenant('south', 'South Shop');
 
-        await accessService.assignRole('person-1', String(north._id), 'tenant', 'admin');
-        await accessService.assignRole('person-1', String(south._id), 'tenant', 'warehouse');
+        await seedMembership('person-1', String(north._id), 'tenant', 'admin');
+        await seedMembership('person-1', String(south._id), 'tenant', 'warehouse');
 
         const held = await accessService.membershipsOf('person-1');
 
@@ -72,8 +73,8 @@ describe('membership across tenants', () => {
     it('holds one role per person per place, so a reassignment replaces rather than adds', async () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
 
-        await accessService.assignRole('person-1', String(shop._id), 'tenant', 'support');
-        await accessService.assignRole('person-1', String(shop._id), 'tenant', 'manager');
+        await seedMembership('person-1', String(shop._id), 'tenant', 'support');
+        await seedMembership('person-1', String(shop._id), 'tenant', 'manager');
 
         const held = await accessService.membershipsOf('person-1');
 
@@ -86,8 +87,8 @@ describe('membership across tenants', () => {
     it('separates the two scopes, so one person can run a shop and operate the installation', async () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
 
-        await accessService.assignRole('person-1', String(shop._id), 'tenant', 'admin');
-        await accessService.assignRole('person-1', null, 'platform', 'operator');
+        await seedMembership('person-1', String(shop._id), 'tenant', 'admin');
+        await seedMembership('person-1', null, 'platform', 'operator');
 
         const held = await accessService.membershipsOf('person-1');
 
@@ -101,7 +102,13 @@ describe('the invariants', () => {
 
         // A member with a role nothing defines can do nothing and looks like a member who can.
         await expect(
-            accessService.assignRole('person-1', String(shop._id), 'tenant', 'archivist')
+            accessService.assignRole(
+                'person-1',
+                String(shop._id),
+                'tenant',
+                'archivist',
+                permissionsOfRole('admin')
+            )
         ).rejects.toThrow(AccessInvariantError);
     });
 
@@ -130,9 +137,14 @@ describe('the invariants', () => {
 
     it('removes even the last member who can administer a shop, leaving it with none', async () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
-        await accessService.assignRole('only-owner', String(shop._id), 'tenant', 'admin');
+        await seedMembership('only-owner', String(shop._id), 'tenant', 'admin');
 
-        await accessService.revokeRole('only-owner', String(shop._id), 'tenant');
+        await accessService.revokeRole(
+            'only-owner',
+            String(shop._id),
+            'tenant',
+            callerContextAs('admin')
+        );
 
         expect(await accessService.rolesOf('only-owner', String(shop._id))).toEqual({
             tenant: null,
@@ -140,17 +152,68 @@ describe('the invariants', () => {
         });
     });
 
+    it('refuses a revoke by a caller who does not hold assign:Role, audited as a failure', async () => {
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
+        await seedMembership('target', String(shop._id), 'tenant', 'manager');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        // A moderator holds many keys, but not the one permission that protects people.
+        await expect(
+            accessService.revokeRole(
+                'target',
+                String(shop._id),
+                'tenant',
+                callerContextAs('moderator')
+            )
+        ).rejects.toThrow(AccessInvariantError);
+
+        expect(await accessService.rolesOf('target', String(shop._id))).toEqual({
+            tenant: 'manager',
+            platform: null
+        });
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accessAuditActions.ROLE_REVOKED,
+                outcome: 'failure',
+                targetId: 'target'
+            })
+        );
+    });
+
+    it('refuses a revoke by an anonymous caller too', async () => {
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
+        await seedMembership('target', String(shop._id), 'tenant', 'manager');
+
+        await expect(
+            accessService.revokeRole('target', String(shop._id), 'tenant', testCallerContext)
+        ).rejects.toThrow(AccessInvariantError);
+    });
+
+    it('refuses a grant whose granter is an empty key set: omitting the check is not an option', async () => {
+        const shop = await accessService.ensureTenant('shop', 'The Shop');
+
+        await expect(
+            accessService.assignRole('person-1', String(shop._id), 'tenant', 'manager', [])
+        ).rejects.toThrow(/does not hold assign:Role/);
+        expect(await accessService.membershipIn('person-1', String(shop._id), 'tenant')).toBeNull();
+    });
+
     it('surfaces a rejecting delete instead of losing it silently', async () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
-        await accessService.assignRole('owner-a', String(shop._id), 'tenant', 'admin');
-        await accessService.assignRole('owner-b', String(shop._id), 'tenant', 'admin');
+        await seedMembership('owner-a', String(shop._id), 'tenant', 'admin');
+        await seedMembership('owner-b', String(shop._id), 'tenant', 'admin');
         const failure = new Error('mongo is down');
         const spy = jest.spyOn(membershipRepository, 'deleteById').mockRejectedValue(failure);
 
         // Before this fix the delete was fired with `void` and never awaited — a rejection here
         // vanished as an unhandled rejection instead of reaching the caller.
         await expect(
-            accessService.revokeRole('owner-a', String(shop._id), 'tenant')
+            accessService.revokeRole(
+                'owner-a',
+                String(shop._id),
+                'tenant',
+                callerContextAs('admin')
+            )
         ).rejects.toThrow('mongo is down');
 
         spy.mockRestore();
@@ -197,7 +260,13 @@ describe('a role lives in exactly one place, the membership row', () => {
             const shop = await accessService.ensureTenant('shop', 'The Shop');
 
             await expect(
-                accessService.assignRole('person-1', String(shop._id), 'tenant', audience)
+                accessService.assignRole(
+                    'person-1',
+                    String(shop._id),
+                    'tenant',
+                    audience,
+                    permissionsOfRole('admin')
+                )
             ).rejects.toThrow(AccessInvariantError);
             expect(
                 await accessService.membershipIn('person-1', String(shop._id), 'tenant')
@@ -217,7 +286,7 @@ describe('auditing a role change', () => {
             String(shop._id),
             'tenant',
             'manager',
-            undefined,
+            permissionsOfRole('admin'),
             admin
         );
 
@@ -259,11 +328,16 @@ describe('auditing a role change', () => {
 
     it('records a revoke', async () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
-        await accessService.assignRole('owner-a', String(shop._id), 'tenant', 'admin');
-        await accessService.assignRole('owner-b', String(shop._id), 'tenant', 'admin');
+        await seedMembership('owner-a', String(shop._id), 'tenant', 'admin');
+        await seedMembership('owner-b', String(shop._id), 'tenant', 'admin');
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        await accessService.revokeRole('owner-a', String(shop._id), 'tenant', testCallerContext);
+        await accessService.revokeRole(
+            'owner-a',
+            String(shop._id),
+            'tenant',
+            callerContextAs('admin')
+        );
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -279,7 +353,7 @@ describe('auditing a role change', () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        await accessService.assignRole('target-user', String(shop._id), 'tenant', 'manager');
+        await seedMembership('target-user', String(shop._id), 'tenant', 'manager');
 
         expect(auditSpy).not.toHaveBeenCalled();
     });
@@ -297,7 +371,7 @@ describe('assignRole inside a caller transaction', () => {
                 String(shop._id),
                 'tenant',
                 'manager',
-                undefined,
+                permissionsOfRole('admin'),
                 context,
                 session
             )
@@ -326,7 +400,7 @@ describe('assignRole inside a caller transaction', () => {
                         String(shop._id),
                         'tenant',
                         'manager',
-                        undefined,
+                        permissionsOfRole('admin'),
                         undefined,
                         session
                     )
@@ -401,24 +475,12 @@ describe('grantRefusalAudited', () => {
     });
 });
 
-describe('revokeAllOf', () => {
-    it('clears every membership a person holds, tenant and platform alike', async () => {
-        const shop = await accessService.ensureTenant('shop', 'The Shop');
-        await accessService.assignRole('person-1', String(shop._id), 'tenant', 'admin');
-        await accessService.assignRole('person-1', null, 'platform', 'operator');
-
-        await accessService.revokeAllOf('person-1');
-
-        expect(await accessService.membershipsOf('person-1')).toEqual([]);
-    });
-});
-
 describe('eraseMemberships', () => {
     it('removes every membership one person holds, and nobody else’s', async () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
-        await accessService.assignRole('erased', String(shop._id), 'tenant', 'admin');
-        await accessService.assignRole('erased', null, 'platform', 'operator');
-        await accessService.assignRole('bystander', String(shop._id), 'tenant', 'editor');
+        await seedMembership('erased', String(shop._id), 'tenant', 'admin');
+        await seedMembership('erased', null, 'platform', 'operator');
+        await seedMembership('bystander', String(shop._id), 'tenant', 'editor');
 
         await withTransaction((session) => accessService.eraseMemberships('erased', session));
 
@@ -428,7 +490,7 @@ describe('eraseMemberships', () => {
 
     it('is undone with the transaction it joined', async () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
-        await accessService.assignRole('kept', String(shop._id), 'tenant', 'admin');
+        await seedMembership('kept', String(shop._id), 'tenant', 'admin');
 
         await expect(
             withTransaction((session) =>
@@ -459,8 +521,8 @@ describe('assertCanGrant', () => {
 describe('rolesOfMany', () => {
     it('batch-resolves the tenant role for a set of people in one query', async () => {
         const shop = await accessService.ensureTenant('shop', 'The Shop');
-        await accessService.assignRole('person-1', String(shop._id), 'tenant', 'manager');
-        await accessService.assignRole('person-2', String(shop._id), 'tenant', 'editor');
+        await seedMembership('person-1', String(shop._id), 'tenant', 'manager');
+        await seedMembership('person-2', String(shop._id), 'tenant', 'editor');
 
         const roles = await accessService.rolesOfMany(
             ['person-1', 'person-2', 'nobody'],

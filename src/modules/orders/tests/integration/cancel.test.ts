@@ -40,6 +40,7 @@ import {
     callerContextAs,
     testCallerContext
 } from '@tests/callers';
+import { cancelForErasureById } from '../../services/cancel';
 
 // The queue, not the copy.
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -164,7 +165,7 @@ describe('cancelOnRequestById', () => {
         const order = await seedOrder(owner);
         await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
 
-        const refused = await orderService.cancelForErasureById(String(order._id));
+        const refused = await cancelForErasureById(String(order._id));
 
         expect(refused.success).toBe(false);
         expect(refused.status).toBe(409);
@@ -486,7 +487,7 @@ describe('cancelOnRequestById — the payment-window-expired email', () => {
         });
 
         // A system actor with no context and no reservation flag: not the sweep, so no expiry notice.
-        await orderService.cancelForErasureById(String(order._id));
+        await cancelForErasureById(String(order._id));
 
         await settleOutboxNudges();
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
@@ -609,7 +610,7 @@ describe('cancelOnRequestById — the cancelled notice', () => {
     });
 
     it.each([
-        ['an erasure', (orderId: string) => orderService.cancelForErasureById(orderId)],
+        ['an erasure', (orderId: string) => cancelForErasureById(orderId)],
         [
             'a payment mismatch',
             (orderId: string) => orderService.cancelForPaymentMismatchById(orderId)

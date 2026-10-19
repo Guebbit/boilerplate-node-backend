@@ -253,7 +253,7 @@ describe('merge', () => {
             const product = await createProduct({ onHand: 10 });
             await cartService.addItemById(user.id, String(product._id), 8);
             // Five of the ten leave the shelf, through the ledger the merge reads.
-            await inventoryService.adjust(String(product._id), -5, 'stocktake');
+            await inventoryService.adjust(String(product._id), -5, 'stocktake', testCallerContext);
 
             const { lines } = await cartService.merge(
                 user.id,

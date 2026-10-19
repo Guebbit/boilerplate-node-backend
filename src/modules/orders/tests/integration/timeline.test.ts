@@ -19,6 +19,7 @@ import { OrderStatus } from '@types';
 import { orderService } from '../../services';
 import { withdrawUntilFrom } from '../../domain';
 import { orderEventModel } from '../../model';
+import { cancelForErasureById } from '../../services/cancel';
 
 setupTestDb();
 
@@ -124,7 +125,7 @@ describe('what each move writes', () => {
         const swept = await orderOfBuyer(1, OrderStatus.pending);
 
         await orderService.cancelOnRequestById(String(mine._id), asCustomer(user.id));
-        await orderService.cancelForErasureById(String(swept._id));
+        await cancelForErasureById(String(swept._id));
 
         expect(await timelineOf(String(mine._id))).toMatchObject([
             { type: 'cancelled', actor: user.id, data: { by: 'customer' } }
@@ -204,7 +205,7 @@ describe('what the law lets go', () => {
             callerContextAs('admin', staff.id)
         );
 
-        await userService.eraseOwnAccount(staff);
+        await userService.eraseOwnAccount(userService.redeemedOwner(staff));
 
         const [row] = await timelineOf(String(order._id));
         expect(row.type).toBe('status_overridden');
@@ -238,7 +239,7 @@ describe('what the law lets go', () => {
 
     it('removes the timeline with an order that is hard-deleted', async () => {
         const order = await seedOrder(OrderStatus.pending);
-        await orderService.cancelForErasureById(String(order._id));
+        await cancelForErasureById(String(order._id));
         await settleOutboxNudges();
 
         await orderService.removeById(String(order._id), true);

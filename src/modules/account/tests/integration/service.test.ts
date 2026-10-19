@@ -16,6 +16,8 @@ import {
     REPLACEMENT_PASSWORD
 } from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
+import { issueToken } from '@modules/account/services/tokens';
+import { passwordChange } from '@modules/account/services/password';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { userRepository } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
@@ -401,9 +403,7 @@ describe('passwordChange', () => {
             password: PASSPHRASE_PASSWORD
         });
 
-        const response = asSuccess(
-            await accountService.passwordChange(user, PLAIN_PASSWORD, PLAIN_PASSWORD)
-        );
+        const response = asSuccess(await passwordChange(user, PLAIN_PASSWORD, PLAIN_PASSWORD));
 
         expect(response.status).toBe(200);
 
@@ -423,9 +423,7 @@ describe('passwordChange', () => {
             password: PASSPHRASE_PASSWORD
         });
 
-        const response = asReject(
-            await accountService.passwordChange(user, PLAIN_PASSWORD, REPLACEMENT_PASSWORD)
-        );
+        const response = asReject(await passwordChange(user, PLAIN_PASSWORD, REPLACEMENT_PASSWORD));
 
         expect(response.status).toBe(422);
 
@@ -438,7 +436,7 @@ describe('issueToken', () => {
     it('stores a token of the requested type and returns it', async () => {
         const user = await createUser({ email: 'tokenadd@example.com' });
 
-        const token = await accountService.issueToken(user.id, 'password', 60_000);
+        const token = await issueToken(user.id, 'password', 60_000);
 
         const rows = await tokenRowsOf(user.id);
         expect(rows).toHaveLength(1);
@@ -452,7 +450,7 @@ describe('issueToken', () => {
         // anything shorter is a guessable reset link, and the value is only ever compared for
         // equality, so nothing else in the system would complain.
         return createUser({ email: 'entropy@example.com' })
-            .then((user) => accountService.issueToken(user.id, 'password', 60_000))
+            .then((user) => issueToken(user.id, 'password', 60_000))
             .then((token) => {
                 expect(token).toMatch(/^[\da-f]{32}$/);
             });
@@ -465,8 +463,8 @@ describe('issueToken', () => {
         const user = await createUser({ email: 'concurrent@example.com' });
 
         const [first, second] = await Promise.all([
-            accountService.issueToken(user.id, 'delete', 60_000),
-            accountService.issueToken(user.id, 'delete', 60_000)
+            issueToken(user.id, 'delete', 60_000),
+            issueToken(user.id, 'delete', 60_000)
         ]);
 
         const rows = await tokenRowsOf(user.id);
@@ -481,8 +479,8 @@ describe('issueToken', () => {
         const user = await createUser({ email: 'concurrent-reset@example.com' });
 
         const [first, second] = await Promise.all([
-            accountService.issueToken(user.id, 'password', 60_000),
-            accountService.issueToken(user.id, 'password', 60_000)
+            issueToken(user.id, 'password', 60_000),
+            issueToken(user.id, 'password', 60_000)
         ]);
 
         const rows = await tokenRowsOf(user.id);
@@ -493,8 +491,8 @@ describe('issueToken', () => {
     it('issues a different token every time', async () => {
         const user = await createUser({ email: 'distinct@example.com' });
 
-        const first = await accountService.issueToken(user.id, 'password', 60_000);
-        const second = await accountService.issueToken(user.id, 'password', 60_000);
+        const first = await issueToken(user.id, 'password', 60_000);
+        const second = await issueToken(user.id, 'password', 60_000);
 
         expect(first).not.toBe(second);
     });
@@ -503,7 +501,7 @@ describe('issueToken', () => {
         const user = await createUser({ email: 'expiry@example.com' });
         const before = Date.now();
 
-        await accountService.issueToken(user.id, 'password', 60_000);
+        await issueToken(user.id, 'password', 60_000);
 
         const [row] = await tokenRowsOf(user.id);
         // Offset from *now*, not an absolute constant: an expiry computed from the wrong origin

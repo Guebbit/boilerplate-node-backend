@@ -232,7 +232,7 @@ describe('the module subscriptions', () => {
             const productId = String(product._id);
             await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
 
-            await inventoryService.receive(productId, 2);
+            await inventoryService.receive(productId, 2, undefined, testCallerContext);
             await settleOutboxNudges();
             await stockAlertService.onBuyableAgain(productId);
             await settleOutboxNudges();

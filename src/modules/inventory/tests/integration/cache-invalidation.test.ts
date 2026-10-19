@@ -11,6 +11,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { inventoryService } from '../../services';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
+import { testCallerContext } from '@tests/callers';
 
 /*
  * Replaced, not spied on: a CommonJS namespace import exposes a non-configurable getter, which
@@ -36,7 +37,7 @@ describe('the products cache tag, cleared where stock is written', () => {
     it('clears it when stock is received', async () => {
         const product = await createProduct({ onHand: 1 });
 
-        await inventoryService.receive(String(product._id), 4);
+        await inventoryService.receive(String(product._id), 4, undefined, testCallerContext);
 
         expect(invalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
     });
@@ -44,7 +45,7 @@ describe('the products cache tag, cleared where stock is written', () => {
     it('clears it when stock is adjusted', async () => {
         const product = await createProduct({ onHand: 5 });
 
-        await inventoryService.adjust(String(product._id), -2);
+        await inventoryService.adjust(String(product._id), -2, undefined, testCallerContext);
 
         expect(invalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
     });

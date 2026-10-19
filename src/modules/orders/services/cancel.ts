@@ -345,6 +345,7 @@ export const expireReservationById = (
  * account that no longer exists.
  *
  * @param id - the order to cancel
+ * @internal Cancels any order with no owner check: only this module's erasure hook may call it, so it is not on `orderService`.
  */
 export const cancelForErasureById = (
     id: string

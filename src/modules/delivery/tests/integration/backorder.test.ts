@@ -141,7 +141,7 @@ describe('stock arriving for a paid backorder', () => {
         });
         await fulfillmentOrdersOf(orderId);
 
-        await inventoryService.receive(productId, 2);
+        await inventoryService.receive(productId, 2, undefined, testCallerContext);
         await settleOutboxNudges();
 
         const all = await fulfillmentOrdersOf(orderId);

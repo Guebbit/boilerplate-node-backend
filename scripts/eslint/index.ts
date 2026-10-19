@@ -22,6 +22,9 @@
  * its `index.ts` may publish — a question about the barrel's own export declarations, not about
  * an import edge between two modules.
  *
+ * `friend-members` is the door a barrel cannot be: a write that exactly one other module must call
+ * has to be published, and then nothing stops a third module reaching it. The rule names who may.
+ *
  * They live in this directory rather than in a published plugin package because they are about
  * THIS repo's conventions and have exactly one consumer. One file per rule so each can be
  * unit-tested with `RuleTester` — see `tests/unit/scripts/eslint/`.
@@ -29,6 +32,7 @@
 import { barrelAllowedSources } from './barrel-allowed-sources';
 import { commentLinks } from './comment-links';
 import { controllerChainMustCatch } from './controller-chain-must-catch';
+import { friendMembers } from './friend-members';
 import { noHardcodedUserText } from './no-hardcoded-user-text';
 import { noPersistenceImports } from './no-persistence-imports';
 
@@ -37,6 +41,7 @@ export default {
     'barrel-allowed-sources': barrelAllowedSources,
     'comment-links': commentLinks,
     'controller-chain-must-catch': controllerChainMustCatch,
+    'friend-members': friendMembers,
     'no-hardcoded-user-text': noHardcodedUserText,
     'no-persistence-imports': noPersistenceImports
 };

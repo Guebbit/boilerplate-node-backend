@@ -5,6 +5,12 @@
  */
 
 import { eventually } from '@tests/eventually';
+
+/**
+ * Freeze a credit note from the amounts given, for a sibling's test of what reads one. Not on
+ * `invoicingService`: only this module's own `payment.refunded` listener runs it in production.
+ */
+export { issueCreditNote } from '../services/issue-credit-note';
 import { invoicingRepository } from '../repository';
 
 /**

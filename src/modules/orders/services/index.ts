@@ -31,7 +31,6 @@ import {
     cancelOnRequestById,
     withdrawById,
     expireReservationById,
-    cancelForErasureById,
     cancelForPaymentMismatchById,
     cancelUnanswered
 } from './cancel';
@@ -59,8 +58,7 @@ import {
     readTimeline,
     collectTimelineOf,
     clearTimelineActor,
-    scrubTimelineText,
-    deleteTimelineOf
+    scrubTimelineText
 } from './timeline';
 import {
     paidBuckets,
@@ -144,7 +142,6 @@ export const orderService = {
     collectTimelineOf,
     clearTimelineActor,
     scrubTimelineText,
-    deleteTimelineOf,
     detachUserId,
     eraseUserOrders,
     startOrderPiiClock,
@@ -152,7 +149,6 @@ export const orderService = {
     cancelOnRequestById,
     withdrawById,
     expireReservationById,
-    cancelForErasureById,
     cancelForPaymentMismatchById,
     cancelUnanswered,
     withActions

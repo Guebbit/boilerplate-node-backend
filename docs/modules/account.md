@@ -284,6 +284,10 @@ Decisions rather than mechanics:
 - **A new export costs one mail.** Starting one is charged to the per-mailbox mail
   budget, because it ends in a mailed link. A spent budget answers `429` before the old export is deleted,
   so a ready file stays downloadable; asking while one is `building` is not charged.
+- **The queue message names an account, not a mailbox.** The worker reads the account's address
+  from the account itself, both for the mail and for the sections that match by address. A message
+  that could carry its own address would let whoever can publish to the queue send one person's
+  data to another's inbox. An account erased since the request fails the row and mails nobody.
 - **Peak memory is one section.** The worker collects the sections one at a time and appends each to
   the file as it arrives, so the largest section is the ceiling, not the sum. The audit section reads
   by cursor on the `{ actorUserId, timestamp }` index: no count and no skip per page, which would make

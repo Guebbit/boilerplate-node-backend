@@ -179,6 +179,8 @@ export const cancelOpenIntent = (payment: PaymentDocument, reason: string): Prom
  *
  * @param orderId - the order that was cancelled
  * @param expired - whether the cancel was the stock hold running out unpaid
+ * @internal Closes any order's open intent with no caller to check: only this module's `subscribe`
+ *   may run it, so it is not on `paymentService`.
  */
 export const cancelOpenIntentForOrder = (orderId: string, expired = false): Promise<void> =>
     paymentRepository.findByOrderId(orderId).then((payment) => {

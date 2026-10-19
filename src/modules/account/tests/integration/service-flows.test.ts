@@ -11,6 +11,8 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/callers';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
+import { issueToken } from '@modules/account/services/tokens';
+import { passwordChange } from '@modules/account/services/password';
 import * as auditPort from '@infrastructure/observability/audit';
 import { verifyAccessToken, startSession } from '@modules/account/session/jwt';
 import { accountAuditActions } from '../../audit';
@@ -182,10 +184,10 @@ describe('accountService.login', () => {
     });
 });
 
-describe('accountService.issueToken', () => {
+describe('issueToken', () => {
     it('stores a one-time token for the account and returns the plaintext', async () => {
         const user = await createUser();
-        const token = await accountService.issueToken(user.id, 'password', 3_600_000);
+        const token = await issueToken(user.id, 'password', 3_600_000);
 
         expect(typeof token).toBe('string');
         expect(token).toHaveLength(32);
@@ -194,7 +196,7 @@ describe('accountService.issueToken', () => {
     it('persists only the digest, with its kind', async () => {
         const user = await createUser();
 
-        const token = await accountService.issueToken(user.id, 'verify', 3_600_000);
+        const token = await issueToken(user.id, 'verify', 3_600_000);
 
         const rows = await tokenRowsOf(user.id);
         expect(rows).toHaveLength(1);
@@ -206,7 +208,7 @@ describe('accountService.issueToken', () => {
         const user = await createUser();
         const now = Date.now();
 
-        await accountService.issueToken(user.id, 'password', 3_600_000);
+        await issueToken(user.id, 'password', 3_600_000);
 
         const [row] = await tokenRowsOf(user.id);
         expect(row.expiresAt.getTime()).toBeGreaterThanOrEqual(now + 3_600_000 - 1000);
@@ -216,10 +218,10 @@ describe('accountService.issueToken', () => {
     it('replaces the previous link of a one-live-link kind, and adds another of a many-live kind', async () => {
         const user = await createUser();
 
-        await accountService.issueToken(user.id, 'password', 3_600_000);
-        await accountService.issueToken(user.id, 'password', 3_600_000);
-        await accountService.issueToken(user.id, 'delete', 3_600_000);
-        await accountService.issueToken(user.id, 'delete', 3_600_000);
+        await issueToken(user.id, 'password', 3_600_000);
+        await issueToken(user.id, 'password', 3_600_000);
+        await issueToken(user.id, 'delete', 3_600_000);
+        await issueToken(user.id, 'delete', 3_600_000);
 
         const rows = await tokenRowsOf(user.id);
         expect(rows.filter((row) => row.type === 'password')).toHaveLength(1);
@@ -227,25 +229,17 @@ describe('accountService.issueToken', () => {
     });
 });
 
-describe('accountService.passwordChange', () => {
+describe('passwordChange', () => {
     it('changes the password when both fields match and meet requirements', async () => {
         const user = await createUser();
-        const result = await accountService.passwordChange(
-            user,
-            REPLACEMENT_PASSWORD,
-            REPLACEMENT_PASSWORD
-        );
+        const result = await passwordChange(user, REPLACEMENT_PASSWORD, REPLACEMENT_PASSWORD);
 
         expect(result.success).toBe(true);
     });
 
     it('rejects when passwords do not match', async () => {
         const user = await createUser();
-        const result = await accountService.passwordChange(
-            user,
-            REPLACEMENT_PASSWORD,
-            PLAIN_PASSWORD
-        );
+        const result = await passwordChange(user, REPLACEMENT_PASSWORD, PLAIN_PASSWORD);
 
         expect(result.success).toBe(false);
         expect((result as ResponseReject).status).toBe(422);
@@ -253,7 +247,7 @@ describe('accountService.passwordChange', () => {
 
     it('rejects when the new password is too short', async () => {
         const user = await createUser();
-        const result = await accountService.passwordChange(user, 'abc', 'abc');
+        const result = await passwordChange(user, 'abc', 'abc');
 
         expect(result.success).toBe(false);
         expect((result as ResponseReject).status).toBe(422);
@@ -263,7 +257,7 @@ describe('accountService.passwordChange', () => {
         const user = await createUser({ email: 'pwdchange@example.com' });
         const id = user._id.toString();
 
-        await accountService.passwordChange(user, 'BrandNew1!', 'BrandNew1!');
+        await passwordChange(user, 'BrandNew1!', 'BrandNew1!');
 
         const refreshed = await userRepository.findById(id);
         const loginResult = await accountService.login('pwdchange@example.com', 'BrandNew1!');

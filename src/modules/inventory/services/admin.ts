@@ -85,7 +85,7 @@ interface AdminStockTransition {
     /** Signed for `adjust`, always positive for `receive` — `applyTransition`'s own `quantity`. */
     amount: number;
     note?: string;
-    context?: CallerContext;
+    context: CallerContext;
     /**
      * Called only when `applyTransition` refuses. `receive`'s guard covers just "the product is
      * still there", so its refusal is always a 404 — left `undefined`, the default below.
@@ -156,14 +156,15 @@ const applyAdminStockTransition = ({
  * @param productId - the product
  * @param quantity - how many arrived; strictly positive, the contract enforces it too
  * @param note - what to record: supplier, delivery note, operator's words
- * @param context - audit context for `ADMIN_STOCK_RECEIVED`; tests omit it to skip the emit
+ * @param context - the caller, audited as `ADMIN_STOCK_RECEIVED`. Required: a stock write with no
+ *   one to answer for it is a write nobody can trace
  * @returns the counters after the delivery, or 404 if the product is unknown
  */
 export const receive = (
     productId: string,
     quantity: number,
-    note?: string,
-    context?: CallerContext
+    note: string | undefined,
+    context: CallerContext
 ): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> =>
     applyAdminStockTransition({
         reason: StockMovementReason.receive,
@@ -185,14 +186,14 @@ export const receive = (
  * @param productId - the product
  * @param delta - signed and non-zero; the controller rejects zero
  * @param note - why; an unexplained correction is what an audit looks for
- * @param context - audit context for `ADMIN_STOCK_ADJUSTED`; tests omit it to skip the emit
+ * @param context - the caller, audited as `ADMIN_STOCK_ADJUSTED`. Required, like {@link receive}'s
  * @returns the counters after the correction, 404 if unknown, or 409 if below reserved
  */
 export const adjust = (
     productId: string,
     delta: number,
-    note?: string,
-    context?: CallerContext
+    note: string | undefined,
+    context: CallerContext
 ): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> =>
     applyAdminStockTransition({
         reason: StockMovementReason.adjust,

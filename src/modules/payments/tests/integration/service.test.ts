@@ -37,7 +37,6 @@ import {
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asReject } from '@tests/response';
-import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import {
     asCustomer,
@@ -49,6 +48,7 @@ import {
 } from '@tests/callers';
 import { payByCard } from '@modules/payments/tests/factories';
 import { reservationRepository } from '@modules/inventory/tests/factories';
+import { seedMembership } from '@modules/access/tests/factories';
 
 // The audit port is replaced, not spied on — see `tests/support/ports.ts`.
 jest.mock('@infrastructure/observability/audit', () =>
@@ -354,7 +354,7 @@ describe('getForOrder', () => {
         const { user, order } = await paidOrder();
 
         const whileCustomer = await paymentService.getForOrder(String(order._id), asModerator());
-        await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'support');
+        await seedMembership(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'support');
         const whileStaff = await paymentService.getForOrder(String(order._id), asModerator());
 
         expect([whileCustomer.data?.actions?.refund, whileStaff.data?.actions?.refund]).toEqual([
@@ -369,7 +369,7 @@ describe('getForOrder', () => {
 describe('a refund on one’s own order', () => {
     it('is offered, allowed and flagged ownOrder for a buyer promoted to moderator', async () => {
         const { user, order } = await paidOrder();
-        await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'moderator');
+        await seedMembership(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'moderator');
         const own = asRole('moderator', user.id);
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
@@ -479,7 +479,7 @@ describe('refund on cancel', () => {
         const { providerRef } = (await paymentRepository.findByOrderId(String(order._id)))!;
         const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
 
-        await userService.eraseOwnAccount(user);
+        await userService.eraseOwnAccount(userService.redeemedOwner(user));
         // The cancel's listeners run off the outbox relay, after the erasure returns.
         await settleOutboxNudges();
 
@@ -1530,7 +1530,7 @@ describe('recordOfflinePayment', () => {
     // also record the cash for it, and the audit row is flagged.
     it('lets the buyer record cash on their own order, flagged ownOrder', async () => {
         const { user, order } = await orderFor();
-        await accessService.assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
+        await seedMembership(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
         const result = await paymentService.recordOfflinePayment(

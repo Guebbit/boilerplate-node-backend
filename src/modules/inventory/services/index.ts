@@ -26,15 +26,7 @@ import {
 import { restockReturnedLines } from './returns';
 import { refreshStockCacheForProducts } from './transition';
 import { runReservationSweep } from './sweep';
-import {
-    availableFor,
-    openLevel,
-    removeLevel,
-    listLevels,
-    lowStockCount,
-    listMovements,
-    listPreorders
-} from './levels';
+import { availableFor, listLevels, lowStockCount, listMovements, listPreorders } from './levels';
 import { receive, adjust, setBackorderLimit } from './admin';
 
 export type {
@@ -63,8 +55,6 @@ export const inventoryService = {
     isHoldReleased,
     runReservationSweep,
     availableFor,
-    openLevel,
-    removeLevel,
     receive,
     adjust,
     setBackorderLimit,
