@@ -157,13 +157,13 @@ export const handleUncaughtError = (
     });
     // Stryker restore all
 
-    // The one throw shape this handler translates by hand, and the only one whose own copy is
-    // forwarded: multer's messages are chosen for an end user and name no internals.
+    // The one throw shape this handler translates by hand: multer's `code` names which limit was
+    // hit and stays in the item, but its English `message` is replaced by one translated text.
     if (error instanceof MulterError)
         return rejectResponse(response, 400, [
             {
                 code: error.code,
-                message: error.message
+                message: t('generic.error-upload-refused')
             }
         ]);
 
