@@ -240,7 +240,8 @@ way a handle does. What it never publishes, no matter how convenient:
   Publishing it is a repository export one level up: the write goes through, the checks don't. A
   judgement call, not a file name, so a person marks the step `@internal` (TSDoc's own tag, with
   the one-line reason). `tests/cross-cutting/guarded-steps-stay-unpublished.test.ts` then refuses
-  any tagged step a barrel reaches (also when a service object bundles it as `{ x: ns.fn }`), and the
+  any tagged step a barrel reaches (also when a service object bundles it as `{ x: ns.fn }`, as a
+  forwarding wrapper `{ x: (a) => step(a) }`, or with `...ns`), and the
   `scripts/audit/reachability/SKILL.md` audit (see [AI Auditing](../tools/ai-auditing.md))
   hunts the ones nobody has tagged.
 
