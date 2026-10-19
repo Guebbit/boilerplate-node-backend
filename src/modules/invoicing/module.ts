@@ -24,6 +24,7 @@ import { PAYMENT_REFUNDED } from '@modules/payments';
 import { OrderStatus } from '@types';
 import { router } from './routes';
 import { invoicingService } from './services';
+import { issueCreditNote } from './services/issue-credit-note';
 import { collectPersonalData } from './services/personal-data';
 import { invoicingRateLimits } from './rate-limits';
 import { invoicingConfig } from './config';
@@ -64,7 +65,7 @@ export default {
                 .then((order) => (order ? invoicingService.issueInvoice(order) : undefined));
         });
         onDomainEvent(PAYMENT_REFUNDED, ({ orderId, refundId, amount, full, goods }) =>
-            invoicingService.issueCreditNote({
+            issueCreditNote({
                 orderId,
                 refundId,
                 amount,

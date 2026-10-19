@@ -14,14 +14,14 @@
  * Files:      one per flow, listed in docs/modules/payments.md.
  */
 
-import { createIntent, cancelOpenIntentForOrder } from './intent';
+import { createIntent } from './intent';
 import {
     confirmPayment,
     syncPayment,
     applyWebhookDelivery,
     applyWebhookSettlement
 } from './settlement';
-import { refundByOrder, refundForOrder, refundForReturn } from './refunds';
+import { refundByOrder, refundForReturn } from './refunds';
 import { retryOpenRefunds, reconcileStalePayments } from './effects';
 import { recordOfflinePayment } from './offline';
 import { openTransferPayment } from './transfer';
@@ -47,19 +47,17 @@ export type { PaymentMethodInfo } from '../config';
  * `settlePayment` and `performRefund` are NOT published: each is the choreography beneath a door
  * that carries the guards (scope, own-money rule, order gate), so a caller going round the door
  * would skip them. `confirmPayment`/`syncPayment`/`applyWebhookSettlement` and
- * `refundByOrder`/`refundForOrder`/`refundForReturn` are the doors.
+ * `refundByOrder`/`refundForReturn` are the doors. `refundForOrder` and `cancelOpenIntentForOrder` act for the `order.cancelled` listener alone, so they stay off the object too.
  */
 
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
 export const paymentService = {
     createIntent,
-    cancelOpenIntentForOrder,
     confirmPayment,
     syncPayment,
     applyWebhookDelivery,
     applyWebhookSettlement,
     getForOrder,
-    refundForOrder,
     refundByOrder,
     refundForReturn,
     retryOpenRefunds,

@@ -162,6 +162,7 @@ export const scrubTimelineText = (): Promise<number> =>
  * Remove the timeline of an order that was hard-deleted.
  *
  * @param orderId - the deleted order
+ * @internal Deletes any order's timeline: only this module's order removal may call it, so it is not on `orderService`.
  */
 export const deleteTimelineOf = (orderId: string): Promise<void> =>
     orderEventRepository.deleteByOrderId(orderId).then(() => undefined);

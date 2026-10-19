@@ -128,7 +128,7 @@ const paidMixed = async (
         intent.data.id,
         'pm_card_visa',
         asCustomer(user.id),
-        testCallerContext
+        callerContextAs('customer', user.id)
     );
     await forceOrderStatus(orderId, status);
     return { user, shirt, mug, orderId };
@@ -146,7 +146,7 @@ const buyerCancels = (fixture: Fixture) =>
             fulfillmentOrderId: fixture.fulfillmentOrderId
         },
         asCustomer(fixture.user.id),
-        testCallerContext
+        callerContextAs('customer', fixture.user.id)
     );
 
 /** A created cancellation, or a loud failure. */
@@ -164,7 +164,7 @@ const returnShippedGoods = async (
     const outcome = await returnService.createReturn(
         { orderId: fixture.orderId, reason },
         asCustomer(fixture.user.id),
-        testCallerContext
+        callerContextAs('customer', fixture.user.id)
     );
     const opened = created(outcome);
     if (reason !== 'withdrawal')
@@ -306,7 +306,7 @@ describe('the buyer cancelling what has not shipped', () => {
                 fulfillmentOrderId: String(fulfillmentOrder._id)
             },
             asCustomer(user.id),
-            testCallerContext
+            callerContextAs('customer', user.id)
         );
 
         expect(!outcome.success && outcome.errors[0].code).toBe('RETURN_NOTHING_TO_CANCEL');
@@ -354,7 +354,7 @@ describe('the buyer cancelling what has not shipped', () => {
                 fulfillmentOrderId: fixture.fulfillmentOrderId
             },
             asCustomer(stranger.id),
-            testCallerContext
+            callerContextAs('customer', stranger.id)
         );
 
         // Scoped to what the caller may read: a stranger is told the order does not exist.
@@ -425,7 +425,7 @@ const cancelGroup = (
             fulfillmentOrderId
         },
         asCustomer(fixture.user.id),
-        testCallerContext
+        callerContextAs('customer', fixture.user.id)
     );
 
 /** A paid order of two shirts and a made-to-order mug, nothing shipped, then withdrawn from. */
@@ -436,7 +436,7 @@ const withdrawsFrom = async (status: OrderStatus) => {
     const outcome = await returnService.createReturn(
         { orderId: fixture.orderId, reason: 'withdrawal' },
         asCustomer(fixture.user.id),
-        testCallerContext
+        callerContextAs('customer', fixture.user.id)
     );
     return { fixture, outcome };
 };
@@ -538,7 +538,7 @@ describe('withdrawing from an order that holds made-to-order goods', () => {
         const again = await returnService.createReturn(
             { orderId: fixture.orderId, reason: 'withdrawal' },
             asCustomer(fixture.user.id),
-            testCallerContext
+            callerContextAs('customer', fixture.user.id)
         );
 
         expect(!again.success && again.errors[0].code).toBe('RETURN_NOTHING_TO_CANCEL');
@@ -963,7 +963,7 @@ describe('returning goods that shipped in part', () => {
             returnService.createReturn(
                 { orderId, reason: 'withdrawal' },
                 asCustomer(user.id),
-                testCallerContext
+                callerContextAs('customer', user.id)
             )
         ]);
 
@@ -1016,7 +1016,7 @@ const shirtShippedPreorderWaiting = async ({ shipShirt = true } = {}) => {
         intent.data.id,
         'pm_card_visa',
         asCustomer(user.id),
-        testCallerContext
+        callerContextAs('customer', user.id)
     );
     await forceOrderStatus(orderId, OrderStatus.processing);
     const all = await fulfillmentOrdersOf(orderId);
@@ -1048,7 +1048,7 @@ describe('cancelling a preorder that is still waiting for stock', () => {
                 fulfillmentOrderId: fixture.fulfillmentOrderId
             },
             asCustomer(fixture.user.id),
-            testCallerContext
+            callerContextAs('customer', fixture.user.id)
         );
 
         const cancellation = created(outcome);
@@ -1171,7 +1171,7 @@ describe('a preorder wait nobody answered', () => {
             intent.data.id,
             'pm_card_visa',
             asCustomer(user.id),
-            testCallerContext
+            callerContextAs('customer', user.id)
         );
         const [waiting] = await fulfillmentOrdersOf(orderId);
         await letSilenceRunOut();

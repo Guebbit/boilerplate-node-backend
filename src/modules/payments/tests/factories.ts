@@ -18,6 +18,12 @@ import { paymentService } from '../services';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 
+/**
+ * The cancel listener's refund, for a sibling's test that needs a refunded order. Not on
+ * `paymentService`: only this module's own `order.cancelled` listener runs it in production.
+ */
+export { refundForOrder } from '../services/refunds';
+
 /** What a test may pin on {@link transferOrder}. */
 export interface TransferOrderOptions {
     /** The buyer; a fresh customer by default. */

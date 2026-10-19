@@ -17,6 +17,7 @@ import paymentsModule from '@modules/payments/module';
 import invoicingModule from '@modules/invoicing/module';
 import { yearInZone } from '@modules/orders';
 import { paymentService } from '@modules/payments';
+import { refundForOrder } from '@modules/payments/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, timelineOf, toOrderItem } from '@modules/orders/tests/factories';
@@ -26,10 +27,10 @@ import { setEnvironment } from '@tests/environment';
 import { creditNoteNumberCounterModel } from '../../model';
 import { decryptInvoiceParty } from '../../pii';
 import { invoicingRepository } from '../../repository';
-import { invoicingService } from '../../services';
 import { shopTimezone } from '@modules/shop';
 import { OrderStatus } from '@types';
 import { waitForInvoice } from '../factories';
+import { issueCreditNote } from '../../services/issue-credit-note';
 
 /** The fake PSP's "always succeeds" reference (`scenarios/support/doubles/payments/fake.ts`). */
 const FAKE_SUCCESS_METHOD = 'pm_card_visa';
@@ -91,7 +92,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         );
         const invoice = await waitForInvoice(String(order._id));
 
-        await paymentService.refundForOrder(String(order._id));
+        await refundForOrder(String(order._id));
         const [creditNote] = await waitForNotes(String(order._id), 1);
 
         // Both series independently start their own year at 1 — the SAME printed number on two
@@ -167,7 +168,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         });
         const [note] = await waitForNotes(orderId, 1);
 
-        const again = await invoicingService.issueCreditNote({
+        const again = await issueCreditNote({
             orderId,
             refundId: note.refundId,
             amount: 20,
@@ -184,7 +185,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         freezeDate(new Date('2026-12-31T23:30:00Z'));
 
         try {
-            const note = await invoicingService.issueCreditNote({
+            const note = await issueCreditNote({
                 orderId,
                 refundId: 'refund-new-year',
                 amount: 5,
@@ -206,7 +207,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
             NODE_SHOP_LEGAL_NAME: 'Renamed Holding Srl',
             NODE_SHOP_VAT_NUMBER: 'IT99999999999'
         });
-        const note = await invoicingService.issueCreditNote({
+        const note = await issueCreditNote({
             orderId,
             refundId: 'refund-after-rename',
             amount: 5,
@@ -223,10 +224,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         const year = yearInZone(new Date(), shopTimezone());
         const input = { orderId, refundId: 'refund-race', amount: 5, full: false };
 
-        const [first, second] = await Promise.all([
-            invoicingService.issueCreditNote(input),
-            invoicingService.issueCreditNote(input)
-        ]);
+        const [first, second] = await Promise.all([issueCreditNote(input), issueCreditNote(input)]);
 
         // One document, one number: the loser's allocation rolled back with its aborted insert.
         expect(String(first?._id)).toBe(String(second?._id));
@@ -247,7 +245,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
             .mockRejectedValueOnce(new Error('disk full'));
 
         await expect(
-            invoicingService.issueCreditNote({
+            issueCreditNote({
                 orderId,
                 refundId: 'refund-fail',
                 amount: 5,
@@ -270,7 +268,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         const orderId = String(order._id);
         const year = yearInZone(new Date(), shopTimezone());
 
-        const note = await invoicingService.issueCreditNote({
+        const note = await issueCreditNote({
             orderId,
             refundId: 'refund-uninvoiced',
             amount: 25,

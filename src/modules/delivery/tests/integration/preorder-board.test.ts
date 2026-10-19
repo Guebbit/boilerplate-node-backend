@@ -55,7 +55,7 @@ const placed = async (quantity: number, days: number, buyer?: string) => {
 
 /** Receive `quantity` units of a product and let the allocation reach delivery. */
 const arrive = async (productId: string, quantity: number) => {
-    await inventoryService.receive(productId, quantity);
+    await inventoryService.receive(productId, quantity, undefined, testCallerContext);
     await settleOutboxNudges();
 };
 

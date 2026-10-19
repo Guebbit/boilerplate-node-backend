@@ -8,6 +8,12 @@
 import type { Types } from 'mongoose';
 import { stockLevelModel } from '../model';
 
+/**
+ * Erase a product's level row, for a sibling's test of a product with none. Not on
+ * `inventoryService`: only this module's own `product.deleted` listener runs it in production.
+ */
+export { removeLevel } from '../services/levels';
+
 /** The stock rows and holds themselves — a sibling's own assertion on what the ledger holds. */
 export { stockLevelRepository, reservationRepository } from '../repository';
 

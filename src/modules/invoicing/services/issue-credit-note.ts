@@ -116,6 +116,7 @@ const reversedFigures = (
  * @param input - the refund that was just settled
  * @returns the credit note just issued (or the one this refund already had), or `undefined` when
  *   there was no invoice to correct
+ * @internal Freezes a numbered legal document from the amounts it is given: only this module's `payment.refunded` listener may call it, so it is not on `invoicingService`.
  */
 export const issueCreditNote = (input: RefundedInput): Promise<CreditNoteDocument | undefined> =>
     findInvoiceForOrder(input.orderId).then((invoice) => {

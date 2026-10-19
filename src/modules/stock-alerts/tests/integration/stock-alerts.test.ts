@@ -21,6 +21,7 @@ import { stockAlertService } from '../../service';
 import { stockAlertModel } from '../../model';
 import { STOCK_ALERT_SENT } from '../../events';
 import { enabledModules } from '../../../../modules';
+import { testCallerContext } from '@tests/callers';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -159,9 +160,9 @@ describe('the signal', () => {
         const productId = await soldOut();
         await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
 
-        await inventoryService.receive(productId, 3);
+        await inventoryService.receive(productId, 3, undefined, testCallerContext);
         await settleOutboxNudges();
-        await inventoryService.receive(productId, 3);
+        await inventoryService.receive(productId, 3, undefined, testCallerContext);
         await settleOutboxNudges();
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
@@ -176,7 +177,7 @@ describe('the signal', () => {
         await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
         await api().delete(`/stock-alerts/${productId}`).set('Authorization', bearer);
 
-        await inventoryService.receive(productId, 3);
+        await inventoryService.receive(productId, 3, undefined, testCallerContext);
         await settleOutboxNudges();
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();

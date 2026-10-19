@@ -7,11 +7,7 @@
  */
 
 import { issueInvoice, findInvoiceForOrder } from './issue-invoice';
-import {
-    issueCreditNote,
-    findCreditNotesForOrder,
-    findCreditNoteForOrderById
-} from './issue-credit-note';
+import { findCreditNotesForOrder, findCreditNoteForOrderById } from './issue-credit-note';
 import { renderInvoicePdf, renderCreditNotePdf } from './render';
 import { invoiceForCaller, creditNotesForCaller, creditNoteForCaller } from './for-caller';
 import { moneyBuckets } from './stats';
@@ -25,7 +21,6 @@ export type { DocumentTotals, MoneyBucket } from './stats';
 export const invoicingService = {
     issueInvoice,
     findInvoiceForOrder,
-    issueCreditNote,
     findCreditNotesForOrder,
     findCreditNoteForOrderById,
     invoiceForCaller,

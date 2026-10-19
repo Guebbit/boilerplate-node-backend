@@ -11,6 +11,7 @@ import { emitDomainEvent, resetDomainEvents } from '@kernel/events';
 import inventoryModule from '../../module';
 import { stockLevelRepository } from '../../repository';
 import { inventoryService } from '../../services';
+import { testCallerContext } from '@tests/callers';
 
 setupTestDb();
 
@@ -49,7 +50,7 @@ describe('PRODUCT_CREATED listener', () => {
     it('opens it once when the same event is delivered twice, and leaves what a receipt booked', async () => {
         const productId = await productWithoutLevel();
         await emitDomainEvent(PRODUCT_CREATED, { productId });
-        await inventoryService.receive(productId, 7);
+        await inventoryService.receive(productId, 7, undefined, testCallerContext);
 
         await emitDomainEvent(PRODUCT_CREATED, { productId });
 

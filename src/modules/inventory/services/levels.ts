@@ -25,6 +25,7 @@ import type { LevelFilters, MovementFilters, StockPosition } from './types';
  * through `receive`, which leaves a ledger row and needs `create:StockMovement`.
  *
  * @param productId - the product just created
+ * @internal The `product.created` listener's own job: it writes any product's level row, so it is not on `inventoryService`.
  */
 export const openLevel = (productId: string): Promise<void> =>
     stockLevelRepository.insertIfAbsent(productId).then(() => undefined);
@@ -36,6 +37,7 @@ export const openLevel = (productId: string): Promise<void> =>
  * `repository.ts`'s `deleteByProductId` for why `stockmovements` is untouched either way.
  *
  * @param productId - the product just hard-deleted
+ * @internal The `product.deleted` listener's own job: it erases any product's stock, so it is not on `inventoryService`.
  */
 export const removeLevel = (productId: string): Promise<void> =>
     stockLevelRepository.deleteByProductId(productId);

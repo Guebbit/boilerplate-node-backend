@@ -17,8 +17,8 @@ import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
 import { auditLogger } from '@infrastructure/adapters/logger';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { invoicingRepository } from '../../repository';
-import { invoicingService } from '../../services';
 import { eventually } from '@tests/eventually';
+import { issueCreditNote } from '../../services/issue-credit-note';
 
 /** A second, distinctly-addressed customer — `authenticateAs('user')` always mints the same
  * default address, which collides the second time one test needs two customers. */
@@ -294,7 +294,7 @@ const refundedOrder = async () => {
     const orderId = String(order._id);
     await orderService.markPaid(orderId);
     await waitUntilInvoiced(orderId, owner.bearer);
-    const creditNote = await invoicingService.issueCreditNote({
+    const creditNote = await issueCreditNote({
         orderId,
         refundId: 'refund-2',
         amount: 1,
@@ -404,7 +404,7 @@ describe('GET /orders/{id}/credit-notes/{creditNoteId}', () => {
         const orderId = String(order._id);
         await orderService.markPaid(orderId);
         await waitUntilInvoiced(orderId, owner.bearer);
-        const creditNote = await invoicingService.issueCreditNote({
+        const creditNote = await issueCreditNote({
             orderId,
             refundId: 'refund-1',
             amount: 1,

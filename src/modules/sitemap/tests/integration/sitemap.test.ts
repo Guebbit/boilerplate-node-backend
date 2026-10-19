@@ -19,6 +19,7 @@ import { givenLocale } from '@modules/locales/tests/factories';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { enabledModules } from '../../../../modules';
+import { testCallerContext } from '@tests/callers';
 
 setupTestDb();
 
@@ -156,7 +157,7 @@ describe('GET /sitemap/products-{page}.xml', () => {
         const before = await lastmodOf();
         await new Promise((resolve) => setTimeout(resolve, 20));
 
-        await inventoryService.receive(String(product._id), 3);
+        await inventoryService.receive(String(product._id), 3, undefined, testCallerContext);
 
         expect(await lastmodOf()).toBe(before);
     });

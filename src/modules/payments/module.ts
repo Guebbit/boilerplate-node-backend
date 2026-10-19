@@ -16,6 +16,8 @@ import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { ORDER_CANCELLED, ORDER_CREATED } from '@modules/orders';
 import { router } from './routes';
 import { paymentService } from './services';
+import { cancelOpenIntentForOrder } from './services/intent';
+import { refundForOrder } from './services/refunds';
 import { paymentsRateLimits } from './rate-limits';
 // Also installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED,
 // PAYMENT_REFUNDED). Reached directly, never through this module's own barrel — see CLAUDE.md's
@@ -90,9 +92,9 @@ export default {
         // when `refund` says so — the money already taken. The refund is the durable half: its
         // event is an outbox row, and a rejection here makes the relay deliver it again.
         onDomainEvent(ORDER_CANCELLED, ({ orderId, refund, cause }) =>
-            paymentService
-                .cancelOpenIntentForOrder(orderId, cause === 'reservation_expired')
-                .then(() => (refund ? paymentService.refundForOrder(orderId) : undefined))
+            cancelOpenIntentForOrder(orderId, cause === 'reservation_expired').then(() =>
+                refund ? refundForOrder(orderId) : undefined
+            )
         );
         // A bank-transfer order is owed money from the moment it is placed: its payment, with the
         // reference and the instructions, opens with it.

@@ -15,6 +15,7 @@ import { PaymentDisplayStatus, type PaymentAttentionItem } from '@types';
 import type { PaymentDocument } from '@modules/payments/model';
 import { paymentModel } from '@modules/payments/model';
 import { paymentService } from '@modules/payments/services';
+import { refundForOrder } from '@modules/payments/services/refunds';
 import { withEnvironmentOverrides } from '@tests/environment';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
@@ -401,8 +402,8 @@ describe('listAttention', () => {
 
         // The cancel's own refund listener: nobody can say the cash went back, so it only
         // opens the record. A redelivery of the same event writes nothing more.
-        await paymentService.refundForOrder(orderId);
-        await paymentService.refundForOrder(orderId);
+        await refundForOrder(orderId);
+        await refundForOrder(orderId);
 
         expect(await attentionRows()).toEqual([
             expect.objectContaining({

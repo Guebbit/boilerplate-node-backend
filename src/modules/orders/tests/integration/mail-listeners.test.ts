@@ -21,6 +21,7 @@ import { orderService } from '../../services';
 import { ORDER_CANCELLED, ORDER_CREATED } from '../../events';
 import type { CancelCause } from '../../services/cancel';
 import ordersModule from '../../module';
+import { cancelForErasureById } from '../../services/cancel';
 
 // The queue, not the copy.
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -142,7 +143,7 @@ describe('every cancel door names its cause on the row it writes', () => {
         ['operator', (id) => orderService.cancelOnRequestById(id, asAdmin())],
         ['withdrawal', (id, user) => orderService.withdrawById(id, asCustomer(user))],
         ['reservation_expired', (id) => orderService.expireReservationById(id)],
-        ['erasure', (id) => orderService.cancelForErasureById(id)],
+        ['erasure', (id) => cancelForErasureById(id)],
         ['payment_mismatch', (id) => orderService.cancelForPaymentMismatchById(id)]
     ])('%s', async (cause, cancel) => {
         const { user, orderId } = await seedOrder();

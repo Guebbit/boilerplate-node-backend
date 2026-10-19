@@ -13,6 +13,7 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { inventoryService } from '../../services';
 import { reservationModel } from '../../model';
 import { reservationRepository, stockLevelRepository } from '../../repository';
+import { testCallerContext } from '@tests/callers';
 
 setupTestDb();
 
@@ -58,7 +59,7 @@ describe('a unit that becomes sellable', () => {
     it('goes to the paid buyer waiting when a stocktake finds it', async () => {
         const { productId, waiting } = await soldOutWithAPaidBuyerWaiting(0);
 
-        await inventoryService.adjust(productId, 1, 'found in the back');
+        await inventoryService.adjust(productId, 1, 'found in the back', testCallerContext);
 
         expect(await itemsOf(waiting)).toEqual([{ quantity: 1, kind: 'stock' }]);
         expect(await levelOf(productId)).toEqual({

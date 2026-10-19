@@ -18,6 +18,7 @@ import { OrderStatus } from '@types';
 import { outboxEventModel } from '@kernel/outbox';
 import { ORDER_CANCELLED } from '../../events';
 import { orderRepository } from '../../repository';
+import { cancelForErasureById } from '../../services/cancel';
 
 setupTestDb();
 
@@ -272,7 +273,7 @@ describe('no rank on an order', () => {
     it('lets the system actor cancel any order, as its sweep does', async () => {
         const order = await orderOf('admin');
 
-        const result = await orderService.cancelForErasureById(String(order._id));
+        const result = await cancelForErasureById(String(order._id));
 
         expect(result.success).toBe(true);
     });

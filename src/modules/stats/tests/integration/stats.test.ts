@@ -25,6 +25,7 @@ import { createOrder, detachOrderUserId, toOrderItem } from '@modules/orders/tes
 import type { OrderDocument } from '@modules/orders';
 import { statsService } from '../../services';
 import { resolvePeriod, type Period } from '../../services/range';
+import { issueCreditNote } from '@modules/invoicing/tests/factories';
 
 setupTestDb();
 
@@ -118,7 +119,7 @@ const seedScenario = async () => {
     await paidOrder({ user: regular, product, quantity: 2, paidAt: '2026-03-10T23:30:00Z' });
     await paidOrder({ user: regular, product, quantity: 1, paidAt: '2026-02-01T10:00:00Z' });
     await issuedAt('2026-03-12T10:00:00Z', () =>
-        invoicingService.issueCreditNote({
+        issueCreditNote({
             orderId: String(a._id),
             refundId: 'refund-a',
             amount: 122,
