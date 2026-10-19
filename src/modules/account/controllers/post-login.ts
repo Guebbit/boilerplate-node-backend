@@ -16,7 +16,7 @@ import { rememberDevice } from '../session/device-cookie';
 import { recordLoginFailure, recordLoginSuccess } from '../session/login-observability';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { rejectValidation, refused } from '@infrastructure/http/controller';
+import { parseBody, refused } from '@infrastructure/http/controller';
 import type { LoginRequest, LoginOutcome } from '@types';
 import { AMR } from '../domain/session-proof';
 
@@ -63,15 +63,13 @@ export const postLogin = (
      * about the credentials — while an unknown tier must not slip through to become a cookie with
      * no lifetime at all.
      */
-    const tier = rememberSchema.safeParse({
-        remember: request.body?.remember,
-        transport: request.body?.transport
-    });
-    if (!tier.success) {
-        rejectValidation(response, tier.error);
-        return;
-    }
-    const { remember, transport } = tier.data;
+    const tier = parseBody(
+        rememberSchema,
+        { remember: request.body?.remember, transport: request.body?.transport },
+        response
+    );
+    if (!tier) return;
+    const { remember, transport } = tier;
     // Read before the hash check: a password changed while it runs must refuse this login.
     const provedAt = Date.now();
 
