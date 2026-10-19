@@ -1,6 +1,6 @@
 /**
  * @module
- * Per-request context: the access log, the observability handle, the locale.
+ * Per-request context: the access log and the observability handle.
  *
  * Everything here attaches something the rest of the request reads, which is why it is one group
  * and why it must precede the routes. The request id is the exception: it is
@@ -10,7 +10,6 @@
 import crypto from 'node:crypto';
 import type { Express, RequestHandler } from 'express';
 import { requestLogger } from '@infrastructure/http/middlewares/request-logger';
-import { attachLocale } from '@infrastructure/http/middlewares/locale';
 import { tracingConfig } from '@infrastructure/runtime/config';
 
 /**
@@ -46,7 +45,7 @@ export const requestIdMiddleware: RequestHandler = (request, response, next) => 
 };
 
 /**
- * Install access logging, the observability context and locale negotiation.
+ * Install access logging and the observability context.
  *
  * @param app - the express application to configure
  */
@@ -55,10 +54,4 @@ export const installRequestContext = (app: Express): void => {
      * Winston access log + OpenTelemetry trace injection
      */
     app.use(requestLogger);
-
-    /*
-     * Negotiate Accept-Language and run the request inside that locale — must precede the routes,
-     * since everything downstream resolves its user-facing copy against it
-     */
-    app.use(attachLocale);
 };

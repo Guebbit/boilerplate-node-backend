@@ -15,6 +15,7 @@ import type { ZodError } from 'zod';
 // `npm run regenerate` unable to take its own second step. `satisfies ErrorCode` below still gets
 // the compiler's check, just at `ts-check` time, by which point the file exists.
 import type { ErrorCode } from '@api/error-codes';
+import { t } from '@infrastructure/i18n';
 
 /** Fields shared by both outcomes — the discriminant plus human/machine status. */
 export interface ResponseNeutral {
@@ -140,35 +141,55 @@ export const createdOrOk = <T>(
         ? createdResponse(response, data, location, message)
         : successResponse(response, data, status, message);
 
+/** One status's wording: its stable code, its English reason phrase, and the key of its translated text. */
+interface StatusEnvelope {
+    /** Machine code; absent where the status shares the generic one. */
+    code?: ErrorCode;
+    /** The top-level `message`: English on purpose, a developer-facing label (AIP-193). */
+    message: string;
+    /** The `generic.*` locale key the status-only `errors[0].message` is translated from. */
+    messageKey: string;
+}
+
 /**
- * Every status the envelope names, with the code and the message it answers with.
+ * Every status the envelope names, with the code, the message and the translated text it answers with.
  *
  * One list, so adding 402 or 423 cannot reach the message and miss the code. An absent `code` is
  * deliberate: 422 and 429 get a reason phrase and the generic code, because a client branches on
  * "the request was wrong", not on which flavour of wrong.
  */
-const STATUS_ENVELOPE: Readonly<Partial<Record<number, { code?: ErrorCode; message: string }>>> = {
-    400: { code: 'BAD_REQUEST', message: 'Bad Request' },
-    401: { code: 'UNAUTHORIZED', message: 'Unauthorized' },
-    403: { code: 'FORBIDDEN', message: 'Forbidden' },
-    404: { code: 'NOT_FOUND', message: 'Not Found' },
-    409: { code: 'CONFLICT', message: 'Conflict' },
-    412: { code: 'PRECONDITION_FAILED', message: 'Precondition Failed' },
-    422: { message: 'Unprocessable Entity' },
-    429: { message: 'Too Many Requests' }
+const STATUS_ENVELOPE: Readonly<Partial<Record<number, StatusEnvelope>>> = {
+    400: { code: 'BAD_REQUEST', message: 'Bad Request', messageKey: 'generic.error-bad-request' },
+    401: {
+        code: 'UNAUTHORIZED',
+        message: 'Unauthorized',
+        messageKey: 'generic.error-unauthorized'
+    },
+    403: { code: 'FORBIDDEN', message: 'Forbidden', messageKey: 'generic.error-forbidden' },
+    404: { code: 'NOT_FOUND', message: 'Not Found', messageKey: 'generic.error-nothing-found' },
+    409: { code: 'CONFLICT', message: 'Conflict', messageKey: 'generic.error-conflict' },
+    412: {
+        code: 'PRECONDITION_FAILED',
+        message: 'Precondition Failed',
+        messageKey: 'generic.error-precondition-failed'
+    },
+    422: { message: 'Unprocessable Entity', messageKey: 'generic.error-invalid-data' },
+    429: { message: 'Too Many Requests', messageKey: 'generic.error-rate-limited' }
 };
 
 /** What every 5xx answers with. One code and one phrase: the flavour would leak internals. */
 const SERVER_FAULT = {
     code: 'INTERNAL_ERROR',
-    message: 'Internal Server Error'
-} as const satisfies { code: ErrorCode; message: string };
+    message: 'Internal Server Error',
+    messageKey: 'generic.error-internal'
+} as const satisfies StatusEnvelope;
 
 /** What an unmapped 4xx answers with. */
 const UNMAPPED_REQUEST_FAULT = {
     code: 'REQUEST_ERROR',
-    message: 'Request Error'
-} as const satisfies { code: ErrorCode; message: string };
+    message: 'Request Error',
+    messageKey: 'generic.error-unknown'
+} as const satisfies StatusEnvelope;
 
 /**
  * Maps HTTP status codes to stable machine-readable error codes.
@@ -197,13 +218,25 @@ export const resolveErrorMessage = (status: number): string => {
 };
 
 /**
+ * The translated text of a status-only failure, in the request's language.
+ *
+ * @param status - HTTP status code
+ * @returns the `generic.*` copy for that status
+ */
+const resolveErrorText = (status: number): string =>
+    t(
+        (status >= 500 ? SERVER_FAULT : (STATUS_ENVELOPE[status] ?? UNMAPPED_REQUEST_FAULT))
+            .messageKey
+    );
+
+/**
  * Normalizes mixed error inputs into the structured API error item shape.
  *
  * Callers may pass plain strings (the common case: a translated message) or fully-formed
  * items. Accepting both keeps call sites terse while guaranteeing the response always
  * carries `{ code, message }` pairs.
  *
- * @param status - used to derive both a code and the fallback text when none was supplied
+ * @param status - used to derive both a code and the (translated) fallback text when none was supplied
  * @param errors - strings and/or structured items, possibly empty
  * @returns a non-empty array of structured items
  */
@@ -211,7 +244,7 @@ const normalizeErrors = (
     status: number,
     errors: (string | ResponseErrorItem)[]
 ): ResponseErrorItem[] => {
-    const fallbackMessage = resolveErrorMessage(status);
+    const fallbackMessage = resolveErrorText(status);
     // Guarantee at least one item: a failure response with `errors: []` would force every
     // client to special-case it.
     const inputErrors = errors.length > 0 ? errors : [fallbackMessage];

@@ -221,6 +221,16 @@ Three things in the flow above are decisions rather than mechanics:
   the OLD address of an email change keeps the name, since that mailbox is the verified one.
 - **Confirming revokes every refresh token.** An email change is the stronger takeover primitive
   of the two, and this is the same treatment a changed password already gets.
+- **A signed-in password change mails a notice; a reset keeps its own confirmation.** Someone
+  holding a stolen session and the current password can change it silently otherwise
+  (`account.password-changed`; NIST SP 800-63B-4 §4.6, ASVS 5.0 6.3.7). It says what happened and
+  to use "Forgot password" if it was not the owner: a reset signs every device out and revokes the
+  API keys. No link, no timestamp. It is queued after the change and never fails it. The
+  reset confirmation says the same ("reset it again and contact us").
+- **Security notices name a support address when one is set.** `NODE_ACCOUNT_SUPPORT_EMAIL`
+  (unset by default) replaces the plain footer of the password, second-factor, sign-in-method and
+  email-change notices with one that names it. Account sits in the foundation, which cannot read
+  the shop's contact, so the address is its own setting.
 
 Collision is checked twice, because the two checks catch different things. At **request time**,
 the requested address is compared against every account's `email` _and_ `pendingEmail`. At **swap

@@ -225,7 +225,7 @@ sequenceDiagram
     A-->>U: setup payload
 ```
 
-Every add or replace, removal, and "2FA turned off" also **mails the account holder** out of band
+Every add or replace, removal, "2FA turned off" and backup-code replacement also **mails the account holder** out of band
 (`account.two-factor-changed`), because a change from a stolen session is otherwise silent.
 
 ## Staff need an authenticator app
