@@ -59,10 +59,11 @@ export const update = (
         analyticsConsent?: boolean;
     },
     /**
-     * The caller MAKING the change, passed on to `assignRole` as its `granter` — the keys behind
-     * `data.role` must be a subset of the keys behind this. Without it a role editor is a
-     * privilege-escalation endpoint: any caller who can reach this function at all could grant
-     * any role, including their own promotion to `admin`.
+     * The caller MAKING the change, whose keys are passed on to `assignRole` as its `granter`:
+     * handing out a role needs `assign:Role` (a role editor without that check is a
+     * privilege-escalation endpoint), and `revokeRole` asks the same of this caller. The role
+     * being granted need not be a subset of the granter's own keys; `assign:Role` is the one
+     * permission that protects people, and it is held by administrators.
      */
     context: CallerContext,
     /** {@link changedRole}'s answer: the role to grant, `null` to take it away, `undefined` for no change. */
