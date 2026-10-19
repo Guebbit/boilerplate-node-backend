@@ -18,7 +18,13 @@ export const search = (
 ): Promise<{
     items: UserWire[];
     meta: PaginatedMeta;
-}> => userRepository.search(filters);
+}> =>
+    // `purchaseHold: true` is a question about NOW (an expired hold is not a hold), which a stored
+    // column filter cannot ask, so it rides in as the repository's scope.
+    userRepository.search(
+        filters,
+        filters.purchaseHold ? { 'purchaseHold.until': { $gt: new Date() } } : undefined
+    );
 
 /** Get a single user by ID. Returns undefined when no id is provided. */
 export const getById = (id?: string): Promise<UserDocument | undefined> => {

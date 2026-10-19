@@ -23,6 +23,13 @@ import { create } from './create';
 import { updateById } from './update';
 import { restoreById, removeById } from './remove';
 import {
+    purchaseHoldOf,
+    purchaseHoldCountingSince,
+    setPurchaseHold,
+    liftPurchaseHold,
+    takeAutomaticPurchaseHold
+} from './purchase-hold';
+import {
     updateOwnProfile,
     redeemedOwner,
     eraseOwnAccount,
@@ -81,6 +88,7 @@ import {
 export { isAuthenticatable } from '../authenticatable';
 export type { TwoFactorSecretRing } from './reencrypt';
 export type { RedeemedOwner } from './own-account';
+export type { ActivePurchaseHold } from './purchase-hold';
 
 /**
  * The service's public surface — the controllers call through this, never the bare functions.
@@ -99,6 +107,11 @@ export const userService = {
     updateById,
     removeById,
     restoreById,
+    purchaseHoldOf,
+    purchaseHoldCountingSince,
+    setPurchaseHold,
+    liftPurchaseHold,
+    takeAutomaticPurchaseHold,
     updateOwnProfile,
     redeemedOwner,
     eraseOwnAccount,

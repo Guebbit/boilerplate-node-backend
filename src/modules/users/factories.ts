@@ -13,7 +13,7 @@
 import { identityOf, toDate, type OverridesFor } from '@infrastructure/persistence/factories';
 import { stripUndefined } from '@infrastructure/object-guards';
 import type { User } from '@types';
-import type { TwoFactorMethodRecord, UserDocument } from './model';
+import type { PurchaseHoldRecord, TwoFactorMethodRecord, UserDocument } from './model';
 
 /**
  * The password every unpinned fixture gets. Exported so a test that logs in types the same
@@ -34,8 +34,12 @@ export const PLAIN_PASSWORD = 'Fx7$qLwZ9m!';
  */
 export type UserOverrides = Omit<
     OverridesFor<User>,
-    'verifiedAt' | 'analyticsConsentAt' | 'role'
+    'verifiedAt' | 'analyticsConsentAt' | 'purchaseHold' | 'role'
 > & {
+    /** A purchase hold, with real `Date`s; the contract's ISO strings are what a read answers. */
+    purchaseHold?: PurchaseHoldRecord;
+    /** Cancellations up to here are not counted again (a staff lift). Never on the wire. */
+    purchaseHoldResetAt?: Date;
     /** Plaintext. Hashed by the model's pre-save hook, never by a fixture. */
     password?: string;
     /** Enrolled second factors — the contract exposes only `twoFactorEnabledAt`. */

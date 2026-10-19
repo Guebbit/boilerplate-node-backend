@@ -172,6 +172,26 @@ a reviewer can see who claims it. No rank check applies, so a staff member may e
 
 `updateById` and `removeById` stay the doors for an admin: they load by id and ask first.
 
+## Purchase hold
+
+A protective pause on checkout for one account, so a person steps in before a bot or a loop does
+damage. It is a field on the user (`purchaseHold`) with its own two doors and one reader:
+
+| Door                               | Who                                        | What it does                                                                                   |
+| ---------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `PUT /users/{id}/purchase-hold`    | staff with `ban:User`                      | a manual hold ending at `until`, with an optional `note` written for the buyer; replaces any   |
+| `DELETE /users/{id}/purchase-hold` | staff with `ban:User`                      | the review: ends the hold now and restarts the count of cancellations from this moment         |
+| `takeAutomaticPurchaseHold`        | `orders` only (a lint-guarded friend door) | the shop's own hold after repeated cancellations; atomic, so only one of two racing calls wins |
+| `purchaseHoldOf`                   | `cart`'s checkout                          | the hold in force, if any                                                                      |
+
+A hold is in force while `until` is in the future, so an expired one needs no sweep. Reads show it only
+while in force, to staff on `/users` and to the buyer on `/account` (for a banner); the export carries it
+with the profile. `setBy` (which staff member) never reaches the wire, the audit row names them. The
+count and the trigger are `orders`' ([the purchase hold](./orders.md#the-purchase-hold)).
+
+Audit: `admin.user.purchase_hold_set`, `admin.user.purchase_hold_lifted` (only when a hold was in
+force), `system.user.purchase_hold_set`. The users list takes `purchaseHold=true` to find them.
+
 ## Soft delete vs. erasure
 
 `DELETE /users/:id` soft-deletes by default — `deletedAt` is stamped, the account's sessions are
@@ -196,7 +216,7 @@ A failing step is logged and never turns a committed erasure into an error.
 
 ## What this module adds to the data export
 
-Two sections of `POST /account/export`: `profile` (the record) and `signInMethods`. The second
+Two sections of `POST /account/export`: `profile` (the record, its purchase hold included while one is in force) and `signInMethods`. The second
 exists because a linked provider's own subject id is an online identifier (GDPR Art. 4(1)) and
 part of what an access request answers (Art. 15), yet it sits behind `select: false` and so is not
 in `profile`.
@@ -225,7 +245,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 | `read:User`   | `UserDisplay`  | —       | —            | —          | —         | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Read other people's accounts. Reading your own is `account`, not a key.                                                                                            |
 | `create:User` | `UserCreation` | —       | —            | —          | —         | —           | —         | —        | ✅          | ✅      | —          | ✅         | Create an account for someone else.                                                                                                                                |
 | `update:User` | `UserEditing`  | —       | —            | —          | —         | —           | ✅        | —        | ✅          | ✅      | —          | ✅         | Change someone else's profile: username, image, locale, phone, website, and the role (only for a holder of `assign:Role`). Never a credential, and never `active`. |
-| `ban:User`    | `UserBanning`  | —       | —            | —          | —         | —           | —         | —        | ✅          | ✅      | —          | ✅         | Deactivate someone else's account, or lift the deactivation.                                                                                                       |
+| `ban:User`    | `UserBanning`  | —       | —            | —          | —         | —           | —         | —        | ✅          | ✅      | —          | ✅         | Deactivate someone else's account, or lift the deactivation; pause someone's checkout, or lift the pause.                                                          |
 | `delete:User` | `UserErasure`  | —       | —            | —          | —         | —           | —         | —        | ✅ ⚡c      | ✅ ⚡c  | —          | —          | Erase someone else's account.                                                                                                                                      |
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·

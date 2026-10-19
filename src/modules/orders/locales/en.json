@@ -81,6 +81,15 @@
         "line-limit-lines": "This order has more than {{limit}} lines.",
         "line-limit-quantity": "A line on this order asks for more than {{limit}} units.",
         "restored": "Order restored.",
-        "not-deleted": "This order is not deleted."
+        "not-deleted": "This order is not deleted.",
+        "email-purchase-hold": {
+            "subject": "Purchase hold: {{email}} cancelled several orders",
+            "meta-title": "Purchase hold placed",
+            "title": "A purchase hold was placed",
+            "summary": "{{email}} cancelled {{count}} orders within {{days}} days, so their checkout is paused. Every cancellation was processed normally; nothing is blocked except placing a new order.",
+            "label-until": "The hold ends by itself on",
+            "label-account": "Account",
+            "review": "Review the account in the admin Users list (filter: purchase hold). Lifting the hold restarts the count."
+        }
     }
 }

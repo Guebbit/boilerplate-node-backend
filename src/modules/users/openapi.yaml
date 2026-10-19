@@ -60,6 +60,14 @@ paths:
                       empty page for `true`.
                   schema:
                       type: boolean
+                - name: purchaseHold
+                  in: query
+                  description: >-
+                      `true` lists only the accounts under a purchase hold right now; absent lists
+                      everyone. There is no `false`: a lifted or expired hold is not a state to search for.
+                  schema:
+                      type: boolean
+                      enum: [true]
             responses:
                 '200':
                     description: Users list page
@@ -256,6 +264,67 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    # A protective pause on checkout for one account: set by hand here, or by the shop after
+    # repeated buyer cancellations. Both verbs need `ban:User`. A hold never blocks paying an
+    # existing order, cancelling, a withdrawal, a return or the account's own data rights.
+    /users/{id}/purchase-hold:
+        put:
+            tags: [Users]
+            summary: Put a purchase hold on a user
+            description: >-
+                Replaces any hold the account has with a manual one ending at `until`. Checkout then
+                answers 409 `CART_PURCHASE_HOLD` until that instant, or until `DELETE` lifts it.
+                Audited as `admin.user.purchase_hold_set`.
+            operationId: setUserPurchaseHold
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SetPurchaseHoldRequest'
+            responses:
+                '200':
+                    description: The user, now holding the hold
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Users]
+            summary: Lift a user's purchase hold
+            description: >-
+                Ends the hold now and restarts the count of cancellations from this moment, so the
+                cancellations that caused an automatic hold never trigger another. A staff review
+                is exactly this call. Safe to repeat: lifting no hold answers 200 with the user.
+                Audited as `admin.user.purchase_hold_lifted` only when a hold was in force.
+            operationId: liftUserPurchaseHold
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The user, with no hold
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     # Undoes a soft delete. A separate verb because DELETE must be safe to repeat (RFC 9110
     # §9.2.2): a retried DELETE never brings a record back.
     /users/{id}/restore:
@@ -439,6 +508,28 @@ components:
                 # gets an empty page for `true`.
                 deleted:
                     type: boolean
+                # `true` only: the accounts under a purchase hold right now. Absent lists everyone.
+                purchaseHold:
+                    type: boolean
+                    enum: [true]
+
+        # `PUT /users/{id}/purchase-hold`. A manual hold carries its own end date; it never stores a
+        # reason code, the server stamps `staff`.
+        SetPurchaseHoldRequest:
+            type: object
+            additionalProperties: false
+            required: [until]
+            properties:
+                until:
+                    type: string
+                    format: date-time
+                    description: When checkout opens again. Must be in the future.
+                note:
+                    type: string
+                    maxLength: 500
+                    description: >-
+                        Shown to the buyer with the refusal, so write it as if they read it
+                        (GDPR Art. 22(3): the reason and how to contest it).
 
         CreateUserRequest:
             type: object

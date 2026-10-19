@@ -26,7 +26,8 @@ and no order exists yet.
 %%{init: {'flowchart': {'nodeSpacing': 26, 'rankSpacing': 40}}}%%
 flowchart TD
     A["1 · load the account<br/><i>users</i>"] --> P["2 · validate the payment method<br/><i>payments — listPaymentMethods</i>"]
-    P --> Q["3 · the open-order cap<br/><i>orders — openUnpaidOrderIds</i>"]
+    P --> K["3 · the purchase hold<br/><i>users — purchaseHoldOf</i>"]
+    K --> Q["3 · the open-order cap<br/><i>orders — openUnpaidOrderIds</i>"]
     Q --> B["4 · resolve the shipping method<br/>a stored choice the basket no longer fits counts as none<br/><i>cart — effectiveShippingChoice</i>"]
     B --> C["5 · resolve the shipping address,<br/>only when a line ships to one<br/><i>addresses — addressService.forCheckout</i>"]
     C --> D["6 · join the lines against the catalogue and the stock ledger<br/><i>products; inventory — availableFor</i>"]
@@ -39,6 +40,7 @@ flowchart TD
     R["refuse — nothing written"]
     A -.->|"no account"| R
     P -.->|"method not offered"| R
+    K -.->|"on hold:<br/>409 CART_PURCHASE_HOLD<br/>with until, reason, note"| R
     Q -.->|"cap reached"| R
         C -.->|"not the caller's address;<br/>or an addressId sent when<br/>nothing ships to an address"| R
     D -.->|"product gone"| R
@@ -53,7 +55,7 @@ flowchart TD
     classDef read fill:#ccfbf1,stroke:#0f766e,color:#111827;
     classDef write fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef bad fill:#fee2e2,stroke:#b91c1c,color:#111827;
-    class A,P,Q,B,C,D,E,T read;
+    class A,P,K,Q,B,C,D,E,T read;
     class F,H,I write;
     class R,L,M bad;
 ```

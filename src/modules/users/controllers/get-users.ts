@@ -6,6 +6,7 @@
  * See: docs/modules/users.md
  */
 
+import { z } from 'zod';
 import { SearchUsersBody } from '@api/schemas.zod';
 import { userService } from '../services';
 import { optionalBooleanSchema, pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
@@ -23,7 +24,9 @@ const searchUsersQuerySchema = SearchUsersBody.extend({
     page: pageSchema,
     pageSize: pageSizeSchema,
     active: optionalBooleanSchema,
-    deleted: optionalBooleanSchema
+    deleted: optionalBooleanSchema,
+    // `true` only, as the contract says: there is no "not held" list, and a `false` is a 422, not a quiet no-op.
+    purchaseHold: optionalBooleanSchema.pipe(z.literal(true).optional())
 });
 
 /**

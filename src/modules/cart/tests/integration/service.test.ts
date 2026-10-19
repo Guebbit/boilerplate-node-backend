@@ -95,6 +95,16 @@ const giveUserAnAddress = (userId: string) =>
         country: 'IT'
     });
 
+/** A buyer with a cart that would check out, so only a hold can refuse it. */
+const buyerReadyToCheckOut = async () => {
+    const user = await createUser();
+    await giveUserAnAddress(user.id);
+    const product = await createProduct();
+    await cartService.setItemById(user.id, String(product._id), 1);
+    await cartRepository.setShippingMethod(user.id, 'pickup');
+    return user;
+};
+
 describe('cart storage', () => {
     it('holds no cart document until the first write', async () => {
         // Absence and an empty cart are the same state — nothing creates a placeholder.
@@ -1404,6 +1414,82 @@ describe('orderConfirm — paymentMethod', () => {
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
         expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT');
+    });
+
+    describe('a purchase hold', () => {
+        it('refuses checkout with the end date, the reason and the note, and writes nothing', async () => {
+            const user = await buyerReadyToCheckOut();
+            const until = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+            await userService.setPurchaseHold(
+                user.id,
+                { until, note: 'Please write to us about your recent orders.' },
+                callerContextAs('moderator')
+            );
+
+            const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
+
+            expect(asReject(result).status).toBe(409);
+            expect(asReject(result).errors[0]).toMatchObject({
+                code: 'CART_PURCHASE_HOLD',
+                details: {
+                    until: until.toISOString(),
+                    reason: 'staff',
+                    note: 'Please write to us about your recent orders.'
+                }
+            });
+            // Plain words for a shopper, with a way to contest it.
+            expect(asReject(result).errors[0].message).toMatch(/contact/i);
+            await expect(countOrders({ userId: user._id })).resolves.toBe(0);
+        });
+
+        it('answers an automatic hold without a note', async () => {
+            const user = await buyerReadyToCheckOut();
+            await userService.takeAutomaticPurchaseHold(
+                user.id,
+                new Date(Date.now() + 24 * 60 * 60 * 1000),
+                testCallerContext
+            );
+
+            const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
+
+            expect(asReject(result).errors[0]).toMatchObject({
+                code: 'CART_PURCHASE_HOLD',
+                details: { reason: 'repeated_cancellations' }
+            });
+            expect(asReject(result).errors[0].details).not.toHaveProperty('note');
+        });
+
+        it('lets checkout through once the hold has ended', async () => {
+            const user = await createUser({
+                purchaseHold: {
+                    until: new Date(Date.now() - 1000),
+                    reason: 'staff',
+                    setAt: new Date(Date.now() - 86_400_000)
+                }
+            });
+            await giveUserAnAddress(user.id);
+            const product = await createProduct();
+            await cartService.setItemById(user.id, String(product._id), 1);
+            await cartRepository.setShippingMethod(user.id, 'pickup');
+
+            const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
+
+            expect(result.success).toBe(true);
+        });
+
+        it('lets checkout through once staff lift the hold', async () => {
+            const user = await buyerReadyToCheckOut();
+            await userService.setPurchaseHold(
+                user.id,
+                { until: new Date(Date.now() + 86_400_000) },
+                callerContextAs('moderator')
+            );
+            await userService.liftPurchaseHold(user.id, callerContextAs('moderator'));
+
+            const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
+
+            expect(result.success).toBe(true);
+        });
     });
 
     it('lets a stricter shop hold an account to a single open order', async () => {

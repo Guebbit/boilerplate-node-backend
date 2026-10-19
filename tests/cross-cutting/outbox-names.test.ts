@@ -164,7 +164,8 @@ it('publishes the set the pair agreed on', () => {
      * for the twin's session. So are `account.export-ready` (the link to a finished data export) and
      * `account.export-failed` (its failure notice): the twin's export is still one synchronous
      * answer. So is `delivery.shipment-delivered`, the notice that a shipment arrived: an order ships in
-     * parts on this backend first. The other eight are the agreed, mirrored set.
+     * parts on this backend first. So is `orders.purchase-hold-staff`, the operator's notice that a purchase hold was
+     * placed: the twin has no hold. The other eight are the agreed, mirrored set.
      */
     const agreedByPair = [
         'account.delete-confirm',
@@ -193,6 +194,7 @@ it('publishes the set the pair agreed on', () => {
         'orders.order-cancelled',
         'orders.order-card-expired',
         'orders.order-confirm',
+        'orders.purchase-hold-staff',
         'payments.payment-received',
         'payments.refund-issued',
         'payments.transfer-expired',
