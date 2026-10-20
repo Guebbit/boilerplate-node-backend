@@ -47,8 +47,9 @@ A sold-out page with no way to say "tell me" is a standard feature missing. Mage
 this repo.
 
 **The click is the consent.** An explicit "Notify me" on one product is specific prior consent for
-that one mail, so the mail carries no other promotion, and the request is deleted when it is
-answered. Signed-in only: there is no guest double opt-in to run, and
+that one mail, so the mail carries no other promotion (adding one, or sending it twice, makes it
+marketing: it then needs an unsubscribe and ePrivacy Art. 13 consent), and the request is deleted
+when it is answered. Signed-in only: there is no guest double opt-in to run, and
 [account erase](./account.md) covers the rows through `personalData`.
 
 **The button only exists while the product cannot be ordered.** `POST /stock-alerts/{productId}` is

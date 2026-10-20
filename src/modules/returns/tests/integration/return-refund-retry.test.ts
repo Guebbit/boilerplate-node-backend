@@ -64,7 +64,7 @@ const withdrawnOrder = async () => {
 
 describe('a return whose refund the provider refuses', () => {
     it('leaves the return received, and closes it when the sweep completes the refund', () =>
-        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { shirt, orderId, returnId } = await withdrawnOrder();
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
 

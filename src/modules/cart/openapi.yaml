@@ -19,6 +19,7 @@ x-error-codes:
     CART_OPEN_ORDER_LIMIT: { status: 409, description: 'The account already holds `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, whatever their payment method — each holds stock. `errors[].details.orderIds` names them: pay one (`POST /payments/intent`) or cancel one (`POST /orders/{id}/cancel`), then check out again.' }
     CART_PAYMENT_METHOD_NOT_AVAILABLE: { status: 409, description: 'The chosen payment method is not enabled for this deployment or this cart.' }
     CART_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line references a product that was deleted or hidden (`active: false`) since it was added: its `availability` is `removed`. A product merely taken off sale is `unavailable` and refused as `CART_INSUFFICIENT_STOCK`.' }
+    CART_PURCHASE_HOLD: { status: 409, description: 'The account is under a purchase hold: a protective pause after repeated cancellations, or one set by staff. `errors[].details` carries `until` (when checkout opens again), `reason` (`repeated_cancellations` or `staff`) and, for a staff hold, the `note` written for the buyer. Paying an existing order, cancelling, a withdrawal and a return are never blocked; the buyer can contest it through the contact form.' }
     CART_QUANTITY_LIMIT: { status: 422, description: 'The requested quantity exceeds the per-line limit.' }
     CART_SHIPPING_METHOD_NOT_FOUND: { status: 404, description: 'The named shipping method does not exist or is not offered.' }
     CART_SHIPPING_METHOD_REQUIRED: { status: 422, description: 'A shipping method is required and none is set on the cart.' }
@@ -304,7 +305,8 @@ paths:
                 # deployment does not offer (`CART_PAYMENT_METHOD_NOT_AVAILABLE`), or the caller
                 # already has `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, of any
                 # payment method (`CART_OPEN_ORDER_LIMIT`, naming them in
-                # `details.orderIds`). A stored shipping choice the basket no
+                # `details.orderIds`), or the account is under a purchase hold
+                # (`CART_PURCHASE_HOLD`, with `details.until`). A stored shipping choice the basket no
                 # longer fits (gone digital-only, lost its last physical line, outgrown the method)
                 # is not a refusal here: it reads as no choice, as in `GET /cart`'s `shipping.selected`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }

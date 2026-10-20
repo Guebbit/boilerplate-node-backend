@@ -212,7 +212,7 @@ describe('cart view, order and payment intent agree on the amount (EUR)', () => 
             fc.asyncProperty(
                 fc.array(
                     fc.record({
-                        // Whole cents and sub-cent prices both: the catalogue accepts any decimal.
+                        // Whole cents and sub-cent prices both: the factory writes sub-cent prices the API would refuse, and the three views must still agree.
                         price: fc.oneof(
                             fc.integer({ min: 0, max: 30_000 }).map((cents) => cents / 100),
                             fc.integer({ min: 0, max: 3_000_000 }).map((tenths) => tenths / 1000)

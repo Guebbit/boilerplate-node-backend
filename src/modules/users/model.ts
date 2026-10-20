@@ -31,6 +31,7 @@ export interface UserRecord extends Omit<
     | 'verifiedAt'
     | 'analyticsConsentAt'
     | 'termsAcceptedAt'
+    | 'purchaseHold'
     | 'role'
 > {
     /**
@@ -139,6 +140,18 @@ export interface UserRecord extends Omit<
     /** Same ISO-string-vs-`Date` redeclaration; see the schema field. */
     termsAcceptedAt?: Date;
 
+    /**
+     * A purchase hold, kept after it ends so its `setAt` still marks where the count of cancellations
+     * restarts. Active only while `until` is in the future: read it through `./services/purchase-hold`.
+     */
+    purchaseHold?: PurchaseHoldRecord;
+
+    /**
+     * When staff last lifted a hold: cancellations up to this instant are not counted again. With
+     * the hold's own `setAt` it is the "count from here" mark. Never on the wire.
+     */
+    purchaseHoldResetAt?: Date;
+
     /** The provider identities linked to this account — see `OAuthAccount` below. */
     oauthAccounts: OAuthAccount[];
 
@@ -156,6 +169,20 @@ export interface UserRecord extends Omit<
      * undo, and useless without the one-time undo token that names this account.
      */
     previousEmail?: string;
+}
+
+/**
+ * A protective pause on checkout. `until` is always stored: for an automatic hold it is the instant
+ * the counted cancellations fall back under the limit, for a manual one the date staff chose.
+ */
+export interface PurchaseHoldRecord {
+    until: Date;
+    reason: 'repeated_cancellations' | 'staff';
+    /** Written for the buyer to read. Absent on an automatic hold. */
+    note?: string;
+    /** The staff account that set it; absent for the shop's own automatic hold. Never on the wire. */
+    setBy?: string;
+    setAt: Date;
 }
 
 /** The four fields one delivered code occupies — in a method's entry and in `reauthCode` alike. */
@@ -441,6 +468,26 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             type: String,
             enum: ['reaper']
         },
+        /* A purchase hold; see {@link PurchaseHoldRecord}. A sub-document, so absent reads as `undefined`. */
+        purchaseHold: {
+            type: new Schema(
+                {
+                    until: { type: Date, required: true },
+                    reason: {
+                        type: String,
+                        enum: ['repeated_cancellations', 'staff'],
+                        required: true
+                    },
+                    note: { type: String, maxlength: 500 },
+                    setBy: { type: String },
+                    setAt: { type: Date, required: true }
+                },
+                { _id: false }
+            )
+        },
+        purchaseHoldResetAt: {
+            type: Date
+        },
         /*
          * Two-factor authentication. Asymmetric storage on purpose: a device method's `secret`
          * must be recoverable to recompute a code against, so it is ENCRYPTED
@@ -673,7 +720,8 @@ const WIRE_OMITTED_FIELDS = [
     'mfaFailures',
     'mfaLockedUntil',
     'tokensValidAfter',
-    'previousEmail'
+    'previousEmail',
+    'purchaseHoldResetAt'
 ] as const;
 
 /**

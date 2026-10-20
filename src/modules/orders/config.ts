@@ -14,8 +14,9 @@
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { int, text } from '@infrastructure/config/fields';
+import { email, int, text } from '@infrastructure/config/fields';
 import { frontendLink } from '@infrastructure/http/frontend-link';
+import { shopIdentity } from '@modules/shop';
 import { createOrderBodyItemsMax, createOrderBodyItemsItemQuantityMax } from '@api/schemas.zod';
 
 /** The rules an order lives by. */
@@ -28,6 +29,9 @@ export const ordersConfig = defineConfig({
         NODE_ORDER_PII_RETENTION_DAYS: int({ default: 3653, min: 1 }),
         NODE_ORDER_EVENT_TEXT_RETENTION_DAYS: int({ default: 1095, min: 1 }),
         NODE_ORDER_EXPORT_MAX_ROWS: int({ default: 20_000, min: 1 }),
+        NODE_PURCHASE_HOLD_CANCEL_COUNT: int({ default: 3, min: 2 }),
+        NODE_PURCHASE_HOLD_WINDOW_DAYS: int({ default: 7, min: 1 }),
+        NODE_STAFF_NOTIFY_EMAIL: email(),
         NODE_FRONTEND_LINK_ORDER: text({ default: 'orders/{id}' })
     }
 });
@@ -92,3 +96,26 @@ export const orderFrontendLink = (parameters: { locale: string; id: string }): s
     frontendLink(ordersConfig().NODE_FRONTEND_LINK_ORDER, parameters.locale, {
         id: parameters.id
     });
+
+/**
+ * How many of a buyer's own cancellations, inside the window, pause their checkout. The minimum is
+ * 2: one cancellation is an ordinary change of mind, never a pattern.
+ * See docs/modules/orders.md#the-purchase-hold
+ * @returns the cancellation count that triggers a hold
+ */
+export const purchaseHoldCancelCount = (): number => ordersConfig().NODE_PURCHASE_HOLD_CANCEL_COUNT;
+
+/**
+ * The window, in days, those cancellations are counted in.
+ * @returns the window length in days
+ */
+export const purchaseHoldWindowDays = (): number => ordersConfig().NODE_PURCHASE_HOLD_WINDOW_DAYS;
+
+/**
+ * Where staff are told a hold was placed: `NODE_STAFF_NOTIFY_EMAIL`, else the shop's own address.
+ * Mirrors the contact form's mailbox (`NODE_CONTACT_NOTIFY_EMAIL`), which is one more address for
+ * a different job.
+ * @returns the mailbox
+ */
+export const staffNotifyEmail = (): string =>
+    ordersConfig().NODE_STAFF_NOTIFY_EMAIL ?? shopIdentity().email;

@@ -12,6 +12,7 @@ import { api, authenticateAs, authenticateAsRole, loginBearer } from '@tests/htt
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
+import { orderModel } from '../../model';
 import { orderRepository } from '../../repository';
 import { orderService } from '../../services';
 import { OrderStatus } from '@types';
@@ -628,5 +629,35 @@ describe('GET /orders/{id}/timeline', () => {
 
         expect(other.status).toBe(404);
         expect(missing.status).toBe(404);
+    });
+});
+
+describe('POST /orders — Idempotency-Key', () => {
+    // A retried admin creation must replay the SAME order, not book a second one.
+    it('replays the first order for a repeat of the same key and body, and books one', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const product = await createProduct();
+        const body = {
+            userId: String(user._id),
+            email: user.email,
+            items: [{ productId: String(product._id), quantity: 1 }]
+        };
+
+        const first = await api()
+            .post('/orders')
+            .set('Authorization', bearer)
+            .set('Idempotency-Key', 'order-key-1')
+            .send(body);
+        const second = await api()
+            .post('/orders')
+            .set('Authorization', bearer)
+            .set('Idempotency-Key', 'order-key-1')
+            .send(body);
+
+        expect(first.status).toBe(201);
+        expect(second.status).toBe(201);
+        expect(second.headers['idempotent-replay']).toBe('true');
+        expect(second.body).toEqual(first.body);
+        expect(await orderModel.countDocuments({})).toBe(1);
     });
 });

@@ -821,6 +821,37 @@ components:
                 # in a separately deployed client is how the two come to disagree.
                 actions:
                     $ref: '#/components/schemas/UserActions'
+                # Present only while a purchase hold is in force: expired or lifted holds are left
+                # out. The buyer reads their own on `/account` (for a cart banner), staff read it
+                # on `/users`, and the data export carries it with the rest of the profile.
+                purchaseHold:
+                    $ref: '#/components/schemas/PurchaseHold'
+
+        # A protective pause on checkout, set by staff or by the shop after repeated cancellations.
+        # It never blocks paying an existing order, cancelling, a withdrawal or a return, and never
+        # the account's own data rights. `note` is written to be read by the buyer.
+        PurchaseHold:
+            type: object
+            additionalProperties: false
+            required: [until, reason, setAt]
+            properties:
+                until:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When checkout opens again without anyone acting. For `repeated_cancellations`
+                        it is the instant the counted cancellations fall back under the limit, so
+                        the oldest one counted plus the window; staff can lift it earlier.
+                reason:
+                    type: string
+                    enum: [repeated_cancellations, staff]
+                note:
+                    type: string
+                    maxLength: 500
+                    description: Staff text shown to the buyer with the refusal. Absent on an automatic hold.
+                setAt:
+                    type: string
+                    format: date-time
 
         UserActions:
             type: object

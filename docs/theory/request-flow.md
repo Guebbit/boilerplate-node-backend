@@ -152,7 +152,7 @@ accepted, and never has to ask whether a field is a string. Which sources a cont
 handler; [Request Input](./request-input.md) is the page for that.
 
 The four steps every controller repeats — parse the body, answer 422, send a service refusal,
-catch — live in `@infrastructure/http/controller` as `parseBody`, `rejectValidation`, `refused`
+catch — live in `@infrastructure/http/controller` as `parseBody`, `refused`
 and `catchAs`. Helpers rather than a wrapper, deliberately: a wrapper that owned the chain would
 move the stack trace off the handler, degrade the inference `parseBody`'s return type carries, and
 hide the literal `.catch(` that `scripts/eslint/controller-chain-must-catch.ts` looks for.

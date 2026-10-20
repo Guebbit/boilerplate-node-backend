@@ -456,7 +456,7 @@ rules:
       subject: User
       module: users
       scope: tenant
-      description: Deactivate someone else's account, or lift the deactivation.
+      description: Deactivate someone else's account, or lift the deactivation; pause someone's checkout, or lift the pause.
     - action: delete
       subject: User
       module: users
@@ -813,7 +813,7 @@ sets:
           - update:User
     - name: UserBanning
       module: users
-      description: Deactivate an account, or lift it.
+      description: Deactivate an account, or lift it; pause a checkout, or lift the pause.
       rules:
           - ban:User
     - name: UserErasure

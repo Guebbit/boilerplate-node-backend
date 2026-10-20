@@ -31,6 +31,8 @@ const ALL = [
     'PUT /:id',
     'PATCH /:id',
     'DELETE /:id',
+    'PUT /:id/purchase-hold',
+    'DELETE /:id/purchase-hold',
     'POST /:id/restore',
     'DELETE /:id/hard'
 ];

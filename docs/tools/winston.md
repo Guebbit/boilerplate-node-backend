@@ -228,12 +228,15 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `users`          | `ADMIN_USER_BANNED`                          | `admin.user.banned`                          | —                      |
 | `users`          | `ADMIN_USER_CREATED`                         | `admin.user.created`                         | `user`                 |
 | `users`          | `ADMIN_USER_ERASED`                          | `admin.user.erased`                          | `user`                 |
+| `users`          | `ADMIN_USER_PURCHASE_HOLD_LIFTED`            | `admin.user.purchase_hold_lifted`            | `user`                 |
+| `users`          | `ADMIN_USER_PURCHASE_HOLD_SET`               | `admin.user.purchase_hold_set`               | `user`                 |
 | `users`          | `ADMIN_USER_RESTORED`                        | `admin.user.restored`                        | `user`                 |
 | `users`          | `ADMIN_USER_SOFT_DELETED`                    | `admin.user.soft_deleted`                    | `user`                 |
 | `users`          | `ADMIN_USER_UNBANNED`                        | `admin.user.unbanned`                        | —                      |
 | `users`          | `ADMIN_USER_UPDATED`                         | `admin.user.updated`                         | —                      |
 | `users`          | `ADMIN_USER_VIEWED`                          | `admin.user.viewed`                          | `user`                 |
 | `users`          | `SYSTEM_USER_ERASED`                         | `system.user.erased`                         | `user`                 |
+| `users`          | `SYSTEM_USER_PURCHASE_HOLD_SET`              | `system.user.purchase_hold_set`              | `user`                 |
 | `users`          | `SYSTEM_USER_SOFT_DELETED`                   | `system.user.soft_deleted`                   | `user`                 |
 | `webhooks`       | `ADMIN_WEBHOOK_DELIVERY_REPLAYED`            | `admin.webhook_delivery.replayed`            | `webhook_delivery`     |
 | `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_CREATED`         | `admin.webhook_subscription.created`         | `webhook_subscription` |

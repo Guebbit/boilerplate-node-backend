@@ -1,0 +1,18 @@
+<!doctype html>
+<%#
+    Operator-facing notification, not customer-facing: its copy is resolved in NODE_DEFAULT_LOCALE
+    by `modules/orders/emails.ts`, and it skips the buyer's footer.
+%>
+<html lang="<%= locale %>">
+    <head>
+        <meta charset="UTF-8" />
+        <title><%= pageMetaTitle %></title>
+    </head>
+    <body>
+        <h2><%= title %></h2>
+        <p><%= summary %></p>
+        <p><strong><%= labelAccount %>:</strong> <%= account %></p>
+        <p><strong><%= labelUntil %>:</strong> <%= until %></p>
+        <p><%= review %></p>
+    </body>
+</html>

@@ -23,6 +23,7 @@ import { replaceUser, updateUser } from './controllers/update-user';
 import { deleteUsers } from './controllers/delete-users';
 import { restoreUsers } from './controllers/restore-users';
 import { getUserItem } from './controllers/get-user-item';
+import { deletePurchaseHold, putPurchaseHold } from './controllers/purchase-hold';
 import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
@@ -115,6 +116,11 @@ router.patch(
 
 // DELETE /users/:id — soft delete unless ?hardDelete=true
 router.delete('/:id', requirePermission('delete', 'User'), deleteUsers);
+
+// PUT / DELETE /users/:id/purchase-hold — pause checkout for one account, or end the pause. The
+// ban's permission: both are a staff act on a buyer's standing, and neither touches their login.
+router.put('/:id/purchase-hold', requirePermission('ban', 'User'), putPurchaseHold);
+router.delete('/:id/purchase-hold', requirePermission('ban', 'User'), deletePurchaseHold);
 
 // POST /users/:id/restore — undo a soft delete; a second DELETE never does
 router.post('/:id/restore', requirePermission('delete', 'User'), restoreUsers);

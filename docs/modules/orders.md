@@ -653,6 +653,50 @@ mail belongs to `payments`, which sends it from its own `payment.refunded` liste
 cancel therefore sends both, a few moments apart. A refund the provider refused sends nothing: no
 money moved.
 
+## The purchase hold
+
+A protective pause, not a punishment: a buyer who cancels `NODE_PURCHASE_HOLD_CANCEL_COUNT` (3) of their
+own orders inside `NODE_PURCHASE_HOLD_WINDOW_DAYS` (7) has their NEXT checkout answered
+`409 CART_PURCHASE_HOLD`, so a person looks before a bot or a loop does damage. Every cancel is still
+processed normally; the hold triggers after the third is accepted.
+
+| Counts                                                                   | Never counts                                        |
+| ------------------------------------------------------------------------ | --------------------------------------------------- |
+| a buyer cancel before dispatch, paid or not (cause `customer`)           | a cancel by staff, or by the system                 |
+| read from the order timeline (`cancelled` rows whose `by` is `customer`) | a hold that ran out, or a withdrawal after dispatch |
+| only those after the last hold was set or staff last lifted one          | returns after delivery                              |
+
+```mermaid
+flowchart TD
+    cancel["order.cancelled, cause customer"] --> count["count the buyer's own cancels<br/>after the last hold or lift,<br/>inside the window"]
+    count --> enough{"limit reached?"}
+    enough -- no --> done["nothing"]
+    enough -- yes --> claim["users — takeAutomaticPurchaseHold<br/>one atomic write"]
+    claim --> won{"this call took it?"}
+    won -- no --> done
+    won -- yes --> notify["audit row + mail to staff"]
+```
+
+The hold ends by itself when the cancellations that caused it fall back under the limit
+(`until` = the oldest counted cancel + the window, or a later one when more were counted), or when
+staff review it: `DELETE /users/{id}/purchase-hold` also restarts the count from that moment, so the
+same cancellations never trigger a second hold. The hold is stored on the user (`users` owns it, see
+[users](./users.md#purchase-hold)); `orders` only owns the count. Staff are told by a mail to
+`NODE_STAFF_NOTIFY_EMAIL` (default `NODE_SHOP_EMAIL`), an audit row `system.user.purchase_hold_set`,
+and the users-list filter `purchaseHold=true`.
+
+What it never blocks: paying an order that already exists, cancelling your own unpaid orders, a
+withdrawal or a return, delivery of paid orders, and the account's own data rights (access, export,
+erasure). Because the legal right to withdraw is not the buyer's to lose, a hold triggered by cancels
+that the law treats as withdrawals is a grey area (BGH VIII ZR 146/15): the terms say so and the
+buyer is told how to contest it.
+
+**Why legitimate interest, and the safeguards.** The basis is Art. 6(1)(f), recital 47: protecting
+the shop's stock from abuse. An automatic pause that affects a customer is read broadly under Art. 22
+(CJEU C-634/21, SCHUFA), so the safeguards are applied anyway: the refusal shows the reason and the end
+date, a person can review and lift it early, every set and lift is audited, the hold is in the data
+export, the privacy notice says so (Art. 13(2)(f)), and a staff note is written as if the buyer reads it.
+
 ## Shop identity
 
 Who the shop is — the legal identity, the return address, who pays the return postage — belongs to
@@ -690,6 +734,9 @@ when the shop offers a longer withdrawal period.
 | `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`     | `10`    | Exports allowed per window, per ACCOUNT                                                                                                                                                        |
 | `NODE_ADMIN_ORDER_MAX_LINES`           | `100`   | Most lines an admin-created order (`POST /orders`) may carry. Over it: `422` `ORDER_LINE_LIMIT_EXCEEDED`. The contract's own ceiling is 1000; a larger value has no effect                     |
 | `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`   | `99999` | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                         |
+| `NODE_PURCHASE_HOLD_CANCEL_COUNT`      | `3`     | How many of a buyer's own cancels inside the window pause their checkout ([the purchase hold](#the-purchase-hold)). Minimum 2                                                                  |
+| `NODE_PURCHASE_HOLD_WINDOW_DAYS`       | `7`     | How long a cancel counts toward it                                                                                                                                                             |
+| `NODE_STAFF_NOTIFY_EMAIL`              | unset   | Where staff are told a hold was placed. Unset: `NODE_SHOP_EMAIL`                                                                                                                               |
 
 The VAT RATES charged against an order line are a different thing with a different owner — see
 [products](./products.md#configuration); this module only freezes onto the order the rate `products`

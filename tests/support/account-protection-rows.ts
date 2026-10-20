@@ -74,6 +74,18 @@ export const PROTECTION_ROWS: readonly ProtectionRow[] = [
         prepare: onUser('post', '/restore')
     },
     {
+        route: 'users PUT /:id/purchase-hold',
+        key: 'ban:User',
+        prepare: onUser('put', '/purchase-hold', () => ({
+            until: new Date(Date.now() + 86_400_000).toISOString()
+        }))
+    },
+    {
+        route: 'users DELETE /:id/purchase-hold',
+        key: 'ban:User',
+        prepare: onUser('delete', '/purchase-hold')
+    },
+    {
         route: 'users DELETE /',
         key: 'delete:User',
         prepare: (owner) => ({ method: 'delete', url: '/users', body: { id: owner.user.id } })

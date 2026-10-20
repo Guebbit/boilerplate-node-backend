@@ -495,7 +495,7 @@ describe('refund on cancel', () => {
      * record with the same idempotency key. The payment stays `succeeded` throughout.
      */
     it('keeps a failed refund open for the sweep instead of recording it as done', () =>
-        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { user, order } = await orderFor();
             await paymentService.createIntent(String(order._id), auth(user));
             const paymentId = String(
@@ -531,7 +531,7 @@ describe('refund on cancel', () => {
         }));
 
     it('leaves an open refund on an order lost mid-payment for the sweep to finish', () =>
-        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { user, order } = await orderFor();
             const intent = await paymentService.createIntent(String(order._id), auth(user));
             const paymentId = String((intent as { data?: { id?: string } }).data?.id);
@@ -585,7 +585,7 @@ describe('refund on cancel', () => {
      */
     it('refuses to refund through a provider this payment was never made with', () => {
         const retiredProvider = 'retired-psp';
-        return withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
+        return withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { user, order } = await orderFor();
             await paymentService.createIntent(String(order._id), auth(user));
             const paymentId = String(

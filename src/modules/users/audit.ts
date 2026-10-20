@@ -1,7 +1,7 @@
 /**
  * @module
  * Audit actions this module emits, declared by augmentation — see `modules/account/audit.ts` for
- * why, rather than a shared enum. All three are `admin.` because they are the admin-facing writes
+ * why, rather than a shared enum. Most are `admin.` because they are the admin-facing writes
  * to the user record; what a person does to their own account is `account`'s vocabulary.
  * See: docs/modules/users.md
  */
@@ -31,7 +31,13 @@ export const usersAuditActions = {
      * account banned" without a reader having to diff two revisions of the row.
      */
     ADMIN_USER_BANNED: 'admin.user.banned',
-    ADMIN_USER_UNBANNED: 'admin.user.unbanned'
+    ADMIN_USER_UNBANNED: 'admin.user.unbanned',
+    /** Staff paused checkout for one account, with their own end date. */
+    ADMIN_USER_PURCHASE_HOLD_SET: 'admin.user.purchase_hold_set',
+    /** Staff ended a hold that was in force: the review, and the point the count restarts from. */
+    ADMIN_USER_PURCHASE_HOLD_LIFTED: 'admin.user.purchase_hold_lifted',
+    /** The shop paused checkout after repeated cancellations: nobody at the keyboard, so `system.*`. */
+    SYSTEM_USER_PURCHASE_HOLD_SET: 'system.user.purchase_hold_set'
 } as const;
 
 /** Registers this module's actions into the app-wide `AuditActionMap` union. */

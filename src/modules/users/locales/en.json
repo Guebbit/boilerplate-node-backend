@@ -8,6 +8,9 @@
         "not-reaper-deleted": "Only an account the inactivity reaper deleted can be erased by it.",
         "not-warned": "This account was never warned about its inactivity, so the reaper cannot delete it.",
         "inactive-staff-account": "An account that holds a staff role is never deleted by the inactivity reaper.",
-        "role-not-assignable": "This role does not exist or cannot be given to an account."
+        "role-not-assignable": "This role does not exist or cannot be given to an account.",
+        "purchase-hold-set": "Purchase hold set. Checkout stays closed to this account until the date given, or until it is lifted.",
+        "purchase-hold-lifted": "Purchase hold lifted.",
+        "purchase-hold-until-past": "The end date must be in the future."
     }
 }

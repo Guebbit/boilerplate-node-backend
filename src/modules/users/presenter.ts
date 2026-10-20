@@ -13,6 +13,27 @@ import { heldRules } from '@kernel/ability';
 import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { phoneAad, type UserDocument, type UserWire } from './model';
+import { activeHoldOf } from './services/purchase-hold';
+
+/**
+ * The `purchaseHold` field while a hold is in force, or nothing: an expired or lifted hold is left
+ * out, and who set it never reaches the wire (the audit row names them).
+ *
+ * @param document - the account
+ */
+const presentPurchaseHold = (document: UserWire): Pick<User, 'purchaseHold'> => {
+    const hold = activeHoldOf(document, new Date());
+    return hold === undefined
+        ? {}
+        : {
+              purchaseHold: {
+                  until: hold.until.toISOString(),
+                  reason: hold.reason,
+                  ...(hold.note === undefined ? {} : { note: hold.note }),
+                  setAt: hold.setAt.toISOString()
+              }
+          };
+};
 
 /**
  * Maps a loaded account straight onto the `User` contract, ISO-stringifying the four fields
@@ -62,7 +83,8 @@ export const presentUser = (document: UserWire, role: string | null, actions?: U
             : {}),
         ...(document.createdAt ? { createdAt: document.createdAt.toISOString() } : {}),
         ...(document.updatedAt ? { updatedAt: document.updatedAt.toISOString() } : {}),
-        ...(document.deletedAt ? { deletedAt: document.deletedAt.toISOString() } : {})
+        ...(document.deletedAt ? { deletedAt: document.deletedAt.toISOString() } : {}),
+        ...presentPurchaseHold(document)
     });
 
 /**

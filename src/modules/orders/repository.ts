@@ -518,6 +518,19 @@ const findOpenUnpaidIdsOf = (userId: string, session?: ClientSession): Promise<s
         .then((orders) => orders.map((order) => String(order._id)));
 
 /**
+ * The ids of every order this account has cancelled — the narrow read the purchase-hold count
+ * starts from, followed by the timeline for when each was cancelled and by whom.
+ *
+ * @param userId - the account
+ * @returns the order ids
+ */
+const findCancelledIdsOf = (userId: string): Promise<string[]> =>
+    orderModel
+        .find({ userId: toObjectId(userId), status: OrderStatus.cancelled }, { _id: 1 })
+        .exec()
+        .then((orders) => orders.map((order) => String(order._id)));
+
+/**
  * The per-order PII clock, as an aggregation expression: `max(now, createdAt + retentionDays)`, and
  * `now` itself for a never-paid order. Shared by erasure ({@link detachUserId}) and inactivity
  * minimisation ({@link startPiiClock}), so both stamp the same date for the same order.
@@ -742,6 +755,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     ) => Promise<OrderDocument | null>;
     findManyReferences: (ids: readonly string[]) => Promise<OrderReference[]>;
     findOpenUnpaidIdsOf: (userId: string, session?: ClientSession) => Promise<string[]>;
+    findCancelledIdsOf: (userId: string) => Promise<string[]>;
     detachUserId: (
         userId: string,
         retentionDays: number,
@@ -771,6 +785,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     writeFulfillment,
     findManyReferences,
     findOpenUnpaidIdsOf,
+    findCancelledIdsOf,
     detachUserId,
     startPiiClock,
     scrubDueForAnonymization,
@@ -792,6 +807,7 @@ export const orderEventRepository: AppendOnlyLedger<
 > & {
     findByOrderId: (orderId: string) => Promise<OrderEventDocument[]>;
     findByOrderIds: (orderIds: readonly string[]) => Promise<OrderEventDocument[]>;
+    findBuyerCancelTimes: (orderIds: readonly string[], after?: Date) => Promise<Date[]>;
     clearActor: (actor: string, session?: ClientSession) => Promise<number>;
     scrubTextBefore: (cutoff: Date) => Promise<number>;
     deleteByOrderId: (orderId: string) => Promise<number>;
@@ -822,6 +838,25 @@ export const orderEventRepository: AppendOnlyLedger<
             .find({ orderId: { $in: orderIds.map((id) => toObjectId(id)) } })
             .sort({ orderId: 1, at: 1, _id: 1 })
             .exec(),
+
+    /**
+     * When the buyer themselves cancelled each of these orders, after `after` when given — the rows
+     * the purchase hold counts. A cancel by staff or by the system is a different `by`.
+     *
+     * @param orderIds - the buyer's cancelled orders
+     * @param after - rows at or before this instant were already answered by an earlier hold or review
+     */
+    findBuyerCancelTimes: (orderIds, after) =>
+        orderEventModel
+            .find({
+                orderId: { $in: orderIds.map((id) => toObjectId(id)) },
+                type: 'cancelled',
+                'data.by': 'customer',
+                ...(after ? { at: { $gt: after } } : {})
+            })
+            .select({ at: 1 })
+            .exec()
+            .then((rows) => rows.map((row) => row.at)),
 
     /**
      * Unset the `actor` on every row one account made.

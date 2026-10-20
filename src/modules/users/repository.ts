@@ -24,7 +24,8 @@ import type {
     UserWire,
     MfaReservation,
     DeliveredCodeSlot,
-    DeliveredCodeState
+    DeliveredCodeState,
+    PurchaseHoldRecord
 } from './model';
 import { trusted } from 'mongoose';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult, ClientSession } from 'mongoose';
@@ -184,6 +185,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     touchLastActive: (id: string, now: Date) => Promise<void>;
     touchApiKeyUse: (id: string, now: Date) => Promise<void>;
     markInactivityMinimised: (id: string, at: Date) => Promise<void>;
+    claimPurchaseHold: (id: string, hold: PurchaseHoldRecord, now: Date) => Promise<boolean>;
     findInactiveUnminimised: (cutoff: Date) => Promise<UserDocument[]>;
     findInactiveUnwarned: (cutoff: Date) => Promise<UserDocument[]>;
     findWarnedStillInactive: (warnedBefore: Date) => Promise<UserDocument[]>;
@@ -676,6 +678,33 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             )
             .exec()
             .then(() => undefined),
+
+    /**
+     * Put an automatic purchase hold on an account, unless one is already in force. One conditional
+     * write, so two cancellations racing to the limit cannot both take it: only the winner is told,
+     * and only the winner mails staff and writes the audit row. `timestamps: false`: a hold is not
+     * an edit of the profile.
+     *
+     * @param id - the account
+     * @param hold - the hold to store
+     * @param now - what "in force" is measured against
+     * @returns whether this call took the hold
+     */
+    claimPurchaseHold: (id: string, hold: PurchaseHoldRecord, now: Date) =>
+        userModel
+            .updateOne(
+                {
+                    _id: toObjectId(id),
+                    $or: [
+                        { purchaseHold: { $exists: false } },
+                        { 'purchaseHold.until': { $lte: now } }
+                    ]
+                },
+                { $set: { purchaseHold: hold } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
      * Every live account quiet since before `cutoff` that has not been minimised for this stretch of
