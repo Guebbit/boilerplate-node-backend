@@ -7,11 +7,11 @@ That means the persistence example is document-oriented, not SQL-oriented.
 
 ## What each piece does
 
-| Tool                                                                                                           | Job                                        |
-| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| [MongoDB](https://www.mongodb.com/docs/manual/)                                                                | document database                          |
-| [Mongoose](https://mongoosejs.com/docs/)                                                                       | schema, model, and query layer             |
-| [Mongoose `syncIndexes`](<https://mongoosejs.com/docs/api/connection.html#Connection.prototype.syncIndexes()>) | reconciles stored indexes with the schemas |
+| Tool                                                                                       | Job                                     |
+| ------------------------------------------------------------------------------------------ | --------------------------------------- |
+| [MongoDB](https://www.mongodb.com/docs/manual/)                                            | document database                       |
+| [Mongoose](https://mongoosejs.com/docs/)                                                   | schema, model, and query layer          |
+| [Mongoose `diffIndexes`](<https://mongoosejs.com/docs/api/model.html#Model.diffIndexes()>) | plans the stored-vs-declared difference |
 
 ## Persistence visual
 
@@ -40,14 +40,18 @@ that already exists is not derivable, so it is a one-off script. The two are cov
 ### `db:sync`
 
 ```bash
-npm run db:sync              # create what is missing, drop what no schema declares
+npm run db:sync              # create what is missing; never drops by surprise
 npm run db:sync -- --check   # print the plan, change nothing
+npm run db:sync -- --prune   # also drop every undeclared index (dev `db:bootstrap` does)
 ```
 
 `scripts/db/sync-indexes.ts` (the CLI; the reconciliation itself is `scripts/db/index-sync.ts`) imports the module registry — which registers every enabled module's models —
-and calls [`connection.syncIndexes()`](<https://mongoosejs.com/docs/api/connection.html#Connection.prototype.syncIndexes()>).
-Collections whose model is not registered are left alone, so disabling a module does not strip its
-indexes.
+and applies the plan [`Model.diffIndexes()`](<https://mongoosejs.com/docs/api/model.html#Model.diffIndexes()>)
+computes per model. It is **add-only**: it creates the missing, replaces a declared index whose options
+changed (a TTL window), drops a name the model retired with `retireIndexes(schema, 'name')`, and keeps
+every other undeclared index, reporting it. `--prune` drops those too; a deploy never passes it, so
+an older release run after a rollback cannot delete the newer release's indexes. Collections whose
+model is not registered are left alone, so disabling a module does not strip its indexes.
 
 Before it builds anything it scans every declared unique index for values already held by more than
 one document, and refuses the whole run if it finds any — `createIndex` would report only the first
@@ -66,8 +70,8 @@ a hand-written DDL file, say — that failure lands on every long-lived database
 fresh ones the tests use.
 
 **Name indexes explicitly.** Mongoose derives `field_direction` for an index declared without a
-name, and a derived name changes when the key does — which leaves the old index in place until the
-next sync drops it.
+name, and a derived name changes when the key does — which leaves the old index in place until it is
+retired (`retireIndexes`) or pruned.
 
 **`autoIndex` is on in development and test**, and that is what gives the test suite its constraints
 for free: `mongodb-memory-server` starts empty and Mongoose builds every declared index on connect.
@@ -75,16 +79,16 @@ Production turns it off (`configureMongoose()` in `src/infrastructure/runtime/da
 `setup` service instead — it runs `db:sync` before `app`/`cron` ever start, so the index set is
 already in place by the time a connection with `autoIndex` off is opened.
 
-`tests/integration/scripts/db/index-sync.test.ts` is what holds this. It runs the reconciliation against a
+`tests/integration/scripts/db/index-sync.test.ts` is what holds this. It runs the sync against a
 real database from nothing, against deliberately constructed drift, and twice over, and asserts
-each collection ends up holding **exactly** what its schema declares — the state no other suite can
+each fresh collection ends up holding **exactly** what its schema declares, and that an undeclared index survives unless pruned — the state no other suite can
 reach, since every other test runs against a database that has never disagreed with the code.
 
 ### TTL windows
 
 `auditlogs`, `carts` and `feedbackrequests` expire rows with a TTL index whose `expireAfterSeconds`
 is computed from an env var. Mongo will not modify an existing window in place: after changing one,
-`npm run db:sync` drops the index and rebuilds it. In development and test, where `autoIndex` is on,
+`npm run db:sync` replaces the index: it drops it and rebuilds it. In development and test, where `autoIndex` is on,
 skipping that and just restarting **fails to boot** — Mongo refuses the conflicting options.
 Production's `autoIndex` is off precisely so a restart never asks Mongo to rebuild anything; `setup`
 running `db:sync` on deploy is what applies a changed window there. See
@@ -194,7 +198,7 @@ each record can date itself, since an ObjectId's leading bytes are a timestamp.
 
 ## External references
 
-- [Mongoose: `syncIndexes()`](<https://mongoosejs.com/docs/api/connection.html#Connection.prototype.syncIndexes()>)
+- [Mongoose: `diffIndexes()`](<https://mongoosejs.com/docs/api/model.html#Model.diffIndexes()>)
 
 ## Related pages
 

@@ -178,8 +178,8 @@ Every TTL index, reaper and cap, with its variable, default and lawful basis, is
 Every TTL index shares one caveat, worth stating once: **Mongo will not modify an
 existing TTL index's `expireAfterSeconds` in place.** In development and test, where `autoIndex` is
 on, raising or lowering any of these variables and RESTARTING fails the boot outright — Mongo
-refuses the conflicting options. `npm run db:sync` is what applies it: it drops the index and
-rebuilds it, which is why `db:bootstrap` syncs before the server starts there. Production runs with
+refuses the conflicting options. `npm run db:sync` is what applies it: it replaces the index (drops it and
+rebuilds it), which is why `db:bootstrap` syncs before the server starts there. Production runs with
 `autoIndex` off for exactly this reason — a restart never asks Mongo to rebuild anything — and
 `docker-compose.production.yml`'s one-shot `setup` service is what runs `db:sync` on deploy instead,
 see [Data — TTL windows](./data.md#ttl-windows). `feedback`'s window

@@ -1,8 +1,8 @@
 # Data
 
 `scripts/db/` holds everything that shapes or fills a database, and the split is the point:
-**`db:sync` owns SCHEMA, `scenario:apply` owns DATA.** `db:sync` makes a collection's indexes match
-the schemas that declare them; `scenario:apply` fills a collection. Neither does the other's job.
+**`db:sync` owns SCHEMA, `scenario:apply` owns DATA.** `db:sync` adds the indexes the schemas
+declare; `scenario:apply` fills a collection. Neither does the other's job.
 
 Neither half is authored here. A module owns its indexes the same way it owns its `openapi.yaml`
 fragment; its demo records live in `scenarios/<name>.ts` instead, outside the module folder — see
@@ -38,8 +38,9 @@ flowchart LR
 ## Schema: `db:sync`
 
 An index is declared in one place — `schema.index(...)` in a module's `model.ts` — and nowhere
-else. `npm run db:sync` reconciles the database with those declarations: it creates what is
-missing and drops what no schema claims.
+else. `npm run db:sync` brings the database up to those declarations: it creates what is
+missing and replaces an index whose options changed. It **never drops by surprise**: an index no
+schema claims is kept and reported, unless you ask for `--prune`.
 
 | File                         | What it is                                                                                                                                   |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -47,8 +48,9 @@ missing and drops what no schema claims.
 | `scripts/db/sync-indexes.ts` | The entry point `npm run db:sync` runs — connection, argument handling, and the report.                                                      |
 
 ```bash
-npm run db:sync              # apply
-npm run db:sync -- --check   # print the plan, change nothing, exit 1 if it is not empty
+npm run db:sync              # apply (add-only)
+npm run db:sync -- --check   # print the plan, change nothing, exit 1 if it would change something
+npm run db:sync -- --prune   # also drop every index no schema declares (dev; a deploy never does)
 ```
 
 **Adding an index is one edit.** Declare it on the schema. The next `db:sync` builds it — in
@@ -66,7 +68,7 @@ filename**, which is correct for a backfill that must happen exactly once and wr
 state that must hold after every deploy. Feeding it a baseline generated from the schemas would
 mean two authors for one index, kept in sync by hand.
 
-`syncIndexes()` has no such gap — there is one author, and convergence is re-applied rather than
+`db:sync` has no such gap — there is one author, and convergence is re-applied rather than
 recorded.
 
 ```mermaid
@@ -74,16 +76,31 @@ flowchart LR
     Schema["a module's model.ts"] --> Sync["db:sync"]
     Sync --> Diff{"diff vs.<br/>what is stored"}
     Diff -->|"declared, absent"| Create["create"]
-    Diff -->|"stored, declared by nobody"| Drop["drop"]
+    Diff -->|"declared, options changed"| Replace["drop, then create"]
+    Diff -->|"stored, listed as retired"| Retired["drop"]
+    Diff -->|"stored, declared by nobody"| Kept["keep and report<br/>(drop with --prune)"]
     Diff -->|"agrees"| Nothing["no-op"]
 ```
 
-### It drops
+### It adds, and drops only what it was told to
 
-An index no schema declares is drift, and `db:sync` removes it. That is the point — drift that
-only ever accumulates is how a collection ends up carrying indexes whose purpose nobody can
-reconstruct — but it is also why `--check` exists. Run that first against a database you cannot
-rebuild.
+An index no schema declares is **kept** and reported (`undeclared, kept`). That is what makes a
+rollback harmless to the index set: an older release running `db:sync` would otherwise drop the
+newer release's indexes, and rolling forward would rebuild them (slow on a big collection).
+
+Three kinds of drop remain, none of them a surprise:
+
+| Drop             | When                                                                                                                                           |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Replace**      | A declared index whose options changed (a TTL window): dropped, then built again. See "TTL windows" below.                                     |
+| **Retired name** | A module lists a name it gave up with `retireIndexes(schema, 'name')` (`src/infrastructure/persistence/retired-indexes.ts`) in its `model.ts`. |
+| **`--prune`**    | Every other undeclared index. Dev `db:bootstrap` passes it, so a dev database matches the schemas exactly. A deploy never does.                |
+
+`--check` prints the groups (create, replace, drop retired, drop undeclared) and `undeclared, kept`;
+only the first four make it exit 1.
+
+Rolling back across a script under `scripts/ops/` that changed fields is the deployer's call: a
+rollback undoes the code, not the data.
 
 `--check` is genuinely read-only, and that takes one deliberate line: the script turns `autoIndex`
 OFF before connecting. It is on in development and the test suite, which is what gives them their
@@ -107,7 +124,7 @@ index's window in place, so:
 | Action after changing e.g. `NODE_AUDIT_RETENTION_DAYS` | In dev/test (`autoIndex` on)                                              | In production (`autoIndex` off)                       |
 | ------------------------------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------- |
 | Restart the app                                        | **Fails to boot.** `autoIndex` asks for the new window; Mongo refuses it. | Boots fine — it never asks Mongo to rebuild anything. |
-| `npm run db:sync`                                      | Drops the index and rebuilds it with the new window.                      | Same — this is what actually applies the new window.  |
+| `npm run db:sync`                                      | Replaces the index: drops it, rebuilds it with the new window.            | Same — this is what actually applies the new window.  |
 
 So in development, `db:bootstrap` — which syncs before the server starts — is what makes a window
 change restart-safe. In production, turning `autoIndex` off is what makes it restart-safe instead:
