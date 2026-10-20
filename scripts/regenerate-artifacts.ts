@@ -24,9 +24,10 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from './pairing/paired-frontend-path';
 import { REPO_ROOT } from './modules-on-disk';
+import { hasFlag } from './cli';
 
 /** `--no-sync` regenerates without touching the paired repo. */
-const skipSync = process.argv.includes('--no-sync');
+const skipSync = hasFlag('no-sync');
 
 /** One entry in the {@link STEPS} chain. */
 interface Step {

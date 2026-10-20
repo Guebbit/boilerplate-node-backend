@@ -18,9 +18,10 @@ import { INFRASTRUCTURE_RATE_LIMITS } from '@infrastructure/http/middlewares/rat
 import { applyMarkerBlocks } from './marker-block';
 import type { RateLimitBudget } from '@types';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
+import { hasFlag } from '../cli';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
-const checkOnly = process.argv.includes('--check');
+const checkOnly = hasFlag('check');
 
 /** The page the table lives in. */
 const PAGE = path.join(ROOT, 'docs/tools/security.md');
