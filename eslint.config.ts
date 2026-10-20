@@ -1378,6 +1378,14 @@ export default tseslint.config(
                             friends: ['account']
                         },
                         {
+                            // The shop's own pause after repeated cancellations: `orders` owns the
+                            // count that justifies it, so no other module may take a hold itself.
+                            handle: 'userService',
+                            owner: 'users',
+                            members: ['takeAutomaticPurchaseHold'],
+                            friends: ['orders']
+                        },
+                        {
                             handle: 'orderService',
                             owner: 'orders',
                             members: ['markPaid'],

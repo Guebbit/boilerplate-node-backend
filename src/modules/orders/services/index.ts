@@ -23,6 +23,7 @@ import { removeById, restoreById } from './remove';
 import { placeOrder } from './place';
 import { mailOrderPlaced, mailBuyer, mailBuyerOfOrder } from './notify';
 import { mailOrderCancelled } from './cancel-mail';
+import { considerPurchaseHold } from './purchase-hold';
 import { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
 import { callerScope, cancelScope, actorOf, ownerScope, ownLiveScope, withActions } from './scope';
 import { freezeOrderLines } from './snapshot';
@@ -107,6 +108,7 @@ export const orderService = {
     placeOrder,
     mailOrderPlaced,
     mailOrderCancelled,
+    considerPurchaseHold,
     mailBuyer,
     mailBuyerOfOrder,
     openUnpaidOrderIds,

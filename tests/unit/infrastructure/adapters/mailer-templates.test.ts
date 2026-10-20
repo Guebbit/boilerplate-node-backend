@@ -39,7 +39,8 @@ import { examplePublishedEmail } from '@modules/example';
 import {
     orderConfirmEmail,
     cardHoldExpiredEmail,
-    orderCancelledEmail
+    orderCancelledEmail,
+    purchaseHoldStaffEmail
 } from '@modules/orders/emails';
 import {
     paymentReceivedEmail,
@@ -170,6 +171,13 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         '2026-000041',
         true
     ),
+    'orders.purchase-hold-staff': purchaseHoldStaffEmail(locale, {
+        buyerEmail: 'ada@example.com',
+        userId: '6ad69a48f753b902e5b98dfe',
+        cancelCount: 3,
+        windowDays: 7,
+        until: '2026-10-26T22:00:00.000Z'
+    }),
     'payments.refund-issued': refundIssuedEmail(
         locale,
         'Ada',

@@ -7,6 +7,9 @@
  * `inventory`, `stats`, `audit-logs` and mail: money to the cent, stock back for the returned
  * units only, sequential documents, and each customer mail sent once.
  *
+ * A second journey has a staff member buy from the shop they work in and return their own money:
+ * the refund goes through, and its audit row says it was their own order.
+ *
  * Asserts the chain across modules only. Each module's own rule has its own tests.
  */
 import '@tests/contract';
@@ -23,13 +26,14 @@ import {
     GetSalesStats200Response,
     ListAuditEntries200Response,
     ListOrderCreditNotes200Response,
+    RefundPaymentByOrder200Response,
     ReceiveReturn200Response,
     ShipFulfillmentOrder201Response,
     Signup201Response,
     StartFulfilment200Response
 } from '@api/schemas.zod';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs, loginBearer } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole, loginBearer } from '@tests/http';
 import { bodyOf } from '@tests/body-of';
 import { checkoutAs } from '@tests/checkout-as';
 import { drain } from '@tests/drain';
@@ -245,4 +249,69 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
         'Your return was refunded',
         'Your return was refunded'
     ]);
+});
+
+it('records a staff buyer’s refund of their own order as theirs', async () => {
+    const product = await createProduct({ price: 20, onHand: 10 });
+    const { bearer: admin } = await authenticateAs('admin');
+    // A moderator holds `create:Refund`, and is a customer of the shop like everyone else.
+    const { bearer: moderator } = await authenticateAsRole('moderator');
+
+    const address = bodyOf(
+        await api().post('/account/addresses').set('Authorization', moderator).send({
+            label: 'home',
+            fullName: 'Staff Buyer',
+            street: 'Via Roma 2',
+            city: 'Modena',
+            zip: '41121',
+            country: 'IT'
+        }),
+        AddAddress201Response
+    ).data;
+    await api()
+        .post('/cart')
+        .set('Authorization', moderator)
+        .send({ productId: String(product._id), quantity: 1 });
+    await api()
+        .put('/cart/shipping-method')
+        .set('Authorization', moderator)
+        .send({ shippingMethodId: 'standard' });
+    const order = bodyOf(
+        await checkoutAs(moderator, { addressId: address.id }),
+        Checkout201Response
+    ).data;
+    const intent = bodyOf(
+        await api()
+            .post('/payments/intent')
+            .set('Authorization', moderator)
+            .send({ orderId: order.id }),
+        CreatePaymentIntent201Response
+    ).data;
+    bodyOf(
+        await api()
+            .post(`/payments/${intent.id}/confirm`)
+            .set('Authorization', moderator)
+            .send({ paymentMethodRef: 'pm_card_visa' }),
+        ConfirmPayment200Response
+    );
+    await drain();
+
+    // The moderator returns the money of the order they bought themselves.
+    const refunded = bodyOf(
+        await api()
+            .post(`/payments/order/${order.id}/refund`)
+            .set('Authorization', moderator)
+            .set('Idempotency-Key', 'journey-own-order-refund')
+            .send({}),
+        RefundPaymentByOrder200Response
+    ).data;
+    expect(refunded).toMatchObject({ amount: 25, amountRefunded: 25 });
+
+    // The trail says the order was theirs; a refund of someone else's order carries no such flag.
+    const refunds = bodyOf(
+        await api().get('/audit').query({ pageSize: 100 }).set('Authorization', admin),
+        ListAuditEntries200Response
+    ).data.items.filter(({ action }) => action === 'admin.payment.refunded');
+    expect(refunds).toHaveLength(1);
+    expect(refunds[0].metadata).toMatchObject({ amount: 25, ownOrder: true });
 });

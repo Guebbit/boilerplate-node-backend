@@ -357,3 +357,46 @@ export const orderCancelledEmail = (
         }
     };
 };
+
+/** What staff are told when the shop pauses a buyer's checkout. */
+export interface PurchaseHoldStaffNotice {
+    buyerEmail: string;
+    userId: string;
+    cancelCount: number;
+    windowDays: number;
+    /** ISO instant the hold ends by itself. */
+    until: string;
+}
+
+/**
+ * The notice to staff that a buyer's checkout was paused after repeated cancellations. It goes to
+ * the operator's mailbox, so it is built in the default language, and skips the buyer-facing footer.
+ *
+ * @param locale - the operator's language (`NODE_DEFAULT_LOCALE`), never the buyer's
+ * @param notice - who was paused, why, and until when
+ */
+export const purchaseHoldStaffEmail = (
+    locale: string,
+    notice: PurchaseHoldStaffNotice
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'orders.purchase-hold-staff',
+        subject: t('orders.email-purchase-hold.subject', { email: notice.buyerEmail }),
+        data: {
+            locale,
+            pageMetaTitle: t('orders.email-purchase-hold.meta-title'),
+            title: t('orders.email-purchase-hold.title'),
+            summary: t('orders.email-purchase-hold.summary', {
+                email: notice.buyerEmail,
+                count: notice.cancelCount,
+                days: notice.windowDays
+            }),
+            labelUntil: t('orders.email-purchase-hold.label-until'),
+            until: notice.until,
+            labelAccount: t('orders.email-purchase-hold.label-account'),
+            account: notice.userId,
+            review: t('orders.email-purchase-hold.review')
+        }
+    };
+};

@@ -81,6 +81,15 @@
         "line-limit-lines": "Questo ordine ha più di {{limit}} righe.",
         "line-limit-quantity": "Una riga di questo ordine chiede più di {{limit}} unità.",
         "restored": "Ordine ripristinato.",
-        "not-deleted": "Questo ordine non è eliminato."
+        "not-deleted": "Questo ordine non è eliminato.",
+        "email-purchase-hold": {
+            "subject": "Blocco acquisti: {{email}} ha annullato più ordini",
+            "meta-title": "Blocco acquisti impostato",
+            "title": "È stato impostato un blocco acquisti",
+            "summary": "{{email}} ha annullato {{count}} ordini in {{days}} giorni, quindi il suo checkout è in pausa. Ogni annullamento è stato elaborato normalmente; è bloccato solo l'invio di un nuovo ordine.",
+            "label-until": "Il blocco termina da solo il",
+            "label-account": "Account",
+            "review": "Controlla l'account nell'elenco Utenti dell'amministrazione (filtro: blocco acquisti). Togliere il blocco fa ripartire il conteggio."
+        }
     }
 }

@@ -91,6 +91,9 @@ type PreflightOutcome<T> = ({ ok: true } & T) | { ok: false; reject: ResponseRej
  * asked rather than re-checked here, so the two can never disagree about what this deployment
  * offers.
  *
+ * A purchase hold is checked first (`users` owns it): a protective pause after repeated
+ * cancellations, or one staff set. It closes checkout only; paying an existing order is another door.
+ *
  * The open-order cap is checked here too, for EVERY method: each unpaid order holds stock, so this
  * is what stops one account hoarding the shelf across many uncompleted orders. The refusal names
  * the open orders, so the buyer can pay or cancel one.
@@ -114,6 +117,23 @@ const resolvePaymentMethod = async (
                 {
                     code: ERROR_CODES.CART_PAYMENT_METHOD_NOT_AVAILABLE,
                     message: t('cart.payment-method-not-available')
+                }
+            ])
+        };
+
+    const hold = await userService.purchaseHoldOf(userId);
+    if (hold)
+        return {
+            ok: false,
+            reject: generateReject(409, [
+                {
+                    code: ERROR_CODES.CART_PURCHASE_HOLD,
+                    message: t('cart.purchase-hold'),
+                    details: {
+                        until: hold.until.toISOString(),
+                        reason: hold.reason,
+                        ...(hold.note === undefined ? {} : { note: hold.note })
+                    }
                 }
             ])
         };
