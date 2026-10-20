@@ -252,7 +252,7 @@ automatically regardless. Runs every 5 minutes, well inside both windows. See
 `npm run sweep:payment-effects` is the provider-facing counterpart. A settlement is one database
 transaction (payment, order, hold, outbox rows), so a crash leaves nothing half-done; what can still
 be owed is the provider's side. The sweep retries every refund still open, with the same idempotency
-key, once it is past `NODE_PAYMENT_EFFECT_RETRY_MINUTES` (default 1: longer than a refund request in
+key, once it is past `NODE_PAYMENT_REFUND_RETRY_MINUTES` (default 1: longer than a refund request in
 flight). Runs every 5 minutes. See [payments](../modules/payments.md#one-settlement-transaction).
 
 The same job reconciles lost webhooks: an unsettled payment untouched for
