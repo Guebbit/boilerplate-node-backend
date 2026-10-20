@@ -9,6 +9,8 @@
  * Driven through the service, one cell per caller role and buyer role.
  */
 import { setupTestDb } from '@tests/setup-test-db';
+import { observePort } from '@tests/ports';
+import * as auditPort from '@infrastructure/observability/audit';
 import { callerContextAs, asRole } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -19,6 +21,11 @@ import { outboxEventModel } from '@kernel/outbox';
 import { ORDER_CANCELLED } from '../../events';
 import { orderRepository } from '../../repository';
 import { cancelForErasureById } from '../../services/cancel';
+
+/* Replaced, not spied on — see `tests/support/ports.ts` for why. */
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
 
 setupTestDb();
 
@@ -268,6 +275,32 @@ describe('no rank on an order', () => {
         );
 
         expect(result.success).toBe(true);
+    });
+
+    // Own money is trusted and recorded: the cancel row carries `ownOrder` when the staff member
+    // is the buyer, and nothing when the order is someone else's.
+    it.each([
+        ['their own', true],
+        ['someone else’s', false]
+    ])('audits a moderator cancelling %s order with ownOrder = %s', async (_which, own) => {
+        const buyer = await createUser({ email: 'own@mod.test', username: 'own' }, 'moderator');
+        const product = await createProduct();
+        const order = await createOrder(buyer, [toOrderItem(product, 1)]);
+        const caller = own ? buyer.id : STAFF_ID;
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await orderService.cancelOnRequestById(
+            String(order._id),
+            asRole('moderator', caller),
+            {},
+            callerContextAs('moderator', caller)
+        );
+
+        const cancelRow = auditSpy.mock.calls
+            .map(([event]) => event)
+            .find(({ action }) => action === 'order.cancelled');
+        expect(cancelRow?.metadata).toMatchObject({ cause: expect.any(String) });
+        expect(cancelRow?.metadata?.ownOrder).toBe(own ? true : undefined);
     });
 
     it('lets the system actor cancel any order, as its sweep does', async () => {

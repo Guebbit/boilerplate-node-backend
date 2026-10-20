@@ -2,6 +2,7 @@ summary: 'Sending goods back, including the EU withdrawal button.'
 subdomain: supporting
 group: shop
 dependsOn:
+    - access # ownOrderFlag: the audit flag of an approve or receive on the caller's own order
     - delivery # the return address, and the cheapest standard delivery a withdrawal refunds
     - inventory # putting received goods back on sale
     - orders # the order a return is about: its lines, its owner, and the cancel a pre-dispatch withdrawal becomes

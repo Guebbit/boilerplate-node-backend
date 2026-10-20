@@ -6,6 +6,7 @@
  * Real Mongo throughout — the guarantees are the conditional writes.
  */
 
+import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -487,5 +488,92 @@ describe('a succeeded payment with no providerRef', () => {
         );
         expect(refunds).toHaveLength(1);
         expect(refunds[0][0]).toMatchObject({ outcome: 'failure' });
+    });
+});
+
+/** The audit events of a refund's request, in the order they were written. */
+const requestRows = (auditSpy: jest.SpyInstance) =>
+    auditSpy.mock.calls
+        .map(([event]: [{ action: string; metadata?: Record<string, unknown> }]) => event)
+        .filter(({ action }) => action === paymentsAuditActions.ADMIN_PAYMENT_REFUND_REQUESTED);
+
+/*
+ * The decision is on file when the record opens, not when the money lands: a refusal leaves the
+ * record to the sweep, which has no caller and audits nothing, so without this row the only
+ * evidence that someone asked would be a settlement row that never comes.
+ */
+describe('the request of a refund', () => {
+    it('is audited with the refund, the amount and the reason, and no ownOrder for someone else’s order', async () => {
+        const { orderId } = await paidOrder();
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await refund(orderId, { amount: 30 });
+
+        const rows = requestRows(auditSpy);
+        expect(rows).toHaveLength(1);
+        expect(rows[0].metadata).toMatchObject({ amount: 30, reason: 'goodwill' });
+        expect(rows[0].metadata).toHaveProperty('refundId');
+        expect(rows[0].metadata).not.toHaveProperty('ownOrder');
+    });
+
+    it('keeps the ownOrder evidence when the provider refuses and the sweep sends the money later', () =>
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
+            const { user, orderId } = await paidOrder();
+            const own = callerContextAs('moderator', String(user._id));
+            const auditSpy = observePort(auditPort.emitAuditEvent);
+            jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
+            await expect(
+                paymentService.refundByOrder(orderId, asAdmin(), own, { amount: 30 })
+            ).rejects.toThrow('down');
+
+            await paymentService.retryOpenRefunds();
+
+            const payment = await paymentOf(orderId);
+            expect(payment.refunds[0]).toMatchObject({ status: 'succeeded' });
+            const rows = requestRows(auditSpy);
+            expect(rows).toHaveLength(1);
+            expect(rows[0].metadata).toMatchObject({ amount: 30, ownOrder: true });
+        }));
+
+    it('is audited for a return’s refund too, flagged when the staff member is the buyer', () =>
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
+            const { user, orderId } = await paidOrder();
+            const own = callerContextAs('warehouse', String(user._id));
+            const auditSpy = observePort(auditPort.emitAuditEvent);
+            jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
+
+            await expect(
+                paymentService.refundForReturn(
+                    orderId,
+                    {
+                        returnId: new Types.ObjectId().toString(),
+                        amount: 40,
+                        lines: [],
+                        shipping: 0
+                    },
+                    own
+                )
+            ).rejects.toThrow('down');
+            await paymentService.retryOpenRefunds();
+
+            const rows = requestRows(auditSpy);
+            expect(rows).toHaveLength(1);
+            expect(rows[0].metadata).toMatchObject({
+                amount: 40,
+                reason: 'return',
+                ownOrder: true
+            });
+        }));
+
+    it('is not written for the cancel listener, which has no caller to put on it', async () => {
+        const { user, orderId } = await paidOrder();
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await orderService.cancelOnRequestById(orderId, asCustomer(user.id));
+        await settleOutboxNudges();
+
+        const payment = await paymentOf(orderId);
+        expect(payment.refunds).toHaveLength(1);
+        expect(requestRows(auditSpy)).toHaveLength(0);
     });
 });

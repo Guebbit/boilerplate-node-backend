@@ -18,6 +18,12 @@ export const paymentsAuditActions = {
     PAYMENT_CONFIRMED: 'payment.confirmed',
     PAYMENT_FAILED: 'payment.failed',
     ADMIN_PAYMENT_REFUNDED: 'admin.payment.refunded',
+    /**
+     * A caller asked for a refund and its record opened — before the provider is asked, so the
+     * decision is on file even when the provider refuses and the sweep sends the money later, with
+     * no caller behind it. `ADMIN_PAYMENT_REFUNDED` is the settlement, which a sweep never audits.
+     */
+    ADMIN_PAYMENT_REFUND_REQUESTED: 'admin.payment.refund_requested',
     PAYMENT_RECORDED_OFFLINE: 'payment.recorded_offline',
     /**
      * A cancel owed a refund on a hand-paid order, and the automatic listener left it alone
