@@ -240,6 +240,10 @@ const isNamespaceNotFound = (error: unknown): boolean =>
  * @returns the stored indexes, `_id_` included
  */
 const storedIndexesOf = (model: RegisteredModel) =>
+    // Mongoose's collection passes this to the driver's `listIndexes` command: every index with its
+    // name and key spec, `_id_` included. A collection that was never created answers
+    // NamespaceNotFound, handled below.
+    // https://www.mongodb.com/docs/manual/reference/command/listIndexes/
     model.collection.indexes().catch((error: unknown) => {
         if (isNamespaceNotFound(error)) return [];
         throw error;
