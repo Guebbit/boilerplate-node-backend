@@ -2,6 +2,8 @@
  * @module
  * Account — domain layer: pure rules only, lint-guaranteed free of Express, Mongoose and every
  * tier. Here, the email-change flow's transition table and the session proof rules.
+ * `epoch.ts` (the session-epoch rule) is not re-exported: `session/` imports it directly, since the
+ * barrel never publishes `session/`'s token surface.
  *
  * See `docs/theory/domain-layer.md`.
  */

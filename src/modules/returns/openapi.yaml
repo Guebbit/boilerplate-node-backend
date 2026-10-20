@@ -404,12 +404,11 @@ components:
                     items:
                         $ref: '#/components/schemas/ReturnLine'
                 returnPostage:
-                    type: string
-                    enum: [consumer, shop]
                     description: >-
                         Who pays to send the goods back — frozen when the return was opened, from the
                         shop's configuration, so it is what the customer was told beforehand (Art.
                         14(1)).
+                    $ref: '../shop/openapi.yaml#/components/schemas/ReturnPostagePayer'
                 declineReason:
                     type: string
                     description: Why staff declined. Present only on a `declined` return.

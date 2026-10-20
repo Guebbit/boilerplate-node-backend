@@ -10,7 +10,7 @@
  */
 
 import { firstSessionRefused } from '../domain/session-proof';
-import { proofPredatesEpoch } from './epoch';
+import { proofPredatesEpoch } from '../domain/epoch';
 
 /**
  * A first session was about to be minted for an account whose second factor is armed, on a proof

@@ -4,7 +4,7 @@
  * it), `proofPredatesEpoch` for a login's proof at the mint.
  */
 
-import { predatesSessionEpoch, proofPredatesEpoch } from '../../session/epoch';
+import { predatesSessionEpoch, proofPredatesEpoch } from '../../domain/epoch';
 
 describe('predatesSessionEpoch', () => {
     const epoch = new Date('2026-10-06T12:00:00.900Z');

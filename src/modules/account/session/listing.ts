@@ -10,7 +10,7 @@ import { userService } from '@modules/users';
 import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { sessionRepository, type SessionRow } from '../repository';
-import { predatesSessionEpoch } from './epoch';
+import { predatesSessionEpoch } from '../domain/epoch';
 import { hasIdledOut, hasOutlivedStaffCap, staffCapEndsAt } from './idle';
 import type { SessionMode } from '../session-mode';
 

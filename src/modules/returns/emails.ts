@@ -11,8 +11,8 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
-import { addressLine, type ReturnPostagePayer } from '@modules/shop';
-import type { ShopAddress } from '@types';
+import { addressLine } from '@modules/shop';
+import type { ReturnPostagePayer, ShopAddress } from '@types';
 
 /** Which notice is being sent. */
 export type ReturnNoticeKind =
