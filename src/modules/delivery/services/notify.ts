@@ -156,6 +156,7 @@ export const mailDelayed = (delayed: FulfillmentOrderDelayed): Promise<void> =>
             ...(delayed.expectedAt ? { expectedAt: new Date(delayed.expectedAt) } : {}),
             needsAnswer: delayed.needsAnswer,
             ...(delayed.answerBy ? { answerBy: new Date(delayed.answerBy) } : {}),
+            ...(delayed.acceptedUntil ? { acceptedUntil: new Date(delayed.acceptedUntil) } : {}),
             orderUrl: orderFrontendLink({ locale, id: String(order._id) })
         });
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);

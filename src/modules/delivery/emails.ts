@@ -49,6 +49,8 @@ export interface FulfillmentDelayedEmailInput {
     needsAnswer: boolean;
     /** When silence turns into a cancel; present when `needsAnswer`. */
     answerBy?: Date | undefined;
+    /** The date the buyer already agreed to wait for; present on a renewed question only. */
+    acceptedUntil?: Date | undefined;
     /** The buyer's own order page, where Keep waiting and Cancel are. */
     orderUrl: string;
 }
@@ -226,9 +228,19 @@ export const fulfillmentDelayedEmail = (
             lines: [...input.titles],
             answer:
                 input.needsAnswer && input.answerBy
-                    ? t('delivery.email-fulfillment-delayed.answer', {
-                          date: longDate(locale, input.answerBy)
-                      })
+                    ? [
+                          // A renewed question says what it follows from: the date already agreed to.
+                          input.acceptedUntil
+                              ? t('delivery.email-fulfillment-delayed.agreed-until', {
+                                    until: longDate(locale, input.acceptedUntil)
+                                })
+                              : '',
+                          t('delivery.email-fulfillment-delayed.answer', {
+                              date: longDate(locale, input.answerBy)
+                          })
+                      ]
+                          .filter(Boolean)
+                          .join(' ')
                     : t('delivery.email-fulfillment-delayed.cancel-any-time'),
             linkLabel: t('delivery.email-fulfillment-delayed.link-label'),
             linkUrl: input.orderUrl,

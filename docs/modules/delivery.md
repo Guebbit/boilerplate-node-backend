@@ -259,7 +259,10 @@ old date, unless the admin moves it after the date has passed; the daily sweep c
 | none: the date was cleared                            | the same question, with no new date to offer, once     | an indefinite delay                               |
 
 A question opens a window of **at most 30 days** (`consent: awaiting`, `consentDeadline`), to the end
-of the UTC day the mail prints. Silence cancels and refunds, so a question never buys time past what
+of the **shop's** day the mail prints (`NODE_SHOP_TIMEZONE`, `endOfDayInZone`): the printed day and
+the enforced day are one, whatever the zone. A "keep waiting" that arrives after that deadline is
+refused with a 409 even before the daily sweep marks the window expired. A renewed question, sent to
+a buyer who already agreed to a date, names that date in the mail. Silence cancels and refunds, so a question never buys time past what
 the buyer was already owed (FTC (b)(1)(iii), (b)(2)(ii)): the deadline is cut back to a cap, read from
 the fulfillment order as it stood BEFORE the question wrote its own state (`answerBy` in
 `domain/preorder.ts`).

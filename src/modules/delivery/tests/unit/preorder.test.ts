@@ -5,6 +5,7 @@
  * table in `domain/preorder.ts`, against a fixed clock.
  */
 
+import { dayInZone } from '@domain-primitives/time';
 import { FulfillmentConsent } from '@types';
 import {
     answerBy,
@@ -173,11 +174,15 @@ describe('answerBy', () => {
             '2027-01-10'
         ]
     ])('%s', (_name, asked, facts, lastDay) => {
-        const deadline = answerBy(new Date(asked), {
-            agreedAt,
-            expectedAt: new Date('2026-12-05T00:00:00Z'),
-            ...facts
-        });
+        const deadline = answerBy(
+            new Date(asked),
+            {
+                agreedAt,
+                expectedAt: new Date('2026-12-05T00:00:00Z'),
+                ...facts
+            },
+            'UTC'
+        );
 
         expect(deadline.toISOString()).toBe(`${lastDay}T23:59:59.999Z`);
     });
@@ -186,11 +191,61 @@ describe('answerBy', () => {
         const asked = new Date('2027-02-10T08:00:00Z');
 
         expect(
-            answerBy(asked, {
-                agreedAt,
-                expectedAt: new Date('2026-12-05T00:00:00Z')
-            }).toISOString()
+            answerBy(
+                asked,
+                { agreedAt, expectedAt: new Date('2026-12-05T00:00:00Z') },
+                'UTC'
+            ).toISOString()
         ).toBe('2027-02-10T23:59:59.999Z');
+    });
+
+    // The deadline ends the day the mail prints, on the SHOP's calendar: the day it is printed on
+    // is the last day the buyer may answer, whatever the zone.
+    describe.each(['Europe/Rome', 'America/New_York', 'Asia/Kolkata', 'Pacific/Kiritimati', 'UTC'])(
+        'in %s',
+        (zone) => {
+            it.each([
+                ['an open 30-day window', '2026-12-11T08:00:00Z', {}],
+                ['a window cut by the promised date plus 28 days', '2026-12-20T08:00:00Z', {}],
+                [
+                    'a renewed question cut by the date accepted',
+                    '2027-01-05T08:00:00Z',
+                    {
+                        consent: FulfillmentConsent.confirmed,
+                        expectedAt: new Date('2027-01-19T00:00:00Z')
+                    }
+                ]
+            ])('ends on the day it prints, to the millisecond: %s', (_name, asked, facts) => {
+                const deadline = answerBy(
+                    new Date(asked),
+                    { agreedAt, expectedAt: new Date('2026-12-05T00:00:00Z'), ...facts },
+                    zone
+                );
+
+                // Still the last printed day at the deadline, the next day one millisecond later.
+                expect(dayInZone(new Date(deadline.getTime() + 1), zone)).not.toBe(
+                    dayInZone(deadline, zone)
+                );
+            });
+        }
+    );
+
+    it('ends a day later east of Greenwich than the UTC day it used to end on', () => {
+        // Asked at 08:00Z on 11 December with no cap: 30 days on is 10 January. Rome's day ends at
+        // 22:59Z, an hour before the UTC day does, and prints January 10 (UTC would print 11).
+        const deadline = answerBy(new Date('2026-12-11T08:00:00Z'), {}, 'Europe/Rome');
+
+        expect(deadline.toISOString()).toBe('2027-01-10T22:59:59.999Z');
+        expect(dayInZone(deadline, 'Europe/Rome')).toBe('2027-01-10');
+    });
+
+    it('lets a buyer in New York answer on the evening of the printed day', () => {
+        // 08:00Z is 03:00 in New York; 30 days on closes at the end of 10 January there, 04:59Z on
+        // the 11th, so the evening of the printed day is still inside the window.
+        const deadline = answerBy(new Date('2026-12-11T08:00:00Z'), {}, 'America/New_York');
+
+        expect(deadline.toISOString()).toBe('2027-01-11T04:59:59.999Z');
+        expect(dayInZone(deadline, 'America/New_York')).toBe('2027-01-10');
     });
 
     it('counts the preview as at most 30 days, to the millisecond', () => {

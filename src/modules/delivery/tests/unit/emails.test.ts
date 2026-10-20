@@ -6,6 +6,8 @@
  * interpolated wrong turns "your parcel is on its way" into a message with no way to act on it.
  */
 
+import { dayInZone } from '@domain-primitives/time';
+import { answerBy } from '@modules/delivery/domain';
 import {
     fulfillmentDelayedEmail,
     shipmentDeliveredEmail,
@@ -144,5 +146,67 @@ describe('fulfillmentDelayedEmail', () => {
         expect(String(mail.data.body)).toContain('December 12, 2026');
         expect(String(mail.data.body)).toContain('December 20, 2026');
         expect(String(mail.data.answer)).toContain('December 18, 2026');
+    });
+    it('prints the day the buyer is held to: the printed deadline day is the enforced day', () => {
+        // Asked at 08:00Z on 11 December, 30 days on is 10 January. Rome ends that day at 22:59Z, so
+        // the mail says January 10; the end of the UTC day would have printed January 11.
+        const deadline = answerBy(new Date('2026-12-11T08:00:00Z'), {}, 'Europe/Rome');
+        const mail = fulfillmentDelayedEmail('en', NAME, {
+            titles: ['Analytical Engine'],
+            agreedAt: new Date('2026-12-01T00:00:00Z'),
+            needsAnswer: true,
+            answerBy: deadline,
+            orderUrl: 'https://shop.example/en/orders/1'
+        });
+
+        expect(dayInZone(deadline, 'Europe/Rome')).toBe('2027-01-10');
+        expect(String(mail.data.answer)).toContain('January 10, 2027');
+        expect(dayInZone(new Date(deadline.getTime() + 1), 'Europe/Rome')).toBe('2027-01-11');
+    });
+
+    it.each([
+        ['en', 'You may also cancel it yourself at any time before it ships'],
+        ['it', 'Puoi anche annullarlo tu stesso in qualsiasi momento prima della spedizione']
+    ])('tells a buyer asked with no new date their right to cancel stays (%s)', (locale, text) => {
+        const mail = fulfillmentDelayedEmail(locale, NAME, {
+            titles: ['Analytical Engine'],
+            agreedAt: new Date('2026-12-01T00:00:00Z'),
+            needsAnswer: true,
+            answerBy: new Date('2026-12-29T22:59:59.999Z'),
+            orderUrl: 'https://shop.example/en/orders/1'
+        });
+
+        expect(String(mail.data.body)).toContain(text);
+    });
+
+    it('gives the delay reason in the passed-date question', () => {
+        const mail = fulfillmentDelayedEmail('en', NAME, {
+            titles: ['Analytical Engine'],
+            agreedAt: new Date('2026-12-01T00:00:00Z'),
+            needsAnswer: true,
+            answerBy: new Date('2026-12-29T22:59:59.999Z'),
+            orderUrl: 'https://shop.example/en/orders/1'
+        });
+
+        expect(String(mail.data.body)).toContain('the stock we ordered has not reached us yet');
+    });
+
+    it('names the date a RENEWED question follows from, and only then', () => {
+        const base = {
+            titles: ['Analytical Engine'],
+            agreedAt: new Date('2026-12-01T00:00:00Z'),
+            needsAnswer: true,
+            answerBy: new Date('2027-01-19T22:59:59.999Z'),
+            orderUrl: 'https://shop.example/en/orders/1'
+        };
+        const renewed = fulfillmentDelayedEmail('en', NAME, {
+            ...base,
+            acceptedUntil: new Date('2027-01-19T10:00:00Z')
+        });
+
+        expect(String(renewed.data.answer)).toContain('You agreed to wait until January 19, 2027.');
+        expect(String(fulfillmentDelayedEmail('en', NAME, base).data.answer)).not.toContain(
+            'You agreed to wait'
+        );
     });
 });

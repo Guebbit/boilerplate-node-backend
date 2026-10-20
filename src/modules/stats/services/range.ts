@@ -5,7 +5,7 @@
  * same one `$dateTrunc` buckets in, so a bucket edge and a bound can never disagree about a day.
  */
 
-import { zonedStartOfDay } from '@modules/orders';
+import { zonedStartOfDay } from '@domain-primitives/time';
 import type { ReportWindow } from '@infrastructure/persistence/report';
 import { addDays, formatDay, type CalendarDay, type CalendarInterval } from '../domain/calendar';
 import { checkRange, previousOf, type RangeRefusal } from '../domain/range';
