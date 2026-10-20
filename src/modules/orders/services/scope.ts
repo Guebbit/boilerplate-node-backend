@@ -14,7 +14,7 @@ import { orderRepository } from '../repository';
 import { OrderStatus } from '@types';
 import {
     orderActionsFor,
-    ORDER_EVENTS,
+    canStartFulfilment,
     overridableTargetsFrom,
     isDigitalOnlyOrder,
     isPayable,
@@ -123,10 +123,8 @@ const startAndOverrideActions = (
 
     const { status } = order;
     const caller = callerForSubject(authContext, 'Order');
-    // The `start` event's own `from` set, not a raw `canTransition(status, target, 'system')`:
-    // the latter answers `true` for an ECHO write (status already equals target), which would
-    // read `start` as true for an order already `processing`.
-    const reachesProcessing = (ORDER_EVENTS.start.from as readonly OrderStatus[]).includes(status);
+    // The start event's own question, the same one `markProcessing`'s conditional write asks.
+    const reachesProcessing = canStartFulfilment(status);
     return {
         start: holds(caller, 'start', 'Shipment') && reachesProcessing,
         correctAddress: holds(caller, 'update', 'Order') && canCorrectAddress(order),

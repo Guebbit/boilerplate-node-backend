@@ -13,6 +13,7 @@ import {
     canTransition,
     canOverrideTo,
     isPayable,
+    canStartFulfilment,
     orderActionsFor,
     statusesLeadingTo,
     statusesReachableFrom,
@@ -286,6 +287,20 @@ describe('isPayable', () => {
     it("agrees with `orderActionsFor`'s `pay` field for every status", () => {
         for (const status of EVERY_STATUS)
             expect(orderActionsFor(status, 'admin').pay).toBe(isPayable(status));
+    });
+});
+
+describe('canStartFulfilment', () => {
+    it('is true for paid alone, over every status', () => {
+        for (const status of EVERY_STATUS)
+            expect(canStartFulfilment(status)).toBe(status === OrderStatus.paid);
+    });
+
+    it('agrees with the statuses that lead to processing as the system', () => {
+        const leadingTo = statusesLeadingTo(OrderStatus.processing, 'system');
+
+        for (const status of EVERY_STATUS)
+            expect(canStartFulfilment(status)).toBe(leadingTo.includes(status));
     });
 });
 
