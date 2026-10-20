@@ -133,6 +133,15 @@ export interface TranslationPort {
      * @returns fields per locale; a locale with no row is simply absent from the map
      */
     readAll: (entityType: string, entityId: string) => Promise<Map<string, TranslatedFields>>;
+
+    /**
+     * {@link readAll} limited to the rows the shop SERVES: a language switched on, plus the
+     * fallback. What a message that outlives its entity (a notification, a mail) copies in, so a
+     * draft language's text is never quoted to a customer.
+     *
+     * @returns fields per served locale; a locale with no row, or not served, is absent
+     */
+    readServed: (entityType: string, entityId: string) => Promise<Map<string, TranslatedFields>>;
 }
 
 /**
@@ -283,6 +292,18 @@ export const readAllTranslations = (
 ): Promise<Map<string, TranslatedFields>> =>
     translationPort
         ? translationPort.readAll(entityType, entityId)
+        : Promise.resolve(new Map<string, TranslatedFields>());
+
+/**
+ * The customer-facing sibling of {@link readAllTranslations} — see {@link TranslationPort.readServed}.
+ * Empty, no query, when nothing is registered.
+ */
+export const readServedTranslations = (
+    entityType: string,
+    entityId: string
+): Promise<Map<string, TranslatedFields>> =>
+    translationPort
+        ? translationPort.readServed(entityType, entityId)
         : Promise.resolve(new Map<string, TranslatedFields>());
 
 /** The one thing {@link applyTranslations} needs from an already wire-shaped item. */

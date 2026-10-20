@@ -20,6 +20,7 @@ const fakePort = (overrides: Partial<TranslationPort> = {}): TranslationPort => 
     plan: jest.fn().mockResolvedValue({ fallbackLocale: 'en', planned: [] }),
     write: jest.fn().mockResolvedValue(undefined),
     readAll: jest.fn().mockResolvedValue(new Map()),
+    readServed: jest.fn().mockResolvedValue(new Map()),
     ...overrides
 });
 

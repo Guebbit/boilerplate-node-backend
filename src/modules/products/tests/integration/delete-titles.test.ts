@@ -26,6 +26,7 @@ jest.mock('@kernel/translation', () => {
         __esModule: true,
         ...actual,
         readAllTranslations: jest.fn(actual.readAllTranslations),
+        readServedTranslations: jest.fn(actual.readServedTranslations),
         removeTranslations: jest.fn(actual.removeTranslations)
     };
 });
@@ -36,6 +37,9 @@ afterEach(() => {
     jest.mocked(translation.readAllTranslations)
         .mockReset()
         .mockImplementation(actual.readAllTranslations);
+    jest.mocked(translation.readServedTranslations)
+        .mockReset()
+        .mockImplementation(actual.readServedTranslations);
     jest.mocked(translation.removeTranslations)
         .mockReset()
         .mockImplementation(actual.removeTranslations);
@@ -81,7 +85,7 @@ describe('product.deleted titles', () => {
     it('reads every language BEFORE the translations are removed', async () => {
         const product = await createProduct({ title: 'Blue mug' });
         const order: string[] = [];
-        jest.mocked(translation.readAllTranslations).mockImplementation(() => {
+        jest.mocked(translation.readServedTranslations).mockImplementation(() => {
             order.push('read');
             return Promise.resolve(
                 new Map([
@@ -141,7 +145,7 @@ describe('productService.titlesById', () => {
 
     it('lets a translated title win over the product column for its own language', async () => {
         const product = await createProduct({ title: 'Column title' });
-        jest.mocked(translation.readAllTranslations).mockResolvedValueOnce(
+        jest.mocked(translation.readServedTranslations).mockResolvedValueOnce(
             new Map([['en', { title: 'Translated title' }]])
         );
 

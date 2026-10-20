@@ -36,7 +36,8 @@ beforeEach(() => {
                 planned: [{ locale: FALLBACK, kind: 'upsert', fields: {} }]
             }),
         write: (...args) => write(...args) as Promise<void>,
-        readAll: () => Promise.resolve(new Map())
+        readAll: () => Promise.resolve(new Map()),
+        readServed: () => Promise.resolve(new Map())
     });
 });
 

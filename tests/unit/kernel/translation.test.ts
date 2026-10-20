@@ -15,6 +15,7 @@ import {
     isTranslationPlan,
     planTranslations,
     readAllTranslations,
+    readServedTranslations,
     registerTranslationPort,
     removeTranslations,
     resolveTranslations,
@@ -33,6 +34,7 @@ const fakePort = (overrides: Partial<TranslationPort> = {}): TranslationPort => 
     plan: jest.fn().mockResolvedValue({ fallbackLocale: 'en', planned: [] }),
     write: jest.fn().mockResolvedValue(undefined),
     readAll: jest.fn().mockResolvedValue(new Map()),
+    readServed: jest.fn().mockResolvedValue(new Map()),
     ...overrides
 });
 
@@ -233,6 +235,22 @@ describe('readAllTranslations', () => {
 
         await expect(readAllTranslations('product', 'p1')).resolves.toBe(rows);
         expect(port.readAll).toHaveBeenCalledWith('product', 'p1');
+    });
+});
+
+describe('readServedTranslations', () => {
+    it('resolves to an empty map when no port is registered', async () => {
+        await expect(readServedTranslations('product', 'p1')).resolves.toEqual(new Map());
+    });
+
+    it('delegates to the registered port, not to the all-rows read', async () => {
+        const served = new Map([['en', { title: 'Bed' }]]);
+        const port = fakePort({ readServed: jest.fn().mockResolvedValue(served) });
+        registerTranslationPort(port);
+
+        await expect(readServedTranslations('product', 'p1')).resolves.toBe(served);
+        expect(port.readServed).toHaveBeenCalledWith('product', 'p1');
+        expect(port.readAll).not.toHaveBeenCalled();
     });
 });
 
