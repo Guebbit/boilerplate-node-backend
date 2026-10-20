@@ -138,9 +138,10 @@ so it **skips a database that already holds anything** and exits 0. That is what
 `compose up` from giving the shop a second history. `npm run scenario:apply:reset` empties and
 rebuilds on purpose.
 
-A deployment never runs any of it: `npm run deploy:setup` is `db:sync` plus `access:bootstrap`,
-which upserts the shop row and nothing else, and `scenario:apply` refuses outright unless
-`NODE_ENV` is `development` or `test`.
+A deployment never runs any of it: `docker/deploy.sh <client>` starts the stack and its one-shot
+`setup` runs `npm run deploy:setup`, which is `db:sync` plus `access:bootstrap`, which upserts the shop row and
+nothing else, and `scenario:apply` refuses outright unless `NODE_ENV` is `development` or `test`.
+See [Deploy and rollback](./tools/deploy-and-rollback.md).
 
 | Local                                           | Production                                      |
 | ----------------------------------------------- | ----------------------------------------------- |

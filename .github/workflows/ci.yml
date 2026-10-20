@@ -25,6 +25,7 @@ name: CI
 #                     `boot` — the PRODUCTION image starts against a real Mongo, answers `/livez`, and
 #                     its runtime user cannot write under `src/`
 #                     `backup-drill` — the backup image backs up a real Mongo and the restore drill restores it
+#                     `deploy-drill` — a bad deploy is refused and the previous image comes back
 #   - pair            frontend-e2e — the paired frontend's Cypress suite against this backend
 #   - supply chain    audit
 #   - adoption        demo-strip-measure — the removal recipes still pass on a scratch copy
@@ -875,6 +876,28 @@ jobs:
             - name: Build the images, back up, restore, compare
               run: bash docker/backup/drill.sh
 
+    deploy-drill:
+        # Proves a BAD DEPLOY IS UNDONE end to end: `docker/deploy.sh` on the real production compose
+        # file with a throwaway client. A good image comes up healthy, a broken one (the same image
+        # with a CMD that exits) is refused and the first image runs again, and `--rollback` returns
+        # to the first image after a second good one. The same script runs on a laptop:
+        # `npm run deploy:drill` (Podman by default; this runner has Docker).
+        # Not in the `ci` job's `needs:` until its first real run on GitHub has passed.
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        permissions:
+            contents: read
+        env:
+            CONTAINER_ENGINE: docker
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
+
+            - name: Deploy, break, roll back
+              run: bash docker/deploy-drill.sh
+
     audit:
         # Reports known moderate-and-above vulnerabilities in production dependencies.
         #
@@ -991,8 +1014,8 @@ jobs:
             - test-contract-cookie
             - container-gate
             - frontend-e2e
-            # `boot`, `backup-drill`, `audit` and (until its first green run) `demo-strip-measure`
-            # are deliberately excluded — see their own comments above.
+            # `boot`, `backup-drill`, `deploy-drill`, `audit` and (until its first
+            # green run) `demo-strip-measure` are deliberately excluded — see their own comments above.
         runs-on: ubuntu-latest
         timeout-minutes: 5
         permissions:

@@ -20,7 +20,7 @@ client's configuration:
 flowchart TD
     Dir["mkdir clients/acme,\ncp .env-example clients/acme/.env"] --> Name["export COMPOSE_PROJECT_NAME=acme"]
     Name --> Secrets["fill in every MUST SET value —\nboot refuses and names the first missing one"]
-    Secrets --> Up["docker compose build app, then up -d\n(-f docker-compose.production.yml)"]
+    Secrets --> Up["docker/deploy.sh acme\n(build, start, check, undo on failure)"]
     Up --> Setup["setup runs once:\nindexes + the shop's row"]
     Setup --> Running(["app, cron, database, cache, limits, queue\npublished to 127.0.0.1 only"])
     Running --> Proxy["reverse proxy terminates TLS\nin front — the app does not;\nthe docker-compose.proxy.yml Traefik overlay does"]
@@ -144,12 +144,14 @@ user created by hand. `readWrite` is enough for everything the app does, `setup`
 index builds included.
 
 ```bash
-docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml build app
-docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d
+docker/deploy.sh acme
 ```
 
-`build app` first: `setup` and `cron` run the image `app` builds rather than building their own,
-so on a stack's first deploy that image has to exist before they start.
+One command: it builds the `app` image (`setup` and `cron` run that image rather than building their
+own), starts the stack, waits until `setup` exited 0 and `app` and `cron` are healthy, and records
+the release in `clients/acme/deploys.log`. A release that does not come up healthy is replaced by
+the previous one on the spot; `docker/deploy.sh acme --rollback` does the same on demand. See
+[Deploy and rollback](tools/deploy-and-rollback.md).
 
 The file is named twice — once by `--env-file`, once by `env_file:` inside the compose file —
 because compose reads it through two separate channels. `--env-file` resolves the `${...}`
