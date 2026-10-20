@@ -30,7 +30,7 @@ import {
 } from './config';
 import type { RefreshTokenExpiryTime } from './config';
 import { keyId, keyForId } from './key-ring';
-import { predatesSessionEpoch } from './epoch';
+import { predatesSessionEpoch } from '../domain/epoch';
 import { recordActivity } from './activity';
 import { assertProofCurrent, assertSecondFactor } from './mint-guard';
 import { revokeFor } from '../services/revocation';
