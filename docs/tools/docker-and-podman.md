@@ -300,6 +300,31 @@ it: your engine is a property of your machine, not of this repo.
 > one runtime and silently does nothing on the other. Plain variables like the two above are
 > substituted by both.
 
+### The compose provider behind `podman compose`
+
+`podman compose` does not run compose itself: it hands the file to an external **provider**, and
+prints which one (`>>>> Executing external compose provider …`). Use **Docker Compose**, not
+podman-compose, on every machine that runs this repo: your laptop, staging, production.
+
+| podman-compose 1.6 (latest), run whole on the production file            | Docker Compose behind `podman compose` |
+| ------------------------------------------------------------------------ | -------------------------------------- |
+| managed mode (`COMPOSE_PROFILES=`) crashes: `required: false` is ignored | starts                                 |
+| a failed `setup` still starts `app` and `cron`                           | `up` fails, `app` and `cron` stay down |
+| `setup` and `mongo-rs-init` re-run on every dependent start              | run once                               |
+
+Set it up once per host:
+
+```bash
+sudo pacman -S docker-compose     # or your distro's package; the binary alone works too
+systemctl --user enable --now podman.socket   # Docker Compose talks to Podman through this socket
+podman compose version            # the banner must name docker-compose
+```
+
+Podman tries `docker-compose` before `podman-compose`, so installing it is the whole switch; you keep
+typing `podman compose`. To pin it, set `compose_providers` in your user's containers.conf
+([containers.conf](https://github.com/containers/common/blob/main/docs/containers.conf.5.md)).
+The podman-compose workarounds still in the compose files are valid Compose, so they stay.
+
 ## When Kubernetes starts to make sense
 
 You do **not** need Kubernetes for this boilerplate by default.

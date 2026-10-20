@@ -58,12 +58,13 @@ sel1._domainkey.example.com.  TXT  "v=DKIM1; k=rsa; p=MIGfMA0GCSq..."
 _dmarc.example.com. TXT  "v=DMARC1; p=none; rua=mailto:dmarc@example.com; adkim=s; aspf=s"
 ```
 
-| Step | Do                                                                                  |
-| ---- | ----------------------------------------------------------------------------------- |
-| 1    | Publish SPF with `-all` (hard fail), not `~all` — a soft fail is widely ignored     |
-| 2    | Publish DKIM, then send a test mail and confirm `dkim=pass` in the received headers |
-| 3    | Publish DMARC at `p=none` and read the aggregate reports for a few weeks            |
-| 4    | Move to `p=quarantine`, then `p=reject`, once no legitimate source is failing       |
+| Step | Do                                                                                                            |
+| ---- | ------------------------------------------------------------------------------------------------------------- |
+| 1    | Publish SPF with `-all` (hard fail), not `~all` — a soft fail is widely ignored                               |
+| 2    | Publish DKIM, then send a test mail and confirm `dkim=pass` in the received headers                           |
+| 3    | Publish DMARC at `p=none` and read the aggregate reports for a few weeks                                      |
+| 3b   | Send a real password-reset mail to [mail-tester.com](https://www.mail-tester.com/); fix until it scores 10/10 |
+| 4    | Move to `p=quarantine`, then `p=reject`, once no legitimate source is failing                                 |
 
 **The trap:** every system that sends as your domain — the app, invoicing, a CRM, a newsletter tool
 — needs to be in SPF and DKIM. `p=reject` published before you have inventoried them silently

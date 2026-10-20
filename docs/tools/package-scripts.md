@@ -179,6 +179,7 @@ anything and says so; `scenario:apply:reset` is how you rebuild on purpose.
 | `db:bootstrap`         | `db:sync` followed by `scenario:apply`                                                        | runs on container boot                            |
 | `access:bootstrap`     | upsert the shop row; no accounts, no demo data                                                | [Deployment hardening](./deployment-hardening.md) |
 | `deploy:setup`         | `db:sync` followed by `access:bootstrap` — a deployment's first run                           | [Deployment hardening](./deployment-hardening.md) |
+| `config:check`         | judge the environment and exit; `cron` runs it before its scheduler                           | [Health checks](./health-checks.md)               |
 
 `scenario:apply` calls `db:cache:clear`'s logic itself after building. Run the
 script by hand after editing the database another way (`mongosh`, a GUI) — those writes never

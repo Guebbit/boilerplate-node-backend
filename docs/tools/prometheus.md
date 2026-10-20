@@ -97,6 +97,20 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 | `DiskAlmostFull`                     | a real mount under 10 % free, or predicted full within 24 h by the last 6 h (needs the `monitoring` profile's node_exporter)              | warning            |
 | `TlsCertExpiringSoon`                | a certificate Traefik serves expires in under 14 days (needs `docker-compose.proxy.yml`)                                                  | warning            |
 
+### Considered and not used {#alerts-not-used}
+
+The rules page on symptoms, not causes. Each of these was weighed and left out:
+
+| Left out                             | Why                                                                                                   |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| MongoDB / Redis / RabbitMQ exporters | they measure causes; the app's own `dependency_up` gauge already sees up/down                         |
+| cAdvisor                             | heavy and privileged; `ApiRestarting` and `DependencyUnavailable` catch the same by symptom           |
+| blackbox_exporter                    | a probe on the same host cannot see the host die (Gatus on a second machine does); Traefik covers TLS |
+| Loki log alerts                      | every failure worth paging already has a counter                                                      |
+| CPU / memory / event-loop lag alerts | causes; the latency and in-flight rules are the symptoms                                              |
+
+The image stays on Prometheus `v2.55.1`: the move to v3 is its own upgrade, not taken yet.
+
 ## Alertmanager
 
 The routing lives in `docker/observability/alertmanager.config.template.yaml`, rendered from the `ALERT_*` knobs by
