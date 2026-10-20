@@ -197,7 +197,7 @@ Any **one** of these flips the answer:
 ```mermaid
 flowchart TD
     T1["A VPS reboot taking every<br/>client down is unacceptable"] --> K
-    T2["You deploy often enough that health-gated<br/>rollouts and one-command rollback pay"] --> K
+    T2["You deploy often enough that rolling<br/>updates and zero-downtime rollouts pay"] --> K
     T3["A contract demands isolation and resource<br/>guarantees Compose cannot demonstrate"] --> K
     T4["A second engineer joins — declarative<br/>state instead of tribal knowledge"] --> K
     K{"A trigger fired"} --> S["Pick the SHAPE: self-run k3s<br/>on your own VMs, or a managed<br/>control plane"]

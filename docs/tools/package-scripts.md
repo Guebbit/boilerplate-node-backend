@@ -168,17 +168,18 @@ the order book by driving the real checkout, payment and shipping endpoints, so 
 the same database would give the shop a second history. It skips a database that already holds
 anything and says so; `scenario:apply:reset` is how you rebuild on purpose.
 
-| Script                 | Job                                                                                           | Read more                                         |
-| ---------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `db:sync`              | make every index match the schemas; `-- --check` plans only                                   | [Data](../reference/data.md)                      |
-| `scenario:apply`       | build the demo dataset (skipped if anything is present; refused outside `development`/`test`) | [Demo profile](./demo-profile.md)                 |
-| `scenario:apply:reset` | empty the database and the rate-limit counters, then build it                                 | [Demo profile](./demo-profile.md)                 |
-| `db:cache:clear`       | drop every cached response under the app's prefix                                             | [Redis cache](./redis-cache.md)                   |
-| `scenario:images`      | regenerate the seed thumbnails                                                                | [Demo profile](./demo-profile.md)                 |
-| `scenario:tls`         | regenerate the webhook sink's TLS material (the dev preload trusts it)                        | [Demo profile](./demo-profile.md)                 |
-| `db:bootstrap`         | `db:sync` followed by `scenario:apply`                                                        | runs on container boot                            |
-| `access:bootstrap`     | upsert the shop row; no accounts, no demo data                                                | [Deployment hardening](./deployment-hardening.md) |
-| `deploy:setup`         | `db:sync` followed by `access:bootstrap` — a deployment's first run                           | [Deployment hardening](./deployment-hardening.md) |
+| Script                 | Job                                                                                                                       | Read more                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `db:sync`              | add the indexes the schemas declare (never drops by surprise); `-- --check` plans, `-- --prune` also drops the undeclared | [Data](../reference/data.md)                      |
+| `scenario:apply`       | build the demo dataset (skipped if anything is present; refused outside `development`/`test`)                             | [Demo profile](./demo-profile.md)                 |
+| `scenario:apply:reset` | empty the database and the rate-limit counters, then build it                                                             | [Demo profile](./demo-profile.md)                 |
+| `db:cache:clear`       | drop every cached response under the app's prefix                                                                         | [Redis cache](./redis-cache.md)                   |
+| `scenario:images`      | regenerate the seed thumbnails                                                                                            | [Demo profile](./demo-profile.md)                 |
+| `scenario:tls`         | regenerate the webhook sink's TLS material (the dev preload trusts it)                                                    | [Demo profile](./demo-profile.md)                 |
+| `db:bootstrap`         | `db:sync -- --prune` followed by `scenario:apply`                                                                         | runs on container boot                            |
+| `access:bootstrap`     | upsert the shop row; no accounts, no demo data                                                                            | [Deployment hardening](./deployment-hardening.md) |
+| `deploy:setup`         | `db:sync` followed by `access:bootstrap` — a deployment's first run                                                       | [Deployment hardening](./deployment-hardening.md) |
+| `config:check`         | judge the environment and exit; `cron` runs it before its scheduler                                                       | [Health checks](./health-checks.md)               |
 
 `scenario:apply` calls `db:cache:clear`'s logic itself after building. Run the
 script by hand after editing the database another way (`mongosh`, a GUI) — those writes never
@@ -205,15 +206,16 @@ hostname-redirecting script appears.
 Five verbs, either engine. Use them instead of a bare `compose up`: they pass the runtime's
 Promtail override with `-f`, which is what gives Promtail a host log path to tail.
 
-| Script            | Job                                                                                                                                            | Read more                                 |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `compose:up`      | start the stack detached                                                                                                                       | [Docker & Podman](./docker-and-podman.md) |
-| `compose:up:full` | start it with the `observability`, `analytics` and `docs` profiles                                                                             | [Docker & Podman](./docker-and-podman.md) |
-| `compose:restart` | restart the compose stack                                                                                                                      | [Docker & Podman](./docker-and-podman.md) |
-| `compose:rebuild` | rebuild images and restart the stack                                                                                                           | [Docker & Podman](./docker-and-podman.md) |
-| `compose:kill`    | force-stop this project's compose containers                                                                                                   | [Docker & Podman](./docker-and-podman.md) |
-| `backup:drill`    | build the backup image, back up a real replica-set Mongo, restore it, and prove the second machine refuses a delete (needs Docker; CI runs it) | [Backups](./backups.md#the-restore-drill) |
-| `compose`         | the bare compose invocation the three share; call it directly for one-off subcommands                                                          | [Docker & Podman](./docker-and-podman.md) |
+| Script            | Job                                                                                                                                                                 | Read more                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `compose:up`      | start the stack detached                                                                                                                                            | [Docker & Podman](./docker-and-podman.md)                 |
+| `compose:up:full` | start it with the `observability`, `analytics` and `docs` profiles                                                                                                  | [Docker & Podman](./docker-and-podman.md)                 |
+| `compose:restart` | restart the compose stack                                                                                                                                           | [Docker & Podman](./docker-and-podman.md)                 |
+| `compose:rebuild` | rebuild images and restart the stack                                                                                                                                | [Docker & Podman](./docker-and-podman.md)                 |
+| `compose:kill`    | force-stop this project's compose containers                                                                                                                        | [Docker & Podman](./docker-and-podman.md)                 |
+| `deploy:drill`    | deploy a good image, a broken one (refused, the first comes back) and a second good one, then `--rollback`, on the real production compose (needs Docker or Podman) | [Deploy and rollback](./deploy-and-rollback.md#the-drill) |
+| `backup:drill`    | build the backup image, back up a real replica-set Mongo, restore it, and prove the second machine refuses a delete (needs Docker; CI runs it)                      | [Backups](./backups.md#the-restore-drill)                 |
+| `compose`         | the bare compose invocation the three share; call it directly for one-off subcommands                                                                               | [Docker & Podman](./docker-and-podman.md)                 |
 
 ```bash
 npm run compose -- logs -f app                   # any compose subcommand

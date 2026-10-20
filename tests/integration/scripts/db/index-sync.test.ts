@@ -8,7 +8,7 @@
  * schema and is still sitting in the collection. This file constructs both and asserts the
  * reconciliation resolves them.
  *
- * There is exactly one author of an index: `model.ts` declares it and `syncIndexes` makes it so.
+ * There is exactly one author of an index: `model.ts` declares it and `db:sync` makes it so.
  * The class of bug where a hand-written migration creates the same key under a different name, and
  * breaks every boot on an already-migrated database, cannot be expressed in this design — so this
  * file does not test two authors agreeing with each other.
@@ -30,8 +30,10 @@ import { MODULES_ROOT } from '@tests/paths';
 import {
     applyIndexSync,
     findBlockingDuplicates,
+    hasChanges,
     planIndexSync
 } from '../../../../scripts/db/index-sync';
+import { retireIndexes } from '@infrastructure/persistence/retired-indexes';
 import { enabledModules } from '../../../../src/modules';
 
 /** The native handle, for the states only the driver can construct. */
@@ -120,9 +122,9 @@ describe('db:sync', () => {
 
     it('leaves each collection holding EXACTLY what its schema declares', async () => {
         /*
-         * The strongest statement available, and the reason `syncIndexes` was chosen over
-         * `createIndexes`: an index nobody declares is drift, and drift that only accumulates is
-         * how a collection ends up carrying indexes whose purpose no one can reconstruct.
+         * The strongest statement available on a fresh database: every declared index exists and
+         * no other does. (On a database that already holds an undeclared index the sync keeps it
+         * unless pruning; see the cases below.)
          *
          * Compared by key rather than by name, so it does not depend on how a name was derived.
          */
@@ -145,10 +147,10 @@ describe('db:sync', () => {
         expect(mismatches).toEqual([]);
     });
 
-    it('drops an index no schema declares', async () => {
-        // Drift, constructed: an index created by hand, or left behind by a schema that has since
-        // stopped declaring it. Nothing else in the suite can produce this state. A TTL index
-        // goes the same way as a plain one: `syncIndexes` drops anything undeclared.
+    it('keeps an index no schema declares, and says so', async () => {
+        // Drift, constructed: an index created by hand, or left by a newer release this one is
+        // rolling back from. Add-only means the sync must not take it away. A TTL index is kept
+        // the same way as a plain one.
         await dropAllIndexes();
         await applyIndexSync();
         await nativeDb()
@@ -158,10 +160,114 @@ describe('db:sync', () => {
                 { name: 'users_orphan', expireAfterSeconds: 2_592_000 }
             );
 
+        const plan = await applyIndexSync();
+
+        const stored = await nativeDb().collection('users').indexes();
+        expect(stored.map(({ name }) => name)).toContain('users_orphan');
+        expect(plan.find(({ collection }) => collection === 'users')?.kept).toEqual([
+            'users_orphan'
+        ]);
+        // Kept is information, not work: `--check` must not exit non-zero for it.
+        expect(plan.some((diff) => hasChanges(diff))).toBe(false);
+    });
+
+    it('drops an undeclared index when pruning', async () => {
+        await dropAllIndexes();
         await applyIndexSync();
+        await nativeDb()
+            .collection('users')
+            .createIndex({ createdAt: -1 }, { name: 'users_orphan' });
+
+        const plan = await planIndexSync({ prune: true });
+        expect(plan.find(({ collection }) => collection === 'users')).toMatchObject({
+            toDropUndeclared: ['users_orphan'],
+            kept: []
+        });
+
+        await applyIndexSync({ prune: true });
 
         const stored = await nativeDb().collection('users').indexes();
         expect(stored.map(({ name }) => name)).not.toContain('users_orphan');
+    });
+
+    it('replaces a declared index whose options changed', async () => {
+        /*
+         * The TTL-window flow: Mongo refuses to change `expireAfterSeconds` in place, so the sync
+         * drops the old index and builds the declared one. Constructed with `sparse`, which
+         * `diffIndexes` treats as an options difference just the same.
+         */
+        await dropAllIndexes();
+        await applyIndexSync();
+
+        // Any model with a plain index will do: only the options of one index are altered.
+        const target = models().find((model) =>
+            model.schema
+                .indexes()
+                .some(([, options]) => !options.unique && !options.partialFilterExpression)
+        );
+        const declared = target?.schema
+            .indexes()
+            .find(([, options]) => !options.unique && !options.partialFilterExpression);
+        if (!target || !declared) throw new Error('no model declares a plain index to alter');
+        const [key, options] = declared;
+
+        const collection = nativeDb().collection(target.collection.name);
+        const built = await collection.indexes();
+        const original = built.find((index) => JSON.stringify(index.key) === JSON.stringify(key));
+        if (!original?.name) throw new Error('the declared index was not built');
+        await collection.dropIndex(original.name);
+        await collection.createIndex(key as Record<string, 1 | -1>, {
+            ...options,
+            name: original.name,
+            sparse: true
+        });
+
+        const plan = await planIndexSync();
+        expect(
+            plan.find(({ collection: name }) => name === target.collection.name)?.toReplace
+        ).toEqual([{ name: original.name, key }]);
+
+        await applyIndexSync();
+
+        const rebuilt = await collection.indexes();
+        expect(rebuilt.find(({ name }) => name === original.name)?.sparse).toBeUndefined();
+        await expect(planIndexSync()).resolves.toEqual([]);
+    });
+
+    it('drops a name its model retired, and only that name', async () => {
+        await dropAllIndexes();
+        await applyIndexSync();
+        const users = models().find(({ collection }) => collection.name === 'users');
+        if (!users) throw new Error('no users model registered');
+        retireIndexes(users.schema, 'users_gone');
+        await nativeDb().collection('users').createIndex({ createdAt: -1 }, { name: 'users_gone' });
+        await nativeDb()
+            .collection('users')
+            .createIndex({ updatedAt: -1 }, { name: 'users_stays' });
+
+        const plan = await planIndexSync();
+        expect(plan.find(({ collection }) => collection === 'users')).toMatchObject({
+            toDropRetired: ['users_gone'],
+            kept: ['users_stays']
+        });
+
+        await applyIndexSync();
+
+        const stored = await nativeDb().collection('users').indexes();
+        const names = stored.map(({ name }) => name);
+        expect(names).not.toContain('users_gone');
+        expect(names).toContain('users_stays');
+    });
+
+    it('treats a retired name that is not stored as nothing to do', async () => {
+        await dropAllIndexes();
+        await applyIndexSync();
+        const users = models().find(({ collection }) => collection.name === 'users');
+        if (!users) throw new Error('no users model registered');
+        retireIndexes(users.schema, 'users_never_existed');
+
+        await expect(planIndexSync()).resolves.toEqual([]);
+        await expect(applyIndexSync()).resolves.toEqual([]);
     });
 
     it('is a no-op the second time', async () => {
@@ -202,7 +308,16 @@ describe('db:sync', () => {
             .collection('carts')
             .insertMany([{ userId: 'dupe-user' }, { userId: 'dupe-user' }]);
 
-        const usersOnly = [{ collection: 'users', toCreate: [{ email: 1 }], toDrop: [] }];
+        const usersOnly = [
+            {
+                collection: 'users',
+                toCreate: [{ email: 1 }],
+                toReplace: [],
+                toDropRetired: [],
+                toDropUndeclared: [],
+                kept: []
+            }
+        ];
 
         await expect(findBlockingDuplicates(usersOnly)).resolves.toEqual([
             expect.stringContaining('both@example.com')

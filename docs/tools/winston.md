@@ -272,7 +272,7 @@ Only the queryable copy expires — log retention is [Loki](./loki.md)'s busines
 ::: warning Changing the retention window
 Mongo will not alter an existing TTL index's `expireAfterSeconds` in place. After changing
 `NODE_AUDIT_RETENTION_DAYS`, a restart **fails the boot** — `autoIndex` asks for the new window and
-Mongo refuses the conflicting options. `npm run db:sync` drops the index and rebuilds it, which is
+Mongo refuses the conflicting options. `npm run db:sync` replaces the index (drops it and rebuilds it), which is
 why `db:bootstrap` syncs before the server starts.
 :::
 

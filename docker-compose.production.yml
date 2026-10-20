@@ -11,10 +11,14 @@
 # production database starts empty and fills with real rows. Telemetry is exported over OTLP to a collector that is deliberately NOT
 # defined here — see the note at the bottom.
 #
+#   docker/deploy.sh acme                 # build, start, check it is healthy, undo it when it is not
+#   docker/deploy.sh acme --rollback      # run the previous good image again
 #   export COMPOSE_PROJECT_NAME=acme
-#   docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d --build
 #   docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml logs -f app
 #   docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml down  # -v: data too
+#
+# `APP_IMAGE` names the image `app`, `cron` and `setup` run and has no default: a `latest` tag was
+# overwritten by every build, so there was nothing to go back to. `docker/deploy.sh` sets it.
 #
 # ── ONE DEPLOYMENT PER CLIENT ────────────────────────────────────────────────────────────────────
 # This stack serves ONE client organisation. Many clients means many stacks, each with its own
@@ -274,8 +278,9 @@ services:
         logging: *logging
         # `image:` alongside `build:`: the image this build produces is tagged once, and `cron`/
         # `setup` reference that same tag by `image:` alone — one build, three containers running
-        # it, never three separate builds of the same Dockerfile drifting apart.
-        image: '${APP_IMAGE:-boilerplate-api:latest}'
+        # it, never three separate builds of the same Dockerfile drifting apart. `build:` is the
+        # no-registry path (`docker/deploy.sh`); with a registry, `APP_IMAGE` names a pushed digest.
+        image: '${APP_IMAGE:?set APP_IMAGE, or deploy with docker/deploy.sh <client>}'
         build:
             context: .
             dockerfile: docker/Dockerfile.production
@@ -393,7 +398,7 @@ services:
     # (`src/infrastructure/persistence/lease.ts`) is the backstop for a future job that does need it.
     cron:
         logging: *logging
-        image: '${APP_IMAGE:-boilerplate-api:latest}'
+        image: '${APP_IMAGE:?set APP_IMAGE, or deploy with docker/deploy.sh <client>}'
         restart: unless-stopped
         deploy:
             replicas: 1
@@ -422,14 +427,15 @@ services:
             - mongo-ca-dir:/ca-dir:ro
         # `-prometheus-listen-address` makes supercronic serve `/health` (and `/metrics`), bound to
         # loopback so it stays private to the container. It answers `OK` while the scheduler runs.
+        # `npm run config:check` first: supercronic stays alive even when every job would refuse a bad
+        # environment, so its health check alone would call that container healthy. `exec` makes
+        # supercronic PID 1 again, so it receives the stop signal.
         # https://github.com/aptible/supercronic
         command:
             [
-                'supercronic',
-                '-passthrough-logs',
-                '-prometheus-listen-address',
-                '127.0.0.1:9746',
-                '/app/crontab'
+                'sh',
+                '-c',
+                'npm run config:check && exec supercronic -passthrough-logs -prometheus-listen-address 127.0.0.1:9746 /app/crontab'
             ]
         # This container's own job is the scheduler, so it checks the scheduler — the image's web
         # check would never pass here (nothing listens on the app port). See docs/tools/health-checks.md.
@@ -467,10 +473,10 @@ services:
     # carries over unchanged to a Kubernetes deployment of the same image.
     #
     # `image:`, not `build:` — same image `app` built, never a separate build of the same
-    # Dockerfile. Build `app` first (`docker compose ... build app`) on a stack's first deploy.
+    # Dockerfile. `docker/deploy.sh` builds `app` first, so the image exists before this runs.
     setup:
         logging: *logging
-        image: '${APP_IMAGE:-boilerplate-api:latest}'
+        image: '${APP_IMAGE:?set APP_IMAGE, or deploy with docker/deploy.sh <client>}'
         env_file:
             - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
         # Mongo and the app's keys only: it never dials Redis or RabbitMQ.
@@ -942,6 +948,7 @@ services:
     # one thing it can tell Prometheus is how full each real mount is (`DiskAlmostFull`).
     # The host root is mounted READ-ONLY at /host: that is how it sees the host's filesystems and
     # not the container's. Virtual and container-storage mounts are excluded: they are not disks.
+    # It is the only exporter on purpose: docs/tools/prometheus.md#alerts-not-used.
     # https://github.com/prometheus/node_exporter#docker
     node-exporter:
         logging: *logging
