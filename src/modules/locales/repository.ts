@@ -75,6 +75,14 @@ const findByTag = (tag: string): Promise<LocaleDocument | null> =>
     localeBase.findOne({ tag: normalizeTag(tag) });
 
 /**
+ * The tags of the languages switched off. What the public manifest needs besides its scoped rows:
+ * a language with a deployed dictionary file has no row of its own to filter out, so the switched-off
+ * flag on its row is the only way to know the visitor must not be offered it.
+ */
+const listInactiveTags = (): Promise<string[]> =>
+    localeModel.distinct('tag', { active: false }).exec();
+
+/**
  * The languages this deployment offers, unpaginated and sorted by tag.
  *
  * Unpaginated on purpose: a deployment's languages are a handful of rows by construction, and
@@ -543,12 +551,14 @@ const removeEntityTranslations = (
 export const localeRepository: Repository<LocaleDocument, Language> & {
     findByTag: (tag: string) => Promise<LocaleDocument | null>;
     list: (scope?: Record<string, unknown>) => Promise<LocaleDocument[]>;
+    listInactiveTags: () => Promise<string[]>;
     bumpRevision: (tag: string) => Promise<number>;
     deleteLocaleCascade: (locale: LocaleDocument) => Promise<LocaleCascadeCounts>;
 } = {
     ...localeBase,
     findByTag,
     list,
+    listInactiveTags,
     bumpRevision,
     deleteLocaleCascade
 };

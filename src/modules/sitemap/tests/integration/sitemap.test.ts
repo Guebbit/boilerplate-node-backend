@@ -108,6 +108,19 @@ describe('GET /sitemap/pages.xml', () => {
             ]);
         }));
 
+    it('leaves out a switched-off language that has a deployed file, from every address and alternate', async () => {
+        await givenLocale('it', { active: false });
+
+        const entries = await entriesOf('/sitemap/pages.xml');
+
+        const about = entries.find(({ url }) => url === `${FRONTEND}/en/about`);
+        expect(entries.some(({ url }) => url.includes('/it'))).toBe(false);
+        expect(about?.links).toEqual([
+            { lang: 'en', url: `${FRONTEND}/en/about` },
+            { lang: 'x-default', url: `${FRONTEND}/en/about` }
+        ]);
+    });
+
     it('lists a newly registered active language, and leaves an inactive one out', async () => {
         await localeService.createLanguage({ tag: 'de', name: 'German', nativeName: 'Deutsch' });
         await localeService.createLanguage({
