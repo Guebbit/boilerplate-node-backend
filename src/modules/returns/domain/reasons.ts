@@ -7,25 +7,24 @@
  * See: docs/modules/returns.md#the-two-deadlines
  */
 
-import { ReturnRequestReason } from '@types';
-import type { ReturnReason } from '@types';
+import { ReturnReason } from '@types';
 
 /**
  * Reasons that ride the shop's withdrawal period (30 days by default), and with it the Art. 16
  * exclusion: `other` is a goodwill return on top of the right, not a legal one.
  */
-export const WITHDRAWAL_WINDOW_REASONS: readonly ReturnRequestReason[] = [
-    ReturnRequestReason.withdrawal,
-    ReturnRequestReason.other
+export const WITHDRAWAL_WINDOW_REASONS: readonly ReturnReason[] = [
+    ReturnReason.withdrawal,
+    ReturnReason.other
 ];
 
 /**
  * Reasons that are the legal guarantee of conformity: they last two years from delivery, and
  * reach made-to-order goods too, since Art. 16 only takes the right of WITHDRAWAL away.
  */
-export const CONFORMITY_REASONS: readonly ReturnRequestReason[] = [
-    ReturnRequestReason.defective,
-    ReturnRequestReason.wrong_item
+export const CONFORMITY_REASONS: readonly ReturnReason[] = [
+    ReturnReason.defective,
+    ReturnReason.wrong_item
 ];
 
 /** What {@link reasonsOpenAt} reads off an order: the deadlines it froze at delivery. */
@@ -51,20 +50,19 @@ const isOpen = (deadline: Date | undefined, now: Date): boolean =>
  * @param now - the moment being asked about
  * @returns an empty list once both deadlines have passed
  */
-export const reasonsOpenAt = (order: FrozenDeadlines, now: Date): ReturnRequestReason[] => [
-    ...(isOpen(order.withdrawUntil, now) ? [ReturnRequestReason.withdrawal] : []),
+export const reasonsOpenAt = (order: FrozenDeadlines, now: Date): ReturnReason[] => [
+    ...(isOpen(order.withdrawUntil, now) ? [ReturnReason.withdrawal] : []),
     ...(isOpen(order.conformityUntil, now) ? CONFORMITY_REASONS : []),
-    ...(isOpen(order.withdrawUntil, now) ? [ReturnRequestReason.other] : [])
+    ...(isOpen(order.withdrawUntil, now) ? [ReturnReason.other] : [])
 ];
 
 /**
  * Whether a reason is the legal guarantee (a defect or a wrong item) rather than the withdrawal
- * period's. Takes the stored `ReturnReason`, which also names the shop's own `no_answer`.
+ * period's.
  * @param reason - the reason on a request
  */
 export const isGuaranteeReason = (reason: ReturnReason): boolean =>
-    // Widened on purpose: `includes` wants the list's own type, and `no_answer` is simply not in it.
-    (CONFORMITY_REASONS as readonly ReturnReason[]).includes(reason);
+    CONFORMITY_REASONS.includes(reason);
 
 /**
  * Whether a request may still name this reason.
@@ -73,5 +71,4 @@ export const isGuaranteeReason = (reason: ReturnReason): boolean =>
  * @param now - the moment being asked about
  */
 export const isReasonOpen = (order: FrozenDeadlines, reason: ReturnReason, now: Date): boolean =>
-    // Widened for the same reason as {@link isGuaranteeReason}.
-    (reasonsOpenAt(order, now) as readonly ReturnReason[]).includes(reason);
+    reasonsOpenAt(order, now).includes(reason);

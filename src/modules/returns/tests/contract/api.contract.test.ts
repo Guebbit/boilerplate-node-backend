@@ -110,13 +110,13 @@ describe('POST /returns', () => {
         expect(response.body.errors[0].code).toBe('RETURN_LINES_INVALID');
     });
 
-    it('refuses a request that names the shop’s own reason, no_answer, with 422', async () => {
+    it('refuses a reason that is not one of the four, with 422', async () => {
         const { bearer, orderId } = await customerWithOrder(OrderStatus.delivered);
 
         const response = await api()
             .post('/returns')
             .set('Authorization', bearer)
-            .send({ orderId, reason: 'no_answer' });
+            .send({ orderId, reason: 'changed_my_mind' });
 
         expect(response.status).toBe(422);
     });

@@ -214,8 +214,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         titles: ['Widget'],
         agreedAt: new Date(Date.UTC(2026, 11, 1)),
         expectedAt: new Date(Date.UTC(2026, 11, 20)),
-        needsAnswer: true,
-        answerBy: new Date(Date.UTC(2027, 0, 20)),
+        reason: 'moved',
         orderUrl: 'https://shop.example/orders/an-order-id'
     }),
     'stock-alerts.back-in-stock': backInStockEmail(locale, 'Ada', {

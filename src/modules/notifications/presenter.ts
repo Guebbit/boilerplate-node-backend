@@ -27,8 +27,7 @@ const bodyOf = (notification: NotificationDocument): NotificationBody => {
         case 'notifications.wishlist-item-removed': {
             return { code: notification.code, params: notification.params };
         }
-        case 'notifications.fulfillment-delayed':
-        case 'notifications.fulfillment-confirm-wait': {
+        case 'notifications.fulfillment-delayed': {
             return { code: notification.code, params: notification.params };
         }
         case 'notifications.fulfillment-held': {

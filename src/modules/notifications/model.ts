@@ -24,7 +24,6 @@ export const NOTIFICATION_CODES = [
     'notifications.wishlist-item-removed',
     'notifications.cart-merge-refused',
     'notifications.fulfillment-delayed',
-    'notifications.fulfillment-confirm-wait',
     'notifications.fulfillment-held',
     'notifications.stock-alert'
 ] as const;
@@ -41,7 +40,6 @@ export interface NotificationParametersByCode {
     'notifications.wishlist-item-removed': CartLineRemovedParams;
     'notifications.cart-merge-refused': CartMergeRefusedParams;
     'notifications.fulfillment-delayed': FulfillmentDelayedParams;
-    'notifications.fulfillment-confirm-wait': FulfillmentDelayedParams;
     'notifications.fulfillment-held': FulfillmentHeldParams;
     'notifications.stock-alert': CartLineRemovedParams;
 }

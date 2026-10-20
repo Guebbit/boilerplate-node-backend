@@ -9,9 +9,7 @@
  * | The new date is…                           | The buyer gets                                   |
  * | ------------------------------------------ | ------------------------------------------------ |
  * | not later than expected                    | nothing; the order page shows the date           |
- * | a first slip of at most 28 days            | a notice and the cancel option; silence waits    |
- * | longer, a second slip, or no date at all   | a question; silence cancels 28 days past agreed  |
- * | any later date after an open-ended "yes"   | a notice and the cancel option; never a question |
+ * | later, or cleared                          | an email and the cancel option; silence waits    |
  *
  * Idempotent, since the outbox delivers at least once: a redelivery finds the date already expected
  * (or, for a cleared date, no expected date left) and does nothing.
@@ -97,7 +95,7 @@ const apply = async (
     session: ClientSession
 ): Promise<SentNotice | undefined> => {
     if (verdict.kind === 'earlier') {
-        // Quietly follow the date; the buyer is not told good news is a notice, and consent stays.
+        // Quietly follow the date: good news needs no email.
         if (next && next.getTime() !== fulfillmentOrder.expectedAt?.getTime()) {
             const claimed = await fulfillmentOrderRepository.claim(
                 String(fulfillmentOrder._id),
@@ -112,12 +110,7 @@ const apply = async (
 
     const sent = await recordNotice(
         fulfillmentOrder,
-        {
-            reason: 'moved',
-            expectedAt: next ?? null,
-            needsAnswer: verdict.kind === 'ask',
-            countsAsSlip: true
-        },
+        { reason: 'moved', expectedAt: next ?? null },
         now,
         session
     );

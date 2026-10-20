@@ -91,13 +91,6 @@ const presentRecord = (fulfillmentOrder: FulfillmentOrderDocument) => ({
     ...(fulfillmentOrder.expectedAt
         ? { expectedAt: fulfillmentOrder.expectedAt.toISOString() }
         : {}),
-    ...(fulfillmentOrder.consent ? { consent: fulfillmentOrder.consent } : {}),
-    ...(fulfillmentOrder.consentDeadline
-        ? { consentDeadline: fulfillmentOrder.consentDeadline.toISOString() }
-        : {}),
-    ...(fulfillmentOrder.revisedShipDate
-        ? { revisedShipDate: fulfillmentOrder.revisedShipDate.toISOString() }
-        : {}),
     ...(fulfillmentOrder.lastNoticeAt
         ? { lastNoticeAt: fulfillmentOrder.lastNoticeAt.toISOString() }
         : {}),
@@ -177,13 +170,6 @@ export const presentPreorderFulfillmentOrder = (
     late: isLate(fulfillmentOrder, now),
     delivered,
     ...(fulfillmentOrder.holdReason ? { holdReason: fulfillmentOrder.holdReason } : {}),
-    ...(fulfillmentOrder.consent ? { consent: fulfillmentOrder.consent } : {}),
-    ...(fulfillmentOrder.consentDeadline
-        ? { consentDeadline: fulfillmentOrder.consentDeadline.toISOString() }
-        : {}),
-    ...(fulfillmentOrder.revisedShipDate
-        ? { revisedShipDate: fulfillmentOrder.revisedShipDate.toISOString() }
-        : {}),
     ...(fulfillmentOrder.lastNoticeAt
         ? { lastNoticeAt: fulfillmentOrder.lastNoticeAt.toISOString() }
         : {}),
@@ -201,7 +187,6 @@ export const presentProductSummary = (row: ProductSummaryRow): PreorderProductSu
     firstAgreedAt: row.firstAgreedAt.toISOString(),
     paid: row.paid,
     waiting: row.waiting,
-    awaitingYes: row.awaitingYes,
     allocated: row.allocated,
     shipped: row.shipped,
     cancelled: row.cancelled,

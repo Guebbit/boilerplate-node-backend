@@ -108,30 +108,3 @@ export const zonedStartOfDay = (
     const guess = wall - offsetAt(wall);
     return new Date(wall - offsetAt(guess));
 };
-
-/**
- * The last millisecond of the calendar day an instant falls in on the wall clock of `timeZone`,
- * optionally some calendar days on.
- *
- * A deadline that is printed as a date, in the shop's zone, must end at the end of THAT date: with
- * the UTC day the printed day and the enforced day drift apart by the zone's offset, a day later
- * east of Greenwich and an evening early west of it. Counting calendar days and not 24 hours keeps
- * a day of 23 or 25 hours (DST) from moving the boundary.
- * @param instant - any moment of the starting day
- * @param timeZone - canonical IANA zone name, e.g. `Europe/Rome`
- * @param plusDays - whole calendar days to move on first (default 0)
- * @returns `23:59:59.999` on the wall clock of that day
- */
-export const endOfDayInZone = (instant: Date, timeZone: string, plusDays = 0): Date => {
-    const [year = 0, month = 0, day = 0] = dayInZone(instant, timeZone).split('-').map(Number);
-    // Plain calendar arithmetic on the civil date: Date.UTC rolls month and year over.
-    const next = new Date(Date.UTC(year, month - 1, day + plusDays + 1));
-    return new Date(
-        zonedStartOfDay(
-            next.getUTCFullYear(),
-            next.getUTCMonth() + 1,
-            next.getUTCDate(),
-            timeZone
-        ).getTime() - 1
-    );
-};

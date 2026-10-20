@@ -6,7 +6,7 @@
     <h1><%= greeting %></h1>
     <p><%= body %></p>
     <% if (lines.length > 0) { %><ul><% lines.forEach(function (line) { %><li><%= line %></li><% }) %></ul><% } %>
-    <p><%= answer %></p>
+    <p><%= closing %></p>
     <p><a href="<%= linkUrl %>"><%= linkLabel %></a></p>
 </main>
 <%- include("/shared/templates/layouts/default-footer.ejs"); %>

@@ -30,7 +30,7 @@ export interface ShipmentShippedPayload extends ShipmentEventPayload {
     remainingUnits?: number;
 }
 
-/** What a `fulfillment_order.delayed` event tells: the dates, and whether the buyer must answer. */
+/** What a `fulfillment_order.delayed` event tells: the dates, and nothing the buyer must answer. */
 export interface FulfillmentOrderDelayed {
     orderId: string;
     fulfillmentOrderId: string;
@@ -42,17 +42,8 @@ export interface FulfillmentOrderDelayed {
     agreedAt: string;
     /** The date now expected, absent when there is none (the date was cleared). */
     expectedAt?: string;
-    /** `moved`: the date was changed. `due`: the expected date is two days away (or past) and there is still no stock. */
+    /** `moved`: the date was changed. `due`: the expected date passed and there is still no stock. */
     reason: 'moved' | 'due';
-    /** Whether silence cancels: the buyer must say "keep waiting" by `answerBy`. */
-    needsAnswer: boolean;
-    /** When silence turns into a cancel (ISO 8601); present exactly when `needsAnswer`. */
-    answerBy?: string;
-    /**
-     * The date the buyer already agreed to wait for (ISO 8601); present only on a RENEWED question,
-     * so the mail can say what the new deadline follows from. Internal: the webhook omits it.
-     */
-    acceptedUntil?: string;
 }
 
 /**
@@ -103,18 +94,10 @@ declare module '@kernel/events' {
         /**
          * A waiting preorder's buyer was told its date moved or passed (PRODUCT_STATES P5). Written
          * in the same transaction as the change to the fulfillment order. `notifications` turns it
-         * into an inbox row, `fulfillment-delayed` or, when the buyer must answer,
-         * `fulfillment-confirm-wait`; the email is sent by this module from the same event.
+         * into an inbox row, `fulfillment-delayed`; the email is sent by this module from the same
+         * event. The shop only tells: it asks nothing and cancels nothing on its own.
          */
         'fulfillment_order.delayed': FulfillmentOrderDelayed;
-
-        /**
-         * A buyer was asked to keep waiting and the window closed in silence: the fulfillment order
-         * is to be cancelled and refunded. `returns` listens, since only it reaches money and stock
-         * together. Re-announced by the daily sweep until the cancel has landed, so a listener must
-         * be idempotent.
-         */
-        'fulfillment_order.wait_expired': { orderId: string; fulfillmentOrderId: string };
     }
 }
 
@@ -138,6 +121,3 @@ export const FULFILLMENT_ORDER_CANCELLED = 'fulfillment_order.cancelled';
 
 /** See `DomainEventMap['fulfillment_order.delayed']` above. */
 export const FULFILLMENT_ORDER_DELAYED = 'fulfillment_order.delayed';
-
-/** See `DomainEventMap['fulfillment_order.wait_expired']` above. */
-export const FULFILLMENT_ORDER_WAIT_EXPIRED = 'fulfillment_order.wait_expired';

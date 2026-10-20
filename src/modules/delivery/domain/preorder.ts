@@ -3,111 +3,54 @@
  * The rules for a preorder whose date slips (PRODUCT_STATES P5). Pure: a clock comes in as an
  * argument, so every case is testable without waiting.
  *
- * The law, and our margin:
+ * The shop tells, a person decides. It never asks the buyer anything and never cancels on its own:
  *
- * | Case                                      | Law                                    | What we do                              |
- * | ----------------------------------------- | -------------------------------------- | --------------------------------------- |
- * | first slip, at most 28 days past agreed   | FTC 16 CFR 435.2 (b)(1)(ii): 30 days   | notice, silence keeps waiting           |
- * | a longer slip, or any second one          | (b)(1)(iii), (b)(2)(ii): silence = no  | ask, silence cancels 28 days past agreed |
- * | the expected date passes, no newer date   | (b)(1)(iii)(B), (b)(2)                 | ask, same as above                      |
- * | a later date after an open-ended "yes"    | (b)(2)(iii): no more notices required  | notice only, the right to cancel stays  |
+ * | The date…                                  | The buyer gets                                           |
+ * | ------------------------------------------ | -------------------------------------------------------- |
+ * | moves later, or is cleared                 | an email: the new date (or none yet), cancel for a full refund |
+ * | moves earlier, or was cleared already      | nothing; the order page shows the date                   |
+ * | passes with the goods still not here       | one email: still no stock, cancel any time               |
  *
- * 28 and not 30: two days for time zones and day counting. The same stricter-of-two-laws idea as
- * the withdrawal window.
+ * Silence always means the buyer keeps waiting. The buyer can cancel any time before it ships, and
+ * staff see the late orders on the board and decide whom to call.
  *
  * See: docs/modules/delivery.md#preorders-and-a-moved-date
  */
 
-import { DAY_MS, endOfDayInZone } from '@domain-primitives/time';
-import {
-    FulfillmentConsent,
-    FulfillmentHoldReason,
-    FulfillmentOrderStatus,
-    PreorderFulfillmentState
-} from '@types';
+import { DAY_MS } from '@domain-primitives/time';
+import { FulfillmentHoldReason, FulfillmentOrderStatus, PreorderFulfillmentState } from '@types';
 import { remainingOf, remainingOfLine, type FulfillmentLine } from './fulfillment';
 
-/** The longest first slip a buyer's silence may stand for: the FTC's 30 days, less a margin. */
-export const SILENT_SLIP_DAYS = 28;
-
-/**
- * How many days before the expected date the buyer is asked, if the goods are still not there. The
- * FTC wants the offer to go out "in no event later than" the promised time (435.2 (b)(1)): two days
- * for time zones and day counting, the same margin as the 28 of 30 above.
- */
-export const ASK_BEFORE_DAYS = 2;
-
-/**
- * How many days before the expected date a RENEWED question goes out: the buyer already accepted a
- * date once, and silence on this one cancels at that date (16 CFR 435.2 (b)(2)(ii)), so asking two
- * days ahead would leave them two days to answer. Two weeks is a fair window that still ends lawfully.
- */
-export const RENEWED_ASK_BEFORE_DAYS = 14;
-
-/**
- * The window {@link answerBy} falls back to when nothing bounds a question (no date promised, none
- * offered): the FTC's 30 days. Unreachable for a preorder, which always carries its promised date.
- */
-export const CONSENT_WINDOW_DAYS = 30;
-
-/** What a moved date asks of the buyer, decided by {@link judgeSlip}. */
+/** What a moved date owes the buyer, decided by {@link judgeSlip}. */
 export type SlipVerdict =
     /**
      * Not later than the date already expected, or nothing was expected and nothing is now: no
-     * notice, the order page shows the new date.
+     * email, the order page shows the new date.
      */
     | { kind: 'earlier' }
-    /** A short first slip: tell the buyer and offer cancel; silence means they keep waiting. */
-    | { kind: 'notify' }
-    /** A long or repeated slip, or no date at all: ask, and silence means cancel. */
-    | { kind: 'ask' };
+    /** Later, or no date at all: tell the buyer, who can cancel; silence means they keep waiting. */
+    | { kind: 'notify' };
 
 /** What {@link judgeSlip} reads. */
 export interface SlipFacts {
-    /** The date promised when ordering; never moves. */
-    agreedAt: Date;
     /** The date expected right now; absent once the date was cleared. */
     expectedAt?: Date | undefined;
-    /** How many later dates the buyer was already told about. */
-    slips: number;
     /** The date now expected; absent when the date was cleared, which is an indefinite delay. */
     next?: Date | undefined;
-    /** Whether the buyer was asked, and what they answered. */
-    consent?: FulfillmentConsent | undefined;
-    /** The definite revised date on record; absent with `consent: confirmed` is an open-ended yes. */
-    revisedShipDate?: Date | undefined;
 }
 
 /**
- * Did the buyer agree to wait with no end date? A "yes" to a question that offered no date: the FTC
- * wants no further delay notices for it (16 CFR 435.2 (b)(2)(iii)); the right to cancel before
- * shipment stays.
- * @param facts - the fulfillment order's consent and revised date
- */
-export const isOpenEndedYes = (facts: Pick<SlipFacts, 'consent' | 'revisedShipDate'>): boolean =>
-    facts.consent === FulfillmentConsent.confirmed && facts.revisedShipDate === undefined;
-
-/**
- * What a moved release date asks of the buyer.
+ * What a moved release date owes the buyer: an email when it moves later or is cleared, nothing
+ * when it moves earlier or there was no date to move.
  *
- * @param facts - the promise, the current expectation, the slips so far and the new date
+ * @param facts - the current expectation and the new date
  */
-export const judgeSlip = (facts: SlipFacts): SlipVerdict => {
-    const { agreedAt, expectedAt, slips, next } = facts;
-    if (isOpenEndedYes(facts)) {
-        // Told, never asked: no deadline, the buyer can cancel any time before it ships. A date
-        // that is later, or the first one at all, is news; anything else is followed quietly.
-        return next !== undefined &&
-            (expectedAt === undefined || next.getTime() > expectedAt.getTime())
-            ? { kind: 'notify' }
-            : { kind: 'earlier' };
-    }
-    if (next === undefined) return expectedAt === undefined ? { kind: 'earlier' } : { kind: 'ask' };
-    if (expectedAt === undefined || next.getTime() <= expectedAt.getTime())
-        return { kind: 'earlier' };
-
-    const slippedDays = (next.getTime() - agreedAt.getTime()) / DAY_MS;
-    return slips === 0 && slippedDays <= SILENT_SLIP_DAYS ? { kind: 'notify' } : { kind: 'ask' };
+export const judgeSlip = ({ expectedAt, next }: SlipFacts): SlipVerdict => {
+    if (next === undefined)
+        return expectedAt === undefined ? { kind: 'earlier' } : { kind: 'notify' };
+    return expectedAt === undefined || next.getTime() <= expectedAt.getTime()
+        ? { kind: 'earlier' }
+        : { kind: 'notify' };
 };
 
 /**
@@ -159,16 +102,10 @@ export interface MoveFacts {
     agreedAt?: Date | undefined;
     /** The date expected right now; absent once the date was cleared. */
     expectedAt?: Date | undefined;
-    /** How many later dates the buyer was already told about. */
-    slips: number;
-    /** Whether the buyer was asked, and what they answered. */
-    consent?: FulfillmentConsent | undefined;
-    /** The definite revised date on record; absent with `consent: confirmed` is an open-ended yes. */
-    revisedShipDate?: Date | undefined;
 }
 
 /**
- * What a moved date asks of the buyer of one fulfillment order. The one rule the release-date
+ * What a moved date owes the buyer of one fulfillment order. The one rule the release-date
  * listener and the staff preview share, so the preview cannot drift from what the save does.
  *
  * @param facts - the fulfillment order
@@ -176,116 +113,26 @@ export interface MoveFacts {
  * @returns the verdict, or `undefined` when nothing was ever promised, so there is nothing to slip
  */
 export const judgeMove = (facts: MoveFacts, next: Date | undefined): SlipVerdict | undefined =>
-    facts.agreedAt === undefined
-        ? undefined
-        : judgeSlip({
-              agreedAt: facts.agreedAt,
-              expectedAt: facts.expectedAt,
-              slips: facts.slips,
-              consent: facts.consent,
-              revisedShipDate: facts.revisedShipDate,
-              next
-          });
-
-/** What {@link answerBy} reads off the fulfillment order as it stood BEFORE the question's own patch. */
-export interface AnswerFacts {
-    /** The date promised when ordering. */
-    agreedAt?: Date | undefined;
-    /** Whether the buyer was asked, and what they answered. */
-    consent?: FulfillmentConsent | undefined;
-    /** The end of an open window, while `consent` is `awaiting`. */
-    consentDeadline?: Date | undefined;
-    /** The definite revised date the buyer was offered or accepted; see the model. */
-    revisedShipDate?: Date | undefined;
-}
-
-/**
- * The latest instant silence may be taken for a cancel, whatever the buyer was last told: the
- * seller must refund promptly, so a question never buys time past what the buyer was already owed
- * (16 CFR 435.2 (b)(1)(iii), (b)(2)(ii)). First that applies:
- *
- * - an open window is never extended by asking again;
- * - a definite date offered or accepted: silence cancels at the end of that date's day;
- * - otherwise the promised date plus {@link SILENT_SLIP_DAYS} calendar days, with or without a date
- *   expected now: the rule's own end, not a count from the day the buyer happens to be asked;
- * - with nothing promised, {@link CONSENT_WINDOW_DAYS} from the question (unreachable for a preorder).
- * @param now - the instant the buyer is asked
- * @param facts - the fulfillment order before the patch
- * @param timeZone - the shop's canonical IANA zone
- */
-const answerCapOf = (now: Date, facts: AnswerFacts, timeZone: string): Date => {
-    if (facts.consent === FulfillmentConsent.awaiting && facts.consentDeadline)
-        return facts.consentDeadline;
-    if (facts.revisedShipDate) return endOfDayInZone(facts.revisedShipDate, timeZone);
-    return facts.agreedAt
-        ? endOfDayInZone(facts.agreedAt, timeZone, SILENT_SLIP_DAYS)
-        : endOfDayInZone(now, timeZone, CONSENT_WINDOW_DAYS);
-};
-
-/**
- * When silence turns into a cancel, for a buyer asked at `now`: where {@link answerCapOf} puts it,
- * to the end of that day on the SHOP's calendar: the day the mail prints, so the printed day and
- * the enforced day are one. A cap already past is held at today: the buyer is never given a
- * deadline that has gone.
- * @param now - the instant the buyer was asked
- * @param facts - the fulfillment order before this question changed it
- * @param timeZone - the shop's canonical IANA zone, the calendar the mail prints in
- */
-export const answerBy = (now: Date, facts: AnswerFacts, timeZone: string): Date =>
-    endOfDayInZone(
-        new Date(Math.max(answerCapOf(now, facts, timeZone).getTime(), now.getTime())),
-        timeZone
-    );
+    facts.agreedAt === undefined ? undefined : judgeSlip({ expectedAt: facts.expectedAt, next });
 
 /** What the daily sweep reads off a waiting fulfillment order. */
 export interface SweepFacts {
-    consent?: FulfillmentConsent | undefined;
-    consentDeadline?: Date | undefined;
-    revisedShipDate?: Date | undefined;
     expectedAt?: Date | undefined;
     lastNoticeAt?: Date | undefined;
 }
 
 /**
- * Is the expected date close (or past) with the buyer not told since? Keyed on the CURRENT expected
- * date: after an accepted slip the agreed date is long gone, and only the expected one can still be
- * missed. The first question goes out {@link ASK_BEFORE_DAYS} before it, because the offer must not
- * come later than the promise; a renewed one, after the buyer accepted a date,
- * {@link RENEWED_ASK_BEFORE_DAYS} before, so they have time to answer. A notice sent since then (or at the moment the date was moved) is what
- * stops a daily repeat.
+ * Has the expected date passed with the buyer not told since? The one email the sweep sends: the
+ * date came and the goods did not. A notice sent after the date (or never needed one) stops a
+ * daily repeat, and a date that moves later is a new date that can pass again.
  *
- * @param facts - the fulfillment order's dates and last notice
+ * @param facts - the fulfillment order's expected date and last notice
  * @param now - the instant of the sweep
  */
-export const needsDueNotice = (facts: SweepFacts, now: Date): boolean => {
-    // An open-ended yes is never asked again (16 CFR 435.2 (b)(2)(iii)).
-    if (
-        facts.expectedAt === undefined ||
-        facts.consent === FulfillmentConsent.awaiting ||
-        isOpenEndedYes(facts)
-    )
-        return false;
-    const aheadDays =
-        facts.consent === FulfillmentConsent.confirmed ? RENEWED_ASK_BEFORE_DAYS : ASK_BEFORE_DAYS;
-    const dueAt = facts.expectedAt.getTime() - aheadDays * DAY_MS;
-    return (
-        dueAt <= now.getTime() &&
-        (facts.lastNoticeAt === undefined || facts.lastNoticeAt.getTime() < dueAt)
-    );
-};
-
-/**
- * Has the buyer been asked and let the window close in silence? Either the sweep already said so
- * (`expired`, which stays true until the cancel lands), or the deadline has passed.
- *
- * @param facts - the fulfillment order's consent state and deadline
- * @param now - the instant of the sweep
- */
-export const hasWaitExpired = (facts: SweepFacts, now: Date): boolean =>
-    facts.consent === FulfillmentConsent.expired ||
-    (facts.consent === FulfillmentConsent.awaiting &&
-        facts.consentDeadline !== undefined &&
-        facts.consentDeadline.getTime() <= now.getTime());
+export const needsDueNotice = (facts: SweepFacts, now: Date): boolean =>
+    facts.expectedAt !== undefined &&
+    facts.expectedAt.getTime() <= now.getTime() &&
+    (facts.lastNoticeAt === undefined || facts.lastNoticeAt.getTime() < facts.expectedAt.getTime());
 
 /**
  * The day gap between the date promised and the date expected, for a board column.
@@ -305,13 +152,6 @@ export interface BoardFacts extends SweepFacts {
 }
 
 /**
- * Whether the buyer has been asked and the answer is outstanding or the window already closed.
- * @param facts - the fulfillment order's consent state
- */
-const isBeingAsked = (facts: Pick<SweepFacts, 'consent'>): boolean =>
-    facts.consent === FulfillmentConsent.awaiting || facts.consent === FulfillmentConsent.expired;
-
-/**
  * Where a preorder's fulfillment order stands, as the board names it. A staff hold on goods already
  * allocated is still `allocated`: the stock is set aside, someone is just holding it back.
  *
@@ -325,10 +165,7 @@ export const boardStateOf = (facts: BoardFacts): PreorderFulfillmentState => {
     const awaitingStock =
         facts.status === FulfillmentOrderStatus.on_hold &&
         facts.holdReason === FulfillmentHoldReason.awaiting_stock;
-    if (!awaitingStock) return PreorderFulfillmentState.allocated;
-    return isBeingAsked(facts)
-        ? PreorderFulfillmentState.awaiting_yes
-        : PreorderFulfillmentState.waiting;
+    return awaitingStock ? PreorderFulfillmentState.waiting : PreorderFulfillmentState.allocated;
 };
 
 /**

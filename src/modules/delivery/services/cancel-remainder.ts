@@ -13,7 +13,7 @@ import type { ClientSession } from 'mongoose';
 import { orderService } from '@modules/orders';
 import { FulfillmentCancelReason, FulfillmentHoldReason, FulfillmentOrderStatus } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
-import { hasWaitExpired, remainderLines, statusOfLines, withRemainderCancelled } from '../domain';
+import { remainderLines, statusOfLines, withRemainderCancelled } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
 import { announceCancelled, recordRemainderCancelled } from './announce';
@@ -103,7 +103,7 @@ export const cancelRemainder = async (
             lines: cancelledLines,
             status: statusOfLines(cancelledLines, false),
             cancelReason: reason,
-            unset: ['holdReason', 'holdNote', 'consentDeadline']
+            unset: ['holdReason', 'holdNote']
         },
         session
     );
@@ -139,11 +139,8 @@ export const cancelAllForOrder = (orderId: string): Promise<void> =>
                 {
                     lines,
                     status: statusOfLines(lines, false),
-                    // A buyer who was asked and never answered is why this order is being cancelled.
-                    cancelReason: hasWaitExpired(fulfillmentOrder, new Date())
-                        ? FulfillmentCancelReason.no_answer
-                        : FulfillmentCancelReason.order,
-                    unset: ['holdReason', 'holdNote', 'consentDeadline']
+                    cancelReason: FulfillmentCancelReason.order,
+                    unset: ['holdReason', 'holdNote']
                 },
                 session
             );

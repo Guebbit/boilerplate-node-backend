@@ -65,18 +65,17 @@ backend keeps no copy in step with the UI.
 
 `Notification` is a discriminated union on `code`, and each variant types its own `params`:
 
-| `code`                                   | `params`                                                         |
-| ---------------------------------------- | ---------------------------------------------------------------- |
-| `notifications.cart-line-removed`        | `{ productId, titles }`                                          |
-| `notifications.wishlist-item-removed`    | `{ productId, titles }`                                          |
-| `notifications.cart-merge-refused`       | `{ lines: [{ productId, requested, titles }] }`                  |
-| `notifications.fulfillment-delayed`      | `{ orderId, fulfillmentOrderId, titles, agreedAt, expectedAt? }` |
-| `notifications.fulfillment-confirm-wait` | the same, plus `answerBy`                                        |
-| `notifications.fulfillment-held`         | `{ orderId, fulfillmentOrderId, notice, message? }`              |
+| `code`                                | `params`                                                         |
+| ------------------------------------- | ---------------------------------------------------------------- |
+| `notifications.cart-line-removed`     | `{ productId, titles }`                                          |
+| `notifications.wishlist-item-removed` | `{ productId, titles }`                                          |
+| `notifications.cart-merge-refused`    | `{ lines: [{ productId, requested, titles }] }`                  |
+| `notifications.fulfillment-delayed`   | `{ orderId, fulfillmentOrderId, titles, agreedAt, expectedAt? }` |
+| `notifications.fulfillment-held`      | `{ orderId, fulfillmentOrderId, notice, message? }`              |
 
-The last two are a late preorder's notice ([delivery](./delivery.md#preorders-and-a-moved-date)): the
-first only informs and offers the cancel, the second needs an answer by `answerBy` or silence cancels.
-Both are written from `fulfillment_order.delayed`, and an erased account has no inbox to write to.
+`fulfillment-delayed` is a late preorder's notice ([delivery](./delivery.md#preorders-and-a-moved-date)): it
+informs and offers the cancel, and asks nothing. It is written from `fulfillment_order.delayed`, and an
+erased account has no inbox to write to.
 
 `notifications.fulfillment-held` is a hold the buyer can act on or should read about, written from
 `fulfillment_order.hold_noticed` ([delivery](./delivery.md#holds)): `notice` is `check_address` or `delayed`,

@@ -40,7 +40,6 @@ flowchart LR
     products -. "product.restock_date_changed" .-> delivery
     delivery -. "fulfillment_order.delayed" .-> notifications
     delivery -. "fulfillment_order.hold_noticed" .-> notifications
-    delivery -. "fulfillment_order.wait_expired" .-> returns
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -241,157 +240,133 @@ A delay is worded without the word preorder (`delivery.fulfillment-delayed`,
 after release is a backorder in all but name.
 
 The buyer of a preorder was promised a date, and that promise is law: the date shown when ordering
-is the agreed one (CRD Art. 18), and a seller who cannot keep a mail-order date must tell the buyer
-before it and offer a cancel (FTC 16 CFR 435.2). `agreedAt` is frozen; `expectedAt` is the date the
-fulfillment order is expected now. **This module owns the whole flow**, because both dates live on
-its fulfillment order and `orders → delivery` is forbidden.
+is the agreed one (CRD Art. 18). `agreedAt` is frozen; `expectedAt` is the date the fulfillment
+order is expected now. **This module owns the whole flow**, because both dates live on its
+fulfillment order and `orders → delivery` is forbidden.
+
+**The computer tells; a person decides.** The shop never asks the buyer a question and never
+cancels on its own. When the date moves later, or is taken away, the buyer gets one email: the new
+date (or "no date yet"), and that they can cancel from their order page for a full refund. If they
+are happy to wait they do nothing: **silence always means keep waiting**. Staff see every late
+order on the board's Late view and decide whom to call (see
+[the staff routine](#what-staff-do-about-a-late-order)).
 
 When an admin moves a product's `releaseDate`, `products` announces `product.release_date_changed`,
 and every fulfillment order still waiting for that product is judged by a pure table
-(`domain/preorder.ts`). The notice goes out the moment the admin saves, so it is always before the
-old date, unless the admin moves it after the date has passed; the daily sweep catches that case.
+(`domain/preorder.ts`):
 
-| The new date is...                                    | The buyer gets                                         | Law, and our margin                               |
-| ----------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------- |
-| not later than the date expected                      | nothing; the order page shows the new date             | none owed                                         |
-| a **first** slip, at most **28** days past the agreed | a notice with the cancel option; silence keeps waiting | FTC (b)(1)(ii) allows 30; two days for time zones |
-| a longer slip, **or** any second one                  | a question: keep waiting, or cancel                    | FTC (b)(1)(iii), (b)(2)(ii): silence is a cancel  |
-| none: the date was cleared                            | the same question, with no new date to offer, once     | an indefinite delay                               |
-| a **later or new** date, after an open-ended "yes"    | a notice with the cancel option, never a question      | (b)(2)(iii): no further notice is required        |
+| The new date is...               | The buyer gets                                                  |
+| -------------------------------- | --------------------------------------------------------------- |
+| later than the date expected     | an email with the new date and the way to cancel                |
+| none: the date was cleared       | an email saying there is no new date yet, and the way to cancel |
+| not later than the date expected | nothing; the order page shows the new date                      |
+| a date after a cleared one       | nothing; the order page shows it (good news needs no email)     |
 
-A question opens a window (`consent: awaiting`, `consentDeadline`) that ends with the **rule's own end**,
-never a fixed span from the day it is sent, at the end of the **shop's** day the mail prints (`NODE_SHOP_TIMEZONE`, `endOfDayInZone`): the printed day and
-the enforced day are one, whatever the zone. A "keep waiting" that arrives after that deadline is
-refused with a 409 even before the daily sweep marks the window expired. A renewed question, sent to
-a buyer who already agreed to a date, names that date in the mail. Silence cancels and refunds, so a question never buys time past what
-the buyer was already owed (FTC (b)(1)(iii), (b)(2)(ii)): the deadline is read from the fulfillment
-order as it stood BEFORE the question wrote its own state (`answerBy` in `domain/preorder.ts`), the
-first row that applies:
-
-| The buyer's state before the question                    | The deadline is the end of the shop day of...                                            |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| a question is already open (`awaiting`)                  | that open window: asking again never extends it                                          |
-| a definite date offered or agreed to (`revisedShipDate`) | that date                                                                                |
-| nothing agreed yet                                       | the agreed date plus 28 days (FTC's 30, less two), whether or not a date is expected now |
-
-(With no promised date at all, which a preorder never has, it falls back to 30 days on.) A cap that
-has already passed is held at today, so a buyer is never handed a deadline that is gone. An early
-question is not cut short: it stays open until that end, so a buyer told weeks ahead has the time
-the rule gives them. `revisedShipDate` is the definite revised date on the order: the one a question
-offers while `consent` is `awaiting`, otherwise the one the buyer agreed to, by answering or by silence.
-It is absent with `consent: confirmed` when the buyer said yes to a question that offered no date:
-an **open-ended yes**, which asks for no further question and records no deadline, because the
-rule requires no further notice once a buyer agrees to an indefinite date. A later or new date is
-then only told (a `notify`, with the cancel option), and the right to cancel before shipment stays.
-The preview's `answerBy` below is the EARLIEST deadline among the questions a move would send. The
-buyer answers
-`POST /delivery/fulfillment-orders/{id}/confirm-wait` (`consent: confirmed`), cancels (the existing
-cancel or remainder cancel), or says nothing. The fulfillment order carries the whole state: `slips`
-(later dates already told), `consent`, `consentDeadline`, `revisedShipDate`, `lastNoticeAt` and `cancelReason`. Moving a
-date earlier writes only `expectedAt`. Which date is expected is read from the catalogue, the latest
-release date among the products still waiting, so a group of several stays right when one of them
-moves; the event only says that something moved, and a redelivery finds the date already expected.
-A product that still waits with no release date makes the whole group undated (it cannot leave
-before that product), and an undated group has no `expectedAt` at all: a cleared date removes it, so
-a redelivered event finds nothing to move and asks nobody twice.
+Which date is expected is read from the catalogue, the latest release date among the products still
+waiting, so a group of several stays right when one of them moves; the event only says that
+something moved, and a redelivery finds the date already expected. A product that still waits with
+no release date makes the whole group undated (it cannot leave before that product), and an undated
+group has no `expectedAt` at all: a cleared date removes it, so a redelivered event finds nothing to
+move and tells nobody twice. The fulfillment order carries the state: `agreedAt`, `expectedAt`,
+`lastNoticeAt` and `cancelReason`.
 
 ```mermaid
 stateDiagram-v2
     direction LR
     [*] --> Waiting: paid, preorder line
-    Waiting --> Waiting: date moved earlier<br/>(no notice)
-    Waiting --> Noticed: first slip within 28 days<br/>(notice, silence keeps waiting)
-    Waiting --> Asked: longer slip, second slip,<br/>no date, or the date passed
-    Noticed --> Asked: another slip, or the date passes
-    Asked --> Confirmed: buyer says keep waiting
-    Confirmed --> Asked: a newer date moves, or 14 days before the accepted one<br/>(never after an open-ended yes: that is only told)
-    Asked --> Expired: silence until the deadline (sweep)
-    Expired --> Cancelled: returns cancels and refunds
+    Waiting --> Waiting: date moved earlier<br/>(no email)
+    Waiting --> Told: date moved later or cleared<br/>(email, silence keeps waiting)
+    Told --> Told: another move<br/>(another email)
+    Told --> Late: the date passes, no stock<br/>(one more email, from the sweep)
+    Waiting --> Late: the date passes, no stock
     Waiting --> Allocated: stock arrives
-    Noticed --> Allocated: stock arrives
-    Asked --> Allocated: stock arrives
-    Confirmed --> Allocated: stock arrives
+    Told --> Allocated: stock arrives
+    Late --> Allocated: stock arrives
 ```
 
 ### Previewing a move before it is saved
 
 `GET /delivery/fulfillment-orders/release-date-impact?productId=&releaseDate=` tells staff, before
-they save, how many **orders** the move would notify (`notify`) or ask (`ask`), and the earliest
-`answerBy` among the questions it would send (absent when nobody is asked). It runs the listener's own rule (`expectedDateOf` and `judgeMove` in
-`domain/preorder.ts`) against the date that would be, and writes nothing, so the two cannot drift.
+they save, how many **orders** the move would email (`notify`). It runs the listener's own rule
+(`expectedDateOf` and `judgeMove` in `domain/preorder.ts`) against the date that would be, and
+writes nothing, so the two cannot drift.
 
 ```mermaid
 flowchart LR
     Q[productId + releaseDate] --> V{Valid? Product exists?}
     V -- no --> R[422 / 404]
     V -- yes --> U{Same date as now?}
-    U -- yes --> Z[0 and 0]
+    U -- yes --> Z[0]
     U -- no --> W[Each waiting fulfillment order]
     W --> J[judgeMove with the proposed date]
     J --> T[Tally in distinct orders]
-    T --> O[notify, ask, earliest answerBy]
+    T --> O[notify]
 ```
 
 - `releaseDate` absent or blank previews a **cleared** date.
 - The same format and "at most one year ahead" rule as the product save.
-- An order with groups in both buckets counts once, under `ask`.
+- An order with several groups to tell counts once.
 - Guarded by `update:Product` **and** `display:Order`: an editor moves dates but sees no order volume.
-- A snapshot: a payment or a shipment between the preview and the save can shift a count.
+- A snapshot: a payment or a shipment between the preview and the save can shift the count.
 
 Every notice is one transaction with the state it leaves on the fulfillment order and one outbox
 event, `fulfillment_order.delayed`; the email follows the commit and links to the buyer's order
-page, where the cancel button already is. [`notifications`](./notifications.md) turns the event into an
-inbox row, `notifications.fulfillment-delayed` when it only informs and `notifications.fulfillment-confirm-wait`
-when the buyer must answer.
+page, where the cancel button already is. [`notifications`](./notifications.md) turns the event into
+an inbox row, `notifications.fulfillment-delayed`.
 
 #### The daily sweep
 
 `npm run sweep:preorders` (02:20 UTC, under a lease; [scheduled jobs](../reference/ops.md#scheduled-jobs))
-does two things, and only to fulfillment orders still `on_hold` for stock:
+does one thing, and only to fulfillment orders still `on_hold` for stock: a fulfillment order whose
+**current** `expectedAt` has passed, with no stock and no notice since, tells its buyer once: "we
+have not been able to send it, there is no new date yet, you can cancel any time". It is keyed on
+`expectedAt`, not `agreedAt`: after a moved date the agreed one is long gone and only the expected
+one can still be missed. `lastNoticeAt` is what stops a daily repeat, and a date that moves later is
+a new date that can pass again. A backorder promised the 30-day default is told like any other,
+the day after day 30.
 
-- a fulfillment order whose **current** `expectedAt` is two days away, or past, with no stock and no
-  notice since, asks the same question. A **renewed** question (the buyer accepted a date before)
-  goes out 14 days ahead instead, because silence on it cancels at that date and two days would be
-  too little to answer in. The offer must go out no later than the promise (FTC
-  435.2(b)(1)), so it goes out ahead of the date, never after. It is keyed on `expectedAt`, not `agreedAt`: after an accepted slip the agreed date
-  is long gone and only the expected one can still be missed. `lastNoticeAt` is what stops a daily
-  repeat. A backorder promised the 30-day default is asked like any other, on day 28;
-- one asked and not answered by its deadline is marked `consent: expired` and announced as
-  `fulfillment_order.wait_expired`. [`returns`](./returns.md#a-wait-nobody-answered) cancels and refunds
-  it. It is announced again each day until the cancel lands, so a failed cancel retries by itself.
+The sweep cancels nothing and expires nothing. Units already allocated but not shipped (`open`) are
+left alone: goods on the shelf are a short, definite delay, and the buyer can already cancel any
+time before dispatch. The admin's Late view is where they show.
 
-Units already allocated but not shipped (`open`) are left alone: goods on the shelf are a short, definite
-delay (FTC (b)(1)(ii)), not an indefinite one, and the buyer can already cancel any time before dispatch.
-The admin's Late view is where they show.
+#### What staff do about a late order
+
+Check the Late list about once a week. For an order that is **very late** (a month past its ship
+date, the assumption this shop starts from), contact the buyer: ask whether they still want it. If
+they do not, or the goods will not come, cancel and refund with the existing staff cancel. The
+buyer who does nothing keeps waiting.
+
+Selling to the **EU** needs no warning or clause for this, because the shop never cancels on its
+own. Selling to **US** buyers adds the FTC's mail-order rule (16 CFR 435.2): for a long delay the
+buyer's express OK is needed. Staff ask for it by email by hand, and cancel with a refund if there is
+no OK within 30 days. See [before you sell](../demo-ecommerce/before-you-sell.md).
 
 ### The preorder board
 
 The admin's preorder board (ADMIN_SALES 3) reads two things from here. The grain is the fulfillment
-order, not the order line: the agreed and expected date, the hold, the consent state and the cancel
+order, not the order line: the agreed and expected date, the hold and the cancel
 reason all live on it, and `orders → delivery` is forbidden, so `orders` could not serve those columns.
 
-| Route                                                  | Answers                                                                                                 |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| `GET /delivery/fulfillment-orders`                     | one row per fulfillment order, with its buyer, `paidAt`, `state`, `late`, `delivered`, `slippedDays`    |
-| `GET /delivery/fulfillment-orders/summary`             | per product, in units: paid, waiting, awaiting a yes, allocated, shipped, cancelled, late               |
-| `GET /delivery/fulfillment-orders/release-date-impact` | orders a release-date move would notify or ask, before it is saved (`update:Product` + `display:Order`) |
+| Route                                                  | Answers                                                                                              |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `GET /delivery/fulfillment-orders`                     | one row per fulfillment order, with its buyer, `paidAt`, `state`, `late`, `delivered`, `slippedDays` |
+| `GET /delivery/fulfillment-orders/summary`             | per product, in units: paid, waiting, allocated, shipped, cancelled, late                            |
+| `GET /delivery/fulfillment-orders/release-date-impact` | orders a release-date move would email, before it is saved (`update:Product` + `display:Order`)      |
 
 Filters on the list: `cause` (`preorder`, `backorder`, or `any` wait that carries an agreed date),
 `state`, `productId`, `late` and `dueWithin`.
 
-| `state`        | The fulfillment order is...                                                                          |
-| -------------- | ---------------------------------------------------------------------------------------------------- |
-| `waiting`      | paid and held for stock, the buyer not being asked anything                                          |
-| `awaiting_yes` | held for stock, and the buyer was asked to keep waiting (or the window closed, the cancel pending)   |
-| `allocated`    | stock is set aside for it and not all shipped; a staff hold on such goods is still `allocated`       |
-| `shipped`      | nothing remains and something shipped; `delivered` says whether every shipment also arrived          |
-| `cancelled`    | nothing remains and nothing shipped; `cancelReason` says who: `buyer`, `staff`, `no_answer`, `order` |
+| `state`     | The fulfillment order is...                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------------- |
+| `waiting`   | paid and held for stock                                                                        |
+| `allocated` | stock is set aside for it and not all shipped; a staff hold on such goods is still `allocated` |
+| `shipped`   | nothing remains and something shipped; `delivered` says whether every shipment also arrived    |
+| `cancelled` | nothing remains and nothing shipped; `cancelReason` says who: `buyer`, `staff`, `order`        |
 
 `late` is the Late view: the expected date has passed and units remain, whether still waiting, allocated
 and not shipped, or part shipped. It is where goods on the shelf show, which the daily sweep deliberately
-does not ask the buyer about. `dueWithin=N` is its early warning, for fulfillment orders still waiting
-and expected within N days: a slip moved before the date passes is a notice, and one moved after is a
-question. The queue key stock is allocated by is the hold's `committedAt`, stamped in the payment's own
+does not write to the buyer about. `dueWithin=N` is its early warning, for fulfillment orders still waiting
+and expected within N days. The queue key stock is allocated by is the hold's `committedAt`, stamped in the payment's own
 transaction, so `paidAt` here orders the buyers the way `inventory` does.
 
 **Who reads it** is the audience of the orders themselves: the key is `display:Order` (decided A5.2,
@@ -525,7 +500,7 @@ at a time**, by [`returns`](./returns.md#cancelling-what-has-not-shipped)
 (a Return of `kind: cancellation`) — it moves the money, the stock and the shipping rule, and is the
 only module that already reaches all of them. This module only marks the lines:
 `cancelRemainder(fulfillmentOrderId, orderId, session, reason)`, called inside `returns`' own
-transaction, and stores who cancelled (`cancelReason`: `buyer`, `staff`, `no_answer` or `order`). The
+transaction, and stores who cancelled (`cancelReason`: `buyer`, `staff` or `order`). The
 result says whether the fulfillment order was held for stock (`waitingForStock`), because then what
 is given back is the preorder allowance and not shelf units.
 
@@ -542,9 +517,7 @@ Each act writes its rows to the order's [timeline](./orders.md#the-timeline) in 
 | `fulfillment_released` | staff, or an allocation of stock, release it (staff only)      | fulfillment order id                                         |
 | `remainder_cancelled`  | `returns` cancels what had not shipped                         | fulfillment order id                                         |
 | `release_date_moved`   | a product's date moved and this order's expected date followed | fulfillment order id, `from` and `to` (ISO, or `null`)       |
-| `delay_notice_sent`    | the buyer was told: the date moved, or it passed               | fulfillment order id, `reason`, `needsAnswer`, dates         |
-| `wait_confirmed`       | the buyer said "keep waiting" (their own `actor`)              | fulfillment order id                                         |
-| `wait_expired`         | the sweep announced a wait that ran to its deadline in silence | fulfillment order id                                         |
+| `delay_notice_sent`    | the buyer was told: the date moved, or it passed               | fulfillment order id, `reason`, `expectedAt`                 |
 
 A whole-order cancel writes no `remainder_cancelled`: the order's own `cancelled` row says it. The
 shipment row comes first, then the order's own move that it caused (`shipped`, `delivered`).
@@ -558,7 +531,6 @@ date this order was expecting, not the product's previous date.
 
 | Route                                                      | Key                 | Answers                                                             |
 | ---------------------------------------------------------- | ------------------- | ------------------------------------------------------------------- |
-| `POST /delivery/fulfillment-orders/{id}/confirm-wait`      | the order's buyer   | the fulfillment order, `consent: confirmed`                         |
 | `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`     | [the preorder board](#the-preorder-board)'s two reads               |
 | `GET /delivery/order/{orderId}`                            | the owner, or staff | `{ fulfillmentOrders[], shipments[] }`, each with its own `actions` |
 | `POST /delivery/order/{orderId}/start`                     | `start:Shipment`    | the order, `processing`                                             |
@@ -577,8 +549,7 @@ frontend never re-derives a rule. Every staff door asks the key and nothing else
 | `shipment.delivered`                                  | the same                                                   | yes                            |
 | `fulfillment_order.held` · `.released` · `.cancelled` | `{orderId, fulfillmentOrderId, reason?}`                   | no                             |
 | `fulfillment_order.hold_noticed`                      | `{orderId, fulfillmentOrderId, userId?, notice, message?}` | no                             |
-| `fulfillment_order.delayed`                           | the dates, the titles, `needsAnswer`, `answerBy`           | no                             |
-| `fulfillment_order.wait_expired`                      | `{orderId, fulfillmentOrderId}`                            | no                             |
+| `fulfillment_order.delayed`                           | the dates, the titles, `reason` (`moved` or `due`)         | no                             |
 
 All are written through the outbox **in the act's transaction**. An order shipped in two goes fires
 `shipment.shipped` twice, and the order reaching `shipped` is the last of them.

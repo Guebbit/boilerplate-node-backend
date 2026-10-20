@@ -6,8 +6,6 @@
  * interpolated wrong turns "your parcel is on its way" into a message with no way to act on it.
  */
 
-import { dayInZone } from '@domain-primitives/time';
-import { answerBy } from '@modules/delivery/domain';
 import {
     fulfillmentDelayedEmail,
     shipmentDeliveredEmail,
@@ -132,81 +130,71 @@ describe('shipmentDeliveredEmail', () => {
 });
 
 describe('fulfillmentDelayedEmail', () => {
+    const base = {
+        titles: ['Analytical Engine'],
+        agreedAt: new Date('2026-12-01T00:00:00Z'),
+        orderUrl: 'https://shop.example/en/orders/1'
+    };
+
     it("prints the dates on the shop's calendar, so a day staff typed does not slip a day", () => {
         // Local midnight in Rome is 23:00Z the evening before (winter, UTC+1).
         const mail = fulfillmentDelayedEmail('en', NAME, {
-            titles: ['Analytical Engine'],
+            ...base,
             agreedAt: new Date('2026-12-11T23:00:00Z'),
             expectedAt: new Date('2026-12-19T23:00:00Z'),
-            needsAnswer: true,
-            answerBy: new Date('2026-12-17T23:00:00Z'),
-            orderUrl: 'https://shop.example/en/orders/1'
+            reason: 'moved'
         });
 
         expect(String(mail.data.body)).toContain('December 12, 2026');
         expect(String(mail.data.body)).toContain('December 20, 2026');
-        expect(String(mail.data.answer)).toContain('December 18, 2026');
-    });
-    it('prints the day the buyer is held to: the printed deadline day is the enforced day', () => {
-        // Asked at 08:00Z on 11 December, 30 days on is 10 January. Rome ends that day at 22:59Z, so
-        // the mail says January 10; the end of the UTC day would have printed January 11.
-        const deadline = answerBy(new Date('2026-12-11T08:00:00Z'), {}, 'Europe/Rome');
-        const mail = fulfillmentDelayedEmail('en', NAME, {
-            titles: ['Analytical Engine'],
-            agreedAt: new Date('2026-12-01T00:00:00Z'),
-            needsAnswer: true,
-            answerBy: deadline,
-            orderUrl: 'https://shop.example/en/orders/1'
-        });
-
-        expect(dayInZone(deadline, 'Europe/Rome')).toBe('2027-01-10');
-        expect(String(mail.data.answer)).toContain('January 10, 2027');
-        expect(dayInZone(new Date(deadline.getTime() + 1), 'Europe/Rome')).toBe('2027-01-11');
     });
 
     it.each([
-        ['en', 'You may also cancel it yourself at any time before it ships'],
-        ['it', 'Puoi anche annullarlo tu stesso in qualsiasi momento prima della spedizione']
-    ])('tells a buyer asked with no new date their right to cancel stays (%s)', (locale, text) => {
-        const mail = fulfillmentDelayedEmail(locale, NAME, {
-            titles: ['Analytical Engine'],
-            agreedAt: new Date('2026-12-01T00:00:00Z'),
-            needsAnswer: true,
-            answerBy: new Date('2026-12-29T22:59:59.999Z'),
-            orderUrl: 'https://shop.example/en/orders/1'
-        });
+        ['en', 'You can cancel it from your order page at any time before it ships'],
+        [
+            'it',
+            'Puoi annullarlo dalla pagina del tuo ordine in qualsiasi momento prima della spedizione'
+        ]
+    ])(
+        'closes every wording the same way: cancel any time, doing nothing keeps waiting (%s)',
+        (locale, text) => {
+            for (const mail of [
+                fulfillmentDelayedEmail(locale, NAME, {
+                    ...base,
+                    expectedAt: new Date('2026-12-29T00:00:00Z'),
+                    reason: 'moved'
+                }),
+                fulfillmentDelayedEmail(locale, NAME, { ...base, reason: 'moved' }),
+                fulfillmentDelayedEmail(locale, NAME, { ...base, reason: 'due' })
+            ]) {
+                expect(String(mail.data.closing)).toContain(text);
+                // Nothing is asked of the buyer: no answer slot, no deadline.
+                expect(mail.data).not.toHaveProperty('answer');
+            }
+        }
+    );
 
-        expect(String(mail.data.body)).toContain(text);
-    });
-
-    it('gives the delay reason in the passed-date question', () => {
-        const mail = fulfillmentDelayedEmail('en', NAME, {
-            titles: ['Analytical Engine'],
-            agreedAt: new Date('2026-12-01T00:00:00Z'),
-            needsAnswer: true,
-            answerBy: new Date('2026-12-29T22:59:59.999Z'),
-            orderUrl: 'https://shop.example/en/orders/1'
-        });
-
-        expect(String(mail.data.body)).toContain('the stock we ordered has not reached us yet');
-    });
-
-    it('names the date a RENEWED question follows from, and only then', () => {
-        const base = {
-            titles: ['Analytical Engine'],
-            agreedAt: new Date('2026-12-01T00:00:00Z'),
-            needsAnswer: true,
-            answerBy: new Date('2027-01-19T22:59:59.999Z'),
-            orderUrl: 'https://shop.example/en/orders/1'
-        };
-        const renewed = fulfillmentDelayedEmail('en', NAME, {
+    it('names three wordings, one per thing that happened', () => {
+        const moved = fulfillmentDelayedEmail('en', NAME, {
             ...base,
-            acceptedUntil: new Date('2027-01-19T10:00:00Z')
+            expectedAt: new Date('2026-12-29T00:00:00Z'),
+            reason: 'moved'
         });
+        const cleared = fulfillmentDelayedEmail('en', NAME, { ...base, reason: 'moved' });
+        const passed = fulfillmentDelayedEmail('en', NAME, { ...base, reason: 'due' });
 
-        expect(String(renewed.data.answer)).toContain('You agreed to wait until January 19, 2027.');
-        expect(String(fulfillmentDelayedEmail('en', NAME, base).data.answer)).not.toContain(
-            'You agreed to wait'
-        );
+        expect(String(moved.data.body)).toContain('They are now expected on December 29, 2026');
+        expect(String(cleared.data.body)).toContain('We do not have a new date for them yet');
+        expect(String(passed.data.body)).toContain('the stock we ordered has not reached us yet');
+        expect(new Set([moved.subject, cleared.subject, passed.subject]).size).toBe(3);
+    });
+
+    it('resolves every copy slot rather than echoing a key', () => {
+        const { subject, data } = fulfillmentDelayedEmail('it', NAME, { ...base, reason: 'due' });
+
+        for (const value of [subject, data.pageMetaTitle, data.body, data.closing, data.footer]) {
+            expect(value).not.toBe('');
+            expect(value).not.toMatch(/^delivery\./);
+        }
     });
 });

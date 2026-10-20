@@ -6,12 +6,7 @@
  */
 
 import { dayInZone } from '@domain-primitives/time';
-import {
-    FulfillmentConsent,
-    FulfillmentHoldReason,
-    FulfillmentOrderKind,
-    FulfillmentOrderStatus
-} from '@types';
+import { FulfillmentHoldReason, FulfillmentOrderKind, FulfillmentOrderStatus } from '@types';
 
 /** Why a fulfillment order waits for stock: its units are not released yet, or ran out. */
 export type WaitCause = 'preorder' | 'backorder';
@@ -401,7 +396,6 @@ export interface ActionCandidate {
     kind: FulfillmentOrderKind;
     status: FulfillmentOrderStatus;
     holdReason?: FulfillmentHoldReason | undefined;
-    consent?: FulfillmentConsent | undefined;
     lines: readonly FulfillmentLine[];
 }
 
@@ -442,13 +436,3 @@ export const isHoldable = (candidate: ActionCandidate): boolean =>
 export const isReleasable = (candidate: ActionCandidate): boolean =>
     candidate.status === FulfillmentOrderStatus.on_hold &&
     candidate.holdReason !== FulfillmentHoldReason.awaiting_stock;
-
-/**
- * Whether the buyer has been asked to say "keep waiting" and may answer: the fulfillment order
- * still waits for stock and its consent is `awaiting`.
- * @param candidate - the fulfillment order
- */
-export const isAwaitingAnswer = (candidate: ActionCandidate): boolean =>
-    candidate.status === FulfillmentOrderStatus.on_hold &&
-    candidate.holdReason === FulfillmentHoldReason.awaiting_stock &&
-    candidate.consent === FulfillmentConsent.awaiting;

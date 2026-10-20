@@ -137,8 +137,8 @@ const actOn = (userId: string, email: string, findings: Findings): Promise<void>
 
 /**
  * Apply the rule when a buyer cancels. Only a cancel the buyer made counts (by either door), or an
- * order whose reservation ran out unpaid: staff, an erasure, a payment mismatch and an unanswered
- * wait are other causes. A failure is logged and never rejected: the count is state, not a counter,
+ * order whose reservation ran out unpaid: staff, an erasure and a payment mismatch are other
+ * causes. A failure is logged and never rejected: the count is state, not a counter,
  * so the next cancel finds the same cancels and acts then, while a rejection here would hold back
  * the order's later events (the refund mail).
  *

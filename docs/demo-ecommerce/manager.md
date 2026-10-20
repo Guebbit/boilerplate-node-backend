@@ -143,6 +143,21 @@ recorded as its first delivery.
 **You can see an order's payment, but you cannot return money by hand.** That is the moderator's and
 the admin's job; cancelling a paid order still refunds it.
 
+## Late orders
+
+A preorder or backorder is **late** when its expected date has passed and units remain. The preorder
+board's **Late** view lists them. The shop already told the buyer by email (the new date, or "no
+new date yet", and how to cancel), and it never cancels on its own: a buyer who says nothing keeps
+waiting. So the routine is a person's:
+
+1. **About once a week**, open the Late view.
+2. For an order that is **very late** (a month past its ship date, the threshold this shop starts
+   from), write to the buyer and ask whether they still want it.
+3. If they do not, or the goods will not come, **cancel and refund** with the ordinary staff cancel.
+
+Before you move a release or restock date, the product form shows how many orders would get an
+email. → [`delivery`](../modules/delivery.md#what-staff-do-about-a-late-order)
+
 ## Prices and delivery
 
 Product prices are set per product. Delivery prices are fixed rules, not settings:
