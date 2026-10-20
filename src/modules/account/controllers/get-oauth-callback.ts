@@ -13,6 +13,8 @@ import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { callerContextOf } from '@infrastructure/http/request';
 import { cookieOf } from '@infrastructure/http/cookies';
+import { resolveCookie } from '@kernel/authentication';
+import { readSessionCookie } from '@kernel/cookies';
 import { resolveOAuthProvider } from '../oauth/providers';
 import {
     stateMatches,
@@ -61,6 +63,24 @@ const clearOAuthCookies = (response: Response): void => {
     destroyContinueCookie(response);
     destroyLocaleCookie(response);
     destroyLinkCookie(response);
+};
+
+/**
+ * The account this browser is signed in as, or `undefined` when it holds no live session.
+ *
+ * Resolved here, explicitly, from the session cookie: in `jwt` mode the global middleware does not
+ * fill the caller from a cookie (it is a refresh token there), so reading the request's own caller
+ * would see nobody on a perfectly signed-in connect. The resolver answers in both modes.
+ *
+ * @param request - the callback request
+ */
+const signedInUserId = (request: Request): Promise<string | undefined> => {
+    const sessionToken = readSessionCookie(request);
+    if (!sessionToken) return Promise.resolve(undefined);
+
+    return resolveCookie(sessionToken).then((resolved) =>
+        'ok' in resolved ? resolved.ok?.id : undefined
+    );
 };
 
 /**
@@ -150,11 +170,14 @@ export const getOAuthCallback = (request: Request, response: Response) => {
                 codeVerifier: verifier
             })
             .then((identity) =>
-                accountService.linkProviderToSignedInAccount(
-                    linkToken,
-                    provider.name,
-                    identity,
-                    context
+                signedInUserId(request).then((sessionUserId) =>
+                    accountService.linkProviderToSignedInAccount(
+                        linkToken,
+                        sessionUserId,
+                        provider.name,
+                        identity,
+                        context
+                    )
                 )
             )
             .then(() => {

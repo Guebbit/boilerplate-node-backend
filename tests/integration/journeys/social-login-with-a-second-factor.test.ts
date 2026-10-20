@@ -36,7 +36,7 @@ const socialSignIn = async () => {
 
     return api()
         .get(callback.pathname + callback.search)
-        .set('Cookie', cookieHeader(start, 'oauth_state', 'oauth_verifier'));
+        .set('Cookie', cookieHeader(start, '__Host-oauth_state', '__Host-oauth_verifier'));
 };
 
 it('asks for the code after the provider, and runs the session on the answer', async () => {
@@ -60,7 +60,7 @@ it('asks for the code after the provider, and runs the session on the answer', a
     const location = new URL(challenged.headers.location);
     expect(location.searchParams.get('mfaRequired')).toBe('1');
     expect(setCookie(challenged, '__Host-session')).toBeUndefined();
-    const challenge = setCookie(challenged, 'oauth_mfa_challenge') ?? '';
+    const challenge = setCookie(challenged, '__Host-oauth_mfa_challenge') ?? '';
     expect(challenge).toBeTruthy();
 
     // A wrong code gets nothing; the right one gets the session.

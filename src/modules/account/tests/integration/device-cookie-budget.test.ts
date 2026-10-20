@@ -42,7 +42,7 @@ const guess = (app: ReturnType<typeof appAnswering>, email: string, cookie?: str
 /** Log in for real and answer the `device` cookie the response set, as a `Cookie` header. */
 const deviceCookieAfterLogin = async (email: string): Promise<string> => {
     const response = await api().post('/account/login').send({ email, password: PLAIN_PASSWORD });
-    const header = setCookie(response, 'device');
+    const header = setCookie(response, '__Host-device');
     if (!header) throw new Error('login set no device cookie');
     return header.split(';', 1)[0];
 };
@@ -58,8 +58,8 @@ describe('the device cookie, as issued', () => {
             .post('/account/login')
             .send({ email: user.email, password: PLAIN_PASSWORD });
 
-        expect(setCookie(failed, 'device')).toBeUndefined();
-        expect(setCookie(succeeded, 'device')).toMatch(/HttpOnly/i);
+        expect(setCookie(failed, '__Host-device')).toBeUndefined();
+        expect(setCookie(succeeded, '__Host-device')).toMatch(/HttpOnly/i);
     });
 });
 
@@ -149,9 +149,9 @@ describe('the per-account credential budget', () => {
         const app = appAnswering(401, true, ...limiters);
 
         // The account budget is nowhere near spent: only the forged-cookie budget can answer 429.
-        expect(await statusOf(guess(app, 'a@example.com', 'device=forged'))).toBe(401);
-        expect(await statusOf(guess(app, 'b@example.com', 'device=forged'))).toBe(401);
-        expect(await statusOf(guess(app, 'c@example.com', 'device=forged'))).toBe(429);
+        expect(await statusOf(guess(app, 'a@example.com', '__Host-device=forged'))).toBe(401);
+        expect(await statusOf(guess(app, 'b@example.com', '__Host-device=forged'))).toBe(401);
+        expect(await statusOf(guess(app, 'c@example.com', '__Host-device=forged'))).toBe(429);
         // A request with no cookie at all is not in that budget.
         expect(await statusOf(guess(app, 'd@example.com'))).toBe(401);
     });

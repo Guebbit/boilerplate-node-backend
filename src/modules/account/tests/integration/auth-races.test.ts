@@ -211,7 +211,7 @@ const startAttempt = async () => {
     return () =>
         api()
             .get(callbackUrl.pathname + callbackUrl.search)
-            .set('Cookie', cookieHeader(start, 'oauth_state', 'oauth_verifier'));
+            .set('Cookie', cookieHeader(start, '__Host-oauth_state', '__Host-oauth_verifier'));
 };
 
 describe('two simultaneous OAuth signups for one identity', () => {

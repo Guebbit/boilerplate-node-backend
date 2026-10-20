@@ -165,22 +165,30 @@ export const startOAuthLink = (userId: string): Promise<string> =>
  * provider simply stays connected, with nothing new to record.
  *
  * @param linkToken - the `oauth-link` token the start put in the cookie
+ * @param sessionUserId - the account the browser is signed in as right now, or `undefined` when it
+ *   holds no live session. The token alone is not proof: it rides a cookie, and a planted one would
+ *   otherwise link the victim's provider identity to the account that minted it
  * @param provider - the registry name
  * @param identity - what the provider's token exchange resolved
  * @param context - for the audit row and the mail's locale
  * @returns the account that connected
- * @throws {@link OAuthLinkExpiredError} for a missing, spent or expired token
+ * @throws {@link OAuthLinkExpiredError} for a missing, spent or expired token, or a browser that is
+ *   not signed in as the account the token was minted for
  * @throws {@link OAuthAccountUnavailableError} for an account that may no longer authenticate
  * @throws {@link OAuthIdentityTakenError} for an identity another account holds
  */
 export const linkProviderToSignedInAccount = (
     linkToken: string | undefined,
+    sessionUserId: string | undefined,
     provider: string,
     identity: OAuthIdentity,
     context: CallerContext
 ): Promise<UserDocument> =>
     redeemLiveToken(OAUTH_LINK_TOKEN_TYPE, linkToken ?? '').then((user) => {
         if (!user) throw new OAuthLinkExpiredError();
+        // Refused as an expired attempt: the FE has one message for it, and a new reason code would
+        // be a contract change. A session that ended inside the five minutes fails the link too.
+        if (sessionUserId !== user.id) throw new OAuthLinkExpiredError();
         if (!isAuthenticatable(user)) throw new OAuthAccountUnavailableError(user.id);
 
         return userService.findByOAuthIdentity(provider, identity.providerId).then((owner) => {

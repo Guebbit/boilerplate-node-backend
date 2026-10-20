@@ -13,8 +13,7 @@ import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
 
 /**
  * Flags shared by every cookie this module treats as a credential — `createSessionCookie`,
- * `destroySessionCookie`, and (via `../oauth/state.ts` and `../oauth/mfa-redirect.ts`) the
- * OAuth state/verifier/MFA-challenge cookies: unreadable from script (`httpOnly`), HTTPS-only
+ * `destroySessionCookie`: unreadable from script (`httpOnly`), HTTPS-only
  * outside development and test (`secure`), confined to same-site navigation (`sameSite: 'lax'`), and sent
  * on every path this app serves (`path: '/'`) since the endpoint that sets one is rarely the
  * endpoint that reads or clears it. A function, not a constant, so each call reads `NODE_ENV`
@@ -31,9 +30,10 @@ export const secureCookieOptions = () => ({
  * The session cookie's flags: {@link secureCookieOptions} with `Secure` forced on in every
  * environment, which the `__Host-` prefix requires. Browsers accept `Secure` cookies from
  * `http://localhost`, so a developer machine is unaffected; a LAN-IP dev over plain HTTP is not,
- * and would need HTTPS or a hostname that is not an address.
+ * and would need HTTPS or a hostname that is not an address. Every browser-held cookie of this
+ * module that is host-bound uses it: the session, the device cookie and the OAuth ones.
  */
-const hostCookieOptions = () => ({ ...secureCookieOptions(), secure: true });
+export const hostCookieOptions = () => ({ ...secureCookieOptions(), secure: true });
 
 /**
  * Set the secure httpOnly session cookie.

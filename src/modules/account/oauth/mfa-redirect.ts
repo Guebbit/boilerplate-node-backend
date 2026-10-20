@@ -12,10 +12,10 @@
 
 import type { Request, Response } from 'express';
 import { cookieOf } from '@infrastructure/http/cookies';
-import { secureCookieOptions } from '../session/cookies';
+import { hostCookieOptions } from '../session/cookies';
 
 /** The MFA challenge cookie — single-attempt, cleared once the challenge is spent. */
-const MFA_CHALLENGE_COOKIE = 'oauth_mfa_challenge';
+const MFA_CHALLENGE_COOKIE = '__Host-oauth_mfa_challenge';
 
 /**
  * Set the challenge cookie for one OAuth 2FA continuation. Its lifetime tracks the challenge's
@@ -33,12 +33,12 @@ export const createMfaChallengeCookie = (
     expiresAt: string
 ): void => {
     const maxAge = Math.max(0, new Date(expiresAt).getTime() - Date.now());
-    response.cookie(MFA_CHALLENGE_COOKIE, challenge, { ...secureCookieOptions(), maxAge });
+    response.cookie(MFA_CHALLENGE_COOKIE, challenge, { ...hostCookieOptions(), maxAge });
 };
 
 /** Clear the challenge cookie — called once it has been spent, success or failure. */
 export const destroyMfaChallengeCookie = (response: Response): void => {
-    response.clearCookie(MFA_CHALLENGE_COOKIE, secureCookieOptions());
+    response.clearCookie(MFA_CHALLENGE_COOKIE, hostCookieOptions());
 };
 
 /** The challenge cookie on an incoming request, when one was set. */

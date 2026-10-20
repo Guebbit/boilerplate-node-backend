@@ -315,7 +315,7 @@ describe('mfaChallengeLimiter', () => {
             supertest(app)
                 .post('/route')
                 .set('X-Forwarded-For', '203.0.113.5')
-                .set('Cookie', `oauth_mfa_challenge=${cookie}`)
+                .set('Cookie', `__Host-oauth_mfa_challenge=${cookie}`)
                 .send({});
 
         expect(await statusOf(guessWith('first-challenge'))).toBe(200);

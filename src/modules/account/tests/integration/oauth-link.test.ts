@@ -204,6 +204,7 @@ describe('connecting a provider from a signed-in session', () => {
 
         const linked = await linkProviderToSignedInAccount(
             token,
+            user.id,
             'google',
             identity({ email: 'a-different-address@example.com' }),
             testCallerContext
@@ -224,7 +225,13 @@ describe('connecting a provider from a signed-in session', () => {
     it('mails the owner that a sign-in method was added, naming the provider and no link', async () => {
         const { user, token } = await connecting();
 
-        await linkProviderToSignedInAccount(token, 'github', identity(), testCallerContext);
+        await linkProviderToSignedInAccount(
+            token,
+            user.id,
+            'github',
+            identity(),
+            testCallerContext
+        );
 
         const mails = mockOutbox.filter(
             ({ template }) => template === 'account.sign-in-method-changed'
@@ -238,11 +245,18 @@ describe('connecting a provider from a signed-in session', () => {
 
     it('spends the token: a replayed callback is an expired attempt, linking nothing twice', async () => {
         const { user, token } = await connecting();
-        await linkProviderToSignedInAccount(token, 'google', identity(), testCallerContext);
+        await linkProviderToSignedInAccount(
+            token,
+            user.id,
+            'google',
+            identity(),
+            testCallerContext
+        );
 
         await expect(
             linkProviderToSignedInAccount(
                 token,
+                user.id,
                 'github',
                 identity({ providerId: 'subject-2' }),
                 testCallerContext
@@ -254,11 +268,45 @@ describe('connecting a provider from a signed-in session', () => {
 
     it('refuses a missing or unknown token as an expired attempt', async () => {
         await expect(
-            linkProviderToSignedInAccount(undefined, 'google', identity(), testCallerContext)
+            linkProviderToSignedInAccount(
+                undefined,
+                undefined,
+                'google',
+                identity(),
+                testCallerContext
+            )
         ).rejects.toBeInstanceOf(OAuthLinkExpiredError);
         await expect(
-            linkProviderToSignedInAccount('nope', 'google', identity(), testCallerContext)
+            linkProviderToSignedInAccount(
+                'nope',
+                undefined,
+                'google',
+                identity(),
+                testCallerContext
+            )
         ).rejects.toBeInstanceOf(OAuthLinkExpiredError);
+    });
+
+    it('refuses a link token while the browser is signed in as someone else, linking nothing', async () => {
+        const { user, token } = await connecting();
+        const other = await createUser({ email: 'victim@example.com', verifiedAt: new Date() });
+
+        await expect(
+            linkProviderToSignedInAccount(token, other.id, 'google', identity(), testCallerContext)
+        ).rejects.toBeInstanceOf(OAuthLinkExpiredError);
+
+        expect(await oauthAccountsOf(user.id)).toEqual([]);
+        expect(await oauthAccountsOf(other.id)).toEqual([]);
+    });
+
+    it('refuses a link token when the browser holds no session at all', async () => {
+        const { user, token } = await connecting();
+
+        await expect(
+            linkProviderToSignedInAccount(token, undefined, 'google', identity(), testCallerContext)
+        ).rejects.toBeInstanceOf(OAuthLinkExpiredError);
+
+        expect(await oauthAccountsOf(user.id)).toEqual([]);
     });
 
     it('refuses an identity another account already holds, and links nothing', async () => {
@@ -271,7 +319,7 @@ describe('connecting a provider from a signed-in session', () => {
         const { user, token } = await connecting();
 
         await expect(
-            linkProviderToSignedInAccount(token, 'google', identity(), testCallerContext)
+            linkProviderToSignedInAccount(token, user.id, 'google', identity(), testCallerContext)
         ).rejects.toBeInstanceOf(OAuthIdentityTakenError);
 
         expect(await oauthAccountsOf(user.id)).toEqual([]);
@@ -287,7 +335,13 @@ describe('connecting a provider from a signed-in session', () => {
         });
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        await linkProviderToSignedInAccount(token, 'google', identity(), testCallerContext);
+        await linkProviderToSignedInAccount(
+            token,
+            user.id,
+            'google',
+            identity(),
+            testCallerContext
+        );
 
         expect(await oauthAccountsOf(user.id)).toHaveLength(1);
         expect(auditSpy).not.toHaveBeenCalled();
@@ -299,7 +353,7 @@ describe('connecting a provider from a signed-in session', () => {
         await userRepository.updateMany({ _id: user.id }, { active: false });
 
         await expect(
-            linkProviderToSignedInAccount(token, 'google', identity(), testCallerContext)
+            linkProviderToSignedInAccount(token, user.id, 'google', identity(), testCallerContext)
         ).rejects.toBeInstanceOf(OAuthAccountUnavailableError);
 
         expect(await oauthAccountsOf(user.id)).toEqual([]);
