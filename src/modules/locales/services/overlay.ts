@@ -14,3 +14,10 @@ import { refreshLocaleOverrides } from '@infrastructure/i18n';
  * even though those can't affect the overlay — cheaper than threading the app through.
  */
 export const refreshOverlay = (): void => void refreshLocaleOverrides();
+
+/**
+ * Re-read the overlay and wait for it. For the writes that change which languages are SERVED:
+ * the request right after a language is switched on or off, on the worker that took the write,
+ * must already negotiate against the new list. Never rejects, like the refresh itself.
+ */
+export const refreshOverlayNow = (): Promise<void> => refreshLocaleOverrides();

@@ -8,9 +8,9 @@
  *   the deployment that existed before overrides did;
  *   overrides do not accumulate — a deleted row must actually stop answering, which only works
  *   because a refresh restores the baseline before re-applying;
- *   a language with no deployed file is skipped — the supported list is what the middleware
- *   negotiates against, and answering `Content-Language: pt` while resolving English is worse
- *   than not offering Portuguese at all.
+ *   a language with no deployed file is skipped — i18next holds resources only for the deployed
+ *   files, so an API override for any other language has nothing to land on. That language is
+ *   still served (see `served.test.ts`), with the fallback's wording, key by key.
  *
  * `i18next` is initialised per test rather than shared: `addResourceBundle` mutates a global, and
  * a leaked override would make whichever test ran next depend on order.
@@ -26,10 +26,18 @@ import {
     resetLocaleOverrides,
     startLocaleOverrideRefresh,
     stopLocaleOverrideRefresh,
-    t
+    t,
+    type LocaleOverlay
 } from '@infrastructure/i18n';
 import enTranslation from '../../../../src/locales/en.json';
 import { setEnvironment } from '@tests/environment';
+
+/** A provider answer: the given overrides and registered languages, none by default. */
+const overlayOf = (
+    overrides: LocaleOverlay['overrides'] = {},
+    activeTags: string[] = [],
+    inactiveTags: string[] = []
+): LocaleOverlay => ({ overrides, activeTags, inactiveTags });
 
 describe('locale overrides', () => {
     beforeEach(async () => {
@@ -55,7 +63,9 @@ describe('locale overrides', () => {
 
     it('lets a stored override win over the deployed file', async () => {
         registerLocaleOverrideProvider(() =>
-            Promise.resolve({ en: { generic: { 'error-unauthorized': 'Edited by a human' } } })
+            Promise.resolve(
+                overlayOf({ en: { generic: { 'error-unauthorized': 'Edited by a human' } } })
+            )
         );
 
         await refreshLocaleOverrides();
@@ -70,7 +80,7 @@ describe('locale overrides', () => {
      */
     it('keeps the sibling keys of an overridden one', async () => {
         registerLocaleOverrideProvider(() =>
-            Promise.resolve({ en: { generic: { 'error-unauthorized': 'Edited' } } })
+            Promise.resolve(overlayOf({ en: { generic: { 'error-unauthorized': 'Edited' } } }))
         );
 
         await refreshLocaleOverrides();
@@ -84,11 +94,11 @@ describe('locale overrides', () => {
      */
     it('drops an override that has since been deleted', async () => {
         registerLocaleOverrideProvider(() =>
-            Promise.resolve({ en: { generic: { 'error-unauthorized': 'Edited' } } })
+            Promise.resolve(overlayOf({ en: { generic: { 'error-unauthorized': 'Edited' } } }))
         );
         await refreshLocaleOverrides();
 
-        registerLocaleOverrideProvider(() => Promise.resolve({}));
+        registerLocaleOverrideProvider(() => Promise.resolve(overlayOf()));
         await refreshLocaleOverrides();
 
         expect(t('generic.error-unauthorized')).toBe(enTranslation.generic['error-unauthorized']);
@@ -100,7 +110,7 @@ describe('locale overrides', () => {
      */
     it('keeps the last good overlay when the provider fails', async () => {
         registerLocaleOverrideProvider(() =>
-            Promise.resolve({ en: { generic: { 'error-unauthorized': 'Edited' } } })
+            Promise.resolve(overlayOf({ en: { generic: { 'error-unauthorized': 'Edited' } } }))
         );
         await refreshLocaleOverrides();
 
@@ -112,7 +122,7 @@ describe('locale overrides', () => {
 
     it('ignores overrides for a language with no deployed dictionary', async () => {
         registerLocaleOverrideProvider(() =>
-            Promise.resolve({ pt: { generic: { 'error-unauthorized': 'Editado' } } })
+            Promise.resolve(overlayOf({ pt: { generic: { 'error-unauthorized': 'Editado' } } }))
         );
 
         await expect(refreshLocaleOverrides()).resolves.toBeUndefined();
@@ -121,7 +131,7 @@ describe('locale overrides', () => {
 
     it('overrides one language without touching another', async () => {
         registerLocaleOverrideProvider(() =>
-            Promise.resolve({ it: { generic: { 'error-unauthorized': 'Modificato' } } })
+            Promise.resolve(overlayOf({ it: { generic: { 'error-unauthorized': 'Modificato' } } }))
         );
 
         await refreshLocaleOverrides();
@@ -178,7 +188,7 @@ describe('the override refresh interval', () => {
 
     it('re-reads the overrides once per period', () => {
         setEnvironment({ NODE_LOCALE_OVERRIDE_REFRESH_MS: '1000' });
-        const provider = jest.fn(() => Promise.resolve({}));
+        const provider = jest.fn(() => Promise.resolve(overlayOf()));
         registerLocaleOverrideProvider(provider);
 
         startLocaleOverrideRefresh();
@@ -191,7 +201,7 @@ describe('the override refresh interval', () => {
     // timer would double every worker's read rate against Mongo for the life of the process.
     it('runs one timer however many times it is started', () => {
         setEnvironment({ NODE_LOCALE_OVERRIDE_REFRESH_MS: '1000' });
-        const provider = jest.fn(() => Promise.resolve({}));
+        const provider = jest.fn(() => Promise.resolve(overlayOf()));
         registerLocaleOverrideProvider(provider);
 
         startLocaleOverrideRefresh();
@@ -203,7 +213,7 @@ describe('the override refresh interval', () => {
 
     it('stops re-reading once stopped, and can be started again', () => {
         setEnvironment({ NODE_LOCALE_OVERRIDE_REFRESH_MS: '1000' });
-        const provider = jest.fn(() => Promise.resolve({}));
+        const provider = jest.fn(() => Promise.resolve(overlayOf()));
         registerLocaleOverrideProvider(provider);
 
         startLocaleOverrideRefresh();
@@ -235,7 +245,7 @@ describe('isLocaleOverrideAvailable', () => {
     it('is false with no provider registered, true once one is', () => {
         expect(isLocaleOverrideAvailable()).toBe(false);
 
-        registerLocaleOverrideProvider(() => Promise.resolve({}));
+        registerLocaleOverrideProvider(() => Promise.resolve(overlayOf()));
 
         expect(isLocaleOverrideAvailable()).toBe(true);
     });

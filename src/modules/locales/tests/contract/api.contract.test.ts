@@ -914,13 +914,45 @@ describe('a locale only the API has', () => {
     });
 
     /*
-     * And the converse, which is the guarantee the tier split is FOR: a language that exists only
-     * in the database must never change what `Content-Language` says. i18next has no resource for
-     * it and never will until a file is deployed, so negotiating it would be a header that lies.
+     * And the other half of the one-pick rule: a language that exists only in the database is
+     * answered in once it is switched on. `Content-Language` names the audience the answer is
+     * written for; the API's own messages have no Portuguese wording, so each falls back to the
+     * default language, key by key. A switched-off one is never picked.
      */
-    it('does not start answering in a language that exists only in the database', async () => {
+    it('answers in a language that exists only in the database, once it is switched on', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
+
+        const response = await api().get('/locales').set('Accept-Language', 'pt');
+
+        expect(response.headers['content-language']).toBe('pt');
+    });
+
+    it('words its own messages in the default language when the picked one has no wording', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api().get('/locales/xx').set('Accept-Language', 'pt');
+
+        expect(response.status).toBe(404);
+        expect(response.body.errors[0].message).toBe(
+            translator(getFallbackLocale())('generic.error-invalid-data')
+        );
+    });
+
+    it('does not pick a language that exists only in the database while it is switched off', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer, { ...PORTUGUESE, active: false });
+
+        const response = await api().get('/locales').set('Accept-Language', 'pt');
+
+        expect(response.headers['content-language']).toBe(getFallbackLocale());
+    });
+
+    it('stops picking it the moment it is switched off', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        await api().patch('/locales/pt').set('Authorization', bearer).send({ active: false });
 
         const response = await api().get('/locales').set('Accept-Language', 'pt');
 

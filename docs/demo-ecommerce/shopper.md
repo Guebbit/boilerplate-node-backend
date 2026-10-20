@@ -161,6 +161,18 @@ An address book holds the places they have shipped to, with one marked as the us
 Deleting the account is deliberately two steps, and it takes everything with it: the basket, the
 wishlist and the address book all go. → [`account`](../modules/account.md)
 
+## The shop's language
+
+The shopper picks one language and everything follows it: the buttons, the product names and
+descriptions, the search, and the emails the shop sends them. A language the shop has not switched
+on is never offered. If a shopper had saved one that has since been switched off, they get the
+shop's default language instead, in the page and in the emails.
+
+Some of the shop's own messages (an error, a confirmation) may not exist in a language that was
+added by hand and has no translation file yet. Those few show in the default language, one message
+at a time, while the product names and the screens stay in the shopper's language.
+→ [`locales`](../modules/locales.md)
+
 ## The words we used
 
 | Word          | In plain terms                                                                                                        |

@@ -10,33 +10,33 @@ import type { NextFunction, Request, Response } from 'express';
 import {
     createLocaleContext,
     getFallbackLocale,
-    listSupportedLocales,
+    listServedLocales,
     runWithLocaleContext
 } from '@infrastructure/i18n';
 
 /**
- * Picks the best supported locale for the request's `Accept-Language` header.
+ * Picks the best served locale for the request's `Accept-Language` header.
+ *
+ * One pick decides everything: the API's own wording (a message with no wording in the picked
+ * language falls back to the default one key at a time), the product text, and the
+ * `Content-Language` label, which names the audience the answer is written for (RFC 9110 §8.5).
+ * What can be picked is every language switched on — deployed or registered — and the fallback;
+ * a switched-off or unknown tag falls back like no header at all.
  *
  * `request.acceptsLanguages` (Express, via `accepts`/`negotiator`) handles q-weights, `*` and
  * `en-GB` → `en` region-prefix matching — the same ground `CLAUDE.md` says not to reimplement by
  * hand. `false` (nothing offered matches, or the header explicitly refuses everything) falls back,
  * same as no header at all.
  *
- * The fallback locale goes FIRST in the offered list: `negotiator` answers a bare `*` — or no
- * header — with the first candidate offered, so that is what makes both cases resolve to the
- * fallback rather than an arbitrary supported locale.
+ * The fallback locale goes FIRST in the offered list ({@link listServedLocales} puts it there):
+ * `negotiator` answers a bare `*` — or no header — with the first candidate offered, so that is
+ * what makes both cases resolve to the fallback rather than an arbitrary served locale.
  *
  * @param request - only `acceptsLanguages` is read off it, so a stub needs no more than that
  */
 const negotiateLocale = (request: Pick<Request, 'acceptsLanguages'>): string => {
-    const supported = listSupportedLocales();
-    const fallback = supported.includes(getFallbackLocale())
-        ? getFallbackLocale()
-        : (supported[0] ?? getFallbackLocale());
-    const offered = [fallback, ...supported.filter((locale) => locale !== fallback)];
-
-    const negotiated = request.acceptsLanguages(...offered);
-    return typeof negotiated === 'string' ? negotiated : fallback;
+    const negotiated = request.acceptsLanguages(...listServedLocales());
+    return typeof negotiated === 'string' ? negotiated : getFallbackLocale();
 };
 
 /**

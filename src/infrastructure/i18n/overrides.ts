@@ -1,10 +1,10 @@
 /**
  * @module
  * The database overlay: admin-edited copy layered on top of the deployed dictionaries under
- * `./catalog`. Nothing here is awaited on the request path, a refresh restores the file baseline
- * before re-applying overrides, and only a language with a deployed file can be overridden.
- * Deliberately isolated — nothing imports this back, so deleting the file and its two
- * boot-sequence lines removes the whole feature.
+ * `./catalog`, plus which registered languages are switched on or off (`./served`). Nothing here
+ * is awaited on the request path, a refresh restores the file baseline before re-applying
+ * overrides, and only a language with a deployed file can be overridden. One refresh fills both,
+ * so the copy and the list of served languages never come from two different reads.
  *
  * See: docs/tools/i18n.md#database-overrides
  */
@@ -12,15 +12,26 @@
 import i18next from 'i18next';
 import { logger } from '@infrastructure/adapters/logger';
 import { listSupportedLocales, readLocaleDictionary } from './catalog';
+import { resetServedLanguages, setServedLanguages } from './served';
 import { localeConfig } from '@infrastructure/i18n/config';
 
-/**
- * Supplies the current overrides, keyed by locale, already nested.
- *
- * Nested rather than flat: only the `locales` module can expand a dotted key safely (it refuses
- * `__proto__` and rejects an ambiguous string/group key), so `infrastructure` must not redo that.
- */
-export type LocaleOverrideProvider = () => Promise<Record<string, Record<string, unknown>>>;
+/** What one refresh learns from the database: the copy, and which registered languages are on. */
+export interface LocaleOverlay {
+    /**
+     * The current overrides, keyed by locale, already nested.
+     *
+     * Nested rather than flat: only the `locales` module can expand a dotted key safely (it refuses
+     * `__proto__` and rejects an ambiguous string/group key), so `infrastructure` must not redo that.
+     */
+    overrides: Record<string, Record<string, unknown>>;
+    /** Tags of the registered languages that are switched on. */
+    activeTags: readonly string[];
+    /** Tags of the registered languages that are switched off. */
+    inactiveTags: readonly string[];
+}
+
+/** Supplies the current {@link LocaleOverlay}; a rejection leaves the last good one in place. */
+export type LocaleOverrideProvider = () => Promise<LocaleOverlay>;
 
 /** The registered provider, or `undefined` before the composition root has supplied one. */
 let overrideProvider: LocaleOverrideProvider | undefined;
@@ -41,16 +52,23 @@ export const registerLocaleOverrideProvider = (provider?: LocaleOverrideProvider
  */
 export const isLocaleOverrideAvailable = (): boolean => overrideProvider !== undefined;
 
+/** Put every supported language back on its deployed files, dropping any applied override. */
+const restoreFileBaseline = (): void => {
+    for (const locale of listSupportedLocales())
+        i18next.addResourceBundle(locale, 'translation', readLocaleDictionary(locale), true, true);
+};
+
 /**
- * Restore every supported language to its deployed files, dropping any applied override.
+ * Restore every supported language to its deployed files, and forget which registered languages
+ * are on or off.
  *
  * The path a failed refresh does NOT take — a provider that throws leaves the last good overlay in
  * place, because stale copy beats copy that reverts itself every time Mongo hiccups. This exists
  * for shutdown and for tests, which need a clean instance rather than a plausible one.
  */
 export const resetLocaleOverrides = (): void => {
-    for (const locale of listSupportedLocales())
-        i18next.addResourceBundle(locale, 'translation', readLocaleDictionary(locale), true, true);
+    restoreFileBaseline();
+    resetServedLanguages();
 };
 
 /**
@@ -69,7 +87,7 @@ export const applyLocaleOverrides = (
     // EVERY supported language is restored, not only the ones with overrides here — deleting a
     // language's last override must restore it, not leave it unchanged. Synchronous so nothing
     // observes the language briefly back on its file baseline.
-    resetLocaleOverrides();
+    restoreFileBaseline();
 
     const skipped: string[] = [];
 
@@ -97,7 +115,17 @@ export const applyLocaleOverrides = (
 };
 
 /**
- * Pull the current overrides and apply them. Never rejects.
+ * Apply one refresh: the copy, and which registered languages are served.
+ *
+ * @param overlay - what the provider read
+ */
+export const applyLocaleOverlay = (overlay: LocaleOverlay): void => {
+    applyLocaleOverrides(overlay.overrides);
+    setServedLanguages(overlay.activeTags, overlay.inactiveTags);
+};
+
+/**
+ * Pull the current overlay and apply it. Never rejects.
  *
  * Swallowing the failure is the whole point: this runs at boot, on a timer and after every admin
  * write, and none of those callers has a user to report to. A database that cannot be read costs
@@ -107,11 +135,11 @@ export const refreshLocaleOverrides = (): Promise<void> => {
     if (!overrideProvider) return Promise.resolve();
 
     return overrideProvider()
-        .then((overrides) => applyLocaleOverrides(overrides))
+        .then((overlay) => applyLocaleOverlay(overlay))
         .catch((error: unknown) => {
             // Stryker disable all
             logger.warn(
-                'refreshLocaleOverrides - locale overrides unavailable, keeping the last set',
+                'refreshLocaleOverrides - locale overlay unavailable, keeping the last set',
                 {
                     error
                 }

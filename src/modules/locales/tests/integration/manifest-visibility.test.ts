@@ -2,8 +2,9 @@
  * @module
  * Who the manifest offers a switched-off language to. A language with a deployed dictionary file
  * (`src/locales/it.json`) is always among the supported ones, so the scoped read that drops a
- * switched-off ROW is not enough: the file-backed language came back as `active: true`. The
- * public manifest, and the sitemap that reads it, must leave it out; staff still see it, off.
+ * switched-off ROW is not enough: the file-backed language came back as `active: true`. Every
+ * caller now sees it as `active: false`: a client that bundles the language itself needs that row
+ * to stop offering it. The sitemap, which lists only the active ones, leaves it out.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -24,15 +25,15 @@ const manifestTags = (bearer?: string) => {
 };
 
 describe('GET /locales for a language with a deployed file that is switched off', () => {
-    it('leaves it out for a visitor, and keeps it, off, for staff', async () => {
+    it('lists it as off, for a visitor and for staff alike', async () => {
         await givenLocale('it', { active: false });
         const { bearer } = await authenticateAs('admin');
 
         const visitor = await manifestTags();
         const staff = await manifestTags(bearer);
 
-        expect(visitor.map(([tag]) => tag)).not.toContain('it');
         expect(visitor).toContainEqual(['en', true]);
+        expect(visitor).toContainEqual(['it', false]);
         expect(staff).toContainEqual(['it', false]);
     });
 

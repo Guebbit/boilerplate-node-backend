@@ -172,7 +172,21 @@ describe('mergeCapabilities', () => {
         expect(row?.name).toBe('Spanish');
     });
 
-    it('reports a database-only language as frontend-only — the API cannot answer in it', () => {
+    // A deployed file has no off switch of its own: a row registered for its tag switches it off,
+    // and the frontend that bundles the file needs that row to stop offering it.
+    it('reports a deployed-file language as off when a row switches it off', () => {
+        const [row] = localeService.mergeCapabilities(['it'], [], new Map(), new Set(['it']));
+
+        expect(row).toMatchObject({ tag: 'it', active: false, source: LocaleSource.static });
+    });
+
+    it('leaves a deployed-file language on when no row switches it off', () => {
+        const rows = localeService.mergeCapabilities(['en', 'it'], [], new Map(), new Set(['pt']));
+
+        expect(rows.map(({ active }) => active)).toEqual([true, true]);
+    });
+
+    it('reports a database-only language as frontend-only — the API has no wording of its own in it', () => {
         const rows = localeService.mergeCapabilities(
             [],
             [language({ tag: 'pt', name: 'Portuguese', nativeName: 'Português', revision: 3 })],

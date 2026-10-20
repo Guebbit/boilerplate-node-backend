@@ -25,7 +25,9 @@ import {
     getCurrentLocale,
     getFallbackLocale,
     getLocaleContext,
-    listSupportedLocales
+    listServedLocales,
+    resetServedLanguages,
+    setServedLanguages
 } from '@infrastructure/i18n';
 
 /**
@@ -81,14 +83,14 @@ describe('attachLocale', () => {
     });
 
     it('states the locale the client actually got, not the one it asked for', () => {
-        // 'zz' is supported by nothing, so negotiation falls back — and the header has to say so,
+        // 'zz' is served by nothing, so negotiation falls back — and the header has to say so,
         // otherwise a cache keys an English body under a Klingon request.
         const request = makeRequest('zz');
         const response = makeResponse();
 
         attachLocale(request, response, jest.fn() as NextFunction);
 
-        expect(listSupportedLocales()).toContain(request.locale);
+        expect(listServedLocales()).toContain(request.locale);
         expect(response.set).toHaveBeenCalledWith('Content-Language', request.locale);
     });
 
@@ -106,7 +108,7 @@ describe('attachLocale', () => {
         const response = makeResponse();
 
         expect(() => attachLocale(request, response, jest.fn() as NextFunction)).not.toThrow();
-        expect(listSupportedLocales()).toContain(request.locale);
+        expect(listServedLocales()).toContain(request.locale);
     });
 
     it('calls next exactly once', () => {
@@ -174,5 +176,81 @@ describe('attachLocale', () => {
 
             expect(request.locale).toBe(getFallbackLocale());
         });
+    });
+});
+
+/** The locale `attachLocale` negotiates for one `Accept-Language` header. */
+const negotiate = (header: string): string | undefined => {
+    const request = makeRequest(header);
+
+    attachLocale(request, makeResponse(), jest.fn() as NextFunction);
+
+    return request.locale;
+};
+
+/**
+ * One language per request, picked from every language that is switched on: the deployed files
+ * minus the switched-off, plus the registered ones with no file, plus the fallback. The picked
+ * tag is what product text is read in and what `Content-Language` says.
+ */
+describe('attachLocale against the served languages', () => {
+    afterEach(() => {
+        resetServedLanguages();
+    });
+
+    it('picks a registered language that has no deployed file once it is switched on', () => {
+        setServedLanguages(['es'], []);
+
+        expect(negotiate('es')).toBe('es');
+    });
+
+    it('labels the answer with that language, not with the fallback', () => {
+        setServedLanguages(['es'], []);
+        const response = makeResponse();
+
+        attachLocale(makeRequest('es'), response, jest.fn() as NextFunction);
+
+        expect(response.set).toHaveBeenCalledWith('Content-Language', 'es');
+    });
+
+    it('falls back for a registered language that is switched off', () => {
+        setServedLanguages([], ['es']);
+
+        expect(negotiate('es')).toBe(getFallbackLocale());
+    });
+
+    it('falls back for a deployed language that has been switched off', () => {
+        setServedLanguages([], ['it']);
+
+        expect(negotiate('it')).toBe(getFallbackLocale());
+    });
+
+    it('falls back for a language nobody registered', () => {
+        setServedLanguages(['es'], []);
+
+        expect(negotiate('de')).toBe(getFallbackLocale());
+    });
+
+    it('matches a regional tag to the registered language', () => {
+        setServedLanguages(['es'], []);
+
+        expect(negotiate('es-MX')).toBe('es');
+    });
+
+    it('prefers the highest q-weight among the switched-on languages', () => {
+        setServedLanguages(['es'], []);
+
+        expect(negotiate('es;q=0.9, it;q=0.8')).toBe('es');
+    });
+
+    it('skips a switched-off language the client ranks first and takes its next choice', () => {
+        setServedLanguages(['es'], ['it']);
+
+        expect(negotiate('it, es;q=0.5')).toBe('es');
+    });
+
+    it('serves exactly the deployed files before any refresh has landed', () => {
+        expect(negotiate('es')).toBe(getFallbackLocale());
+        expect(negotiate('it')).toBe('it');
     });
 });
