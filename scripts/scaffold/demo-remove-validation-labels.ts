@@ -14,6 +14,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { isPlainObject } from '@infrastructure/object-guards';
+import { modulesWith } from '../modules-on-disk';
 import type { RemovalNote } from './demo-remove-registry';
 
 /** Where the shared dictionaries live, relative to the repo root. */
@@ -121,9 +122,9 @@ export const readRemovedFields = (
     names: readonly string[]
 ): ReadonlySet<string> => {
     const modulesRoot = path.join(repoRoot, 'src', 'modules');
-    const survivors = readdirSync(modulesRoot, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory() && !names.includes(entry.name))
-        .map((entry) => path.join(modulesRoot, entry.name));
+    const survivors = modulesWith(modulesRoot, 'openapi.yaml')
+        .filter((name) => !names.includes(name))
+        .map((name) => path.join(modulesRoot, name));
     const surviving = requestFields(
         [...survivors, path.join(repoRoot, 'shared', 'contracts')].flatMap((directory) =>
             contractsIn(directory)
