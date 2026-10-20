@@ -49,7 +49,6 @@ import {
     callerContextAs
 } from '@tests/callers';
 import { payByCard } from '@modules/payments/tests/factories';
-import { reservationRepository } from '@modules/inventory/tests/factories';
 import { seedMembership } from '@modules/access/tests/factories';
 
 // The audit port is replaced, not spied on — see `tests/support/ports.ts`.
@@ -756,9 +755,9 @@ describe('the confirm commits the order’s held units', () => {
         expect(movements.items.map((row) => row.reason)).toEqual(['reserve']);
     });
 
-    it('settles a payment whose order is already paid: the hold commits, nothing is refunded', async () => {
+    it('settles a payment whose order is already paid: nothing is refunded', async () => {
         // The replay branch: the payment write lands but `markPaid` matches nothing, because the
-        // order moved to `paid` while the card was being charged, and left its hold `held`.
+        // order moved to `paid` while the card was being charged.
         const { user, order } = await placedOrder(10, 3);
         const orderId = String(order._id);
         const intent = await paymentService.createIntent(orderId, auth(user));
@@ -782,8 +781,6 @@ describe('the confirm commits the order’s held units', () => {
         expect(payment!.status).toBe('succeeded');
         expect(payment!.refunds).toHaveLength(0);
         expect((await orderService.getById(orderId))!.status).toBe('paid');
-        const hold = await reservationRepository.findByOrderId(orderId);
-        expect(hold?.status).toBe('committed');
     });
 
     it('commits once when the webhook and the browser settle the same payment', async () => {

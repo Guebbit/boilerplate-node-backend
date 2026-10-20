@@ -43,7 +43,7 @@ says, and `available` is identical in both models at every moment.
 | Transition                 | Called by                                                                                               | Counters                        | Ledger `reason` |
 | -------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------- |
 | `reserveForOrder`          | [checkout](./cart-checkout.md), admin order create                                                      | `reserved` +n                   | `reserve`       |
-| `commitForOrder`           | [`payments`](./payments.md) on confirm                                                                  | none                            | none            |
+| `commitForOrder`           | [`orders`](./orders.md), in the transaction of `markPaid` (a card, a transfer or a cash payment)        | none                            | none            |
 | `shipLinesForOrder`        | [`delivery`](./delivery.md) (through `orders`), in the transaction of each shipment — only ITS units    | `onHand` −n, `reserved` −n      | `ship`          |
 | `shipForOrder`             | [`orders`](./orders.md), in the transaction of an admin override past dispatch — whatever is left       | `onHand` −n, `reserved` −n      | `ship`          |
 | `releaseLinesForOrder`     | [`returns`](./returns.md), in the transaction of a remainder cancel — only the cancelled units          | `reserved` −n                   | `release`       |

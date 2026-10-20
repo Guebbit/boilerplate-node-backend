@@ -71,13 +71,13 @@ key, for as long as it takes. A hand-paid order opens its record too and waits f
 it shows on the needs-attention list as `manual_refund_owed`, and the operator's own refund
 settles it by hand.
 
-**`settlePayment` is the one place where the money and the goods agree.** It commits the order's
-held units itself rather than announcing and hoping, because that instant is the only moment a hold
-becomes a paid claim (the units leave the shelf later, at shipment). Without this module nothing would ever commit a hold, and every order would sit
-reserved until its window expired.
+**`settlePayment` is the one place where the money and the goods agree.** It moves the order to
+`paid` in the same transaction, and `markPaid` commits the order's held units there rather than
+announcing and hoping: that instant is the only moment a hold becomes a paid claim (the units leave
+the shelf later, at shipment).
 
 It is reached three ways — the confirm, the sync, and the provider's webhook — and there is exactly
-one of it because two would drift, and drifted copies commit the hold twice. Every write inside it
+one of it because two would drift, and drifted copies would settle one order twice. Every write inside it
 is conditional on the payment still being settleable, and the two terminal statuses are deliberately
 outside that set: that absence is what makes a provider retrying a delivery for three days find
 nothing left to move.
@@ -857,6 +857,6 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 - [The provider port](./payments-provider-port.md) — the interface and the fake behind it
 - [`orders`](./orders.md) — what a payment is about
-- [`inventory`](./inventory.md) — the units this module commits
+- [`inventory`](./inventory.md) — the units a settlement keeps held
 - [Layers](../theory/layers.md) — what a port is and where it sits
 - [Security](../tools/security.md) — what is never stored here, and this module's own rate-limit budgets

@@ -2,7 +2,7 @@
  * @module
  * Reconciling what the provider says about a payment — the browser-driven confirm/sync and the
  * webhook delivery all funnel into {@link settlePayment}, the ONE place money is reconciled. Two
- * copies would drift, and drifted copies commit inventory twice.
+ * copies would drift, and drifted copies would settle one order twice.
  */
 
 import { t } from '@infrastructure/i18n';
@@ -219,7 +219,8 @@ type SettlementOutcome =
  *          exactly one caller sees its own write land; a webhook and a confirm racing each other
  *          commit once. The other finds nothing to do — `replay`.
  * Replay:  `markPaid` answering `null` on an order that is already past payment (a move that
- *          landed some other way) still commits the hold and announces; nothing is lost.
+ *          landed some other way) still announces; nothing is lost. Whoever moved the order
+ *          committed its hold, in the same transaction as the move.
  * Lost:    the order was cancelled (or otherwise left `pending`) before the money arrived. The
  *          refund record is opened here, so the money is never durable without its way back; the
  *          provider call happens after the commit.
@@ -260,7 +261,6 @@ const settleWithin = async (
             await openRefund(succeeded, CANCELLATION_REQUEST, undefined, session);
             return { kind: 'lost', payment: succeeded };
         }
-        await inventoryService.commitForOrder(orderId, session);
     }
 
     await enqueueOutboxEvent(
