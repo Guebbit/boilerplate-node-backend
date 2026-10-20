@@ -216,6 +216,52 @@ missing goods — the units are still on the shelf, just unreserved — so refun
 alone would cancel a sale that may be perfectly fulfillable. A human reads the audit trail and
 decides.
 
+### Money can land on a released hold: paid wins
+
+An expiry is two transactions, not one: the sweep releases the hold and writes
+`inventory.reservation_expired` (`expireOne`), and `orders` cancels the order later, when the
+outbox delivers that event (`expireReservationById`). They cannot be one transaction because
+`inventory` may not import `orders`. In between, the order still says `pending` and is payable
+while its hold is `released`.
+
+| Situation                                 | How long the order is payable with no hold                  |
+| ----------------------------------------- | ----------------------------------------------------------- |
+| normal (`nudgeOutbox()` after the commit) | milliseconds                                                |
+| the nudge fails                           | up to a minute (the `sweep:outbox` cron is the backstop)    |
+| the cancel throws                         | backoff retries, up to `NODE_OUTBOX_MAX_ATTEMPTS`           |
+| retries exhausted, the row goes `dead`    | unbounded: the order stays `pending`, payable, with no hold |
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as sweep (inventory)
+    participant X as outbox
+    participant O as orders
+    participant P as payments
+    S->>S: release the hold (held → released)
+    S->>X: write reservation_expired, in the same transaction
+    Note over O: order still pending and payable
+    P->>O: money lands (a transfer is recorded, a late webhook arrives)
+    O->>O: markPaid: the order is paid
+    O->>S: commitForOrder: the claim misses, the hold is released
+    S-->>S: admin.commit.orphaned audit row (the alarm)
+    X->>O: reservation_expired, delivered late
+    O->>O: the system cancel only leaves pending: it refuses, the paid order stands
+```
+
+**Which doors ask first.** Only the card confirm checks the hold before money moves
+(`orderService.isPayableNow`: awaiting payment AND hold not released). It is interactive, so the
+buyer can still be refused before the card is charged. Every other door records money that already
+moved: an operator recording cash or a transfer, a provider reference or webhook, the
+`PaymentActions.pay` view, `orders`' `canRecordPayment` and `markPaid` itself check the status only.
+Refusing there would not un-pay anything.
+
+**The policy is deliberate: paid wins.** The payment stands, the `admin.commit.orphaned` alarm above
+fires, and a human decides: ship from the shelf (the units are still there, only unreserved), or
+refund. Nothing refuses a payment on a released hold and nothing refunds on its own. When the
+retries are exhausted the row is `dead`, which the `OutboxEventsDead` alert already raises (see
+[Alert rules](../tools/prometheus.md#alert-rules) and [the outbox](../tools/outbox.md)).
+
 ## The ledger is half of the transition, not a reaction to it
 
 `stockmovements` rows are written **by the same call that moves the counter**. There is deliberately
