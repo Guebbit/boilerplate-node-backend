@@ -23,6 +23,10 @@ import {
     setFulfillmentOrderState
 } from '@modules/delivery/tests/factories';
 import { deliveryService } from '@modules/delivery/services';
+import {
+    presentExportFulfillmentOrder,
+    presentPreorderFulfillmentOrder
+} from '@modules/delivery/presenter';
 import { confirmWait } from '@modules/delivery/services/confirm-wait';
 import deliveryModule from '@modules/delivery/module';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
@@ -108,6 +112,8 @@ describe('a release date that moves', () => {
         expect(waiting.expectedAt?.getTime()).toBeGreaterThan(waiting.agreedAt!.getTime());
         expect(waiting.slips).toBe(1);
         expect(waiting.consent).toBeUndefined();
+        // Silence is consent to the new date (16 CFR 435.2 (b)(1)(ii)): it is on record as agreed.
+        expect(waiting.revisedShipDate).toEqual(waiting.expectedAt);
         expect(waiting.lastNoticeAt).toBeInstanceOf(Date);
         expect(await delayedEvents()).toMatchObject([
             { orderId, needsAnswer: false, reason: 'moved', titles: expect.any(Array) }
@@ -115,7 +121,7 @@ describe('a release date that moves', () => {
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
     });
 
-    it('asks a question when the slip is longer than 28 days, and opens the 30-day window', async () => {
+    it('asks a question when the slip is longer than 28 days, and ends the window 28 days past the promise', async () => {
         const { orderId, productIds } = await preorder(30);
         await waitingOf(orderId);
 
@@ -123,10 +129,13 @@ describe('a release date that moves', () => {
 
         const waiting = await waitingOf(orderId);
         expect([waiting.consent, waiting.slips]).toEqual(['awaiting', 1]);
-        // 30 days on, to the end of that shop-zone day: never less, and under 31.
-        const days = (waiting.consentDeadline!.getTime() - Date.now()) / DAY;
-        expect(days).toBeGreaterThan(29.9);
-        expect(days).toBeLessThan(31);
+        // The rule's own end, not a count from today: the promise (30 days out) plus 28 calendar
+        // days, to the end of that shop-zone day. A fixed 30 days from now would close it a month early.
+        expect(waiting.consentDeadline).toEqual(
+            endOfDayInZone(waiting.agreedAt!, shopTimezone(), 28)
+        );
+        // The date the question offers is on record while it is open.
+        expect(waiting.revisedShipDate).toEqual(waiting.expectedAt);
         const events = await delayedEvents();
         expect(events).toMatchObject([{ needsAnswer: true }]);
         // A first question follows from no earlier agreement.
@@ -146,6 +155,87 @@ describe('a release date that moves', () => {
             endOfDayInZone(new Date(promised.getTime() + 28 * DAY), shopTimezone())
         );
     });
+
+    it('does not cut an early question short: it stays open to the promise plus 28 days', async () => {
+        const { orderId, productIds } = await preorder(60);
+
+        await moveDate(productIds[0], inDays(150));
+
+        const waiting = await waitingOf(orderId);
+        expect(waiting.consent).toBe('awaiting');
+        // About day 88, not day 30: a buyer told two months ahead keeps the time the rule gives.
+        expect(waiting.consentDeadline).toEqual(
+            endOfDayInZone(waiting.agreedAt!, shopTimezone(), 28)
+        );
+        expect(waiting.consentDeadline!.getTime() - Date.now()).toBeGreaterThan(80 * DAY);
+    });
+
+    it('takes a silent short delay as consent to its date, so a later question ends there', async () => {
+        const { orderId, productIds } = await preorder(30);
+        await moveDate(productIds[0], inDays(40));
+        const silent = await waitingOf(orderId);
+
+        await moveDate(productIds[0], inDays(55));
+
+        const waiting = await waitingOf(orderId);
+        expect(waiting.consent).toBe('awaiting');
+        // Not the promise plus 28 (day 58): silence cancels at the date already consented to.
+        expect(waiting.consentDeadline).toEqual(
+            endOfDayInZone(silent.revisedShipDate!, shopTimezone())
+        );
+    });
+
+    it('keeps the date a buyer accepted when the date later moves earlier', async () => {
+        const { orderId, productIds } = await preorder(30);
+        await moveDate(productIds[0], inDays(40));
+        const silent = await waitingOf(orderId);
+
+        await moveDate(productIds[0], inDays(35));
+
+        const waiting = await waitingOf(orderId);
+        expect(waiting.expectedAt!.getTime()).toBeLessThan(silent.expectedAt!.getTime());
+        expect(waiting.revisedShipDate).toEqual(silent.revisedShipDate);
+    });
+
+    it.each([
+        ['a cleared date', null],
+        ['a date that passed with no newer one', 'passed']
+    ] as const)(
+        'tells, and never asks, about every later date after an open-ended yes: %s',
+        async (_name, how) => {
+            const { orderId, productIds, user } = await preorder(30);
+            if (how === null) await moveDate(productIds[0], null);
+            else await deliveryService.runPreorderSweep(inDays(31));
+            const asked = await waitingOf(orderId);
+            expect(asked.consent).toBe('awaiting');
+            // A question that offers no date records none, so a "yes" to it has no end date.
+            expect(asked.revisedShipDate).toBeUndefined();
+            await confirmWait(String(asked._id), asCustomer(user.id), testCallerContext);
+            const yes = await waitingOf(orderId);
+            expect(yes.consent).toBe('confirmed');
+            expect(yes.revisedShipDate).toBeUndefined();
+            const questions = await delayedEvents().then((all) => all.length);
+
+            await moveDate(productIds[0], inDays(200));
+            const first = await waitingOf(orderId);
+            await moveDate(productIds[0], inDays(260));
+            const second = await waitingOf(orderId);
+            await moveDate(productIds[0], inDays(240));
+            const earlier = await waitingOf(orderId);
+            await deliveryService.runPreorderSweep(inDays(245));
+
+            // Two notices, each with the cancel option and no deadline; the earlier move is silent.
+            const events = await delayedEvents().then((all) => all.slice(questions));
+            expect(events).toMatchObject([{ needsAnswer: false }, { needsAnswer: false }]);
+            for (const state of [first, second, earlier]) {
+                expect(state.consent).toBe('confirmed');
+                expect(state.consentDeadline).toBeUndefined();
+                expect(state.revisedShipDate).toBeUndefined();
+            }
+            expect(earlier.expectedAt!.getTime()).toBeLessThan(second.expectedAt!.getTime());
+            expect(await consentOf(orderId)).toBe('confirmed');
+        }
+    );
 
     it('asks again on a second slip, however small', async () => {
         const { orderId, productIds } = await preorder(30);
@@ -376,6 +466,56 @@ describe('the buyer saying keep waiting', () => {
     });
 });
 
+/** The three views of one fulfillment order, as the wire carries them. */
+const viewsOf = async (orderId: string, userId: string) => {
+    const stored = await waitingOf(orderId);
+    const buyer = await deliveryService.getForOrder(orderId, asCustomer(userId));
+    return {
+        buyer: buyer.success ? buyer.data.fulfillmentOrders[0] : undefined,
+        exported: presentExportFulfillmentOrder(stored),
+        board: presentPreorderFulfillmentOrder(stored, undefined, false, new Date())
+    };
+};
+
+describe('the revised ship date, as the buyer, the export and the board see it', () => {
+    it('carries the date a silent short delay was taken to agree to', async () => {
+        const { orderId, productIds, user } = await preorder(30);
+        await moveDate(productIds[0], inDays(40));
+        const { expectedAt } = await waitingOf(orderId);
+
+        const { buyer, exported, board } = await viewsOf(orderId, user.id);
+
+        for (const view of [buyer, exported, board])
+            expect(view?.revisedShipDate).toBe(expectedAt!.toISOString());
+    });
+
+    it('carries the date an open question offers, and keeps it once the buyer says yes', async () => {
+        const { orderId, productIds, user } = await preorder(30);
+        await moveDate(productIds[0], inDays(75));
+        const { expectedAt } = await waitingOf(orderId);
+        await confirmWait(await waitingIdOf(orderId), asCustomer(user.id), testCallerContext);
+
+        const { buyer } = await viewsOf(orderId, user.id);
+
+        expect(buyer).toMatchObject({
+            consent: 'confirmed',
+            revisedShipDate: expectedAt!.toISOString()
+        });
+    });
+
+    it('is absent for an open-ended yes: the buyer agreed to wait with no end date', async () => {
+        const { orderId, productIds, user } = await preorder(30);
+        await moveDate(productIds[0], null);
+        await confirmWait(await waitingIdOf(orderId), asCustomer(user.id), testCallerContext);
+
+        const { buyer, exported, board } = await viewsOf(orderId, user.id);
+
+        expect(buyer).toMatchObject({ consent: 'confirmed' });
+        for (const view of [buyer, exported, board])
+            expect(view).not.toHaveProperty('revisedShipDate');
+    });
+});
+
 describe('the daily sweep', () => {
     it('asks the buyer once about a date that came with no stock, and not again', async () => {
         const { orderId } = await preorder(30);
@@ -451,6 +591,7 @@ describe('the daily sweep', () => {
         await setFulfillmentOrderState(waitingId, {
             agreedAt: inDays(-40),
             expectedAt: accepted,
+            revisedShipDate: accepted,
             consent: 'confirmed',
             lastNoticeAt: inDays(-30)
         });

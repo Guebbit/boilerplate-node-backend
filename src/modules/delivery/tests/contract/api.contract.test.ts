@@ -737,6 +737,19 @@ describe('GET /delivery/fulfillment-orders/release-date-impact', () => {
         });
     });
 
+    it('matches the contract: nobody asked means no deadline to name', async () => {
+        const { bearer, productId } = await adminWithPreorder();
+
+        const response = await api()
+            .get(url)
+            .query({ productId, releaseDate: new Date(Date.now() + 40 * DAY).toISOString() })
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        // A short first slip is only told: `answerBy` is absent, not null.
+        expect(response.body.data).toEqual({ notify: 1, ask: 0 });
+    });
+
     it.each([
         ['absent', {}],
         ['blank', { releaseDate: '' }]

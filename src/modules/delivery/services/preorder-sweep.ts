@@ -6,7 +6,7 @@
  *   notice since gets the same question a long slip does: keep waiting, or cancel (an indefinite
  *   delay, FTC 16 CFR 435.2 (b)(1)(iii)(B)). Asked ahead of the date, never after: the offer must go
  *   out no later than the promise;
- * - one whose buyer was asked and let the 30 days pass in silence is marked `expired` and
+ * - one whose buyer was asked and let the deadline pass in silence is marked `expired` and
  *   announced, and `returns` cancels and refunds it. It is announced again each day until the
  *   cancel lands.
  *

@@ -72,6 +72,12 @@ export interface FulfillmentOrderDocument extends Document {
     consent?: FulfillmentConsent;
     /** When silence turns into a cancel. Present exactly while `consent` is `awaiting`. */
     consentDeadline?: Date;
+    /**
+     * The definite revised date the buyer was offered or accepted (16 CFR 435.2 (b)(2)): the one in a
+     * question while `consent` is `awaiting`, else the one agreed to, by answering or by silence.
+     * Absent with `consent: confirmed`, the buyer agreed to wait with no end date.
+     */
+    revisedShipDate?: Date;
     /** When the buyer was last told the date moved or passed: what stops a daily repeat. */
     lastNoticeAt?: Date;
     /** How many later dates the buyer was told about: a second slip always asks for a yes. */
@@ -154,6 +160,7 @@ export const fulfillmentOrderSchema = new Schema<FulfillmentOrderDocument>(
         expectedAt: { type: Date },
         consent: { type: String, enum: Object.values(FulfillmentConsent) },
         consentDeadline: { type: Date },
+        revisedShipDate: { type: Date },
         lastNoticeAt: { type: Date },
         slips: { type: Number, required: true, min: 0, default: 0 },
         cancelReason: { type: String, enum: Object.values(FulfillmentCancelReason) },

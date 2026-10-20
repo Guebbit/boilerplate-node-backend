@@ -151,6 +151,7 @@ export type FulfillmentOrderPatch = Partial<
         | 'expectedAt'
         | 'consent'
         | 'consentDeadline'
+        | 'revisedShipDate'
         | 'lastNoticeAt'
         | 'slips'
         | 'cancelReason'
@@ -162,6 +163,7 @@ export type FulfillmentOrderPatch = Partial<
         | 'holdNote'
         | 'holdMessage'
         | 'consentDeadline'
+        | 'revisedShipDate'
         | 'expectedAt'
     )[];
 };

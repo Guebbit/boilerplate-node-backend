@@ -13,7 +13,7 @@ import { buyerIdOf, orderService } from '@modules/orders';
 import { shopTimezone } from '@modules/shop';
 import type { OrderDocument } from '@modules/orders';
 import { FulfillmentConsent } from '@types';
-import { answerBy } from '../domain';
+import { answerBy, isOpenEndedYes } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
 import type { FulfillmentOrderPatch } from '../repository';
 import type { FulfillmentOrderDocument } from '../model';
@@ -68,9 +68,11 @@ const payloadOf = (
 /**
  * Record a notice on a fulfillment order and announce it, inside the caller's transaction.
  *
- * A notice that needs an answer opens the window (`consent: awaiting`, deadline at most 30 days on); one
- * that does not leaves the consent alone. Both stamp `lastNoticeAt`, which is what stops the sweep
- * repeating itself. The write is conditional on the revision the caller read, so a ship or an
+ * A notice that needs an answer opens the window (`consent: awaiting`, the deadline from `answerBy`);
+ * one that does not leaves the consent alone. Both stamp `lastNoticeAt`, which is what stops the
+ * sweep repeating itself, and both record the definite date they put to the buyer as
+ * `revisedShipDate`: offered by a question, taken as agreed by silence. A buyer who said yes with no
+ * end date keeps that: a later date is only told, and records none. The write is conditional on the revision the caller read, so a ship or an
  * allocation racing it wins and the notice is simply not sent.
  *
  * @param fulfillmentOrder - the fulfillment order, as the caller read it in `session`
@@ -97,13 +99,26 @@ export const recordNotice = async (
     // mail names (16 CFR 435.2 (b)(2)(ii): the buyer is told what they agreed to).
     const acceptedUntil =
         input.needsAnswer && fulfillmentOrder.consent === FulfillmentConsent.confirmed
-            ? fulfillmentOrder.expectedAt
+            ? fulfillmentOrder.revisedShipDate
             : undefined;
+    // The definite date this notice leaves on record. A question offers `input.expectedAt` (none for
+    // the sweep's, which offers no new date); a notice with no answer is taken as agreed unless the
+    // buyer's yes was open-ended, which a later date does not turn into a dated one.
+    const revisedShipDate =
+        input.needsAnswer || !isOpenEndedYes(fulfillmentOrder)
+            ? (input.expectedAt ?? undefined)
+            : undefined;
+    const unset = [
+        // A cleared date leaves no `expectedAt`, so a redelivery finds nothing to move.
+        ...(input.expectedAt === null ? ['expectedAt' as const] : []),
+        // A question that offers no date drops the date an earlier answer settled on.
+        ...(input.needsAnswer && revisedShipDate === undefined ? ['revisedShipDate' as const] : [])
+    ];
     const patch: FulfillmentOrderPatch = {
         lastNoticeAt: now,
         ...(input.expectedAt ? { expectedAt: input.expectedAt } : {}),
-        // A cleared date leaves no `expectedAt`, so a redelivery finds nothing to move.
-        ...(input.expectedAt === null ? { unset: ['expectedAt' as const] } : {}),
+        ...(revisedShipDate ? { revisedShipDate } : {}),
+        ...(unset.length > 0 ? { unset } : {}),
         ...(input.countsAsSlip ? { slips: fulfillmentOrder.slips + 1 } : {}),
         ...(input.needsAnswer
             ? {

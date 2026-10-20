@@ -19,6 +19,8 @@ import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
 import { MISSING_ID } from '@tests/ids';
 import { fulfillmentOrderModel } from '@modules/delivery/model';
+import { endOfDayInZone } from '@domain-primitives/time';
+import { shopTimezone } from '@modules/shop';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -151,20 +153,99 @@ describe('the preview', () => {
         expect(previewed).toEqual({ notify: 0, ask: 1 });
     });
 
-    it('names the deadline a question would carry', async () => {
-        const { productIds } = await preorder(inDays(30));
-        const now = new Date('2026-12-01T00:00:00Z');
+    it('names the deadline a question would carry: 28 days past the promise, not 30 from now', async () => {
+        const { orderId, productIds } = await preorder(inDays(30));
+        const [waiting] = await fulfillmentOrdersOf(orderId);
+        const asked = new Date(Date.now() + 3 * DAY);
 
         const result = await deliveryService.previewDateImpact(
             productIds[0],
             'preorder',
             undefined,
-            now
+            asked
         );
 
         expect(result).toMatchObject({
             success: true,
-            data: { answerBy: '2026-12-31T00:00:00.000Z' }
+            data: {
+                ask: 1,
+                answerBy: endOfDayInZone(waiting.agreedAt!, shopTimezone(), 28).toISOString()
+            }
         });
+    });
+
+    it('reports the EARLIEST deadline among the questions it would send', async () => {
+        const { orderId, productIds } = await preorder(inDays(30));
+        const [first] = await fulfillmentOrdersOf(orderId);
+        // A second group of the same order, promised five days earlier: its question ends sooner.
+        await fulfillmentOrderModel.create({
+            ...first.toObject(),
+            _id: undefined,
+            number: first.number + 1,
+            agreedAt: new Date(first.agreedAt!.getTime() - 5 * DAY)
+        });
+
+        const result = await deliveryService.previewDateImpact(
+            productIds[0],
+            'preorder',
+            undefined
+        );
+
+        expect(result).toMatchObject({
+            success: true,
+            data: {
+                ask: 1,
+                answerBy: endOfDayInZone(
+                    new Date(first.agreedAt!.getTime() - 5 * DAY),
+                    shopTimezone(),
+                    28
+                ).toISOString()
+            }
+        });
+    });
+
+    it('ends a buyer who already agreed to a date at that date', async () => {
+        const { orderId, productIds } = await preorder(inDays(30));
+        const [waiting] = await fulfillmentOrdersOf(orderId);
+        const agreed = new Date(Date.now() + 40 * DAY);
+        await fulfillmentOrderModel
+            .updateOne({ _id: waiting._id }, { $set: { revisedShipDate: agreed, slips: 1 } })
+            .exec();
+
+        const result = await deliveryService.previewDateImpact(
+            productIds[0],
+            'preorder',
+            undefined
+        );
+
+        expect(result).toMatchObject({
+            success: true,
+            data: { ask: 1, answerBy: endOfDayInZone(agreed, shopTimezone()).toISOString() }
+        });
+    });
+
+    it('names no deadline when nobody would be asked', async () => {
+        const { productIds } = await preorder(inDays(30));
+
+        const result = await deliveryService.previewDateImpact(
+            productIds[0],
+            'preorder',
+            inDays(10)
+        );
+
+        expect(result).toMatchObject({ success: true, data: { notify: 0, ask: 0 } });
+        expect(result.success && result.data).not.toHaveProperty('answerBy');
+    });
+
+    it('tells, and does not ask, a buyer who agreed to wait with no end date', async () => {
+        const { orderId, productIds } = await preorder(inDays(30));
+        const [waiting] = await fulfillmentOrdersOf(orderId);
+        await fulfillmentOrderModel
+            .updateOne({ _id: waiting._id }, { $set: { consent: 'confirmed', slips: 4 } })
+            .exec();
+
+        const previewed = await preview(productIds[0], inDays(120));
+
+        expect(previewed).toEqual({ notify: 1, ask: 0 });
     });
 });

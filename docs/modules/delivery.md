@@ -257,29 +257,37 @@ old date, unless the admin moves it after the date has passed; the daily sweep c
 | a **first** slip, at most **28** days past the agreed | a notice with the cancel option; silence keeps waiting | FTC (b)(1)(ii) allows 30; two days for time zones |
 | a longer slip, **or** any second one                  | a question: keep waiting, or cancel                    | FTC (b)(1)(iii), (b)(2)(ii): silence is a cancel  |
 | none: the date was cleared                            | the same question, with no new date to offer, once     | an indefinite delay                               |
+| a **later or new** date, after an open-ended "yes"    | a notice with the cancel option, never a question      | (b)(2)(iii): no further notice is required        |
 
-A question opens a window of **at most 30 days** (`consent: awaiting`, `consentDeadline`), to the end
-of the **shop's** day the mail prints (`NODE_SHOP_TIMEZONE`, `endOfDayInZone`): the printed day and
+A question opens a window (`consent: awaiting`, `consentDeadline`) that ends with the **rule's own end**,
+never a fixed span from the day it is sent, at the end of the **shop's** day the mail prints (`NODE_SHOP_TIMEZONE`, `endOfDayInZone`): the printed day and
 the enforced day are one, whatever the zone. A "keep waiting" that arrives after that deadline is
 refused with a 409 even before the daily sweep marks the window expired. A renewed question, sent to
 a buyer who already agreed to a date, names that date in the mail. Silence cancels and refunds, so a question never buys time past what
-the buyer was already owed (FTC (b)(1)(iii), (b)(2)(ii)): the deadline is cut back to a cap, read from
-the fulfillment order as it stood BEFORE the question wrote its own state (`answerBy` in
-`domain/preorder.ts`).
+the buyer was already owed (FTC (b)(1)(iii), (b)(2)(ii)): the deadline is read from the fulfillment
+order as it stood BEFORE the question wrote its own state (`answerBy` in `domain/preorder.ts`), the
+first row that applies:
 
-| The buyer's state before the question    | The deadline is the earlier of 30 days on and...  |
-| ---------------------------------------- | ------------------------------------------------- |
-| a question is already open (`awaiting`)  | that open window: asking again never extends it   |
-| a dated delay was accepted (`confirmed`) | the date accepted (`expectedAt`)                  |
-| nothing accepted yet                     | the agreed date plus 28 days (FTC's 30, less two) |
-| no date expected                         | nothing: 30 days on                               |
+| The buyer's state before the question                    | The deadline is the end of the shop day of...                                            |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| a question is already open (`awaiting`)                  | that open window: asking again never extends it                                          |
+| a definite date offered or agreed to (`revisedShipDate`) | that date                                                                                |
+| nothing agreed yet                                       | the agreed date plus 28 days (FTC's 30, less two), whether or not a date is expected now |
 
-A cap that has already passed is held at today, so a buyer is never handed a deadline that is gone.
-The preview's `answerBy` below is the 30-day ceiling, since it cannot know whom a question would
-reach. The buyer answers
+(With no promised date at all, which a preorder never has, it falls back to 30 days on.) A cap that
+has already passed is held at today, so a buyer is never handed a deadline that is gone. An early
+question is not cut short: it stays open until that end, so a buyer told weeks ahead has the time
+the rule gives them. `revisedShipDate` is the definite revised date on the order: the one a question
+offers while `consent` is `awaiting`, otherwise the one the buyer agreed to, by answering or by silence.
+It is absent with `consent: confirmed` when the buyer said yes to a question that offered no date:
+an **open-ended yes**, which asks for no further question and records no deadline, because the
+rule requires no further notice once a buyer agrees to an indefinite date. A later or new date is
+then only told (a `notify`, with the cancel option), and the right to cancel before shipment stays.
+The preview's `answerBy` below is the EARLIEST deadline among the questions a move would send. The
+buyer answers
 `POST /delivery/fulfillment-orders/{id}/confirm-wait` (`consent: confirmed`), cancels (the existing
 cancel or remainder cancel), or says nothing. The fulfillment order carries the whole state: `slips`
-(later dates already told), `consent`, `consentDeadline`, `lastNoticeAt` and `cancelReason`. Moving a
+(later dates already told), `consent`, `consentDeadline`, `revisedShipDate`, `lastNoticeAt` and `cancelReason`. Moving a
 date earlier writes only `expectedAt`. Which date is expected is read from the catalogue, the latest
 release date among the products still waiting, so a group of several stays right when one of them
 moves; the event only says that something moved, and a redelivery finds the date already expected.
@@ -296,7 +304,7 @@ stateDiagram-v2
     Waiting --> Asked: longer slip, second slip,<br/>no date, or the date passed
     Noticed --> Asked: another slip, or the date passes
     Asked --> Confirmed: buyer says keep waiting
-    Confirmed --> Asked: a newer date moves, or 14 days before the accepted one
+    Confirmed --> Asked: a newer date moves, or 14 days before the accepted one<br/>(never after an open-ended yes: that is only told)
     Asked --> Expired: silence until the deadline (sweep)
     Expired --> Cancelled: returns cancels and refunds
     Waiting --> Allocated: stock arrives
@@ -308,8 +316,8 @@ stateDiagram-v2
 ### Previewing a move before it is saved
 
 `GET /delivery/fulfillment-orders/release-date-impact?productId=&releaseDate=` tells staff, before
-they save, how many **orders** the move would notify (`notify`) or ask (`ask`), and the `answerBy`
-a question would carry. It runs the listener's own rule (`expectedDateOf` and `judgeMove` in
+they save, how many **orders** the move would notify (`notify`) or ask (`ask`), and the earliest
+`answerBy` among the questions it would send (absent when nobody is asked). It runs the listener's own rule (`expectedDateOf` and `judgeMove` in
 `domain/preorder.ts`) against the date that would be, and writes nothing, so the two cannot drift.
 
 ```mermaid
@@ -321,7 +329,7 @@ flowchart LR
     U -- no --> W[Each waiting fulfillment order]
     W --> J[judgeMove with the proposed date]
     J --> T[Tally in distinct orders]
-    T --> O[notify, ask, answerBy]
+    T --> O[notify, ask, earliest answerBy]
 ```
 
 - `releaseDate` absent or blank previews a **cleared** date.
@@ -348,7 +356,7 @@ does two things, and only to fulfillment orders still `on_hold` for stock:
   435.2(b)(1)), so it goes out ahead of the date, never after. It is keyed on `expectedAt`, not `agreedAt`: after an accepted slip the agreed date
   is long gone and only the expected one can still be missed. `lastNoticeAt` is what stops a daily
   repeat. A backorder promised the 30-day default is asked like any other, on day 28;
-- one asked and not answered for 30 days is marked `consent: expired` and announced as
+- one asked and not answered by its deadline is marked `consent: expired` and announced as
   `fulfillment_order.wait_expired`. [`returns`](./returns.md#a-wait-nobody-answered) cancels and refunds
   it. It is announced again each day until the cancel lands, so a failed cancel retries by itself.
 
@@ -536,7 +544,7 @@ Each act writes its rows to the order's [timeline](./orders.md#the-timeline) in 
 | `release_date_moved`   | a product's date moved and this order's expected date followed | fulfillment order id, `from` and `to` (ISO, or `null`)       |
 | `delay_notice_sent`    | the buyer was told: the date moved, or it passed               | fulfillment order id, `reason`, `needsAnswer`, dates         |
 | `wait_confirmed`       | the buyer said "keep waiting" (their own `actor`)              | fulfillment order id                                         |
-| `wait_expired`         | the sweep announced a wait that ran 30 days in silence         | fulfillment order id                                         |
+| `wait_expired`         | the sweep announced a wait that ran to its deadline in silence | fulfillment order id                                         |
 
 A whole-order cancel writes no `remainder_cancelled`: the order's own `cancelled` row says it. The
 shipment row comes first, then the order's own move that it caused (`shipped`, `delivered`).

@@ -26,7 +26,7 @@ export const deliveryJobs: readonly JobDeclaration[] = [
         // both are idempotent.
         schedule: '20 2 * * *',
         summary:
-            'Asks the buyer of a late preorder whether to keep waiting, and announces a wait left unanswered for 30 days, which `returns` cancels and refunds.',
+            'Asks the buyer of a late preorder whether to keep waiting, and announces a wait left unanswered past its deadline, which `returns` cancels and refunds.',
         run: () =>
             runPreorderSweep()
                 .then((result) => {

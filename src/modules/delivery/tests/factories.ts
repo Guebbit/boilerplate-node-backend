@@ -49,7 +49,13 @@ export const setFulfillmentOrderState = (
     fields: Partial<
         Pick<
             FulfillmentOrderDocument,
-            'agreedAt' | 'expectedAt' | 'consent' | 'consentDeadline' | 'lastNoticeAt' | 'slips'
+            | 'agreedAt'
+            | 'expectedAt'
+            | 'consent'
+            | 'consentDeadline'
+            | 'revisedShipDate'
+            | 'lastNoticeAt'
+            | 'slips'
         >
     >
 ): Promise<unknown> =>

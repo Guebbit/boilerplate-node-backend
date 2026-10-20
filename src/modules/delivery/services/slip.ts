@@ -10,7 +10,8 @@
  * | ------------------------------------------ | ------------------------------------------------ |
  * | not later than expected                    | nothing; the order page shows the date           |
  * | a first slip of at most 28 days            | a notice and the cancel option; silence waits    |
- * | longer, a second slip, or no date at all   | a question; 30 days of silence cancels           |
+ * | longer, a second slip, or no date at all   | a question; silence cancels 28 days past agreed  |
+ * | any later date after an open-ended "yes"   | a notice and the cancel option; never a question |
  *
  * Idempotent, since the outbox delivers at least once: a redelivery finds the date already expected
  * (or, for a cleared date, no expected date left) and does nothing.

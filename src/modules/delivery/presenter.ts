@@ -95,6 +95,9 @@ const presentRecord = (fulfillmentOrder: FulfillmentOrderDocument) => ({
     ...(fulfillmentOrder.consentDeadline
         ? { consentDeadline: fulfillmentOrder.consentDeadline.toISOString() }
         : {}),
+    ...(fulfillmentOrder.revisedShipDate
+        ? { revisedShipDate: fulfillmentOrder.revisedShipDate.toISOString() }
+        : {}),
     ...(fulfillmentOrder.lastNoticeAt
         ? { lastNoticeAt: fulfillmentOrder.lastNoticeAt.toISOString() }
         : {}),
@@ -177,6 +180,9 @@ export const presentPreorderFulfillmentOrder = (
     ...(fulfillmentOrder.consent ? { consent: fulfillmentOrder.consent } : {}),
     ...(fulfillmentOrder.consentDeadline
         ? { consentDeadline: fulfillmentOrder.consentDeadline.toISOString() }
+        : {}),
+    ...(fulfillmentOrder.revisedShipDate
+        ? { revisedShipDate: fulfillmentOrder.revisedShipDate.toISOString() }
         : {}),
     ...(fulfillmentOrder.lastNoticeAt
         ? { lastNoticeAt: fulfillmentOrder.lastNoticeAt.toISOString() }

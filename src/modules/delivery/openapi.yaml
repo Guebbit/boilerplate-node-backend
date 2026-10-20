@@ -217,8 +217,7 @@ paths:
             description: |
                 A preview for staff about to save a release date, so the save is never a surprise. Counts the
                 orders whose waiting fulfillment orders for this product would get a notice (`notify`: a short first
-                slip, silence keeps them waiting) or a question (`ask`: silence for 30 days cancels and refunds,
-                by `answerBy`). An order with groups in both counts once, under `ask`. It judges with the same rule
+                slip, silence keeps them waiting) or a question (`ask`: silence cancels and refunds once the buyer's deadline passes, 28 days after the date they were promised or the date they already agreed to; `answerBy` is the earliest of those). An order with groups in both counts once, under `ask`. It judges with the same rule
                 the save does and writes nothing: the counts are a snapshot, and a payment or shipment between the
                 preview and the save can shift them.
 
@@ -263,8 +262,7 @@ paths:
             description: |
                 A preview for staff about to save a restock date, so the save is never a surprise. Counts the
                 orders whose backordered units for this product would get a notice (`notify`: a short first
-                slip, silence keeps them waiting) or a question (`ask`: silence for 30 days cancels and refunds,
-                by `answerBy`). An order with groups in both counts once, under `ask`. It judges with the same rule
+                slip, silence keeps them waiting) or a question (`ask`: silence cancels and refunds once the buyer's deadline passes, 28 days after the date they were promised or the date they already agreed to; `answerBy` is the earliest of those). An order with groups in both counts once, under `ask`. It judges with the same rule
                 the save does and writes nothing: the counts are a snapshot, and a payment or shipment between the
                 preview and the save can shift them.
 
@@ -752,6 +750,10 @@ components:
                     type: string
                     format: date-time
                     description: When silence turns into a cancel and a refund. Present exactly while `consent` is `awaiting`.
+                revisedShipDate:
+                    type: string
+                    format: date-time
+                    description: The definite revised shipping date (16 CFR 435.2 (b)), meaning the one offered while `consent` is `awaiting`, otherwise the one the buyer accepted, by answering or by silence. Absent with `consent` `confirmed` when the buyer agreed to wait with no end date and can still cancel any time before it ships.
                 lastNoticeAt:
                     type: string
                     format: date-time
@@ -931,6 +933,10 @@ components:
                     type: string
                     format: date-time
                     description: When silence turns into a cancel and a refund. Present exactly while `consent` is `awaiting`.
+                revisedShipDate:
+                    type: string
+                    format: date-time
+                    description: The definite revised shipping date (16 CFR 435.2 (b)), meaning the one offered while `consent` is `awaiting`, otherwise the one the buyer accepted, by answering or by silence. Absent with `consent` `confirmed` when the buyer agreed to wait with no end date and can still cancel any time before it ships.
                 lastNoticeAt:
                     type: string
                     format: date-time
@@ -1131,6 +1137,10 @@ components:
                 consentDeadline:
                     type: string
                     format: date-time
+                revisedShipDate:
+                    type: string
+                    format: date-time
+                    description: The definite revised shipping date (16 CFR 435.2 (b)), meaning the one offered while `consent` is `awaiting`, otherwise the one the buyer accepted, by answering or by silence. Absent with `consent` `confirmed` when the buyer agreed to wait with no end date and can still cancel any time before it ships.
                 lastNoticeAt:
                     type: string
                     format: date-time
@@ -1221,7 +1231,7 @@ components:
         ReleaseDateImpact:
             type: object
             additionalProperties: false
-            required: [notify, ask, answerBy]
+            required: [notify, ask]
             description: Orders a release-date move would tell, counted in orders, never fulfillment orders.
             properties:
                 notify:
@@ -1231,11 +1241,11 @@ components:
                 ask:
                     type: integer
                     minimum: 0
-                    description: Orders that get a question; silence until `answerBy` cancels and refunds. Includes an order that also has a notice.
+                    description: Orders that get a question; silence until the buyer's deadline cancels and refunds. Includes an order that also has a notice.
                 answerBy:
                     type: string
                     format: date-time
-                    description: When silence would turn into a cancel, were the question asked now. Meaningful when `ask` is above 0.
+                    description: The earliest date by which a buyer who gets a question must say yes, if the move were saved now; each buyer's own deadline is 28 days after the date they were promised, or the date they already accepted. Absent when `ask` is 0.
 
         ReleaseDateImpactEnvelope:
             type: object

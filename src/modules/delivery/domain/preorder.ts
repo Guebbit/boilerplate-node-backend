@@ -5,11 +5,12 @@
  *
  * The law, and our margin:
  *
- * | Case                                      | Law                                    | What we do                       |
- * | ----------------------------------------- | -------------------------------------- | -------------------------------- |
- * | first slip, at most 28 days past agreed   | FTC 16 CFR 435.2 (b)(1)(ii): 30 days   | notice, silence keeps waiting    |
- * | a longer slip, or any second one          | (b)(1)(iii), (b)(2)(ii): silence = no  | ask, silence for 30 days cancels |
- * | the expected date passes, no newer date   | (b)(1)(iii)(B), (b)(2)                 | ask, same as above               |
+ * | Case                                      | Law                                    | What we do                              |
+ * | ----------------------------------------- | -------------------------------------- | --------------------------------------- |
+ * | first slip, at most 28 days past agreed   | FTC 16 CFR 435.2 (b)(1)(ii): 30 days   | notice, silence keeps waiting           |
+ * | a longer slip, or any second one          | (b)(1)(iii), (b)(2)(ii): silence = no  | ask, silence cancels 28 days past agreed |
+ * | the expected date passes, no newer date   | (b)(1)(iii)(B), (b)(2)                 | ask, same as above                      |
+ * | a later date after an open-ended "yes"    | (b)(2)(iii): no more notices required  | notice only, the right to cancel stays  |
  *
  * 28 and not 30: two days for time zones and day counting. The same stricter-of-two-laws idea as
  * the withdrawal window.
@@ -43,7 +44,10 @@ export const ASK_BEFORE_DAYS = 2;
  */
 export const RENEWED_ASK_BEFORE_DAYS = 14;
 
-/** How long a buyer has to say "keep waiting" before silence cancels: the FTC's 30 days. */
+/**
+ * The window {@link answerBy} falls back to when nothing bounds a question (no date promised, none
+ * offered): the FTC's 30 days. Unreachable for a preorder, which always carries its promised date.
+ */
 export const CONSENT_WINDOW_DAYS = 30;
 
 /** What a moved date asks of the buyer, decided by {@link judgeSlip}. */
@@ -68,14 +72,36 @@ export interface SlipFacts {
     slips: number;
     /** The date now expected; absent when the date was cleared, which is an indefinite delay. */
     next?: Date | undefined;
+    /** Whether the buyer was asked, and what they answered. */
+    consent?: FulfillmentConsent | undefined;
+    /** The definite revised date on record; absent with `consent: confirmed` is an open-ended yes. */
+    revisedShipDate?: Date | undefined;
 }
+
+/**
+ * Did the buyer agree to wait with no end date? A "yes" to a question that offered no date: the FTC
+ * wants no further delay notices for it (16 CFR 435.2 (b)(2)(iii)); the right to cancel before
+ * shipment stays.
+ * @param facts - the fulfillment order's consent and revised date
+ */
+export const isOpenEndedYes = (facts: Pick<SlipFacts, 'consent' | 'revisedShipDate'>): boolean =>
+    facts.consent === FulfillmentConsent.confirmed && facts.revisedShipDate === undefined;
 
 /**
  * What a moved release date asks of the buyer.
  *
  * @param facts - the promise, the current expectation, the slips so far and the new date
  */
-export const judgeSlip = ({ agreedAt, expectedAt, slips, next }: SlipFacts): SlipVerdict => {
+export const judgeSlip = (facts: SlipFacts): SlipVerdict => {
+    const { agreedAt, expectedAt, slips, next } = facts;
+    if (isOpenEndedYes(facts)) {
+        // Told, never asked: no deadline, the buyer can cancel any time before it ships. A date
+        // that is later, or the first one at all, is news; anything else is followed quietly.
+        return next !== undefined &&
+            (expectedAt === undefined || next.getTime() > expectedAt.getTime())
+            ? { kind: 'notify' }
+            : { kind: 'earlier' };
+    }
     if (next === undefined) return expectedAt === undefined ? { kind: 'earlier' } : { kind: 'ask' };
     if (expectedAt === undefined || next.getTime() <= expectedAt.getTime())
         return { kind: 'earlier' };
@@ -135,6 +161,10 @@ export interface MoveFacts {
     expectedAt?: Date | undefined;
     /** How many later dates the buyer was already told about. */
     slips: number;
+    /** Whether the buyer was asked, and what they answered. */
+    consent?: FulfillmentConsent | undefined;
+    /** The definite revised date on record; absent with `consent: confirmed` is an open-ended yes. */
+    revisedShipDate?: Date | undefined;
 }
 
 /**
@@ -152,6 +182,8 @@ export const judgeMove = (facts: MoveFacts, next: Date | undefined): SlipVerdict
               agreedAt: facts.agreedAt,
               expectedAt: facts.expectedAt,
               slips: facts.slips,
+              consent: facts.consent,
+              revisedShipDate: facts.revisedShipDate,
               next
           });
 
@@ -159,65 +191,57 @@ export const judgeMove = (facts: MoveFacts, next: Date | undefined): SlipVerdict
 export interface AnswerFacts {
     /** The date promised when ordering. */
     agreedAt?: Date | undefined;
-    /** The date expected before this question; absent when the date was cleared. */
-    expectedAt?: Date | undefined;
     /** Whether the buyer was asked, and what they answered. */
     consent?: FulfillmentConsent | undefined;
     /** The end of an open window, while `consent` is `awaiting`. */
     consentDeadline?: Date | undefined;
+    /** The definite revised date the buyer was offered or accepted; see the model. */
+    revisedShipDate?: Date | undefined;
 }
 
 /**
  * The latest instant silence may be taken for a cancel, whatever the buyer was last told: the
  * seller must refund promptly, so a question never buys time past what the buyer was already owed
- * (16 CFR 435.2 (b)(1)(iii), (b)(2)(ii)). `undefined` when nothing bounds it.
+ * (16 CFR 435.2 (b)(1)(iii), (b)(2)(ii)). First that applies:
  *
  * - an open window is never extended by asking again;
- * - once a dated delay was accepted, silence cancels at that date;
- * - before anything was accepted, at the promised date plus {@link SILENT_SLIP_DAYS};
- * - with no date expected there is nothing to be late for.
+ * - a definite date offered or accepted: silence cancels at the end of that date's day;
+ * - otherwise the promised date plus {@link SILENT_SLIP_DAYS} calendar days, with or without a date
+ *   expected now: the rule's own end, not a count from the day the buyer happens to be asked;
+ * - with nothing promised, {@link CONSENT_WINDOW_DAYS} from the question (unreachable for a preorder).
+ * @param now - the instant the buyer is asked
  * @param facts - the fulfillment order before the patch
+ * @param timeZone - the shop's canonical IANA zone
  */
-const answerCapOf = (facts: AnswerFacts): Date | undefined => {
+const answerCapOf = (now: Date, facts: AnswerFacts, timeZone: string): Date => {
     if (facts.consent === FulfillmentConsent.awaiting && facts.consentDeadline)
         return facts.consentDeadline;
-    if (facts.expectedAt === undefined) return undefined;
-    if (facts.consent === FulfillmentConsent.confirmed) return facts.expectedAt;
+    if (facts.revisedShipDate) return endOfDayInZone(facts.revisedShipDate, timeZone);
     return facts.agreedAt
-        ? new Date(facts.agreedAt.getTime() + SILENT_SLIP_DAYS * DAY_MS)
-        : undefined;
+        ? endOfDayInZone(facts.agreedAt, timeZone, SILENT_SLIP_DAYS)
+        : endOfDayInZone(now, timeZone, CONSENT_WINDOW_DAYS);
 };
 
 /**
- * When silence turns into a cancel, for a buyer asked at `now`: 30 days on, but never later than
- * what {@link answerCapOf} allows, to the end of that day on the SHOP's calendar: the day the mail
- * prints, so the printed day and the enforced day are one. A cap already past is held at today: the
- * buyer is never given a deadline that has gone.
+ * When silence turns into a cancel, for a buyer asked at `now`: where {@link answerCapOf} puts it,
+ * to the end of that day on the SHOP's calendar: the day the mail prints, so the printed day and
+ * the enforced day are one. A cap already past is held at today: the buyer is never given a
+ * deadline that has gone.
  * @param now - the instant the buyer was asked
  * @param facts - the fulfillment order before this question changed it
  * @param timeZone - the shop's canonical IANA zone, the calendar the mail prints in
  */
-export const answerBy = (now: Date, facts: AnswerFacts, timeZone: string): Date => {
-    const latest = now.getTime() + CONSENT_WINDOW_DAYS * DAY_MS;
-    const cap = answerCapOf(facts);
-    return endOfDayInZone(
-        new Date(cap ? Math.min(latest, Math.max(cap.getTime(), now.getTime())) : latest),
+export const answerBy = (now: Date, facts: AnswerFacts, timeZone: string): Date =>
+    endOfDayInZone(
+        new Date(Math.max(answerCapOf(now, facts, timeZone).getTime(), now.getTime())),
         timeZone
     );
-};
-
-/**
- * The most a question asked at `now` could give a buyer, for a preview that does not know which
- * fulfillment orders it would reach: 30 days, which {@link answerBy} only ever shortens.
- * @param now - the instant a question would be asked
- */
-export const latestAnswerBy = (now: Date): Date =>
-    new Date(now.getTime() + CONSENT_WINDOW_DAYS * DAY_MS);
 
 /** What the daily sweep reads off a waiting fulfillment order. */
 export interface SweepFacts {
     consent?: FulfillmentConsent | undefined;
     consentDeadline?: Date | undefined;
+    revisedShipDate?: Date | undefined;
     expectedAt?: Date | undefined;
     lastNoticeAt?: Date | undefined;
 }
@@ -234,7 +258,12 @@ export interface SweepFacts {
  * @param now - the instant of the sweep
  */
 export const needsDueNotice = (facts: SweepFacts, now: Date): boolean => {
-    if (facts.expectedAt === undefined || facts.consent === FulfillmentConsent.awaiting)
+    // An open-ended yes is never asked again (16 CFR 435.2 (b)(2)(iii)).
+    if (
+        facts.expectedAt === undefined ||
+        facts.consent === FulfillmentConsent.awaiting ||
+        isOpenEndedYes(facts)
+    )
         return false;
     const aheadDays =
         facts.consent === FulfillmentConsent.confirmed ? RENEWED_ASK_BEFORE_DAYS : ASK_BEFORE_DAYS;
