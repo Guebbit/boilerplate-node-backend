@@ -1525,7 +1525,11 @@ components:
                     in use.
             description: >-
                 One or more locales for one entity, keyed by locale tag. See the operation
-                description for what an object, a `null`, and an absent key each mean.
+                description for what an object, a `null`, and an absent key each mean. A tag this
+                deployment has no language for is a 422. A registered language that is switched off
+                is accepted and stored as a draft: it is not served, searched or copied into a
+                message until the language is switched on. A `PUT` deletes the stored locales it
+                leaves out, drafts included.
             example:
                 it:
                     fields:
