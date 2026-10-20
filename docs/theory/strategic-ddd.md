@@ -144,8 +144,16 @@ constraints belong on the symbols.
 
 ## 4. Subdomain distillation — where to spend effort
 
-DDD's own advice is the part most often skipped: tactical patterns belong in the **core** domain, and
-everything else should use the simplest thing that works.
+DDD's own advice is the part most often skipped: spend the modelling effort where the business
+differs, and use the simplest thing that works everywhere else.
+
+- The **expensive** tactical patterns — entities, aggregates, domain repositories, invariants at
+  construction — are what `core` would earn. Outside `core` they are a signal to re-check the label or
+  the build-vs-buy call, not a ban: how much logic a module has picks the pattern, the label only
+  predicts it (Khononov, _Learning Domain-Driven Design_, ch. 10).
+- The **cheap** two this repo already uses, `Money` and a transition table, go wherever the rule lives:
+  `feedback` and `example` (`generic`) and `payments` and `returns` (`supporting`) all carry tables.
+  No `core` module has an aggregate today.
 
 | Subdomain    | Meaning                                                         | Here                                                                                                                  |
 | ------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
@@ -153,11 +161,19 @@ everything else should use the simplest thing that works.
 | `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`, `wishlist`, `invoicing`, `returns`, `notifications`, `addresses`                 |
 | `generic`    | a solved problem, interchangeable with something bought         | `antibot`, `audit-logs`, `locales`, `observability`, `feedback`, `access`, `users`, `account`, `api-keys`, `webhooks` |
 
-The rule of thumb that follows: **a `generic` module should not carry a `domain/` folder**, with
-one exception — a 3+-state status field earns the folder regardless of subdomain, which is why
-`feedback` (`generic`) has one and `products` (`core`) doesn't. See
-[Domain layer](./domain-layer.md#mandatory-for-a-3-state-status-optional-otherwise) for the full
-rule and every module it reaches.
+The rule that follows: **the label sets how much modelling a module earns; the complexity of its logic
+picks the pattern; any rule that clears
+[the floor](./domain-layer.md#the-floor-testable-without-a-database-is-necessary-not-sufficient)
+goes in `domain/`, whatever the label.**
+
+- Where the pure rules live is a separate question from which pattern the module uses. A `domain/` of
+  pure functions is not a tactical pattern: it is a functional core inside an imperative shell, and any
+  pattern, even a Transaction Script, can have one. `account` (`generic`) keeps its session-revocation
+  and email-change rules there.
+- Evans says the same from the other side: a generic subdomain still gets its own model, and the label
+  sets priority and buy-versus-build ([DDD Reference](https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf)).
+- Keep the useful half of the old rule as a smell, not a ban: expect a generic module's `domain/` to be
+  small. A large one says the label, or the build-vs-buy call, is wrong.
 
 ::: warning These values are an example, not a finding
 A boilerplate has no core domain. It cannot know what the next project's will be, and what it ships
@@ -171,7 +187,7 @@ This table keeps the definitions; the values themselves live on each module's ow
 (`npm run docs:graph`) — so the table above is illustrative, not the source of truth for any one
 module's label. `tests/cross-cutting/module-descriptors.test.ts` only holds `subdomain` to being one
 of the three names; it does not check that a classification stays HONEST (nothing stops every module
-drifting to `core`), or that a `generic` module carries no `domain/` folder. Placing the value with
+drifting to `core`). Placing the value with
 the module it describes is still worth doing, since a doc table can go stale the moment a new module
 lands and nothing points back at it; it is not a claim that the label is enforced beyond its spelling.
 

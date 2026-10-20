@@ -10,7 +10,7 @@ import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { userService } from '@modules/users';
 import type { AuthContext } from '@types';
-import { predatesSessionEpoch } from './epoch';
+import { predatesSessionEpoch } from '../domain/epoch';
 
 /** What a session has proved: when the account last actually proved itself, and how. */
 export interface SessionProof {

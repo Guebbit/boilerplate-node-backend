@@ -187,16 +187,19 @@ Both halves are live:
 | `readScope`         | A tagged union its only caller destructured two lines later                   |
 | `canDecrement`      | Frontend: `q > MIN_LINE_QUANTITY`, one template binding                       |
 
-### Mandatory for a 3+-state status, optional otherwise
+### A 3+-state stored status almost always earns the folder
 
-**A module with a 3+-state status field must have a `domain/` folder.** A transition table catches
-real bugs a status literal scattered across services cannot — `orders/domain/lifecycle.ts` below is
-the worked example, and `payments`, `feedback` and `returns` are the modules this rule reaches beyond `orders`
-itself (6, 4 and 5 states).
+A 3+-state **stored** status almost always clears the floor, because its allowed moves are a rule: a
+transition table catches real bugs a status literal scattered across services cannot.
+`orders/domain/lifecycle.ts` below is the worked example. "Stored" keeps a derived status, such as
+observability's `DependencyStatus`, out of it.
 
-Everywhere else the folder stays optional, and creating an empty one to match a shape is how
-ceremony starts — most modules here don't have one. Modules with a `domain/` folder today: `orders`,
-`cart`, `delivery`, `inventory`, `products`, `webhooks`, `payments`, `feedback`, `returns`, `invoicing`, `account` and `example`.
+It is a consequence of the floor, not a rule of its own. `webhooks` has a 4-state delivery status and no
+transition table: its moves are atomic claims in `repository.ts`, a database concern. Its `domain/`
+exists for `backoff.ts`.
+
+No rule that clears the floor means no folder, and never an empty one: creating a folder to match a
+shape is how ceremony starts.
 
 **`delivery/domain/` is the shortest worked example, and the best argument for the folder.** It is
 a few pure functions in `rates.ts` (`findShippingMethod`, `priceShipping`, `methodFitsWeight`,
@@ -347,8 +350,8 @@ One tell: the `__v` conditional write in `cart/services/checkout.ts` is **aggreg
 hand-rolled because there is no aggregate to hang it on. The need is real; only the vocabulary is
 missing.
 
-`Money` and the lifecycle table are the two tactical patterns that pay for themselves without an
-aggregate — plain data with functions in front of it, in a folder that already existed. See
+`Money` and the lifecycle table are the two cheap tactical patterns that pay for themselves without an
+aggregate — plain data with functions in front of it, placed wherever the rule lives. See
 [Tactical DDD](./tactical-ddd.md) for why those two and nothing else.
 
 ---
