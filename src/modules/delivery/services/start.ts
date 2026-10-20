@@ -71,8 +71,9 @@ export const startFulfilment = (
 
         if (!STARTABLE_FROM.includes(order.status)) return notPaid();
 
+        // The caller's id lands on the timeline row, so it names the operator and not the system.
         return ensureFulfillmentOrders(orderId)
-            .then(() => orderService.markProcessing(orderId))
+            .then(() => orderService.markProcessing(orderId, undefined, context.caller.id))
             .then((moved) => {
                 if (!moved) return notPaid();
 

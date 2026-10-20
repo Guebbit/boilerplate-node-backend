@@ -147,6 +147,22 @@ describe('shipping and delivering', () => {
     });
 });
 
+describe('starting fulfilment', () => {
+    it('names the operator on the processing row, as the first shipment does', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.paid
+        });
+        const orderId = String(order._id);
+
+        await deliveryService.startFulfilment(orderId, asAdmin(), admin);
+
+        // Not a whole-trail match: `ensureFulfillmentOrders` writes rows of its own.
+        expect(await trail(orderId)).toContainEqual(['processing', 'admin-1']);
+    });
+});
+
 describe('holds', () => {
     it('writes the hold with its reason code and the release, never the note', async () => {
         const { order, fulfillmentOrderId } = await processingOrder();
