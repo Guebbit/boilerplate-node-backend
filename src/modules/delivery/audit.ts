@@ -7,7 +7,7 @@
 /**
  * The doors staff writes through: starting fulfilment, cutting a shipment, recording an arrival,
  * fulfilling a digital fulfillment order, correcting a tracking code, and holding or releasing a
- * fulfillment order — and the one door a buyer writes through: "keep waiting" for a late preorder.
+ * fulfillment order.
  *
  * Metadata, where it says more than the target:
  * - shipped, delivered: `forced`, and the operator's `reason` when it was forced (a sanctioned
@@ -21,8 +21,7 @@ export const deliveryAuditActions = {
     ADMIN_ORDER_FULFILLED: 'admin.order.fulfilled',
     ADMIN_SHIPMENT_TRACKING_EDITED: 'admin.shipment.tracking_edited',
     ADMIN_FULFILLMENT_ORDER_HELD: 'admin.fulfillment_order.held',
-    ADMIN_FULFILLMENT_ORDER_RELEASED: 'admin.fulfillment_order.released',
-    BUYER_WAIT_CONFIRMED: 'fulfillment_order.wait_confirmed'
+    ADMIN_FULFILLMENT_ORDER_RELEASED: 'admin.fulfillment_order.released'
 } as const;
 
 /** Registers this module's action shape into the shared `AuditActionMap`. */

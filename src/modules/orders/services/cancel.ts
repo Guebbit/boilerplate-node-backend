@@ -33,7 +33,7 @@ import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { ORDER_CANCELLED } from '../events';
 import { orderRepository } from '../repository';
-import { ORDER_EVENTS, buyerIdOf, statusesLeadingTo, type OrderActor } from '../domain';
+import { buyerIdOf, statusesLeadingTo, type OrderActor } from '../domain';
 import { getById } from './read';
 import { withTimeline } from './timeline';
 import { cancelScope, actorOf } from './scope';
@@ -113,8 +113,7 @@ export type CancelCause =
     | 'withdrawal'
     | 'reservation_expired'
     | 'erasure'
-    | 'payment_mismatch'
-    | 'wait_unanswered';
+    | 'payment_mismatch';
 
 /** What one {@link CancelCause} decides. */
 interface CauseRules {
@@ -173,12 +172,6 @@ export const CANCEL_CAUSES = {
     payment_mismatch: {
         by: 'system',
         mail: 'none',
-        analytics: ordersAnalyticsEvents.ORDER_CANCELLED,
-        refundIsChoice: false
-    },
-    wait_unanswered: {
-        by: 'fulfilment',
-        mail: 'cancelled',
         analytics: ordersAnalyticsEvents.ORDER_CANCELLED,
         refundIsChoice: false
     }
@@ -367,30 +360,3 @@ export const cancelForPaymentMismatchById = (
     id: string
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
     cancel(id, 'payment_mismatch', SYSTEM_ACTOR);
-
-/**
- * Cancel an order whose preorder buyer was asked to keep waiting and never answered: silence is a
- * cancel, and a cancel refunds in full (FTC 16 CFR 435.2 (b)(1)(iii)). Called by
- * `returns`, which reacts to `delivery`'s record of the silence, and only for an order with nothing
- * shipped — goods that left are cancelled one fulfillment order at a time instead.
- *
- * Its own door, with its own `from` set (the named event's own), because the system's other doors
- * must never reach a paid order. The buyer is told, since a refund is the one thing they cannot
- * see for themselves.
- *
- * @param orderId - the order to cancel
- * @returns whether this call cancelled it; `false` when it moved on (paid out, shipped, cancelled)
- */
-export const cancelUnanswered = (orderId: string): Promise<boolean> =>
-    moveToCancelled(
-        orderId,
-        ORDER_EVENTS.cancelUnanswered.from,
-        { 'fulfillment.shipped': { $ne: true } },
-        true,
-        'wait_unanswered',
-        undefined
-    ).then((order) => {
-        if (!order) return false;
-        afterCancel(order, 'wait_unanswered', true);
-        return true;
-    });

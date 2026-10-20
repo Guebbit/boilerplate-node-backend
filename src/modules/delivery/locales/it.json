@@ -32,8 +32,6 @@
             "body": "La tua spedizione è arrivata.",
             "withdraw-until": "Puoi recedere dall'acquisto fino al {{date}}."
         },
-        "not-awaiting-answer": "Questa spedizione non attende una risposta",
-        "answer-window-closed": "Il tempo per rispondere è scaduto: l'ordine verrà annullato e rimborsato",
         "email-hold-notice": {
             "meta-title": "Una parte del tuo ordine è in sospeso",
             "greeting": "Ciao, {{name}}!",
@@ -54,17 +52,15 @@
                 "subject": "Una parte del tuo ordine arriverà più tardi del previsto",
                 "body": "Gli articoli qui sotto erano promessi per il {{agreed}}. Ora sono attesi per il {{expected}}."
             },
-            "ask-moved": {
-                "subject": "Una parte del tuo ordine è in ritardo: vuoi continuare ad aspettare?",
-                "body": "Gli articoli qui sotto erano promessi per il {{agreed}}. Ora sono attesi per il {{expected}}, un ritardo che non possiamo chiederti di accettare senza il tuo consenso."
+            "cleared": {
+                "subject": "Una parte del tuo ordine è in ritardo",
+                "body": "Gli articoli qui sotto erano promessi per il {{agreed}}. Per ora non abbiamo una nuova data; ti scriveremo quando l'avremo."
             },
-            "ask-passed": {
-                "subject": "Una parte del tuo ordine è in ritardo: vuoi continuare ad aspettare?",
-                "body": "Gli articoli qui sotto erano promessi per il {{agreed}} e la merce che abbiamo ordinato non ci è ancora arrivata. Non possiamo darti una nuova data. Puoi anche annullarlo tu stesso in qualsiasi momento prima della spedizione e sarai rimborsato per intero."
+            "passed": {
+                "subject": "Una parte del tuo ordine è in ritardo",
+                "body": "Gli articoli qui sotto erano promessi per il {{agreed}} e la merce che abbiamo ordinato non ci è ancora arrivata. Per ora non possiamo darti una nuova data."
             },
-            "agreed-until": "Avevi accettato di aspettare fino al {{until}}.",
-            "answer": "Ti chiediamo di dirci entro il {{date}} che vuoi continuare ad aspettare. Se non ci risponderai, lo annulleremo e ti rimborseremo per intero.",
-            "cancel-any-time": "Puoi annullarlo in qualsiasi momento prima della spedizione e sarai rimborsato per intero. Se non fai nulla, continui ad aspettare.",
+            "cancel-any-time": "Puoi annullarlo dalla pagina del tuo ordine in qualsiasi momento prima della spedizione e sarai rimborsato per intero. Se ti va bene aspettare, non devi fare nulla.",
             "link-label": "Vedi il tuo ordine"
         }
     }

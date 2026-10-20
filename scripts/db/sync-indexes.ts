@@ -26,12 +26,13 @@ import { startJob, connection } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../run-script';
 import { applyIndexSync, hasChanges, planIndexSync, type IndexDiff } from './index-sync';
+import { hasFlag } from '../cli';
 
 /** Report the plan without touching the database. */
-const checkOnly = process.argv.includes('--check');
+const checkOnly = hasFlag('check');
 
 /** Also drop every index no schema declares. A deploy never passes it. */
-const prune = process.argv.includes('--prune');
+const prune = hasFlag('prune');
 
 /** One collection's pending changes, as a line per index rather than a blob. */
 const describe = ({

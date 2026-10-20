@@ -27,7 +27,7 @@
 9 2 * * * cd /app && npm run reap:account-exports
 # Unsets a fulfillment order's hold note once it has not changed for its retention window.
 11 2 * * * cd /app && npm run reap:delivery
-# Asks the buyer of a late preorder whether to keep waiting, and announces a wait left unanswered past its deadline, which `returns` cancels and refunds.
+# Tells the buyer of a preorder whose expected date passed with the goods still not here, once. It asks nothing and cancels nothing.
 20 2 * * * cd /app && npm run sweep:preorders
 # Drains every stale checkout hold (batches of 200) and cancels the order behind each.
 */5 * * * * cd /app && npm run sweep:reservations

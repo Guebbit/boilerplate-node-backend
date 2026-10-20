@@ -8,7 +8,7 @@
 
 import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
-import { canRecordArrival, canShip, isAwaitingGoods, isBuyer } from '@modules/orders';
+import { canRecordArrival, canShip, isAwaitingGoods } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import type {
     AuthContext,
@@ -17,30 +17,24 @@ import type {
     Shipment,
     ShipmentActions
 } from '@types';
-import { isAwaitingAnswer, isFulfillable, isHoldable, isReleasable, isShippable } from '../domain';
+import { isFulfillable, isHoldable, isReleasable, isShippable } from '../domain';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import { presentFulfillmentOrder, presentShipment } from '../presenter';
 
-/** How the caller stands to an order: may they update fulfilment, and are they its buyer. */
+/** How the caller stands to an order: may they update fulfilment. */
 export interface Standing {
     /** The caller holds `update:Shipment`. */
     staff: boolean;
-    /** The caller is the order's own buyer — the one who may answer "keep waiting". */
-    owner: boolean;
 }
 
 /**
- * How the caller stands to this order's fulfilment.
- * @param order - the order
+ * How the caller stands to a fulfilment.
  * @param authContext - the caller, or `undefined` for no request behind the read
  */
-export const standingOn = (order: OrderDocument, authContext: AuthContext | undefined): Standing =>
+export const standingOn = (authContext: AuthContext | undefined): Standing =>
     authContext
-        ? {
-              staff: holds(callerForSubject(authContext, 'Shipment'), 'update', 'Shipment'),
-              owner: isBuyer(order, authContext)
-          }
-        : { staff: false, owner: false };
+        ? { staff: holds(callerForSubject(authContext, 'Shipment'), 'update', 'Shipment') }
+        : { staff: false };
 
 /**
  * What the caller may do to one fulfillment order.
@@ -58,9 +52,7 @@ export const fulfillmentOrderActions = (
         ship: may && canShip(order.status) && isShippable(fulfillmentOrder),
         fulfill: may && canShip(order.status) && isFulfillable(fulfillmentOrder),
         hold: may && isAwaitingGoods(order.status) && isHoldable(fulfillmentOrder),
-        release: may && isAwaitingGoods(order.status) && isReleasable(fulfillmentOrder),
-        confirmWait:
-            standing.owner && isAwaitingGoods(order.status) && isAwaitingAnswer(fulfillmentOrder)
+        release: may && isAwaitingGoods(order.status) && isReleasable(fulfillmentOrder)
     };
 };
 
@@ -90,7 +82,7 @@ export const viewFulfillmentOrder = (
     order: OrderDocument,
     authContext: AuthContext | undefined
 ): FulfillmentOrder => {
-    const standing = standingOn(order, authContext);
+    const standing = standingOn(authContext);
 
     return presentFulfillmentOrder(
         fulfillmentOrder,
@@ -109,5 +101,4 @@ export const viewShipment = (
     shipment: ShipmentDocument,
     order: OrderDocument,
     authContext: AuthContext | undefined
-): Shipment =>
-    presentShipment(shipment, shipmentActions(shipment, order, standingOn(order, authContext)));
+): Shipment => presentShipment(shipment, shipmentActions(shipment, order, standingOn(authContext)));

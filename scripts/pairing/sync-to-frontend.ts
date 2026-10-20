@@ -19,12 +19,13 @@ import path from 'node:path';
 import { SHARED_FILES, hashFile, THIS_REPO } from './spec-identity';
 import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from './paired-frontend-path';
 import { writesIntoMainFromWorktree } from './linked-worktree';
+import { hasFlag } from '../cli';
 
 /** `--dry`: report what would be copied, and write nothing on either side. */
-const dryRun = process.argv.includes('--dry');
+const dryRun = hasFlag('dry');
 
 /** `--forced`: copy every shared file, even one that already hashes identical over there. */
-const forcedRun = process.argv.includes('--forced');
+const forcedRun = hasFlag('forced');
 
 /*
  * Always on, except under `--dry`, which promises to write nothing — over there least of all.

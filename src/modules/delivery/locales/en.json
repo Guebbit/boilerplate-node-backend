@@ -32,8 +32,6 @@
             "body": "Your shipment has arrived.",
             "withdraw-until": "You may withdraw from the purchase until {{date}}."
         },
-        "not-awaiting-answer": "This fulfillment order is not waiting for an answer",
-        "answer-window-closed": "The time to answer has ended: this order will be cancelled and refunded",
         "email-hold-notice": {
             "meta-title": "Part of your order is on hold",
             "greeting": "Hello, {{name}}!",
@@ -54,17 +52,15 @@
                 "subject": "Part of your order will arrive later than planned",
                 "body": "The items below were promised for {{agreed}}. They are now expected on {{expected}}."
             },
-            "ask-moved": {
-                "subject": "Part of your order is delayed: do you want to keep waiting?",
-                "body": "The items below were promised for {{agreed}}. They are now expected on {{expected}}, which is later than we can ask you to wait without your say-so."
+            "cleared": {
+                "subject": "Part of your order is delayed",
+                "body": "The items below were promised for {{agreed}}. We do not have a new date for them yet; we will write to you when we do."
             },
-            "ask-passed": {
-                "subject": "Part of your order is late: do you want to keep waiting?",
-                "body": "The items below were promised for {{agreed}}, and the stock we ordered has not reached us yet. We cannot give you a new date. You may also cancel it yourself at any time before it ships, and you will be refunded in full."
+            "passed": {
+                "subject": "Part of your order is late",
+                "body": "The items below were promised for {{agreed}}, and the stock we ordered has not reached us yet. We cannot give you a new date yet."
             },
-            "agreed-until": "You agreed to wait until {{until}}.",
-            "answer": "Please tell us by {{date}} that you want to keep waiting. If we do not hear from you, we will cancel it and refund you in full.",
-            "cancel-any-time": "You may cancel it at any time before it ships, and you will be refunded in full. If you do nothing, you keep waiting.",
+            "cancel-any-time": "You can cancel it from your order page at any time before it ships, and you will be refunded in full. If you are happy to wait, you do not need to do anything.",
             "link-label": "See your order"
         }
     }

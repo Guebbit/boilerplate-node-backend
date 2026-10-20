@@ -24,7 +24,6 @@ import { generateReject } from '@infrastructure/http/response';
 import { auditForbidden } from '@infrastructure/observability/forbidden';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { nudgeOutbox } from '@kernel/outbox';
-import { systemCallerContext } from '@kernel/permissions';
 import { deliveryService, ActRefusal } from '@modules/delivery';
 import { inventoryService } from '@modules/inventory';
 import { isBuyer, orderService } from '@modules/orders';
@@ -308,76 +307,3 @@ export const createCancellation = (
             });
     });
 };
-
-/**
- * The system's remainder cancel for a wait that ended in silence: what had not shipped of one
- * fulfillment order, cancelled and refunded as a `no_answer` return. The same transaction and the same
- * refund as a buyer's own cancel; the differences are who is acting (nobody at a keyboard, so no
- * rank or key to check) and that the buyer is not told twice — `delivery`'s notice was the warning.
- *
- * @param order - the order, with goods already shipped
- * @param fulfillmentOrderId - the fulfillment order whose buyer never answered
- */
-const cancelRemainderUnanswered = (
-    order: OrderDocument,
-    fulfillmentOrderId: string
-): Promise<void> => {
-    const context = systemCallerContext('Return');
-    return cancelUnderLock(
-        order,
-        {
-            orderId: String(order._id),
-            reason: 'no_answer',
-            kind: 'cancellation',
-            fulfillmentOrderId
-        },
-        fulfillmentOrderId,
-        FulfillmentCancelReason.no_answer
-    ).then((done) =>
-        typeof done === 'string'
-            ? undefined
-            : announceCancelled(order, done, context).then(() => undefined)
-    );
-};
-
-/**
- * End a preorder's wait that nobody answered: cancel and refund what had not shipped. `delivery`
- * announces `fulfillment_order.wait_expired` again every day until this lands, so it re-checks that
- * the wait really is still expired (a "keep waiting" that came in since wins) and that there is
- * still something to cancel.
- *
- * Which cancel depends on what has shipped:
- *
- * | The order                                         | What is cancelled                              |
- * | ------------------------------------------------- | ---------------------------------------------- |
- * | something already shipped                         | this fulfillment order's remainder, through a `no_answer` return |
- * | nothing shipped, this is the only live one        | the whole order, refunded in full              |
- * | nothing shipped, another fulfillment order lives  | nothing yet: the goods that are on the shelf   |
- * |                                                   | are the buyer's, and ship first; asked again tomorrow |
- *
- * @param orderId - the order
- * @param fulfillmentOrderId - the fulfillment order whose buyer never answered
- * @param now - the instant to judge the wait at; tests pass their own
- */
-export const cancelUnanswered = (
-    orderId: string,
-    fulfillmentOrderId: string,
-    now: Date = new Date()
-): Promise<void> =>
-    deliveryService.waitHasExpired(fulfillmentOrderId, now).then((expired) => {
-        if (!expired) return undefined;
-
-        return orderService.getById(orderId).then((order) => {
-            if (!order) return undefined;
-            if (order.fulfillment?.shipped === true)
-                return cancelRemainderUnanswered(order, fulfillmentOrderId);
-
-            return deliveryService
-                .remainderOptions(orderId, true)
-                .then((live) =>
-                    live.every((option) => option.fulfillmentOrderId === fulfillmentOrderId)
-                        ? orderService.cancelUnanswered(orderId).then(() => undefined)
-                        : undefined
-                );
-        });
-    });

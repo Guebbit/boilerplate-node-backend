@@ -929,7 +929,7 @@ components:
                     type: string
                 reason:
                     type: string
-                    description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`; `no_answer` when the shop itself cancelled a preorder's remainder after its buyer never answered the late-date question.
+                    description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`.
             additionalProperties: false
         ReturnReceivedPayload:
             type: object
@@ -1112,9 +1112,6 @@ components:
                 expectedAt:
                     type: string
                     format: date-time
-                answerBy:
-                    type: string
-                    format: date-time
             additionalProperties: false
         FulfillmentHeldParamsPayload:
             title: FulfillmentHeldParamsPayload
@@ -1219,39 +1216,6 @@ components:
                     type: string
                     enum:
                         - notifications.fulfillment-delayed
-                params:
-                    $ref: '#/components/schemas/FulfillmentDelayedParamsPayload'
-                severity:
-                    type: string
-                    enum:
-                        - info
-                        - success
-                        - warning
-                        - error
-                readAt:
-                    description: When the owner read it; absent while unread.
-                    type: string
-                    format: date-time
-                createdAt:
-                    type: string
-                    format: date-time
-            additionalProperties: false
-        NotificationFulfillmentConfirmWaitPayload:
-            title: NotificationFulfillmentConfirmWaitPayload
-            type: object
-            required:
-                - id
-                - code
-                - params
-                - severity
-                - createdAt
-            properties:
-                id:
-                    type: string
-                code:
-                    type: string
-                    enum:
-                        - notifications.fulfillment-confirm-wait
                 params:
                     $ref: '#/components/schemas/FulfillmentDelayedParamsPayload'
                 severity:
@@ -1375,7 +1339,6 @@ components:
                 - $ref: '#/components/schemas/NotificationWishlistItemRemovedPayload'
                 - $ref: '#/components/schemas/NotificationCartMergeRefusedPayload'
                 - $ref: '#/components/schemas/NotificationFulfillmentDelayedPayload'
-                - $ref: '#/components/schemas/NotificationFulfillmentConfirmWaitPayload'
                 - $ref: '#/components/schemas/NotificationFulfillmentHeldPayload'
                 - $ref: '#/components/schemas/NotificationStockAlertPayload'
             # A plain property name here, unlike OpenAPI's `{ propertyName }` object.

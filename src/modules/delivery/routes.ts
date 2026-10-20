@@ -26,7 +26,6 @@ import {
     postReleaseFulfillmentOrder
 } from './controllers/post-hold-fulfillment-order';
 import { patchShipment } from './controllers/patch-shipment';
-import { postConfirmWait } from './controllers/post-confirm-wait';
 import { getReleaseDateImpact, getRestockDateImpact } from './controllers/get-date-impact';
 import {
     getPreorderFulfillmentOrders,
@@ -144,11 +143,6 @@ router.post(
     requirePermission('update', 'Shipment'),
     postReleaseFulfillmentOrder
 );
-
-// POST /delivery/fulfillment-orders/:id/confirm-wait — the BUYER's "keep waiting" for a late
-// preorder. Only authentication here: it is the order's own buyer's answer, not a staff key's, and
-// the service refuses anyone else.
-router.post('/fulfillment-orders/:id/confirm-wait', getAuth, isAuth, postConfirmWait);
 
 // PATCH /delivery/shipments/:id — correct a tracking code (RFC 7396).
 router.patch(

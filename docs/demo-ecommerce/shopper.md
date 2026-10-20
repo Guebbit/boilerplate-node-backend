@@ -138,6 +138,15 @@ back: the shop is not asking "would you like to pay again", it already has the m
 - **They can re-order** — one click puts everything from a past order back in the basket.
 - **They can track the parcel** once it ships. → [`delivery`](../modules/delivery.md)
 
+## When an order is late
+
+A preorder or backorder can be late: its date moves later, is taken away, or passes with the goods
+still not here. The shopper gets an **email** (and a note in their inbox) with the new date, or
+"no new date yet", and the way to cancel: they can **cancel from their order page for a full refund**
+any time before it ships. They are never asked a question and never have to answer. **If they are
+happy to wait they do nothing**, and the shop never cancels their order for them. If it is very late,
+a person from the shop may write to them. → [`delivery`](../modules/delivery.md#preorders-and-a-moved-date)
+
 ## When checkout is paused
 
 A shopper whose **unpaid** orders keep falling through (cancelled, or left to expire without paying,

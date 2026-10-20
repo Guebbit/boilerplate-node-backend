@@ -17,7 +17,6 @@ import {
     FULFILLMENT_ORDER_HELD,
     FULFILLMENT_ORDER_HOLD_NOTICED,
     FULFILLMENT_ORDER_RELEASED,
-    FULFILLMENT_ORDER_WAIT_EXPIRED,
     type FulfillmentOrderDelayed,
     SHIPMENT_DELIVERED,
     SHIPMENT_SHIPPED
@@ -258,7 +257,7 @@ export const recordRemainderCancelled = (
 
 /**
  * Write `fulfillment_order.delayed`, keyed on the order so its events stay in order, and the
- * timeline's `delay_notice_sent` with the dates and whether an answer is owed.
+ * timeline's `delay_notice_sent` with the reason and the date now expected.
  * @param delayed - what the buyer is told
  * @param session - the act's transaction
  */
@@ -274,44 +273,11 @@ export const announceDelayed = (
                 data: {
                     fulfillmentOrderId: delayed.fulfillmentOrderId,
                     reason: delayed.reason,
-                    needsAnswer: delayed.needsAnswer,
-                    ...(delayed.expectedAt ? { expectedAt: delayed.expectedAt } : {}),
-                    ...(delayed.answerBy ? { answerBy: delayed.answerBy } : {})
+                    ...(delayed.expectedAt ? { expectedAt: delayed.expectedAt } : {})
                 }
             },
             session
         )
         .then(() =>
             enqueueOutboxEvent(FULFILLMENT_ORDER_DELAYED, delayed, delayed.orderId, session)
-        );
-
-/**
- * Write `fulfillment_order.wait_expired`, keyed on the order so its events stay in order, and the
- * timeline's `wait_expired`.
- * @param fulfillmentOrder - the fulfillment order whose buyer never answered
- * @param session - the act's transaction
- */
-export const announceWaitExpired = (
-    fulfillmentOrder: FulfillmentOrderDocument,
-    session: ClientSession
-): Promise<void> =>
-    orderService
-        .appendTimeline(
-            String(fulfillmentOrder.orderId),
-            {
-                type: 'wait_expired',
-                data: { fulfillmentOrderId: String(fulfillmentOrder._id) }
-            },
-            session
-        )
-        .then(() =>
-            enqueueOutboxEvent(
-                FULFILLMENT_ORDER_WAIT_EXPIRED,
-                {
-                    orderId: String(fulfillmentOrder.orderId),
-                    fulfillmentOrderId: String(fulfillmentOrder._id)
-                },
-                String(fulfillmentOrder.orderId),
-                session
-            )
         );

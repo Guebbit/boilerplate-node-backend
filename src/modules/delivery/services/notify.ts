@@ -143,7 +143,7 @@ export const mailDelivered = ({
 
 /**
  * Tell the buyer their waiting preorder is late, or that its date came with no stock: the notice
- * `recordNotice` committed. The notice is already a fact, and the inbox row and the order page say
+ * `recordNotice` committed. It asks for nothing; the buyer can cancel from the order page. The notice is already a fact, and the inbox row and the order page say
  * the same.
  *
  * @param delayed - the `fulfillment_order.delayed` fact
@@ -154,9 +154,7 @@ export const mailDelayed = (delayed: FulfillmentOrderDelayed): Promise<void> =>
             titles: delayed.titles,
             agreedAt: new Date(delayed.agreedAt),
             ...(delayed.expectedAt ? { expectedAt: new Date(delayed.expectedAt) } : {}),
-            needsAnswer: delayed.needsAnswer,
-            ...(delayed.answerBy ? { answerBy: new Date(delayed.answerBy) } : {}),
-            ...(delayed.acceptedUntil ? { acceptedUntil: new Date(delayed.acceptedUntil) } : {}),
+            reason: delayed.reason,
             orderUrl: orderFrontendLink({ locale, id: String(order._id) })
         });
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);

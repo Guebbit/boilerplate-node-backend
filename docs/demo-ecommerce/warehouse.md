@@ -108,6 +108,13 @@ There is a stock board showing everything with a "show me only the low ones" fil
 In the demo, the Heavy-Duty Cat Scratching Post sits at zero — a permanent example of what the
 bottom of that list looks like.
 
+## Goods that are late
+
+Stock that has not arrived by its date leaves the order **waiting**; the buyer has already been
+emailed, and may cancel any time before it ships. When stock does arrive, record it as usual: the
+waiting orders take it in the order they were paid. Which orders are late, and the weekly check, are
+the manager's: see [Late orders](./manager.md#late-orders).
+
 ## Getting parcels out of the door
 
 The same rule as the stock diary above applies here: **you record what happened, and the status

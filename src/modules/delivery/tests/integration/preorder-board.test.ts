@@ -70,31 +70,19 @@ const board = (
 const orderIdsOf = (rows: readonly { orderId: string }[]) =>
     rows.map(({ orderId }) => orderId).toSorted();
 
-/** What an admin does to ask a buyer: move the date far enough that silence may not stand for it. */
-const slipFar = async (productId: string) => {
-    await productService.updateById(
-        productId,
-        { releaseDate: inDays(90).toISOString() },
-        testCallerContext
-    );
-    await settleOutboxNudges();
-};
-
 /** One paid preorder, each about to be taken to a different state. */
 const everyState = async () => {
     const waiting = await placed(1, 30, 'waiting@example.com');
-    const asked = await placed(1, 30, 'asked@example.com');
     const allocated = await placed(1, 30, 'allocated@example.com');
     const shipped = await placed(1, 30, 'shipped@example.com');
     const delivered = await placed(1, 30, 'delivered@example.com');
     const cancelled = await placed(1, 30, 'cancelled@example.com');
     const held = await placed(1, 30, 'held@example.com');
-    await slipFar(asked.productIds[0]);
-    return { waiting, asked, allocated, shipped, delivered, cancelled, held };
+    return { waiting, allocated, shipped, delivered, cancelled, held };
 };
 
 describe('every state filter returns exactly the rows that are in that state', () => {
-    it('agrees with the state each row reports, for all five', async () => {
+    it('agrees with the state each row reports, for all four', async () => {
         const orders = await everyState();
         await arrive(orders.allocated.productIds[0], 1);
         await arrive(orders.shipped.productIds[0], 1);
@@ -115,16 +103,16 @@ describe('every state filter returns exactly the rows that are in that state', (
         );
 
         const everyone = await board();
-        const states = ['waiting', 'awaiting_yes', 'allocated', 'shipped', 'cancelled'] as const;
+        const states = ['waiting', 'allocated', 'shipped', 'cancelled'] as const;
 
-        expect(everyone).toHaveLength(7);
+        expect(everyone).toHaveLength(6);
         for (const state of states) {
             const filtered = await board({ state });
             expect(orderIdsOf(filtered)).toEqual(
                 orderIdsOf(everyone.filter((row) => row.state === state))
             );
         }
-        // And the five are not all empty: the board really was in every state.
+        // And the four are not all empty: the board really was in every state.
         const present = new Set(everyone.map(({ state }) => state));
         expect([...present].toSorted()).toEqual([...states].toSorted());
     });
@@ -204,19 +192,16 @@ describe('the product summary', () => {
         const mine = items.find(({ productId }) => productId === first.productIds[0]);
         expect(mine).toMatchObject({ paid: 3, allocated: 2, waiting: 1, shipped: 0, cancelled: 0 });
         for (const row of items)
-            expect(
-                row.waiting + row.awaitingYes + row.allocated + row.shipped + row.cancelled
-            ).toBe(row.paid);
+            expect(row.waiting + row.allocated + row.shipped + row.cancelled).toBe(row.paid);
     });
 
-    it('counts units waiting on an answer apart, and the late ones as a subset', async () => {
-        const order = await placed(2, 5, 'asked@example.com');
-        await deliveryService.runPreorderSweep(inDays(6));
+    it('counts the late units as a subset of the waiting ones', async () => {
+        const order = await placed(2, 5, 'late@example.com');
 
         const { items } = await deliveryService.summarizePreorders({}, asAdmin(), inDays(7));
 
         expect(items).toMatchObject([
-            { productId: order.productIds[0], paid: 2, waiting: 0, awaitingYes: 2, late: 2 }
+            { productId: order.productIds[0], paid: 2, waiting: 2, late: 2 }
         ]);
     });
 });

@@ -52,8 +52,6 @@ export const TIMELINE_AUDIENCE: Readonly<Record<OrderTimelineType, TimelineAudie
     credit_note_issued: 'buyer',
     release_date_moved: 'buyer',
     delay_notice_sent: 'buyer',
-    wait_confirmed: 'buyer',
-    wait_expired: 'buyer',
     address_corrected: 'staff'
 };
 

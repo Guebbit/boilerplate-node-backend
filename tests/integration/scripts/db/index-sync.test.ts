@@ -360,7 +360,22 @@ describe('db:sync', () => {
         // `db:bootstrap` on a never-booted database: listing a missing collection's indexes throws.
         await nativeDb().dropDatabase();
 
-        await expect(planIndexSync({ prune: true })).resolves.toBeDefined();
+        // With nothing stored the plan is exactly "create what the schemas declare": no replacement,
+        // no retired name, no undeclared index to drop or keep.
+        const plan = await planIndexSync({ prune: true });
+        for (const model of models().filter((candidate) => declaredKeys(candidate).size > 0)) {
+            const diff = plan.find(({ collection }) => collection === model.collection.name);
+            expect(new Set(diff?.toCreate.map((key) => JSON.stringify(key)))).toEqual(
+                declaredKeys(model)
+            );
+            expect(diff).toMatchObject({
+                toReplace: [],
+                toDropRetired: [],
+                toDropUndeclared: [],
+                kept: []
+            });
+        }
+
         await applyIndexSync({ prune: true });
 
         // A model that declares no index gets no collection from a sync, so there is nothing to read.

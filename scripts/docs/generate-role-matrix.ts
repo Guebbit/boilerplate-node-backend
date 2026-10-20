@@ -33,9 +33,10 @@ import { heldRules } from '@kernel/ability';
 import { applyMarkerBlocks } from './marker-block';
 import type { AuthorizationScope, Caller } from '@types';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
+import { hasFlag } from '../cli';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
-const checkOnly = process.argv.includes('--check');
+const checkOnly = hasFlag('check');
 
 /** The page the tables live in. */
 const PAGE = path.join(ROOT, 'docs/demo-ecommerce/index.md');

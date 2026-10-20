@@ -14,14 +14,8 @@ import {
     applyShipmentTransform
 } from './model';
 import type { FulfillmentOrderDocument, ShipmentDocument } from './model';
-import { RENEWED_ASK_BEFORE_DAYS } from './domain';
 import type { FulfillmentOrderDraft, WaitCause } from './domain';
-import {
-    FulfillmentConsent,
-    FulfillmentHoldReason,
-    FulfillmentOrderStatus,
-    PreorderFulfillmentState
-} from '@types';
+import { FulfillmentHoldReason, FulfillmentOrderStatus, PreorderFulfillmentState } from '@types';
 import {
     createRepository,
     toObjectId,
@@ -51,7 +45,6 @@ export interface ProductSummaryRow {
     firstAgreedAt: Date;
     paid: number;
     waiting: number;
-    awaitingYes: number;
     allocated: number;
     shipped: number;
     cancelled: number;
@@ -70,13 +63,9 @@ const stateCondition = (state: PreorderFulfillmentState): QueryFilter<Fulfillmen
         status: FulfillmentOrderStatus.on_hold,
         holdReason: FulfillmentHoldReason.awaiting_stock
     };
-    const asked = [FulfillmentConsent.awaiting, FulfillmentConsent.expired];
     switch (state) {
         case PreorderFulfillmentState.waiting: {
-            return { ...awaitingStock, consent: { $nin: asked } };
-        }
-        case PreorderFulfillmentState.awaiting_yes: {
-            return { ...awaitingStock, consent: { $in: asked } };
+            return awaitingStock;
         }
         case PreorderFulfillmentState.allocated: {
             return {
@@ -149,23 +138,12 @@ export type FulfillmentOrderPatch = Partial<
         | 'holdNote'
         | 'holdMessage'
         | 'expectedAt'
-        | 'consent'
-        | 'consentDeadline'
-        | 'revisedShipDate'
         | 'lastNoticeAt'
-        | 'slips'
         | 'cancelReason'
     >
 > & {
-    /** Fields to remove — a released hold carries no reason or note, a confirmed wait no deadline, a cleared date no expected date. */
-    unset?: readonly (
-        | 'holdReason'
-        | 'holdNote'
-        | 'holdMessage'
-        | 'consentDeadline'
-        | 'revisedShipDate'
-        | 'expectedAt'
-    )[];
+    /** Fields to remove — a released hold carries no reason or note, a cleared date no expected date. */
+    unset?: readonly ('holdReason' | 'holdNote' | 'holdMessage' | 'expectedAt')[];
 };
 
 /** The shared factory's CRUD surface plus the fulfillment order's own reads and claims. */
@@ -195,8 +173,7 @@ export const fulfillmentOrderRepository: Repository<
         productId: string,
         cause: WaitCause
     ) => Promise<FulfillmentOrderDocument[]>;
-    findDateNear: (now: Date) => Promise<FulfillmentOrderDocument[]>;
-    findWaitsExpired: (now: Date) => Promise<FulfillmentOrderDocument[]>;
+    findDatePassed: (now: Date) => Promise<FulfillmentOrderDocument[]>;
     searchBoard: (
         filters: BoardFilters,
         now: Date,
@@ -272,8 +249,7 @@ export const fulfillmentOrderRepository: Repository<
                         ...(draft.cause ? { cause: draft.cause } : {}),
                         ...(draft.defaulted ? { defaulted: true } : {}),
                         ...(draft.agreedAt ? { agreedAt: draft.agreedAt } : {}),
-                        ...(draft.expectedAt ? { expectedAt: draft.expectedAt } : {}),
-                        slips: 0
+                        ...(draft.expectedAt ? { expectedAt: draft.expectedAt } : {})
                     }
                 },
                 { upsert: true, session }
@@ -323,34 +299,16 @@ export const fulfillmentOrderRepository: Repository<
             .exec(),
 
     /**
-     * The waiting fulfillment orders whose expected date is near (within the longest margin a
-     * question goes out ahead of it) or past, for the sweep to judge against their last notice (a date alone
-     * cannot say whether the buyer was already told).
+     * The waiting fulfillment orders whose expected date has passed, for the sweep to judge against
+     * their last notice (a date alone cannot say whether the buyer was already told).
      * @param now - the instant of the sweep
      */
-    findDateNear: (now) =>
+    findDatePassed: (now) =>
         fulfillmentOrderModel
             .find({
                 status: FulfillmentOrderStatus.on_hold,
                 holdReason: FulfillmentHoldReason.awaiting_stock,
-                expectedAt: { $lte: new Date(now.getTime() + RENEWED_ASK_BEFORE_DAYS * DAY_MS) }
-            })
-            .exec(),
-
-    /**
-     * The fulfillment orders whose buyer was asked and let the window close — including the ones
-     * already marked expired, whose cancel has not landed yet and is announced again.
-     * @param now - the instant of the sweep
-     */
-    findWaitsExpired: (now) =>
-        fulfillmentOrderModel
-            .find({
-                status: FulfillmentOrderStatus.on_hold,
-                holdReason: FulfillmentHoldReason.awaiting_stock,
-                $or: [
-                    { consent: FulfillmentConsent.expired },
-                    { consent: FulfillmentConsent.awaiting, consentDeadline: { $lte: now } }
-                ]
+                expectedAt: { $lte: now }
             })
             .exec(),
 
@@ -378,7 +336,7 @@ export const fulfillmentOrderRepository: Repository<
     /**
      * A page of per-product unit counts across every preorder fulfillment order, earliest promise
      * first. Units, not fulfillment orders; one `$group` over the unwound lines. A product's counts
-     * add up: `paid = waiting + awaitingYes + allocated + shipped + cancelled`.
+     * add up: `paid = waiting + allocated + shipped + cancelled`.
      *
      * Mongo aggregation: https://www.mongodb.com/docs/manual/aggregation/
      *
@@ -397,12 +355,6 @@ export const fulfillmentOrderRepository: Repository<
             $and: [
                 { $eq: ['$status', FulfillmentOrderStatus.on_hold] },
                 { $eq: ['$holdReason', FulfillmentHoldReason.awaiting_stock] }
-            ]
-        };
-        const beingAsked = {
-            $in: [
-                { $ifNull: ['$consent', 'none'] },
-                [FulfillmentConsent.awaiting, FulfillmentConsent.expired]
             ]
         };
         const sumWhere = (condition: unknown) => ({
@@ -429,8 +381,7 @@ export const fulfillmentOrderRepository: Repository<
                             paid: { $sum: '$lines.quantity' },
                             shipped: { $sum: '$lines.shippedQuantity' },
                             cancelled: { $sum: '$lines.cancelledQuantity' },
-                            waiting: sumWhere({ $and: [onHoldForStock, { $not: [beingAsked] }] }),
-                            awaitingYes: sumWhere({ $and: [onHoldForStock, beingAsked] }),
+                            waiting: sumWhere(onHoldForStock),
                             allocated: sumWhere({
                                 $or: [
                                     {

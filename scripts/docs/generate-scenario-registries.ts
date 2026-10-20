@@ -8,9 +8,10 @@
 import { REPO_ROOT } from '../modules-on-disk';
 import { formatWithRepoConfig } from '../scaffold/format-text';
 import { staleScenarioRegistries, writeScenarioRegistries } from '../scaffold/scenario-registry';
+import { hasFlag } from '../cli';
 
 /** Report drift instead of rewriting — what `complete` runs. */
-const checkOnly = process.argv.includes('--check');
+const checkOnly = hasFlag('check');
 
 (checkOnly
     ? staleScenarioRegistries(REPO_ROOT, formatWithRepoConfig).then((stale) => {

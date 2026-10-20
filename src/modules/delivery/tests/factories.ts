@@ -38,26 +38,14 @@ export const fulfillmentOrdersOf = (orderId: string): Promise<FulfillmentOrderDo
         .then(() => fulfillmentOrderRepository.findByOrderId(orderId));
 
 /**
- * Set a fulfillment order's dates and consent to a state a test needs to start from — a promise
- * long past, a date the buyer already accepted, a deadline that has just gone — which only the
- * clock reaches through the doors.
+ * Set a fulfillment order's dates to a state a test needs to start from — a promise long past, a
+ * notice sent at a given moment — which only the clock reaches through the doors.
  * @param fulfillmentOrderId - the fulfillment order
  * @param fields - the fields to set
  */
 export const setFulfillmentOrderState = (
     fulfillmentOrderId: string,
-    fields: Partial<
-        Pick<
-            FulfillmentOrderDocument,
-            | 'agreedAt'
-            | 'expectedAt'
-            | 'consent'
-            | 'consentDeadline'
-            | 'revisedShipDate'
-            | 'lastNoticeAt'
-            | 'slips'
-        >
-    >
+    fields: Partial<Pick<FulfillmentOrderDocument, 'agreedAt' | 'expectedAt' | 'lastNoticeAt'>>
 ): Promise<unknown> =>
     fulfillmentOrderModel.updateOne({ _id: fulfillmentOrderId }, { $set: fields }).exec();
 

@@ -41,8 +41,7 @@ describe('returnSchema', () => {
             'withdrawal',
             'defective',
             'wrong_item',
-            'other',
-            'no_answer'
+            'other'
         ]);
         expect(enumOf(returnSchema, 'returnPostage')).toEqual(['consumer', 'shop']);
         // A return is goods coming back unless it says it cancelled what never shipped.

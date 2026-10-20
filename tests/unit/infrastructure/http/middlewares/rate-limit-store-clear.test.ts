@@ -1,7 +1,7 @@
 /**
  * `clearRateLimitCounters` — what the e2e reset uses so a spent budget does not outlive the data.
  *
- * Asserts the scope (only the limiter's own prefix, never a flush), the fail-open answer, and that
+ * Asserts the scope (only the limiter's own prefix, never a flush), the three statuses, and that
  * the short-lived client is always closed.
  */
 
@@ -50,9 +50,8 @@ describe('clearRateLimitCounters', () => {
 
     it('deletes only keys under the limiter prefix, and counts them', async () => {
         await expect(clearRateLimitCounters('redis://127.0.0.1:6379')).resolves.toEqual({
-            deleted: 2,
-            reachable: true,
-            configured: true
+            status: 'cleared',
+            deleted: 2
         });
         expect(calls.patterns).toEqual(['rate-limit:*']);
         expect(calls.deleted).toEqual([['rate-limit:auth:a', 'rate-limit:payments:b']]);
@@ -65,19 +64,17 @@ describe('clearRateLimitCounters', () => {
 
     it('says it was not configured, instead of looking like an empty clear, without a Redis URL', async () => {
         await expect(clearRateLimitCounters(undefined)).resolves.toEqual({
-            deleted: 0,
-            reachable: true,
-            configured: false
+            status: 'not-configured',
+            deleted: 0
         });
         expect(calls.patterns).toEqual([]);
     });
 
-    it('answers reachable: false instead of rejecting when Redis is down', async () => {
+    it('answers unreachable instead of rejecting when Redis is down', async () => {
         connectError = new Error('ECONNREFUSED');
         await expect(clearRateLimitCounters('redis://127.0.0.1:6379')).resolves.toEqual({
-            deleted: 0,
-            reachable: false,
-            configured: true
+            status: 'unreachable',
+            deleted: 0
         });
         expect(calls.closed).toBe(1);
     });

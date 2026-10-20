@@ -28,8 +28,7 @@ export {
     isShippable,
     isFulfillable,
     isHoldable,
-    isReleasable,
-    isAwaitingAnswer
+    isReleasable
 } from './fulfillment';
 export type {
     FulfillmentLine,
@@ -44,27 +43,13 @@ export type {
 } from './fulfillment';
 
 export {
-    SILENT_SLIP_DAYS,
-    CONSENT_WINDOW_DAYS,
-    ASK_BEFORE_DAYS,
-    RENEWED_ASK_BEFORE_DAYS,
     judgeSlip,
     judgeMove,
-    isOpenEndedYes,
     expectedDateOf,
     expectedDateOfWaiting,
-    answerBy,
     needsDueNotice,
-    hasWaitExpired,
     slippedDays,
     boardStateOf,
     isLate
 } from './preorder';
-export type {
-    AnswerFacts,
-    BoardFacts,
-    MoveFacts,
-    SlipFacts,
-    SlipVerdict,
-    SweepFacts
-} from './preorder';
+export type { BoardFacts, MoveFacts, SlipFacts, SlipVerdict, SweepFacts } from './preorder';
