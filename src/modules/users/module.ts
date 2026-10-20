@@ -44,6 +44,7 @@ export default {
     routes: router,
     onRegistered,
     locales: path.join(__dirname, 'locales'),
+    templates: path.join(__dirname, 'templates'),
     jobs: usersJobs,
     /*
      * `account`'s signup and profile-update flows write through this same `userRepository` —

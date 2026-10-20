@@ -48,6 +48,7 @@ import {
     transferExpiredEmail,
     transferInstructionsEmail
 } from '@modules/payments/emails';
+import { purchaseHoldPlacedEmail } from '@modules/users/emails';
 import { buildDocumentView } from '@modules/invoicing/emails';
 import {
     holdNoticeEmail,
@@ -177,6 +178,15 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         cancelCount: 3,
         windowDays: 7,
         until: '2026-10-26T22:00:00.000Z'
+    }),
+    'users.purchase-hold-placed': purchaseHoldPlacedEmail(locale, {
+        until: new Date('2026-10-26T22:00:00.000Z'),
+        reason: 'repeated_cancellations',
+        cancelCount: 3,
+        windowDays: 7,
+        note: 'Please write to us.',
+        contactUrl: 'https://shop.example/en/contact?category=account',
+        privacyUrl: 'https://shop.example/en/privacy'
     }),
     'payments.refund-issued': refundIssuedEmail(
         locale,

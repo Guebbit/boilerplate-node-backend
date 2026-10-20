@@ -1447,7 +1447,8 @@ describe('orderConfirm — paymentMethod', () => {
             await userService.takeAutomaticPurchaseHold(
                 user.id,
                 new Date(Date.now() + 24 * 60 * 60 * 1000),
-                testCallerContext
+                testCallerContext,
+                { cancelCount: 3, windowDays: 7 }
             );
 
             const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);

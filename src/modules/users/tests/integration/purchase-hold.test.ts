@@ -8,6 +8,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { observePort } from '@tests/ports';
 import { callerContextAs, testCallerContext } from '@tests/callers';
 import * as auditPort from '@infrastructure/observability/audit';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import type { ResponseReject } from '@infrastructure/http/response';
 import { userService } from '@modules/users/services';
 import { createUser, userRepository } from '@modules/users/tests/factories';
@@ -19,9 +20,29 @@ jest.mock('@infrastructure/observability/audit', () =>
     jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
 );
 
+// The queue, not the copy.
+jest.mock('@infrastructure/adapters/mailer', () => ({
+    __esModule: true,
+    enqueueEmail: jest.fn()
+}));
+const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
+
 setupTestDb();
 
+beforeEach(() => {
+    mockEnqueueEmail.mockReset();
+    // The buyer mail chains a `.catch` on the queue's promise, like the contact form's.
+    mockEnqueueEmail.mockResolvedValue(undefined);
+});
+
+/** The mails queued to the buyer about a hold. */
+const holdMails = () =>
+    mockEnqueueEmail.mock.calls.filter(([, template]) => template === 'users.purchase-hold-placed');
+
 const DAY = 24 * 60 * 60 * 1000;
+
+/** The rule behind an automatic hold, as the buyer's mail states it. */
+const AUTOMATIC_BASIS = { cancelCount: 3, windowDays: 7 };
 
 /** `days` from now. */
 const inDays = (days: number): Date => new Date(Date.now() + days * DAY);
@@ -155,7 +176,8 @@ describe('takeAutomaticPurchaseHold', () => {
         const taken = await userService.takeAutomaticPurchaseHold(
             buyer.id,
             until,
-            testCallerContext
+            testCallerContext,
+            AUTOMATIC_BASIS
         );
 
         expect(taken).toBe(true);
@@ -172,8 +194,18 @@ describe('takeAutomaticPurchaseHold', () => {
         const buyer = await createUser();
 
         const outcomes = await Promise.all([
-            userService.takeAutomaticPurchaseHold(buyer.id, inDays(2), testCallerContext),
-            userService.takeAutomaticPurchaseHold(buyer.id, inDays(3), testCallerContext)
+            userService.takeAutomaticPurchaseHold(
+                buyer.id,
+                inDays(2),
+                testCallerContext,
+                AUTOMATIC_BASIS
+            ),
+            userService.takeAutomaticPurchaseHold(
+                buyer.id,
+                inDays(3),
+                testCallerContext,
+                AUTOMATIC_BASIS
+            )
         ]);
 
         expect(outcomes.filter(Boolean)).toHaveLength(1);
@@ -190,7 +222,8 @@ describe('takeAutomaticPurchaseHold', () => {
         const taken = await userService.takeAutomaticPurchaseHold(
             buyer.id,
             inDays(1),
-            testCallerContext
+            testCallerContext,
+            AUTOMATIC_BASIS
         );
 
         expect(taken).toBe(false);
@@ -212,7 +245,8 @@ describe('takeAutomaticPurchaseHold', () => {
         const taken = await userService.takeAutomaticPurchaseHold(
             buyer.id,
             inDays(2),
-            testCallerContext
+            testCallerContext,
+            AUTOMATIC_BASIS
         );
 
         expect(taken).toBe(true);
@@ -258,6 +292,116 @@ const exportedProfile = (id: string): Promise<{ purchaseHold?: object }> =>
         // `toJSON` transform runs only in the stringify (`structuredClone` would skip it).
         // eslint-disable-next-line unicorn/prefer-structured-clone -- structuredClone bypasses toJSON, which is the thing under test
         .then((profile) => JSON.parse(JSON.stringify(profile)) as { purchaseHold?: object });
+
+describe('the buyer mail when a hold is placed', () => {
+    it('mails the buyer a staff hold: until when, the note, a way to ask a person, the right to object', async () => {
+        const buyer = await createUser({ email: 'held@owner.test', username: 'held' });
+        const until = inDays(3);
+
+        await userService.setPurchaseHold(
+            buyer.id,
+            { until, note: 'Please write to us about your recent orders.' },
+            callerContextAs('moderator')
+        );
+
+        expect(holdMails()).toHaveLength(1);
+        const [recipient, , data] = holdMails()[0];
+        expect(recipient).toMatchObject({ to: 'held@owner.test' });
+        expect(data).toMatchObject({
+            note: 'Please write to us about your recent orders.',
+            reason: expect.stringContaining('member of our team'),
+            contactUrl: expect.stringContaining('contact?category=account'),
+            privacyUrl: expect.stringContaining('/privacy')
+        });
+        // The right to object is its own paragraph, apart from the reason.
+        expect(data).toMatchObject({ objection: expect.stringContaining('Article 21') });
+        expect(JSON.stringify(data)).not.toContain('moderator');
+    });
+
+    it('mails an automatic hold with the rule that caused it, in the buyer’s language', async () => {
+        const buyer = await createUser({ email: 'it@owner.test', username: 'it', locale: 'it' });
+
+        await userService.takeAutomaticPurchaseHold(
+            buyer.id,
+            inDays(4),
+            testCallerContext,
+            AUTOMATIC_BASIS
+        );
+
+        expect(holdMails()).toHaveLength(1);
+        const data = holdMails()[0][2];
+        expect(data).toMatchObject({
+            locale: 'it',
+            reason: expect.stringContaining('3 tuoi ordini'),
+            summary: expect.stringMatching(/fino al .*UTC/),
+            note: ''
+        });
+        expect((data as { contactUrl: string }).contactUrl).toContain('/it/');
+    });
+
+    it('mails once when two automatic calls race to the limit', async () => {
+        const buyer = await createUser();
+
+        await Promise.all([
+            userService.takeAutomaticPurchaseHold(
+                buyer.id,
+                inDays(2),
+                testCallerContext,
+                AUTOMATIC_BASIS
+            ),
+            userService.takeAutomaticPurchaseHold(
+                buyer.id,
+                inDays(3),
+                testCallerContext,
+                AUTOMATIC_BASIS
+            )
+        ]);
+
+        expect(holdMails()).toHaveLength(1);
+    });
+
+    it('never undoes the hold when the mail cannot be queued', async () => {
+        mockEnqueueEmail.mockRejectedValue(new Error('smtp down'));
+        const buyer = await createUser();
+
+        const result = await userService.setPurchaseHold(
+            buyer.id,
+            { until: inDays(2) },
+            callerContextAs('moderator')
+        );
+
+        expect(result.success).toBe(true);
+        await expect(userService.purchaseHoldOf(buyer.id)).resolves.toMatchObject({
+            reason: 'staff'
+        });
+    });
+
+    it('sends nothing for a refused hold, a lift, or an automatic call that lost the race', async () => {
+        const buyer = await createUser();
+        await userService.setPurchaseHold(
+            buyer.id,
+            { until: inDays(-1) },
+            callerContextAs('moderator')
+        );
+        await userService.liftPurchaseHold(buyer.id, callerContextAs('moderator'));
+        await userService.setPurchaseHold(
+            buyer.id,
+            { until: inDays(5) },
+            callerContextAs('moderator')
+        );
+        mockEnqueueEmail.mockClear();
+
+        const taken = await userService.takeAutomaticPurchaseHold(
+            buyer.id,
+            inDays(1),
+            testCallerContext,
+            AUTOMATIC_BASIS
+        );
+
+        expect(taken).toBe(false);
+        expect(holdMails()).toHaveLength(0);
+    });
+});
 
 describe('what the data export carries', () => {
     it('carries a hold in force, without the staff member who set it', async () => {
