@@ -44,7 +44,7 @@ beforeAll(() => {
  * needed to redeem a callback since PKCE landed beside the CSRF check.
  */
 const attemptCookies = (start: { headers: Record<string, unknown> }): string =>
-    cookieHeader(start, 'oauth_state', 'oauth_verifier');
+    cookieHeader(start, '__Host-oauth_state', '__Host-oauth_verifier');
 
 describe('GET /account/oauth/providers', () => {
     it('lists the fake provider once it is registered', async () => {
@@ -68,11 +68,11 @@ describe('GET /account/oauth/:provider', () => {
 
         expect(response.status).toBe(302);
         expect(response.headers.location).toContain('/account/oauth/fake/callback');
-        expect(setCookie(response, 'oauth_state')).toBeTruthy();
-        expect(setCookie(response, 'oauth_verifier')).toBeTruthy();
+        expect(setCookie(response, '__Host-oauth_state')).toBeTruthy();
+        expect(setCookie(response, '__Host-oauth_verifier')).toBeTruthy();
     });
 
-    it.each(['oauth_state', 'oauth_verifier'])(
+    it.each(['__Host-oauth_state', '__Host-oauth_verifier'])(
         'sets %s for five minutes, httpOnly and SameSite=Lax',
         async (name) => {
             const response = await api().get('/account/oauth/fake');
@@ -87,13 +87,15 @@ describe('GET /account/oauth/:provider', () => {
     it('saves a same-origin `continue` as a cookie of its own', async () => {
         const response = await api().get('/account/oauth/fake?continue=%2Fcheckout');
 
-        expect(setCookie(response, 'oauth_continue')).toMatch(/oauth_continue=%2Fcheckout;/);
+        expect(setCookie(response, '__Host-oauth_continue')).toMatch(
+            /__Host-oauth_continue=%2Fcheckout;/
+        );
     });
 
     it('saves a `locale` tag as a cookie of its own', async () => {
         const response = await api().get('/account/oauth/fake?locale=it');
 
-        expect(setCookie(response, 'oauth_locale')).toMatch(/oauth_locale=it;/);
+        expect(setCookie(response, '__Host-oauth_locale')).toMatch(/__Host-oauth_locale=it;/);
     });
 
     it('drops a `locale` that is not a tag rather than saving it', async () => {
@@ -102,7 +104,7 @@ describe('GET /account/oauth/:provider', () => {
         );
 
         expect(response.status).toBe(302);
-        expect(setCookie(response, 'oauth_locale')).toBeUndefined();
+        expect(setCookie(response, '__Host-oauth_locale')).toBeUndefined();
     });
 
     it.each([
@@ -113,7 +115,7 @@ describe('GET /account/oauth/:provider', () => {
         const response = await api().get(`/account/oauth/fake?continue=${continueTo}`);
 
         expect(response.status).toBe(302);
-        expect(setCookie(response, 'oauth_continue')).toBeUndefined();
+        expect(setCookie(response, '__Host-oauth_continue')).toBeUndefined();
     });
 });
 
@@ -134,7 +136,7 @@ describe('GET /account/oauth/:provider/callback', () => {
 
     it('answers 400 when the state does not match the cookie, and clears it', async () => {
         const start = await api().get('/account/oauth/fake');
-        const stateCookie = setCookie(start, 'oauth_state')!;
+        const stateCookie = setCookie(start, '__Host-oauth_state')!;
 
         const response = await api()
             .get('/account/oauth/fake/callback?code=fake-oauth-code&state=not-the-real-state')
@@ -142,12 +144,21 @@ describe('GET /account/oauth/:provider/callback', () => {
 
         expect(response.status).toBe(400);
         // Cleared even on failure, so a retried callback can't replay the same state twice.
-        expect(setCookie(response, 'oauth_state')).toMatch(/oauth_state=;/);
+        expect(setCookie(response, '__Host-oauth_state')).toMatch(/__Host-oauth_state=;/);
+    });
+
+    it('ignores planted unprefixed state and verifier cookies: a sibling host cannot win the handshake', async () => {
+        const response = await api()
+            .get('/account/oauth/fake/callback?code=fake-oauth-code&state=planted')
+            .set('Cookie', 'oauth_state=planted; oauth_verifier=planted');
+
+        expect(response.status).toBe(400);
+        expect(setCookie(response, '__Host-session')).toBeUndefined();
     });
 
     it('answers 400 when the verifier cookie is missing, without ever reaching the token exchange', async () => {
         const start = await api().get('/account/oauth/fake');
-        const stateCookie = setCookie(start, 'oauth_state')!.split(';', 1)[0];
+        const stateCookie = setCookie(start, '__Host-oauth_state')!.split(';', 1)[0];
         const callbackUrl = new URL(start.headers.location);
 
         // The state cookie rides along, the verifier does not — the trap the build order warns
@@ -157,7 +168,7 @@ describe('GET /account/oauth/:provider/callback', () => {
             .set('Cookie', stateCookie);
 
         expect(response.status).toBe(400);
-        expect(setCookie(response, 'oauth_state')).toMatch(/oauth_state=;/);
+        expect(setCookie(response, '__Host-oauth_state')).toMatch(/__Host-oauth_state=;/);
     });
 
     it('completes the round trip: session cookies set, user created, redirected to the frontend', async () => {
@@ -176,7 +187,7 @@ describe('GET /account/oauth/:provider/callback', () => {
         expect(setCookie(response, '__Host-session')).not.toMatch(/max-age=|expires=/i);
         expect(setCookie(response, 'isAuth')).not.toMatch(/max-age=|expires=/i);
         // A completed login marks the browser familiar, as the password path does.
-        expect(setCookie(response, 'device')).toBeTruthy();
+        expect(setCookie(response, '__Host-device')).toBeTruthy();
 
         const created = await userRepository.findOne({ email: 'oauth.demo@example.com' });
         expect(created).not.toBeNull();
@@ -190,8 +201,8 @@ describe('GET /account/oauth/:provider/callback', () => {
         const response = await fakeLogin();
 
         expect(response.status).toBe(302);
-        expect(setCookie(response, 'oauth_state')).toMatch(/oauth_state=;/);
-        expect(setCookie(response, 'oauth_verifier')).toMatch(/oauth_verifier=;/);
+        expect(setCookie(response, '__Host-oauth_state')).toMatch(/__Host-oauth_state=;/);
+        expect(setCookie(response, '__Host-oauth_verifier')).toMatch(/__Host-oauth_verifier=;/);
     });
 
     it('sends an address the provider has not verified to `email_unverified`, with no session', async () => {
@@ -237,12 +248,20 @@ describe('GET /account/oauth/:provider/callback', () => {
 
         const response = await api()
             .get(callbackUrl.pathname + callbackUrl.search)
-            .set('Cookie', cookieHeader(start, 'oauth_state', 'oauth_verifier', 'oauth_continue'));
+            .set(
+                'Cookie',
+                cookieHeader(
+                    start,
+                    '__Host-oauth_state',
+                    '__Host-oauth_verifier',
+                    '__Host-oauth_continue'
+                )
+            );
 
         expect(response.status).toBe(302);
         const location = new URL(response.headers.location);
         expect(location.searchParams.get('continue')).toBe('/checkout');
-        expect(setCookie(response, 'oauth_continue')).toMatch(/oauth_continue=;/);
+        expect(setCookie(response, '__Host-oauth_continue')).toMatch(/__Host-oauth_continue=;/);
     });
 
     it('carries a saved `locale` through to the frontend redirect, and clears the cookie', async () => {
@@ -251,13 +270,21 @@ describe('GET /account/oauth/:provider/callback', () => {
 
         const response = await api()
             .get(callbackUrl.pathname + callbackUrl.search)
-            .set('Cookie', cookieHeader(start, 'oauth_state', 'oauth_verifier', 'oauth_locale'));
+            .set(
+                'Cookie',
+                cookieHeader(
+                    start,
+                    '__Host-oauth_state',
+                    '__Host-oauth_verifier',
+                    '__Host-oauth_locale'
+                )
+            );
 
         expect(response.status).toBe(302);
         const location = new URL(response.headers.location);
         expect(location.searchParams.get('locale')).toBe('it');
         expect(location.searchParams.has('continue')).toBe(false);
-        expect(setCookie(response, 'oauth_locale')).toMatch(/oauth_locale=;/);
+        expect(setCookie(response, '__Host-oauth_locale')).toMatch(/__Host-oauth_locale=;/);
     });
 
     it('carries the saved `locale` on a failure redirect too, so the error page speaks it', async () => {
@@ -267,7 +294,15 @@ describe('GET /account/oauth/:provider/callback', () => {
 
         const response = await api()
             .get(`${callbackUrl.pathname}?state=${state}&error=access_denied`)
-            .set('Cookie', cookieHeader(start, 'oauth_state', 'oauth_verifier', 'oauth_locale'));
+            .set(
+                'Cookie',
+                cookieHeader(
+                    start,
+                    '__Host-oauth_state',
+                    '__Host-oauth_verifier',
+                    '__Host-oauth_locale'
+                )
+            );
 
         const location = new URL(response.headers.location);
         expect(location.searchParams.get('error')).toBe('access_denied');
@@ -282,7 +317,7 @@ describe('GET /account/oauth/:provider/callback', () => {
             .get(callbackUrl.pathname + callbackUrl.search)
             .set(
                 'Cookie',
-                `${cookieHeader(start, 'oauth_state', 'oauth_verifier')}; oauth_locale=//evil.example`
+                `${cookieHeader(start, '__Host-oauth_state', '__Host-oauth_verifier')}; __Host-oauth_locale=//evil.example`
             );
 
         expect(response.status).toBe(302);
@@ -307,7 +342,7 @@ describe('GET /account/oauth/:provider/callback', () => {
             .get(callbackUrl.pathname + callbackUrl.search)
             .set(
                 'Cookie',
-                `${cookieHeader(start, 'oauth_state', 'oauth_verifier')}; oauth_continue=//evil.example`
+                `${cookieHeader(start, '__Host-oauth_state', '__Host-oauth_verifier')}; __Host-oauth_continue=//evil.example`
             );
 
         expect(response.status).toBe(302);
@@ -344,7 +379,12 @@ const fakeLogin = async (continueTo?: string, provider = 'fake') => {
     const start = await api().get(`/account/oauth/${provider}${query}`);
     const callbackUrl = new URL(start.headers.location);
     const cookies = continueTo
-        ? cookieHeader(start, 'oauth_state', 'oauth_verifier', 'oauth_continue')
+        ? cookieHeader(
+              start,
+              '__Host-oauth_state',
+              '__Host-oauth_verifier',
+              '__Host-oauth_continue'
+          )
         : attemptCookies(start);
     return api()
         .get(callbackUrl.pathname + callbackUrl.search)
@@ -385,13 +425,13 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
         // No session — the whole point of 1b.
         expect(setCookie(challenged, '__Host-session')).toBeUndefined();
         expect(setCookie(challenged, 'isAuth')).toBeUndefined();
-        expect(setCookie(challenged, 'oauth_mfa_challenge')).toBeTruthy();
+        expect(setCookie(challenged, '__Host-oauth_mfa_challenge')).toBeTruthy();
 
         // The challenge token never left the server — only its cookie did. `code` alone in the
         // body, carrying the cookie, is what a real browser can actually do here.
         const finished = await api()
             .post('/account/login/2fa')
-            .set('Cookie', setCookie(challenged, 'oauth_mfa_challenge')!)
+            .set('Cookie', setCookie(challenged, '__Host-oauth_mfa_challenge')!)
             .send({ code: await codeFor(secret, 1) });
 
         expect(finished.status).toBe(200);
@@ -406,12 +446,19 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
     });
 });
 
-/** A password sign-in of `email`, as the bearer a signed-in client sends. */
+/**
+ * A password sign-in of `email`: the bearer a signed-in client sends, and the session cookie the
+ * browser holds beside it (the connect callback is a browser navigation, so it carries the cookie
+ * and no bearer).
+ */
 const signInAs = (email: string) =>
     api()
         .post('/account/login')
         .send({ email, password: PLAIN_PASSWORD })
-        .then((login) => `Bearer ${login.body.data.token as string}`);
+        .then((login) => ({
+            bearer: `Bearer ${login.body.data.token as string}`,
+            session: cookieHeader(login, '__Host-session')
+        }));
 
 /** The provider names linked to an account, straight from the database. */
 const linksOf = (userId: string) =>
@@ -446,7 +493,7 @@ describe('a sign-in whose email matches an existing account', () => {
 });
 
 /** The connect start for `provider`, then the callback it leads to, with the cookies between. */
-const connect = async (bearer: string, provider = 'fake') => {
+const connect = async (bearer: string, session: string, provider = 'fake') => {
     const start = await api()
         .post(`/account/oauth/links/${provider}?continue=%2Fprofile`)
         .set('Authorization', bearer);
@@ -455,7 +502,7 @@ const connect = async (bearer: string, provider = 'fake') => {
         .get(callbackUrl.pathname + callbackUrl.search)
         .set(
             'Cookie',
-            cookieHeader(start, 'oauth_state', 'oauth_verifier', 'oauth_link', 'oauth_continue')
+            `${cookieHeader(start, '__Host-oauth_state', '__Host-oauth_verifier', '__Host-oauth_link', '__Host-oauth_continue')}; ${session}`
         );
     return { start, callback };
 };
@@ -463,7 +510,7 @@ const connect = async (bearer: string, provider = 'fake') => {
 describe('POST /account/oauth/links/:provider', () => {
     it('answers 404 for a provider this deployment never configured', async () => {
         await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
-        const bearer = await signInAs('owner@example.com');
+        const { bearer } = await signInAs('owner@example.com');
 
         const response = await api()
             .post('/account/oauth/links/not-a-real-provider')
@@ -474,13 +521,13 @@ describe('POST /account/oauth/links/:provider', () => {
 
     it('answers the consent URL and sets the state, verifier and connect cookies', async () => {
         await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
-        const bearer = await signInAs('owner@example.com');
+        const { bearer } = await signInAs('owner@example.com');
 
         const response = await api().post('/account/oauth/links/fake').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
         expect(response.body.data.authorizeUrl).toContain('/account/oauth/fake/callback');
-        for (const name of ['oauth_state', 'oauth_verifier', 'oauth_link']) {
+        for (const name of ['__Host-oauth_state', '__Host-oauth_verifier', '__Host-oauth_link']) {
             expect(setCookie(response, name)).toMatch(/HttpOnly/i);
             // Five minutes, the lifetime of the link token the cookie carries.
             expect(setCookie(response, name)).toMatch(/Max-Age=300(;|$)/i);
@@ -489,9 +536,9 @@ describe('POST /account/oauth/links/:provider', () => {
 
     it('links the provider to the signed-in account, mints no session, and sends the browser back', async () => {
         const user = await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
-        const bearer = await signInAs('owner@example.com');
+        const { bearer, session } = await signInAs('owner@example.com');
 
-        const { callback } = await connect(bearer);
+        const { callback } = await connect(bearer, session);
 
         expect(callback.status).toBe(302);
         const location = new URL(callback.headers.location);
@@ -499,7 +546,7 @@ describe('POST /account/oauth/links/:provider', () => {
         expect(location.searchParams.get('continue')).toBe('/profile');
         expect(location.searchParams.has('error')).toBe(false);
         expect(setCookie(callback, '__Host-session')).toBeUndefined();
-        expect(setCookie(callback, 'oauth_link')).toMatch(/oauth_link=;/);
+        expect(setCookie(callback, '__Host-oauth_link')).toMatch(/__Host-oauth_link=;/);
         expect(await linksOf(user.id)).toEqual(['fake']);
     });
 
@@ -511,9 +558,9 @@ describe('POST /account/oauth/links/:provider', () => {
             connectedAt: new Date()
         });
         const user = await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
-        const bearer = await signInAs('owner@example.com');
+        const { bearer, session } = await signInAs('owner@example.com');
 
-        const { callback } = await connect(bearer);
+        const { callback } = await connect(bearer, session);
 
         expect(new URL(callback.headers.location).searchParams.get('error')).toBe('already_linked');
         expect(await linksOf(user.id)).toEqual([]);
@@ -521,10 +568,10 @@ describe('POST /account/oauth/links/:provider', () => {
 
     it('treats a replayed callback as an expired attempt: ?error=link_expired', async () => {
         await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
-        const bearer = await signInAs('owner@example.com');
+        const { bearer, session } = await signInAs('owner@example.com');
         const start = await api().post('/account/oauth/links/fake').set('Authorization', bearer);
         const callbackUrl = new URL(start.body.data.authorizeUrl as string);
-        const cookies = cookieHeader(start, 'oauth_state', 'oauth_verifier', 'oauth_link');
+        const cookies = `${cookieHeader(start, '__Host-oauth_state', '__Host-oauth_verifier', '__Host-oauth_link')}; ${session}`;
         await api()
             .get(callbackUrl.pathname + callbackUrl.search)
             .set('Cookie', cookies);
@@ -534,6 +581,43 @@ describe('POST /account/oauth/links/:provider', () => {
             .set('Cookie', cookies);
 
         expect(new URL(replay.headers.location).searchParams.get('error')).toBe('link_expired');
+    });
+
+    it('refuses a connect callback from a browser holding no session: ?error=link_expired', async () => {
+        const user = await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
+        const { bearer } = await signInAs('owner@example.com');
+        const start = await api().post('/account/oauth/links/fake').set('Authorization', bearer);
+        const callbackUrl = new URL(start.body.data.authorizeUrl as string);
+
+        // The three connect cookies are all present; only the session is not.
+        const callback = await api()
+            .get(callbackUrl.pathname + callbackUrl.search)
+            .set(
+                'Cookie',
+                cookieHeader(
+                    start,
+                    '__Host-oauth_state',
+                    '__Host-oauth_verifier',
+                    '__Host-oauth_link'
+                )
+            );
+
+        expect(new URL(callback.headers.location).searchParams.get('error')).toBe('link_expired');
+        expect(await linksOf(user.id)).toEqual([]);
+    });
+
+    it('refuses a connect callback whose session belongs to another account: ?error=link_expired', async () => {
+        const owner = await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
+        const victim = await createUser({ email: 'victim@example.com', verifiedAt: new Date() });
+        const { bearer } = await signInAs('owner@example.com');
+        const { session: victimSession } = await signInAs('victim@example.com');
+
+        // The attacker's link token and cookies, replayed in the victim's browser.
+        const { callback } = await connect(bearer, victimSession);
+
+        expect(new URL(callback.headers.location).searchParams.get('error')).toBe('link_expired');
+        expect(await linksOf(owner.id)).toEqual([]);
+        expect(await linksOf(victim.id)).toEqual([]);
     });
 
     it('needs a fresh session: a stale one is asked to prove itself again', async () => {

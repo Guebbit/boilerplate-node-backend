@@ -17,12 +17,12 @@ import type { Request, Response } from 'express';
 import { constantTimeEqual } from '@infrastructure/security/constant-time';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { readBodyField } from '@infrastructure/http/middlewares/rate-limit';
-import { secureCookieOptions } from './cookies';
+import { hostCookieOptions } from './cookies';
 import { sessionConfig } from './config';
 import { DAY_MS } from '@domain-primitives/time';
 
-/** The cookie's name. */
-export const DEVICE_COOKIE = 'device';
+/** The cookie's name; `__Host-` because it is host-only and httpOnly, like the session's. */
+export const DEVICE_COOKIE = '__Host-device';
 
 /** How many accounts one browser may be familiar for; the oldest drops first. */
 const MAX_TOKENS = 5;
@@ -116,7 +116,7 @@ export const rememberDevice = (request: Request, response: Response, email: stri
     );
     // Express: a persistent, httpOnly cookie. https://expressjs.com/en/api.html#res.cookie
     response.cookie(DEVICE_COOKIE, tokens.join(SEPARATOR), {
-        ...secureCookieOptions(),
+        ...hostCookieOptions(),
         maxAge: DEVICE_COOKIE_MAX_AGE_MS
     });
 };

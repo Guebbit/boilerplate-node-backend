@@ -37,6 +37,7 @@ import {
     type PaginatedMeta
 } from '@infrastructure/persistence/search';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
+import { EXTERNAL_KEY_QUERY } from '@infrastructure/persistence/external-key-query';
 import { setAndUnset } from '@infrastructure/persistence/changes';
 
 /**
@@ -343,7 +344,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      *
      * @param providerRef - the provider's own intent id
      */
-    findByProviderRef: (providerRef: string) => paymentModel.findOne({ providerRef }).exec(),
+    findByProviderRef: (providerRef: string) =>
+        paymentModel.findOne({ providerRef }).setOptions(EXTERNAL_KEY_QUERY).exec(),
 
     /**
      * Record the provider's intent id on a payment that has just been prepared.
