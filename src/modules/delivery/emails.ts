@@ -188,7 +188,9 @@ export const holdNoticeEmail = (
             pageMetaTitle: t('delivery.email-hold-notice.meta-title'),
             greeting: t('delivery.email-hold-notice.greeting', { name }),
             body: t(`delivery.email-hold-notice.${input.notice}.body`),
-            message: input.message,
+            // Always a string: the job crosses the queue as JSON, which drops an `undefined` key, and
+            // the template reads `message` unconditionally (a missing key is a ReferenceError).
+            message: input.message ?? '',
             linkLabel: t('delivery.email-hold-notice.link-label'),
             linkUrl: input.orderUrl,
             footer: t('email.footer')
