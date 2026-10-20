@@ -84,11 +84,16 @@ const expectedMinor = (
     return linesMinor + shipping * scale;
 };
 
-/** Run one basket through the cart view, checkout and the payment intent as `shopper`. */
+/**
+ * Run one basket through the cart view, checkout and the payment intent as `shopper`.
+ *
+ * @param canceller - who cancels the leftover unpaid order; the shopper themselves by default
+ */
 const priceThroughHttp = async (
     { bearer }: Shopper,
     lines: readonly BasketLine[],
-    method: keyof typeof SHIPPING
+    method: keyof typeof SHIPPING,
+    canceller: string = bearer
 ): Promise<Prices> => {
     for (const { price, quantity } of lines) {
         const product = await createProduct({ price, onHand: quantity + 5 });
@@ -114,9 +119,11 @@ const priceThroughHttp = async (
         .expect(201);
     // Each basket leaves an unpaid order, and a shopper may hold only so many open at once
     // (`CART_OPEN_ORDER_LIMIT`): cancel it so the next basket can be placed by the same shopper.
+    // A shopper's OWN cancels pause their checkout (purchase hold), so a shopper reused across
+    // baskets is cancelled for by someone else.
     await api()
         .post(`/orders/${String(checkout.body.data.id)}/cancel`)
-        .set('Authorization', bearer)
+        .set('Authorization', canceller)
         .expect(200);
 
     return {
@@ -208,6 +215,7 @@ describe('cart view, order and payment intent agree on the amount (EUR)', () => 
 
     it('agrees for any generated basket', async () => {
         const shopper = await newShopper();
+        const admin = await authenticateAs('admin');
         await fc.assert(
             fc.asyncProperty(
                 fc.array(
@@ -223,7 +231,7 @@ describe('cart view, order and payment intent agree on the amount (EUR)', () => 
                 ),
                 fc.constantFrom('standard', 'express', 'pickup'),
                 async (lines, method) => {
-                    const prices = await priceThroughHttp(shopper, lines, method);
+                    const prices = await priceThroughHttp(shopper, lines, method, admin.bearer);
 
                     expectReconciled(prices, expectedPrices(lines, method, 2));
                 }
