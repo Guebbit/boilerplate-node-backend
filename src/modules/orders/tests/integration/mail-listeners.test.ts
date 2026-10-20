@@ -90,7 +90,6 @@ describe('order.cancelled sends the mail its cause picks', () => {
     it.each<[CancelCause, 'card' | 'bank_transfer', string[]]>([
         ['customer', 'card', ['orders.order-cancelled']],
         ['operator', 'bank_transfer', ['orders.order-cancelled']],
-        ['wait_unanswered', 'card', ['orders.order-cancelled']],
         ['reservation_expired', 'card', ['orders.order-card-expired']],
         // A transfer nobody sent is answered by `payments`.
         ['reservation_expired', 'bank_transfer', []],

@@ -84,6 +84,16 @@ If they want to cancel, they can — and a paid order refunds itself when they d
 process it.
 → [The customer](./shopper.md) · [`orders`](../modules/orders.md)
 
+## "My order is late"
+
+The customer already got an email and an inbox note when the date moved or passed. It says the new
+date (or that there is none yet), and that they can **cancel from their order page for a full
+refund** any time before it ships. Nothing is asked of them and the shop never cancels for them:
+silence means they keep waiting. Staff look at the **Late** list weekly
+([the weekly routine](./manager.md#late-orders)). A customer who writes in about it is told the same,
+and if they want out, a staff member cancels and refunds with the ordinary cancel.
+→ [`delivery`](../modules/delivery.md#what-staff-do-about-a-late-order)
+
 ## "My checkout is paused"
 
 If a customer writes that they cannot place an order, the cause may be a **purchase pause**: the

@@ -17,7 +17,6 @@ import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import {
     FulfillmentCancelReason,
-    FulfillmentConsent,
     FulfillmentHoldReason,
     FulfillmentOrderKind,
     FulfillmentOrderStatus,
@@ -65,23 +64,8 @@ export interface FulfillmentOrderDocument extends Document {
     agreedAt?: Date;
     /** When it is now expected to ship. */
     expectedAt?: Date;
-    /**
-     * Where a waiting preorder stands with its buyer after a late date; absent until they were
-     * asked. See `domain/preorder.ts`.
-     */
-    consent?: FulfillmentConsent;
-    /** When silence turns into a cancel. Present exactly while `consent` is `awaiting`. */
-    consentDeadline?: Date;
-    /**
-     * The definite revised date the buyer was offered or accepted (16 CFR 435.2 (b)(2)): the one in a
-     * question while `consent` is `awaiting`, else the one agreed to, by answering or by silence.
-     * Absent with `consent: confirmed`, the buyer agreed to wait with no end date.
-     */
-    revisedShipDate?: Date;
     /** When the buyer was last told the date moved or passed: what stops a daily repeat. */
     lastNoticeAt?: Date;
-    /** How many later dates the buyer was told about: a second slip always asks for a yes. */
-    slips: number;
     /** Who cancelled what was left, once something was. */
     cancelReason?: FulfillmentCancelReason;
     /**
@@ -158,11 +142,7 @@ export const fulfillmentOrderSchema = new Schema<FulfillmentOrderDocument>(
         defaulted: { type: Boolean },
         agreedAt: { type: Date },
         expectedAt: { type: Date },
-        consent: { type: String, enum: Object.values(FulfillmentConsent) },
-        consentDeadline: { type: Date },
-        revisedShipDate: { type: Date },
         lastNoticeAt: { type: Date },
-        slips: { type: Number, required: true, min: 0, default: 0 },
         cancelReason: { type: String, enum: Object.values(FulfillmentCancelReason) },
         revision: { type: Number, required: true, default: 0 }
     },
@@ -178,14 +158,10 @@ fulfillmentOrderSchema.index(
     { name: 'fulfillmentorders_status_holdReason_linesProductId' }
 );
 
-// The daily sweep's two reads: a date that passed, and a yes that never came.
+// The daily sweep's read: a date that passed.
 fulfillmentOrderSchema.index(
     { status: 1, holdReason: 1, expectedAt: 1 },
     { name: 'fulfillmentorders_status_holdReason_expectedAt' }
-);
-fulfillmentOrderSchema.index(
-    { consent: 1, consentDeadline: 1 },
-    { name: 'fulfillmentorders_consent_consentDeadline' }
 );
 
 // The preorder board's order (earliest expected first) and its product filter.

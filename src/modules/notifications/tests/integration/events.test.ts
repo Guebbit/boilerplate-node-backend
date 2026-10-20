@@ -264,7 +264,7 @@ describe('the module subscriptions', () => {
             return placed;
         };
 
-        it('tells the buyer of a short slip with fulfillment-delayed, naming the dates and the product', async () => {
+        it('tells the buyer of a later date with fulfillment-delayed, naming the dates and the product', async () => {
             const { user, orderId } = await moved(40);
 
             const [message, ...rest] = await inboxOf(user.id);
@@ -280,13 +280,13 @@ describe('the module subscriptions', () => {
             expect(message?.params).not.toHaveProperty('answerBy');
         });
 
-        it('asks a long slip with fulfillment-confirm-wait, carrying the deadline', async () => {
+        it('tells a long slip the same way: nothing is asked of the buyer', async () => {
             const { user } = await moved(90);
 
             const [message] = await inboxOf(user.id);
 
-            expect(message?.code).toBe('notifications.fulfillment-confirm-wait');
-            expect(message?.params).toHaveProperty('answerBy');
+            expect(message?.code).toBe('notifications.fulfillment-delayed');
+            expect(message?.params).not.toHaveProperty('answerBy');
         });
 
         it('writes no row at all for a buyer whose account was erased', async () => {
@@ -295,8 +295,7 @@ describe('the module subscriptions', () => {
                 fulfillmentOrderId: 'fo-1',
                 titles: ['Blue mug'],
                 agreedAt: new Date().toISOString(),
-                reason: 'moved',
-                needsAnswer: false
+                reason: 'moved'
             });
 
             // Not an inbox read: a stray row would belong to a made-up owner nobody can open.

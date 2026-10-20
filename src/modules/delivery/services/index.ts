@@ -15,7 +15,6 @@ import {
     getForOrder,
     shippedQuantities,
     remainderOptions,
-    waitHasExpired,
     findShipmentsForOrders,
     findFulfillmentOrdersForOrders
 } from './read';
@@ -31,7 +30,6 @@ import { splitForAllocation } from './split';
 import { releaseAllocated } from './release-allocated';
 import { onDateChanged } from './slip';
 import { runPreorderSweep } from './preorder-sweep';
-import { confirmWait } from './confirm-wait';
 import { listPreorderFulfillmentOrders, summarizePreorders } from './board';
 import { previewDateImpact } from './release-date-impact';
 import { scrubHoldNotes } from './retention';
@@ -58,10 +56,8 @@ export const deliveryService = {
     holdFulfillmentOrder,
     releaseFulfillmentOrder,
     editShipmentTracking,
-    confirmWait,
     shippedQuantities,
     remainderOptions,
-    waitHasExpired,
     findShipmentsForOrders,
     findFulfillmentOrdersForOrders,
     ensureFulfillmentOrders,

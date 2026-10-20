@@ -344,7 +344,6 @@ flowchart LR
 | `tests/integration/journeys/an-accounts-whole-security-life.test.ts`   | Signup, TOTP, a key, a reset, step-up, and the undo and export links lapsing.                          |
 | `tests/integration/journeys/social-login-with-a-second-factor.test.ts` | A provider sign-in stops at the challenge once a second factor is armed.                               |
 | `tests/integration/journeys/an-integrator-start-to-finish.test.ts`     | A key subscribes an endpoint; each event arrives once, signed, in order; a key follows its minter.     |
-| `tests/integration/journeys/the-preorder-nobody-answered.test.ts`      | An unanswered preorder wait is cancelled and refunded exactly; the shipped line is untouched.          |
 | `tests/integration/journeys/a-receiver-that-stays-down.test.ts`        | Five dead chains and three failing days switch a subscription off, mail its owner and audit it.        |
 | `tests/integration/journeys/quiet-for-three-years.test.ts`             | Minimise, warn, deactivate, delete, across addresses, orders, wishlist, users and signup.              |
 

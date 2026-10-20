@@ -22,18 +22,17 @@ export const deliveryJobs: readonly JobDeclaration[] = [
     },
     {
         name: 'sweep:preorders',
-        // Once a day: the preorder duties are measured in days (the margin is two days wide), and
-        // both are idempotent.
+        // Once a day: a date passes on a calendar day, and the sweep is idempotent.
         schedule: '20 2 * * *',
         summary:
-            'Asks the buyer of a late preorder whether to keep waiting, and announces a wait left unanswered past its deadline, which `returns` cancels and refunds.',
+            'Tells the buyer of a preorder whose expected date passed with the goods still not here, once. It asks nothing and cancels nothing.',
         run: () =>
             runPreorderSweep()
                 .then((result) => {
                     logger.info({ message: 'Preorder sweep done.', ...result });
                 })
-                // Each notice and each expiry rides the outbox; settled inside the lease so
-                // `notifications` and `returns` have heard every one before the connections close.
+                // Each notice rides the outbox; settled inside the lease so `notifications` has
+                // heard every one before the connections close.
                 .then(() => settleOutboxNudges()),
         needs: { subscriptions: true, i18n: true },
         lease: { ttlMs: 30 * 60 * 1000 }

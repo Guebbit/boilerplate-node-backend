@@ -81,16 +81,6 @@ describe('presentNotification, per code', () => {
             }
         },
         {
-            code: 'notifications.fulfillment-confirm-wait',
-            params: {
-                orderId: 'o2',
-                fulfillmentOrderId: 'f2',
-                titles: ['Coming soon', 'Also late'],
-                agreedAt: '2026-12-01T00:00:00.000Z',
-                answerBy: '2027-01-10T00:00:00.000Z'
-            }
-        },
-        {
             code: 'notifications.fulfillment-held',
             params: {
                 orderId: 'o3',

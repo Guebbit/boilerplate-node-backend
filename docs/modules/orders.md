@@ -135,7 +135,6 @@ flowchart LR
 | `expireReservationById`        | `reservation_expired` | system     | the expiry notice      | whatever was paid                     |
 | `cancelForErasureById`         | `erasure`             | system     | nobody                 | whatever was paid                     |
 | `cancelForPaymentMismatchById` | `payment_mismatch`    | system     | nobody                 | whatever was paid                     |
-| `cancelUnanswered`             | `wait_unanswered`     | fulfilment | the cancelled notice   | always (its own `from` set)           |
 
 The one door that serves two actors, `cancelOnRequestById`, resolves which inside the service: a
 caller holding `update:Order` is the operator. The controller never makes that decision. A new
@@ -448,7 +447,7 @@ added there without an audience row fails to compile.
 | Shipments | `fulfillment_held`, `fulfillment_released` (a hold's reason code)                            | no         |
 | Returns   | `return_requested`, `return_approved`, `return_declined`, `return_received`, `return_closed` | yes        |
 | Documents | `invoice_issued`, `credit_note_issued`                                                       | yes        |
-| Preorders | `release_date_moved`, `delay_notice_sent`, `wait_confirmed`, `wait_expired`                  | yes        |
+| Preorders | `release_date_moved`, `delay_notice_sent`                                                    | yes        |
 
 A row holds ids, codes and numbers in `data`. Never a sibling's free text: `returns`' `note` and
 `declineReason`, `delivery`'s hold note are reaped on their own clocks, and a copy here would
@@ -672,7 +671,7 @@ dispatch, and both count.
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | **Pause** (and flag) | UNPAID cancels by the buyer, by either door (cause `customer` or `withdrawal`), plus orders whose reservation ran out unpaid (cause `reservation_expired`) | checkout answers `409`, for at most 7 days; staff are mailed ("paused") |
 | **Flag only**        | PAID cancels by the buyer, by either door                                                                                                                  | nothing is paused; staff are mailed ("review only"), once               |
-| Never counts         | a cancel by staff, an erasure, a payment mismatch, an unanswered wait; returns after delivery                                                              |                                                                         |
+| Never counts         | a cancel by staff, an erasure, a payment mismatch; returns after delivery                                                                                  |                                                                         |
 
 Both counts read the order timeline (`cancelled` rows: `by` and, for the system's causes, `cause`),
 only the rows after the last hold was set or staff last acted on the account (set or lifted a hold),

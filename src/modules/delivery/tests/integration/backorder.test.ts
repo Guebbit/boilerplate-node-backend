@@ -112,23 +112,18 @@ describe('grouping a paid backorder', () => {
 });
 
 describe('the daily sweep', () => {
-    it('asks a buyer promised the 30-day default two days before it, and not earlier', async () => {
+    it('tells a buyer promised the 30-day default once it has passed, and not earlier', async () => {
         const { orderId } = await paidBackorderOrder({ quantity: 1, shelf: 0 });
         await waitingOf(orderId);
 
-        const early = await deliveryService.runPreorderSweep(inDays(27));
-        const due = await deliveryService.runPreorderSweep(inDays(28.5));
+        const early = await deliveryService.runPreorderSweep(inDays(28.5));
+        const due = await deliveryService.runPreorderSweep(inDays(30.5));
         await settleOutboxNudges();
 
-        expect([early, due]).toEqual([
-            { asked: 0, expired: 0 },
-            { asked: 1, expired: 0 }
-        ]);
-        const waiting = await waitingOf(orderId);
-        expect(waiting.consent).toBe('awaiting');
-        expect(await delayedEvents()).toMatchObject([
-            { orderId, reason: 'due', needsAnswer: true }
-        ]);
+        expect([early, due]).toEqual([{ notified: 0 }, { notified: 1 }]);
+        const stillWaiting = await waitingOf(orderId);
+        expect(stillWaiting.status).toBe('on_hold');
+        expect(await delayedEvents()).toMatchObject([{ orderId, reason: 'due' }]);
     });
 });
 
@@ -150,7 +145,7 @@ describe('stock arriving for a paid backorder', () => {
 });
 
 describe('a restock date that moves', () => {
-    it('tells the buyer of a short first slip and keeps them waiting', async () => {
+    it('tells the buyer of a later date and keeps them waiting', async () => {
         const { orderId, productId } = await paidBackorderOrder({
             quantity: 1,
             shelf: 0,
@@ -161,11 +156,11 @@ describe('a restock date that moves', () => {
         await moveRestockDate(productId, inDays(30));
 
         const waiting = await waitingOf(orderId);
-        expect([waiting.consent, waiting.slips]).toEqual([undefined, 1]);
-        expect(await delayedEvents()).toMatchObject([{ orderId, needsAnswer: false }]);
+        expect(waiting.status).toBe('on_hold');
+        expect(await delayedEvents()).toMatchObject([{ orderId, reason: 'moved' }]);
     });
 
-    it('asks, with no new date, when the date is cleared', async () => {
+    it('tells the buyer, with no new date, when the date is cleared', async () => {
         const { orderId, productId } = await paidBackorderOrder({
             quantity: 1,
             shelf: 0,
@@ -176,8 +171,8 @@ describe('a restock date that moves', () => {
         await moveRestockDate(productId, null);
 
         const waiting = await waitingOf(orderId);
-        expect(waiting.consent).toBe('awaiting');
-        expect(await delayedEvents()).toMatchObject([{ needsAnswer: true }]);
+        expect(waiting.expectedAt).toBeUndefined();
+        expect(await delayedEvents()).toMatchObject([{ reason: 'moved' }]);
     });
 
     it('leaves a buyer promised the 30-day default alone, whatever the catalogue does', async () => {
@@ -189,7 +184,6 @@ describe('a restock date that moves', () => {
 
         const after = await waitingOf(orderId);
         expect(after.expectedAt?.toISOString()).toBe(before.expectedAt?.toISOString());
-        expect(after.slips).toBe(0);
         expect(await delayedEvents()).toEqual([]);
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });

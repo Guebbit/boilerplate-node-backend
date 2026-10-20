@@ -8,7 +8,6 @@
 import { createReturn } from './create';
 import { approveReturn, declineReturn } from './decide';
 import { receiveReturn } from './receive';
-import { cancelUnanswered } from './cancel-remainder';
 import { collectPersonalData } from './personal-data';
 import { listReturns, getReturn, withActions } from './read';
 import { getReturnOptions } from './options';
@@ -35,7 +34,6 @@ export const returnService = {
     returnedBuckets,
     returnedByProduct,
     returnedSeries,
-    cancelUnanswered,
     collectPersonalData,
     mailReturnRequested,
     mailReturnDecided,

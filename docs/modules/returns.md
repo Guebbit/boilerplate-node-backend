@@ -38,7 +38,6 @@ flowchart LR
     returns --> orders
     returns --> payments
     returns --> shop
-    delivery -. "fulfillment_order.wait_expired" .-> returns
     payments -. "payment.refunded" .-> returns
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -391,25 +390,6 @@ units (that one is the whole order: cancel the order instead).
 **Before anything ships**, a fulfillment order may be cancelled alone as long as another stays live.
 Made-to-order goods have a group of their own (`delivery`'s [grouping rule](./delivery.md#the-grouping-rule)),
 which the buyer may cancel while the order is `paid` and not once it is `processing`.
-
-### A wait nobody answered
-
-A preorder's buyer who was asked to keep waiting and never answered has, by law, cancelled (FTC 16 CFR
-435.2 (b)(1)(iii); [delivery](./delivery.md#the-daily-sweep) runs the question and the clock). The
-daily sweep announces `fulfillment_order.wait_expired`, and this module acts, because only it reaches
-money and stock together. It first re-checks that the wait really is expired (a "keep waiting" that
-came in since wins) and then:
-
-| The order                                                | What is cancelled                                                   |
-| -------------------------------------------------------- | ------------------------------------------------------------------- |
-| something already shipped                                | that fulfillment order's remainder, as a `no_answer` return, system |
-| nothing shipped, this is the only fulfillment order left | the whole order, refunded in full (`orders`' `cancelUnanswered`)    |
-| nothing shipped, another fulfillment order is alive      | nothing yet: the goods on the shelf are the buyer's and ship first  |
-
-The first row is the same transaction and the same refund as a buyer's own remainder cancel, with the
-system as the actor and `reason: no_answer` on the Return. The reason is the shop's own: a request
-naming it is refused. The announcement is repeated daily until a cancel lands, so every row above is
-idempotent, and the third row simply tries again tomorrow.
 
 ### The delivery across several cancels and returns
 

@@ -184,8 +184,8 @@ components:
             required: [orderId, fulfillmentOrderId, titles, agreedAt]
             description: >-
                 What the buyer needs to read a late-preorder notice: which order and fulfillment order,
-                what is waiting, the date they were promised, the date now expected (absent when there
-                is none) and, for `notifications.fulfillment-confirm-wait`, by when silence cancels.
+                what is waiting, the date they were promised and the date now expected (absent when there
+                is none).
             properties:
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -200,9 +200,6 @@ components:
                     type: string
                     format: date-time
                 expectedAt:
-                    type: string
-                    format: date-time
-                answerBy:
                     type: string
                     format: date-time
 
@@ -295,29 +292,6 @@ components:
                     type: string
                     format: date-time
 
-        NotificationFulfillmentConfirmWait:
-            type: object
-            additionalProperties: false
-            description: A preorder the caller paid for is late and the shop needs an answer — keep waiting, or cancel; silence until `answerBy` cancels and refunds.
-            required: [id, code, params, severity, createdAt]
-            properties:
-                id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                code:
-                    type: string
-                    enum: [notifications.fulfillment-confirm-wait]
-                params:
-                    $ref: '#/components/schemas/FulfillmentDelayedParams'
-                severity:
-                    $ref: '#/components/schemas/NotificationSeverity'
-                readAt:
-                    type: string
-                    format: date-time
-                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
-                createdAt:
-                    type: string
-                    format: date-time
-
         NotificationCartLineRemoved:
             type: object
             additionalProperties: false
@@ -393,7 +367,6 @@ components:
                 - $ref: '#/components/schemas/NotificationWishlistItemRemoved'
                 - $ref: '#/components/schemas/NotificationCartMergeRefused'
                 - $ref: '#/components/schemas/NotificationFulfillmentDelayed'
-                - $ref: '#/components/schemas/NotificationFulfillmentConfirmWait'
                 - $ref: '#/components/schemas/NotificationFulfillmentHeld'
                 - $ref: '#/components/schemas/NotificationStockAlert'
             discriminator:
@@ -403,7 +376,6 @@ components:
                     notifications.wishlist-item-removed: '#/components/schemas/NotificationWishlistItemRemoved'
                     notifications.cart-merge-refused: '#/components/schemas/NotificationCartMergeRefused'
                     notifications.fulfillment-delayed: '#/components/schemas/NotificationFulfillmentDelayed'
-                    notifications.fulfillment-confirm-wait: '#/components/schemas/NotificationFulfillmentConfirmWait'
                     notifications.fulfillment-held: '#/components/schemas/NotificationFulfillmentHeld'
                     notifications.stock-alert: '#/components/schemas/NotificationStockAlert'
 

@@ -677,7 +677,6 @@ describe('GET /delivery/fulfillment-orders/summary', () => {
                 firstAgreedAt: releaseDate.toISOString(),
                 paid: 3,
                 waiting: 3,
-                awaitingYes: 0,
                 allocated: 0,
                 shipped: 0,
                 cancelled: 0,
@@ -721,7 +720,7 @@ describe('GET /delivery/fulfillment-orders/release-date-impact', () => {
         return { bearer, productId: productIds[0] };
     };
 
-    it('matches the contract: one order told a long slip is one order asked', async () => {
+    it('matches the contract: one order told a long slip is one order to email', async () => {
         const { bearer, productId } = await adminWithPreorder();
 
         const response = await api()
@@ -730,31 +729,26 @@ describe('GET /delivery/fulfillment-orders/release-date-impact', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({
-            notify: 0,
-            ask: 1,
-            answerBy: expect.any(String)
-        });
+        expect(response.body.data).toEqual({ notify: 1 });
     });
 
-    it('matches the contract: nobody asked means no deadline to name', async () => {
+    it('matches the contract: an earlier date emails nobody', async () => {
         const { bearer, productId } = await adminWithPreorder();
 
         const response = await api()
             .get(url)
-            .query({ productId, releaseDate: new Date(Date.now() + 40 * DAY).toISOString() })
+            .query({ productId, releaseDate: new Date(Date.now() + 10 * DAY).toISOString() })
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        // A short first slip is only told: `answerBy` is absent, not null.
-        expect(response.body.data).toEqual({ notify: 1, ask: 0 });
+        expect(response.body.data).toEqual({ notify: 0 });
     });
 
     it.each([
         ['absent', {}],
         ['blank', { releaseDate: '' }]
     ])(
-        'reads a %s releaseDate as a cleared date, which asks every waiting buyer',
+        'reads a %s releaseDate as a cleared date, which tells every waiting buyer',
         async (_name, extra) => {
             const { bearer, productId } = await adminWithPreorder();
 
@@ -764,7 +758,7 @@ describe('GET /delivery/fulfillment-orders/release-date-impact', () => {
                 .set('Authorization', bearer);
 
             expect(response.status).toBe(200);
-            expect(response.body.data).toMatchObject({ notify: 0, ask: 1 });
+            expect(response.body.data).toEqual({ notify: 1 });
         }
     );
 
@@ -804,7 +798,7 @@ describe('GET /delivery/fulfillment-orders/restock-date-impact', () => {
     const DAY = 86_400_000;
     const url = '/delivery/fulfillment-orders/restock-date-impact';
 
-    it('matches the contract: one backordered buyer whose date is cleared is one buyer asked', async () => {
+    it('matches the contract: one backordered buyer whose date is cleared is one buyer to email', async () => {
         const { bearer } = await authenticateAs('admin');
         const { orderId, productId } = await paidBackorderOrder({
             quantity: 1,
@@ -817,10 +811,6 @@ describe('GET /delivery/fulfillment-orders/restock-date-impact', () => {
         const response = await api().get(url).query({ productId }).set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({
-            notify: 0,
-            ask: 1,
-            answerBy: expect.any(String)
-        });
+        expect(response.body.data).toEqual({ notify: 1 });
     });
 });

@@ -45,13 +45,9 @@ export interface FulfillmentDelayedEmailInput {
     agreedAt: Date;
     /** The date now expected; absent when there is none. */
     expectedAt?: Date | undefined;
-    /** Whether the buyer must answer, or silence cancels. */
-    needsAnswer: boolean;
-    /** When silence turns into a cancel; present when `needsAnswer`. */
-    answerBy?: Date | undefined;
-    /** The date the buyer already agreed to wait for; present on a renewed question only. */
-    acceptedUntil?: Date | undefined;
-    /** The buyer's own order page, where Keep waiting and Cancel are. */
+    /** `moved`: the date changed. `due`: it passed and the goods are still not here. */
+    reason: 'moved' | 'due';
+    /** The buyer's own order page, where Cancel is. */
     orderUrl: string;
 }
 
@@ -199,15 +195,14 @@ export const holdNoticeEmail = (
 };
 
 /**
- * "Part of your order will be late" — sent when a waiting fulfillment order's date moved or passed. Three
- * wordings, one per thing the buyer is owed: a short slip (the new date, and cancel is open;
- * silence keeps waiting), a long or repeated one (the new date and a question), and a date that
- * came with no stock (a question with no new date). A question always says by when to answer and
- * what silence does, because that is what makes silence a lawful cancel.
+ * "Part of your order will be late" — sent when a waiting fulfillment order's date moved or passed.
+ * Three wordings, one per thing that happened: a new date, a date taken away (none yet), and a date
+ * that came with no stock. Every one closes the same way: the buyer may cancel for a full refund
+ * until it ships, and doing nothing means they keep waiting. The shop asks nothing.
  *
  * @param locale - the buyer's language
  * @param name - the buyer's name, for the greeting
- * @param input - what changed and what the buyer may do about it
+ * @param input - what changed
  */
 export const fulfillmentDelayedEmail = (
     locale: string,
@@ -215,7 +210,7 @@ export const fulfillmentDelayedEmail = (
     input: FulfillmentDelayedEmailInput
 ): EmailContent => {
     const t = translator(locale);
-    const variant = input.needsAnswer ? (input.expectedAt ? 'ask-moved' : 'ask-passed') : 'moved';
+    const variant = input.reason === 'due' ? 'passed' : input.expectedAt ? 'moved' : 'cleared';
     return {
         template: 'delivery.fulfillment-delayed',
         subject: t(`delivery.email-fulfillment-delayed.${variant}.subject`),
@@ -228,22 +223,7 @@ export const fulfillmentDelayedEmail = (
                 expected: input.expectedAt ? longDate(locale, input.expectedAt) : ''
             }),
             lines: [...input.titles],
-            answer:
-                input.needsAnswer && input.answerBy
-                    ? [
-                          // A renewed question says what it follows from: the date already agreed to.
-                          input.acceptedUntil
-                              ? t('delivery.email-fulfillment-delayed.agreed-until', {
-                                    until: longDate(locale, input.acceptedUntil)
-                                })
-                              : '',
-                          t('delivery.email-fulfillment-delayed.answer', {
-                              date: longDate(locale, input.answerBy)
-                          })
-                      ]
-                          .filter(Boolean)
-                          .join(' ')
-                    : t('delivery.email-fulfillment-delayed.cancel-any-time'),
+            closing: t('delivery.email-fulfillment-delayed.cancel-any-time'),
             linkLabel: t('delivery.email-fulfillment-delayed.link-label'),
             linkUrl: input.orderUrl,
             footer: t('email.footer')

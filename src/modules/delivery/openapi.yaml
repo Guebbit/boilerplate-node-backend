@@ -17,7 +17,6 @@ x-error-codes:
     DELIVERY_NOT_DIGITAL: { status: 409, description: 'A physical fulfillment order cannot be fulfilled without a shipment; ship it instead.' }
     DELIVERY_NOT_HOLDABLE: { status: 409, description: 'Only an open or in-progress fulfillment order can be put on hold.' }
     DELIVERY_NOT_RELEASABLE: { status: 409, description: 'The fulfillment order is not on hold, or waits for stock and is released only by the stock arriving.' }
-    DELIVERY_NOT_AWAITING_ANSWER: { status: 409, description: 'The fulfillment order is not waiting for the buyer to say whether to keep waiting, so there is nothing to confirm.' }
     DELIVERY_NOT_DELIVERABLE: { status: 409, description: 'The shipment has already been delivered, or its order is no longer in a state this can run from.' }
     ORDER_NOT_PAID: { status: 409, description: 'The order must be paid before this delivery action.' }
     ORDER_NOT_PROCESSING: { status: 409, description: 'The order is not in a state this delivery action can run from.' }
@@ -117,13 +116,12 @@ paths:
             summary: List fulfillment orders (the preorder board)
             description: |
                 One row per fulfillment order, with the buyer and when the order was paid, for the admin's preorder
-                board: the fulfillment orders of preorders, where they stand with their buyer, and which are late.
+                board: the fulfillment orders of preorders, where they stand, and which are late.
                 `cause` keeps one kind of wait: `preorder`, `backorder`, or `any` that carries an agreed date.
 
                 `late=true` is the Late view: the expected date has passed and units remain, whether still waiting
                 for stock, allocated and not yet shipped, or part shipped. `dueWithin=N` is its warning: still
-                waiting for stock, and expected within the next N days — see it coming, since a slip moved before
-                the date passes is a notice, and one moved after is a question.
+                waiting for stock, and expected within the next N days — see it coming.
 
                 Same audience as the orders it belongs to: staff holding `display:Order` see every row, anyone
                 else only their own orders'. `delivered` is true once nothing remains and every shipment arrived.
@@ -183,7 +181,7 @@ paths:
             summary: Preorder units by product and state
             description: |
                 For each product sold as a preorder, how its units stand across every fulfillment order made from it:
-                paid, waiting for stock, waiting for the buyer's answer, allocated, shipped, cancelled, and late. Units,
+                paid, waiting for stock, allocated, shipped, cancelled, and late. Units,
                 not fulfillment orders. `firstAgreedAt` is the earliest date any buyer was promised. For the Products
                 tab of the preorder board; same audience and scope as the list.
             operationId: summarizePreorderFulfillmentOrders
@@ -216,12 +214,11 @@ paths:
             summary: What moving a product's release date would tell the buyers
             description: |
                 A preview for staff about to save a release date, so the save is never a surprise. Counts the
-                orders whose waiting fulfillment orders for this product would get a notice (`notify`: a short first
-                slip, silence keeps them waiting) or a question (`ask`: silence cancels and refunds once the buyer's deadline passes, 28 days after the date they were promised or the date they already agreed to; `answerBy` is the earliest of those). An order with groups in both counts once, under `ask`. It judges with the same rule
+                orders whose waiting fulfillment orders for this product would get a delay email (`notify`), counted once per order. It judges with the same rule
                 the save does and writes nothing: the counts are a snapshot, and a payment or shipment between the
                 preview and the save can shift them.
 
-                `releaseDate` absent or blank previews a CLEARED date, which asks every waiting buyer. The same
+                `releaseDate` absent or blank previews a CLEARED date, which tells every waiting buyer. The same
                 format and "at most one year ahead" rule as the product save apply (422). An unchanged date counts
                 nothing. For the product form; a holder of both `update:Product` and `display:Order`. The response
                 is never cached.
@@ -244,7 +241,7 @@ paths:
                   description: The date to preview, an ISO 8601 date-time with a zone. Absent or blank means cleared.
             responses:
                 '200':
-                    description: How many orders the move would notify and how many it would ask
+                    description: How many orders the move would email
                     content:
                         application/json:
                             schema:
@@ -261,12 +258,11 @@ paths:
             summary: What moving a product's restock date would tell the buyers
             description: |
                 A preview for staff about to save a restock date, so the save is never a surprise. Counts the
-                orders whose backordered units for this product would get a notice (`notify`: a short first
-                slip, silence keeps them waiting) or a question (`ask`: silence cancels and refunds once the buyer's deadline passes, 28 days after the date they were promised or the date they already agreed to; `answerBy` is the earliest of those). An order with groups in both counts once, under `ask`. It judges with the same rule
+                orders whose backordered units for this product would get a delay email (`notify`), counted once per order. It judges with the same rule
                 the save does and writes nothing: the counts are a snapshot, and a payment or shipment between the
                 preview and the save can shift them.
 
-                `restockDate` absent or blank previews a CLEARED date, which asks every buyer who was promised that date. A buyer promised the 30-day default is left alone. The same
+                `restockDate` absent or blank previews a CLEARED date, which tells every buyer who was promised that date. A buyer promised the 30-day default is left alone. The same
                 format and "at most one year ahead" rule as the product save apply (422). An unchanged date counts
                 nothing. For the product form; a holder of both `update:Product` and `display:Order`. The response
                 is never cached.
@@ -289,7 +285,7 @@ paths:
                   description: The date to preview, an ISO 8601 date-time with a zone. Absent or blank means cleared.
             responses:
                 '200':
-                    description: How many orders the move would notify and how many it would ask
+                    description: How many orders the move would email
                     content:
                         application/json:
                             schema:
@@ -405,34 +401,6 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
-    /delivery/fulfillment-orders/{id}/confirm-wait:
-        post:
-            tags: [Delivery]
-            summary: Keep waiting for a late preorder
-            description: >-
-                The buyer's answer to a notice that their preorder will be later than promised (or that
-                its date passed): yes, keep waiting. Clears the deadline after which silence would
-                cancel the fulfillment order and refund it. Only the order's own buyer may answer, and
-                only while `consent` is `awaiting` (`DELIVERY_NOT_AWAITING_ANSWER` otherwise). The
-                buyer's other answer, cancel, is the existing cancel or remainder cancel.
-            operationId: confirmFulfillmentOrderWait
-            security:
-                - bearerAuth: []
-            parameters:
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
-                  description: The fulfillment order the buyer will keep waiting for
-            responses:
-                '200':
-                    description: The fulfillment order, with `consent` now `confirmed`
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/FulfillmentOrderEnvelope'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /delivery/fulfillment-orders/{id}/release:
@@ -623,24 +591,12 @@ components:
                 as `delayed`, so a notice never reveals a screening result. The reason itself
                 (`FulfillmentHoldReason`) is staff's.
 
-        FulfillmentConsent:
-            type: string
-            enum: [awaiting, confirmed, expired]
-            description: >-
-                Where a waiting preorder stands with its buyer after a late date. Absent: the buyer was
-                never asked. `awaiting`: asked to say whether to keep waiting, and silence until
-                `consentDeadline` cancels and refunds (FTC 16 CFR 435.2 (b)(1)(iii), (b)(2)(ii); in the
-                EU this is the shop's own cancellation). `confirmed`: the buyer said keep waiting, so a
-                later slip asks again. `expired`: the window closed in silence and the cancel and refund
-                are on their way; too late to answer.
-
         FulfillmentCancelReason:
             type: string
-            enum: [buyer, staff, no_answer, order]
+            enum: [buyer, staff, order]
             description: >-
                 Who cancelled what was left of a fulfillment order. `buyer`: the buyer's own cancel of
-                the remainder. `staff`: a refund by staff. `no_answer`: the buyer was asked to keep
-                waiting and never answered. `order`: the whole order was cancelled.
+                the remainder. `staff`: a refund by staff. `order`: the whole order was cancelled.
 
         FulfillmentOrderKind:
             type: string
@@ -677,11 +633,11 @@ components:
         FulfillmentOrderActions:
             type: object
             additionalProperties: false
-            required: [ship, fulfill, hold, release, confirmWait]
+            required: [ship, fulfill, hold, release]
             description: >-
                 What the requesting caller may do to this fulfillment order, decided by the server so
                 a client renders its controls from this. `ship`, `fulfill`, `hold` and `release` are
-                false for anyone without `update:Shipment`; `confirmWait` is the order's own buyer's.
+                false for anyone without `update:Shipment`.
             properties:
                 ship:
                     type: boolean
@@ -695,9 +651,6 @@ components:
                 release:
                     type: boolean
                     description: Whether `POST /delivery/fulfillment-orders/{id}/release` would be accepted — never for `awaiting_stock`.
-                confirmWait:
-                    type: boolean
-                    description: Whether `POST /delivery/fulfillment-orders/{id}/confirm-wait` would be accepted — the caller is the buyer and `consent` is `awaiting`.
 
         FulfillmentOrder:
             type: object
@@ -744,16 +697,6 @@ components:
                     type: string
                     format: date-time
                     description: When it is now expected to ship, when that differs from what was agreed. Absent when the release date was cleared after the order was paid, since then nothing is expected.
-                consent:
-                    $ref: '#/components/schemas/FulfillmentConsent'
-                consentDeadline:
-                    type: string
-                    format: date-time
-                    description: When silence turns into a cancel and a refund. Present exactly while `consent` is `awaiting`.
-                revisedShipDate:
-                    type: string
-                    format: date-time
-                    description: The definite revised shipping date (16 CFR 435.2 (b)), meaning the one offered while `consent` is `awaiting`, otherwise the one the buyer accepted, by answering or by silence. Absent with `consent` `confirmed` when the buyer agreed to wait with no end date and can still cancel any time before it ships.
                 lastNoticeAt:
                     type: string
                     format: date-time
@@ -927,16 +870,6 @@ components:
                 expectedAt:
                     type: string
                     format: date-time
-                consent:
-                    $ref: '#/components/schemas/FulfillmentConsent'
-                consentDeadline:
-                    type: string
-                    format: date-time
-                    description: When silence turns into a cancel and a refund. Present exactly while `consent` is `awaiting`.
-                revisedShipDate:
-                    type: string
-                    format: date-time
-                    description: The definite revised shipping date (16 CFR 435.2 (b)), meaning the one offered while `consent` is `awaiting`, otherwise the one the buyer accepted, by answering or by silence. Absent with `consent` `confirmed` when the buyer agreed to wait with no end date and can still cancel any time before it ships.
                 lastNoticeAt:
                     type: string
                     format: date-time
@@ -1066,11 +999,10 @@ components:
 
         PreorderFulfillmentState:
             type: string
-            enum: [waiting, awaiting_yes, allocated, shipped, cancelled]
+            enum: [waiting, allocated, shipped, cancelled]
             description: >-
                 Where a preorder's fulfillment order stands, as the board reads it. `waiting`: paid, held for
-                stock. `awaiting_yes`: held for stock, and the buyer was asked to keep waiting (or let the
-                window close and the cancel is on its way). `allocated`: stock is set aside for it, not all
+                stock. `allocated`: stock is set aside for it, not all
                 shipped. `shipped`: nothing remains and something shipped. `cancelled`: nothing remains and
                 nothing shipped; `cancelReason` says who.
 
@@ -1132,15 +1064,6 @@ components:
                     description: Nothing remains, something shipped, and every shipment arrived.
                 holdReason:
                     $ref: '#/components/schemas/FulfillmentHoldReason'
-                consent:
-                    $ref: '#/components/schemas/FulfillmentConsent'
-                consentDeadline:
-                    type: string
-                    format: date-time
-                revisedShipDate:
-                    type: string
-                    format: date-time
-                    description: The definite revised shipping date (16 CFR 435.2 (b)), meaning the one offered while `consent` is `awaiting`, otherwise the one the buyer accepted, by answering or by silence. Absent with `consent` `confirmed` when the buyer agreed to wait with no end date and can still cancel any time before it ships.
                 lastNoticeAt:
                     type: string
                     format: date-time
@@ -1179,10 +1102,10 @@ components:
         PreorderProductSummary:
             type: object
             additionalProperties: false
-            required: [productId, title, firstAgreedAt, paid, waiting, awaitingYes, allocated, shipped, cancelled, late]
+            required: [productId, title, firstAgreedAt, paid, waiting, allocated, shipped, cancelled, late]
             description: >-
                 One product's preorder units across every fulfillment order made from it. `paid` is every
-                unit paid for, so `waiting + awaitingYes + allocated + shipped + cancelled` equals it.
+                unit paid for, so `waiting + allocated + shipped + cancelled` equals it.
                 `late` is a subset: units remaining on fulfillment orders whose expected date has passed.
             properties:
                 productId:
@@ -1198,9 +1121,6 @@ components:
                     type: integer
                     minimum: 0
                 waiting:
-                    type: integer
-                    minimum: 0
-                awaitingYes:
                     type: integer
                     minimum: 0
                 allocated:
@@ -1231,21 +1151,13 @@ components:
         ReleaseDateImpact:
             type: object
             additionalProperties: false
-            required: [notify, ask]
-            description: Orders a release-date move would tell, counted in orders, never fulfillment orders.
+            required: [notify]
+            description: Orders a release-date move would email, counted in orders, never fulfillment orders.
             properties:
                 notify:
                     type: integer
                     minimum: 0
-                    description: Orders that get a notice only (a short first slip); silence keeps them waiting.
-                ask:
-                    type: integer
-                    minimum: 0
-                    description: Orders that get a question; silence until the buyer's deadline cancels and refunds. Includes an order that also has a notice.
-                answerBy:
-                    type: string
-                    format: date-time
-                    description: The earliest date by which a buyer who gets a question must say yes, if the move were saved now; each buyer's own deadline is 28 days after the date they were promised, or the date they already accepted. Absent when `ask` is 0.
+                    description: Orders that would get a delay email (the date moves later or is cleared); silence always means the buyer keeps waiting, and they can cancel any time before it ships.
 
         ReleaseDateImpactEnvelope:
             type: object
