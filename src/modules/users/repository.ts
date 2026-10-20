@@ -186,6 +186,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     touchApiKeyUse: (id: string, now: Date) => Promise<void>;
     markInactivityMinimised: (id: string, at: Date) => Promise<void>;
     claimPurchaseHold: (id: string, hold: PurchaseHoldRecord, now: Date) => Promise<boolean>;
+    reduceExpiredPurchaseHolds: (now: Date) => Promise<number>;
     findInactiveUnminimised: (cutoff: Date) => Promise<UserDocument[]>;
     findInactiveUnwarned: (cutoff: Date) => Promise<UserDocument[]>;
     findWarnedStillInactive: (warnedBefore: Date) => Promise<UserDocument[]>;
@@ -705,6 +706,40 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             )
             .exec()
             .then(({ modifiedCount }) => modifiedCount > 0),
+
+    /**
+     * Reduce every expired purchase hold to the mark that restarts the count of cancellations: the
+     * later of the account's own mark and the hold's `setAt`, with the hold itself (its note, its
+     * staff id) removed. Past its end a hold is personal data kept for nothing but that one date.
+     * One pipeline update, so the mark is computed in the same write; nightly job only, an
+     * unindexed whole-collection `updateMany`.
+     *
+     * @param now - a hold ending at or before this instant is expired
+     * @returns how many accounts were reduced
+     */
+    reduceExpiredPurchaseHolds: (now: Date) =>
+        userModel
+            .updateMany(
+                { 'purchaseHold.until': { $lte: now } },
+                [
+                    {
+                        // https://www.mongodb.com/docs/manual/reference/operator/aggregation/max/
+                        // `$max` skips a missing or null operand, so an account with no mark yet
+                        // takes the hold's `setAt`.
+                        $set: {
+                            purchaseHoldResetAt: {
+                                $max: ['$purchaseHoldResetAt', '$purchaseHold.setAt']
+                            }
+                        }
+                    },
+                    { $unset: 'purchaseHold' }
+                ],
+                // `updatePipeline`: Mongoose refuses an array update without it
+                // (https://mongoosejs.com/docs/api/query.html#Query.prototype.setUpdate()).
+                { timestamps: false, updatePipeline: true }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount),
 
     /**
      * Every live account quiet since before `cutoff` that has not been minimised for this stretch of

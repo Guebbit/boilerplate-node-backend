@@ -11,6 +11,24 @@
         "role-not-assignable": "This role does not exist or cannot be given to an account.",
         "purchase-hold-set": "Purchase hold set. Checkout stays closed to this account until the date given, or until it is lifted.",
         "purchase-hold-lifted": "Purchase hold lifted.",
-        "purchase-hold-until-past": "The end date must be in the future."
+        "purchase-hold-until-past": "The end date must be in the future.",
+        "email": {
+            "purchase-hold": {
+                "subject": "Checkout is paused on your account",
+                "meta-title": "Checkout paused",
+                "title": "Checkout is paused on your account",
+                "greeting": "Hello,",
+                "summary": "We have paused new orders on your account until {{date}}.",
+                "reason-repeated_cancellations": "Why: {{count}} of your orders were cancelled by you within {{days}} days, and a rule pauses checkout after that. It was applied automatically.",
+                "reason-staff": "Why: a member of our team paused it.",
+                "note-label": "Their note to you",
+                "still-works": "Paying an order you already placed, cancelling, withdrawing, returning goods and your own data rights are not affected.",
+                "contact-intro": "If you think this is a mistake, or you want to tell us your side, a person will read it.",
+                "contact-label": "Write to us about this pause",
+                "objection-title": "Your right to object",
+                "objection": "We apply this pause because we have a legitimate interest in keeping checkout from being abused. You may object to it at any time (GDPR Article 21): say so in your message and give your reason. You may also complain to your data protection authority (Article 77).",
+                "privacy-label": "How we handle your data"
+            }
+        }
     }
 }

@@ -11,6 +11,24 @@
         "role-not-assignable": "Questo ruolo non esiste o non può essere assegnato a un account.",
         "purchase-hold-set": "Blocco acquisti impostato. Il checkout resta chiuso per questo account fino alla data indicata, o finché non viene tolto.",
         "purchase-hold-lifted": "Blocco acquisti tolto.",
-        "purchase-hold-until-past": "La data di fine deve essere nel futuro."
+        "purchase-hold-until-past": "La data di fine deve essere nel futuro.",
+        "email": {
+            "purchase-hold": {
+                "subject": "Il checkout è sospeso sul tuo account",
+                "meta-title": "Checkout sospeso",
+                "title": "Il checkout è sospeso sul tuo account",
+                "greeting": "Ciao,",
+                "summary": "Abbiamo sospeso i nuovi ordini sul tuo account fino al {{date}}.",
+                "reason-repeated_cancellations": "Perché: {{count}} tuoi ordini sono stati annullati da te entro {{days}} giorni, e dopo di questo una regola sospende il checkout. È stato applicato in automatico.",
+                "reason-staff": "Perché: un membro del nostro team lo ha sospeso.",
+                "note-label": "La sua nota per te",
+                "still-works": "Non cambia nulla per pagare un ordine già effettuato, annullare, recedere, restituire la merce e i tuoi diritti sui dati.",
+                "contact-intro": "Se pensi sia un errore, o vuoi raccontarci la tua versione, una persona leggerà il tuo messaggio.",
+                "contact-label": "Scrivici su questa sospensione",
+                "objection-title": "Il tuo diritto di opposizione",
+                "objection": "Applichiamo questa sospensione perché abbiamo un legittimo interesse a evitare abusi del checkout. Puoi opporti in qualsiasi momento (art. 21 GDPR): scrivilo nel messaggio e indica il motivo. Puoi anche presentare reclamo alla tua autorità per la protezione dei dati (art. 77).",
+                "privacy-label": "Come trattiamo i tuoi dati"
+            }
+        }
     }
 }

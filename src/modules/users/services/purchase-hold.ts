@@ -11,7 +11,9 @@
  * See: docs/modules/users.md#purchase-hold
  */
 
-import { t } from '@infrastructure/i18n';
+import { logger } from '@infrastructure/adapters/logger';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { getDefaultLocale, t } from '@infrastructure/i18n';
 import {
     fieldError,
     generateReject,
@@ -24,6 +26,8 @@ import { accessService } from '@modules/access';
 import type { CallerContext } from '@types';
 import type { PurchaseHoldRecord, UserDocument } from '../model';
 import { usersAuditActions } from '../audit';
+import { contactFrontendLink, privacyFrontendLink } from '../config';
+import { purchaseHoldPlacedEmail } from '../emails';
 import { userRepository } from '../repository';
 
 /** What a checkout (or a banner) needs to know about a hold in force. */
@@ -83,6 +87,51 @@ export const purchaseHoldOf = (
 export const purchaseHoldCountingSince = (userId: string): Promise<Date | undefined> =>
     userRepository.findById(userId).then((user) => (user ? countingSinceOf(user) : undefined));
 
+/** The rule behind an automatic hold, as the buyer's mail states it. */
+export interface PurchaseHoldBasis {
+    cancelCount: number;
+    windowDays: number;
+}
+
+/**
+ * Tell the buyer a hold was placed, in their own language: until when, why, what still works, a
+ * way to ask a person, and their right to object. A mail that cannot be queued is logged, never
+ * raised: the hold is already in force and the cart shows it.
+ *
+ * @param user - the account, for its address and language
+ * @param hold - the hold just stored
+ * @param basis - the rule's numbers, for an automatic hold
+ */
+const notifyBuyer = (
+    user: Pick<UserDocument, 'email' | 'locale'>,
+    hold: PurchaseHoldRecord,
+    basis?: PurchaseHoldBasis
+): void => {
+    // Built inside the chain, so even a copy that throws is logged here and never reaches the
+    // caller: by now the hold is stored.
+    void Promise.resolve()
+        .then(() => {
+            // A stored locale wins; an account that never had one is written to in the deployment's.
+            const locale = user.locale ?? getDefaultLocale();
+            const mail = purchaseHoldPlacedEmail(locale, {
+                until: hold.until,
+                reason: hold.reason,
+                ...basis,
+                ...(hold.note === undefined ? {} : { note: hold.note }),
+                contactUrl: contactFrontendLink(locale),
+                privacyUrl: privacyFrontendLink(locale)
+            });
+            return enqueueEmail(
+                { to: user.email, subject: mail.subject },
+                mail.template,
+                mail.data
+            );
+        })
+        .catch((error: unknown) =>
+            logger.error({ message: 'purchase hold buyer notification email failed', error })
+        );
+};
+
 /**
  * Put a manual hold on an account, replacing any hold it has. The note is written for the buyer to
  * read (GDPR Art. 22(3): the reason, and a way to contest it).
@@ -111,14 +160,16 @@ export const setPurchaseHold = (
                 ]);
 
             const note = input.note?.trim();
-            user.purchaseHold = {
+            const hold: PurchaseHoldRecord = {
                 until: input.until,
                 reason: 'staff',
                 ...(note ? { note } : {}),
                 setBy: context.caller.id ?? undefined,
                 setAt: now
             };
+            user.purchaseHold = hold;
             return userRepository.save(user).then((saved) => {
+                notifyBuyer(saved, hold);
                 recordAudit(context, {
                     action: usersAuditActions.ADMIN_USER_PURCHASE_HOLD_SET,
                     outcome: 'success',
@@ -168,31 +219,53 @@ export const liftPurchaseHold = (
     });
 
 /**
+ * The nightly sweep: reduce every expired hold to the mark that restarts the count, dropping its
+ * note and the staff id. Safe to repeat. A hold in force is never touched.
+ *
+ * @param now - a hold ending at or before this instant is expired
+ * @returns how many accounts were reduced
+ */
+export const reapExpiredPurchaseHolds = (now = new Date()): Promise<number> =>
+    userRepository.reduceExpiredPurchaseHolds(now);
+
+/**
  * Take the automatic hold after repeated cancellations. Atomic: when two cancellations race to the
  * limit only one call returns `true`, so only one staff mail and one audit row follow.
  *
  * @param id - the account
  * @param until - when the counted cancellations fall back under the limit
  * @param context - the system caller, for the audit row
+ * @param basis - the rule's numbers, for the buyer's mail
  * @returns whether this call took the hold
  */
 export const takeAutomaticPurchaseHold = (
     id: string,
     until: Date,
-    context: CallerContext
+    context: CallerContext,
+    basis: PurchaseHoldBasis
 ): Promise<boolean> => {
     const now = new Date();
-    return userRepository
-        .claimPurchaseHold(id, { until, reason: 'repeated_cancellations', setAt: now }, now)
-        .then((taken) => {
-            if (taken)
-                recordAudit(context, {
-                    action: usersAuditActions.SYSTEM_USER_PURCHASE_HOLD_SET,
-                    outcome: 'success',
-                    targetType: 'user',
-                    targetId: id,
-                    metadata: { until: until.toISOString() }
-                });
-            return taken;
+    const hold: PurchaseHoldRecord = { until, reason: 'repeated_cancellations', setAt: now };
+    return userRepository.claimPurchaseHold(id, hold, now).then((taken) => {
+        if (!taken) return false;
+
+        recordAudit(context, {
+            action: usersAuditActions.SYSTEM_USER_PURCHASE_HOLD_SET,
+            outcome: 'success',
+            targetType: 'user',
+            targetId: id,
+            metadata: { until: until.toISOString() }
         });
+        // Only the winner of a race reaches here, so the buyer is mailed once. A failed read of
+        // the account costs the mail, never the hold.
+        return userRepository
+            .findById(id)
+            .then((user) => {
+                if (user) notifyBuyer(user, hold, basis);
+            })
+            .catch((error: unknown) =>
+                logger.error({ message: 'purchase hold buyer notification failed', error })
+            )
+            .then(() => true);
+    });
 };

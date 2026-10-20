@@ -92,7 +92,10 @@ export const considerPurchaseHold = ({
                 if (!until) return;
 
                 return userService
-                    .takeAutomaticPurchaseHold(userId, until, systemCallerContext('User'))
+                    .takeAutomaticPurchaseHold(userId, until, systemCallerContext('User'), {
+                        cancelCount: purchaseHoldCancelCount(),
+                        windowDays: purchaseHoldWindowDays()
+                    })
                     .then((taken) => {
                         if (taken) notifyStaff(order.email, userId, until);
                     });

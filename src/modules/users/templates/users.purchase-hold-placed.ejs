@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="<%= locale %>">
+<%- include("/shared/templates/layouts/email-template-head.ejs"); %>
+<body>
+<main class="centered">
+    <h1><%= title %></h1>
+    <p><%= greeting %></p>
+    <p><%= summary %></p>
+    <p><%= reason %></p>
+    <% if (note !== '') { %>
+    <p><strong><%= noteLabel %>:</strong> <%= note %></p>
+    <% } %>
+    <p><%= stillWorks %></p>
+    <p><%= contactIntro %> <a href="<%= contactUrl %>"><%= contactLabel %></a></p>
+</main>
+<section>
+    <h2><%= objectionTitle %></h2>
+    <p><%= objection %></p>
+    <p><a href="<%= privacyUrl %>"><%= privacyLabel %></a></p>
+</section>
+<%- include("/shared/templates/layouts/default-footer.ejs"); %>
+</body>
+</html>

@@ -166,7 +166,8 @@ it('publishes the set the pair agreed on', () => {
      * `account.export-failed` (its failure notice): the twin's export is still one synchronous
      * answer. So is `delivery.shipment-delivered`, the notice that a shipment arrived: an order ships in
      * parts on this backend first. So is `orders.purchase-hold-staff`, the operator's notice that a purchase hold was
-     * placed: the twin has no hold. The other eight are the agreed, mirrored set.
+     * placed: the twin has no hold. So is `users.purchase-hold-placed`, the buyer's notice of the same
+     * hold. The other eight are the agreed, mirrored set.
      */
     const agreedByPair = [
         'account.delete-confirm',
@@ -203,6 +204,7 @@ it('publishes the set the pair agreed on', () => {
         'payments.transfer-instructions',
         'returns.notice',
         'stock-alerts.back-in-stock',
+        'users.purchase-hold-placed',
         'webhooks.subscription-disabled'
     ];
     // A name's first segment is the module that publishes it, so deleting a module (`demo:remove`)
