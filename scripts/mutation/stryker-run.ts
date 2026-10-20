@@ -34,11 +34,12 @@ const STRYKER_WORKER_PEAK_MB = 2900;
 const STRYKER_OS_RESERVE_MB = 4096;
 
 /**
- * Where jest's in-memory Mongo data directories live. Outside the sandbox, deliberately, and
- * scoped to `tmp/test/` rather than all of `tmp/` — the sweep below deletes it wholesale before
- * every run, and `tmp/reports/` (this same run's own incremental cache) must survive that.
+ * Where the mutation run's jest instances keep their in-memory Mongo data directories. Outside the
+ * sandbox, deliberately, and its own folder rather than `tmp/test/` (a plain `npm test` run's) or
+ * all of `tmp/` — the sweep below deletes it wholesale before every run, so it must not hold a
+ * live jest run's database, nor `tmp/reports/` (this same run's own incremental cache).
  */
-const TEST_TMP_BASE = path.join(REPO_ROOT, 'tmp', 'test');
+const TEST_TMP_BASE = path.join(REPO_ROOT, 'tmp', 'test-mutation');
 
 /**
  * How many restarts, inside how long, count as the loop rather than bad luck.

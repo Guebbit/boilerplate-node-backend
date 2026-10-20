@@ -109,7 +109,7 @@ it('refunds nothing twice and sends no second webhook when the row is delivered 
 });
 
 it('leaves a refund the provider refused open for the sweep, and answers the event', () =>
-    withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
+    withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
         await subscribeToEverything();
         const { user, order } = await paidOrder();
         const orderId = String(order._id);

@@ -84,6 +84,8 @@ describe('a money field', () => {
 
     it('refuses a negative amount where the field says so, and a non-finite one anywhere', async () => {
         await expect(probeModel.create({ amount: -1 })).rejects.toThrow(/non-negative/);
+        // The message names the failing path, not the literal `{PATH}` token a function message cannot expand.
+        await expect(probeModel.create({ amount: -1 })).rejects.toThrow(/amount must be/);
         await expect(probeModel.create({ amount: NaN })).rejects.toThrow();
         // A nested `price` may be negative (a discount line), so only the finite check refuses this.
         await expect(

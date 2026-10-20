@@ -243,7 +243,7 @@ describe('a refund that asks for too much', () => {
     // The sweep finishing the record while its opener is still at the provider: the opener lost the
     // conditional settle, and the money did go back, so it must not be told there was nothing.
     it('reports success to the caller whose open refund the sweep settled first', () =>
-        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId } = await paidOrder();
             const providerRefund = fakePaymentProvider.refund.bind(fakePaymentProvider);
             jest.spyOn(fakePaymentProvider, 'refund').mockImplementationOnce(async (...args) => {
@@ -321,7 +321,7 @@ describe('a refund the provider refuses', () => {
     });
 
     it('is finished by the sweep with the same idempotency key', () =>
-        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const spy = jest.spyOn(fakePaymentProvider, 'refund');
             const { orderId } = await paidOrder();
             spy.mockRejectedValueOnce(new Error('unreachable'));
@@ -338,7 +338,7 @@ describe('a refund the provider refuses', () => {
         }));
 
     it('completes the payment when the sweep finishes the last part', () =>
-        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { orderId } = await paidOrder();
             await refund(orderId, { amount: 40 });
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));

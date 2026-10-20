@@ -102,7 +102,7 @@ describe('the provider refuses a refund', () => {
         const stuck = await paymentOf(staff, order.id);
         expect(stuck.refunds.map(({ status }) => status)).toEqual(['failed']);
 
-        // The sweep retries only records older than NODE_PAYMENT_EFFECT_RETRY_MINUTES (1).
+        // The sweep retries only records older than NODE_PAYMENT_REFUND_RETRY_MINUTES (1).
         setFakeRefundFailure(ref, undefined);
         advanceDate(61_000);
         await drain('sweep:payment-effects');

@@ -8,7 +8,7 @@
  */
 
 import type { Request, Response } from 'express';
-import type { ZodError, ZodType } from 'zod';
+import type { ZodType } from 'zod';
 import {
     rejectResponse,
     validationErrors,
@@ -99,15 +99,6 @@ export const catchAs =
     (error: unknown): void => {
         rejectDatabaseError(response, context, error);
     };
-
-/**
- * Answer 422 for a Zod failure.
- *
- * @param response - the express response
- * @param error - the `ZodError` from a failed `safeParse`
- */
-export const rejectValidation = (response: Response, error: ZodError) =>
-    rejectResponse(response, 422, validationErrors(error));
 
 /**
  * Parse a request body (or a query) against its generated schema, answering 422 and returning

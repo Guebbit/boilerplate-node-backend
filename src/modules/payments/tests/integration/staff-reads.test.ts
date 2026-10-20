@@ -322,7 +322,7 @@ describe('listRefunds', () => {
 
 describe('listAttention', () => {
     it('lists a stale provider refund, and drops it once the sweep has finished it', () =>
-        withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
             const { payment } = await seedPayment({
                 amountRefunded: 10,
                 refunds: [
@@ -351,7 +351,7 @@ describe('listAttention', () => {
     it(
         'lists the oldest problem first, and no more than 100 from one source',
         () =>
-            withEnvironmentOverrides({ NODE_PAYMENT_EFFECT_RETRY_MINUTES: '0' }, async () => {
+            withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
                 // Oldest of all, then 100 younger ones: 101 in the source, 100 may come back.
                 const oldest = await staleRefund(500);
                 await Promise.all(

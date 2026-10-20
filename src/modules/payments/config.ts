@@ -150,7 +150,7 @@ export const paymentsConfig = defineConfig({
             placeholder: 'your-payment-webhook-secret-here',
             productionOnly: true
         }),
-        NODE_PAYMENT_EFFECT_RETRY_MINUTES: int({ default: 1, min: 0 }),
+        NODE_PAYMENT_REFUND_RETRY_MINUTES: int({ default: 1, min: 0 }),
         NODE_PAYMENT_RECONCILE_MINUTES: int({ default: 15, min: 0 }),
         NODE_PAYMENT_ATTENTION_MINUTES: int({ default: 60, min: 1 }),
         NODE_PAYMENT_ABANDONED_RETENTION_DAYS: int({ default: 30, min: 1 })
@@ -174,7 +174,7 @@ export const paymentsConfig = defineConfig({
  * @returns the grace window in minutes
  */
 export const paymentEffectRetryMinutes = (): number =>
-    paymentsConfig().NODE_PAYMENT_EFFECT_RETRY_MINUTES;
+    paymentsConfig().NODE_PAYMENT_REFUND_RETRY_MINUTES;
 
 /**
  * How long an unsettled payment sits untouched before `effects.ts#reconcileStalePayments` asks
