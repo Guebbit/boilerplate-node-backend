@@ -5,7 +5,7 @@
 
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { getFallbackLocale } from '@infrastructure/i18n';
-import { readAllTranslations } from '@kernel/translation';
+import { readAllTranslations, readServedTranslations } from '@kernel/translation';
 import type { ProductTranslationFields } from '@types';
 import type { ProductDocument } from '../model';
 import { withTransaction } from '@infrastructure/runtime/database';
@@ -109,7 +109,40 @@ export const syncStockCache = (productId: string, counters: StockCounters): Prom
     });
 
 /**
- * A product's title and description in every language it has them in, locale → fields.
+ * Lays a product's own columns under the translation rows it was given: they ARE the fallback
+ * language's content, so they fill that slot when the rows have none for it.
+ *
+ * @param product - the document whose columns fill the fallback slot
+ * @param rows - the translation rows to start from, locale → fields
+ */
+const withFallbackRow = (
+    product: ProductDocument,
+    rows: Map<string, Record<string, string>>
+): Record<string, ProductTranslationFields> => {
+    const translations: Record<string, ProductTranslationFields> = {};
+    for (const [locale, fields] of rows)
+        translations[locale] = {
+            title: fields.title,
+            // `TranslationFields` types as `Record<string, string>`, but a row can genuinely
+            // omit the key — `in` is a runtime presence check `fields.description ===
+            // undefined` isn't, since the index signature already promises every key a
+            // `string`.
+            ...('description' in fields ? { description: fields.description } : {})
+        };
+
+    const fallbackLocale = getFallbackLocale();
+    if (!(fallbackLocale in translations))
+        translations[fallbackLocale] = {
+            title: product.title,
+            ...(product.description ? { description: product.description } : {})
+        };
+
+    return translations;
+};
+
+/**
+ * A product's title and description in every language it has them in, locale → fields — drafts
+ * included, for the editor's admin read.
  *
  * The product's own `title`/`description` columns ARE the fallback language's content, so they fill
  * that slot when the translation port has no row for it (or no `locales` module at all).
@@ -119,38 +152,25 @@ export const syncStockCache = (productId: string, counters: StockCounters): Prom
 export const translationsWithFallback = (
     product: ProductDocument
 ): Promise<Record<string, ProductTranslationFields>> =>
-    readAllTranslations('product', product._id.toString()).then((rows) => {
-        const translations: Record<string, ProductTranslationFields> = {};
-        for (const [locale, fields] of rows)
-            translations[locale] = {
-                title: fields.title,
-                // `TranslationFields` types as `Record<string, string>`, but a row can genuinely
-                // omit the key — `in` is a runtime presence check `fields.description ===
-                // undefined` isn't, since the index signature already promises every key is a
-                // `string`.
-                ...('description' in fields ? { description: fields.description } : {})
-            };
-
-        const fallbackLocale = getFallbackLocale();
-        if (!(fallbackLocale in translations))
-            translations[fallbackLocale] = {
-                title: product.title,
-                ...(product.description ? { description: product.description } : {})
-            };
-
-        return translations;
-    });
+    readAllTranslations('product', product._id.toString()).then((rows) =>
+        withFallbackRow(product, rows)
+    );
 
 /**
- * A product's name in every language it has one in, locale → title. For a message that has to
- * outlive the product: copy the names in, never look the product up again.
+ * A product's name in every language the shop SERVES it in, locale → title: a language switched
+ * on, plus the fallback. For a message that has to outlive the product: copy the names in, never
+ * look the product up again. A draft language's title is never copied in, so no customer can read
+ * it back from an inbox, a stream, an export or a mail.
  *
  * @param product - the document whose names to collect
  */
 export const titlesOf = (product: ProductDocument): Promise<Record<string, string>> =>
-    translationsWithFallback(product).then((translations) =>
+    readServedTranslations('product', product._id.toString()).then((rows) =>
         Object.fromEntries(
-            Object.entries(translations).map(([locale, { title }]) => [locale, title])
+            Object.entries(withFallbackRow(product, rows)).map(([locale, { title }]) => [
+                locale,
+                title
+            ])
         )
     );
 

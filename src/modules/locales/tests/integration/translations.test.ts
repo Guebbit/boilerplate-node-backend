@@ -204,6 +204,80 @@ describe('upsertEntityTranslations', () => {
         expect(resolved.get(id)).toEqual({ title: 'Cuccia' });
     });
 
+    it('serves no row whose language is gone, a draft nor an orphan', async () => {
+        const product = await createProduct();
+        const id = String(product._id);
+        await givenLocale('it');
+        await givenLocale('fr', { active: false });
+        // `xx` has no `locales` row at all: what a write racing a language delete leaves behind.
+        await translationRepository.upsertEntityLocale(
+            'product',
+            id,
+            'xx',
+            { title: 'Orfano' },
+            'human',
+            undefined,
+            undefined
+        );
+        await localeService.upsertEntityTranslations('product', id, {
+            it: { fields: { title: 'Cuccia' } },
+            fr: { fields: { title: 'Brouillon' } }
+        });
+        const chain = ['xx', 'fr', 'it'];
+
+        const resolved = await translationRepository.resolveEntityFields('product', [id], chain);
+        const found = await translationRepository.findEntityIdsByFieldMatch(
+            'product',
+            ['title'],
+            'Orfano',
+            chain
+        );
+
+        expect(resolved.get(id)).toEqual({ title: 'Cuccia' });
+        expect(found).toEqual([]);
+    });
+
+    it('serves the fallback locale even with no locale row for it', async () => {
+        const product = await createProduct();
+        const id = String(product._id);
+        await translationRepository.upsertEntityLocale(
+            'product',
+            id,
+            FALLBACK,
+            { title: 'Cuccia' },
+            'human',
+            undefined,
+            undefined
+        );
+        const fallbackRow = await localeRepository.findOne({ tag: FALLBACK });
+        if (fallbackRow) await localeRepository.deleteOne(fallbackRow);
+
+        const resolved = await translationRepository.resolveEntityFields(
+            'product',
+            [id],
+            [FALLBACK]
+        );
+
+        expect(resolved.get(id)).toEqual({ title: 'Cuccia' });
+    });
+
+    it('reads only the served rows for a message that outlives the entity', async () => {
+        const product = await createProduct();
+        const id = String(product._id);
+        await givenLocale('it');
+        await givenLocale('fr', { active: false });
+        await localeService.upsertEntityTranslations('product', id, {
+            it: { fields: { title: 'Cuccia' } },
+            fr: { fields: { title: 'Brouillon' } }
+        });
+
+        const all = await translationRepository.findEntityTranslations('product', id);
+        const served = await translationRepository.findServedEntityTranslations('product', id);
+
+        expect(all.map((row) => row.locale)).toEqual(['fr', 'it']);
+        expect(served.map((row) => row.locale)).toEqual(['it']);
+    });
+
     it('writes the fallback locale even with no locale row for it', async () => {
         const product = await createProduct();
 

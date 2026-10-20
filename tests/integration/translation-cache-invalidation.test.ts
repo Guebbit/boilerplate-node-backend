@@ -105,3 +105,49 @@ describe('a translation write invalidates the cached product it translated', () 
         expect(stillCached.headers['x-cache']).toBe('HIT');
     });
 });
+
+/** The title an anonymous reader gets for a product in Italian, and whether it came from cache. */
+const readInItalian = (id: string) =>
+    api()
+        .get(`/products/${id}`)
+        .set('Accept-Language', 'it')
+        .then((response) => ({
+            title: response.body.data.title,
+            cache: response.headers['x-cache']
+        }));
+
+describe('switching a language off or on re-renders the cached products', () => {
+    it('keeps a draft language out of the cache, serves it once on, and drops it again off', async () => {
+        await givenLocale(FALLBACK);
+        await givenLocale('it', { active: false });
+        const product = await createProduct({ title: 'Old title' });
+        const id = String(product._id);
+        const { bearer } = await authenticateAs('admin');
+
+        // An editor's draft in a switched-off language is accepted, and not served.
+        const draft = await api()
+            .patch(`/products/${id}`)
+            .set('Authorization', bearer)
+            .send({ translations: { it: { title: 'Cuccia' } } });
+        expect(draft.status).toBe(200);
+        expect(await readInItalian(id)).toEqual({ title: 'Old title', cache: 'MISS' });
+        expect(await readInItalian(id)).toMatchObject({ cache: 'HIT' });
+
+        // Switching it on must not leave the cached fallback served in its place.
+        const on = await api()
+            .patch('/locales/it')
+            .set('Authorization', bearer)
+            .send({ active: true });
+        expect(on.status).toBe(200);
+        expect(await readInItalian(id)).toEqual({ title: 'Cuccia', cache: 'MISS' });
+        expect(await readInItalian(id)).toMatchObject({ cache: 'HIT' });
+
+        // Switching it off must not leave the cached Italian served for up to an hour.
+        const off = await api()
+            .patch('/locales/it')
+            .set('Authorization', bearer)
+            .send({ active: false });
+        expect(off.status).toBe(200);
+        expect(await readInItalian(id)).toEqual({ title: 'Old title', cache: 'MISS' });
+    });
+});

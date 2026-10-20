@@ -53,6 +53,10 @@ const onRegistered = (modules: readonly AppModule[]): void => {
         readAll: (entityType, entityId) =>
             translationRepository
                 .findEntityTranslations(entityType, entityId)
+                .then((rows) => new Map(rows.map((row) => [row.locale, row.fields]))),
+        readServed: (entityType, entityId) =>
+            translationRepository
+                .findServedEntityTranslations(entityType, entityId)
                 .then((rows) => new Map(rows.map((row) => [row.locale, row.fields])))
     });
 

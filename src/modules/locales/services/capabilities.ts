@@ -64,7 +64,9 @@ export const staticCapability = (tag: string): LocaleCapability => ({
     name: describeLanguage(tag, 'en'),
     nativeName: describeLanguage(tag, tag),
     direction: isRightToLeft(tag) ? LocaleDirection.rtl : LocaleDirection.ltr,
-    // A deployed file has no off switch: a static language is always selectable.
+    // A deployed file has no off switch of its own: this row is always selectable. A language
+    // switched off through its row is dropped from a visitor's manifest before it gets here, see
+    // `listCapabilities`.
     active: true,
     // The backend app and only that: the API can answer in it, and there is no dictionary to
     // download.
@@ -134,21 +136,27 @@ export const readDynamicTier = (
 ): Promise<{
     languages: LocaleDocument[];
     entryCounts: Map<string, number>;
+    inactiveTags: ReadonlySet<string>;
 }> =>
     Promise.all([
         // `active` gates what a VISITOR may select and nothing else — the admin, who is the
         // one toggling the flag, reads every row. Same rule as products and users.
         localeRepository.list(scope),
-        localeEntryRepository.countEntriesByLocale()
+        localeEntryRepository.countEntriesByLocale(),
+        localeRepository.listInactiveTags()
     ])
-        .then(([languages, entryCounts]) => ({ languages, entryCounts }))
+        .then(([languages, entryCounts, inactive]) => ({
+            languages,
+            entryCounts,
+            inactiveTags: new Set(inactive)
+        }))
         .catch((error: unknown) => {
             // Stryker disable all
             logger.warn('listCapabilities - dynamic locale tier unavailable, serving static only', {
                 error
             });
             // Stryker restore all
-            return { languages: [], entryCounts: new Map() };
+            return { languages: [], entryCounts: new Map(), inactiveTags: new Set<string>() };
         });
 
 /**
@@ -170,8 +178,20 @@ export const callerScope = (caller?: Caller) => accessibleFilterFor(caller, 'Loc
  *   only in reach of the admin surface
  */
 export const listCapabilities = (scope?: Record<string, unknown>): Promise<LocaleCapabilities> =>
-    readDynamicTier(scope).then(({ languages, entryCounts }) => ({
-        locales: mergeCapabilities(listSupportedLocales(), languages, entryCounts),
-        default: getDefaultLocale(),
-        fallback: getFallbackLocale()
-    }));
+    readDynamicTier(scope).then(({ languages, entryCounts, inactiveTags }) => {
+        // A language with a deployed dictionary file is always in `listSupportedLocales()`, and a
+        // visitor's scoped read drops its switched-off row, so merging alone would put it back as
+        // `active: true`. Leave it out unless the caller's own scope still reads its row (staff,
+        // who then see it as `active: false`). A failed read of the flags is an empty set, and the
+        // files are served as before.
+        const readable = new Set(languages.map(({ tag }) => tag));
+        const staticTags = listSupportedLocales().filter(
+            (tag) => !inactiveTags.has(tag) || readable.has(tag)
+        );
+
+        return {
+            locales: mergeCapabilities(staticTags, languages, entryCounts),
+            default: getDefaultLocale(),
+            fallback: getFallbackLocale()
+        };
+    });

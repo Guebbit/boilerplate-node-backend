@@ -71,12 +71,26 @@ response still resolves its copy from the files.
 
 ### A draft language
 
-`active: false` keeps a language off the public surface: absent from the manifest, `404` on
-`GET /locales/{locale}/messages`, and its translated entity text (a product's title and
-description) is neither served nor searched. Staff holding `display:Locale` still see the manifest
-row and the dictionary, so a translation can be read in the shop's own screens before it is
-switched on, and entity text can be written into it from the editor's language tabs. Going live is
-the one flag.
+`active: false` keeps a language's TEXT off the public surface. A write into it is accepted
+(`200`) and stored, never served: Shopify, WPML and Polylang let an editor translate before
+publishing, and none refuses the write. A tag this deployment has no language for is a `422`.
+
+| Path                                                                                                                          | A switched-off language                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A product's translated title and description on a read                                                                        | Not served: the fallback text answers. Only the languages that are on, plus the fallback, are read                                                                                                                                                |
+| Free-text search                                                                                                              | Not searched: a draft word finds nothing                                                                                                                                                                                                          |
+| The names copied into a message that outlives its product (an inbox row, the stream, the data export, the back-in-stock mail) | Not copied: a customer can never read a draft title back from a message                                                                                                                                                                           |
+| A row whose language no longer exists (a write racing a delete)                                                               | Served by nothing, for the same reason: the read is an allow-list of live languages                                                                                                                                                               |
+| The editor's admin read, `GET /products/{id}/admin`                                                                           | Lists every row, drafts included                                                                                                                                                                                                                  |
+| `GET /locales/{locale}/messages` and the dictionary                                                                           | `404` to everyone but staff holding `display:Locale`                                                                                                                                                                                              |
+| The manifest, `GET /locales`, and the sitemap that reads it                                                                   | Absent for a visitor, a language with a deployed file (`src/locales/it.json`) included: the visitor's manifest drops it although the file is still deployed. Staff holding `display:Locale` still see it, `active: false`                         |
+| What still answers in a deployed-file language that is switched off                                                           | The API's own copy: `Accept-Language` is still negotiated against the deployed files, mail goes out in the buyer's stored language, and the paired frontend bundles the file. Only the manifest, the sitemap and the entity text stop offering it |
+| Cached product responses                                                                                                      | Cleared when the flag changes and when the language is deleted, since both change what is served and no entity was written                                                                                                                        |
+
+Staff holding `display:Locale` still see the manifest row and the dictionary, so a translation can
+be read in the shop's own screens before it is switched on, and entity text can be written into it
+from the editor's language tabs. Going live is the one flag. Switching a language off keeps its
+text; deleting it (refused while it is on) removes its UI strings and its entity text.
 
 ## The pipeline
 

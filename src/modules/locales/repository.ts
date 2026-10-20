@@ -31,6 +31,7 @@ import type {
 } from '@types';
 import { frontendAppIds } from './apps';
 import { withTransaction } from '@infrastructure/runtime/database';
+import { getFallbackLocale } from '@infrastructure/i18n';
 
 /** One key and its translation, as a write supplies them. */
 export interface EntryInput {
@@ -72,6 +73,14 @@ const entryBase = createRepository<LocaleEntryDocument, LocaleEntry>(localeEntry
 /** One language by its tag — the lookup every route in this module starts with. */
 const findByTag = (tag: string): Promise<LocaleDocument | null> =>
     localeBase.findOne({ tag: normalizeTag(tag) });
+
+/**
+ * The tags of the languages switched off. What the public manifest needs besides its scoped rows:
+ * a language with a deployed dictionary file has no row of its own to filter out, so the switched-off
+ * flag on its row is the only way to know the visitor must not be offered it.
+ */
+const listInactiveTags = (): Promise<string[]> =>
+    localeModel.distinct('tag', { active: false }).exec();
 
 /**
  * The languages this deployment offers, unpaginated and sorted by tag.
@@ -334,11 +343,36 @@ const findEntityLocale = (
         .exec();
 
 /**
- * The tags of the languages switched off. A draft language's entity text is written but not
- * served: both public read paths below drop its rows, the way the manifest and the dictionary
- * drop the language itself. Languages are a handful of rows, so this is one tiny query.
+ * The tags whose entity text is SERVED: every language switched on, plus the fallback language
+ * (which can be neither switched off nor deleted, and may have no `locales` row at all). A
+ * language's draft text is written but not served: both public read paths below read only these
+ * rows, the way the manifest and the dictionary drop the language itself.
+ *
+ * An allow-list, not a deny-list of the switched-off: a row whose language no longer exists (a
+ * delete racing a write, the cascade is not transactional) is served by nothing. Languages are a
+ * handful of rows, so this is one tiny query.
  */
-const inactiveTags = (): Promise<string[]> => localeModel.distinct('tag', { active: false }).exec();
+const servedTags = (): Promise<string[]> =>
+    localeModel
+        .distinct('tag', { active: true })
+        .exec()
+        .then((active) => [...new Set([...active, getFallbackLocale()])]);
+
+/**
+ * {@link findEntityTranslations} limited to the languages the shop serves — see {@link servedTags}.
+ * What a message that outlives its entity copies the names from.
+ */
+const findServedEntityTranslations = (
+    entityType: string,
+    entityId: string
+): Promise<TranslationDocument[]> =>
+    servedTags().then((served) =>
+        translationModel
+            .find({ entityType, entityId, locale: { $in: served } })
+            .sort({ locale: 1 })
+            .lean<TranslationDocument[]>()
+            .exec()
+    );
 
 /**
  * A page's translated fields, one indexed `$in` query resolving every entity at once — the query
@@ -355,13 +389,13 @@ const resolveEntityFields = (
     entityIds: string[],
     localeCandidates: string[]
 ): Promise<Map<string, TranslationFields>> =>
-    inactiveTags()
-        .then((inactive) =>
+    servedTags()
+        .then((served) =>
             translationModel
                 .find({
                     entityType,
                     entityId: { $in: entityIds },
-                    locale: { $in: localeCandidates, $nin: inactive }
+                    locale: { $in: localeCandidates.filter((tag) => served.includes(tag)) }
                 })
                 .select({ entityId: 1, locale: 1, fields: 1, _id: 0 })
                 .lean<Pick<TranslationDocument, 'entityId' | 'locale' | 'fields'>[]>()
@@ -407,12 +441,12 @@ const findEntityIdsByFieldMatch = (
     pattern: string,
     localeCandidates: string[]
 ): Promise<string[]> =>
-    inactiveTags()
-        .then((inactive) =>
+    servedTags()
+        .then((served) =>
             translationModel
                 .find({
                     entityType,
-                    locale: { $in: localeCandidates, $nin: inactive },
+                    locale: { $in: localeCandidates.filter((tag) => served.includes(tag)) },
                     $or: fields.map((field) => ({
                         [`fields.${field}`]: { $regex: pattern, $options: 'i' }
                     }))
@@ -517,12 +551,14 @@ const removeEntityTranslations = (
 export const localeRepository: Repository<LocaleDocument, Language> & {
     findByTag: (tag: string) => Promise<LocaleDocument | null>;
     list: (scope?: Record<string, unknown>) => Promise<LocaleDocument[]>;
+    listInactiveTags: () => Promise<string[]>;
     bumpRevision: (tag: string) => Promise<number>;
     deleteLocaleCascade: (locale: LocaleDocument) => Promise<LocaleCascadeCounts>;
 } = {
     ...localeBase,
     findByTag,
     list,
+    listInactiveTags,
     bumpRevision,
     deleteLocaleCascade
 };
@@ -567,6 +603,10 @@ export const translationRepository: Repository<TranslationDocument, Translation>
         entityType: string,
         entityId: string
     ) => Promise<TranslationDocument[]>;
+    findServedEntityTranslations: (
+        entityType: string,
+        entityId: string
+    ) => Promise<TranslationDocument[]>;
     findEntityLocale: (
         entityType: string,
         entityId: string,
@@ -604,6 +644,7 @@ export const translationRepository: Repository<TranslationDocument, Translation>
 } = {
     ...translationBase,
     findEntityTranslations,
+    findServedEntityTranslations,
     findEntityLocale,
     resolveEntityFields,
     findEntityIdsByFieldMatch,

@@ -313,8 +313,11 @@ per language, the fallback language included, no special-cased "source" row.
 
 Every read resolves them onto the wire shape: `search()` and `getById()` in
 `src/modules/products/services/{search,read}.ts` call `applyTranslations('product', …)`, which overlays the
-caller's `Accept-Language` chain — exact tag, base language, then the deployment's fallback — over
-an already-serialized page in one batched query. See
+caller's negotiated language chain — exact tag, base language, then the deployment's fallback — over
+an already-serialized page in one batched query. The language is the one the API negotiated from
+`Accept-Language` among the languages it can answer in (a deployed dictionary file), not the raw
+header; text in a language that is switched off is never part of the chain
+([a draft language](./locales.md#a-draft-language)). See
 [Internationalisation](../tools/i18n.md#tier-3-user-authored-content) for the resolve/fallback path.
 
 ::: warning The document's own `title`/`description` are a derived index column, not the wire shape
