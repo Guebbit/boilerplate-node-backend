@@ -278,7 +278,7 @@ describe('the umami provider', () => {
         expect('X-Forwarded-For' in sentRequest().headers).toBe(false);
     });
 
-    it('carries distinctId as a queryable `user_id`, the only place a user id can live here', () => {
+    it('never sends the account id: Umami cannot join on it and keeps events past account deletion', () => {
         configureUmami();
         emitAnalyticsEvent({
             analyticsConsent: true,
@@ -286,7 +286,8 @@ describe('the umami provider', () => {
             event: cartAnalyticsEvents.CHECKOUT_COMPLETED
         });
 
-        expect(sentRequest().body.payload.data.user_id).toBe('user-42');
+        expect(JSON.stringify(sentRequest().body)).not.toContain('user-42');
+        expect('user_id' in sentRequest().body.payload.data).toBe(false);
     });
 
     it('carries the trace id, and omits the key entirely when untraced', () => {
@@ -308,18 +309,19 @@ describe('the umami provider', () => {
         expect('trace_id' in sentRequest().body.payload.data).toBe(false);
     });
 
-    it('keeps caller properties, and does not let one of them overwrite user_id', () => {
+    it('keeps caller properties, and does not let one of them overwrite trace_id', () => {
         configureUmami();
         emitAnalyticsEvent({
             analyticsConsent: true,
             distinctId: 'real-user',
             event: cartAnalyticsEvents.CART_ITEM_ADDED,
-            properties: { product_id: 'prod-7', user_id: 'spoofed' }
+            properties: { product_id: 'prod-7', trace_id: 'spoofed' },
+            traceId: 'real-trace'
         });
 
         const { data } = sentRequest().body.payload;
         expect(data.product_id).toBe('prod-7');
-        expect(data.user_id).toBe('real-user');
+        expect(data.trace_id).toBe('real-trace');
     });
 
     it('strips the port from the hostname, which Umami rejects with a 400', () => {
@@ -629,7 +631,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
 
         emitAnalyticsEvent({ ...baseEvent, analyticsConsent: false });
 
-        expect(sentRequest().body.payload.data.user_id).toBe('user-42');
+        expect(sentRequest().body.payload.name).toBe('product_viewed');
     });
 
     it('captures in full when consent is granted', () => {
@@ -639,7 +641,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
         emitAnalyticsEvent({ ...baseEvent, analyticsConsent: true });
 
         expect(sentRequest().headers['X-Forwarded-For']).toBe('203.0.113.9');
-        expect(sentRequest().body.payload.data.user_id).toBe('user-42');
+        expect(sentRequest().body.payload.name).toBe('product_viewed');
     });
 
     it('drops the event outright when consent is denied', () => {

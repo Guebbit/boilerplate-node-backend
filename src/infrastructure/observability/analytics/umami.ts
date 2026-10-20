@@ -59,15 +59,15 @@ const readConfig = (): { host: string; websiteId: string } | undefined => {
 let warnedAboutConfiguration = false;
 
 /**
- * Flatten an event into the `data` map: `distinctId` becomes `user_id`, trace id becomes
- * `trace_id`, so both are filterable in Umami's event-data view. Umami keys visitors on an IP +
- * user-agent hash, so this is the only place a user id can live.
+ * Flatten an event into the `data` map: the trace id becomes `trace_id`, so it is filterable in
+ * Umami's event-data view. The account id (`distinctId`) is deliberately NOT sent: Umami keys
+ * visitors on an IP + user-agent hash, cannot join on a user id, and keeps its events until they
+ * are deleted by hand, so an id there would outlive the account. PostHog keeps `distinctId`.
  */
 const buildEventData = (event: AnalyticsEvent): Record<string, unknown> => ({
-    // Caller-supplied context first, so the fields below cannot be overwritten by a property
-    // that happens to share their name.
+    // Caller-supplied context first, so the field below cannot be overwritten by a property
+    // that happens to share its name.
     ...event.properties,
-    user_id: event.distinctId,
     ...(event.traceId ? { trace_id: event.traceId } : {})
 });
 

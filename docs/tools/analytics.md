@@ -139,9 +139,10 @@ one database. The compose file itself defaults `NODE_ANALYTICS_PROVIDER` to `non
 profile is running.
 
 Pick `posthog` when the funnel is identity-shaped. Umami keys visitors on a hash of IP and
-user-agent, so _"this logged-in user did X then Y"_ is not a question it can answer:
-`distinctId` travels as an ordinary `user_id` event property and is filterable, but it is not the
-join key. The cost is a hosted dependency in an otherwise fully self-hosted estate.
+user-agent, so _"this logged-in user did X then Y"_ is not a question it can answer: the account
+id (`distinctId`) is not sent to Umami at all, and it keeps its events until they are deleted by
+hand, so an id there would outlive the account. PostHog takes it as `distinct_id`. The cost is a
+hosted dependency in an otherwise fully self-hosted estate.
 
 ## Configuration
 
