@@ -26,3 +26,11 @@ export const setTranslatables = (
 export const translatableTarget = (entityType: string): TranslatableTarget | undefined =>
     // Own-property only: `entityType` comes off the URL, and `constructor` is inherited by every object.
     Object.hasOwn(translatables, entityType) ? translatables[entityType] : undefined;
+
+/**
+ * Every cache tag a translation write clears, once each — what a language switching on or off, or
+ * going away, must clear too, since it changes which stored text the cached responses may carry.
+ */
+export const translatableCacheTags = (): string[] => [
+    ...new Set(Object.values(translatables).flatMap((target) => (target ? [target.cacheTag] : [])))
+];

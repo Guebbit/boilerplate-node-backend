@@ -22,6 +22,15 @@ import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
 import { refreshOverlay } from './overlay';
+import { translatableCacheTags } from './translatables';
+import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
+
+/**
+ * Drops every cached response that may carry translated entity text — what a language switching on
+ * or off, or being deleted, changes without any entity being written.
+ */
+const clearTranslatableCaches = (): Promise<void> =>
+    invalidateCacheTagsLogged(translatableCacheTags());
 
 /** Not found, phrased the one way every route in this module phrases it. */
 export const languageNotFound = (): ResponseReject =>
@@ -103,20 +112,30 @@ export const updateLanguage = (
         if (payload.direction !== undefined) language.direction = payload.direction;
         if (payload.active !== undefined) language.active = payload.active;
 
-        return localeRepository.save(language).then((saved) => {
-            recordAudit(context, {
-                action: localeAuditActions.ADMIN_LOCALE_UPDATED,
-                outcome: 'success',
-                targetType: 'locale',
-                targetId: tag,
-                // The visibility flag is the field worth having in the trail on its own: it is
-                // what makes a half-finished translation public, and the only edit here that
-                // changes what an anonymous caller can see.
-                metadata: { active: saved.active }
-            });
+        return localeRepository
+            .save(language)
+            .then((saved) =>
+                // Cached product responses are keyed by language and kept for an hour: switching a
+                // language off must not leave its text served, nor switching it on leave the
+                // fallback served in its place. Only the visibility flag changes what is served.
+                (payload.active === undefined ? Promise.resolve() : clearTranslatableCaches()).then(
+                    () => saved
+                )
+            )
+            .then((saved) => {
+                recordAudit(context, {
+                    action: localeAuditActions.ADMIN_LOCALE_UPDATED,
+                    outcome: 'success',
+                    targetType: 'locale',
+                    targetId: tag,
+                    // The visibility flag is the field worth having in the trail on its own: it is
+                    // what makes a half-finished translation public, and the only edit here that
+                    // changes what an anonymous caller can see.
+                    metadata: { active: saved.active }
+                });
 
-            return generateSuccess(saved);
-        });
+                return generateSuccess(saved);
+            });
     });
 
 /**
@@ -141,7 +160,11 @@ export const removeLanguage = (
 
         return localeRepository
             .deleteLocaleCascade(language)
-            .then(({ entries: removedEntries, translations: removedTranslations }) => {
+            .then(({ entries: removedEntries, translations: removedTranslations }) =>
+                // The cascade removed the language's product text: cached responses still hold it.
+                clearTranslatableCaches().then(() => ({ removedEntries, removedTranslations }))
+            )
+            .then(({ removedEntries, removedTranslations }) => {
                 recordAudit(context, {
                     action: localeAuditActions.ADMIN_LOCALE_DELETED,
                     outcome: 'success',
