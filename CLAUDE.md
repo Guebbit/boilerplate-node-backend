@@ -155,6 +155,10 @@ See `docs/reference/tests.md`.
   `jest/no-disabled-tests` refuse a `.only` or a `.skip` outright.
 - Assert through the public door (the route, the service, the repository), not on private
   internals. A test shaped like the implementation fails on every refactor and catches nothing.
+- **A run that finds failures: fix them all, then re-run only what the fixes can affect.** That is
+  the failed tests plus the ones that touch the same areas — never the whole suite by default. A
+  long suite (the live e2e takes hours) is run in full once; a second full run is a deliberate
+  choice, made when extra certainty is wanted after the fix pass is done.
 - **Mutation score is the one test-quality number; coverage is not measured.** A line can be
   executed by a test that asserts nothing about it. Stryker marks every line no test ran as a
   `NoCoverage` mutant — `docs/tools/coverage-and-confidence.md`.
