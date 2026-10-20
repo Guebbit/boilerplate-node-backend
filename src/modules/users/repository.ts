@@ -26,7 +26,9 @@ import type {
     DeliveredCodeSlot,
     DeliveredCodeState
 } from './model';
+import { trusted } from 'mongoose';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult, ClientSession } from 'mongoose';
+import { EXTERNAL_KEY_QUERY } from '@infrastructure/persistence/external-key-query';
 import {
     createRepository,
     toObjectId,
@@ -120,6 +122,16 @@ const codeSlotFilter = (
 const codeSlotPath = (slot: DeliveredCodeSlot, name: CodeField): string =>
     slot.kind === 'reauth' ? `reauthCode.${name}` : `twoFactorMethods.$.${name}`;
 
+/**
+ * {@link AUTHENTICATABLE_FILTER} for a query that also sanitizes its filter: the operator in it is
+ * ours, so it is marked `trusted()` and survives the sanitizing that wipes an outsider's.
+ * https://mongoosejs.com/docs/api/mongoose.html#Mongoose.prototype.trusted()
+ */
+export const TRUSTED_AUTHENTICATABLE_FILTER = {
+    active: trusted({ ...AUTHENTICATABLE_FILTER.active }),
+    deletedAt: AUTHENTICATABLE_FILTER.deletedAt
+};
+
 /** An `$unset` document that clears every field of the code in a slot. */
 const clearedCode = (slot: DeliveredCodeSlot): Record<string, ''> =>
     Object.fromEntries(DELIVERED_CODE_FIELDS.map((name) => [codeSlotPath(slot, name), '']));
@@ -139,6 +151,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findOneWithCredentials: (where: QueryFilter<UserDocument>) => Promise<UserDocument | null>;
     findByIdWithPendingEmail: (id: string) => Promise<UserDocument | null>;
     emailOrPendingEmailTaken: (email: string, excludingId: string) => Promise<boolean>;
+    emailTaken: (email: string) => Promise<boolean>;
     findAuthenticatableById: (id: string) => Promise<UserDocument | null>;
     findAuthenticatableByEmail: (email: string) => Promise<UserDocument | null>;
     clearLapsedPreviousEmail: (keepUserIds: readonly string[]) => Promise<number>;
@@ -213,7 +226,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * Fetch the first user matching the filter WITH its credential fields.
      */
     findOneWithCredentials: (where: QueryFilter<UserDocument>) =>
-        userModel.findOne(where).select(CREDENTIAL_FIELDS).exec(),
+        userModel.findOne(where).setOptions(EXTERNAL_KEY_QUERY).select(CREDENTIAL_FIELDS).exec(),
 
     /**
      * Fetch a user by id WITH `pendingEmail` — for the caller's own profile
@@ -235,9 +248,22 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     emailOrPendingEmailTaken: (email: string, excludingId: string) =>
         userModel
             .exists({
-                _id: { $ne: toObjectId(excludingId) },
+                _id: trusted({ $ne: toObjectId(excludingId) }),
                 $or: [{ email }, { pendingEmail: email }]
             })
+            .setOptions(EXTERNAL_KEY_QUERY)
+            .then((match) => match !== null),
+
+    /**
+     * Whether any account holds this email. Signup's duplicate-email pre-check; the address came
+     * from the request body.
+     *
+     * @param email - the address, already normalised
+     */
+    emailTaken: (email: string) =>
+        userModel
+            .exists({ email })
+            .setOptions(EXTERNAL_KEY_QUERY)
             .then((match) => match !== null),
 
     /**
@@ -261,7 +287,8 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      */
     findAuthenticatableByEmail: (email: string) =>
         userModel
-            .findOne({ email, ...AUTHENTICATABLE_FILTER })
+            .findOne({ email, ...TRUSTED_AUTHENTICATABLE_FILTER })
+            .setOptions(EXTERNAL_KEY_QUERY)
             .select(CREDENTIAL_FIELDS)
             .exec(),
 

@@ -25,6 +25,21 @@ A filter on a path the schema does not declare is refused with `StrictModeError`
 [An undeclared path in a filter is an error](../../tools/mongodb-mongoose.md#an-undeclared-path-in-a-filter-is-an-error).
 It does not stop an operator on a declared path.
 
+Zod is the guard against that, and the lookups keyed by a value an outsider supplied add a second one:
+per-query `sanitizeFilter` (`infrastructure/persistence/external-key-query.ts`). It wraps an operator
+object in `$eq`, so `{ "$ne": null }` standing where a string belongs fails the cast instead of
+matching every row. The sinks are the login and reset email lookups, the signup and email-change
+duplicate checks, the federated-identity lookup and the payment provider reference. A lookup keyed by
+a digest (a link token, a session or API key hash) cannot be widened: the hash is a string whatever the
+caller sent. The same goes for the API key's public prefix, which is cut out of a header string. A
+payment adapter's event is parsed against the contract by the port before any lookup, so an adapter
+that skipped its own validation cannot reach the repository with an operator object either.
+
+The global switch, `mongoose.set('sanitizeFilter', true)`, was weighed and declined. About 200 filters
+carry an operator of their own (`$in`, `$ne`, `$gt`) and would each need `mongoose.trusted()`; one that
+is missed fails silently with an empty result, and every future query pays the same tax. Per query puts
+the cost where the outsider's value is.
+
 Search text is the one place a request value legitimately becomes part of a pattern, and it is
 handled in [Into a pattern](#into-a-pattern) below.
 
