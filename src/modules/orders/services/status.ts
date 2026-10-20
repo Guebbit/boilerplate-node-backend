@@ -101,8 +101,9 @@ const markSystemMove = (
  * @param by - for the timeline: the `actor` who recorded offline money (absent for the provider
  *   and the system) and the `method` the payment row carries, which says how it was really paid
  * @param session - the settlement's transaction, when the move belongs to one; absent, the move
- *   opens its own. Inside one, the caller wakes the outbox relay and refreshes the stock cache
- *   (`inventoryService.refreshStockCacheForOrder`) once it has committed
+ *   opens its own. Inside one, the caller wakes the outbox relay once it has committed. The stock
+ *   cache needs nothing from the caller: a preorder this payment serves announces itself, and
+ *   `inventory` refreshes its own copy
  * @returns the order as it now stands, or `null` if it could no longer be paid
  */
 export const markPaid = (
@@ -129,11 +130,6 @@ export const markPaid = (
                 order ? inventoryService.commitForOrder(orderId, active).then(() => order) : order
             ),
         () => statusChangedEvent(orderId, from[0], to)
-    ).then((order) =>
-        // Opened its own transaction: the cache write cannot roll back, so it waits for the commit.
-        order && !session
-            ? inventoryService.refreshStockCacheForOrder(orderId).then(() => order)
-            : order
     );
 };
 

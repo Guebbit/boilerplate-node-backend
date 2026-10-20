@@ -3,8 +3,7 @@
  * Payments: an order's money, behind a provider port (`./providers`), so the generic part of
  * taking money can be bought rather than built. Depends on orders (a payment freezes an order's
  * total, and a refunding `ORDER_CANCELLED` opens the refund — see `docs/modules/payments.md`)
- * and on inventory (a settlement keeps the hold alive and refreshes the stock cache). Detaches an erased account through its own
- * `personalData.erase` hook — the payment survives account erasure, same as the order it paid for.
+ * Detaches an erased account through its own `personalData.erase` hook — the payment survives account erasure, same as the order it paid for.
  *
  * See: docs/modules/payments.md
  */

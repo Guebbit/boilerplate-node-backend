@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — an order's money, behind a provider port. The intent freezes a total; the confirm moves the order to `paid`.
-**Depends on** — [`orders`](./orders.md), [`inventory`](./inventory.md).
+**Depends on** — [`orders`](./orders.md).
 **Breaks if you change** — the confirm path. It is the single moment held units become a sale.
 :::
 
@@ -19,7 +19,6 @@ flowchart LR
     payments["payments<br/><i>this module</i>"]
     access["access"]
     cart["cart"]
-    inventory["inventory"]
     invoicing["invoicing"]
     orders["orders"]
     returns["returns"]
@@ -31,7 +30,6 @@ flowchart LR
     returns --> payments
     stats --> payments
     payments --> access
-    payments --> inventory
     payments --> orders
     payments --> shop
     orders -. "order.cancelled" .-> payments
@@ -44,7 +42,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class inventory,invoicing,returns,shop,stats supporting;
+    class invoicing,returns,shop,stats supporting;
     class access generic;
     class payments centre;
 ```
@@ -195,7 +193,7 @@ flowchart TD
     G --> M["orderService.markPaid(session)<br/>+ hold commit + timeline"]
     M -->|order paid| O["enqueue payment.succeeded"]
     M -->|order gone| F["open refund record (same transaction)"]
-    O --> C["after commit: nudge relay, mail, stock cache"]
+    O --> C["after commit: nudge relay, mail"]
     F --> P["after commit: provider refund"]
     P -->|fails| Q["record stays open;<br/>retryOpenRefunds finishes it"]
 ```
@@ -547,7 +545,7 @@ flowchart LR
     D -->|"succeeded / declined"| ST
     ST -.->|declined| E["order stays pending<br/><i>units still held</i>"]
     ST -->|succeeded| F["order → paid<br/><i>orders</i>"]
-    F --> G["commit the hold<br/><i>inventory · no counter moves<br/>until the parcel ships</i>"]
+    F --> G["commit the hold<br/><i>orders · no counter moves<br/>until the parcel ships</i>"]
     OC["orders"] -. "order.cancelled" .-> R["refund<br/><i>if one was due</i>"]
 
     classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -857,6 +855,5 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 
 - [The provider port](./payments-provider-port.md) — the interface and the fake behind it
 - [`orders`](./orders.md) — what a payment is about
-- [`inventory`](./inventory.md) — the units a settlement keeps held
 - [Layers](../theory/layers.md) — what a port is and where it sits
 - [Security](../tools/security.md) — what is never stored here, and this module's own rate-limit budgets

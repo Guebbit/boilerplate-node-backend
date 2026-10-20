@@ -18,7 +18,6 @@ import { toMinorUnits } from '@domain-primitives/money';
 import { orderService, paymentSettled } from '@modules/orders';
 import { bankTransferHoldHours } from '../config';
 import { ReceivePaymentWebhookBody } from '@api/schemas.zod';
-import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -273,9 +272,8 @@ const settleWithin = async (
 };
 
 /**
- * What only a committed settlement allows: wake the outbox relay, bring the catalogue's stock
- * cache into step (a preorder may have been served), and for money that arrived too late, ask
- * the provider to return it. A failed refund is logged and left to `retryOpenRefunds`: the open
+ * What only a committed settlement allows: wake the outbox relay and, for money that arrived too
+ * late, ask the provider to return it. A failed refund is logged and left to `retryOpenRefunds`: the open
  * record is already durable.
  *
  * @param payment - the payment as the caller read it, for the answer when nothing was written
@@ -315,17 +313,7 @@ const afterSettlement = (
                 transitioned: true
             }));
 
-    return inventoryService
-        .refreshStockCacheForOrder(orderId)
-        .catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Payments: could not refresh the stock cache for order ${orderId} after its payment settled`,
-                error
-            });
-            // Stryker restore all
-        })
-        .then(() => ({ payment: outcome.payment, orderLost: false, transitioned: true }));
+    return Promise.resolve({ payment: outcome.payment, orderLost: false, transitioned: true });
 };
 
 /**
