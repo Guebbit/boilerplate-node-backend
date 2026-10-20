@@ -261,16 +261,36 @@ permission they hold is trusted wherever they act: recording a payment by hand, 
 approving and receiving a return, or cancelling the remainder of an order all work on one's own
 order exactly as on anyone's.
 
-What the system adds is a record, not a refusal. The audit row of the two steps that move money out
-or in — `payment.recorded_offline` and `admin.payment.refunded` (which also covers a return's refund
-and a remainder cancel) — carries `ownOrder: true` when the caller is the buyer (`ownOrderFlag` in
-`@modules/access`), so a review sees self-dealing at a glance.
+What the system adds is a record, not a refusal. The audit rows of the steps that move money out or
+in — `payment.recorded_offline`, `admin.payment.refund_requested` and `admin.payment.refunded`
+(which also cover a return's refund and a remainder cancel), `order.cancelled`, and a return's
+approval and receipt — carry `ownOrder: true` when the caller is the buyer (`ownOrderFlag` in
+`@modules/access`). The request row is written when a refund's record opens, before the provider is
+asked: a provider that refuses leaves the record to the sweep, which has no caller, so without that
+row an own-order refund finished later would carry no evidence at all.
 
 Why trust and record rather than refuse: no shop platform ships a self-refund rule (Shopify, Stripe
-and Saleor leave it to the merchant, as do Solidus and WooCommerce), a refund goes back to the card
-that paid, so it cannot send money elsewhere, and a refusal for a one-person shop blocks its owner.
-Where separation of duties is wanted, the audit row is what NIST SP 800-53 AC-5 asks of the
-compensating control.
+and Saleor leave it to the merchant, as do Solidus and WooCommerce), and a refusal for a one-person
+shop blocks its owner. Two things the record does **not** do, so they are not oversold:
+
+- **The card is not the control.** A refund goes back to the card that paid, which stops a stolen
+  session diverting money elsewhere. It does not stop self-dealing: on one's own order the paying
+  card is one's own. The basis is a trusted role plus a record.
+- **The flag catches the careless case**, not a second account or collusion. It is a review aid.
+
+The most exposed step is the hand-recorded payment (`payment.recorded_offline`): a trusted operator
+can record cash that never arrived and the goods ship. The control for that is **bank
+reconciliation**, not the flag: the invoice and `GET /payments?method=` list what was
+recorded (filter by `method`: `bank_transfer`, `cash`, `other`), to be matched against the bank statement. A refund started in the provider's own
+dashboard is outside the app and invisible to it.
+
+There is no refund cap: this app has no unreferenced refunds — every one is tied to a payment's
+`providerRef` and can never exceed what is left of it, the property whose absence makes a limit
+worth having ([Adyen](https://docs.adyen.com/point-of-sale/basic-tapi-integration/refund-payment/unreferenced)
+offers one only for unreferenced refunds; [Stripe](https://docs.stripe.com/refunds) never refunds
+above the charge, to the same method). Auditing is what NIST SP 800-53 AC-5 lists as an example of a
+compensating control where separation of duties is wanted. A shop that wants it edits
+`authorization-roles.yaml` (for example, take `PaymentRecording` from the moderator).
 
 ## Who can do what, per module
 
