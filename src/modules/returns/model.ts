@@ -14,8 +14,7 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
-import { ReturnKind, ReturnReason, ReturnStatus } from '@types';
-import { RETURN_POSTAGE_PAYERS, type ReturnPostagePayer } from '@modules/shop';
+import { ReturnKind, ReturnPostagePayer, ReturnReason, ReturnStatus } from '@types';
 
 /** One line of a return — a snapshot of what is coming back, so it reads the same later. */
 export interface ReturnLine {
@@ -111,7 +110,7 @@ export const returnSchema = new Schema<ReturnDocument>(
         fulfillmentOrderId: { type: Schema.Types.ObjectId },
         note: { type: String, maxlength: 1000 },
         lines: { type: [returnLineSchema], required: true },
-        returnPostage: { type: String, enum: [...RETURN_POSTAGE_PAYERS], required: true },
+        returnPostage: { type: String, enum: Object.values(ReturnPostagePayer), required: true },
         declineReason: { type: String, maxlength: 500 },
         decidedAt: { type: Date },
         receivedAt: { type: Date },

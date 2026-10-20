@@ -33,6 +33,13 @@ paths:
 components:
     schemas:
         # ---------- shop — the schemas only this module's paths reference. ----------
+        ReturnPostagePayer:
+            type: string
+            enum: [consumer, shop]
+            description: >-
+                Who pays to send returned goods back: the customer, or the shop. The shop's setting is
+                `NODE_RETURN_POSTAGE_PAYER`; a return freezes the value it was opened under.
+
         ShopAddress:
             type: object
             additionalProperties: false
@@ -109,9 +116,7 @@ components:
                 returnAddress:
                     $ref: '#/components/schemas/ShopAddress'
                 returnPostagePayer:
-                    type: string
-                    enum: [consumer, shop]
-                    description: Who pays to send returned goods back (`NODE_RETURN_POSTAGE_PAYER`).
+                    $ref: '#/components/schemas/ReturnPostagePayer'
 
         ShopEnvelope:
             type: object
