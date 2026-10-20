@@ -355,4 +355,17 @@ describe('db:sync', () => {
 
         await nativeDb().collection('users').deleteMany({ email: 'clash@example.com' });
     });
+
+    it('plans and builds, pruning, against a database that has no collections yet', async () => {
+        // `db:bootstrap` on a never-booted database: listing a missing collection's indexes throws.
+        await nativeDb().dropDatabase();
+
+        await expect(planIndexSync({ prune: true })).resolves.toBeDefined();
+        await applyIndexSync({ prune: true });
+
+        // A model that declares no index gets no collection from a sync, so there is nothing to read.
+        for (const model of models().filter((candidate) => declaredKeys(candidate).size > 0)) {
+            expect(await storedKeys(model)).toEqual(declaredKeys(model));
+        }
+    });
 });

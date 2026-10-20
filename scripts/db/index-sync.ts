@@ -222,6 +222,30 @@ export const findBlockingDuplicates = async (plan?: IndexDiff[]): Promise<string
 };
 
 /**
+ * MongoDB's `NamespaceNotFound`: the answer to listing the indexes of a collection nothing has
+ * written to yet, which is every collection on a database the app has never booted against.
+ *
+ * https://www.mongodb.com/docs/manual/reference/error-codes/
+ *
+ * @param error - whatever the driver rejected with
+ * @returns true when the collection simply does not exist
+ */
+const isNamespaceNotFound = (error: unknown): boolean =>
+    typeof error === 'object' && error !== null && 'code' in error && error.code === 26;
+
+/**
+ * The indexes stored for a model, none when its collection does not exist yet.
+ *
+ * @param model - the registered model
+ * @returns the stored indexes, `_id_` included
+ */
+const storedIndexesOf = (model: RegisteredModel) =>
+    model.collection.indexes().catch((error: unknown) => {
+        if (isNamespaceNotFound(error)) return [];
+        throw error;
+    });
+
+/**
  * Sort the stored names Mongoose says no schema declares into replaced, retired and the rest.
  *
  * A declared index whose options changed shows up twice in `diffIndexes()`: its old name in
@@ -238,7 +262,7 @@ const classify = async (
     { toCreate, toDrop }: { toCreate: Record<string, unknown>[]; toDrop: string[] },
     { prune = false }: IndexSyncOptions
 ): Promise<IndexDiff> => {
-    const stored = await model.collection.indexes();
+    const stored = await storedIndexesOf(model);
     const storedKeyOf = new Map(
         stored.flatMap(({ name, key }) =>
             name === undefined ? [] : [[name, JSON.stringify(key)] as const]
