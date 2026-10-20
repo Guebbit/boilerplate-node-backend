@@ -48,7 +48,7 @@ export const canCorrectAddress = (order: AddressCandidate): boolean =>
 /**
  * When the withdrawal window closes, counted from the moment its clock starts.
  *
- * Calendar days, as CRD recital 41 → Regulation 1182/71 Art. 3(1) and 3(2)(c) count them:
+ * Calendar days, as CRD recital 41 → Regulation 1182/71 Art. 3(1) and 3(2)(b) count them:
  *
  * - the day the event happens is not counted;
  * - the period ends with the last hour of its last day, not `days × 24 h` after the event.

@@ -566,7 +566,7 @@ flowchart LR
   `orders` cannot read `delivery`'s own timestamps.
 - **The window ends with the last hour of its last day.** The day of the event is not counted and
   the last day of the period is counted whole (CRD recital 41 → Regulation 1182/71 Art. 3(1),
-  3(2)(c)), in UTC. A date in an email is the opposite case: staff type it on the shop's clock, so it
+  3(2)(b)), in UTC. A date in an email is the opposite case: staff type it on the shop's clock, so it
   is printed in `NODE_SHOP_TIMEZONE` (the delivery mails, the order confirmation, the bank-transfer
   deadline with its zone named, the API-key expiry in UTC, named).
 - **No weekend or holiday roll-over is computed.** Art. 3(4) moves a deadline that lands on one to
