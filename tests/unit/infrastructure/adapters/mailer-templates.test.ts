@@ -278,6 +278,25 @@ describe('email templates render in every supported locale', () => {
     });
 
     /**
+     * The mail job crosses the queue as JSON, which drops a key whose value is `undefined`. A
+     * hold notice with no sentence from staff must still render from what arrives on the other
+     * side, and show no empty quote.
+     */
+    it('renders a hold notice that carries no staff message, after the JSON round trip', async () => {
+        const { data } = holdNoticeEmail('en', 'Ada', {
+            notice: 'delayed',
+            orderUrl: 'https://shop.example/orders/an-order-id'
+        });
+        const arrived = JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
+
+        const html = await ejs.renderFile(templateFile('delivery.hold-notice'), arrived, {
+            root: process.cwd()
+        });
+
+        expect(html).not.toContain('<blockquote>');
+    });
+
+    /**
      * The invoice PDF lives outside the collected map (nothing resolves it by name, so it
      * is reached directly, the same way its own module does) but is the same kind of artefact —
      * a document a customer reads — so it is held to the same translation rule.
