@@ -234,10 +234,10 @@ scenarios/<name>.ts                  the demo records — outside src/, see Demo
 ```
 
 Every one is optional: a module with no HTTP surface contributes no OpenAPI fragment, and that is a
-good sign rather than an omission. Deleting a module is `rm -rf` of the folder, one line out of
-`src/modules.ts`, and its entry out of
-`scenarios/index.ts`'s table — the last one is not colocated with the folder, so
-`tests/cross-cutting/scenario-fixtures.test.ts` is what catches a forgotten one. A module that
+good sign rather than an omission. Deleting a module is `rm -rf` of the folder, its registration out of
+`src/modules.ts` and its `scenarios/<name>.ts` file — the scenario registry is generated from the
+files on disk (`npm run scenarios:generate`), and a `shopModules` key naming an unmounted module is a
+compile error. A module that
 declared probes is also named in `scripts/contracts/client-collections-bundle.ts`, and that one
 announces itself: the import stops compiling.
 

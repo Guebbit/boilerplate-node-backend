@@ -57,8 +57,9 @@ flowchart LR
 
 ## 1. Bounded context — the folder
 
-One module is one context. `rm -rf src/modules/wishlist` plus one line in `src/modules.ts` deletes
-the domain, and anything that breaks is real coupling worth seeing.
+One module is one context. `rm -rf src/modules/wishlist` plus its import, its `enabledModules` entry
+and its `ModuleName` member in `src/modules.ts` deletes the domain, and anything that breaks is real
+coupling worth seeing ([Removing a module](./module-lifecycle.md#removing-a-module) walks it).
 
 This is the oldest rule in the repo and the one everything else hangs off. It is covered in
 [Modules](./modules.md); the rest of this page assumes it.
@@ -68,12 +69,12 @@ This is the oldest rule in the repo and the one everything else hangs off. It is
 A module's imports are its dependency list. What they do not say is what KIND of reach each one is,
 and the kinds differ enormously in what they cost when the upstream moves:
 
-| Kind                 | What it means                                                       | Cost when the upstream changes                   | Example             |
-| -------------------- | ------------------------------------------------------------------- | ------------------------------------------------ | ------------------- |
-| `conformist`         | reads the upstream's records as they are, no translation, no say    | **high** — the shape is your shape too           | `orders → products` |
-| `customer-supplier`  | asks the upstream to _do_ something; its surface answers the demand | medium — the call survives, the payload may not  | `cart → orders`     |
-| `published-language` | receives vocabulary, not records: pure functions over plain data    | **low** — neither side knows the other's storage | `cart → delivery`   |
-| `shared-kernel`      | both read and write the same model                                  | **highest** — every change agreed twice          | `account → users`   |
+| Kind                 | What it means                                                       | Cost when the upstream changes                   | Example           |
+| -------------------- | ------------------------------------------------------------------- | ------------------------------------------------ | ----------------- |
+| `conformist`         | reads the upstream's records as they are, no translation, no say    | **high** — the shape is your shape too           | `cart → products` |
+| `customer-supplier`  | asks the upstream to _do_ something; its surface answers the demand | medium — the call survives, the payload may not  | `cart → orders`   |
+| `published-language` | receives vocabulary, not records: pure functions over plain data    | **low** — neither side knows the other's storage | `cart → delivery` |
+| `shared-kernel`      | both read and write the same model                                  | **highest** — every change agreed twice          | `account → users` |
 
 Anticorruption layer is deliberately absent from the list. It is the right pattern for a model you
 do not control, and every module here is a sibling in this repo. `payments` does wrap an outside
@@ -91,36 +92,40 @@ return path an import graph alone cannot show.
 Two places, on purpose, for two different questions. **Which** siblings a module may reach lives in
 its own `module.yaml#dependsOn` — a plain array of names, one per module folder, read by
 `.dependency-cruiser.cjs` and enforced as the allow-list behind `check:dependencies`. **What kind**
-of reach each edge is, and why it exists, stays in prose at the top of `module.ts`, next to the
-imports it describes.
+of reach each edge is, and why it exists, stays in prose: a `# why` comment beside each edge in
+`module.yaml`, the `module.ts` docblock for what crosses and what is deliberately not in the import
+graph, and the kind label itself on the module pages
+([`cart-checkout.md`](../modules/cart-checkout.md#what-crosses-each-edge), `account.md`, `users.md`,
+`wishlist.md`).
 
 A typed `dependsOn: { module, as, because }[]` manifest field is deliberately not used: nothing
 would read it at runtime and nothing would enforce it, and it would duplicate the relationship KIND
 this table already classifies.
 
-`module.yaml#dependsOn` carries the edge ONLY, no kind and no prose, and
-`.dependency-cruiser.cjs` reads it directly as the rule it enforces — an import outside a module's
-own `dependsOn` fails `check:dependencies`, the same gate CI runs. There is no second copy to drift:
-the file the config reads IS the map. The reasoning behind an edge — which of the four kinds
-(`conformist`, `customer-supplier`, `published-language`, `shared-kernel`) it is, and why — still
-lives where it always did, in `module.ts`'s docblock, in prose rather than a label a script reads:
-`module.yaml` answers "may it", the docblock answers "why, and how".
+`module.yaml#dependsOn` carries the edge, and `.dependency-cruiser.cjs` reads it directly as the rule
+it enforces — an import outside a module's own `dependsOn` fails `check:dependencies`, the same gate
+CI runs. There is no second copy to drift: the file the config reads IS the map. Which of the four
+kinds (`conformist`, `customer-supplier`, `published-language`, `shared-kernel`) an edge is lives
+in prose, not in a label a script reads: `module.yaml` answers "may it", the comment and the module
+page answer "why, and how".
 
 The twin makes the opposite call, and correctly: `boilerplate-php-laravel-backend` keeps its
 `dependsOn` edges because `ModuleRegistry::inDependencyOrder()` sorts the seeders with them —
 an `orders` row has foreign keys to a product and a user, so the graph decides who is written
-first. Mongo has no foreign keys, and this repo's own seeding order is a single explicit
-exception (`locales` finishes before the rest of `shopModules` runs concurrently — see
-`scenarios/index.ts`'s `seedShop`) stated in code, not carried as a `dependsOn` graph — which is
-why the same field is documentation here and load-bearing there.
+first. Mongo has no foreign keys. This repo's seeding order is a small `after` graph of its own
+(`scenarios/waves.ts`, run from `scenarios/shop.scenario.ts`; today only `products` waits, for
+`locales`), separate from `dependsOn` — which is why the same field is documentation here and
+load-bearing there.
 
 ### Reading the map
 
-`cart` reaches seven modules, and that is not a smell to refactor away — a checkout is the one place
-where price, stock, address, shipping and the resulting order all have to agree at once. Its
-docblock says _how_ it depends on each — a `published-language` read of `products`, a
-`customer-supplier` call into `orders`, and so on. `delivery` is the cheapest relationship to
-name and the one to copy: it publishes a few pure functions and no storage at all.
+`cart` reaches the most modules ([the map](../modules/index.md#the-map) draws them), and that is not a
+smell to refactor away — a checkout is the one place where price, stock, address, shipping and the
+resulting order all have to agree at once. [`cart-checkout.md`](../modules/cart-checkout.md#what-crosses-each-edge)
+says _how_ it depends on each — a `conformist` read of `products`, a `customer-supplier` call into
+`orders`, and so on. The `cart → delivery` edge is the cheapest relationship to name and the one to
+copy: `cart` calls pure functions over plain data (`findShippingMethod`, `priceShipping`) and never
+learns that a shipment record exists.
 
 ## 3. Ubiquitous language — per context, not per app
 
@@ -155,11 +160,13 @@ differs, and use the simplest thing that works everywhere else.
   `feedback` and `example` (`generic`) and `payments` and `returns` (`supporting`) all carry tables.
   No `core` module has an aggregate today.
 
-| Subdomain    | Meaning                                                         | Here                                                                                                                  |
-| ------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `core`       | the reason the product exists — worth entities and invariants   | `products`, `orders`, `cart`                                                                                          |
-| `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`, `wishlist`, `invoicing`, `returns`, `notifications`, `addresses`                 |
-| `generic`    | a solved problem, interchangeable with something bought         | `antibot`, `audit-logs`, `locales`, `observability`, `feedback`, `access`, `users`, `account`, `api-keys`, `webhooks` |
+| Subdomain    | Meaning                                                         | Here, for example                           |
+| ------------ | --------------------------------------------------------------- | ------------------------------------------- |
+| `core`       | the reason the product exists — worth entities and invariants   | `products`, `orders`, `cart`                |
+| `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`         |
+| `generic`    | a solved problem, interchangeable with something bought         | `antibot`, `audit-logs`, `locales`, `users` |
+
+[The map](../modules/index.md#the-map) colours every module by its subdomain.
 
 The rule that follows: **the label sets how much modelling a module earns; the complexity of its logic
 picks the pattern; any rule that clears

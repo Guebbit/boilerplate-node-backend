@@ -484,7 +484,7 @@ decision of whether the return was owed.
 | `NODE_RETURN_TEXT_RETENTION_DAYS` | `1095`  | Days without a change before `reap:returns` unsets a return's `note` and `declineReason` |
 
 The return address (`NODE_RETURN_ADDRESS_*`) and who pays postage (`NODE_RETURN_POSTAGE_PAYER`) are
-[`orders`'s](./orders.md#shop-identity). The postage payer is frozen on each return when it opens.
+[`shop`'s](./shop.md#configuration). The postage payer is frozen on each return when it opens.
 
 ## Who can do what
 

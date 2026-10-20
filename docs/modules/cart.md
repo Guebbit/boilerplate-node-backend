@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — one cart document per user, priced against the live catalogue, and the checkout that ends it.
-**Depends on** — seven modules. Checkout is where every rule in the shop has to agree at once.
+**Depends on** — more modules than any other. Checkout is where every rule in the shop has to agree at once.
 **Breaks if you change** — `clearLinesIfUnchanged`. It is what stops two parallel checkouts becoming two orders.
 :::
 
@@ -57,7 +57,7 @@ flowchart LR
 ## The story
 
 Checkout is the one place price, stock, address, shipping and order creation must all agree at
-the same instant, and that is why this module carries more edges than any other. **The seven arrows
+the same instant, and that is why this module carries more edges than any other. **The arrows
 are not a smell to be refactored away — they are what a checkout is.** This module is a customer of
 those contexts rather than an orchestration layer sitting above them.
 
@@ -284,4 +284,4 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 - [`orders`](./orders.md) — what a checkout produces
 - [`inventory`](./inventory.md) — who holds the units while a checkout runs
 - [Redis Cache](../tools/redis-cache.md) — why the cart is not in it
-- [Strategic DDD](../theory/strategic-ddd.md) — reading a seven-edge context map
+- [Strategic DDD](../theory/strategic-ddd.md) — reading a busy context map

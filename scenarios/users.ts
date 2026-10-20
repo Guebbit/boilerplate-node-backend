@@ -308,7 +308,7 @@ const userFixtures = [...namedUsers, ...customerUsers];
  * Seed this collection. The filler customers hold no role at all — a customer is computed from
  * `verifiedAt`, never granted — so only the documents are written, through `insertIfAbsent`'s
  * own upsert: re-running this against an already-seeded database changes nothing.
- * Declared in `./index`'s `shopModules`; walked by `seedShop`.
+ * Collected into `shopModules` (`./shop-modules`); run by `seedShop`.
  */
 const seedUsersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(userFixtures.map((user) => insertIfAbsent(userRepository, user)));

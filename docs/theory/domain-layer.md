@@ -92,7 +92,7 @@ and copy are delivery concerns; the same verdict serves a queue consumer or a CL
 
 ### Why bother
 
-`src/modules/orders/tests/unit/totals.property.test.ts` runs **13 properties × 300 generated baskets, seeded, with no
+`src/modules/orders/tests/unit/totals.property.test.ts` runs **each property over `TEST_PROPERTY_RUNS` generated baskets (300 by default), seeded, with no
 `setupTestDb`, no `beforeAll` and no mocks** — there is nothing to set up, because the file under
 test cannot reach anything. It proves things like _"a total is never `NaN`, for every possible
 input"_, which is a claim about all inputs that no table of examples can make. A `NaN` total
@@ -174,12 +174,12 @@ barrel line and a hop.
 
 Both halves are live:
 
-| Kept              | Why it clears the floor                                                                                            |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `sumLineItems`    | Two modules — `cart` totals itself through it, so a summary cannot disagree with the order it previews             |
-| `orderTotal`      | Three callers owe the customer one number — the order, the payment intent and the confirmation email               |
-| `steppedQuantity` | Frontend (the paired repo's cart quantity helpers): one caller, but a real trap — the clamp catches a double click |
-| `checkOrderLines` | Ordered reasons that map to distinct status codes and analytics labels                                             |
+| Kept              | Why it clears the floor                                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `sumLineItems`    | Three modules — `cart`, `orders` and `returns` total through it, so a summary cannot disagree with the order it previews |
+| `orderTotal`      | Every place that owes the customer one number reads it, so the order and the payment intent cannot disagree              |
+| `steppedQuantity` | Frontend (the paired repo's cart quantity helpers): one caller, but a real trap — the clamp catches a double click       |
+| `checkOrderLines` | Ordered reasons that map to distinct status codes and analytics labels                                                   |
 
 | Removed             | Why it did not                                                                |
 | ------------------- | ----------------------------------------------------------------------------- |
@@ -201,8 +201,8 @@ exists for `backoff.ts`.
 No rule that clears the floor means no folder, and never an empty one: creating a folder to match a
 shape is how ceremony starts.
 
-**`delivery/domain/` is the shortest worked example, and the best argument for the folder.** It is
-a few pure functions in `rates.ts` (`findShippingMethod`, `priceShipping`, `methodFitsWeight`,
+**`delivery/domain/rates.ts` is a worked example, and a good argument for the folder.** It is
+a few pure functions (`findShippingMethod`, `priceShipping`, `methodFitsWeight`,
 `cheapestStandardShipping`), re-exported through the module barrel: a sibling prices a shipping
 method without learning that shipments, couriers or a `shipmentRepository` exist. That is what stops `cart`'s checkout and `GET /delivery/methods` from
 ever quoting different numbers — there is one function and both call it — and it is a published
@@ -220,13 +220,13 @@ the whole point of a domain folder: the rule exists once and the callers ask it.
 tactical DDD.** A `Money` is a branded integer count of minor units, so every total is computed in
 whole cents and converted back to a decimal exactly once, at the boundary. `openapi.yaml` still
 types these `number`/`double` and no response shape moves; what moves is that no site outside this
-file holds a rounding rule of its own. It lives in `src/domain-primitives/` because six modules do money
+file holds a rounding rule of its own. It lives in `src/domain-primitives/` because many modules do money
 arithmetic, and a domain folder may import that tier — the one thing outside itself it may reach, since
 the tier imports only npm and `@types`.
 
 **`inventory/domain/transitions.ts` is the other kind of case: the folder holding the model
-itself.** It is one table (`counterDeltaFor`) mapping each of the seven stock movement reasons to the
-pair of counter deltas it implies, plus the subtraction that defines availability. Nothing about it
+itself.** It is one table (`counterDeltaFor`) mapping each of the nine stock movement reasons to the
+three counter deltas (`onHand`, `reserved`, `backordered`) it implies, plus the subtraction that defines availability. Nothing about it
 needs a database, and everything that does — the conditional writes, the ledger row, the
 reservation lifecycle — reads the table rather than restating it;
 `src/modules/inventory/tests/unit/transitions.test.ts` pins the actual signed delta each reason
@@ -322,15 +322,16 @@ one model and one language stop being valid_, not by where you put files.
 
 ## 4. Where this repo stands
 
-**Strategic DDD — adopted, and machine-checked.** Each row is a declaration in the code with a test
-behind it, not a claim about intent. See [Strategic DDD](./strategic-ddd.md) for what each one
+**Strategic DDD — adopted, and mostly machine-checked.** Most rows are a declaration in the code with a
+check behind it, not a claim about intent. Three have none: the kind label of each context-map edge,
+the ubiquitous language and the subdomain table are prose, with no test behind them. See [Strategic DDD](./strategic-ddd.md) for what each one
 enforces and what it refuses.
 
 | Concept                | Where                                                                                                                           |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Bounded context        | one folder per module; `rm -rf` deletes the domain                                                                              |
 | Published language     | the module barrel, `index.ts` — lint forbids reaching past it, every module publishes one                                       |
-| Context map            | the docblock on each `module.ts`, beside the imports it describes                                                               |
+| Context map            | the edges in `module.yaml#dependsOn` (enforced by `check:dependencies`); each edge's kind and why, in prose on the module pages |
 | Ubiquitous language    | the code's own identifiers, per context — see [Glossary](./glossary.md)                                                         |
 | Subdomain distillation | the table in [Strategic DDD](./strategic-ddd.md) §4 — a judgement, re-decided per project                                       |
 | Domain events          | `kernel/events.ts` — `products` emits, `cart` subscribes                                                                        |

@@ -52,12 +52,13 @@ const { parse: parseYaml } = require('yaml');
  * questions — is bought here instead, read off every module's own file and enforced in one place,
  * reported at the offending import.
  *
- * WHY `module.ts`'s docblock still matters: `module.yaml` holds the EDGE only. What is reached
- * across it, and why it is that kind of relationship, is prose at the top of each `module.ts` —
- * beside the imports it describes, where a reader meets both at once, and where a coupling the
- * import graph cannot see (a shared document, a metric read by string, a TTL window another domain
- * depends on) can also be written down. A rule reconciled against imports could never hold one of
- * those, and `module.yaml` is deliberately just the allow-list, not the reasoning.
+ * WHY the reasoning stays in prose: `module.yaml` holds the EDGE, with a `# why` comment beside it.
+ * What is reached across it is prose at the top of each `module.ts`, beside the imports it
+ * describes, where a reader meets both at once, and where a coupling the import graph cannot see
+ * (a shared document, a metric read by string, a TTL window another domain depends on) can also be
+ * written down; the kind of relationship is labelled on the module's page. A rule reconciled
+ * against imports could never hold one of those, and `module.yaml` is deliberately just the
+ * allow-list, not the reasoning.
  *
  * Fails closed on purpose: a module folder with no `module.yaml` gets `[]` — it may reach no
  * sibling, never "no rule at all" — and a `dependsOn` that is not an array of strings throws,
@@ -213,7 +214,7 @@ module.exports = {
         {
             name: 'module-internals-are-private',
             comment:
-                "A module has one public path, `@modules/<name>`, and the moment anything reaches past it the module stops being deletable. `eslint-plugin-boundaries` states this for one module reaching another and cannot state it for the tiers that are not modules: `src/app/` reaching `@modules/account/session/jwt` passes every lint rule. This is that gap, for all thirteen at once. Scoped to `from: ^src/` on purpose — `scenarios/<name>.ts` needs its own module's repository, model and factories directly, and sits outside `src/` precisely so this rule does not reach it.",
+                "A module has one public path, `@modules/<name>`, and the moment anything reaches past it the module stops being deletable. `eslint-plugin-boundaries` states this for one module reaching another and cannot state it for the tiers that are not modules: `src/app/` reaching `@modules/account/session/jwt` passes every lint rule. This is that gap, for every module at once. Scoped to `from: ^src/` on purpose — `scenarios/<name>.ts` needs its own module's repository, model and factories directly, and sits outside `src/` precisely so this rule does not reach it.",
             severity: 'error',
             from: { path: '^src/', pathNot: '^src/modules/[^/]+/' },
             to: { path: String.raw`^src/modules/[^/]+/(?!index\.ts|module\.ts)` }

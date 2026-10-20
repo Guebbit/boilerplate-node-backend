@@ -1,11 +1,13 @@
 /**
  * @module
  * THE registry: which domains this build serves. Adding one is a folder under `src/modules/` plus
- * one line here; removing one is `rm -rf` plus deleting its line, and any resulting break is real
- * coupling worth seeing. Order is alphabetical only to keep diffs boring — mount order, import
- * resolution and `subscribe` timing don't depend on it. The contract bundlers do not read this
- * list: they run before `enabledModules` is even importable (its modules import the generated
- * `@api/` client the bundler produces), so they discover modules from disk instead
+ * three edits here (the import, the {@link enabledModules} entry and the {@link ModuleName}
+ * member); removing one is `rm -rf` plus deleting those, and any resulting break is real
+ * coupling worth seeing (`docs/theory/module-lifecycle.md`). Order is alphabetical only to keep
+ * diffs boring — mount order, import resolution and `subscribe` timing don't depend on it. The
+ * contract bundlers do not read this list: they run before `enabledModules` is even importable
+ * (its modules import the generated `@api/` client the bundler produces), so they discover
+ * modules from disk instead
  * (`scripts/contracts/section-order.ts`).
  */
 
@@ -114,6 +116,7 @@ export type ModuleName =
     | 'payments'
     | 'products'
     | 'returns'
+    | 'shop'
     | 'sitemap'
     | 'stats'
     | 'stock-alerts'

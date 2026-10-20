@@ -86,7 +86,7 @@ Present when the domain needs it. A module that has none of these is not incompl
 
 ::: tip A module's seed records are not in this folder
 `scenarios/<name>.ts`, outside `src/` entirely, upserted through the shared seeding primitive and
-tabled by `scenarios/index.ts` — what `npm run scenario:apply` and the demo profile put in the
+collected from disk by `npm run scenarios:generate` into `scenarios/shop-modules.generated.ts` — what `npm run scenario:apply` and the demo profile put in the
 database. See [Data](./data.md) and [Demo profile](../tools/demo-profile.md).
 :::
 

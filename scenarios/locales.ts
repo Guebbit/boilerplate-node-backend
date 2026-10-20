@@ -217,7 +217,7 @@ export const localeEntryFixtures = LOCALE_ENTRIES.map(([id, locale, app, key, va
 );
 
 /**
- * Seed both collections. Declared in `./index`'s `shopModules`; walked by `seedShop`.
+ * Seed both collections. Collected into `shopModules` (`./shop-modules`); run by `seedShop`.
  * Languages first: an entry names its language by tag, and landing entries before
  * their language would publish a dictionary the manifest doesn't list.
  */

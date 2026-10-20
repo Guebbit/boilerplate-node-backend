@@ -32,7 +32,7 @@ const wishlistFixtures = [
     })
 ];
 
-/** Seed this collection. Declared in `./index`'s `shopModules`; walked by `seedShop`. */
+/** Seed this collection. Collected into `shopModules` (`./shop-modules`); run by `seedShop`. */
 const seedWishlistsCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(
         wishlistFixtures.map((wishlist) => insertIfAbsentForOwner(wishlistRepository, wishlist))

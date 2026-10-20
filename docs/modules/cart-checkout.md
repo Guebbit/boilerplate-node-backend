@@ -92,15 +92,16 @@ possible, and only checkout knows which basket it was clearing.
 
 ## What crosses each edge
 
-| Module                        | Edge                 | What checkout actually asks for                                                                                                                                       |
-| ----------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`users`](./users.md)         | `conformist`         | The account record. An order records the address it was placed from, so a checkout for an account that no longer exists is the one cart operation that can still 404. |
-| [`payments`](./payments.md)   | `customer-supplier`  | `listPaymentMethods` — the same list `GET /payments/methods` answers, so checkout and that endpoint can never disagree about what this deployment offers.             |
-| [`delivery`](./delivery.md)   | `published-language` | `findShippingMethod` and `priceShipping` — pure functions. The cart never learns that a shipment record exists.                                                       |
-| [`addresses`](./addresses.md) | `customer-supplier`  | `addressService.forCheckout` — the addresses this order ships to and is invoiced to. The address CRUD stays behind that module's routes.                              |
-| [`products`](./products.md)   | `conformist`         | Catalogue documents, read as they are, to price lines.                                                                                                                |
-| [`inventory`](./inventory.md) | `published-language` | `availableFor` — how much can be sold, read from the ledger rather than the catalogue's cached copy, to pre-flight availability.                                      |
-| [`orders`](./orders.md)       | `customer-supplier`  | `placeOrder` — the one function every order is written through, admin's own `POST /orders` included — and `openUnpaidOrderIds` for the open-order cap.                |
+| Module                        | Edge                 | What checkout actually asks for                                                                                                                                           |
+| ----------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`users`](./users.md)         | `conformist`         | The account record. An order records the address it was placed from, so a checkout for an account that no longer exists is the one cart operation that can still 404.     |
+| [`payments`](./payments.md)   | `customer-supplier`  | `listPaymentMethods` — the same list `GET /payments/methods` answers, so checkout and that endpoint can never disagree about what this deployment offers.                 |
+| [`delivery`](./delivery.md)   | `published-language` | `findShippingMethod` and `priceShipping` — pure functions. The cart never learns that a shipment record exists.                                                           |
+| [`addresses`](./addresses.md) | `customer-supplier`  | `addressService.forCheckout` — the addresses this order ships to and is invoiced to. The address CRUD stays behind that module's routes.                                  |
+| [`products`](./products.md)   | `conformist`         | Catalogue documents, read as they are, to price lines.                                                                                                                    |
+| [`inventory`](./inventory.md) | `published-language` | `availableFor` — how much can be sold, read from the ledger rather than the catalogue's cached copy, to pre-flight availability.                                          |
+| [`shop`](./shop.md)           | `published-language` | `shopCurrency` and `shipToCountries` — the currency the cart is priced in and the countries a checkout may ship to. The shop's settings stay behind that module's barrel. |
+| [`orders`](./orders.md)       | `customer-supplier`  | `placeOrder` — the one function every order is written through, admin's own `POST /orders` included — and `openUnpaidOrderIds` for the open-order cap.                    |
 
 ::: tip The basket is mapped, not handed over
 `inventory` is given product ids and quantities, nothing else: checkout asks `availableFor` with

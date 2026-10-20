@@ -3,7 +3,8 @@
 **The half of Domain-Driven Design this repo takes selectively** — value objects, invariants,
 aggregates. [Strategic DDD](./strategic-ddd.md) covers the other half, which is adopted wholesale.
 
-Two tactical patterns are in the code. Both live in `src/modules/orders/domain/`, both are plain
+Two tactical patterns are in the code. `Money` lives in `src/domain-primitives/money.ts` and the
+order lifecycle in `src/modules/orders/domain/lifecycle.ts`; both are plain
 data with functions in front of them, and both exist for the same reason: a rule needed in more than
 one place gets one owner, so the copies cannot disagree.
 
@@ -386,15 +387,14 @@ flowchart LR
     class M exact;
 ```
 
-Two functions in (`toMinorUnits`, `toDecimalAmount`, both taking the currency they convert for),
-one out. Every intermediate is an integer, so the sum is exact and
+One function in (`toMinorUnits`) and one out (`toDecimalAmount`), both taking the currency they
+convert for. Every intermediate is an integer, so the sum is exact and
 order-independent — no accumulator can round differently depending on the sequence it saw the lines
 in. The rounding rule exists once, in this file.
 
 `money.ts` owns ROUNDING; `totals.ts` owns COMPOSITION. `orderTotal({ items, shippingCost })` is
-what the customer owes, and its callers — the order serializer, `payments.createIntent` and
-the confirmation email — all read it rather than adding the two numbers themselves, so the payment
-intent cannot charge the lines and forget the shipping.
+what the customer owes, and every place that needs that figure reads it rather than adding the two
+numbers itself, so the payment intent cannot charge the lines and forget the shipping.
 
 ### At rest: Decimal128
 
@@ -457,8 +457,8 @@ examples. It found the `-0` case.
 ### Why it lives in `src/domain-primitives/`
 
 Money arithmetic is not one module's business: `orders`, `payments`, `returns`, `invoicing`,
-`cart` and `stats` all add, scale or convert amounts. A type six modules need has no single owner,
-so it sits in its own tier, `src/domain-primitives/`.
+`cart` and `stats`, among others, all add, scale or convert amounts. A type that many modules need
+has no single owner, so it sits in its own tier, `src/domain-primitives/`.
 
 There is also a hard constraint. The domain layer may not import `@kernel/*`, `@infrastructure/*`,
 `@modules/*` or even `../*` — see the folder rule in `eslint.config.ts`. A jointly-owned value type
@@ -523,8 +523,9 @@ fixed multi-rate, multi-line example each, not a single hand-picked total.
 The invoice needs a fourth shape `orderTaxBreakdown` also returns but the wire contract never
 sees: `shippingByRate`, shipping's slice of `taxSummary` broken back OUT per rate — "shipping,
 taxed at 22%: €4.10 net, €0.90 tax" as its own printed row. `model.ts` does not copy it onto a
-serialized order; only `invoicing/emails.ts`'s invoice builder reads it, straight off its own call to
-`orderTaxBreakdown`.
+serialized order. `invoicing`'s `issue-invoice.ts` and `services/credit-breakdown.ts` call
+`orderTaxBreakdown` and freeze `shippingByRate` onto the invoicing document; `emails.ts`, `render.ts`
+and `domain/credit-shares.ts` read it from there.
 
 ### Currency is an argument, not part of the type
 

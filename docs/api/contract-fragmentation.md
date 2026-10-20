@@ -454,7 +454,7 @@ write.**
 
 ### The demo dataset — not a bundle
 
-Each module's seed records live in `scenarios/<name>.ts`, imported by `scenarios/index.ts` and by
+Each module's seed records live in `scenarios/<name>.ts`, collected by `npm run scenarios:generate` and imported by
 nothing under `src/` — no fragment, no text concatenation. What the API actually answers for a
 seeded row is not published to a file: it is asserted directly, against a real database, by
 `tests/integration/scenarios/shop.test.ts`. The one thing consumers can read is
