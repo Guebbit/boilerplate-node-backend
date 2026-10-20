@@ -135,6 +135,10 @@ back: the shop is not asking "would you like to pay again", it already has the m
   an operator has to confirm the money actually came back before the order shows refunded. Past
   that point the money does not come back on its own: it goes back when the goods do (or when an
   operator chooses to refund), in whole or in part — see [`payments`](../modules/payments.md).
+- **They can withdraw from the purchase** once it has arrived, without giving a reason. The delivery
+  email, the order's history and the withdrawal box all name the same last day, written as "until
+  the end of 5 December", with no time of day. The shop quietly accepts a withdrawal for one more
+  day, so a buyer who counts a day differently is never turned away. → [`orders`](../modules/orders.md#the-withdrawal-window)
 - **They can re-order** — one click puts everything from a past order back in the basket.
 - **They can track the parcel** once it ships. → [`delivery`](../modules/delivery.md)
 

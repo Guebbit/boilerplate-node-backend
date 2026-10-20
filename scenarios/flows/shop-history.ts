@@ -618,7 +618,8 @@ export const driveShopHistory = async (
     };
     await deliveredForWindow('order.withdrawal-open', 1);
     await deliveredForWindow('order.withdrawal-last-day', period);
-    await deliveredForWindow('order.withdrawal-closed', period + 1);
+    // One day past the announced last day is the silent grace day (still open), so closed is two.
+    await deliveredForWindow('order.withdrawal-closed', period + 2);
 
     /*
      * The two rows that stay dated TODAY, because both are still holding stock against a

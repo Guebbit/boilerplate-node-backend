@@ -324,12 +324,21 @@ describe('the buyer cancelling what has not shipped', () => {
 
     it('answers 409 once the withdrawal window has closed, and writes nothing', async () => {
         const fixture = await partlyShipped();
-        await setWithdrawUntil(fixture.orderId, new Date(Date.now() - 1000));
+        await setWithdrawUntil(fixture.orderId, new Date(Date.now() - 86_400_000 - 1000));
 
         const outcome = await buyerCancels(fixture);
 
         expect(!outcome.success && outcome.errors[0].code).toBe('RETURN_WINDOW_CLOSED');
         expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
+    });
+
+    it('still takes the cancel on the silent grace day after the announced last day', async () => {
+        const fixture = await partlyShipped();
+        await setWithdrawUntil(fixture.orderId, new Date(Date.now() - 3_600_000));
+
+        const outcome = await buyerCancels(fixture);
+
+        expect(outcome.success).toBe(true);
     });
 
     it('lets exactly one of two parallel cancels through', async () => {
@@ -866,7 +875,7 @@ describe('GET /returns/options', () => {
 
     it('says the buyer may not cancel once the window has closed, or when the goods are excluded', async () => {
         const closed = await partlyShipped();
-        await setWithdrawUntil(closed.orderId, new Date(Date.now() - 1000));
+        await setWithdrawUntil(closed.orderId, new Date(Date.now() - 86_400_000 - 1000));
         const excluded = await partlyShipped({ noWithdrawal: true });
 
         const afterWindow = await returnService.getReturnOptions(

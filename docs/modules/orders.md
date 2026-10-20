@@ -570,6 +570,13 @@ flowchart LR
   3(2)(b)), in UTC. A date in an email is the opposite case: staff type it on the shop's clock, so it
   is printed in `NODE_SHOP_TIMEZONE` (the delivery mails, the order confirmation, the bank-transfer
   deadline with its zone named, the API-key expiry in UTC, named).
+- **One silent grace day.** `withdrawUntil` is the last day the buyer is **told**; a withdrawal is
+  accepted one UTC day past it (`withdrawalClosesAt`, the end of the next UTC day). The delivery
+  mail, the timeline row and the withdrawal panel print that announced date only, as "until the end
+  of 5 December", with no time and never the grace day, so nobody gets fewer days than their own
+  count and nobody is shown a date later than the real close. The grace day is enforced in one place
+  per door: the button (`withdrawalRefusalOf`), `POST /returns` and the remainder cancel
+  (`returns`' `frozenDeadlinesOf`, `cancel-right`). It is UTC on purpose: no shop-calendar maths.
 - **No weekend or holiday roll-over is computed.** Art. 3(4) moves a deadline that lands on one to
   the next working day; closing early would be illegal, offering more never is. So the period is
   long enough that the move cannot matter:
@@ -578,7 +585,7 @@ flowchart LR
     | ------------------------------------------------------------------ | ---- |
     | the legal period                                                   | 14   |
     | longest weekend + holiday run in any EU country (Denmark's Easter) | +5   |
-    | UTC day counting                                                   | +1   |
+    | the silent grace day (it also absorbs the UTC day counting)        | +1   |
     | needed                                                             | 20   |
     | minimum, a day to spare                                            | 21   |
 

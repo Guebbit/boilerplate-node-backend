@@ -54,15 +54,29 @@ export const canCorrectAddress = (order: AddressCandidate): boolean =>
  * - the period ends with the last hour of its last day, not `days × 24 h` after the event.
  *
  * Days are UTC days. Weekend and public-holiday roll-over (Art. 3(4)) is not computed: the
- * period's minimum (`orders/config.ts`) always outlasts it.
+ * period's minimum (`orders/config.ts`) always outlasts it. This is the last day the buyer is
+ * TOLD, the date every mail, timeline row and screen prints; {@link withdrawalClosesAt} is when the
+ * window really closes.
  * See docs/modules/orders.md#the-withdrawal-window
  *
  * @param start - delivery for goods, or the conclusion of the contract for digital content
  * @param days - the withdrawal period (14 by law, 21 at least here, 30 by default)
- * @returns the last instant a withdrawal is still valid
+ * @returns the end of the last day a withdrawal is announced to be valid
  */
 export const withdrawUntilFrom = (start: Date, days: number): Date =>
     endOfUtcDay(new Date(start.getTime() + days * DAY_MS));
+
+/**
+ * When a withdrawal is really refused: one silent UTC day after the announced last day. A buyer
+ * whose own count differs from ours by a day (a zone, a delivery marked after midnight) is never
+ * turned away, and nobody is told a date later than the real close.
+ * See docs/modules/orders.md#the-withdrawal-window
+ *
+ * @param withdrawUntil - the frozen announced deadline ({@link withdrawUntilFrom})
+ * @returns the last instant a withdrawal is accepted
+ */
+export const withdrawalClosesAt = (withdrawUntil: Date): Date =>
+    new Date(withdrawUntil.getTime() + DAY_MS);
 
 /** The statutory guarantee of conformity, in years (Directive 2019/771 Art. 10(1), 2019/770 Art. 11(2)). */
 const CONFORMITY_YEARS = 2;
@@ -169,7 +183,7 @@ export interface WithdrawalCandidate {
  * | Reason | When |
  * | --- | --- |
  * | `all_excluded` | every line is goods Art. 16 takes the right away from |
- * | `window_closed` | the frozen period ended |
+ * | `window_closed` | the frozen period ended, and its silent grace day with it |
  * | `nothing_left` | every unit is already back with the shop |
  *
  * A status that offers no withdrawal (cancelled) has no reason: there is no button to explain.
@@ -183,7 +197,10 @@ export const withdrawalRefusalOf = (
     if (!ORDER_STATUS_TRAITS[order.status].withdrawable) return undefined;
     if (order.items?.every((line) => isExcludedFromWithdrawal(line)))
         return WithdrawBlockedReason.all_excluded;
-    if (order.withdrawUntil !== undefined && now.getTime() > order.withdrawUntil.getTime())
+    if (
+        order.withdrawUntil !== undefined &&
+        now.getTime() > withdrawalClosesAt(order.withdrawUntil).getTime()
+    )
         return WithdrawBlockedReason.window_closed;
     return order.returnStatus === 'returned' ? WithdrawBlockedReason.nothing_left : undefined;
 };
