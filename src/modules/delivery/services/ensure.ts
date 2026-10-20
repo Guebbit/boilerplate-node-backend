@@ -8,8 +8,7 @@
  * See: docs/modules/delivery.md#when-they-are-made
  */
 
-import { OrderStatus } from '@types';
-import { orderService, isShippedItem } from '@modules/orders';
+import { orderService, isShippedItem, isAwaitingGoods } from '@modules/orders';
 import { shopTimezone } from '@modules/shop';
 import type { OrderDocument } from '@modules/orders';
 import { withTransaction } from '@infrastructure/runtime/database';
@@ -45,13 +44,6 @@ const groupableLinesOf = (order: OrderDocument): GroupableLine[] =>
     }));
 
 /**
- * The statuses whose goods are still to be handed over. `shipped` and `delivered` orders have had
- * their goods handed over by other means; making an `open` fulfillment order for them would offer
- * to ship goods twice.
- */
-const FULFILLABLE: ReadonlySet<OrderStatus> = new Set([OrderStatus.paid, OrderStatus.processing]);
-
-/**
  * Make the order's fulfillment orders if it has none yet, and report the summary — in one
  * transaction. Idempotent on `{ orderId, number }`: a retried listener, a read racing it, or the
  * safety net running after the listener all leave exactly one set.
@@ -64,7 +56,7 @@ const FULFILLABLE: ReadonlySet<OrderStatus> = new Set([OrderStatus.paid, OrderSt
  */
 export const ensureFulfillmentOrders = (orderId: string): Promise<void> =>
     orderService.getById(orderId).then((order) => {
-        if (!order || !FULFILLABLE.has(order.status)) return undefined;
+        if (!order || !isAwaitingGoods(order.status)) return undefined;
 
         return fulfillmentOrderRepository.findByOrderId(orderId).then((existing) => {
             if (existing.length > 0) return undefined;

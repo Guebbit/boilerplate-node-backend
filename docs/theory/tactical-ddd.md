@@ -190,7 +190,7 @@ lifecycle edge of its own, they all ask.
 | `orders/services/cancel.ts` — the cancel doors                                          | `statusesLeadingTo(cancelled, cause.by)`                                                                                                        |
 | `orders/services/status.ts` — `markPaid`/`markProcessing`/`markShipped`/`markDelivered` | the named event's own `from` and `to` (`ORDER_EVENTS.ship`, ...), read off the table rather than restated as a literal                          |
 | `payments/services/intent.ts`/`offline.ts`/`settlement.ts`/`view.ts`                    | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below) |
-| `delivery/services/start.ts`/`ship.ts`                                                  | `canStartFulfilment(status)` — asks `orders` whether fulfilment may start, never the table directly                                             |
+| `delivery/services/*`, `returns/services/{cancel-right,withdraw}.ts`                    | `canStartFulfilment`, `canShip`, `canRecordArrival`, `isAwaitingGoods`, `hasShopStarted`                                                        |
 | `orders/services/override.ts`                                                           | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces     |
 
 Every cancel door asks as its cause's actor, because the table answers differently for each: a customer

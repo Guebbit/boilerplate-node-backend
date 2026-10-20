@@ -14,6 +14,10 @@ import {
     canOverrideTo,
     isPayable,
     canStartFulfilment,
+    isAwaitingGoods,
+    canShip,
+    canRecordArrival,
+    hasShopStarted,
     orderActionsFor,
     statusesLeadingTo,
     statusesReachableFrom,
@@ -301,6 +305,46 @@ describe('canStartFulfilment', () => {
 
         for (const status of EVERY_STATUS)
             expect(canStartFulfilment(status)).toBe(leadingTo.includes(status));
+    });
+});
+
+describe('isAwaitingGoods', () => {
+    it('is true for paid and processing alone, over every status', () => {
+        for (const status of EVERY_STATUS)
+            expect(isAwaitingGoods(status)).toBe(
+                status === OrderStatus.paid || status === OrderStatus.processing
+            );
+    });
+});
+
+describe('canShip', () => {
+    it('is true for processing alone, over every status', () => {
+        for (const status of EVERY_STATUS)
+            expect(canShip(status)).toBe(status === OrderStatus.processing);
+    });
+
+    it('agrees with the statuses that lead to shipped as the system', () => {
+        const leadingTo = statusesLeadingTo(OrderStatus.shipped, 'system');
+
+        for (const status of EVERY_STATUS) expect(canShip(status)).toBe(leadingTo.includes(status));
+    });
+});
+
+describe('canRecordArrival', () => {
+    it('is true for processing and shipped alone, over every status', () => {
+        for (const status of EVERY_STATUS)
+            expect(canRecordArrival(status)).toBe(
+                status === OrderStatus.processing || status === OrderStatus.shipped
+            );
+    });
+});
+
+describe('hasShopStarted', () => {
+    it('is false for pending and paid alone, so cancelled counts as started', () => {
+        for (const status of EVERY_STATUS)
+            expect(hasShopStarted(status)).toBe(
+                status !== OrderStatus.pending && status !== OrderStatus.paid
+            );
     });
 });
 

@@ -12,6 +12,7 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { nudgeOutbox } from '@kernel/outbox';
 import { deliveryService } from '@modules/delivery';
 import {
+    hasShopStarted,
     orderService,
     orderTotal,
     isBeforeDispatch,
@@ -19,7 +20,6 @@ import {
 } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { returnPostagePayer } from '@modules/shop';
-import { OrderStatus } from '@types';
 import type { AuthContext, CallerContext } from '@types';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
@@ -159,8 +159,7 @@ export const withdrawBeforeDispatch = (
     openAsReturn: () => Promise<CreateReturnOutcome>
 ): Promise<CreateReturnOutcome> => {
     const bespokeAndStarted =
-        order.status === OrderStatus.processing &&
-        order.items.some((item) => isExcludedFromWithdrawal(item));
+        hasShopStarted(order.status) && order.items.some((item) => isExcludedFromWithdrawal(item));
     if (bespokeAndStarted) return withdrawEligibleGroups(order, authContext, context);
 
     return orderService.withdrawById(String(order._id), authContext, context).then((cancelled) => {

@@ -9,9 +9,8 @@
 
 import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
-import { isBuyer, isExcludedFromWithdrawal } from '@modules/orders';
+import { hasShopStarted, isBuyer, isExcludedFromWithdrawal } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { OrderStatus } from '@types';
 import type { AuthContext } from '@types';
 import type { ProductQuantity } from '../domain';
 
@@ -42,9 +41,7 @@ export const cancelRefusalOf = (
 
     if (order.withdrawUntil && Date.now() > order.withdrawUntil.getTime()) return 'window-closed';
 
-    const shopHasStarted =
-        order.status !== OrderStatus.paid && order.status !== OrderStatus.pending;
-    if (!shopHasStarted) return undefined;
+    if (!hasShopStarted(order.status)) return undefined;
 
     const excluded = new Set(
         order.items
