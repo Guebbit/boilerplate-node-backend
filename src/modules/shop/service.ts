@@ -8,9 +8,8 @@
  */
 
 import { ConfigError } from '@infrastructure/config/define';
-import type { Shop, ShopAddress } from '@types';
+import type { ReturnPostagePayer, Shop, ShopAddress } from '@types';
 import { shopConfig } from './config';
-import type { ReturnPostagePayer } from './domain';
 
 /**
  * A required variable's value. `NODE_ENV=test` skips the boot check, so a suite that forgot to

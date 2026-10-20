@@ -12,14 +12,8 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { ORDER_EVENTS, orderService } from '@modules/orders';
-import type {
-    AuthContext,
-    CallerContext,
-    Order,
-    OrderStatus,
-    ShippingMethodsResponse
-} from '@types';
+import { canStartFulfilment, orderService } from '@modules/orders';
+import type { AuthContext, CallerContext, Order, ShippingMethodsResponse } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { deliveryAuditActions } from '../audit';
 import { SHIPPING_METHODS } from '../domain';
@@ -47,9 +41,6 @@ export const listMethods = (): ResponseSuccess<ShippingMethodsResponse> => {
 const notPaid = (): ResponseReject =>
     generateReject(409, [{ code: ERROR_CODES.ORDER_NOT_PAID, message: t('delivery.not-paid') }]);
 
-/** The statuses the order lifecycle lets fulfilment start from, widened so `includes` accepts any status. */
-const STARTABLE_FROM: readonly OrderStatus[] = ORDER_EVENTS.start.from;
-
 /**
  * Report that fulfilment has started on a paid order — the `paid → processing` door, before any
  * shipment exists to record. Makes the order's fulfillment orders too if the `paid` listener has not
@@ -69,10 +60,11 @@ export const startFulfilment = (
     orderService.getById(orderId).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
 
-        if (!STARTABLE_FROM.includes(order.status)) return notPaid();
+        if (!canStartFulfilment(order.status)) return notPaid();
 
+        // The caller's id lands on the timeline row, so it names the operator and not the system.
         return ensureFulfillmentOrders(orderId)
-            .then(() => orderService.markProcessing(orderId))
+            .then(() => orderService.markProcessing(orderId, undefined, context.caller.id))
             .then((moved) => {
                 if (!moved) return notPaid();
 

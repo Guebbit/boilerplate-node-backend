@@ -16,9 +16,8 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { orderService } from '@modules/orders';
+import { isAwaitingGoods, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { OrderStatus } from '@types';
 import type { AuthContext, CallerContext, FulfillmentHoldReason, FulfillmentOrder } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { isHoldable, isReleasable, statusOfLines } from '../domain';
@@ -53,8 +52,7 @@ interface Changed {
  * meaningless.
  * @param order - the order
  */
-const isWorked = (order: OrderDocument): boolean =>
-    order.status === OrderStatus.paid || order.status === OrderStatus.processing;
+const isWorked = (order: OrderDocument): boolean => isAwaitingGoods(order.status);
 
 /**
  * The hold act, in its transaction.

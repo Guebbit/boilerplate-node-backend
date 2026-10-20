@@ -8,7 +8,7 @@
 
 import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
-import { isBuyer } from '@modules/orders';
+import { canRecordArrival, canShip, isAwaitingGoods, isBuyer } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import type {
     AuthContext,
@@ -17,7 +17,6 @@ import type {
     Shipment,
     ShipmentActions
 } from '@types';
-import { OrderStatus } from '@types';
 import { isAwaitingAnswer, isFulfillable, isHoldable, isReleasable, isShippable } from '../domain';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import { presentFulfillmentOrder, presentShipment } from '../presenter';
@@ -44,15 +43,6 @@ export const standingOn = (order: OrderDocument, authContext: AuthContext | unde
         : { staff: false, owner: false };
 
 /**
- * The order's status is one a fulfilment act can still run from: `processing` for shipping and
- * delivering, `paid` or `processing` for holding.
- * @param status - the order's status
- * @param allowed - the statuses the act runs from
- */
-const orderIn = (status: OrderStatus, allowed: readonly OrderStatus[]): boolean =>
-    allowed.includes(status);
-
-/**
  * What the caller may do to one fulfillment order.
  * @param fulfillmentOrder - the fulfillment order
  * @param order - the order it belongs to
@@ -65,24 +55,12 @@ export const fulfillmentOrderActions = (
 ): FulfillmentOrderActions => {
     const may = standing.staff;
     return {
-        ship:
-            may && orderIn(order.status, [OrderStatus.processing]) && isShippable(fulfillmentOrder),
-        fulfill:
-            may &&
-            orderIn(order.status, [OrderStatus.processing]) &&
-            isFulfillable(fulfillmentOrder),
-        hold:
-            may &&
-            orderIn(order.status, [OrderStatus.paid, OrderStatus.processing]) &&
-            isHoldable(fulfillmentOrder),
-        release:
-            may &&
-            orderIn(order.status, [OrderStatus.paid, OrderStatus.processing]) &&
-            isReleasable(fulfillmentOrder),
+        ship: may && canShip(order.status) && isShippable(fulfillmentOrder),
+        fulfill: may && canShip(order.status) && isFulfillable(fulfillmentOrder),
+        hold: may && isAwaitingGoods(order.status) && isHoldable(fulfillmentOrder),
+        release: may && isAwaitingGoods(order.status) && isReleasable(fulfillmentOrder),
         confirmWait:
-            standing.owner &&
-            orderIn(order.status, [OrderStatus.paid, OrderStatus.processing]) &&
-            isAwaitingAnswer(fulfillmentOrder)
+            standing.owner && isAwaitingGoods(order.status) && isAwaitingAnswer(fulfillmentOrder)
     };
 };
 
@@ -97,10 +75,7 @@ export const shipmentActions = (
     order: OrderDocument,
     standing: Standing
 ): ShipmentActions => {
-    const open =
-        standing.staff &&
-        shipment.status === 'shipped' &&
-        orderIn(order.status, [OrderStatus.processing, OrderStatus.shipped]);
+    const open = standing.staff && shipment.status === 'shipped' && canRecordArrival(order.status);
     return { deliver: open, editTracking: open };
 };
 

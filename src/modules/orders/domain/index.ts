@@ -24,12 +24,17 @@ export {
 } from './rules';
 export type { ShippableLineCandidate } from './rules';
 
-// `ORDER_EVENTS` is the one place a service reads a move's `from` and `to`; the edge questions
-// (`canTransition`, `statusesLeadingTo`, ...) are derived from it and already have names.
+// `ORDER_EVENTS` is published for reading; a sibling module asks a named predicate
+// (`isPayable`, `canStartFulfilment`, ...) and never lists statuses or reads the table itself.
 export {
     ORDER_EVENTS,
     canTransition,
     isPayable,
+    canStartFulfilment,
+    isAwaitingGoods,
+    canShip,
+    canRecordArrival,
+    hasShopStarted,
     paymentSettled,
     statusesReachableFrom,
     statusesLeadingTo,

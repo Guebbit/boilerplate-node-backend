@@ -15,9 +15,8 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { orderService } from '@modules/orders';
+import { canRecordArrival, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { OrderStatus } from '@types';
 import type { AuthContext, CallerContext, Shipment } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { deliveryAuditActions } from '../audit';
@@ -63,7 +62,7 @@ const deliverAct = async (
     const order = await orderService.readOrder(orderId, session);
     if (!order) return refuseMissing('delivery.order-not-found');
     // Only an order with goods out can take an arrival; `delivered` and `cancelled` are over.
-    if (order.status !== OrderStatus.processing && order.status !== OrderStatus.shipped)
+    if (!canRecordArrival(order.status))
         refuse(409, ERROR_CODES.DELIVERY_NOT_DELIVERABLE, 'delivery.not-deliverable');
 
     // One instant for the shipment and, when it completes the order, the withdrawal deadline: the

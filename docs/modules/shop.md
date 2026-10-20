@@ -80,6 +80,8 @@ the same variable.
 
 ## Configuration
 
+These settings are deploy-time env on purpose: a correction is a restart, not an admin screen. Commerce platforms keep them in a database; this boilerplate declines to become one.
+
 | Variable                                             | Meaning                                                                            |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | `NODE_SHOP_LEGAL_NAME`, `_STREET`, `_CITY`, `_ZIP`   | The seller's name and address (required)                                           |

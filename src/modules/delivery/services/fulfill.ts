@@ -15,9 +15,8 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { orderService } from '@modules/orders';
+import { canShip, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { OrderStatus } from '@types';
 import type { AuthContext, CallerContext, Shipment } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { isFulfillable, remainderLines } from '../domain';
@@ -48,7 +47,7 @@ const fulfillAct = async (
 ): Promise<Fulfilled> => {
     const { fulfillmentOrder, order } = await readWithOrder(fulfillmentOrderId, session);
     const orderId = String(fulfillmentOrder.orderId);
-    if (order.status !== OrderStatus.processing)
+    if (!canShip(order.status))
         refuse(409, ERROR_CODES.ORDER_NOT_PROCESSING, 'delivery.not-processing');
     if (fulfillmentOrder.kind !== 'digital')
         refuse(409, ERROR_CODES.DELIVERY_NOT_DIGITAL, 'delivery.not-digital');

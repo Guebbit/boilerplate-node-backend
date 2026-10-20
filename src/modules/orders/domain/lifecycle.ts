@@ -122,6 +122,59 @@ export const canTransition = (from: OrderStatus, to: OrderStatus, actor: OrderAc
 export const isPayable = (status: OrderStatus): boolean =>
     canTransition(status, OrderStatus.paid, 'system');
 
+/** The `start` event's `from` set, widened once so `includes` accepts any status. */
+const STARTABLE_FROM: readonly OrderStatus[] = ORDER_EVENTS.start.from;
+
+/**
+ * Whether fulfilment may start on an order in `status` — `paid` only. Keyed on the `start` event's
+ * own `from`, not on `canTransition`: that is exactly the set `markProcessing`'s conditional write
+ * uses, so a pre-check and the write can never disagree.
+ * @param status - current status
+ * @returns whether `delivery`'s start door (or a forced first shipment) may move the order on
+ */
+export const canStartFulfilment = (status: OrderStatus): boolean => STARTABLE_FROM.includes(status);
+
+/**
+ * Whether the order's goods are still to be handed over — `paid` or `processing`: money in, nothing
+ * out. `shipped` and `delivered` orders have had their goods handed over, so a fulfillment order
+ * for them would offer to ship twice; a hold on a finished or cancelled order means nothing.
+ * @param status - current status
+ * @returns whether fulfilment work (making, holding, releasing, awaiting an answer) still applies
+ */
+export const isAwaitingGoods = (status: OrderStatus): boolean =>
+    ORDER_STATUS_TRAITS[status].stockCommitted && ORDER_STATUS_TRAITS[status].beforeDispatch;
+
+/** The `ship` event's `from` set, widened once so `includes` accepts any status. */
+const SHIPPABLE_FROM: readonly OrderStatus[] = ORDER_EVENTS.ship.from;
+
+/**
+ * Whether a shipment may leave, or a digital fulfilment may complete, on an order in `status` —
+ * `processing` only, the `from` of `ship` and of `fulfilmentComplete` alike.
+ * @param status - current status
+ * @returns whether shipping (or completing a digital order) is open
+ */
+export const canShip = (status: OrderStatus): boolean => SHIPPABLE_FROM.includes(status);
+
+/**
+ * Whether a shipment's arrival may be recorded on an order in `status`. `processing` counts
+ * because one shipment can land while the others are still unshipped; `delivered` and `cancelled`
+ * are over.
+ * @param status - current status
+ * @returns whether an arrival can be taken
+ */
+export const canRecordArrival = (status: OrderStatus): boolean =>
+    status === OrderStatus.processing || status === OrderStatus.shipped;
+
+/**
+ * Whether the shop has begun on the order: anything past `paid`, `cancelled` included — a cancel
+ * after the start still means the shop was at work, which the right of cancellation reads as
+ * "started". `pending` and `paid` are the two statuses before the first fulfilment move.
+ * @param status - current status
+ * @returns whether the order is past the point where nothing had been done to it
+ */
+export const hasShopStarted = (status: OrderStatus): boolean =>
+    !isPayable(status) && !canStartFulfilment(status);
+
 /**
  * Whether an order in `status` has already been paid — `paid`, or further along. `pending` has
  * only a stock hold, and `cancelled` gave it up. The one place this fact is declared, so a caller
@@ -219,10 +272,7 @@ type StatusDerivedActions = Pick<OrderActions, 'transitions' | 'cancel' | 'pay'>
  * @returns the caller's options for this order
  */
 export const orderActionsFor = (status: OrderStatus, actor: OrderActor): StatusDerivedActions => {
-    // Both fields off ONE reading, so they cannot describe different orders. `canTransition` is
-    // the wrong question here: it allows a write that changes nothing, which is right for an edit
-    // that repeats the current status and wrong for "may I cancel this" on an order already
-    // cancelled. `statusesReachableFrom` excludes the current status, which is the answer wanted.
+    // Both fields off ONE reading, so they cannot describe different orders.
     const transitions = statusesReachableFrom(status, actor);
     return {
         transitions: [...transitions],
