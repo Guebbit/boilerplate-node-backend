@@ -17,9 +17,10 @@ import { enabledModules } from '../../src/modules';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
 import { applyMarkerBlocks } from './marker-block';
 import { renderCrontab, renderJobsTable, withJobScripts } from './jobs-render';
+import { hasFlag } from '../cli';
 
 /** Report drift instead of rewriting — what `complete` runs. */
-const checkOnly = process.argv.includes('--check');
+const checkOnly = hasFlag('check');
 
 /** Every job in the build: the ones no module owns, then each enabled module's. */
 const jobs = [...appJobs, ...resolveJobs(enabledModules)];

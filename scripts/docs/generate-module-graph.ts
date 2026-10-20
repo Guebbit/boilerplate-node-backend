@@ -34,8 +34,9 @@ import { readAllModuleDescriptors, type ModuleDescriptor } from './module-descri
 import { applyMarkerBlocks } from './marker-block';
 import { readCatalogue, renderModuleList } from './module-catalogue';
 import { MODULES_ROOT, REPO_ROOT as ROOT } from '../modules-on-disk';
+import { hasFlag } from '../cli';
 
-const checkOnly = process.argv.includes('--check');
+const checkOnly = hasFlag('check');
 
 /** Every module folder under `src/modules`. */
 
