@@ -138,6 +138,16 @@ back: the shop is not asking "would you like to pay again", it already has the m
 - **They can re-order** — one click puts everything from a past order back in the basket.
 - **They can track the parcel** once it ships. → [`delivery`](../modules/delivery.md)
 
+## When checkout is paused
+
+A shopper whose **unpaid** orders keep falling through (cancelled, or left to expire without paying,
+three times in a week) finds their next checkout refused: a notice on the cart and the profile says
+why, until when, and how to ask a person. The pause lasts **at most seven days** and ends by itself
+sooner if a person lifts it. They get an email with the same, a contact link, and their right to
+object. Paying an order they already placed, cancelling, returning and their own data rights are never
+blocked. Cancelling a **paid** order never pauses anything: that is a legal right, and the shop only
+asks a person to take a look. → [`orders`](../modules/orders.md#the-purchase-hold)
+
 ## Their account
 
 Sign up, verify by email, log in, forget the password and reset it, change it, and see every device (in the cookie set-up with its name, such as "Firefox on Linux")

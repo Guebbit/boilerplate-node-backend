@@ -5,7 +5,7 @@
  */
 
 import { DAY_MS } from '@domain-primitives/time';
-import { purchaseHoldUntil } from '../../domain';
+import { AUTOMATIC_PURCHASE_HOLD_MAX_DAYS, purchaseHoldUntil } from '../../domain';
 
 const NOW = new Date('2026-10-19T12:00:00.000Z');
 
@@ -54,5 +54,34 @@ describe('purchaseHoldUntil', () => {
 
     it('is undefined with no cancels', () => {
         expect(purchaseHoldUntil([], 3, 7, NOW)).toBeUndefined();
+    });
+});
+
+describe('the 7-day cap on an automatic hold', () => {
+    it('is seven days', () => {
+        expect(AUTOMATIC_PURCHASE_HOLD_MAX_DAYS).toBe(7);
+    });
+
+    it('ends no later than 7 days after now, however long the window is', () => {
+        const until = purchaseHoldUntil([daysAgo(1), daysAgo(2), daysAgo(3)], 3, 90, NOW);
+
+        expect(until).toEqual(new Date(NOW.getTime() + 7 * DAY_MS));
+    });
+
+    it('keeps an end that is already sooner than the cap', () => {
+        // Oldest counted cancel 6.5 days ago in a 7-day window: the count falls back in 12 hours.
+        const oldest = new Date(NOW.getTime() - 6.5 * DAY_MS);
+        const until = purchaseHoldUntil([oldest, daysAgo(1), daysAgo(2)], 3, 7, NOW);
+
+        expect(until).toEqual(new Date(oldest.getTime() + 7 * DAY_MS));
+        expect(until!.getTime() - NOW.getTime()).toBeLessThan(7 * DAY_MS);
+    });
+
+    it('is exact at the boundary: an end exactly 7 days away is kept', () => {
+        // Window 14 days, oldest counted cancel 7 days ago: oldest + window is exactly now + 7 days.
+        const oldest = daysAgo(7);
+        const until = purchaseHoldUntil([oldest, daysAgo(1), daysAgo(2)], 3, 14, NOW);
+
+        expect(until).toEqual(new Date(NOW.getTime() + 7 * DAY_MS));
     });
 });

@@ -773,7 +773,9 @@ components:
                         What the type needs to say, as ids, codes and numbers — never another
                         module's free text. `status_overridden`: `mode` (`status` or `forced`),
                         `from`, `to`. `paid`: `method`. `delivered`: `withdrawUntil`. `cancelled`:
-                        `by`, `refund` (whether the cancel returned the money). Shipment and hold rows: `shipmentId` or `fulfillmentOrderId`,
+                        `by`, `cause` (why: `customer`, `operator`, `withdrawal`, `reservation_expired`,
+                        `erasure`, `payment_mismatch` or `wait_unanswered`; `by` is shared by the
+                        system's causes), `refund` (whether the cancel returned the money). Shipment and hold rows: `shipmentId` or `fulfillmentOrderId`,
                         `trackingCode`, `reason` (a hold's reason code). Refund rows: `refundId`,
                         `amount`, `currency`, `reason`, and `failureReason` on a failure. Return
                         rows: `returnId`. Document rows: `number`.

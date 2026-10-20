@@ -237,6 +237,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `users`          | `ADMIN_USER_UPDATED`                         | `admin.user.updated`                         | —                      |
 | `users`          | `ADMIN_USER_VIEWED`                          | `admin.user.viewed`                          | `user`                 |
 | `users`          | `SYSTEM_USER_ERASED`                         | `system.user.erased`                         | `user`                 |
+| `users`          | `SYSTEM_USER_PURCHASE_HOLD_FLAGGED`          | `system.user.purchase_hold_flagged`          | `user`                 |
 | `users`          | `SYSTEM_USER_PURCHASE_HOLD_SET`              | `system.user.purchase_hold_set`              | `user`                 |
 | `users`          | `SYSTEM_USER_SOFT_DELETED`                   | `system.user.soft_deleted`                   | `user`                 |
 | `webhooks`       | `ADMIN_WEBHOOK_DELIVERY_REPLAYED`            | `admin.webhook_delivery.replayed`            | `webhook_delivery`     |

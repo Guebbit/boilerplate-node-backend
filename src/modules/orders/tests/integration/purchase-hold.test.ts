@@ -6,7 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/factories';
+import { createUser, userRepository } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { asAdmin, asCustomer, callerContextAs } from '@tests/callers';
@@ -17,6 +17,8 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { userService } from '@modules/users';
 import { shopIdentity } from '@modules/shop';
 import { withEnvironmentOverrides } from '@tests/environment';
+import { OrderStatus } from '@types';
+import { DAY_MS } from '@domain-primitives/time';
 import { orderService } from '../../services';
 import { ORDER_CANCELLED } from '../../events';
 import ordersModule from '../../module';
@@ -51,6 +53,43 @@ const cancelOneAsBuyer = async (buyer: Awaited<ReturnType<typeof createUser>>) =
     await orderService.cancelOnRequestById(id, asCustomer(buyer.id));
     return id;
 };
+
+/**
+ * A PAID order of the buyer's, cancelled by the buyer: a statutory withdrawal that money reached.
+ * Resolves to its id.
+ */
+const cancelOnePaidAsBuyer = async (buyer: Awaited<ReturnType<typeof createUser>>) => {
+    const product = await createProduct();
+    const order = await createOrder(buyer, [toOrderItem(product, 1)], {
+        status: OrderStatus.paid,
+        paidAt: new Date().toISOString()
+    });
+    const id = String(order._id);
+    await orderService.cancelOnRequestById(id, asCustomer(buyer.id));
+    return id;
+};
+
+/** An unpaid order of the buyer's, withdrawn from through returns before dispatch; its id. */
+const withdrawOneUnpaid = async (buyer: Awaited<ReturnType<typeof createUser>>) => {
+    const product = await createProduct();
+    const order = await createOrder(buyer, [toOrderItem(product, 1)]);
+    const id = String(order._id);
+    await orderService.withdrawById(id, asCustomer(buyer.id));
+    return id;
+};
+
+/** An unpaid order whose checkout reservation ran out; its id. */
+const letOneExpire = async (buyer: Awaited<ReturnType<typeof createUser>>) => {
+    const product = await createProduct();
+    const order = await createOrder(buyer, [toOrderItem(product, 1)]);
+    const id = String(order._id);
+    await orderService.expireReservationById(id);
+    return id;
+};
+
+/** Whether the account carries the review flag. */
+const flaggedAt = (id: string) =>
+    userRepository.findById(id).then((user) => user?.purchaseHoldFlaggedAt);
 
 /** What the `order.cancelled` row says for a buyer cancel, as the relay would deliver it. */
 const buyerCancelled = (orderId: string) => ({ orderId, refund: true, cause: 'customer' }) as const;
@@ -104,12 +143,12 @@ describe('considerPurchaseHold', () => {
             await cancelOneAsBuyer(buyer)
         ];
 
-        // The same three orders delivered as other causes: nothing for the hold to answer.
-        for (const cause of ['operator', 'reservation_expired', 'withdrawal'] as const)
-            for (const orderId of ids)
-                await orderService.considerPurchaseHold({ orderId, refund: true, cause });
+        // The same three orders delivered as a cause that is staff's: nothing for the hold to answer.
+        for (const orderId of ids)
+            await orderService.considerPurchaseHold({ orderId, refund: true, cause: 'operator' });
 
         await expect(holdOf(buyer.id)).resolves.toBeUndefined();
+        await expect(flaggedAt(buyer.id)).resolves.toBeUndefined();
     });
 
     it("does not count a cancel staff made on the buyer's behalf", async () => {
@@ -216,5 +255,169 @@ describe('considerPurchaseHold', () => {
                 cause: 'customer'
             })
         ).resolves.toBeUndefined();
+    });
+});
+
+describe('the pause counts what bots do', () => {
+    it('pauses at the third unpaid order left to expire, the way a hoarding bot leaves them', async () => {
+        const buyer = await createUser();
+
+        for (let n = 0; n < 3; n += 1)
+            await orderService.considerPurchaseHold({
+                orderId: await letOneExpire(buyer),
+                refund: false,
+                cause: 'reservation_expired'
+            });
+
+        await expect(holdOf(buyer.id)).resolves.toMatchObject({ reason: 'repeated_cancellations' });
+        expect(staffNotices()).toHaveLength(1);
+    });
+
+    it('pauses at the third unpaid withdrawal through returns, the second door of the same act', async () => {
+        const buyer = await createUser();
+
+        for (let n = 0; n < 3; n += 1)
+            await orderService.considerPurchaseHold({
+                orderId: await withdrawOneUnpaid(buyer),
+                refund: true,
+                cause: 'withdrawal'
+            });
+
+        await expect(holdOf(buyer.id)).resolves.toMatchObject({ reason: 'repeated_cancellations' });
+    });
+
+    it('counts both doors together', async () => {
+        const buyer = await createUser();
+        await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
+        await orderService.considerPurchaseHold({
+            orderId: await withdrawOneUnpaid(buyer),
+            refund: true,
+            cause: 'withdrawal'
+        });
+        await orderService.considerPurchaseHold({
+            orderId: await letOneExpire(buyer),
+            refund: false,
+            cause: 'reservation_expired'
+        });
+
+        await expect(holdOf(buyer.id)).resolves.toMatchObject({ reason: 'repeated_cancellations' });
+    });
+
+    it('flags the account in the same write as the pause, and the staff mail says paused', async () => {
+        const buyer = await createUser();
+
+        for (let n = 0; n < 3; n += 1)
+            await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
+
+        await expect(flaggedAt(buyer.id)).resolves.toBeInstanceOf(Date);
+        const [envelope, , data] = staffNotices()[0] ?? [];
+        expect(envelope?.subject).toContain('checkout paused');
+        expect(JSON.stringify(data)).toContain('ends by itself');
+    });
+});
+
+describe('the pause never lasts longer than 7 days', () => {
+    it('ends within a week even when the window is ninety', async () => {
+        await withEnvironmentOverrides({ NODE_PURCHASE_HOLD_WINDOW_DAYS: '90' }, async () => {
+            const buyer = await createUser();
+            const before = Date.now();
+
+            for (let n = 0; n < 3; n += 1)
+                await orderService.considerPurchaseHold(
+                    buyerCancelled(await cancelOneAsBuyer(buyer))
+                );
+
+            const hold = await holdOf(buyer.id);
+            expect(hold?.until.getTime()).toBeGreaterThan(Date.now());
+            expect(hold?.until.getTime()).toBeLessThanOrEqual(before + 7 * DAY_MS + 60_000);
+        });
+    });
+});
+
+describe('paid cancellations only flag the account', () => {
+    it('flags at the third paid cancel, leaves checkout open and says so to staff', async () => {
+        const buyer = await createUser();
+
+        for (let n = 0; n < 3; n += 1)
+            await orderService.considerPurchaseHold(
+                buyerCancelled(await cancelOnePaidAsBuyer(buyer))
+            );
+
+        await expect(holdOf(buyer.id)).resolves.toBeUndefined();
+        await expect(flaggedAt(buyer.id)).resolves.toBeInstanceOf(Date);
+        expect(staffNotices()).toHaveLength(1);
+        const [envelope, , data] = staffNotices()[0] ?? [];
+        expect(envelope?.subject).toContain('Review needed');
+        expect(JSON.stringify(data)).toContain('statutory withdrawal');
+    });
+
+    it('flags nothing below the limit', async () => {
+        const buyer = await createUser();
+
+        for (let n = 0; n < 2; n += 1)
+            await orderService.considerPurchaseHold(
+                buyerCancelled(await cancelOnePaidAsBuyer(buyer))
+            );
+
+        await expect(flaggedAt(buyer.id)).resolves.toBeUndefined();
+        expect(staffNotices()).toHaveLength(0);
+    });
+
+    it('counts paid withdrawals through the other door too', async () => {
+        const buyer = await createUser();
+        const product = await createProduct();
+
+        for (let n = 0; n < 3; n += 1) {
+            const order = await createOrder(buyer, [toOrderItem(product, 1)], {
+                status: OrderStatus.paid,
+                paidAt: new Date().toISOString()
+            });
+            await orderService.withdrawById(String(order._id), asCustomer(buyer.id));
+            await orderService.considerPurchaseHold({
+                orderId: String(order._id),
+                refund: true,
+                cause: 'withdrawal'
+            });
+        }
+
+        await expect(holdOf(buyer.id)).resolves.toBeUndefined();
+        await expect(flaggedAt(buyer.id)).resolves.toBeInstanceOf(Date);
+    });
+
+    it('mails staff once, however many more paid cancels follow while it stays flagged', async () => {
+        const buyer = await createUser();
+
+        for (let n = 0; n < 5; n += 1)
+            await orderService.considerPurchaseHold(
+                buyerCancelled(await cancelOnePaidAsBuyer(buyer))
+            );
+
+        expect(staffNotices()).toHaveLength(1);
+    });
+
+    it('does not mix with the unpaid count: two unpaid and two paid pause and flag nothing', async () => {
+        const buyer = await createUser();
+        await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
+        await orderService.considerPurchaseHold(buyerCancelled(await cancelOneAsBuyer(buyer)));
+        await orderService.considerPurchaseHold(buyerCancelled(await cancelOnePaidAsBuyer(buyer)));
+        await orderService.considerPurchaseHold(buyerCancelled(await cancelOnePaidAsBuyer(buyer)));
+
+        await expect(holdOf(buyer.id)).resolves.toBeUndefined();
+        await expect(flaggedAt(buyer.id)).resolves.toBeUndefined();
+    });
+
+    it('counts again from zero after a staff review clears the flag', async () => {
+        const buyer = await createUser();
+        for (let n = 0; n < 3; n += 1)
+            await orderService.considerPurchaseHold(
+                buyerCancelled(await cancelOnePaidAsBuyer(buyer))
+            );
+        await userService.liftPurchaseHold(buyer.id, callerContextAs('admin'));
+        mockEnqueueEmail.mockClear();
+
+        await orderService.considerPurchaseHold(buyerCancelled(await cancelOnePaidAsBuyer(buyer)));
+
+        await expect(flaggedAt(buyer.id)).resolves.toBeUndefined();
+        expect(staffNotices()).toHaveLength(0);
     });
 });

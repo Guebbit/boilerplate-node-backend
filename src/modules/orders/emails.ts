@@ -358,44 +358,51 @@ export const orderCancelledEmail = (
     };
 };
 
-/** What staff are told when the shop pauses a buyer's checkout. */
-export interface PurchaseHoldStaffNotice {
+/**
+ * What staff are told when the shop's rule fires on a buyer. `paused`: unpaid cancellations paused
+ * checkout (it ends by itself at `until`). `review`: paid cancellations only flagged the account,
+ * and checkout stays open.
+ */
+export type PurchaseHoldStaffNotice = {
     buyerEmail: string;
     userId: string;
     cancelCount: number;
     windowDays: number;
-    /** ISO instant the hold ends by itself. */
-    until: string;
-}
+} & ({ kind: 'paused'; until: string } | { kind: 'review' });
 
 /**
- * The notice to staff that a buyer's checkout was paused after repeated cancellations. It goes to
- * the operator's mailbox, so it is built in the default language, and skips the buyer-facing footer.
+ * The notice to staff that the shop's rule fired on a buyer, in one of two wordings. It goes to the
+ * operator's mailbox, so it is built in the default language, and skips the buyer-facing footer.
+ *
+ * - `paused`: unpaid orders were cancelled or left to expire; checkout is paused until `until` and
+ *   ends by itself then (an automatic pause lasts at most 7 days), so staff who want it longer
+ *   place a manual hold.
+ * - `review`: paid orders were cancelled. Those are statutory withdrawals, so nothing is paused;
+ *   the account is only flagged, and staff hold it for abuse, never for the right itself.
  *
  * @param locale - the operator's language (`NODE_DEFAULT_LOCALE`), never the buyer's
- * @param notice - who was paused, why, and until when
+ * @param notice - who the rule fired on, why, and for `paused` until when
  */
 export const purchaseHoldStaffEmail = (
     locale: string,
     notice: PurchaseHoldStaffNotice
 ): EmailContent => {
     const t = translator(locale);
+    const wording = notice.kind === 'paused' ? 'paused' : 'review-only';
+    const counts = { email: notice.buyerEmail, count: notice.cancelCount, days: notice.windowDays };
     return {
         template: 'orders.purchase-hold-staff',
-        subject: t('orders.email-purchase-hold.subject', { email: notice.buyerEmail }),
+        subject: t(`orders.email-purchase-hold.${wording}.subject`, { email: notice.buyerEmail }),
         data: {
             locale,
-            pageMetaTitle: t('orders.email-purchase-hold.meta-title'),
-            title: t('orders.email-purchase-hold.title'),
-            summary: t('orders.email-purchase-hold.summary', {
-                email: notice.buyerEmail,
-                count: notice.cancelCount,
-                days: notice.windowDays
-            }),
+            pageMetaTitle: t(`orders.email-purchase-hold.${wording}.meta-title`),
+            title: t(`orders.email-purchase-hold.${wording}.title`),
+            summary: t(`orders.email-purchase-hold.${wording}.summary`, counts),
             labelUntil: t('orders.email-purchase-hold.label-until'),
-            until: notice.until,
+            until: notice.kind === 'paused' ? notice.until : '',
             labelAccount: t('orders.email-purchase-hold.label-account'),
             account: notice.userId,
+            guidance: t(`orders.email-purchase-hold.${wording}.guidance`),
             review: t('orders.email-purchase-hold.review')
         }
     };

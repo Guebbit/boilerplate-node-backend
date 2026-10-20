@@ -83,13 +83,23 @@
         "restored": "Order restored.",
         "not-deleted": "This order is not deleted.",
         "email-purchase-hold": {
-            "subject": "Purchase hold: {{email}} cancelled several orders",
-            "meta-title": "Purchase hold placed",
-            "title": "A purchase hold was placed",
-            "summary": "{{email}} cancelled {{count}} orders within {{days}} days, so their checkout is paused. Every cancellation was processed normally; nothing is blocked except placing a new order.",
+            "paused": {
+                "subject": "Purchase hold: {{email}} has checkout paused",
+                "meta-title": "Purchase hold placed",
+                "title": "A purchase hold was placed",
+                "summary": "{{email}} cancelled or left to expire {{count}} unpaid orders within {{days}} days, so their checkout is paused. Every cancellation was processed normally; nothing is blocked except placing a new order.",
+                "guidance": "The pause ends by itself at the time below (an automatic pause lasts at most 7 days). To keep checkout closed longer, place a manual hold on the account."
+            },
+            "review-only": {
+                "subject": "Review needed: {{email}} cancelled paid orders",
+                "meta-title": "Account flagged for review",
+                "title": "An account was flagged for review",
+                "summary": "{{email}} cancelled {{count}} paid orders within {{days}} days. Checkout is NOT paused.",
+                "guidance": "Cancelling a paid order before dispatch is a statutory withdrawal, a right the buyer does not need a reason for. Place a hold only for abuse, never for the right itself."
+            },
             "label-until": "The hold ends by itself on",
             "label-account": "Account",
-            "review": "Review the account in the admin Users list (filter: purchase hold). Lifting the hold restarts the count."
+            "review": "Review the account in the admin Users list (filter: needs review). Setting or lifting a hold marks it reviewed and restarts the count."
         }
     }
 }

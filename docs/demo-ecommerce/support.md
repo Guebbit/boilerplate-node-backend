@@ -84,6 +84,21 @@ If they want to cancel, they can — and a paid order refunds itself when they d
 process it.
 → [The customer](./shopper.md) · [`orders`](../modules/orders.md)
 
+## "My checkout is paused"
+
+If a customer writes that they cannot place an order, the cause may be a **purchase pause**: the
+shop pauses checkout for at most **seven days** after several unpaid orders were cancelled or left
+to expire. The customer sees a notice on their cart and profile that says why and until when, and
+gets an email with a link to write to you. Paying an order they already have, cancelling, returning
+and their own data rights all still work.
+
+Support **cannot lift it**: that is `ban:User`, the [moderator's](./moderator.md) key. Pass the case
+on with the customer's address and what they told you; the moderator checks the account (it shows as
+"Needs review") and lifts the pause or keeps it. Tell the customer a person will look at it, and that
+it ends by itself within seven days at the latest. They may also object to it (GDPR Art. 21): say so in
+the same ticket.
+→ [`orders`](../modules/orders.md#the-purchase-hold)
+
 ## Languages
 
 The shop's buttons, labels and messages speak more than one language, and **that wording can be

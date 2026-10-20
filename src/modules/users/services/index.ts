@@ -27,7 +27,8 @@ import {
     purchaseHoldCountingSince,
     setPurchaseHold,
     liftPurchaseHold,
-    takeAutomaticPurchaseHold
+    takeAutomaticPurchaseHold,
+    flagPurchaseHoldReview
 } from './purchase-hold';
 import {
     updateOwnProfile,
@@ -112,6 +113,7 @@ export const userService = {
     setPurchaseHold,
     liftPurchaseHold,
     takeAutomaticPurchaseHold,
+    flagPurchaseHoldReview,
     updateOwnProfile,
     redeemedOwner,
     eraseOwnAccount,

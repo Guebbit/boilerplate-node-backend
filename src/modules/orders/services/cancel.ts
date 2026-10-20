@@ -86,7 +86,7 @@ const moveToCancelled = (
                     {
                         type: 'cancelled',
                         actor: actorId,
-                        data: { by: CANCEL_CAUSES[cause].by, refund }
+                        data: { by: CANCEL_CAUSES[cause].by, cause, refund }
                     }
                 ]
             )(session);

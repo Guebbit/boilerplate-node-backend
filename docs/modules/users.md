@@ -200,8 +200,18 @@ or the staff note), what still works, a link to the contact page pre-filled for 
 privacy notice linked (`NODE_FRONTEND_LINK_PRIVACY`). The greeting names nobody: the display name is
 free text. A mail that cannot be built or queued is logged and never undoes the hold.
 
-Audit: `admin.user.purchase_hold_set`, `admin.user.purchase_hold_lifted` (only when a hold was in
-force), `system.user.purchase_hold_set`. The users list takes `purchaseHold=true` to find them.
+**The review flag.** `User.purchaseHoldFlaggedAt` marks an account for a person to look at: it is set
+in the same write as an automatic hold, or alone when only PAID cancellations reached the limit
+(`system.user.purchase_hold_flagged`; those are statutory withdrawals and never pause anyone). It
+outlives the hold, so an unreviewed pause does not drop off the staff list when it ends by itself; it
+stays until a staff member acts. Placing a hold or lifting one clears it. The `/users` reads show it
+(never `/account`); the data export carries it with the rest of the profile.
+
+Audit: `admin.user.purchase_hold_set`; `admin.user.purchase_hold_lifted` (when there was a hold or a
+flag to clear; `metadata.inForce` says whether a hold was still running, so "reviewed, no hold" is
+audited too); `system.user.purchase_hold_set`; `system.user.purchase_hold_flagged`. The users list
+takes `purchaseHold=true` (held right now) and `purchaseHoldReview=true` (flagged, not yet reviewed)
+to find them.
 The nightly job `reap:purchase-holds` is listed with the others in
 [scheduled jobs](../reference/ops.md#scheduled-jobs).
 

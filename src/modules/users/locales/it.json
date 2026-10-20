@@ -19,7 +19,7 @@
                 "title": "Il checkout è sospeso sul tuo account",
                 "greeting": "Ciao,",
                 "summary": "Abbiamo sospeso i nuovi ordini sul tuo account fino al {{date}}.",
-                "reason-repeated_cancellations": "Perché: {{count}} tuoi ordini sono stati annullati da te entro {{days}} giorni, e dopo di questo una regola sospende il checkout. È stato applicato in automatico.",
+                "reason-repeated_cancellations": "Perché: {{count}} tuoi ordini non pagati sono stati annullati o lasciati scadere entro {{days}} giorni, e dopo di questo una regola sospende il checkout. È stato applicato in automatico e dura al massimo 7 giorni; una persona del nostro team lo esaminerà.",
                 "reason-staff": "Perché: un membro del nostro team lo ha sospeso.",
                 "note-label": "La sua nota per te",
                 "still-works": "Non cambia nulla per pagare un ordine già effettuato, annullare, recedere, restituire la merce e i tuoi diritti sui dati.",

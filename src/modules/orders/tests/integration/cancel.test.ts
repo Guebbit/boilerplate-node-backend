@@ -319,7 +319,9 @@ describe('cancelOnRequestById — audit and analytics', () => {
             })
         );
         const rows = await timelineOf(String(order._id), 'cancelled');
-        expect(rows.map(({ data }) => data)).toEqual([{ by: 'admin', refund: false }]);
+        expect(rows.map(({ data }) => data)).toEqual([
+            { by: 'admin', cause: 'operator', refund: false }
+        ]);
     });
 
     it('a customer cancel says the money goes back', async () => {
@@ -341,7 +343,9 @@ describe('cancelOnRequestById — audit and analytics', () => {
             })
         );
         const rows = await timelineOf(String(order._id), 'cancelled');
-        expect(rows.map(({ data }) => data)).toEqual([{ by: 'customer', refund: true }]);
+        expect(rows.map(({ data }) => data)).toEqual([
+            { by: 'customer', cause: 'customer', refund: true }
+        ]);
     });
 
     it('a reservation timing out (no context) is audited as the system, not left silent', async () => {

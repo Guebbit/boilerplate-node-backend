@@ -32,6 +32,7 @@ export interface UserRecord extends Omit<
     | 'analyticsConsentAt'
     | 'termsAcceptedAt'
     | 'purchaseHold'
+    | 'purchaseHoldFlaggedAt'
     | 'role'
 > {
     /**
@@ -151,6 +152,14 @@ export interface UserRecord extends Omit<
      * the hold's own `setAt` it is the "count from here" mark. Never on the wire.
      */
     purchaseHoldResetAt?: Date;
+
+    /**
+     * When the shop's rule flagged this account for a person to look at: set with an automatic hold
+     * or on its own (paid cancellations never pause), cleared only when staff set or lift a hold. It
+     * outlives the hold, so an unreviewed pause does not drop off the staff list when it ends.
+     * Real `Date`; the contract's ISO string is what a `/users` read answers.
+     */
+    purchaseHoldFlaggedAt?: Date;
 
     /** The provider identities linked to this account — see `OAuthAccount` below. */
     oauthAccounts: OAuthAccount[];
@@ -486,6 +495,9 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             )
         },
         purchaseHoldResetAt: {
+            type: Date
+        },
+        purchaseHoldFlaggedAt: {
             type: Date
         },
         /*

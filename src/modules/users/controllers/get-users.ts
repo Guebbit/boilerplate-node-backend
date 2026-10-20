@@ -26,7 +26,8 @@ const searchUsersQuerySchema = SearchUsersBody.extend({
     active: optionalBooleanSchema,
     deleted: optionalBooleanSchema,
     // `true` only, as the contract says: there is no "not held" list, and a `false` is a 422, not a quiet no-op.
-    purchaseHold: optionalBooleanSchema.pipe(z.literal(true).optional())
+    purchaseHold: optionalBooleanSchema.pipe(z.literal(true).optional()),
+    purchaseHoldReview: optionalBooleanSchema.pipe(z.literal(true).optional())
 });
 
 /**

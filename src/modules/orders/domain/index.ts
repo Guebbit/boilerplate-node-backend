@@ -9,7 +9,7 @@
 
 export { sumLineItems, orderTotal } from './totals';
 
-export { purchaseHoldUntil } from './purchase-hold';
+export { AUTOMATIC_PURCHASE_HOLD_MAX_DAYS, purchaseHoldUntil } from './purchase-hold';
 
 export { owedLineOf, DEFAULT_BACKORDER_PROMISE_DAYS } from './backorder';
 export type { OwedLine } from './backorder';

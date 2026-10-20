@@ -177,6 +177,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         userId: '6ad69a48f753b902e5b98dfe',
         cancelCount: 3,
         windowDays: 7,
+        kind: 'paused',
         until: '2026-10-26T22:00:00.000Z'
     }),
     'users.purchase-hold-placed': purchaseHoldPlacedEmail(locale, {
@@ -287,6 +288,7 @@ describe('email templates render in every supported locale', () => {
             notice: 'delayed',
             orderUrl: 'https://shop.example/orders/an-order-id'
         });
+        // eslint-disable-next-line unicorn/prefer-structured-clone -- the queue stores JSON, so a key set to undefined must vanish exactly as it does there; a structured clone would keep it
         const arrived = JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
 
         const html = await ejs.renderFile(templateFile('delivery.hold-notice'), arrived, {

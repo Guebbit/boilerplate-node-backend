@@ -826,6 +826,17 @@ components:
                 # on `/users`, and the data export carries it with the rest of the profile.
                 purchaseHold:
                     $ref: '#/components/schemas/PurchaseHold'
+                # Staff-facing, so only on the `/users` reads (never on `/account`): the shop's rule
+                # flagged this account for a person to look at. It stays until a staff member sets or
+                # lifts a hold, even after the automatic hold ended by itself. The data export
+                # carries it with the rest of the profile.
+                purchaseHoldFlaggedAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When the shop's rule flagged this account for staff review after repeated
+                        cancellations. Staff view only (`/users` reads). Cleared when staff set or
+                        lift a hold.
 
         # A protective pause on checkout, set by staff or by the shop after repeated cancellations.
         # It never blocks paying an existing order, cancelling, a withdrawal or a return, and never
@@ -841,7 +852,8 @@ components:
                     description: >-
                         When checkout opens again without anyone acting. For `repeated_cancellations`
                         it is the instant the counted cancellations fall back under the limit, so
-                        the oldest one counted plus the window; staff can lift it earlier.
+                        the oldest one counted plus the window, but at most 7 days after the hold
+                        was placed; staff can lift it earlier. A `staff` hold has no maximum.
                 reason:
                     type: string
                     enum: [repeated_cancellations, staff]

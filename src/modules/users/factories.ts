@@ -34,12 +34,14 @@ export const PLAIN_PASSWORD = 'Fx7$qLwZ9m!';
  */
 export type UserOverrides = Omit<
     OverridesFor<User>,
-    'verifiedAt' | 'analyticsConsentAt' | 'purchaseHold' | 'role'
+    'verifiedAt' | 'analyticsConsentAt' | 'purchaseHold' | 'purchaseHoldFlaggedAt' | 'role'
 > & {
     /** A purchase hold, with real `Date`s; the contract's ISO strings are what a read answers. */
     purchaseHold?: PurchaseHoldRecord;
     /** Cancellations up to here are not counted again (a staff lift). Never on the wire. */
     purchaseHoldResetAt?: Date;
+    /** When the shop's rule flagged the account for staff review, with a real `Date`. */
+    purchaseHoldFlaggedAt?: Date;
     /** Plaintext. Hashed by the model's pre-save hook, never by a fixture. */
     password?: string;
     /** Enrolled second factors — the contract exposes only `twoFactorEnabledAt`. */

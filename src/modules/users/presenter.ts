@@ -84,7 +84,12 @@ export const presentUser = (document: UserWire, role: string | null, actions?: U
         ...(document.createdAt ? { createdAt: document.createdAt.toISOString() } : {}),
         ...(document.updatedAt ? { updatedAt: document.updatedAt.toISOString() } : {}),
         ...(document.deletedAt ? { deletedAt: document.deletedAt.toISOString() } : {}),
-        ...presentPurchaseHold(document)
+        ...presentPurchaseHold(document),
+        // Staff-facing: the `/users` reads carry `actions`, `/account` does not, and a buyer is not
+        // shown the shop's own note to staff about them.
+        ...(actions === undefined || document.purchaseHoldFlaggedAt === undefined
+            ? {}
+            : { purchaseHoldFlaggedAt: document.purchaseHoldFlaggedAt.toISOString() })
     });
 
 /**

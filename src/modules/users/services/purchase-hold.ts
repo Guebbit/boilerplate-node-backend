@@ -168,6 +168,8 @@ export const setPurchaseHold = (
                 setAt: now
             };
             user.purchaseHold = hold;
+            // Placing a hold is acting on a flagged account, so the flag has done its job.
+            user.purchaseHoldFlaggedAt = undefined;
             return userRepository.save(user).then((saved) => {
                 notifyBuyer(saved, hold);
                 recordAudit(context, {
@@ -183,8 +185,11 @@ export const setPurchaseHold = (
     });
 
 /**
- * End a hold now and restart the count of cancellations from this moment: a staff review is exactly
- * this call. Safe to repeat. The audit row is written only when a hold was in force.
+ * End a hold now, clear the review flag and restart the count of cancellations from this moment: a
+ * staff review is exactly this call. Safe to repeat. The audit row is written when there was
+ * something to review: a hold (in force, or already ended and not yet swept) or a flag; its
+ * `inForce` metadata tells "lifted" from "reviewed, no hold". A repeat that finds neither writes
+ * nothing.
  *
  * @param id - the account
  * @param context - the staff caller
@@ -203,15 +208,19 @@ export const liftPurchaseHold = (
 
             const now = new Date();
             const wasInForce = activeHoldOf(user, now) !== undefined;
+            const hadSomethingToReview =
+                user.purchaseHold !== undefined || user.purchaseHoldFlaggedAt !== undefined;
             user.purchaseHold = undefined;
+            user.purchaseHoldFlaggedAt = undefined;
             user.purchaseHoldResetAt = now;
             return userRepository.save(user).then((saved) => {
-                if (wasInForce)
+                if (hadSomethingToReview)
                     recordAudit(context, {
                         action: usersAuditActions.ADMIN_USER_PURCHASE_HOLD_LIFTED,
                         outcome: 'success',
                         targetType: 'user',
-                        targetId: id
+                        targetId: id,
+                        metadata: { inForce: wasInForce }
                     });
                 return generateSuccess(saved, 200, t('users.purchase-hold-lifted'));
             });
@@ -269,3 +278,25 @@ export const takeAutomaticPurchaseHold = (
             .then(() => true);
     });
 };
+
+/**
+ * Flag an account for staff review without pausing it: the answer to cancellations that must not
+ * trigger a hold (paid ones are statutory withdrawals, a right the shop does not punish). Atomic:
+ * when two cancellations race to the limit only one call returns `true`, so only one staff mail and
+ * one audit row follow; an account already flagged returns `false` and is left as it is.
+ *
+ * @param id - the account
+ * @param context - the system caller, for the audit row
+ * @returns whether this call set the flag
+ */
+export const flagPurchaseHoldReview = (id: string, context: CallerContext): Promise<boolean> =>
+    userRepository.claimPurchaseHoldReview(id, new Date()).then((flagged) => {
+        if (flagged)
+            recordAudit(context, {
+                action: usersAuditActions.SYSTEM_USER_PURCHASE_HOLD_FLAGGED,
+                outcome: 'success',
+                targetType: 'user',
+                targetId: id
+            });
+        return flagged;
+    });

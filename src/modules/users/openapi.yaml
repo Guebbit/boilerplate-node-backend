@@ -68,6 +68,15 @@ paths:
                   schema:
                       type: boolean
                       enum: [true]
+                - name: purchaseHoldReview
+                  in: query
+                  description: >-
+                      `true` lists only the accounts the shop's rule flagged for review and no staff
+                      member has acted on yet, whether or not a hold is still running. Absent lists
+                      everyone. There is no `false`.
+                  schema:
+                      type: boolean
+                      enum: [true]
             responses:
                 '200':
                     description: Users list page
@@ -273,7 +282,7 @@ paths:
             summary: Put a purchase hold on a user
             description: >-
                 Replaces any hold the account has with a manual one ending at `until`. Checkout then
-                answers 409 `CART_PURCHASE_HOLD` until that instant, or until `DELETE` lifts it.
+                answers 409 `CART_PURCHASE_HOLD` until that instant, or until `DELETE` lifts it. Clears the account's review flag: placing a hold is acting on it.
                 Audited as `admin.user.purchase_hold_set`.
             operationId: setUserPurchaseHold
             security:
@@ -305,8 +314,10 @@ paths:
             description: >-
                 Ends the hold now and restarts the count of cancellations from this moment, so the
                 cancellations that caused an automatic hold never trigger another. A staff review
-                is exactly this call. Safe to repeat: lifting no hold answers 200 with the user.
-                Audited as `admin.user.purchase_hold_lifted` only when a hold was in force.
+                is exactly this call, and it clears the account's review flag. Safe to repeat:
+                lifting no hold answers 200 with the user. Audited as
+                `admin.user.purchase_hold_lifted` when a hold or a review flag was there to clear
+                (`inForce` says which); a repeat that finds neither writes no row.
             operationId: liftUserPurchaseHold
             security:
                 - bearerAuth: []
@@ -510,6 +521,10 @@ components:
                     type: boolean
                 # `true` only: the accounts under a purchase hold right now. Absent lists everyone.
                 purchaseHold:
+                    type: boolean
+                    enum: [true]
+                # `true` only: the accounts flagged for review that no staff member has acted on yet.
+                purchaseHoldReview:
                     type: boolean
                     enum: [true]
 

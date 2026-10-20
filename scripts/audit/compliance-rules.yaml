@@ -370,14 +370,15 @@ rules:
           the subject must be told it was taken and why.
       applies_when: >
           APPLICABLE. The automatic purchase hold is a rule-only refusal of new checkouts: after a
-          buyer's own N-th cancellation inside the window (orders/services/purchase-hold.ts, counts
-          from orders/config.ts) the account is refused a new order until the hold ends
-          (cart/services/checkout.ts answers 409 CART_PURCHASE_HOLD). No person is involved before
-          it takes effect; staff get an email only after. Whether it reaches the "similarly
-          significant effect" bar of GDPR Art. 22(1) is an open question: it is short and
-          self-expiring, one shop, and never blocks paying, cancelling, a withdrawal, a return or the
-          account's data rights, but it is an outright refusal to contract and the window has no
-          upper bound in configuration. Still checked and NOT-APPLICABLE: antibot
+          buyer's N-th UNPAID cancellation (either door) or expired reservation inside the window
+          (orders/services/purchase-hold.ts, counts from orders/config.ts) the account is refused a
+          new order until the hold ends, at most 7 days later (cart/services/checkout.ts answers
+          409 CART_PURCHASE_HOLD). Paid cancellations are statutory withdrawals and never pause
+          anyone; they only flag the account. No person is involved before the pause takes effect;
+          staff get an email only after, and the account is flagged for review. Whether it reaches
+          the "similarly significant effect" bar of GDPR Art. 22(1) is an open question: it is short,
+          capped, self-expiring, one shop, and never blocks paying, cancelling, a withdrawal, a
+          return or the account's data rights, but it is an outright refusal to contract. Still checked and NOT-APPLICABLE: antibot
           (src/infrastructure/http/middlewares/human-challenge.ts, rate-limit.ts, adapters/antibot.ts)
           is a per-request throttle that never sets a flag on the user record and is retryable next
           window; payments/services/settlement.ts only records what the provider reports (a decline
@@ -404,9 +405,10 @@ rules:
           works (mail and an in-app notice on the cart and on the profile); a contact route reaches
           staff who can lift it (DELETE /users/{id}/purchase-hold, which also restarts the count);
           the processing basis and a legitimate-interest assessment are written down
-          (docs/theory/data-retention.md). Gap: a person only reviews after the fact, so the hold is
-          "solely automated" in the WP251 sense; closing it (flag for review instead of holding, or a
-          hard cap on the hold) is a product decision the operator owns. The audit must report this
+          (docs/theory/data-retention.md); the pause is capped at 7 days and flags the account so a
+          person reviews it (users list filter purchaseHoldReview). Gap: a person only reviews
+          after the fact, so the pause is "solely automated" in the WP251 sense; closing it (a person
+          before the pause) is a product decision the operator owns. The audit must report this
           rule as APPLICABLE with that gap, not as NOT-APPLICABLE.
 
 suggested_rules:

@@ -83,13 +83,23 @@
         "restored": "Ordine ripristinato.",
         "not-deleted": "Questo ordine non è eliminato.",
         "email-purchase-hold": {
-            "subject": "Blocco acquisti: {{email}} ha annullato più ordini",
-            "meta-title": "Blocco acquisti impostato",
-            "title": "È stato impostato un blocco acquisti",
-            "summary": "{{email}} ha annullato {{count}} ordini in {{days}} giorni, quindi il suo checkout è in pausa. Ogni annullamento è stato elaborato normalmente; è bloccato solo l'invio di un nuovo ordine.",
+            "paused": {
+                "subject": "Blocco acquisti: {{email}} ha il checkout in pausa",
+                "meta-title": "Blocco acquisti impostato",
+                "title": "È stato impostato un blocco acquisti",
+                "summary": "{{email}} ha annullato o lasciato scadere {{count}} ordini non pagati in {{days}} giorni, quindi il suo checkout è in pausa. Ogni annullamento è stato elaborato normalmente; è bloccato solo l'invio di un nuovo ordine.",
+                "guidance": "La pausa termina da sola all'ora indicata sotto (una pausa automatica dura al massimo 7 giorni). Per tenere il checkout chiuso più a lungo, imposta un blocco manuale sull'account."
+            },
+            "review-only": {
+                "subject": "Da controllare: {{email}} ha annullato ordini pagati",
+                "meta-title": "Account segnalato per controllo",
+                "title": "Un account è stato segnalato per controllo",
+                "summary": "{{email}} ha annullato {{count}} ordini pagati in {{days}} giorni. Il checkout NON è in pausa.",
+                "guidance": "Annullare un ordine pagato prima della spedizione è un recesso previsto dalla legge, un diritto per cui l'acquirente non deve dare motivi. Imposta un blocco solo per abuso, mai per il diritto in sé."
+            },
             "label-until": "Il blocco termina da solo il",
             "label-account": "Account",
-            "review": "Controlla l'account nell'elenco Utenti dell'amministrazione (filtro: blocco acquisti). Togliere il blocco fa ripartire il conteggio."
+            "review": "Controlla l'account nell'elenco Utenti dell'amministrazione (filtro: da controllare). Impostare o togliere un blocco lo segna come controllato e fa ripartire il conteggio."
         }
     }
 }

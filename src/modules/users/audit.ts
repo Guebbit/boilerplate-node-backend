@@ -34,10 +34,15 @@ export const usersAuditActions = {
     ADMIN_USER_UNBANNED: 'admin.user.unbanned',
     /** Staff paused checkout for one account, with their own end date. */
     ADMIN_USER_PURCHASE_HOLD_SET: 'admin.user.purchase_hold_set',
-    /** Staff ended a hold that was in force: the review, and the point the count restarts from. */
+    /**
+     * Staff ended a hold, or cleared a review flag with no hold left in force: the review, and the
+     * point the count restarts from. `metadata.inForce` tells the two apart.
+     */
     ADMIN_USER_PURCHASE_HOLD_LIFTED: 'admin.user.purchase_hold_lifted',
     /** The shop paused checkout after repeated cancellations: nobody at the keyboard, so `system.*`. */
-    SYSTEM_USER_PURCHASE_HOLD_SET: 'system.user.purchase_hold_set'
+    SYSTEM_USER_PURCHASE_HOLD_SET: 'system.user.purchase_hold_set',
+    /** The shop's rule flagged an account for staff review without pausing it (paid cancellations). */
+    SYSTEM_USER_PURCHASE_HOLD_FLAGGED: 'system.user.purchase_hold_flagged'
 } as const;
 
 /** Registers this module's actions into the app-wide `AuditActionMap` union. */

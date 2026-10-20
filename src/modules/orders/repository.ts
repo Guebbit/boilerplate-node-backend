@@ -518,17 +518,21 @@ const findOpenUnpaidIdsOf = (userId: string, session?: ClientSession): Promise<s
         .then((orders) => orders.map((order) => String(order._id)));
 
 /**
- * The ids of every order this account has cancelled — the narrow read the purchase-hold count
- * starts from, followed by the timeline for when each was cancelled and by whom.
+ * The ids of every order this account has cancelled, split by whether money ever reached it — the
+ * narrow read the purchase-hold count starts from, followed by the timeline for when each was
+ * cancelled and why. A never-paid order carries no `paidAt`, and a cancel does not clear one.
  *
  * @param userId - the account
- * @returns the order ids
+ * @returns the order ids: `unpaid` were never paid for, `paid` were
  */
-const findCancelledIdsOf = (userId: string): Promise<string[]> =>
+const findCancelledIdsOf = (userId: string): Promise<{ paid: string[]; unpaid: string[] }> =>
     orderModel
-        .find({ userId: toObjectId(userId), status: OrderStatus.cancelled }, { _id: 1 })
+        .find({ userId: toObjectId(userId), status: OrderStatus.cancelled }, { _id: 1, paidAt: 1 })
         .exec()
-        .then((orders) => orders.map((order) => String(order._id)));
+        .then((orders) => ({
+            paid: orders.filter((order) => order.paidAt).map((order) => String(order._id)),
+            unpaid: orders.filter((order) => !order.paidAt).map((order) => String(order._id))
+        }));
 
 /**
  * The per-order PII clock, as an aggregation expression: `max(now, createdAt + retentionDays)`, and
@@ -755,7 +759,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     ) => Promise<OrderDocument | null>;
     findManyReferences: (ids: readonly string[]) => Promise<OrderReference[]>;
     findOpenUnpaidIdsOf: (userId: string, session?: ClientSession) => Promise<string[]>;
-    findCancelledIdsOf: (userId: string) => Promise<string[]>;
+    findCancelledIdsOf: (userId: string) => Promise<{ paid: string[]; unpaid: string[] }>;
     detachUserId: (
         userId: string,
         retentionDays: number,
@@ -807,7 +811,11 @@ export const orderEventRepository: AppendOnlyLedger<
 > & {
     findByOrderId: (orderId: string) => Promise<OrderEventDocument[]>;
     findByOrderIds: (orderIds: readonly string[]) => Promise<OrderEventDocument[]>;
-    findBuyerCancelTimes: (orderIds: readonly string[], after?: Date) => Promise<Date[]>;
+    findBuyerCancelTimes: (
+        orderIds: readonly string[],
+        after: Date | undefined,
+        countExpiredReservations: boolean
+    ) => Promise<Date[]>;
     clearActor: (actor: string, session?: ClientSession) => Promise<number>;
     scrubTextBefore: (cutoff: Date) => Promise<number>;
     deleteByOrderId: (orderId: string) => Promise<number>;
@@ -840,18 +848,26 @@ export const orderEventRepository: AppendOnlyLedger<
             .exec(),
 
     /**
-     * When the buyer themselves cancelled each of these orders, after `after` when given — the rows
-     * the purchase hold counts. A cancel by staff or by the system is a different `by`.
+     * When each of these orders was cancelled by the buyer, after `after` when given — the rows the
+     * purchase hold counts. The buyer cancels through two doors that are one legal act: the cancel
+     * button (`customer`) and a withdrawal through returns before dispatch (`withdrawal`). A cancel
+     * by staff or by the system is a different `by`; the one system cause counted on request is a
+     * reservation that ran out unpaid, which the row names in `data.cause` because `by: system` is
+     * shared with an erasure and a payment mismatch.
      *
      * @param orderIds - the buyer's cancelled orders
      * @param after - rows at or before this instant were already answered by an earlier hold or review
+     * @param countExpiredReservations - whether an order whose reservation ran out counts too
      */
-    findBuyerCancelTimes: (orderIds, after) =>
+    findBuyerCancelTimes: (orderIds, after, countExpiredReservations) =>
         orderEventModel
             .find({
                 orderId: { $in: orderIds.map((id) => toObjectId(id)) },
                 type: 'cancelled',
-                'data.by': 'customer',
+                $or: [
+                    { 'data.by': { $in: ['customer', 'withdrawal'] } },
+                    ...(countExpiredReservations ? [{ 'data.cause': 'reservation_expired' }] : [])
+                ],
                 ...(after ? { at: { $gt: after } } : {})
             })
             .select({ at: 1 })

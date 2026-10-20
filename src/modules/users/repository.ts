@@ -186,6 +186,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     touchApiKeyUse: (id: string, now: Date) => Promise<void>;
     markInactivityMinimised: (id: string, at: Date) => Promise<void>;
     claimPurchaseHold: (id: string, hold: PurchaseHoldRecord, now: Date) => Promise<boolean>;
+    claimPurchaseHoldReview: (id: string, now: Date) => Promise<boolean>;
     reduceExpiredPurchaseHolds: (now: Date) => Promise<number>;
     findInactiveUnminimised: (cutoff: Date) => Promise<UserDocument[]>;
     findInactiveUnwarned: (cutoff: Date) => Promise<UserDocument[]>;
@@ -701,7 +702,29 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                         { 'purchaseHold.until': { $lte: now } }
                     ]
                 },
-                { $set: { purchaseHold: hold } },
+                // The review flag rides in the same write: an automatic hold is also a case for a
+                // person to look at, and the flag outlives the hold's end.
+                { $set: { purchaseHold: hold, purchaseHoldFlaggedAt: now } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount > 0),
+
+    /**
+     * Flag an account for staff review without pausing it. One conditional write (only an account
+     * not already flagged matches), so two paid cancellations racing to the limit flag it once and
+     * only the winner mails staff and writes the audit row. `timestamps: false`: a flag is not an
+     * edit of the profile.
+     *
+     * @param id - the account
+     * @param now - the flag's instant
+     * @returns whether this call set the flag
+     */
+    claimPurchaseHoldReview: (id: string, now: Date) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(id), purchaseHoldFlaggedAt: { $exists: false } },
+                { $set: { purchaseHoldFlaggedAt: now } },
                 { timestamps: false }
             )
             .exec()

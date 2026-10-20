@@ -143,6 +143,7 @@
             "providerRef": "Provider reference",
             "purchasable": "Purchasable",
             "purchaseHold": "Purchase hold",
+            "purchaseHoldReview": "Needs review",
             "quantity": "Quantity",
             "rateType": "Rate type",
             "reason": "Reason",

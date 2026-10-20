@@ -157,6 +157,76 @@ describe('liftPurchaseHold', () => {
         );
     });
 
+    it('audits a lift of a hold that has already ended, as a review with no hold in force', async () => {
+        const recorded = observePort(auditPort.emitAuditEvent);
+        const buyer = await createUser({
+            purchaseHold: {
+                until: inDays(-1),
+                reason: 'repeated_cancellations',
+                setAt: inDays(-4)
+            },
+            purchaseHoldFlaggedAt: inDays(-4)
+        });
+
+        await userService.liftPurchaseHold(buyer.id, callerContextAs('moderator'));
+
+        expect(recorded).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: usersAuditActions.ADMIN_USER_PURCHASE_HOLD_LIFTED,
+                metadata: { inForce: false }
+            })
+        );
+    });
+
+    it('audits a lift of a flagged account whose hold the nightly sweep already removed', async () => {
+        const recorded = observePort(auditPort.emitAuditEvent);
+        const buyer = await createUser({ purchaseHoldFlaggedAt: inDays(-4) });
+
+        await userService.liftPurchaseHold(buyer.id, callerContextAs('moderator'));
+
+        expect(recorded).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: usersAuditActions.ADMIN_USER_PURCHASE_HOLD_LIFTED,
+                metadata: { inForce: false }
+            })
+        );
+    });
+
+    it('says the hold was in force when it was', async () => {
+        const recorded = observePort(auditPort.emitAuditEvent);
+        const buyer = await createUser();
+        await userService.setPurchaseHold(
+            buyer.id,
+            { until: inDays(5) },
+            callerContextAs('moderator')
+        );
+
+        await userService.liftPurchaseHold(buyer.id, callerContextAs('moderator'));
+
+        expect(recorded).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: usersAuditActions.ADMIN_USER_PURCHASE_HOLD_LIFTED,
+                metadata: { inForce: true }
+            })
+        );
+    });
+
+    it('clears the review flag, and a repeat then writes no second row', async () => {
+        const recorded = observePort(auditPort.emitAuditEvent);
+        const buyer = await createUser({ purchaseHoldFlaggedAt: inDays(-1) });
+
+        await userService.liftPurchaseHold(buyer.id, callerContextAs('moderator'));
+        await userService.liftPurchaseHold(buyer.id, callerContextAs('moderator'));
+
+        const stored = await userRepository.findById(buyer.id);
+        expect(stored?.purchaseHoldFlaggedAt).toBeUndefined();
+        expect(
+            recorded.mock.calls.filter(
+                ([event]) => event.action === usersAuditActions.ADMIN_USER_PURCHASE_HOLD_LIFTED
+            )
+        ).toHaveLength(1);
+    });
+
     it('answers 404 for an account that does not exist', async () => {
         const result = await userService.liftPurchaseHold(
             '000000000000000000000000',
@@ -164,6 +234,115 @@ describe('liftPurchaseHold', () => {
         );
 
         expect((result as ResponseReject).status).toBe(404);
+    });
+});
+
+describe('the review flag', () => {
+    it('is cleared by placing a hold: acting on the account is the review', async () => {
+        const buyer = await createUser({ purchaseHoldFlaggedAt: inDays(-1) });
+
+        await userService.setPurchaseHold(
+            buyer.id,
+            { until: inDays(2) },
+            callerContextAs('moderator')
+        );
+
+        const stored = await userRepository.findById(buyer.id);
+        expect(stored?.purchaseHoldFlaggedAt).toBeUndefined();
+    });
+
+    it('is set by flagPurchaseHoldReview with no hold, and audited as the system', async () => {
+        const recorded = observePort(auditPort.emitAuditEvent);
+        const buyer = await createUser();
+
+        const flagged = await userService.flagPurchaseHoldReview(buyer.id, testCallerContext);
+
+        expect(flagged).toBe(true);
+        await expect(userService.purchaseHoldOf(buyer.id)).resolves.toBeUndefined();
+        const stored = await userRepository.findById(buyer.id);
+        expect(stored?.purchaseHoldFlaggedAt).toBeInstanceOf(Date);
+        expect(recorded).toHaveBeenCalledWith(
+            auditedAction(usersAuditActions.SYSTEM_USER_PURCHASE_HOLD_FLAGGED)
+        );
+    });
+
+    it('is set once: an account already flagged is left as it is and writes no second row', async () => {
+        const recorded = observePort(auditPort.emitAuditEvent);
+        const flaggedAt = inDays(-2);
+        const buyer = await createUser({ purchaseHoldFlaggedAt: flaggedAt });
+
+        const flagged = await userService.flagPurchaseHoldReview(buyer.id, testCallerContext);
+
+        expect(flagged).toBe(false);
+        const stored = await userRepository.findById(buyer.id);
+        expect(stored?.purchaseHoldFlaggedAt?.getTime()).toBe(flaggedAt.getTime());
+        expect(recorded).not.toHaveBeenCalledWith(
+            auditedAction(usersAuditActions.SYSTEM_USER_PURCHASE_HOLD_FLAGGED)
+        );
+    });
+
+    it('lets exactly one of two racing calls win', async () => {
+        const buyer = await createUser();
+
+        const results = await Promise.all([
+            userService.flagPurchaseHoldReview(buyer.id, testCallerContext),
+            userService.flagPurchaseHoldReview(buyer.id, testCallerContext)
+        ]);
+
+        expect(results.filter(Boolean)).toHaveLength(1);
+    });
+
+    it('is set in the same write as an automatic hold', async () => {
+        const buyer = await createUser();
+
+        await userService.takeAutomaticPurchaseHold(
+            buyer.id,
+            inDays(1),
+            testCallerContext,
+            AUTOMATIC_BASIS
+        );
+
+        const stored = await userRepository.findById(buyer.id);
+        expect(stored?.purchaseHoldFlaggedAt).toBeInstanceOf(Date);
+    });
+
+    it('outlives the hold: the nightly sweep removes the hold and keeps the flag', async () => {
+        const buyer = await createUser({
+            purchaseHold: {
+                until: inDays(-1),
+                reason: 'repeated_cancellations',
+                setAt: inDays(-4)
+            },
+            purchaseHoldFlaggedAt: inDays(-4)
+        });
+
+        await reapExpiredPurchaseHolds();
+
+        const stored = await userRepository.findById(buyer.id);
+        expect(stored?.purchaseHold).toBeUndefined();
+        expect(stored?.purchaseHoldFlaggedAt).toBeInstanceOf(Date);
+    });
+
+    it('shows on a staff read and is left off the account owner’s own', async () => {
+        const buyer = await createUser({ purchaseHoldFlaggedAt: inDays(-1) });
+        const stored = await userRepository.findById(buyer.id);
+
+        const staffView = userService.toUser(stored!, null, {
+            update: true,
+            ban: true,
+            delete: true
+        });
+        const ownView = userService.toUser(stored!, null);
+
+        expect(staffView.purchaseHoldFlaggedAt).toBe(stored?.purchaseHoldFlaggedAt?.toISOString());
+        expect(ownView.purchaseHoldFlaggedAt).toBeUndefined();
+    });
+
+    it('is carried by the data export with the rest of the profile', async () => {
+        const buyer = await createUser({ purchaseHoldFlaggedAt: inDays(-1) });
+        const stored = await userRepository.findById(buyer.id);
+
+        expect(JSON.stringify(stored?.toJSON())).toContain('purchaseHoldFlaggedAt');
     });
 });
 
@@ -537,5 +716,50 @@ describe('the users list filter', () => {
         const { items } = await userService.search({ purchaseHold: true });
 
         expect(items.map((row) => row.email)).toEqual(['held@owner.test']);
+    });
+});
+
+describe('the needs-review filter', () => {
+    it('lists the flagged accounts whether or not a hold is still running', async () => {
+        await createUser({
+            email: 'flag-only@owner.test',
+            username: 'flagonly',
+            purchaseHoldFlaggedAt: inDays(-1)
+        });
+        await createUser({
+            email: 'flag-held@owner.test',
+            username: 'flagheld',
+            purchaseHold: { until: inDays(1), reason: 'repeated_cancellations', setAt: inDays(-1) },
+            purchaseHoldFlaggedAt: inDays(-1)
+        });
+        await createUser({ email: 'plain@owner.test', username: 'plain' });
+
+        const { items } = await userService.search({ purchaseHoldReview: true });
+
+        expect(items.map((row) => row.email).toSorted()).toEqual([
+            'flag-held@owner.test',
+            'flag-only@owner.test'
+        ]);
+    });
+
+    it('combines with the hold filter: flagged AND held right now', async () => {
+        await createUser({
+            email: 'flag-only@owner.test',
+            username: 'flagonly',
+            purchaseHoldFlaggedAt: inDays(-1)
+        });
+        await createUser({
+            email: 'flag-held@owner.test',
+            username: 'flagheld',
+            purchaseHold: { until: inDays(1), reason: 'repeated_cancellations', setAt: inDays(-1) },
+            purchaseHoldFlaggedAt: inDays(-1)
+        });
+
+        const { items } = await userService.search({
+            purchaseHold: true,
+            purchaseHoldReview: true
+        });
+
+        expect(items.map((row) => row.email)).toEqual(['flag-held@owner.test']);
     });
 });

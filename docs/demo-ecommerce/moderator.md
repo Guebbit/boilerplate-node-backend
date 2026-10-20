@@ -41,6 +41,35 @@ code path: flipping `active` from true to false is recorded as `admin.user.banne
 back is `admin.user.unbanned` — everything else that changes on the same request is still recorded
 as a plain update. → [`users`](../modules/users.md)
 
+## "Needs review": checking an account the shop flagged
+
+The shop watches for a buyer who keeps cancelling. When someone's **unpaid** orders fall through
+three times in a week (cancelled, or left to expire without paying), their next checkout is
+**paused** for at most seven days, and their account is **flagged "Needs review"**. When it is
+**paid** orders they cancel, nothing is paused: cancelling before dispatch is a legal right, so the
+shop only flags the account for a person to look at. Either way you get an email, and the account
+shows a "Needs review" chip in the Users list (filter: Review → Needs review).
+
+The flag **stays until you act on it**, even after a pause has ended by itself. Setting or lifting a
+hold counts as acting. Both are `ban:User`, so this is your job and not [support's](./support.md).
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
+flowchart TD
+    A["email: account flagged"] --> B["open the account<br/><i>Users → Needs review</i>"]
+    B --> C{"a real buyer<br/>or a bot / abuse?"}
+    C -->|"real buyer"| D["Lift the hold, or<br/>Mark as reviewed<br/><i>the flag clears</i>"]
+    C -->|"bot / abuse"| E["Pause checkout by hand<br/><i>no maximum, with a note<br/>the buyer can read</i>"]
+
+    classDef act fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef effect fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    class B,C act;
+    class D,E effect;
+```
+
+A **paid** cancellation is never a reason to pause on its own. Place a hold only for abuse, and write
+the note as if the buyer reads it, because they do. → [`orders`](../modules/orders.md#the-purchase-hold)
+
 ## Recording a transfer, and why a paid order refuses it
 
 `create:Payment` is also what lets this role record money that arrived outside the checkout

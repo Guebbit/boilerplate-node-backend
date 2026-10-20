@@ -12,7 +12,10 @@
         <h2><%= title %></h2>
         <p><%= summary %></p>
         <p><strong><%= labelAccount %>:</strong> <%= account %></p>
+        <% if (until) { %>
         <p><strong><%= labelUntil %>:</strong> <%= until %></p>
+        <% } %>
+        <p><%= guidance %></p>
         <p><%= review %></p>
     </body>
 </html>
