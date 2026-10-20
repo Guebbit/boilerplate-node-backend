@@ -115,8 +115,10 @@ export const readTimeline = (
         );
 
 /**
- * Every timeline row of one account's own orders, for `POST /account/export`. The full rows, actor
- * and staff text included: the export is the buyer's data, not the buyer's screen.
+ * Every timeline row of one account's own orders, for `POST /account/export`. Staff text and
+ * staff-only rows are included (the export is the buyer's data, not the buyer's screen), but an
+ * `actor` only when it is the exporting account itself: who at the shop wrote a row stays in the
+ * audit log (CJEU Pankki S, C-579/21).
  *
  * @param userId - the account requesting its export
  * @returns each row with the order it belongs to
@@ -127,7 +129,9 @@ export const collectTimelineOf = (
     ownOrderIds(userId).then((orderIds) =>
         orderEventRepository.findByOrderIds(orderIds).then((events) =>
             events.map((event) => ({
-                ...presentTimelineEntry(event, 'staff'),
+                // The `buyer` audience leaves the actor out; only the account's own id is put back.
+                ...presentTimelineEntry(event, 'buyer'),
+                ...(event.actor === userId ? { actor: event.actor } : {}),
                 orderId: String(event.orderId)
             }))
         )

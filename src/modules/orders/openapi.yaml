@@ -28,8 +28,9 @@ x-personal-data:
             type: array
             items:
                 $ref: '#/components/schemas/Order'
-    # The whole timeline of the account's own orders, staff reasons and actors included: the
-    # export is the buyer's data, not the buyer's screen.
+    # The whole timeline of the account's own orders, staff reasons included: the export is the
+    # buyer's data, not the buyer's screen. An `actor` appears only when it is the account itself;
+    # which staff member wrote a row stays in the audit log (CJEU Pankki S, C-579/21).
     orderTimeline:
         schema:
             type: array
@@ -758,7 +759,8 @@ components:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                     description: >-
                         The account that made the change. Staff view only, and absent for the system
-                        or once that account was erased.
+                        or once that account was erased. In the account export it is present only
+                        when it is the exporting account itself, never a staff member's id.
                 text:
                     type: string
                     description: >-

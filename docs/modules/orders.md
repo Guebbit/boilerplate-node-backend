@@ -461,7 +461,9 @@ outlive the original. The one free text `orders` owns is an override's reason (`
   inactivity, so a live customer's text would otherwise never go. The row stays.
 - An erased account loses its name on every row it made (`actor` unset), staff or buyer.
 - The buyer's data export (`orderTimeline` section of `POST /account/export`) carries every row of
-  their own orders, staff text and actor included: the export is their data, the screen is a view.
+  their own orders, staff text included: the export is their data, the screen is a view. An `actor`
+  appears only when it is the exporting account itself; which staff member wrote a row stays in the
+  audit log (CJEU Pankki S, C-579/21). Returns, holds and the purchase hold follow the same rule.
 - The buyer's own screen never shows `actor`: who at the shop did something is the shop's business.
 
 Not built: `note_added` (no staff-note door exists) and `email_sent`.
