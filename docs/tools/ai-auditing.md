@@ -41,7 +41,7 @@ Two consequences, both non-negotiable:
 - **A finding without a citation is not a finding.** Either a `file:line` in the spec, or nothing.
   Prose confidence is not evidence.
 
-## The nine prompts
+## The prompts
 
 | File                                         | Asks                                                                                                                                                           | Writes to                                |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
@@ -54,10 +54,11 @@ Two consequences, both non-negotiable:
 | `scripts/audit/rate-limit-keys/SKILL.md`     | Which rate-limit budgets bucket callers by something the attacker supplies or rotates for free?                                                                | `tmp/reports/audit/rate-limit-keys/`     |
 | `scripts/audit/test-honesty/SKILL.md`        | Which tests stay green when the behaviour they claim to check is broken? See [below](#test-honesty-a-test-is-innocent-once-it-has-failed).                     | `tmp/reports/audit/test-honesty/`        |
 | `scripts/audit/code-shape/SKILL.md`          | Which functions, files and options don't earn their place, and which code is dead or copy-pasted? See [below](#code-shape-the-tools-count-the-model-judges).   | `tmp/reports/audit/code-shape/`          |
+| `scripts/audit/ddd-drift/SKILL.md`           | Where has the code drifted from the DDD the docs describe — who drives whose state, who reads a sibling's table, where a rule lives — and which side is wrong? | `tmp/reports/audit/ddd-drift/`           |
 
-All nine take one argument — a module (`orders`), a path, or `--diff` for whatever the working
-tree touched. The two compliance prompts default an empty argument to the **whole repo** rather
-than the touched modules — a compliance gap is rarely introduced by the change that happens to
+All of them take one argument — a module (`orders`), a path, or `--diff` for whatever the working
+tree touched. The two compliance prompts and `ddd-drift` default an empty argument to the **whole repo** rather
+than the touched modules — a compliance gap or a DDD drift is rarely introduced by the change that happens to
 surface it.
 
 ### Each repo keeps the prompts its own stack needs
