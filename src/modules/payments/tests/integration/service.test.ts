@@ -37,6 +37,8 @@ import {
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asReject } from '@tests/response';
+import { asStub } from '@tests/stub';
+import { WebhookRejected, type ProviderWebhookEvent } from '@modules/payments/providers';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import {
     asCustomer,
@@ -1358,6 +1360,27 @@ describe('applyWebhookDelivery', () => {
 
         expect(retrieveSpy).not.toHaveBeenCalled();
         retrieveSpy.mockRestore();
+    });
+
+    it.each([
+        ['an operator object as the intent', { id: 'evt_op', providerRef: { $ne: null } }],
+        ['a non-string event id', { id: 7, providerRef: 'pi_x' }],
+        ['a field the schema does not name', { id: 'evt_x', providerRef: 'pi_x', extra: true }],
+        ['an operator object as the id', { id: { $gt: '' } }],
+        ['an oversize id', { id: 'x'.repeat(201) }],
+        ['an oversize providerRef', { id: 'evt_x', providerRef: 'p'.repeat(201) }],
+        ['a number as the providerRef', { id: 'evt_x', providerRef: 7 }],
+        ['no event id', { providerRef: 'pi_x' }],
+        ['an array', [1, 2, 3]]
+    ])('refuses an adapter event carrying %s before any lookup', async (_name, event) => {
+        const lookupSpy = jest.spyOn(paymentRepository, 'findByProviderRef');
+
+        await expect(
+            paymentService.applyWebhookDelivery(asStub<ProviderWebhookEvent>(event))
+        ).rejects.toBeInstanceOf(WebhookRejected);
+
+        expect(lookupSpy).not.toHaveBeenCalled();
+        lookupSpy.mockRestore();
     });
 });
 

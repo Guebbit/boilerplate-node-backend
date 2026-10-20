@@ -780,10 +780,16 @@ metadata so the match is exact.
 ### The webhook
 
 `parseWebhook` receives the raw body, byte for byte. Verify the signature over those bytes first,
-then parse against the contract's schema, then return only the event id and the intent it names.
+then translate the body, then return only the event id and the intent it names.
 The delivery's own claim about the outcome is never used: the settlement calls `retrieve`, so a
 late or reordered event is harmless. Throw `WebhookRejected` for anything that does not
 authenticate or parse; the route answers 400.
+
+The port checks your work: `applyWebhookDelivery` parses the event you return against the
+contract's schema (`ReceivePaymentWebhookBody`) before any lookup, so an operator object such as
+`{ "$ne": null }` where a `providerRef` string belongs is refused with the same 400, even from an
+adapter that validated nothing. Do not rely on that: refuse a body you cannot make sense of
+yourself, and keep the reason in the `WebhookRejected` message.
 
 ### Refund errors
 
