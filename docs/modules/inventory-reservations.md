@@ -40,18 +40,18 @@ cancelled first, `released`. Shelf count (`onHand`) drops at dispatch, not at pa
 Shopify, Magento MSI, Saleor and Medusa share — so a stocktake counts the same number `onHand`
 says, and `available` is identical in both models at every moment.
 
-| Transition                 | Called by                                                                                               | Counters                        | Ledger `reason` |
-| -------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------- |
-| `reserveForOrder`          | [checkout](./cart-checkout.md), admin order create                                                      | `reserved` +n                   | `reserve`       |
-| `commitForOrder`           | [`orders`](./orders.md), in the transaction of `markPaid` (a card, a transfer or a cash payment)        | none                            | none            |
-| `shipLinesForOrder`        | [`delivery`](./delivery.md) (through `orders`), in the transaction of each shipment — only ITS units    | `onHand` −n, `reserved` −n      | `ship`          |
-| `shipForOrder`             | [`orders`](./orders.md), in the transaction of an admin override past dispatch — whatever is left       | `onHand` −n, `reserved` −n      | `ship`          |
-| `releaseLinesForOrder`     | [`returns`](./returns.md), in the transaction of a remainder cancel — only the cancelled units          | `reserved` −n                   | `release`       |
-| `releaseForOrder`          | [`orders`](./orders.md) on cancel                                                                       | `reserved` −n                   | `release`       |
-| `releaseForOrder`          | the sweep                                                                                               | `reserved` −n                   | `expire`        |
-| `releaseCommittedForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing (a paid, unshipped order)      | `reserved` −n                   | `release`       |
-| `reserveForOrder`          | checkout, for a [preorder](#preorders) line, or the owed part of a [backorder](#backorders) line        | `backordered` +n                | `backorder`     |
-| `receive`                  | `POST /inventory/receipts`, for the paid claims waiting (every write that raises `available` does this) | `backordered` −n, `reserved` +n | `allocate`      |
+| Transition                 | Called by                                                                                                                  | Counters                        | Ledger `reason` |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------- |
+| `reserveForOrder`          | [checkout](./cart-checkout.md), admin order create                                                                         | `reserved` +n                   | `reserve`       |
+| `commitForOrder`           | [`orders`](./orders.md), in the transaction of `markPaid` (a card, a transfer or a cash payment)                           | none                            | none            |
+| `shipLinesForOrder`        | [`delivery`](./delivery.md) (through `orders`), in the transaction of each shipment — only ITS units                       | `onHand` −n, `reserved` −n      | `ship`          |
+| `shipForOrder`             | [`orders`](./orders.md), in the transaction of an admin override past dispatch — whatever is left                          | `onHand` −n, `reserved` −n      | `ship`          |
+| `releaseLinesForOrder`     | [`orders`](./orders.md) for [`returns`](./returns.md), in the transaction of a remainder cancel — only the cancelled units | `reserved` −n                   | `release`       |
+| `releaseForOrder`          | [`orders`](./orders.md) on cancel                                                                                          | `reserved` −n                   | `release`       |
+| `releaseForOrder`          | the sweep                                                                                                                  | `reserved` −n                   | `expire`        |
+| `releaseCommittedForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing (a paid, unshipped order)                         | `reserved` −n                   | `release`       |
+| `reserveForOrder`          | checkout, for a [preorder](#preorders) line, or the owed part of a [backorder](#backorders) line                           | `backordered` +n                | `backorder`     |
+| `receive`                  | `POST /inventory/receipts`, for the paid claims waiting (every write that raises `available` does this)                    | `backordered` −n, `reserved` +n | `allocate`      |
 
 **`releaseCommittedForOrder` is never merged into `releaseForOrder`**, on purpose: the sweep only
 ever releases a stale HOLD, and folding the paid case into that same function would let it put a
@@ -261,8 +261,8 @@ week by default). The sweep itself needed no change to honour this: it only ever
 own stored `expiresAt`, never a constant. See [Payments — Bank transfer](./payments.md#bank-transfer).
 
 **A card payment gone `processing` gets the same week, after the fact.** `extendHoldForOrder`
-pushes a still-`held` hold's `expiresAt` out to `NODE_BANK_TRANSFER_HOLD_HOURS` from now, called by
-`settlePayment` the moment the provider reports `processing` — a SEPA debit, some bank redirects,
+pushes a still-`held` hold's `expiresAt` out to `NODE_BANK_TRANSFER_HOLD_HOURS` from now, asked for by
+`settlePayment` (through `orders`' `extendHold`) the moment the provider reports `processing` — a SEPA debit, some bank redirects,
 can take days to settle, and the ordinary 15-minute window would let the sweep cancel an order
 whose money is still genuinely on its way. `requires_action` gets no such grace: that state means
 the BROWSER has a challenge to answer, not the provider a payment to finish, so the ordinary window

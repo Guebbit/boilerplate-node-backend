@@ -15,7 +15,7 @@ import {
 } from '@infrastructure/http/response';
 import type { PaymentStatus, AuthContext } from '@types';
 import { toMinorUnits } from '@domain-primitives/money';
-import { orderService, isPayable, paymentSettled } from '@modules/orders';
+import { orderService, paymentSettled } from '@modules/orders';
 import { bankTransferHoldHours } from '../config';
 import { ReceivePaymentWebhookBody } from '@api/schemas.zod';
 import { inventoryService } from '@modules/inventory';
@@ -381,8 +381,8 @@ export const settlePayment = (
                  * fail the settlement response it stands beside.
                  */
                 if (updated && state.status === 'processing')
-                    await inventoryService
-                        .extendHoldForOrder(orderId, bankTransferHoldHours())
+                    await orderService
+                        .extendHold(orderId, bankTransferHoldHours())
                         .catch((error: unknown) => {
                             // Stryker disable all
                             logger.error({
@@ -527,16 +527,9 @@ const findConfirmable = (
  *   `null` to let the confirm proceed
  */
 const confirmableOrder = (orderId: string): Promise<ResponseReject | null> =>
-    orderService
-        .getById(orderId)
-        .then((order) =>
-            order && isPayable(order.status)
-                ? // Money is taken only for units set aside: a hold already released (an expiry whose
-                  // cancellation has not landed yet) means the shelf may be gone.
-                  inventoryService.isHoldReleased(orderId).then((released) => !released)
-                : false
-        )
-        .then((payable) => (payable ? null : notPayable()));
+    // Money is taken only for units set aside: `isPayableNow` also refuses an order whose hold was
+    // already released (an expiry whose cancellation has not landed yet).
+    orderService.isPayableNow(orderId).then((payable) => (payable ? null : notPayable()));
 
 /**
  * Settle an already-fetched, already-scoped payment via the provider, gated on it currently
