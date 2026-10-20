@@ -138,15 +138,17 @@ async function seed() {
         logger.info('Database emptied.');
 
         /*
-         * Fails open like the cache clear below: an unreachable Redis means no counters to spend
-         * either. SCAN + DEL under the limiter's own prefix — never FLUSHALL.
+         * Only Redis-held counters can be reset from here, by SCAN + DEL under the limiter's own
+         * prefix, never FLUSHALL. Without the URL in THIS process the counters may live in the
+         * running server's memory, which a reseed cannot reach; an unreachable Redis leaves them
+         * where they are. Both are warnings, not failures: the reset itself succeeded.
          */
         const counters = await clearRateLimitCounters(deploymentRateLimitRedisUrl);
-        if (!counters.configured)
+        if (counters.status === 'not-configured')
             logger.warn(
-                'Rate-limit counters NOT cleared: NODE_RATE_LIMIT_REDIS_URL is unset, so they live in the running server and a reseed cannot reach them.'
+                'Rate-limit counters NOT cleared: this process has no NODE_RATE_LIMIT_REDIS_URL, so it cannot tell where they live; if the server keeps them in memory, a reseed cannot reach them.'
             );
-        else if (counters.reachable)
+        else if (counters.status === 'cleared')
             logger.info(`Rate-limit counters cleared: ${counters.deleted} keys removed.`);
         else logger.warn('Rate-limit counters NOT cleared: Redis is unreachable.');
     } else if (!(await isDatabaseEmpty())) {

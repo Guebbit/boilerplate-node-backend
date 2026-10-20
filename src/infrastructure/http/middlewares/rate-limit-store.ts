@@ -321,6 +321,13 @@ export const rateLimitStore = (
 };
 
 /**
+ * How a {@link clearRateLimitCounters} call ended: `cleared` (the keys are gone), `unreachable`
+ * (Redis did not answer, so the counters may survive) or `not-configured` (no Redis URL was given,
+ * so nothing here could reach them).
+ */
+export type RateLimitClearStatus = 'cleared' | 'unreachable' | 'not-configured';
+
+/**
  * Delete every limiter counter, so the next request starts with a full budget.
  *
  * For the e2e reset (`scenario:apply --reset`), which restores the data but would otherwise leave
@@ -332,30 +339,31 @@ export const rateLimitStore = (
  * switched off in the process that calls this. Single-use claims share the prefix, so a reset
  * reopens those too.
  *
- * Never rejects; `reachable: false` tells the caller the counters may survive. `configured: false`
- * means there was no Redis URL: the counters live in the running server's memory, which this
- * process cannot reach, so none were cleared.
+ * Never rejects. Only `cleared` means the counters are gone; the other two statuses tell the
+ * caller they may survive.
  *
  * @param url - the `limits` Redis URL as the DEPLOYMENT configured it (see
- *  {@link limitsRedisUrl}), read before anything switches the limiter off. `undefined` means
- *  no Redis: nothing to clear
+ *  {@link limitsRedisUrl}), read before anything switches the limiter off. `undefined` means this
+ *  process was given none: where the counters live (most likely the running server's memory) is
+ *  unknown to it, so it clears nothing
+ * @returns the status and how many keys were deleted
  */
 export const clearRateLimitCounters = (
     url: string | undefined
-): Promise<{ deleted: number; reachable: boolean; configured: boolean }> => {
-    if (!url) return Promise.resolve({ deleted: 0, reachable: true, configured: false });
+): Promise<{ status: RateLimitClearStatus; deleted: number }> => {
+    if (!url) return Promise.resolve({ status: 'not-configured', deleted: 0 });
 
     const redisClient = buildLimitsClient(url);
 
     return redisClient
         .connect()
         .then(() => drainMatchingKeys(redisClient, `${limitsKeyPrefix()}:*`))
-        .then((deleted) => ({ deleted, reachable: true, configured: true }))
+        .then((deleted) => ({ status: 'cleared' as const, deleted }))
         .catch((error: unknown) => {
             // Stryker disable all
             logger.warn({ message: 'Rate-limit counters could not be cleared.', error });
             // Stryker restore all
-            return { deleted: 0, reachable: false, configured: true };
+            return { status: 'unreachable' as const, deleted: 0 };
         })
         .finally(() => closeRedisClient(redisClient));
 };
