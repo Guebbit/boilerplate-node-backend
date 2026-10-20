@@ -43,5 +43,7 @@
 12 2 * * * cd /app && npm run reap:returns
 # Answers waiting back-in-stock requests for a product that can be ordered again without any write announcing it, such as a preorder whose release date passed.
 35 * * * * cd /app && npm run sweep:stock-alerts
+# Reduces every expired purchase hold to the date that restarts the count of cancellations, dropping its note and who set it.
+12 2 * * * cd /app && npm run reap:purchase-holds
 # Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.
 * * * * * cd /app && npm run sweep:webhook-retries

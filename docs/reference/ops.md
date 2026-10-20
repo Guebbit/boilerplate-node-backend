@@ -119,6 +119,7 @@ its own supercronic, so the backup secrets stay out of the `cron` container. See
 | `npm run sweep:payment-effects`  | every 5 min    | No     | Retries refunds the provider has not answered, and settles unsettled payments whose webhook never arrived.                                                                  |
 | `npm run reap:returns`           | 02:12 nightly  | No     | Unsets a return's free text (`note`, `declineReason`) once the return has not changed for its retention window.                                                             |
 | `npm run sweep:stock-alerts`     | `35 * * * *`   | Yes    | Answers waiting back-in-stock requests for a product that can be ordered again without any write announcing it, such as a preorder whose release date passed.               |
+| `npm run reap:purchase-holds`    | 02:12 nightly  | Yes    | Reduces every expired purchase hold to the date that restarts the count of cancellations, dropping its note and who set it.                                                 |
 | `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.                                                                       |
 
 <!-- jobs:end -->

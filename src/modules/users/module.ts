@@ -23,6 +23,7 @@ import { userService } from './services';
 import { setPersonalDataErasers, setPersonalDataMinimisers } from './erasure-registry';
 import './events';
 import { usersConfig } from './config';
+import { usersJobs } from './jobs';
 
 /**
  * Resolves every module's `personalData.erase` and `minimise` hooks once every module is known, and
@@ -43,6 +44,7 @@ export default {
     routes: router,
     onRegistered,
     locales: path.join(__dirname, 'locales'),
+    jobs: usersJobs,
     /*
      * `account`'s signup and profile-update flows write through this same `userRepository` —
      * there is no separate `users` collection for them to register their own target under.

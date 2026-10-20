@@ -11,6 +11,7 @@ import * as auditPort from '@infrastructure/observability/audit';
 import type { ResponseReject } from '@infrastructure/http/response';
 import { userService } from '@modules/users/services';
 import { createUser, userRepository } from '@modules/users/tests/factories';
+import { reapExpiredPurchaseHolds } from '../../services/purchase-hold';
 import { usersAuditActions } from '../../audit';
 
 // The audit port is replaced, not spied on — see `tests/support/ports.ts`.
@@ -241,6 +242,136 @@ describe('what the wire shows', () => {
         const stored = await userRepository.findById(buyer.id);
 
         expect(userService.toUser(stored!, null).purchaseHold).toBeUndefined();
+    });
+});
+
+/**
+ * The `profile` section as the export writes it: the stored account, serialised whole, so the
+ * model's own `toJSON` is what decides what leaves.
+ *
+ * @param id - the account
+ */
+const exportedProfile = (id: string): Promise<{ purchaseHold?: object }> =>
+    userService
+        .findByIdWithCredentials(id)
+        // The export writes `JSON.stringify(section)`: this is that, read back, because the
+        // `toJSON` transform runs only in the stringify (`structuredClone` would skip it).
+        // eslint-disable-next-line unicorn/prefer-structured-clone -- structuredClone bypasses toJSON, which is the thing under test
+        .then((profile) => JSON.parse(JSON.stringify(profile)) as { purchaseHold?: object });
+
+describe('what the data export carries', () => {
+    it('carries a hold in force, without the staff member who set it', async () => {
+        const buyer = await createUser();
+        await userService.setPurchaseHold(
+            buyer.id,
+            { until: inDays(2), note: 'Please contact us.' },
+            callerContextAs('moderator', 'staff-9')
+        );
+
+        const profile = await exportedProfile(buyer.id);
+
+        expect(profile.purchaseHold).toMatchObject({ reason: 'staff', note: 'Please contact us.' });
+        expect(JSON.stringify(profile)).not.toContain('staff-9');
+        expect(profile.purchaseHold).not.toHaveProperty('setBy');
+    });
+
+    it('carries an expired hold until the nightly sweep reduces it, still without who set it', async () => {
+        const buyer = await createUser({
+            purchaseHold: {
+                until: inDays(-1),
+                reason: 'staff',
+                setBy: 'staff-9',
+                setAt: inDays(-3)
+            }
+        });
+
+        const profile = await exportedProfile(buyer.id);
+
+        expect(profile.purchaseHold).toMatchObject({ reason: 'staff' });
+        expect(profile.purchaseHold).not.toHaveProperty('setBy');
+    });
+
+    it('keeps who set a hold in the stored record, for the audit trail', async () => {
+        const buyer = await createUser();
+        await userService.setPurchaseHold(
+            buyer.id,
+            { until: inDays(2) },
+            callerContextAs('moderator', 'staff-9')
+        );
+
+        const stored = await userRepository.findById(buyer.id);
+
+        expect(stored?.purchaseHold?.setBy).toBe('staff-9');
+    });
+});
+
+describe('reapExpiredPurchaseHolds', () => {
+    it('reduces an expired hold to the date that restarts the count, dropping the rest', async () => {
+        const setAt = inDays(-8);
+        const buyer = await createUser({
+            purchaseHold: {
+                until: inDays(-1),
+                reason: 'staff',
+                note: 'Please contact us.',
+                setBy: 'staff-9',
+                setAt
+            }
+        });
+
+        await expect(reapExpiredPurchaseHolds()).resolves.toBe(1);
+
+        const stored = await userRepository.findById(buyer.id);
+        expect(stored?.purchaseHold).toBeUndefined();
+        expect(stored?.purchaseHoldResetAt).toEqual(setAt);
+    });
+
+    it('leaves a hold in force untouched', async () => {
+        const buyer = await createUser();
+        await userService.setPurchaseHold(
+            buyer.id,
+            { until: inDays(2), note: 'Still in force.' },
+            callerContextAs('moderator', 'staff-9')
+        );
+
+        await expect(reapExpiredPurchaseHolds()).resolves.toBe(0);
+
+        const stored = await userRepository.findById(buyer.id);
+        expect(stored?.purchaseHold).toMatchObject({ note: 'Still in force.', setBy: 'staff-9' });
+    });
+
+    it('keeps the account’s own mark when it is later than the hold’s', async () => {
+        const liftedAt = inDays(-2);
+        const buyer = await createUser({
+            purchaseHold: { until: inDays(-1), reason: 'staff', setAt: inDays(-8) },
+            purchaseHoldResetAt: liftedAt
+        });
+
+        await reapExpiredPurchaseHolds();
+
+        const stored = await userRepository.findById(buyer.id);
+        expect(stored?.purchaseHoldResetAt).toEqual(liftedAt);
+    });
+
+    it('does not make the count start over: cancellations before the hold stay answered', async () => {
+        const setAt = inDays(-8);
+        const buyer = await createUser({
+            purchaseHold: { until: inDays(-1), reason: 'repeated_cancellations', setAt }
+        });
+        const before = await userService.purchaseHoldCountingSince(buyer.id);
+
+        await reapExpiredPurchaseHolds();
+
+        await expect(userService.purchaseHoldCountingSince(buyer.id)).resolves.toEqual(before);
+        await expect(userService.purchaseHoldCountingSince(buyer.id)).resolves.toEqual(setAt);
+    });
+
+    it('is safe to repeat', async () => {
+        await createUser({
+            purchaseHold: { until: inDays(-1), reason: 'staff', setAt: inDays(-3) }
+        });
+
+        await expect(reapExpiredPurchaseHolds()).resolves.toBe(1);
+        await expect(reapExpiredPurchaseHolds()).resolves.toBe(0);
     });
 });
 

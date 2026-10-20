@@ -168,6 +168,16 @@ export const liftPurchaseHold = (
     });
 
 /**
+ * The nightly sweep: reduce every expired hold to the mark that restarts the count, dropping its
+ * note and the staff id. Safe to repeat. A hold in force is never touched.
+ *
+ * @param now - a hold ending at or before this instant is expired
+ * @returns how many accounts were reduced
+ */
+export const reapExpiredPurchaseHolds = (now = new Date()): Promise<number> =>
+    userRepository.reduceExpiredPurchaseHolds(now);
+
+/**
  * Take the automatic hold after repeated cancellations. Atomic: when two cancellations race to the
  * limit only one call returns `true`, so only one staff mail and one audit row follow.
  *

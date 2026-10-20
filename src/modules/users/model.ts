@@ -180,7 +180,7 @@ export interface PurchaseHoldRecord {
     reason: 'repeated_cancellations' | 'staff';
     /** Written for the buyer to read. Absent on an automatic hold. */
     note?: string;
-    /** The staff account that set it; absent for the shop's own automatic hold. Never on the wire. */
+    /** The staff account that set it; absent for the shop's own automatic hold. Never in any output. */
     setBy?: string;
     setAt: Date;
 }
@@ -751,7 +751,14 @@ export const applyUserTransform = applySerialization(userSchema, {
     // `twoFactorEnabledAt` alone is the `User` contract's business, same asymmetry as
     // the schema's own `select: false` split above. `oauthAccounts` gets the same treatment: not
     // part of the `User` contract, `select: false` on the schema already, this is defense in depth.
-    omit: [...WIRE_OMITTED_FIELDS]
+    omit: [...WIRE_OMITTED_FIELDS],
+    after: (serialized) => {
+        // `setBy` names the staff member who set a hold: the audit row keeps that, no output does
+        // (the data export serialises this document whole, and the account's owner reads it).
+        // One `as`: the serialized bag is untyped, and the hold's stored shape is known here.
+        const hold = serialized.purchaseHold as Partial<PurchaseHoldRecord> | undefined;
+        if (hold) delete hold.setBy;
+    }
 });
 
 /** The compiled Mongoose model. */
