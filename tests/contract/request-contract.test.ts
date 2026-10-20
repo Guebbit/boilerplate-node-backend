@@ -95,6 +95,7 @@ const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
     'GET /feedback': { request: adminQuery('/feedback') },
     'GET /examples': { request: adminQuery('/examples') },
     'GET /orders': { request: adminQuery('/orders') },
+    'GET /users': { request: adminQuery('/users') },
     'GET /orders/export': { request: adminQuery('/orders/export') },
     'GET /returns': { request: adminQuery('/returns') },
     'GET /returns/options': { request: adminQuery('/returns/options') },
@@ -305,6 +306,8 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
     addCartItem: { productId: (world) => world.productId, quantity: () => 1 },
     signup: { passwordConfirm: (_world, payload) => payload.password },
     searchUsers: { id: () => [OBJECT_ID] },
+    // A generated date-time can be in the past; a purchase hold must end in the future.
+    setUserPurchaseHold: { until: () => new Date(Date.now() + 7 * 86_400_000).toISOString() },
     searchProducts: { id: () => [OBJECT_ID] },
     searchOrders: {
         id: () => [OBJECT_ID],
