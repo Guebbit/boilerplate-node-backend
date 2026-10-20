@@ -249,7 +249,7 @@ describe('what the law lets go', () => {
 });
 
 describe('the buyer`s data export', () => {
-    it('carries every row of the account`s own orders, staff text and actor included, and no one else`s', async () => {
+    it('carries every row of the account`s own orders and staff text, but no staff member, and no one else`s', async () => {
         const user = await createUser();
         const product = await createProduct();
         const mine = await createOrder(user, [toOrderItem(product, 1)], {
@@ -266,13 +266,50 @@ describe('the buyer`s data export', () => {
 
         const exported = await orderService.collectTimelineOf(user.id);
 
+        // Staff text is the buyer's data (Nowak); who at the shop wrote it is not (Pankki S).
         expect(exported).toMatchObject([
             {
                 orderId: String(mine._id),
                 type: 'status_overridden',
-                actor: 'admin-1',
                 text: 'visible to the owner'
             }
         ]);
+        expect(exported).toHaveLength(1);
+        expect(exported[0]).not.toHaveProperty('actor');
+    });
+
+    it('keeps the actor when it is the exporting account itself', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const mine = await createOrder(user, [toOrderItem(product, 1)]);
+        await orderService.cancelOnRequestById(String(mine._id), asCustomer(user.id));
+
+        const exported = await orderService.collectTimelineOf(user.id);
+
+        expect(exported).toMatchObject([
+            { orderId: String(mine._id), type: 'cancelled', actor: user.id }
+        ]);
+    });
+
+    it('keeps a staff-only row, still without its actor', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const mine = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.paid
+        });
+        await orderService.overrideStatus(
+            String(mine._id),
+            OrderStatus.processing,
+            'staff only',
+            callerContextAs('admin', 'admin-1')
+        );
+        // The buyer's screen hides this row; the export does not.
+        const onScreen = await orderService.readTimeline(String(mine._id), asCustomer(user.id));
+        expect(onScreen.map((row) => row.type)).not.toContain('status_overridden');
+
+        const exported = await orderService.collectTimelineOf(user.id);
+
+        expect(exported.map((row) => row.type)).toContain('status_overridden');
+        for (const row of exported) expect(row.actor).not.toBe('admin-1');
     });
 });
