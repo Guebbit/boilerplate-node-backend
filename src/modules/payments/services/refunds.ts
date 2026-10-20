@@ -295,6 +295,34 @@ const announceRefund = (
 };
 
 /**
+ * Put the decision on file when a refund's record opens: who asked, for how much and why, with
+ * `ownOrder` when the asker is the buyer. Written before the provider is asked, because a refusal
+ * leaves the record to the sweep, which has no caller and audits nothing — without this row the
+ * only evidence that a caller asked would be the settlement row, which never comes.
+ *
+ * @param payment - the payment the refund is taken from
+ * @param refund - the record that just opened
+ * @param context - the caller; the `order.cancelled` listener has none and writes no row
+ */
+const auditRefundRequested = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    context: CallerContext | undefined
+): void =>
+    recordAudit(context, {
+        action: paymentsAuditActions.ADMIN_PAYMENT_REFUND_REQUESTED,
+        outcome: 'success',
+        targetType: 'order',
+        targetId: String(payment.orderId),
+        metadata: {
+            refundId: String(refund._id),
+            amount: refund.amount,
+            reason: refund.reason,
+            ...ownOrderFlag(context, payment.userId?.toString())
+        }
+    });
+
+/**
  * The `payment.refunded` payload for one settled refund — the fact `invoicing` issues a credit note
  * from and `webhooks` fans out. Built even for the corrupted-row case (`outcome: 'failure'`):
  * `invoicing` cannot see that distinction, and a credit note is owed either way.
@@ -567,7 +595,7 @@ const settledElsewhere = (orderId: string, refund: RefundRecord): Promise<Paymen
  * @returns the payment as it now stands — always still `succeeded`, whatever was returned (its
  *   `displayStatus` says how much) — or `null` when there was nothing to return
  * @internal The step beneath `refundByOrder`, `refundForOrder` and `refundForReturn`, which carry
- *   the own-money and scope checks; it never leaves the barrel.
+ *   the scope and permission checks; it never leaves the barrel.
  */
 export const performRefund = (
     orderId: string,
@@ -588,12 +616,13 @@ export const performRefund = (
             if (remainingOf(current) <= 0) return settled ? current : null;
 
             return openRefund(current, request ?? CANCELLATION_REQUEST, context?.caller.id).then(
-                (opened) =>
-                    opened
-                        ? attemptRefund(opened.payment, opened.refund, context).then(
-                              (after) => after ?? settledElsewhere(orderId, opened.refund)
-                          )
-                        : null
+                (opened) => {
+                    if (!opened) return null;
+                    auditRefundRequested(opened.payment, opened.refund, context);
+                    return attemptRefund(opened.payment, opened.refund, context).then(
+                        (after) => after ?? settledElsewhere(orderId, opened.refund)
+                    );
+                }
             );
         });
     });
