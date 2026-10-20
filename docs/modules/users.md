@@ -184,13 +184,26 @@ damage. It is a field on the user (`purchaseHold`) with its own two doors and on
 | `takeAutomaticPurchaseHold`        | `orders` only (a lint-guarded friend door) | the shop's own hold after repeated cancellations; atomic, so only one of two racing calls wins |
 | `purchaseHoldOf`                   | `cart`'s checkout                          | the hold in force, if any                                                                      |
 
-A hold is in force while `until` is in the future, so an expired one needs no sweep. Reads show it only
-while in force, to staff on `/users` and to the buyer on `/account` (for a banner); the export carries it
-with the profile. `setBy` (which staff member) never reaches the wire, the audit row names them. The
-count and the trigger are `orders`' ([the purchase hold](./orders.md#the-purchase-hold)).
+A hold is in force while `until` is in the future, so every reader ignores an expired one at once.
+Reads show it only while in force, to staff on `/users` and to the buyer on `/account` and in the cart
+(a banner). `setBy` (which staff member) is never in any output, the export included: the audit row
+names them. The data export carries the stored hold, so an ended one is in it until the nightly
+`reap:purchase-holds` reduces it to `purchaseHoldResetAt`, the later of its own `setAt` and the last
+staff lift, which is where `orders` restarts the count of cancellations. The count and the trigger are
+`orders'` ([the purchase hold](./orders.md#the-purchase-hold)).
+
+**The buyer's mail.** Every hold placed, by staff or by the shop's rule, mails the account's own
+address once (an automatic race has one winner, so one mail). It says until when (the instant in UTC:
+`users` is a foundation module and may not read the shop's timezone), why (the rule's count and window,
+or the staff note), what still works, a link to the contact page pre-filled for an account question
+(`NODE_FRONTEND_LINK_CONTACT`), and, in its own paragraph, the right to object and to complain with the
+privacy notice linked (`NODE_FRONTEND_LINK_PRIVACY`). The greeting names nobody: the display name is
+free text. A mail that cannot be built or queued is logged and never undoes the hold.
 
 Audit: `admin.user.purchase_hold_set`, `admin.user.purchase_hold_lifted` (only when a hold was in
 force), `system.user.purchase_hold_set`. The users list takes `purchaseHold=true` to find them.
+The nightly job `reap:purchase-holds` is listed with the others in
+[scheduled jobs](../reference/ops.md#scheduled-jobs).
 
 ## Soft delete vs. erasure
 

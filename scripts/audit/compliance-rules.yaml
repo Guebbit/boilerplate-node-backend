@@ -366,34 +366,48 @@ rules:
       rule: >
           A decision with a legal or similarly significant effect (e.g. an automatic account
           suspension, order rejection, or fraud block) made without human involvement must offer the
-          subject a path to obtain human review, express their view, and contest the decision.
+          subject a path to obtain human review, express their view, and contest the decision, and
+          the subject must be told it was taken and why.
       applies_when: >
-          Only if some flow auto-rejects/auto-suspends without a human in the loop. Checked and
-          currently NOT-APPLICABLE: antibot (src/infrastructure/http/middlewares/human-challenge.ts,
-          rate-limit.ts, adapters/antibot.ts) is a per-request throttle/challenge that never sets a
-          ban/suspend flag on the user record and is always retryable next window — no persistent
-          adverse status to review. payments/services/settlement.ts settlePayment/applyWebhookSettlement only
-          record whatever status the provider (Stripe/PayPal) reports; there is no local fraud
-          scoring or business-rule decline, and a decline is retryable with another payment method
-          (service.ts withActions exposes pay: true on a declined order). The account inactivity
-          reaper (reap:inactive-accounts, disabled by default via NODE_INACTIVE_ACCOUNT_DAYS)
-          has a built-in self-service opt-out — logging in before soft-delete resets the clock — and
-          once soft-deleted, restoration goes through an admin, which is itself a human-review path,
-          not an absence of one. Re-evaluate if a local fraud-scoring/risk-model feature is ever
-          added to payments or antibot.
+          APPLICABLE. The automatic purchase hold is a rule-only refusal of new checkouts: after a
+          buyer's own N-th cancellation inside the window (orders/services/purchase-hold.ts, counts
+          from orders/config.ts) the account is refused a new order until the hold ends
+          (cart/services/checkout.ts answers 409 CART_PURCHASE_HOLD). No person is involved before
+          it takes effect; staff get an email only after. Whether it reaches the "similarly
+          significant effect" bar of GDPR Art. 22(1) is an open question: it is short and
+          self-expiring, one shop, and never blocks paying, cancelling, a withdrawal, a return or the
+          account's data rights, but it is an outright refusal to contract and the window has no
+          upper bound in configuration. Still checked and NOT-APPLICABLE: antibot
+          (src/infrastructure/http/middlewares/human-challenge.ts, rate-limit.ts, adapters/antibot.ts)
+          is a per-request throttle that never sets a flag on the user record and is retryable next
+          window; payments/services/settlement.ts only records what the provider reports (a decline
+          is retryable with another method); the account inactivity reaper has a built-in self-service
+          opt-out and restoration goes through an admin. Re-evaluate if a local fraud-scoring or
+          risk-model feature is ever added to payments or antibot.
       evidence:
           backend:
+              - src/modules/orders/services/purchase-hold.ts, src/modules/orders/domain/purchase-hold.ts
+              - src/modules/users/services/purchase-hold.ts (the staff doors that set and lift a hold)
+              - src/modules/cart/services/checkout.ts (the only door that asks)
+              - src/modules/users/emails.ts (the buyer's mail when a hold is placed)
               - src/modules/antibot/**, src/infrastructure/http/middlewares/human-challenge.ts, rate-limit.ts
               - src/modules/payments/services/settlement.ts (settlePayment, applyWebhookSettlement, applyWebhookDelivery)
-              - src/modules/account/jobs.ts, src/modules/users/services/**
-          frontend: []
+              - src/modules/account/jobs.ts
+          frontend:
+              - boilerplate-vue-frontend src/modules/account/components/PurchaseHoldNotice.vue (reason, end date, contact link)
       references:
-          - GDPR Art. 22
+          - GDPR Art. 22(1) and 22(3), Recital 71
+          - GDPR Art. 21 (right to object to processing based on legitimate interest)
+          - WP29 Guidelines on automated decision-making (WP251), p. 21 (meaningful human involvement)
       notes: >
-          Confirmed NOT-APPLICABLE by design, not by absence of a check: every automated refusal in
-          this app is either transient/retryable (antibot, payment decline) or has a human-reachable
-          recovery path (account reaper). Promoted anyway, since a future fraud-scoring or risk-model
-          feature is exactly the kind of change that would flip this rule silently otherwise.
+          Safeguards present: the buyer is told when a hold is placed, why, until when and what still
+          works (mail and an in-app notice on the cart and on the profile); a contact route reaches
+          staff who can lift it (DELETE /users/{id}/purchase-hold, which also restarts the count);
+          the processing basis and a legitimate-interest assessment are written down
+          (docs/theory/data-retention.md). Gap: a person only reviews after the fact, so the hold is
+          "solely automated" in the WP251 sense; closing it (flag for review instead of holding, or a
+          hard cap on the hold) is a product decision the operator owns. The audit must report this
+          rule as APPLICABLE with that gap, not as NOT-APPLICABLE.
 
 suggested_rules:
     - id: policy-material-change-reconsent

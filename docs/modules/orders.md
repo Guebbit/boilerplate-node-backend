@@ -685,7 +685,8 @@ staff review it: `DELETE /users/{id}/purchase-hold` also restarts the count from
 same cancellations never trigger a second hold. The hold is stored on the user (`users` owns it, see
 [users](./users.md#purchase-hold)); `orders` only owns the count. Staff are told by a mail to
 `NODE_STAFF_NOTIFY_EMAIL` (default `NODE_SHOP_EMAIL`), an audit row `system.user.purchase_hold_set`,
-and the users-list filter `purchaseHold=true`.
+and the users-list filter `purchaseHold=true`. The buyer is told too, by a mail to the account's own
+address sent from `users` ([what it says](./users.md#purchase-hold)).
 
 What it never blocks: paying an order that already exists, cancelling your own unpaid orders, a
 withdrawal or a return, delivery of paid orders, and the account's own data rights (access, export,
@@ -693,11 +694,16 @@ erasure). Because the legal right to withdraw is not the buyer's to lose, a hold
 that the law treats as withdrawals is a grey area (BGH VIII ZR 146/15): the terms say so and the
 buyer is told how to contest it.
 
-**Why legitimate interest, and the safeguards.** The basis is Art. 6(1)(f), recital 47: protecting
-the shop's stock from abuse. An automatic pause that affects a customer is read broadly under Art. 22
-(CJEU C-634/21, SCHUFA), so the safeguards are applied anyway: the refusal shows the reason and the end
-date, a person can review and lift it early, every set and lift is audited, the hold is in the data
-export, the privacy notice says so (Art. 13(2)(f)), and a staff note is written as if the buyer reads it.
+**Why legitimate interest, and the safeguards.** The processing basis is Art. 6(1)(f) with recital 47:
+protecting the shop's stock and checkout from abuse. Whether the automatic pause is also an Art. 22
+decision is a separate question, and an open one: it refuses a new contract, which the CJEU reads
+broadly (C-634/21 SCHUFA, C-203/22 Dun & Bradstreet), but it is short, ends by itself, concerns one
+shop and leaves every right untouched. The safeguards are applied as if it were: the buyer is mailed
+when it is placed and the cart and profile show the reason and end date, a person can review and lift
+it early through the contact page, every set and lift is audited, the data export carries it, the
+mail names the right to object (Art. 21), the privacy notice says so (Art. 13(2)(f)), and a staff note
+is written as if the buyer reads it. The written balancing test, the DPIA screening note and what is
+kept after the hold ends are in [the purchase hold](../theory/data-retention.md#the-purchase-hold).
 
 ## Shop identity
 

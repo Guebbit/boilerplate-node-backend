@@ -212,6 +212,53 @@ The note is in `POST /account/export`, the same rule as a return's `declineReaso
 person is that person's data (CJEU Nowak, C-434/16). Who wrote it is not (CJEU Pankki S, C-579/21), and the
 fulfillment order records no staff id, so none is exported.
 
+## The purchase hold
+
+A hold is a protective pause on one account's checkout after repeated cancellations, or by hand. It
+stores a reason, an end date, an optional note staff wrote for the buyer, who set it and when. The
+mechanics are in [the purchase hold](../modules/orders.md#the-purchase-hold).
+
+**What is kept, and for how long.** While the hold is in force, all of it. After it ends, only one
+date: the nightly `reap:purchase-holds` reduces an ended hold to `purchaseHoldResetAt` (the later of
+the hold's own `setAt` and the account's last staff lift) and removes the hold itself, note and staff
+id included. That date is what stops the same cancellations triggering a second hold, so it has a
+purpose; the note and the staff member's id do not outlive the hold's end (Art. 5(1)(e)). The data
+export carries the hold while it is stored. Who set it is never exported (CJEU Pankki S, C-579/21);
+the audit log keeps that for 90 days.
+
+```mermaid
+flowchart LR
+    placed["placed: reason, end date,<br/>note, setAt"] --> force["in force<br/>(checkout refused)"]
+    force -->|"staff lift"| mark["only the restart date"]
+    force -->|"end date passes"| ended["ended, still stored<br/>(readers ignore it)"]
+    ended -->|"nightly reap:purchase-holds"| mark
+```
+
+**Legitimate-interest assessment (Art. 6(1)(f), [EDPB 1/2024](https://www.edpb.europa.eu/our-work-tools/documents/public-consultations/2024/guidelines-12024-processing-personal-data-based_en)).**
+
+| Test      | Answer                                                                                                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Purpose   | Stop one account from holding stock and refunds in a loop, or a bot from doing it; a real interest (recital 47).                                                                                       |
+| Necessity | A pause after a count of the buyer's own cancellations is a narrow way to do it. A flag for a person to review first is narrower, and is a choice the operator may prefer (see the note below).        |
+| Balancing | The effect is that a new order is refused for days. It ends by itself, never blocks paying an order already placed, cancelling, a withdrawal, a return or the account's data rights, and is explained. |
+
+**Art. 22 is a separate scope question.** Whether the automatic pause is a decision "with similarly
+significant effect" is open (see [orders](../modules/orders.md#the-purchase-hold)). If it is, no
+exception fits (a refusal is not necessary to enter a contract, and a flag for review is a less
+intrusive way), so the way out is a human in the loop before the pause, not a safeguard after it.
+That is a product choice the operator owns, and the demo ships the automatic pause with the Art. 22(3)
+safeguards: the reason, a way to ask a person, and a person who can lift it.
+
+**DPIA screening ([WP248](https://ec.europa.eu/newsroom/article29/items/611236)).** Of the nine
+criteria one is plausibly met (an automated decision with a similarly significant effect, above). One
+criterion is not a presumption of high risk; the count is one shop, one rule and a few accounts. Screen
+again if you raise `NODE_PURCHASE_HOLD_WINDOW_DAYS`, add signals to the rule, or share it across shops.
+
+**The right to object (Art. 21).** The basis is legitimate interest, so the person may object at any
+time and the operator must stop unless it shows compelling grounds. The mail names the right in its own
+paragraph (Art. 21(4)) and points to the contact page, which reaches staff who can lift the hold; the
+privacy notice names it too. The operator decides what a compelling ground is, with its lawyer.
+
 ## Backups and erasure
 
 A backup is a copy of everything, kept for as long as the keep knobs say (24 hourly, 7 daily, 4 weekly,
