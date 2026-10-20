@@ -20,11 +20,12 @@ import { onDomainEvent } from '@kernel/events';
 import { PRODUCT_CREATED, PRODUCT_DELETED } from '@modules/products';
 import { router } from './routes';
 import { openLevel, removeLevel } from './services/levels';
-import './events';
 // Registers the two domain gauges with the metrics registry at module load.
 import './metrics';
 import { inventoryConfig } from './config';
 import { inventoryJobs } from './jobs';
+import { PREORDER_ALLOCATED } from './events';
+import { refreshStockCacheForProducts } from './services/transition';
 
 /** This module's manifest entry: routes, the two domain gauges, and locales. */
 export default {
@@ -47,6 +48,16 @@ export default {
         // where a restore has to come back to them. See `removeLevel`'s own docblock.
         onDomainEvent(PRODUCT_DELETED, ({ productId, hardDelete }) =>
             hardDelete ? removeLevel(productId) : undefined
+        );
+        /*
+         * This module's own announcement: a payment that serves a preorder moves counters inside the
+         * payer's transaction, where the catalogue copy cannot be written (it would not roll back).
+         * The cache's owner brings it into step once the commit has landed. A plain commit moves no
+         * counter, so it announces nothing and needs no refresh. Eventual is fine: the copy may
+         * already be stale, see `docs/modules/inventory.md#why-products-still-carries-a-copy`.
+         */
+        onDomainEvent(PREORDER_ALLOCATED, ({ productId }) =>
+            refreshStockCacheForProducts([productId])
         );
     },
     /*

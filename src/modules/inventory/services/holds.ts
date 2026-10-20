@@ -163,8 +163,9 @@ const commitWithin = async (
  *
  * @param orderId - the order that was paid for
  * @param session - the payment's transaction. The commit then lands with the order's `paid` move
- *   and the caller owes {@link refreshStockCacheForOrder} and a `nudgeOutbox` once it has
- *   committed; absent, this opens its own and does both
+ *   and the caller owes a `nudgeOutbox` once it has committed. A preorder it serves announces
+ *   itself (`PREORDER_ALLOCATED`) and this module refreshes that product's cache on the
+ *   announcement; absent, this opens its own transaction and does both
  * @returns whether this call was the one that committed
  */
 export const commitForOrder = (orderId: string, session?: ClientSession): Promise<boolean> => {

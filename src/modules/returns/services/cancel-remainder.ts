@@ -152,7 +152,7 @@ const cancelUnderLock = (
 
         const breakdown = cancellationRefundOn(order, earlier, cancelled.lines);
         // A fulfillment order held for stock gives back its preorder allowance, not shelf units.
-        await inventoryService.releaseLinesForOrder(
+        await orderService.releaseStock(
             orderId,
             cancelled.waitingForStock
                 ? cancelled.lines.map((line) => ({ ...line, kind: 'backorder' as const }))

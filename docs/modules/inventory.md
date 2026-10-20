@@ -22,14 +22,12 @@ flowchart LR
     cart["cart"]
     delivery["delivery"]
     orders["orders"]
-    payments["payments"]
     products["products"]
     returns["returns"]
 
     cart --> inventory
     delivery --> inventory
     orders --> inventory
-    payments --> inventory
     returns --> inventory
     inventory --> products
     products -. "product.created" .-> inventory
@@ -42,7 +40,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
-    class delivery,payments,returns supporting;
+    class delivery,returns supporting;
     class inventory centre;
 ```
 
@@ -111,9 +109,16 @@ read keeps showing `available` once the counters move here:
    product document, but this module is still their only writer — `productService.syncStockCache`
    sets them, and nothing else may.
 
-The sync is a **plain awaited function call inside `applyTransition`**, never a domain event. This
-module deliberately has no stock event (see "The story" above): an event a
+The sync on a stock write is a **plain awaited function call inside `applyTransition`**, never a
+domain event. This module deliberately has no stock event (see "The story" above): an event a
 listener can miss is fine for a fact nothing depends on, and wrong for one a catalogue page reads.
+
+One exception, and it is not a stock write: a payment that serves a preorder moves counters inside
+the payer's transaction, where the catalogue copy cannot be written (it would not roll back). That
+reaction is a listener on this module's own `inventory.backorder_allocated`, which refreshes the
+served product's copy once the commit has landed. A plain payment moves no counter, so it announces
+nothing and refreshes nothing. Eventual is fine there: the copy may already be stale (a failed
+sync is left for the next transition to correct), and no confirm response shows stock.
 Write order matters and is deliberate: the counter and its ledger row commit first, as
 `applyTransition` does it — the transition IS the source of truth the moment it commits,
 regardless of whether the cache sync afterward succeeds. A failed sync is logged and left for the

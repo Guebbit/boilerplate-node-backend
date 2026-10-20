@@ -49,6 +49,9 @@ import {
     recordFulfillmentProgress,
     recordForcedFulfilment,
     shipStock,
+    releaseStock,
+    extendHold,
+    isPayableNow,
     refreshShelf
 } from './fulfillment';
 import { overrideStatus } from './override';
@@ -135,6 +138,9 @@ export const orderService = {
     recordFulfillmentProgress,
     recordForcedFulfilment,
     shipStock,
+    releaseStock,
+    extendHold,
+    isPayableNow,
     refreshShelf,
     overrideStatus,
     correctShippingAddress,

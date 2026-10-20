@@ -10,10 +10,10 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { inventoryService } from '@modules/inventory';
+import { inventoryService, type StockLine } from '@modules/inventory';
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
-import type { FulfillmentSummary } from '../domain';
+import { isPayable, type FulfillmentSummary } from '../domain';
 import { appendTimeline } from './timeline';
 
 /**
@@ -100,6 +100,53 @@ export const shipStock = (
     lines: readonly { productId: string; quantity: number }[],
     session: ClientSession
 ): Promise<boolean> => inventoryService.shipLinesForOrder(orderId, lines, session);
+
+/**
+ * Give some of an order's held units back, in the caller's transaction: a cancelled remainder
+ * that was never shipped. The mirror of {@link shipStock} — `orders` is the only module that
+ * drives an order's hold, so `returns` asks here instead of reaching `inventory` for it.
+ *
+ * @param orderId - the order whose remainder is cancelled
+ * @param lines - the cancelled units; a `backorder` line gives back a preorder allowance
+ * @param session - the cancel's transaction
+ * @returns whether an open hold was there to take from
+ */
+export const releaseStock = (
+    orderId: string,
+    lines: readonly StockLine[],
+    session: ClientSession
+): Promise<boolean> => inventoryService.releaseLinesForOrder(orderId, lines, session);
+
+/**
+ * Give an order's still-open hold `hours` more from now: a payment that is in the provider's
+ * hands for days (a bank debit) must not lose its units to the reservation sweep meanwhile. A
+ * hold that is already claimed or missing has no deadline left to move, and this says nothing.
+ *
+ * @param orderId - the order whose hold might still be open
+ * @param hours - how long from now the hold may last
+ */
+export const extendHold = (orderId: string, hours: number): Promise<void> =>
+    inventoryService.extendHoldForOrder(orderId, hours);
+
+/**
+ * Whether money may still be taken for this order right now: it is awaiting payment AND its
+ * units are still set aside. A hold already released (an expiry whose cancellation has not landed
+ * yet) means the shelf may be gone; a MISSING hold is not that, only a closed one is.
+ *
+ * Asked before a card is charged, where the buyer can still be refused. Doors that record money
+ * already taken do not ask it: refusing there would not un-pay anything.
+ *
+ * @param orderId - the order a payment would be charged into
+ * @returns `false` when the order is gone, past payment, or its hold was given back
+ */
+export const isPayableNow = (orderId: string): Promise<boolean> =>
+    orderRepository
+        .findByIdScoped(orderId)
+        .then((order) =>
+            order && isPayable(order.status)
+                ? inventoryService.isHoldReleased(orderId).then((released) => !released)
+                : false
+        );
 
 /**
  * Bring the catalogue's stock cache into step after a transaction that moved these products'

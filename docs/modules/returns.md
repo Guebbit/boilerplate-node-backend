@@ -331,7 +331,7 @@ items, under the Refund permission.
 Why here and not in `delivery`: a remainder cancel moves **money, stock and the shipping rule**, and
 only this module already reaches all four. In **one transaction**, under the order's lock row, it
 asks `delivery` to mark the lines (`cancelRemainder`, which also recomputes the order's summary and
-moves its status when that completes it), gives the units back (`inventory.releaseLinesForOrder`) and
+moves its status when that completes it), gives the units back (`orders.releaseStock`, which drives the hold) and
 writes the Return. The refund follows, as on receipt, through `refundForReturn` with
 `reason: cancellation` and the Return's id; a refund the provider refuses stays open for the payment
 sweep, and the Return stays closed.
@@ -342,13 +342,13 @@ sequenceDiagram
     participant C as buyer or staff
     participant R as returns
     participant D as delivery
-    participant I as inventory
+    participant O as orders
     participant P as payments
     C->>R: POST /returns {kind: cancellation, fulfillmentOrderId}
     Note over R: owner or key checks · then one transaction under the order's lock
     R->>D: cancelRemainder(fulfillmentOrderId)
     D-->>R: the lines cancelled, the summary updated
-    R->>I: releaseLinesForOrder(lines)
+    R->>O: releaseStock(lines)
     R->>R: write the Return (closed) · return.requested · return.closed
     Note over R: commit
     R->>P: refundForReturn(reason: cancellation, returnId)
