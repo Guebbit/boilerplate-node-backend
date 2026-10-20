@@ -77,7 +77,7 @@ export const ORDER_EVENTS = {
     },
     /**
      * A preorder's buyer was asked whether to keep waiting for a late date and never answered
-     * (FTC 16 CFR 435.2, CRD Art. 18): silence cancels, and the cancel refunds. Only `delivery`'s
+     * (FTC 16 CFR 435.2 (b)(1)(iii)): silence cancels, and the cancel refunds. Only `delivery`'s
      * record of that silence makes it, and only while nothing has shipped.
      */
     cancelUnanswered: {

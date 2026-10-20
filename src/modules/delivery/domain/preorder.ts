@@ -17,7 +17,7 @@
  * See: docs/modules/delivery.md#preorders-and-a-moved-date
  */
 
-import { DAY_MS, endOfUtcDay } from '@domain-primitives/time';
+import { DAY_MS, endOfDayInZone } from '@domain-primitives/time';
 import {
     FulfillmentConsent,
     FulfillmentHoldReason,
@@ -190,16 +190,19 @@ const answerCapOf = (facts: AnswerFacts): Date | undefined => {
 
 /**
  * When silence turns into a cancel, for a buyer asked at `now`: 30 days on, but never later than
- * what {@link answerCapOf} allows, to the end of that UTC day (the date printed in the mail). A cap
- * already past is held at today: the buyer is never given a deadline that has gone.
+ * what {@link answerCapOf} allows, to the end of that day on the SHOP's calendar: the day the mail
+ * prints, so the printed day and the enforced day are one. A cap already past is held at today: the
+ * buyer is never given a deadline that has gone.
  * @param now - the instant the buyer was asked
  * @param facts - the fulfillment order before this question changed it
+ * @param timeZone - the shop's canonical IANA zone, the calendar the mail prints in
  */
-export const answerBy = (now: Date, facts: AnswerFacts = {}): Date => {
+export const answerBy = (now: Date, facts: AnswerFacts, timeZone: string): Date => {
     const latest = now.getTime() + CONSENT_WINDOW_DAYS * DAY_MS;
     const cap = answerCapOf(facts);
-    return endOfUtcDay(
-        new Date(cap ? Math.min(latest, Math.max(cap.getTime(), now.getTime())) : latest)
+    return endOfDayInZone(
+        new Date(cap ? Math.min(latest, Math.max(cap.getTime(), now.getTime())) : latest),
+        timeZone
     );
 };
 

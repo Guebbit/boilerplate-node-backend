@@ -39,7 +39,8 @@ export const fulfillmentOrdersOf = (orderId: string): Promise<FulfillmentOrderDo
 
 /**
  * Set a fulfillment order's dates and consent to a state a test needs to start from — a promise
- * long past, a date the buyer already accepted — which only the clock reaches through the doors.
+ * long past, a date the buyer already accepted, a deadline that has just gone — which only the
+ * clock reaches through the doors.
  * @param fulfillmentOrderId - the fulfillment order
  * @param fields - the fields to set
  */
@@ -48,7 +49,7 @@ export const setFulfillmentOrderState = (
     fields: Partial<
         Pick<
             FulfillmentOrderDocument,
-            'agreedAt' | 'expectedAt' | 'consent' | 'lastNoticeAt' | 'slips'
+            'agreedAt' | 'expectedAt' | 'consent' | 'consentDeadline' | 'lastNoticeAt' | 'slips'
         >
     >
 ): Promise<unknown> =>

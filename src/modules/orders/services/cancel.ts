@@ -364,7 +364,7 @@ export const cancelForPaymentMismatchById = (
 
 /**
  * Cancel an order whose preorder buyer was asked to keep waiting and never answered: silence is a
- * cancel, and a cancel refunds in full (FTC 16 CFR 435.2 (b)(1)(iii), CRD Art. 18). Called by
+ * cancel, and a cancel refunds in full (FTC 16 CFR 435.2 (b)(1)(iii)). Called by
  * `returns`, which reacts to `delivery`'s record of the silence, and only for an order with nothing
  * shipped — goods that left are cancelled one fulfillment order at a time instead.
  *

@@ -48,6 +48,11 @@ export interface FulfillmentOrderDelayed {
     needsAnswer: boolean;
     /** When silence turns into a cancel (ISO 8601); present exactly when `needsAnswer`. */
     answerBy?: string;
+    /**
+     * The date the buyer already agreed to wait for (ISO 8601); present only on a RENEWED question,
+     * so the mail can say what the new deadline follows from. Internal: the webhook omits it.
+     */
+    acceptedUntil?: string;
 }
 
 /**

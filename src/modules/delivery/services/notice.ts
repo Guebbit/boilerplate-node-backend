@@ -10,6 +10,7 @@
 
 import type { ClientSession } from 'mongoose';
 import { buyerIdOf, orderService } from '@modules/orders';
+import { shopTimezone } from '@modules/shop';
 import type { OrderDocument } from '@modules/orders';
 import { FulfillmentConsent } from '@types';
 import { answerBy } from '../domain';
@@ -42,12 +43,14 @@ export interface SentNotice {
  * @param order - its order
  * @param input - what the notice says
  * @param deadline - when silence cancels, when the buyer must answer
+ * @param acceptedUntil - the date the buyer already agreed to wait for, on a renewed question
  */
 const payloadOf = (
     fulfillmentOrder: FulfillmentOrderDocument,
     order: OrderDocument,
     input: NoticeInput,
-    deadline: Date | undefined
+    deadline: Date | undefined,
+    acceptedUntil: Date | undefined
 ): FulfillmentOrderDelayed => ({
     orderId: String(fulfillmentOrder.orderId),
     fulfillmentOrderId: String(fulfillmentOrder._id),
@@ -58,7 +61,8 @@ const payloadOf = (
     ...(input.expectedAt ? { expectedAt: input.expectedAt.toISOString() } : {}),
     reason: input.reason,
     needsAnswer: input.needsAnswer,
-    ...(deadline ? { answerBy: deadline.toISOString() } : {})
+    ...(deadline ? { answerBy: deadline.toISOString() } : {}),
+    ...(acceptedUntil ? { acceptedUntil: acceptedUntil.toISOString() } : {})
 });
 
 /**
@@ -86,7 +90,15 @@ export const recordNotice = async (
 
     // `fulfillmentOrder` is still as it was before the patch: the cap reads the state the buyer was
     // last told, not the one this very notice writes.
-    const deadline = input.needsAnswer ? answerBy(now, fulfillmentOrder) : undefined;
+    const deadline = input.needsAnswer
+        ? answerBy(now, fulfillmentOrder, shopTimezone())
+        : undefined;
+    // A question to a buyer who already said yes to a date is a RENEWED one: that date is what the
+    // mail names (16 CFR 435.2 (b)(2)(ii): the buyer is told what they agreed to).
+    const acceptedUntil =
+        input.needsAnswer && fulfillmentOrder.consent === FulfillmentConsent.confirmed
+            ? fulfillmentOrder.expectedAt
+            : undefined;
     const patch: FulfillmentOrderPatch = {
         lastNoticeAt: now,
         ...(input.expectedAt ? { expectedAt: input.expectedAt } : {}),
@@ -108,7 +120,7 @@ export const recordNotice = async (
     );
     if (!claimed) return undefined;
 
-    const delayed = payloadOf(claimed, order, input, deadline);
+    const delayed = payloadOf(claimed, order, input, deadline, acceptedUntil);
     await announceDelayed(delayed, session);
     return { fulfillmentOrder: claimed };
 };

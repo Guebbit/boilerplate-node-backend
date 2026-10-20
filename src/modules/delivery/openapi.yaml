@@ -631,9 +631,10 @@ components:
             description: >-
                 Where a waiting preorder stands with its buyer after a late date. Absent: the buyer was
                 never asked. `awaiting`: asked to say whether to keep waiting, and silence until
-                `consentDeadline` cancels and refunds (FTC 16 CFR 435.2, CRD Art. 18). `confirmed`: the
-                buyer said keep waiting, so a later slip asks again. `expired`: the window closed in
-                silence and the cancel and refund are on their way; too late to answer.
+                `consentDeadline` cancels and refunds (FTC 16 CFR 435.2 (b)(1)(iii), (b)(2)(ii); in the
+                EU this is the shop's own cancellation). `confirmed`: the buyer said keep waiting, so a
+                later slip asks again. `expired`: the window closed in silence and the cancel and refund
+                are on their way; too late to answer.
 
         FulfillmentCancelReason:
             type: string

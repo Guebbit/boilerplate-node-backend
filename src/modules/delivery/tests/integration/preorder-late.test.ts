@@ -27,7 +27,8 @@ import { confirmWait } from '@modules/delivery/services/confirm-wait';
 import deliveryModule from '@modules/delivery/module';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { markDomainEventsWired, resetDomainEvents } from '@kernel/events';
-import { endOfUtcDay } from '@domain-primitives/time';
+import { endOfDayInZone } from '@domain-primitives/time';
+import { shopTimezone } from '@modules/shop';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -122,11 +123,14 @@ describe('a release date that moves', () => {
 
         const waiting = await waitingOf(orderId);
         expect([waiting.consent, waiting.slips]).toEqual(['awaiting', 1]);
-        // 30 days on, to the end of that UTC day: never less, and under 31.
+        // 30 days on, to the end of that shop-zone day: never less, and under 31.
         const days = (waiting.consentDeadline!.getTime() - Date.now()) / DAY;
         expect(days).toBeGreaterThan(29.9);
         expect(days).toBeLessThan(31);
-        expect(await delayedEvents()).toMatchObject([{ needsAnswer: true }]);
+        const events = await delayedEvents();
+        expect(events).toMatchObject([{ needsAnswer: true }]);
+        // A first question follows from no earlier agreement.
+        expect(events[0]).not.toHaveProperty('acceptedUntil');
     });
 
     it('keeps the answer deadline at 28 days past the promise when the move comes after it', async () => {
@@ -139,7 +143,7 @@ describe('a release date that moves', () => {
         const waiting = await waitingOf(orderId);
         expect(waiting.consent).toBe('awaiting');
         expect(waiting.consentDeadline).toEqual(
-            endOfUtcDay(new Date(promised.getTime() + 28 * DAY))
+            endOfDayInZone(new Date(promised.getTime() + 28 * DAY), shopTimezone())
         );
     });
 
@@ -457,7 +461,10 @@ describe('the daily sweep', () => {
         expect([early.asked, renewed.asked]).toEqual([0, 1]);
         const waiting = await waitingOf(orderId);
         expect(waiting.consent).toBe('awaiting');
-        expect(waiting.consentDeadline).toEqual(endOfUtcDay(accepted));
+        expect(waiting.consentDeadline).toEqual(endOfDayInZone(accepted, shopTimezone()));
+        // The mail names what the question follows from: the date the buyer agreed to.
+        const events = await delayedEvents();
+        expect(events.at(-1)).toMatchObject({ acceptedUntil: accepted.toISOString() });
     });
 
     it('announces a wait that ran 30 days without an answer, and only then', async () => {
@@ -483,6 +490,36 @@ describe('the daily sweep', () => {
 
         expect(again.expired).toBe(1);
         expect(await expiredEvents()).toHaveLength(2);
+    });
+
+    it('refuses a keep-waiting after the printed deadline, even before the sweep marks it', async () => {
+        const { orderId, user } = await preorder(30);
+        const waitingId = await waitingIdOf(orderId);
+        // Asked, and the end of the day the mail printed has just gone: the sweep has not run.
+        await setFulfillmentOrderState(waitingId, {
+            consent: 'awaiting',
+            consentDeadline: new Date(Date.now() - 1)
+        });
+
+        const late = await confirmWait(waitingId, asCustomer(user.id), testCallerContext);
+
+        expect(asReject(late).errors[0].code).toBe('DELIVERY_NOT_AWAITING_ANSWER');
+        expect(asReject(late).status).toBe(409);
+        expect(await consentOf(orderId)).toBe('awaiting');
+    });
+
+    it('hears a keep-waiting on the printed day itself, up to its last millisecond', async () => {
+        const { orderId, user } = await preorder(30);
+        const waitingId = await waitingIdOf(orderId);
+        await setFulfillmentOrderState(waitingId, {
+            consent: 'awaiting',
+            consentDeadline: endOfDayInZone(new Date(), shopTimezone())
+        });
+
+        const answered = await confirmWait(waitingId, asCustomer(user.id), testCallerContext);
+
+        expect(answered.success).toBe(true);
+        expect(await consentOf(orderId)).toBe('confirmed');
     });
 
     it('refuses a keep-waiting that comes after the window closed', async () => {

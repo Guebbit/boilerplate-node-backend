@@ -22,7 +22,7 @@ import { isBuyer, orderService } from '@modules/orders';
 import { FulfillmentConsent } from '@types';
 import type { AuthContext, CallerContext, FulfillmentOrder } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
-import { isAwaitingAnswer } from '../domain';
+import { hasWaitExpired, isAwaitingAnswer } from '../domain';
 import { deliveryAuditActions } from '../audit';
 import { fulfillmentOrderRepository } from '../repository';
 import { refuse, refuseMissing, runAct } from './act';
@@ -68,6 +68,14 @@ export const confirmWait = (
                             409,
                             ERROR_CODES.DELIVERY_NOT_AWAITING_ANSWER,
                             'delivery.not-awaiting-answer'
+                        );
+                    // The window closed at the end of the day the mail printed; the sweep only marks
+                    // it later, so a "yes" that arrives in between is refused here, not heard.
+                    if (hasWaitExpired(current, new Date()))
+                        return refuse(
+                            409,
+                            ERROR_CODES.DELIVERY_NOT_AWAITING_ANSWER,
+                            'delivery.answer-window-closed'
                         );
 
                     const confirmed = await fulfillmentOrderRepository.claim(
