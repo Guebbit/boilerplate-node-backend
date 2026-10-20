@@ -1,7 +1,8 @@
 # Modules
 
-A domain lives in exactly one folder. Adding one is a folder plus a line; removing one is `rm -rf`
-plus deleting that line. Everything on this page exists to make those two sentences true.
+A domain lives in exactly one folder. Adding one is a folder plus its registration in `src/modules.ts`;
+removing one is `rm -rf` plus deleting that registration. Everything on this page exists to make those
+two sentences true; [Adding & removing a module](./module-lifecycle.md) walks the steps.
 
 > New to the words **domain** and **barrel**? They are defined with a picture each in
 > [The words these pages use](./index.md#the-words-these-pages-use).
@@ -68,19 +69,22 @@ So `kernel` holds only what would lose its reason to exist if modules did — wh
 just the module system machinery (`registry.ts`, `events.ts`): most of its code is the authn/authz surface every module's guard shares. That is a real weight,
 not an oversight — the table below is what earns each file its place, module system or not:
 
-| File                            | Why it cannot be infrastructure                                                                          |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `registry.ts`                   | it _is_ the module system — `AppModule`, `registerModules`                                               |
-| `events.ts`                     | it exists so two modules can talk without importing each other                                           |
-| `authentication.ts`             | the socket `account` plugs into, so guards need no module import                                         |
-| `middlewares/authorizations.ts` | the guard that consumes that socket                                                                      |
-| `permissions.ts`                | the declared keys and preset roles, read off the shared YAML the PHP twin reads                          |
-| `ability.ts`                    | a resolved caller's rules, built once per request from what `permissions.ts` declares                    |
-| `access/query.ts`               | a caller's rules turned into the Mongo filter that enforces them, so no module writes its own            |
-| `access/tenant.ts`              | the one shop's pinned `_id`, needed by `permissions.ts` before `@modules/access` can be imported         |
-| `module-config.ts`              | the boot-time gate collecting every module's — and no module's — configuration slices                    |
-| `config.ts`                     | the kernel's own variables: step-up windows and the outbox retry policy                                  |
-| `translation.ts`                | the hook `modules/locales` answers, so a decorator can resolve content without importing `src/modules/*` |
+| File                            | Why it cannot be infrastructure                                                                           |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `registry.ts`                   | it _is_ the module system — `AppModule`, `registerModules`                                                |
+| `events.ts`                     | it exists so two modules can talk without importing each other                                            |
+| `authentication.ts`             | the socket `account` plugs into, so guards need no module import                                          |
+| `middlewares/authorizations.ts` | the guard that consumes that socket                                                                       |
+| `permissions.ts`                | the declared keys and preset roles, read off the shared YAML the PHP twin reads                           |
+| `ability.ts`                    | a resolved caller's rules, built once per request from what `permissions.ts` declares                     |
+| `access/query.ts`               | a caller's rules turned into the Mongo filter that enforces them, so no module writes its own             |
+| `access/tenant.ts`              | the one shop's pinned `_id`, needed by `permissions.ts` before `@modules/access` can be imported          |
+| `module-config.ts`              | the boot-time gate collecting every module's — and no module's — configuration slices                     |
+| `config.ts`                     | the kernel's own variables: step-up windows and the outbox retry policy                                   |
+| `cookies.ts`                    | the session cookie's name and reader, which the auth port and the SSE-only path both consume              |
+| `outbox.ts`                     | the transactional outbox: an event written with the state change it announces, published after by a relay |
+| `staff-read.ts`                 | the audit entry for staff reading someone else's record, shared by every module's detail reads            |
+| `translation.ts`                | the hook `modules/locales` answers, so a decorator can resolve content without importing `src/modules/*`  |
 
 The seed accounts' ids and credentials — the two demo identities `users`, `orders`, `cart` and
 `wishlist` each point at — are NOT here: they are pure scenario data, owned by none of the modules
@@ -236,7 +240,8 @@ flowchart TD
         RP["repository.ts"]
         MD["model.ts"]
         CN["<b>openapi.yaml</b> · probes.ts<br/>its slice of the contract"]
-        EX["audit.ts · metrics.ts<br/>locales/ · events.ts · emails.ts"]
+        DM["domain/ · events.ts · emails.ts"]
+        EX["audit.ts · metrics.ts<br/>locales/"]
         TS["tests/unit · tests/contract"]
     end
 
@@ -246,33 +251,34 @@ flowchart TD
     SV --> RP
     RP --> MD
     IDX -.->|re-exports| SV
-    IDX -.->|re-exports| RP
+    IDX -.->|re-exports| DM
+    IDX -.->|types only| MD
 
     classDef front fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef layer fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef side fill:#f1f5f9,stroke:#64748b,color:#111827;
     class IDX,MAN front;
-    class RT,CT,SV,RP,MD layer;
+    class RT,CT,SV,RP,MD,DM layer;
     class CN,EX,TS side;
 ```
 
-| File                                                 | Required?                                                                          | What it is                                                                                   |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `module.ts`                                          | **yes**                                                                            | the manifest — the only file `src/modules.ts` imports                                        |
-| `index.ts`                                           | **yes**                                                                            | the public barrel, even when empty (`antibot`)                                               |
-| `routes.ts` + `controllers/`                         | only if the domain serves HTTP                                                     | `audit-logs` has neither                                                                     |
-| `service.ts` · `repository.ts` · `model.ts`          | only if it owns data                                                               | `observability` owns none — it serves URLs over other domains' data                          |
-| `services/`                                          | when `service.ts` outgrows one file                                                | see [Layers](./layers.md#when-service-ts-becomes-services)                                   |
-| `presenter.ts` (`presenters.ts` for >1 resource)     | if it serves HTTP and owns a model                                                 | the one place a document becomes wire shape — see [below](#the-module-template)              |
-| `domain/`                                            | only if the module has rules to prove; a 3+-state stored status almost always does | see [Domain Layer](./domain-layer.md#a-3-state-stored-status-almost-always-earns-the-folder) |
-| `openapi.yaml`                                       | if it serves HTTP                                                                  | its standalone slice of the REST contract                                                    |
-| `asyncapi.yaml`                                      | if it owns a channel                                                               | the same, for the async contract — `observability`, `webhooks`, `notifications`              |
-| `probes.ts`                                          | as needed                                                                          | the requests a spec cannot describe — see below                                              |
-| `providers/`                                         | if the domain has an outbound port                                                 | `payments` at the module root — see below                                                    |
-| `audit.ts` · `metrics.ts` · `locales/` · `events.ts` | as needed                                                                          | the domain's own slice of each cross-cutting declaration                                     |
-| `analytics.ts` · `factories.ts`                      | as needed                                                                          | the event names it emits; how its test/demo records are built                                |
-| `emails.ts`                                          | only if the domain sends email                                                     | the finished copy of its emails — see below                                                  |
-| `tests/unit/` · `tests/contract/`                    | yes, in practice                                                                   | deleted with the module                                                                      |
+| File                                                 | Required?                                                                          | What it is                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `module.ts`                                          | **yes**                                                                            | the manifest — the only file `src/modules.ts` imports                                                                                                                                                                                                                                  |
+| `index.ts`                                           | **yes**                                                                            | the public barrel, even when empty (`antibot`)                                                                                                                                                                                                                                         |
+| `routes.ts` + `controllers/`                         | only if the domain serves HTTP                                                     | only `access` has neither                                                                                                                                                                                                                                                              |
+| `service.ts` · `repository.ts` · `model.ts`          | only if it owns data                                                               | `observability` owns none — it serves URLs over other domains' data                                                                                                                                                                                                                    |
+| `services/`                                          | when `service.ts` outgrows one file                                                | see [Layers](./layers.md#when-service-ts-becomes-services)                                                                                                                                                                                                                             |
+| `presenter.ts` (`presenters.ts` for >1 resource)     | if it serves HTTP and owns a model                                                 | the one place a document becomes wire shape — see [below](#the-module-template)                                                                                                                                                                                                        |
+| `domain/`                                            | only if the module has rules to prove; a 3+-state stored status almost always does | see [Domain Layer](./domain-layer.md#a-3-state-stored-status-almost-always-earns-the-folder)                                                                                                                                                                                           |
+| `openapi.yaml`                                       | if it serves HTTP                                                                  | its standalone slice of the REST contract                                                                                                                                                                                                                                              |
+| `asyncapi.yaml`                                      | if it owns a channel                                                               | the same, for the async contract — `observability`, `webhooks`, `notifications`; `asyncapi.internal.yaml` (`account`, `webhooks`) and `asyncapi.webhooks.yaml` (`delivery`, `example`, `orders`, `payments`, `returns`) are the same idea for the internal and public-webhook channels |
+| `probes.ts`                                          | as needed                                                                          | the requests a spec cannot describe — see below                                                                                                                                                                                                                                        |
+| `providers/`                                         | if the domain has an outbound port                                                 | e.g. `payments`, `invoicing` — see below                                                                                                                                                                                                                                               |
+| `audit.ts` · `metrics.ts` · `locales/` · `events.ts` | as needed                                                                          | the domain's own slice of each cross-cutting declaration                                                                                                                                                                                                                               |
+| `analytics.ts` · `factories.ts`                      | as needed                                                                          | the event names it emits; how its test/demo records are built                                                                                                                                                                                                                          |
+| `emails.ts`                                          | only if the domain sends email                                                     | the finished copy of its emails — see below                                                                                                                                                                                                                                            |
+| `tests/unit/` · `tests/contract/`                    | yes, in practice                                                                   | deleted with the module                                                                                                                                                                                                                                                                |
 
 The table lists what a module MAY have. What decides **where** in the module a file goes is one
 rule, and `account` is the module that forced it to be written down:
@@ -363,17 +369,17 @@ column, and the manifest entry, to drop it.
 | Events and a subscriber    | `events.ts`, `services/notify.ts`                                           | `subscribe`                            | publishes `example.published` on the outbox; its own mail listens |
 | Mail                       | `emails.ts`, `templates/`                                                   | the manifest's `templates`             | mails the owner when an example is published                      |
 | Rate limits                | `rate-limits.ts`                                                            | `rateLimits`                           | a budget on creating examples                                     |
-| A public webhook           | `events.ts`, the catalogue in `src/modules/webhooks/asyncapi.yaml`          | `publicEvents`                         | an `example.published` webhook                                    |
+| A public webhook           | `events.ts`, the module's own `asyncapi.webhooks.yaml`                      | `publicEvents`                         | an `example.published` webhook                                    |
 | Translatable fields        | the `locales` port's methods on `repository.ts`                             | `translatables`                        | the title, per language                                           |
 | An uploaded image          | `services/cover.ts`, `controllers/put-example-cover.ts`, the route and path | `imageTargets`                         | a cover image                                                     |
 | A typed setting            | `config.ts`                                                                 | `config`                               | the longest body an example may have                              |
-| Demo records               | `scenarios/example.ts`, one line in `scenarios/shop-modules.ts`             | (the scenario table)                   | a few seeded examples for the demo profile                        |
+| Demo records               | `scenarios/example.ts`, found by `npm run scenarios:generate`               | (the scenario table)                   | a few seeded examples for the demo profile                        |
 | Metrics, probes, analytics | `metrics.ts`, `probes.ts`, `analytics.ts`                                   | (found by name, not declared)          | one counter, one probe, one event                                 |
 | Personal data              | `services/personal-data.ts`                                                 | `personalData` (`collect` and `erase`) | exports and erases the person's examples                          |
 
 Left out on purpose, with the module that really needs each: `rawBodyPaths` (`payments`: a signed
-body), `consumers` (`webhooks`: a queue), `forbiddenInProduction` (`webhooks`), a custom boot check
-(`account`, `payments`, `products`) and `onRegistered` (`locales`, `account`).
+body), `consumers` (`webhooks`: a queue), a config slice's own `check` (`account`'s session and OAuth
+settings, `payments`) and `onRegistered` (`locales`, `account`).
 
 Four rules the table above cannot show, because each is about how a file BEHAVES rather than
 whether it exists:
@@ -458,7 +464,7 @@ known — installing a kernel port, or resolving a cross-module lookup like `loc
 the manifest, in the module's own `module.yaml` — one plain file, read by `.dependency-cruiser.cjs`
 as the enforced allow-list behind `check:dependencies`, not by the app at runtime — see
 [Strategic DDD](./strategic-ddd.md) §2 and §4. Demo data is not on the manifest either:
-`scenarios/index.ts` reads a module's repository and factories directly.
+`scenarios/<module>.ts` reads a module's repository and factories directly.
 
 `basePath` and `routes` are both optional, so a domain that owns data but no URL is an ordinary
 entry rather than a special case — `access` declares neither and `app/routes.ts` mounts only
@@ -492,25 +498,25 @@ today's shape as an example.
 :::
 
 Every arrow is an import across a module boundary, through the target's barrel. `cart` is the
-busiest node on the graph, reaching `addresses`, `delivery`, `inventory`, `orders`, `payments`,
-`products` and `users` — seven edges, and not a smell to refactor away: a checkout is the one operation that
-genuinely needs the catalogue, the customer, the order it becomes, the method and address it ships
-to, and the payment that settles it. `products` and `access` sit at the opposite end: reached by
-several modules, reaching none.
+busiest node on the graph — its edges are on [the map](../modules/index.md#the-map) — and that is not
+a smell to refactor away: a checkout is the one operation that genuinely needs the catalogue, the
+customer, the order it becomes, the method and address it ships to, and the payment that settles it.
+`access` and `shop` sit at the opposite end: reached by several modules, reaching none.
 
-`inventory` is worth reading as a shape rather than a node. It sits one level above `products` and
-`cart`, `orders` and `payments` depend on it, because it owns the only writes to the two stock
-counters: `orders` asks it to hold units, `payments` asks it to turn a hold into a sale.
+`inventory` is worth reading as a shape rather than a node. It sits one level above `products`, and
+`orders`, `payments`, `delivery` and `returns` depend on it, because it owns the only writes to the
+three stock counters (`onHand`, `reserved`, `backordered`): `orders` asks it to hold units,
+`payments` asks it to turn a hold into a sale.
 
 The reverse direction is domain events, and it is a **separate** graph on purpose — an event edge is
 exactly the edge that would have made the import graph a cycle:
 
-| Event                           | Emitted by  | Handled by                                  |
-| ------------------------------- | ----------- | ------------------------------------------- |
-| `product.deleted`               | `products`  | `cart`, `wishlist`                          |
-| `order.status_changed`          | `orders`    | `delivery` (on `shipped`)                   |
-| `order.cancelled`               | `orders`    | `webhooks` (fans out), `payments` (refunds) |
-| `inventory.reservation_expired` | `inventory` | `orders` (cancels the order)                |
+| Event                           | Emitted by  | Handled by                   |
+| ------------------------------- | ----------- | ---------------------------- |
+| `inventory.reservation_expired` | `inventory` | `orders` (cancels the order) |
+
+That is one example. Every module page's generated neighbourhood graph (see
+[the Modules overview](../modules/index.md)) draws its own event edges as dotted arrows.
 
 A user's hard delete is deliberately not in this table: it is not an event. Each module declares a
 `personalData.erase` hook and `users` runs them all inside one transaction, so a failing eraser
@@ -597,19 +603,20 @@ exists, so every subscription is attached before anything can emit.
 
 ## Adding and removing a domain
 
-Adding one is a folder plus a line; removing one is `rm -rf` plus deleting that line. The full
-procedure — the conditional registries, the bundling, the two-repo step — is
+Adding one is a folder plus its registration in `src/modules.ts`; removing one is `rm -rf` plus
+deleting that registration. The full procedure — the conditional registries, the bundling, the two-repo step — is
 [Adding & removing a module](./module-lifecycle.md). What belongs on this page is why it works and
 what it measured.
 
 **It works because nothing central enumerates domains.** Route mounting, the seeder, the i18n boot,
 the audit vocabulary and the metrics registry all walk the registry rather than naming its entries,
-so none of them is on either checklist. `src/modules.ts` is the one file that names a domain. The
-three contract order lists name domains too, but only as a preferred position — membership is read
+so none of them is on either checklist. `src/modules.ts` is the registry that names a domain, and
+`scripts/scaffold/central-edits.ts` lists the four files a new module still edits by hand (`src/modules.ts`,
+`shared/authorization-roles.yaml`, `shared/authorization-conformance.yaml` and
+`tests/cross-cutting/replace-patch-parity.test.ts`). The three contract order lists name domains too, but only as a preferred position — membership is read
 off disk (`scripts/contracts/section-order.ts`), so they are not a census and never need an edit.
 
-**And it is measured, in both directions.** `wishlist` was added under it: one folder, one registry
-line, and **zero** edits to any existing file.
+**And it is measured, in both directions.** `wishlist` was added under it with its folder and its registration, and no edit to another module.
 
 Deleting a few depended-upon modules together gives these breaks:
 
@@ -646,25 +653,26 @@ Some of these rules are relational — what a file may import depends on which m
 `no-restricted-imports` only matches file globs. Those live as tests instead, in
 `tests/cross-cutting/`.
 
-| Rule                                                                                  | Guard                                |
-| ------------------------------------------------------------------------------------- | ------------------------------------ |
-| No module imports a sibling's internals                                               | ESLint `no-restricted-imports`       |
-| `infrastructure` and `kernel` never import a module                                   | ESLint, per-tier blocks              |
-| A spec may reach its own module, a sibling's barrel, manifest or tests — nothing else | `eslint-plugin-boundaries`           |
-| Two modules never claim the same audit action, and every action is dotted             | `audit-actions.test.ts`              |
-| No module shadows a shared locale key, or writes outside its own namespace            | `locale-namespaces.test.ts`          |
-| Every language declares the same keys across every module                             | `locale-parity.test.ts`              |
-| `infrastructure`'s shared scalars still match every operation in `openapi.yaml`       | `contract-scalars.test.ts`           |
-| Every controller handles its own rejections                                           | ESLint `controller-chain-must-catch` |
-| A module's `subscribe` hook registering nothing, or one event twice                   | `module-subscriptions.test.ts`       |
-| A controller reading the caller on a route that does not guarantee one                | `authenticated-controllers.test.ts`  |
-| Every committed bundle is structurally correct — no dangling path, channel or gap     | `contract-bundles.test.ts`           |
-| Every mounted route is in the spec, and every spec operation is mounted               | `route-spec-parity.test.ts`          |
-| `scenarios/index.ts` names no module `enabledModules` does not also enable            | `scenario-fixtures.test.ts`          |
+| Rule                                                                                  | Guard                                                                                                                                           |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| No module imports a sibling's internals                                               | `eslint-plugin-boundaries`, and dependency-cruiser's `module-internals-are-private` ([how](./strategic-ddd.md#how-the-tier-walls-are-enforced)) |
+| `infrastructure` and `kernel` never import a module                                   | ESLint, per-tier blocks                                                                                                                         |
+| A spec may reach its own module, a sibling's barrel, manifest or tests — nothing else | `eslint-plugin-boundaries`                                                                                                                      |
+| Two modules never claim the same audit action, and every action is dotted             | `audit-actions.test.ts`                                                                                                                         |
+| No module shadows a shared locale key, or writes outside its own namespace            | `locale-namespaces.test.ts`                                                                                                                     |
+| Every language declares the same keys across every module                             | `locale-parity.test.ts`                                                                                                                         |
+| `infrastructure`'s shared scalars still match every operation in `openapi.yaml`       | `contract-scalars.test.ts`                                                                                                                      |
+| Every controller handles its own rejections                                           | ESLint `controller-chain-must-catch`                                                                                                            |
+| A module's `subscribe` hook registering nothing, or one event twice                   | `module-subscriptions.test.ts`                                                                                                                  |
+| A controller reading the caller on a route that does not guarantee one                | `authenticated-controllers.test.ts`                                                                                                             |
+| Every committed bundle is structurally correct — no dangling path, channel or gap     | `contract-bundles.test.ts`                                                                                                                      |
+| Every mounted route is in the spec, and every spec operation is mounted               | `route-spec-parity.test.ts`                                                                                                                     |
+| No `shopModules` entry names a module `enabledModules` does not mount                 | `ShopModulesAreMounted`, a compile-time check in `scenarios/check.ts` (against `ModuleName`)                                                    |
 
 Each of these was verified by deliberately breaking it and watching it fail. A guard nobody has seen
-fire is a comment. All but the last live in `tests/cross-cutting/`; `route-spec-parity.test.ts` sits
-in `tests/contract/`, because it needs the loaded spec the contract harness already registers.
+fire is a comment. Several rows are ESLint rules, dependency-cruiser rules or a `tsc` check, not
+tests; the tests live in `tests/cross-cutting/`, except `route-spec-parity.test.ts`, which sits in
+`tests/contract/` because it needs the loaded spec the contract harness already registers.
 
 **`module-subscriptions.test.ts` is the least obvious of these**, because the thing it catches never
 fails on its own. `subscribe` is the one part of a manifest that is pure behaviour: `routes` and

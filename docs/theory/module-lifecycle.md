@@ -5,12 +5,13 @@ shape; this page is what you actually type.
 
 Both halves are the same claim read in two directions:
 
-> A domain is one folder plus one registry line. Adding it costs a folder and a line; removing it
-> costs `rm -rf` and a line. Anything else that breaks is **real coupling**, and seeing it is the
+> A domain is one folder plus its registration in `src/modules.ts` (the import, the `enabledModules`
+> entry and the `ModuleName` member). Adding it costs a folder and that registration; removing it
+> costs `rm -rf` and deleting it. Anything else that breaks is **real coupling**, and seeing it is the
 > point.
 
 That claim is not aspirational — the cost of one real addition is recorded below, honestly,
-including the parts that are more than one line.
+including the parts beyond the registration.
 
 ## The one registry, and everything that reads from the folder
 
@@ -24,7 +25,7 @@ flowchart LR
     M["src/modules/&lt;name&gt;/"] --> Y["module.yaml<br/><i>group, summary, dependsOn,<br/>noAudit, frontend</i>"]
     M --> F["openapi.yaml · asyncapi.yaml<br/>authorization.yaml · probes.ts"]
     M --> T["module.ts<br/><i>name, routes, personalData…</i>"]
-    R["src/modules.ts<br/><i>the one line</i>"] --> T
+    R["src/modules.ts<br/><i>the registry</i>"] --> T
     Y --> D["docs index + sidebar<br/>audit-exemption check<br/>frontend pairing check"]
     F --> B["contract bundles<br/>client collections"]
     T --> A["app tier: routes, seeding,<br/>i18n, personal data<br/>+ the router-guard tests"]
@@ -63,7 +64,7 @@ their historical order byte for byte.
 
 An `asyncapi.internal.yaml` (a queue nothing outside this service reaches) and whether a module's
 public `asyncapi.yaml` is frontend-visible are both fully automatic — see step 3 below — so neither
-needs a registry line at all.
+needs a registry entry at all.
 
 An `analytics.ts` needs no entry anywhere: `tests/cross-cutting/analytics-events.test.ts` sweeps the
 module folders for one.
@@ -75,10 +76,11 @@ and writing a `## Libraries` section on the module's own page; removing the modu
 library from `package.json` in the same change, once nothing else has started importing it. See
 [Libraries a module owns](./modules.md#libraries-a-module-owns).
 
-A module's demo records live in `scenarios/<name>.ts`, tabled by `scenarios/index.ts` — a list,
-but not a hand-kept one of these four: adding an entry is optional (a module need not have demo
-data at all), and forgetting to remove one after deleting a module is caught by
-`tests/cross-cutting/scenario-fixtures.test.ts` rather than by a build failure. What the API
+A module's demo records live in `scenarios/<name>.ts`, which exports a `shopModule`.
+`npm run scenarios:generate` discovers those files into `scenarios/shop-modules.generated.ts`, so
+there is no hand-kept list of these four: a module need not have demo data at all, and deleting the
+file removes its entry. A `shopModules` key naming a module `enabledModules` does not mount is a
+compile error (`ShopModulesAreMounted` in `scenarios/check.ts`). What the API
 actually answers for a seeded row is not published anywhere; it is checked directly, against a
 real database, by `tests/integration/scenarios/shop.test.ts`.
 
@@ -103,7 +105,7 @@ and the bundler assembles `AccountExportResponse` from them):
 
 ::: tip Steps 1 to 5 can be generated
 `npm run scaffold:module -- <name>` writes the folder, the contract fragment, the permission rules and set,
-the smoke tests, the docs page and the registry line, then regenerates. It also makes the three
+the smoke tests, the docs page and the registry edits, then regenerates. It also makes the three
 edits outside the folder that a keyed module still needs (the admin role list, its conformance
 copy, the PUT/PATCH parity canary). [Module scaffolder](../tools/module-scaffolder.md) has the
 flow; the steps below are what it automates, and what you do by hand for a module of another shape.
@@ -112,7 +114,7 @@ flow; the steps below are what it automates, and what you do by hand for a modul
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
 flowchart LR
-    A["1 · mkdir src/modules/&lt;name&gt;/<br/>write module.ts"] --> B["2 · one line in<br/>src/modules.ts"]
+    A["1 · mkdir src/modules/&lt;name&gt;/<br/>write module.ts"] --> B["2 · register in<br/>src/modules.ts"]
     B --> C["3 · the contract fragments<br/><i>if it serves HTTP</i>"]
     C --> D["4 · npm run regenerate"]
     D --> E["5 · write<br/>docs/modules/&lt;name&gt;.md"]
@@ -226,16 +228,20 @@ manifest type is a union with `never`s on both alternatives, so declaring a rout
 point is a type error rather than a route that silently never registers.
 :::
 
-### 2 · The line
+### 2 · The registration
 
 ```ts
 // src/modules.ts
 import feedback from './modules/feedback/module';
 
 export const enabledModules: AppModule[] = [account, auditLogs, cart /* … */, feedback];
+
+export type ModuleName = 'account' | 'audit-logs' | 'cart' /* … */ | 'feedback';
 ```
 
-Keep the array alphabetical. Order only decides route-mounting sequence, which is irrelevant for
+The third edit is the `ModuleName` member: a table keyed on `ModuleName` (`scenarios/shop-modules.ts`)
+refuses a name no module carries, so a module left out of the union is a false type error later.
+Keep the array and the union alphabetical. Order only decides route-mounting sequence, which is irrelevant for
 distinct base paths, so alphabetical keeps diffs boring.
 
 **Stop here if the domain serves no HTTP.** It is mounted, seeded, translated, audited and measured
@@ -248,9 +254,9 @@ Write `openapi.yaml`; its paths and tags reach the root contract by themselves
 it only chooses where the paths sit; without one the module is appended alphabetically. The same
 goes for `MODULE_ASYNC_ORDER` if you wrote a top-level `asyncapi.yaml` (not `asyncapi.internal.yaml`
 — see below). An `analytics.ts` needs no entry anywhere — the name is swept off disk. A
-`scenarios/<name>.ts`, if the domain has demo data, needs one line in `scenarios/index.ts`'s table —
-the rows themselves are produced by seeding the catalogue and driving the real endpoints at boot,
-not assembled from a committed list.
+`scenarios/<name>.ts`, if the domain has demo data, is found by `npm run scenarios:generate`, which
+writes `scenarios/shop-modules.generated.ts` — the rows themselves are produced by seeding the
+catalogue and driving the real endpoints at boot, not assembled from a committed list.
 
 Whether the channels reach a browser is a naming choice, not a registry entry: `asyncapi.yaml` IS
 the module's public event catalogue — an SSE stream, a websocket — and lands in `asyncapi.public.yaml`,
@@ -357,11 +363,11 @@ flowchart LR
     class A,B,C,D,E,F s;
 ```
 
-### 1–3 · Delete the folder and the line
+### 1–3 · Delete the folder and the registration
 
 ```bash
 rm -rf src/modules/<name>
-# delete the import and the array entry in src/modules.ts
+# delete the import, the array entry and the ModuleName member in src/modules.ts
 ```
 
 Its paths leave the contract, its probes leave the collections and its `module.yaml` entries leave
@@ -510,7 +516,7 @@ cp -al node_modules "$SB"/node_modules            # same filesystem, or copy it
 cd "$SB"
 
 rm -rf src/modules/{products,cart,orders}
-# drop the imports + array entries from src/modules.ts
+# drop the imports, array entries and ModuleName members from src/modules.ts
 npx tsc --noEmit                                  # THE assertion: 0 errors in scripts/db/**, and none
                                                   # in src/** from a module that did not DECLARE
                                                   # the dependency in its manifest
