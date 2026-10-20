@@ -55,6 +55,32 @@ last log lines of `setup`, `app` and `cron`, redeploys the previous good image w
 overwritten by every build, so there was nothing to go back to. The script sets it; set it by hand
 only when you run compose yourself.
 
+## With a registry
+
+`publish-image` in `.github/workflows/ci.yml` builds `docker/Dockerfile.production` once per merge to
+`main` and pushes it, so a deploy runs the exact bytes CI proved. It is **off** until a registry
+exists: with `IMAGE_REGISTRY` unset the job is skipped, and a run shows it as skipped.
+
+| Input (repository settings)    | Meaning                                                            |
+| ------------------------------ | ------------------------------------------------------------------ |
+| `vars.IMAGE_REGISTRY`          | host and namespace, e.g. `registry.example/team`; any OCI registry |
+| `vars.IMAGE_REGISTRY_USER`     | the login name                                                     |
+| `secrets.IMAGE_REGISTRY_TOKEN` | the login token or password                                        |
+| `vars.INSTALL_CHROMIUM`        | `true` to bake Chromium in for invoice PDFs; default `false`       |
+
+```mermaid
+flowchart LR
+    Push["push to main"] --> Gate["ci + boot green"]
+    Gate -->|"IMAGE_REGISTRY set"| Build["build + push<br/>provenance + SBOM"]
+    Gate -->|"IMAGE_REGISTRY unset"| Skip["job skipped"]
+    Build --> Digest["digest in the job summary"]
+    Digest --> Deploy["docker/deploy.sh client ref@digest"]
+```
+
+The tag is the commit sha; the job summary prints the **digest**, which is what `deploy.sh` takes. A
+tag can be moved, a digest cannot. The job is not part of the `ci` aggregate: a registry outage
+never turns the merge gate red.
+
 ## The log
 
 Every good state is appended to `clients/<client>/deploys.log` (`clients/` is gitignored):

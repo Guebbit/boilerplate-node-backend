@@ -26,6 +26,7 @@ name: CI
 #                     its runtime user cannot write under `src/`
 #                     `backup-drill` — the backup image backs up a real Mongo and the restore drill restores it
 #                     `deploy-drill` — a bad deploy is refused and the previous image comes back
+#                     `publish-image` — pushes the proven image to a registry; skipped until `vars.IMAGE_REGISTRY` is set
 #   - pair            frontend-e2e — the paired frontend's Cypress suite against this backend
 #   - supply chain    audit
 #   - adoption        demo-strip-measure — the removal recipes still pass on a scratch copy
@@ -898,6 +899,81 @@ jobs:
             - name: Deploy, break, roll back
               run: bash docker/deploy-drill.sh
 
+    publish-image:
+        # Builds the production image ONCE per merge and pushes it, so `docker/deploy.sh` can pull the
+        # exact bytes CI proved by digest instead of rebuilding on the host. Switched OFF until a
+        # registry exists: with `vars.IMAGE_REGISTRY` unset the job is skipped, not failed, and a run
+        # shows it as skipped. Any OCI registry works; none is named here on purpose.
+        # Inputs (repository settings, set once a registry is picked):
+        #   vars.IMAGE_REGISTRY         host and namespace, e.g. `registry.example/team`
+        #   vars.IMAGE_REGISTRY_USER    the login name
+        #   secrets.IMAGE_REGISTRY_TOKEN the login token or password
+        #   vars.INSTALL_CHROMIUM       `true` to bake Chromium in (invoice PDFs); default false
+        # Needs `ci` (the whole merge gate) and `boot` (the production image starts). Runbook:
+        # docs/tools/deploy-and-rollback.md#with-a-registry
+        # Not in the `ci` job's `needs:`: a registry outage must never turn the merge gate red.
+        if: >-
+            github.event_name == 'push' && github.ref == 'refs/heads/main'
+            && vars.IMAGE_REGISTRY != ''
+            && needs.ci.result == 'success' && needs.boot.result == 'success'
+        needs:
+            - ci
+            - boot
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
+
+            # Buildx: the default docker driver cannot write provenance or SBOM attestations.
+            # https://github.com/docker/setup-buildx-action
+            - name: Set up Buildx
+              uses: docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003 # v4.4.0
+
+            # Logs in to the registry named by `registry`; the token never reaches a build step.
+            # https://github.com/docker/login-action
+            - name: Log in to the registry
+              uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+              with:
+                  registry: ${{ vars.IMAGE_REGISTRY }}
+                  username: ${{ vars.IMAGE_REGISTRY_USER }}
+                  password: ${{ secrets.IMAGE_REGISTRY_TOKEN }}
+
+            # `file`: the production Dockerfile. `push`: send it. `provenance` / `sbom`: attach the build
+            # attestation and the software bill of materials to the image. `build-args`: Chromium is opt-in.
+            # https://github.com/docker/build-push-action
+            - name: Build and push
+              id: push
+              uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+              with:
+                  context: .
+                  file: docker/Dockerfile.production
+                  push: true
+                  provenance: true
+                  sbom: true
+                  build-args: |
+                      INSTALL_CHROMIUM=${{ vars.INSTALL_CHROMIUM || 'false' }}
+                  tags: ${{ vars.IMAGE_REGISTRY }}/boilerplate-api:${{ github.sha }}
+
+            # The digest is what `docker/deploy.sh <client> <ref>` takes: a tag can move, a digest cannot.
+            - name: Print the digest
+              env:
+                  REF: ${{ vars.IMAGE_REGISTRY }}/boilerplate-api@${{ steps.push.outputs.digest }}
+              run: |
+                  {
+                    echo '### Pushed image'
+                    echo
+                    echo 'Deploy it with:'
+                    echo
+                    echo '```'
+                    echo "docker/deploy.sh <client> $REF"
+                    echo '```'
+                  } >> "$GITHUB_STEP_SUMMARY"
+
     audit:
         # Reports known moderate-and-above vulnerabilities in production dependencies.
         #
@@ -1014,7 +1090,7 @@ jobs:
             - test-contract-cookie
             - container-gate
             - frontend-e2e
-            # `boot`, `backup-drill`, `deploy-drill`, `audit` and (until its first
+            # `boot`, `backup-drill`, `deploy-drill`, `publish-image`, `audit` and (until its first
             # green run) `demo-strip-measure` are deliberately excluded — see their own comments above.
         runs-on: ubuntu-latest
         timeout-minutes: 5
