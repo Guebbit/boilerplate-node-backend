@@ -51,7 +51,8 @@ describe('clearRateLimitCounters', () => {
     it('deletes only keys under the limiter prefix, and counts them', async () => {
         await expect(clearRateLimitCounters('redis://127.0.0.1:6379')).resolves.toEqual({
             deleted: 2,
-            reachable: true
+            reachable: true,
+            configured: true
         });
         expect(calls.patterns).toEqual(['rate-limit:*']);
         expect(calls.deleted).toEqual([['rate-limit:auth:a', 'rate-limit:payments:b']]);
@@ -62,10 +63,11 @@ describe('clearRateLimitCounters', () => {
         expect(calls.closed).toBe(1);
     });
 
-    it('has nothing to clear without a Redis URL', async () => {
+    it('says it was not configured, instead of looking like an empty clear, without a Redis URL', async () => {
         await expect(clearRateLimitCounters(undefined)).resolves.toEqual({
             deleted: 0,
-            reachable: true
+            reachable: true,
+            configured: false
         });
         expect(calls.patterns).toEqual([]);
     });
@@ -74,7 +76,8 @@ describe('clearRateLimitCounters', () => {
         connectError = new Error('ECONNREFUSED');
         await expect(clearRateLimitCounters('redis://127.0.0.1:6379')).resolves.toEqual({
             deleted: 0,
-            reachable: false
+            reachable: false,
+            configured: true
         });
         expect(calls.closed).toBe(1);
     });

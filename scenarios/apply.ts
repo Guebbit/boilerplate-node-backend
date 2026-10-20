@@ -142,7 +142,11 @@ async function seed() {
          * either. SCAN + DEL under the limiter's own prefix — never FLUSHALL.
          */
         const counters = await clearRateLimitCounters(deploymentRateLimitRedisUrl);
-        if (counters.reachable)
+        if (!counters.configured)
+            logger.warn(
+                'Rate-limit counters NOT cleared: NODE_RATE_LIMIT_REDIS_URL is unset, so they live in the running server and a reseed cannot reach them.'
+            );
+        else if (counters.reachable)
             logger.info(`Rate-limit counters cleared: ${counters.deleted} keys removed.`);
         else logger.warn('Rate-limit counters NOT cleared: Redis is unreachable.');
     } else if (!(await isDatabaseEmpty())) {

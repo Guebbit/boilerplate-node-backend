@@ -332,7 +332,9 @@ export const rateLimitStore = (
  * switched off in the process that calls this. Single-use claims share the prefix, so a reset
  * reopens those too.
  *
- * Never rejects; `reachable: false` tells the caller the counters may survive.
+ * Never rejects; `reachable: false` tells the caller the counters may survive. `configured: false`
+ * means there was no Redis URL: the counters live in the running server's memory, which this
+ * process cannot reach, so none were cleared.
  *
  * @param url - the `limits` Redis URL as the DEPLOYMENT configured it (see
  *  {@link limitsRedisUrl}), read before anything switches the limiter off. `undefined` means
@@ -340,20 +342,20 @@ export const rateLimitStore = (
  */
 export const clearRateLimitCounters = (
     url: string | undefined
-): Promise<{ deleted: number; reachable: boolean }> => {
-    if (!url) return Promise.resolve({ deleted: 0, reachable: true });
+): Promise<{ deleted: number; reachable: boolean; configured: boolean }> => {
+    if (!url) return Promise.resolve({ deleted: 0, reachable: true, configured: false });
 
     const redisClient = buildLimitsClient(url);
 
     return redisClient
         .connect()
         .then(() => drainMatchingKeys(redisClient, `${limitsKeyPrefix()}:*`))
-        .then((deleted) => ({ deleted, reachable: true }))
+        .then((deleted) => ({ deleted, reachable: true, configured: true }))
         .catch((error: unknown) => {
             // Stryker disable all
             logger.warn({ message: 'Rate-limit counters could not be cleared.', error });
             // Stryker restore all
-            return { deleted: 0, reachable: false };
+            return { deleted: 0, reachable: false, configured: true };
         })
         .finally(() => closeRedisClient(redisClient));
 };
