@@ -188,9 +188,11 @@ The three libraries underneath them:
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | `scripts/docker/generate-dockerfile-dockerignore.ts` | Writes `docker/Dockerfile.dockerignore` from the root `.dockerignore`, `.git` kept IN — Docker/Buildah use a per-Dockerfile ignore file INSTEAD of the root one, not merged with it, so a hand-kept second copy drifts the moment the root list changes. `npm run docker:dockerignore`; its check mode is the gate. | —         |
 
-The shell scripts that live beside the images (`docker/boot-check.sh`, `docker/backup/`) are not under `scripts/`, but one
-has an npm entry: `npm run backup:drill` runs `docker/backup/drill.sh`, the end-to-end proof of the backup system
-(see [Backups](../tools/backups.md#the-restore-drill)).
+The shell scripts that live beside the images (`docker/boot-check.sh`, `docker/backup/`, `docker/deploy.sh`) are not under
+`scripts/`, but two have an npm entry: `npm run backup:drill` runs `docker/backup/drill.sh`, the end-to-end proof of the
+backup system (see [Backups](../tools/backups.md#the-restore-drill)), and `npm run deploy:drill` runs
+`docker/deploy-drill.sh`, the proof that a bad deploy is undone (see
+[Deploy and rollback](../tools/deploy-and-rollback.md#the-drill)).
 
 ## Scheduled jobs — `scripts/ops/`
 

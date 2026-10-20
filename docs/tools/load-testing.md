@@ -15,8 +15,11 @@ hand, and this repo does not ask you to. `bench:k6` and `bench:k6:checkout` inst
 whichever engine `CONTAINER_ENGINE` already names (`podman` by default):
 
 ```
-${CONTAINER_ENGINE:-podman} run --rm -i --network=host -v ./tests/load:/scripts:Z grafana/k6 run /scripts/browse.js
+${CONTAINER_ENGINE:-podman} run --rm -i --network=host -e BASE_URL -v ./tests/load:/scripts:Z grafana/k6 run /scripts/browse.js
 ```
+
+`-e BASE_URL` passes your shell's `BASE_URL` into k6, so `BASE_URL=https://staging.example npm run bench:k6`
+aims it elsewhere. Unset, the scripts use `http://localhost:3000`.
 
 `--network=host` is what lets the containerized k6 reach the app on the host's own port — the
 opposite of most `docker run` traffic, which stays inside the container's network. `tests/load/` is

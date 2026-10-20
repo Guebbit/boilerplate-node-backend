@@ -5,12 +5,15 @@
  * `model.ts` and nowhere else; this reconciles the database with them. Idempotent, so it runs on
  * every boot and every deploy rather than once per database.
  *
- * It DROPS indexes no schema declares. That is the point — an index nobody declares is drift —
- * but it is also why `--check` exists: run that first against anything you cannot rebuild.
+ * It ADDS what a schema declares and never drops by surprise: an index no schema declares is kept
+ * and reported, so an older release run after a rollback cannot delete the newer one's indexes.
+ * Two things are dropped without asking: an index whose options changed (replaced) and a name a
+ * model listed as retired. `--prune` also drops every other undeclared index; `--check` first.
  *
  * Usage:
- *   npm run db:sync              # apply
- *   npm run db:sync -- --check   # print the plan, change nothing, exit 1 if it is not empty
+ *   npm run db:sync              # apply (add-only)
+ *   npm run db:sync -- --check   # print the plan, change nothing, exit 1 if it would change
+ *   npm run db:sync -- --prune   # also drop every undeclared index (dev; a deploy never does)
  *   npm run host -- db:sync      # against a containerised database, from the host
  *
  * See: docs/reference/data.md
@@ -22,17 +25,30 @@ import mongoose from 'mongoose';
 import { startJob, connection } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../run-script';
-import { applyIndexSync, planIndexSync, type IndexDiff } from './index-sync';
+import { applyIndexSync, hasChanges, planIndexSync, type IndexDiff } from './index-sync';
 
 /** Report the plan without touching the database. */
 const checkOnly = process.argv.includes('--check');
 
+/** Also drop every index no schema declares. A deploy never passes it. */
+const prune = process.argv.includes('--prune');
+
 /** One collection's pending changes, as a line per index rather than a blob. */
-const describe = ({ collection, toCreate, toDrop }: IndexDiff): string =>
+const describe = ({
+    collection,
+    toCreate,
+    toReplace,
+    toDropRetired,
+    toDropUndeclared,
+    kept
+}: IndexDiff): string =>
     [
         `  ${collection}`,
-        ...toCreate.map((key) => `    + ${JSON.stringify(key)}`),
-        ...toDrop.map((name) => `    - ${name}`)
+        ...toCreate.map((key) => `    + create ${JSON.stringify(key)}`),
+        ...toReplace.map(({ name, key }) => `    ~ replace ${name} ${JSON.stringify(key)}`),
+        ...toDropRetired.map((name) => `    - drop retired ${name}`),
+        ...toDropUndeclared.map((name) => `    - drop undeclared ${name}`),
+        ...kept.map((name) => `    = undeclared, kept: ${name} (run with --prune to drop)`)
     ].join('\n');
 
 /** Print a plan under a heading, or say there was nothing to do. */
@@ -59,19 +75,20 @@ const sync = async (): Promise<void> => {
     await startJob();
 
     if (checkOnly) {
-        const plan = await planIndexSync();
+        const plan = await planIndexSync({ prune });
         report(plan, `${plan.length} collection(s) differ from their schemas:`);
 
         /*
-         * Non-zero on drift, so this is usable as a deploy gate. `runScript` owns the exit code on
-         * the failure path, and a plan is not a failure — set it directly rather than throwing,
-         * which would print a stack for an outcome that is merely informative.
+         * Non-zero when applying would change something, so this is usable as a deploy gate. An
+         * undeclared index that would be kept is reported but is not a change. `runScript` owns
+         * the exit code on the failure path, and a plan is not a failure — set it directly rather
+         * than throwing, which would print a stack for an outcome that is merely informative.
          */
-        if (plan.length > 0) process.exitCode = 1;
+        if (plan.some((diff) => hasChanges(diff))) process.exitCode = 1;
         return;
     }
 
-    report(await applyIndexSync(), 'Indexes synced:');
+    report(await applyIndexSync({ prune }), 'Indexes synced:');
 };
 
 // `undefined`: a deploy-time setup script, not a `docker/crontab` job — no expected interval to

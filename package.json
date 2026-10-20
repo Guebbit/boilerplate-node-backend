@@ -83,9 +83,10 @@
         "scenario:tls": "tsx scenarios/tools/generate-webhook-sink-tls.ts",
         "scenario:apply:reset": "tsx scenarios/apply.ts --reset",
         "db:cache:clear": "tsx scripts/db/cache-clear.ts",
-        "db:bootstrap": "npm run db:sync && npm run scenario:apply",
+        "db:bootstrap": "npm run db:sync -- --prune && npm run scenario:apply",
         "access:bootstrap": "tsx scripts/db/bootstrap-access.ts",
         "deploy:setup": "npm run db:sync && npm run access:bootstrap",
+        "config:check": "tsx scripts/ops/check-config.ts",
         "reap:quarantine": "tsx scripts/ops/run-job.ts reap:quarantine",
         "reap:orphaned-images": "tsx scripts/ops/run-job.ts reap:orphaned-images",
         "reap:mail-spool": "tsx scripts/ops/run-job.ts reap:mail-spool",
@@ -112,6 +113,7 @@
         "compose:rebuild": "npm run compose -- down -v && npm run compose -- build --no-cache && npm run compose -- up -d",
         "compose:kill": "npm run compose -- kill",
         "backup:drill": "bash docker/backup/drill.sh",
+        "deploy:drill": "bash docker/deploy-drill.sh",
         "docs:dev": "vitepress dev docs",
         "docs:build": "vitepress build docs",
         "docs:preview": "vitepress preview docs",
@@ -130,8 +132,8 @@
         "test:module": "jest --runInBand",
         "bench:orders": "autocannon -c 20 -d 30 -l http://localhost:${NODE_PORT:-3000}/orders",
         "bench:inventory": "autocannon -c 20 -d 30 -l http://localhost:${NODE_PORT:-3000}/inventory/levels",
-        "bench:k6": "${CONTAINER_ENGINE:-podman} run --rm -i --network=host -v ./tests/load:/scripts:Z grafana/k6 run /scripts/browse.js",
-        "bench:k6:checkout": "${CONTAINER_ENGINE:-podman} run --rm -i --network=host -v ./tests/load:/scripts:Z grafana/k6 run /scripts/checkout.js"
+        "bench:k6": "${CONTAINER_ENGINE:-podman} run --rm -i --network=host -e BASE_URL -v ./tests/load:/scripts:Z grafana/k6 run /scripts/browse.js",
+        "bench:k6:checkout": "${CONTAINER_ENGINE:-podman} run --rm -i --network=host -e BASE_URL -v ./tests/load:/scripts:Z grafana/k6 run /scripts/checkout.js"
     },
     "devDependencies": {
         "@asyncapi/diff": "^0.5.0",

@@ -17,11 +17,11 @@
  * This WRITES. It creates orders and moves stock, so point it at a throwaway database and re-seed
  * afterwards (`npm run scenario:apply:reset`). Never at anything you care about.
  *
- * Thresholds are placeholders — see `k6/browse.js` for how to seed real ones. Writes are slower
+ * Thresholds are placeholders — see `tests/load/browse.js` for how to seed real ones. Writes are slower
  * than reads and their ceiling is set higher here for that reason, not because they matter less.
  *
  * Usage:
- *   BASE_URL=http://localhost:3000 k6 run k6/checkout.js
+ *   BASE_URL=http://localhost:3000 npm run bench:k6:checkout
  */
 import http from 'k6/http';
 import { check, group } from 'k6';
