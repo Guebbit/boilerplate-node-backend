@@ -22,6 +22,7 @@ import {
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
+import { ownOrderFlag } from '@modules/access';
 import { inventoryService } from '@modules/inventory';
 import { announceInTransaction } from '@kernel/outbox';
 import type { ClientSession } from 'mongoose';
@@ -32,7 +33,7 @@ import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { ORDER_CANCELLED } from '../events';
 import { orderRepository } from '../repository';
-import { ORDER_EVENTS, statusesLeadingTo, type OrderActor } from '../domain';
+import { ORDER_EVENTS, buyerIdOf, statusesLeadingTo, type OrderActor } from '../domain';
 import { getById } from './read';
 import { withTimeline } from './timeline';
 import { cancelScope, actorOf } from './scope';
@@ -211,7 +212,12 @@ const afterCancel = (
         outcome: 'success',
         targetType: 'order',
         targetId: String(order._id),
-        metadata: { cause, refund, paid: order.paidAt !== undefined }
+        metadata: {
+            cause,
+            refund,
+            paid: order.paidAt !== undefined,
+            ...ownOrderFlag(context, buyerIdOf(order))
+        }
     });
     emitAnalyticsEvent({
         ...buildAnalyticsBase(emitContext),

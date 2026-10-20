@@ -8,6 +8,7 @@
  */
 
 import { t } from '@infrastructure/i18n';
+import { logger } from '@infrastructure/adapters/logger';
 import {
     generateReject,
     generateSuccess,
@@ -17,7 +18,8 @@ import {
 import { recordAudit } from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
-import { orderService } from '@modules/orders';
+import { ownOrderFlag } from '@modules/access';
+import { buyerIdOf, orderService } from '@modules/orders';
 import type { CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository, type ReturnStamp } from '../repository';
@@ -112,26 +114,45 @@ const settleDecision = (
     id: string,
     context: CallerContext
 ): Promise<ResponseSuccess<ReturnDocument>> => {
-    recordAudit(context, {
-        action:
-            to === 'approved'
-                ? returnsAuditActions.ADMIN_RETURN_APPROVED
-                : returnsAuditActions.ADMIN_RETURN_DECLINED,
-        outcome: 'success',
-        targetType: 'return',
-        targetId: id,
-        metadata: { orderId: String(decided.orderId) }
-    });
-
     nudgeOutbox();
 
-    return syncReturnStatus(String(decided.orderId)).then(() =>
-        generateSuccess(
-            decided,
-            200,
-            t(to === 'approved' ? 'returns.approved' : 'returns.declined')
-        )
-    );
+    // The order is read for one fact: whether the staff member is its buyer, which the audit row
+    // says (`ownOrder`) so a review sees an approval of one's own return at a glance. The decision
+    // has already committed, so a failed read costs the flag and never the audit row.
+    return orderService
+        .getById(String(decided.orderId))
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Returns: could not read order ${String(decided.orderId)} for the audit flag`,
+                error
+            });
+            // Stryker restore all
+            return null;
+        })
+        .then((order) => {
+            recordAudit(context, {
+                action:
+                    to === 'approved'
+                        ? returnsAuditActions.ADMIN_RETURN_APPROVED
+                        : returnsAuditActions.ADMIN_RETURN_DECLINED,
+                outcome: 'success',
+                targetType: 'return',
+                targetId: id,
+                metadata: {
+                    orderId: String(decided.orderId),
+                    ...ownOrderFlag(context, order ? buyerIdOf(order) : undefined)
+                }
+            });
+            return syncReturnStatus(String(decided.orderId));
+        })
+        .then(() =>
+            generateSuccess(
+                decided,
+                200,
+                t(to === 'approved' ? 'returns.approved' : 'returns.declined')
+            )
+        );
 };
 
 /**

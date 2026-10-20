@@ -7,6 +7,8 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { observePort } from '@tests/ports';
+import * as auditPort from '@infrastructure/observability/audit';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { createOrder, readOrder, timelineOf, toOrderItem } from '@modules/orders/tests/factories';
@@ -36,6 +38,11 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     enqueueEmail: jest.fn()
 }));
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
+
+/* Replaced, not spied on — see `tests/support/ports.ts` for why. */
+jest.mock('@infrastructure/observability/audit', () =>
+    jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
+);
 
 setupTestDb();
 
@@ -664,5 +671,28 @@ describe('the order timeline of a return', () => {
             creditNoteId: String(note._id),
             number: note.number
         });
+    });
+});
+
+describe('the audit row of a receipt', () => {
+    // Own money is trusted and recorded: the row says so when the staff member is the buyer.
+    it.each([
+        ['their own', true],
+        ['someone else’s', false]
+    ])('carries ownOrder for a warehouse receiving %s return = %s', async (_which, own) => {
+        const fixture = await paidAndDelivered();
+        const id = await approvedReturn(fixture, 'defective');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await returnService.receiveReturn(
+            id,
+            {},
+            callerContextAs('warehouse', own ? fixture.user.id : undefined)
+        );
+
+        const row = auditSpy.mock.calls
+            .map(([event]) => event)
+            .find(({ action }) => action === 'admin.return.received');
+        expect(row?.metadata?.ownOrder).toBe(own ? true : undefined);
     });
 });

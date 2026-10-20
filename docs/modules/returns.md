@@ -23,6 +23,7 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     returns["returns<br/><i>this module</i>"]
+    access["access"]
     delivery["delivery"]
     inventory["inventory"]
     orders["orders"]
@@ -31,6 +32,7 @@ flowchart LR
     stats["stats"]
 
     stats --> returns
+    returns --> access
     returns --> delivery
     returns --> inventory
     returns --> orders
@@ -45,6 +47,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
     class delivery,inventory,payments,shop,stats supporting;
+    class access generic;
     class returns centre;
 ```
 
@@ -360,8 +363,11 @@ excludes, and inside the window). **Staff** (out of stock for good) need
 the **refund key**, `create:Refund` — `stepUp: critical`, so the route asks for a fresh session —
 held by moderator and admin; the manager and the warehouse do not hold it. Holding the key is the
 whole rule, as on every door that sends money out: a refund of one's own order is allowed and its
-audit row is flagged `ownOrder` ([your own money](../theory/authorization.md#your-own-money)). No
-new key and no new verb: it is one more thing the refund permission already means.
+audit rows are flagged `ownOrder` ([your own money](../theory/authorization.md#your-own-money)).
+The refund's **request** is audited the moment its record opens (`admin.payment.refund_requested`),
+before the provider is asked, so a provider refusal that the sweep later finishes still leaves the
+decision on file; an approval or a receipt of one's own return carries the flag too. No new key and
+no new verb: it is one more thing the refund permission already means.
 
 `reason: withdrawal` is the buyer's own right, so it is never written on someone else's behalf: staff
 who are not the order's buyer name another reason, and are refused `withdrawal`. A staff member who

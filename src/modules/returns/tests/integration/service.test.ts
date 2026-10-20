@@ -1109,6 +1109,18 @@ describe('what a decision leaves behind', () => {
         ]);
     });
 
+    // Own money is trusted and recorded: a manager approving the return of their own order is
+    // flagged, an approval of someone else's is not.
+    it('flags an approval of the staff member’s own return ownOrder', async () => {
+        const own = await requestedReturn();
+
+        await returnService.approveReturn(own.returnId, callerContextAs('manager', own.user.id));
+
+        expect(auditedAs(returnsAuditActions.ADMIN_RETURN_APPROVED)).toEqual([
+            expect.objectContaining({ metadata: { orderId: own.orderId, ownOrder: true } })
+        ]);
+    });
+
     it('tells the customer where to send the goods on an approval, and not on a decline', async () => {
         const approved = await requestedReturn();
         const declined = await requestedReturn();

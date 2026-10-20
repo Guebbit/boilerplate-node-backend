@@ -29,7 +29,8 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { announceInTransaction } from '@kernel/outbox';
 import { inventoryService } from '@modules/inventory';
 import { cheapestStandardShipping } from '@modules/delivery';
-import { orderService, sumLineItems } from '@modules/orders';
+import { ownOrderFlag } from '@modules/access';
+import { buyerIdOf, orderService, sumLineItems } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import type { CallerContext } from '@types';
@@ -229,7 +230,7 @@ const refundAndClose = (
 };
 
 /**
- * {@link receiveReturn}'s body once the rank rule has cleared the caller: quote, claim and restock,
+ * {@link receiveReturn}'s body once the return is known to be receivable: quote, claim and restock,
  * then refund and close.
  *
  * @param id - the return
@@ -271,7 +272,8 @@ const receiveFor = (
                         targetId: id,
                         metadata: {
                             orderId: String(received.orderId),
-                            refundAmount: breakdown.total
+                            refundAmount: breakdown.total,
+                            ...ownOrderFlag(context, buyerIdOf(order))
                         }
                     });
                     return refundAndClose(received, breakdown.shipping, context);
