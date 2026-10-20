@@ -93,7 +93,28 @@ endpoints:
           - '[CERTIFICATE_EXPIRATION] > 336h' # two weeks: Traefik renews at 30 days
       alerts:
           - type: ntfy
+    # Ready to serve: also red when the app has lost its database.
+    - name: acme-readyz
+      group: clients
+      url: https://app.acme.example/readyz
+      interval: 1m
+      conditions:
+          - '[STATUS] == 200'
+      alerts:
+          - type: ntfy
+    # The real read path a shopper hits first, with no login.
+    - name: acme-products
+      group: clients
+      url: https://app.acme.example/products?pageSize=1
+      interval: 5m
+      conditions:
+          - '[STATUS] == 200'
+      alerts:
+          - type: ntfy
 ```
+
+No login or cart check: that would need a shopper's password stored on the watcher, for a path
+the staging walk already covers.
 
 Run it:
 

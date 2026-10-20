@@ -13,22 +13,22 @@
 
 import { randomBytes, createHash } from 'node:crypto';
 import type { Response } from 'express';
-import { secureCookieOptions } from '../session/cookies';
+import { hostCookieOptions } from '../session/cookies';
 
 /** The CSRF cookie — cleared by both a successful and a failed callback. */
-export const OAUTH_STATE_COOKIE = 'oauth_state';
+export const OAUTH_STATE_COOKIE = '__Host-oauth_state';
 
 /** The PKCE verifier cookie — same lifetime and clearing points as {@link OAUTH_STATE_COOKIE}. */
-export const OAUTH_VERIFIER_COOKIE = 'oauth_verifier';
+export const OAUTH_VERIFIER_COOKIE = '__Host-oauth_verifier';
 
 /** The saved `?continue=` cookie — same lifetime and clearing points as {@link OAUTH_STATE_COOKIE}. */
-export const OAUTH_CONTINUE_COOKIE = 'oauth_continue';
+export const OAUTH_CONTINUE_COOKIE = '__Host-oauth_continue';
 
 /** The saved `?locale=` cookie — same lifetime and clearing points as {@link OAUTH_STATE_COOKIE}. */
-export const OAUTH_LOCALE_COOKIE = 'oauth_locale';
+export const OAUTH_LOCALE_COOKIE = '__Host-oauth_locale';
 
 /** The connect-attempt cookie: present only when a SIGNED-IN account is linking a provider. */
-export const OAUTH_LINK_COOKIE = 'oauth_link';
+export const OAUTH_LINK_COOKIE = '__Host-oauth_link';
 
 /** Minutes-scale on purpose: long enough to pick a Google account, short enough to bound reuse. */
 const OAUTH_COOKIE_TTL_MS = 5 * 60 * 1000;
@@ -52,10 +52,15 @@ export const codeChallengeOf = (verifier: string): string =>
     createHash('sha256').update(verifier).digest('base64url');
 
 /**
- * Flags shared by both OAuth cookies — `secureCookieOptions()` plus this attempt's own TTL.
+ * Flags shared by the OAuth cookies — `hostCookieOptions()` plus this attempt's own TTL.
+ *
+ * The `__Host-` prefix is what keeps a sibling subdomain from planting them: a browser refuses to
+ * let a script or a response from another host overwrite a `__Host-` cookie, so the double-submit
+ * `state` check cannot be won by injecting both halves.
+ * https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#cookie_prefixes
  */
 const oauthCookieOptions = () => ({
-    ...secureCookieOptions(),
+    ...hostCookieOptions(),
     maxAge: OAUTH_COOKIE_TTL_MS
 });
 

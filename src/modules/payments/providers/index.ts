@@ -192,16 +192,19 @@ export interface PaymentProvider {
      * Returns only which event it is and which intent it names. The state of the payment is NOT
      * read from the delivery: the caller asks {@link PaymentProvider.retrieve}.
      *
-     * Port rule: parse the body against the contract's schema AFTER the signature verifies and
-     * BEFORE any lookup. Nothing downstream may see a value the schema did not accept, such as an
-     * operator object (`{ "$ne": null }`) where a `providerRef` string belongs.
+     * Port rule: the adapter verifies the signature, then translates the body. The port parses the
+     * event it returns against the contract's schema before any lookup
+     * (`applyWebhookDelivery`), so a value the schema does not accept, such as an operator object
+     * (`{ "$ne": null }`) where a `providerRef` string belongs, never reaches the repository even
+     * if an adapter skipped its own validation. An adapter should still refuse a body it cannot
+     * make sense of with {@link WebhookRejected}.
      *
      * @param rawBody - the request body as received
      * @param signature - the provider's signature header, verbatim
      * @throws {WebhookRejected} when the signature does not verify, the body is not valid JSON, or
-     *   the body does not match the event schema (no id, a wrong type, an unknown or oversized
-     *   field) — the caller answers 400 in every case, because a delivery this application cannot
-     *   authenticate or make sense of is not an event
+     *   the body or the event it yields does not match the event schema (no id, a wrong type, an
+     *   unknown or oversized field) — the caller answers 400 in every case, because a delivery this
+     *   application cannot authenticate or make sense of is not an event
      */
     parseWebhook(rawBody: Buffer, signature: string): Promise<ProviderWebhookEvent>;
 }

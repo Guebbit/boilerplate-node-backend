@@ -235,6 +235,19 @@ describe('the bundled database can boot with wire TLS', () => {
     });
 });
 
+describe('cron refuses a bad environment before it schedules anything', () => {
+    /*
+     * Its healthcheck sees only supercronic, and every job judges the environment on its own: a
+     * broken `.env` would read as a healthy container whose every job fails. Checking first makes
+     * the container exit instead, where `ps` and the restart count show it.
+     */
+    it('runs config:check, and only on success starts supercronic', () => {
+        const command = [compose.services.cron?.command ?? []].flat().join(' ');
+
+        expect(command).toMatch(/npm run config:check && exec supercronic /);
+    });
+});
+
 describe('production runs no debugger', () => {
     /*
      * `--inspect` opens a port that grants arbitrary code execution inside the process, with no

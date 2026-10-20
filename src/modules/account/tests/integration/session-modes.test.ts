@@ -231,7 +231,7 @@ const oauthLogin = async () => {
     const callback = new URL(start.headers.location);
     return api()
         .get(callback.pathname + callback.search)
-        .set('Cookie', cookieHeader(start, 'oauth_state', 'oauth_verifier'));
+        .set('Cookie', cookieHeader(start, '__Host-oauth_state', '__Host-oauth_verifier'));
 };
 
 describe.each(MODES)('sessions in %s mode', (mode) => {

@@ -3,8 +3,7 @@
  * The `account` end of the shared kernel, read side: named lookups over `userRepository`.
  */
 
-import { userRepository } from '../repository';
-import { AUTHENTICATABLE_FILTER } from '../authenticatable';
+import { userRepository, TRUSTED_AUTHENTICATABLE_FILTER } from '../repository';
 
 /*
  * `account` end of the one domain-primitives relationship in this repo (`docs/theory/strategic-ddd.md`
@@ -33,7 +32,7 @@ export const findForLogin = (email: string) => userRepository.findAuthenticatabl
 /**
  * The credentialed account already linked to this federated identity, if any — `select: false`
  * fields included because a caller may need to build a 2FA login challenge off
- * `user.twoFactorMethods` right after. Filtered by {@link AUTHENTICATABLE_FILTER}, the same
+ * `user.twoFactorMethods` right after. Filtered by {@link TRUSTED_AUTHENTICATABLE_FILTER}, the same
  * clause `findForLogin` uses: a deactivated or soft-deleted account must not walk straight
  * into a session through a provider it linked before either happened.
  */
@@ -41,7 +40,7 @@ export const findByOAuthIdentity = (provider: string, providerId: string) =>
     userRepository.findOneWithCredentials({
         'oauthAccounts.provider': provider,
         'oauthAccounts.providerId': providerId,
-        ...AUTHENTICATABLE_FILTER
+        ...TRUSTED_AUTHENTICATABLE_FILTER
     });
 
 /** The hydrated document with the pending-email-change field loaded. */
@@ -52,5 +51,4 @@ export const emailOrPendingEmailTaken = (email: string, excludingId: string) =>
     userRepository.emailOrPendingEmailTaken(email, excludingId);
 
 /** Whether an account already exists for this email — signup's duplicate-email pre-check. */
-export const emailTaken = (email: string): Promise<boolean> =>
-    userRepository.findOne({ email }).then((user) => user !== null);
+export const emailTaken = (email: string): Promise<boolean> => userRepository.emailTaken(email);

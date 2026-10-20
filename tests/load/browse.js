@@ -24,7 +24,7 @@
  * nightly against a fixed environment.
  *
  * Usage:
- *   BASE_URL=http://localhost:3000 k6 run k6/browse.js
+ *   BASE_URL=http://localhost:3000 npm run bench:k6
  */
 import http from 'k6/http';
 import { check, group } from 'k6';

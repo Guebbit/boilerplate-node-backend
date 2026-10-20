@@ -100,15 +100,19 @@ sequenceDiagram
 ## The CSRF handshake
 
 A double-submit cookie, not server-side state: the value is minted and handed to the provider as
-`state` in the **same response** that sets it as `oauth_state`, and the callback trusts a request
+`state` in the **same response** that sets it as `__Host-oauth_state`, and the callback trusts a request
 only when the two agree. No new server secret, unlike a signed token would need.
 
 - 128 bits, from `randomBytes(16)` — the same entropy every one-time token carries.
 - 5 minutes: long enough to pick a Google account, short enough to bound reuse.
-- `httpOnly` / `sameSite: 'lax'`, `secure` in production — `createRefreshCookie`'s flags exactly.
+- `httpOnly` / `sameSite: 'lax'`, `secure` always, no `Domain`, path `/` — the `__Host-` prefix's rules,
+  the same flags as `__Host-session`. The prefix is what makes the double-submit check hold: a sibling
+  subdomain that can write cookies cannot plant a state, a verifier and a callback URL that match
+  (login CSRF: the victim lands signed in as the attacker). Every cookie here carries it, and an
+  unprefixed `oauth_state` is simply ignored.
 - Cleared by **both** a successful and a failed callback.
 
-A second cookie, `oauth_verifier`, rides beside it: the **PKCE** verifier (RFC 7636, `S256` only).
+A second cookie, `__Host-oauth_verifier`, rides beside it: the **PKCE** verifier (RFC 7636, `S256` only).
 `state` defeats a forged callback; the verifier defeats a stolen authorization code, since the
 code is redeemable only by whoever holds it. Same lifetime, flags and clearing points. The port's
 `authorizeUrl` takes the challenge and `exchangeCode` the verifier, together with the `state` the
@@ -140,13 +144,13 @@ library reads as the failure it is.
 
 ## What else rides the round trip: `continue` and `locale`
 
-The start route accepts two optional query params. Each is saved as a cookie beside `oauth_state`
+The start route accepts two optional query params. Each is saved as a cookie beside `__Host-oauth_state`
 (same 5 minutes, same flags, same clearing points) and echoed on the redirect back to the frontend.
 
-| Param      | Cookie           | Validated by       | Echoed on                            |
-| ---------- | ---------------- | ------------------ | ------------------------------------ |
-| `continue` | `oauth_continue` | `isSameOriginPath` | the success and the 2FA redirect     |
-| `locale`   | `oauth_locale`   | `isLocaleTag`      | every redirect, a failure's included |
+| Param      | Cookie                  | Validated by       | Echoed on                            |
+| ---------- | ----------------------- | ------------------ | ------------------------------------ |
+| `continue` | `__Host-oauth_continue` | `isSameOriginPath` | the success and the 2FA redirect     |
+| `locale`   | `__Host-oauth_locale`   | `isLocaleTag`      | every redirect, a failure's included |
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 32, 'rankSpacing': 44}}}%%
@@ -201,7 +205,11 @@ second-factor challenge, so someone who failed the challenge still left a perman
 The one door that links is `POST /account/oauth/links/:provider`, for a signed-in caller with a fresh
 session (sensitive tier). The browser comes back from the provider with cookies only, so the start
 issues a short-lived `oauth-link` token (5 minutes, spent on use) beside the state and verifier
-cookies: it is the callback's proof WHICH account is connecting. The same callback then links the
+cookies: it is the callback's proof WHICH account is connecting. It is not proof WHO is at the
+browser, so the callback also resolves the session cookie and refuses the link unless that session
+belongs to the account the token was minted for (a planted token would otherwise link the victim's
+provider identity to the attacker's account, and mail the attacker). A browser with no session, or
+another account's, is `?error=link_expired`; no new reason code, so no contract change. The same callback then links the
 identity to that account (whatever email the provider holds), mints no session, audits
 `AUTH_OAUTH_LINKED`, mails the owner and redirects with `?linked=<provider>`. A provider account that
 already belongs to another account is `?error=already_linked`; a missing, spent or expired token is

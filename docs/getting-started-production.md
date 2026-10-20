@@ -45,7 +45,8 @@ run a second client on the same host, repeat with a different name and a differe
 nothing is shared between them.
 
 Then edit `clients/acme/.env` and set real values. One early choice: `NODE_SESSION_MODE`, how people stay signed in (`jwt`, the default, or `cookie`), which decides whether the two signing secrets are needed at all — see [Choosing the session mode](modules/account-sessions.md#choosing-the-session-mode). Changing it later signs everyone out. The credentials and keys are **not** in this file
-(see [Secrets](#secrets)); delete their lines from your copy. Rather than a hand-copied list here —
+(see [Secrets](#secrets)); delete their lines from your copy. Delete the `NODE_SEED_*` demo
+passwords too: production never seeds, and they would sit in the app's environment for nothing. Rather than a hand-copied list here —
 which goes stale the moment a new setting is added — boot itself tells you what it needs: start the
 stack with the shipped placeholders still in place and it refuses, naming the first one it hit.
 
@@ -169,10 +170,30 @@ what's running is exactly what was built.
 ```bash
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml logs -f app
 curl http://127.0.0.1:3000/livez     # liveness probe
+docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml ps
+docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml exec app env | grep -i password
 ```
+
+- `ps`: every service `healthy`, or `exited (0)` for the one-shot `setup` and `mongo-rs-init`.
+- `env | grep`: at most `NODE_SMTP_PASS`, an optional integration that stays in `.env` by design.
+  Never a Mongo, Redis or RabbitMQ password: those reach the app as files. A test checks the compose
+  file, but only this sees a value someone put straight into the client's `.env`.
 
 The port is published to `127.0.0.1`, not `0.0.0.0` — reachable from the host, not from the
 network. That is deliberate, see [Putting a reverse proxy in front](#putting-a-reverse-proxy-in-front) below.
+
+## Surviving a reboot
+
+Rootless Podman has no daemon, so `restart: unless-stopped` alone does nothing at boot: nobody is
+there to read it. Two commands, once per host, as the user that runs the stacks:
+
+```bash
+loginctl enable-linger "$USER"                     # keep this user's services running with nobody logged in
+systemctl --user enable --now podman-restart.service # at boot, start every container marked unless-stopped / always
+```
+
+Check it once on staging: reboot the VM, then `ps` from [Check it worked](#check-it-worked). Uploaded
+images survive too: they are on a named volume. Docker needs none of this; its daemon restarts them.
 
 ## The first admin
 
@@ -231,6 +252,14 @@ it on a public interface — plain HTTP, carrying the auth cookies this applicat
 easy path. Use that overlay, or put nginx, Caddy or a managed load balancer in front, terminate TLS there, and
 proxy to `127.0.0.1:${NODE_PORT}`.
 
+Rootless Podman cannot publish ports below 1024 by default, and the Traefik overlay publishes 80 and 443. Lower the limit once per host:
+
+```bash
+# Let unprivileged users bind 80 and up; the file makes it survive a reboot.
+echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/90-unprivileged-ports.conf
+sudo sysctl --system
+```
+
 Then set `NODE_TRUST_PROXY_HOPS` to the number of proxies in front (usually `1`; the Traefik overlay
 below sets it for you). It defaults to `0`, which reads the caller's address from the socket — with a proxy in front, that is the proxy's
 address for every request, so every caller shares one rate-limit bucket and every audit row names
@@ -256,7 +285,7 @@ Before the first real customer, in this order:
    an append-only restic server that refuses deletes. [Backup server](tools/backup-server.md) has the steps.
 2. **The knobs** in `clients/acme/.env`: `COMPOSE_PROFILES=bundled,backup`,
    `BACKUP_REPOSITORY=rest:https://<second machine>:8000/acme/`, `BACKUP_PRUNE=false`, and
-   `BACKUP_HEARTBEAT_URL` if you run Gatus. The secrets are in [Secrets](#secrets); keep a copy of
+   `BACKUP_HEARTBEAT_URL` if you run Gatus ([one endpoint per client](tools/gatus.md#backup-freshness)). The secrets are in [Secrets](#secrets); keep a copy of
    `restic_password` off the host.
 3. **Run the restore drill once**: `docker compose ... --profile restore-drill run --rm restore-drill`.
    It restores the latest snapshot into a throwaway Mongo and says how long that took.
@@ -293,6 +322,10 @@ flowchart LR
   Set `ALERT_EMAIL_TO` / `ALERT_EMAIL_FROM` (sent through the app's own `NODE_SMTP_*`),
   `ALERT_WEBHOOK_URL` (ntfy, Slack, Telegram, Matrix: your choice) and `ALERT_HEARTBEAT_URL` in the
   client's `.env`. [Alert routing](tools/prometheus.md#alert-routing) has the table.
+- **Prove it once, on staging.** `docker compose ... stop app`: within about two minutes
+  `[FIRING] ApiDown` reaches your `ALERT_*` receiver, and `start app` sends the resolution. Then stop
+  `alertmanager`: Gatus reports the missing heartbeat ([the drill](tools/gatus.md#the-local-drill)).
+  An alert nobody has ever seen fire is not known to work.
 - **Logs.** Alloy tails the engine's container log files (Docker: `/var/lib/docker/containers`; set
   `CONTAINER_LOGS_PATH` for Podman, together with `CONTAINER_LOG_DRIVER=k8s-file`, because Podman's
   default driver writes no file). It reads the Docker and the Podman format at once.
@@ -315,6 +348,54 @@ dev bind-mounts back in).
 
 See [Docker & Podman](./tools/docker-and-podman.md) for what each of those containers does and
 [Observability Reference](./tools/observability-reference.md) for how the app talks to them.
+
+## A staging copy
+
+The test suite proves the code. It cannot prove the install: a real certificate, mail that lands in
+an inbox, a firewall, a reboot. Staging is where those get checked, before a customer does it for you.
+
+Staging is production in everything but its data: same compose file, same image, a throwaway machine.
+
+```mermaid
+flowchart TD
+    VM["1 · a small VM with Podman + Docker Compose"] --> DNS["2 · staging.&lt;domain&gt; points at it"]
+    DNS --> Conf["3 · clients/staging/.env + secrets/<br/>payments in test mode"]
+    Conf --> Up["4 · build + up -d"]
+    Up --> Smoke["5 · walk the money path by hand"]
+    Smoke --> Break["6 · fire an alert, reboot, scan from outside"]
+    Break --> Redo["7 · now and then: delete it, build it again"]
+
+    classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class VM,DNS,Conf,Up step;
+    class Smoke,Break,Redo done;
+```
+
+1. **A machine.** Any small VM that runs Podman, with Docker Compose as its
+   [compose provider](./tools/docker-and-podman.md#the-compose-provider-behind-podman-compose).
+   [Hosting](./tools/hosting.md) has what it needs.
+2. **A name.** A DNS record for `staging.<domain>` pointing at the VM, then the proxy:
+   [Putting a reverse proxy in front](#putting-a-reverse-proxy-in-front).
+3. **Configuration.** A client called `staging`, exactly as in [First run](#first-run) and [Secrets](#secrets).
+    - Mail: a real SMTP account, so you see what a customer sees, with
+      [SPF, DKIM and DMARC](./tools/deployment-hardening.md#email-authentication-spf-dkim-dmarc) published.
+    - Payments: the provider's **test** keys, never live ones.
+4. **Boot it.** The same two commands as [First run](#first-run), with `COMPOSE_PROJECT_NAME=staging`,
+   then [Check it worked](#check-it-worked).
+5. **Walk the money path by hand**, at `https://staging.<domain>`, and again after every deploy:
+    - `/livez` and `/readyz` answer;
+    - sign up, and the verification mail arrives;
+    - log in, add a product, check out, pay with a test card;
+    - the order turns `paid`, and the confirmation mail arrives;
+    - delete the account.
+6. **The three things only a real host can show:**
+    - an alert reaches you: [Prove it once](#monitoring-and-alerts);
+    - a reboot brings everything back: [Surviving a reboot](#surviving-a-reboot);
+    - from another machine, only 80 and 443 answer and TLS is clean:
+      `nmap -Pn -p- staging.<domain>`, `testssl.sh staging.<domain>`,
+      and `curl -sI https://staging.<domain>/livez` to see the headers after Traefik.
+7. **Rebuild from scratch now and then.** A stack only ever upgraded in place hides what works only
+   because of leftovers.
 
 ## Where to go next
 

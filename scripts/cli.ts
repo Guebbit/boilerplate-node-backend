@@ -11,6 +11,12 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 
 /**
+ * What the script was started with: everything after `node script`. Read at call time, so a test
+ * can set `process.argv`; `parseArgs`' own default also changes shape under `node -e`.
+ */
+const scriptArguments = (): string[] => process.argv.slice(2);
+
+/**
  * The value a string flag was given.
  *
  * @param flag - the flag name, without its dashes
@@ -18,14 +24,33 @@ import { parseArgs } from 'node:util';
  */
 export const flagValue = (flag: string): string | undefined => {
     // Node: https://nodejs.org/api/util.html#utilparseargsconfig — `strict: false` keeps unknown
-    // flags and positionals from throwing; `args` defaults to the script's own arguments.
+    // flags and positionals from throwing; `args` is the script's own arguments.
     const { values } = parseArgs({
+        args: scriptArguments(),
         options: { [flag]: { type: 'string' } },
         strict: false,
         allowPositionals: true
     });
     const value = values[flag];
     return typeof value === 'string' ? value : undefined;
+};
+
+/**
+ * Whether a switch was given, as `--flag` on its own.
+ *
+ * @param flag - the flag name, without its dashes
+ * @returns true when the script was started with the flag
+ */
+export const hasFlag = (flag: string): boolean => {
+    // Node: https://nodejs.org/api/util.html#utilparseargsconfig — a `boolean` option is true when
+    // present; `strict: false` lets other flags and positionals through, as in {@link flagValue}.
+    const { values } = parseArgs({
+        args: scriptArguments(),
+        options: { [flag]: { type: 'boolean' } },
+        strict: false,
+        allowPositionals: true
+    });
+    return values[flag] === true;
 };
 
 /**

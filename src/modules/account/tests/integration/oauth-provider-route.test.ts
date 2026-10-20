@@ -95,7 +95,10 @@ const start = async (provider: string) => {
     const response = await api().get(`/account/oauth/${provider}`);
     expect(response.status).toBe(302);
     const state = new URL(response.headers.location).searchParams.get('state') ?? '';
-    return { state, cookies: cookieHeader(response, 'oauth_state', 'oauth_verifier') };
+    return {
+        state,
+        cookies: cookieHeader(response, '__Host-oauth_state', '__Host-oauth_verifier')
+    };
 };
 
 describe.each(['google', 'github'])('GET /account/oauth/%s/callback', (provider) => {

@@ -38,7 +38,7 @@ import { scopeWithLines } from './mutate-scope';
 import { TARGET_LINES_PER_SHARD, packIntoShards } from './sharding';
 import { runStryker } from './stryker-run';
 import { REPO_ROOT } from '../modules-on-disk';
-import { flagValue } from '../cli';
+import { flagValue, hasFlag } from '../cli';
 
 /** Where each shard's report is kept between evenings. Under `tmp/`, so it is gitignored. */
 const SHARD_ROOT = path.join(REPO_ROOT, 'tmp', 'reports', 'mutation-shards');
@@ -87,7 +87,7 @@ const { run, done } = selectShards(shards, {
     completed,
     only: listArgument('--only'),
     limit: numberArgument('--limit'),
-    force: process.argv.includes('--force')
+    force: hasFlag('force')
 });
 
 /** Minutes and seconds, for a log line that spans hours. */
@@ -132,7 +132,7 @@ const runShard = async (name: string, mutate: string, index: number): Promise<bo
             // previous shard's memory, which is why `mutation.yml` keys its cache per matrix job.
             '--incrementalFile',
             path.join(path.relative(REPO_ROOT, reportRoot), name, 'incremental.json'),
-            ...(process.argv.includes('--force') ? ['--force'] : [])
+            ...(hasFlag('force') ? ['--force'] : [])
         ]
     });
 
@@ -177,7 +177,7 @@ const mergeAll = (): number => {
 
 /** The sweep: print the plan, or run the selected shards one by one, then grade the merge. */
 const main = async (): Promise<number> => {
-    if (process.argv.includes('--list')) {
+    if (hasFlag('list')) {
         printPlan();
         return 0;
     }
@@ -208,7 +208,7 @@ const main = async (): Promise<number> => {
         return banked.length === run.length ? 0 : 1;
     }
 
-    if (process.argv.includes('--no-merge')) {
+    if (hasFlag('no-merge')) {
         console.log(`[shards] scope complete. --no-merge given, so ${BASELINE_PATH} is untouched.`);
         return 0;
     }

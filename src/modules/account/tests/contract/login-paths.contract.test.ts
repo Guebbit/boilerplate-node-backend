@@ -54,7 +54,7 @@ const FAKE_OAUTH_PROVIDER_ID = 'fake-oauth-subject';
 
 /** A start response's CSRF/PKCE cookies, as one `Cookie` header for the callback. */
 const attemptCookies = (start: Response): string =>
-    cookieHeader(start, 'oauth_state', 'oauth_verifier');
+    cookieHeader(start, '__Host-oauth_state', '__Host-oauth_verifier');
 
 /** One full start → callback round trip through the fake provider. */
 const fakeLogin = async (): Promise<Response> => {

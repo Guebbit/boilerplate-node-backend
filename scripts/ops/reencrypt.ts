@@ -25,9 +25,10 @@ import {
 } from '@infrastructure/security/reencrypt';
 import { enabledModules } from '../../src/modules';
 import { runScript } from '../run-script';
+import { hasFlag } from '../cli';
 
 /** True when invoked with `--dry-run`. */
-const dryRun = process.argv.includes('--dry-run');
+const dryRun = hasFlag('dry-run');
 
 /** Every enabled module's walk, in registration order. */
 const walks = enabledModules.flatMap((appModule) =>

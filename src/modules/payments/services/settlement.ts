@@ -17,6 +17,7 @@ import type { PaymentStatus, AuthContext } from '@types';
 import { toMinorUnits } from '@domain-primitives/money';
 import { orderService, isPayable, paymentSettled } from '@modules/orders';
 import { bankTransferHoldHours } from '../config';
+import { ReceivePaymentWebhookBody } from '@api/schemas.zod';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -28,7 +29,12 @@ import { paymentsAnalyticsEvents } from '../analytics';
 import { paymentsAuditActions } from '../audit';
 import { paymentAmountMismatchTotal } from '../metrics';
 import { systemCallerContext } from '@kernel/permissions';
-import { providerNamed, type ProviderPaymentState, type ProviderWebhookEvent } from '../providers';
+import {
+    providerNamed,
+    WebhookRejected,
+    type ProviderPaymentState,
+    type ProviderWebhookEvent
+} from '../providers';
 import { paymentRepository } from '../repository';
 import {
     CONFIRMABLE_PAYMENT_STATUSES,
@@ -670,9 +676,22 @@ export const syncPayment = (
  * logged and dropped rather than raised. A provider reads any non-2xx as a failed delivery and
  * comes back harder, and there is nothing here a retry would fix.
  *
- * @param event - the delivery, already verified and normalised by the provider
+ * The event is parsed here, once, whatever adapter produced it: a real adapter that skipped its own
+ * validation cannot put an operator object (`{ "$ne": null }`) where a `providerRef` string
+ * belongs, because nothing reaches `findByProviderRef` unparsed.
+ *
+ * @param delivery - the delivery, already verified and normalised by the provider
+ * @throws {WebhookRejected} when the delivery does not match the event schema; the controller
+ *   answers 400, the same as a body the adapter itself refused
  */
-export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void> => {
+export const applyWebhookDelivery = (delivery: ProviderWebhookEvent): Promise<void> => {
+    // Zod: `safeParse` answers `{ success, data | error }` instead of throwing.
+    // https://zod.dev/api#safeparse
+    const parsed = ReceivePaymentWebhookBody.safeParse(delivery);
+    if (!parsed.success)
+        return Promise.reject(new WebhookRejected('Event does not match the event schema'));
+    const event = parsed.data;
+
     if (!event.providerRef) {
         // Stryker disable all
         logger.info({
