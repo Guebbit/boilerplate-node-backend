@@ -95,7 +95,7 @@ const addressBookFixtures = [
 ];
 
 /**
- * Seed this collection. Declared in `./index`'s `shopModules`; walked by `seedShop`.
+ * Seed this collection. Collected into `shopModules` (`./shop-modules`); run by `seedShop`.
  *
  * Keyed on the owner even though these fixtures do pin an `_id`: `userId` is the unique column and
  * the one every query here reaches a book through.

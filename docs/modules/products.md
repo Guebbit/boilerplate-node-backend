@@ -3,7 +3,7 @@
 ::: tip At a glance
 **Owns** — the catalogue: what the shop sells. `onHand`/`reserved`/`available` sit on every product
 row too, but as a read-only mirror — [`inventory`](./inventory.md) owns the counters themselves.
-**Depends on** — nothing. It is the leaf four other domains conform to.
+**Depends on** — only [`shop`](./shop.md), for the currency. It is the leaf several domains read as it is.
 **Breaks if you change** — `productSchema`. `orders` embeds it, so an order's history is literally this shape.
 :::
 
@@ -385,6 +385,6 @@ evaluator — [Authorization](../theory/authorization.md) explains the model.
 - [`locales`](./locales.md) — the `translations` collection and its own admin door
 - [Internationalisation](../tools/i18n.md) — the resolve/fallback mechanism translated content runs on
 - [MongoDB & Mongoose](../tools/mongodb-mongoose.md) — what a repository and a model are
-- [Strategic DDD](../theory/strategic-ddd.md) — why `conformist` is the label on four of the arrows pointing here
+- [Strategic DDD](../theory/strategic-ddd.md) — why `conformist` is the label on the `cart → products` arrow, the one this module's pages document
 - [Events & Logging](../tools/events-and-logging.md) — the bus `product.deleted` travels on
 - [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) — how this module's `openapi.yaml` reaches the root document

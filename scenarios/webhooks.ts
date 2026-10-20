@@ -1,6 +1,6 @@
 /**
  * @module
- * The webhooks module's slice of the demo dataset — the one entry in `scenarios/index.ts`'s table
+ * The webhooks module's slice of the demo dataset — the one `shopModules` entry
  * that seeds nothing by default. A demo subscription pointing at the sink (`webhook-tester`
  * behind `webhook-tester-tls`, `docker-compose.yml`'s `integrations` profile, or the frontend's
  * own Cypress listener) is a FIXTURE, not code, per
@@ -54,7 +54,7 @@ const WEBHOOK_DEMO_SECRET_ID = '7f3b8e21-4a6d-4c9f-9e12-3d5a7b8c9f01';
 const WEBHOOK_DEMO_SECRET = 'whsec_ZGVtby13ZWJob29rLXNlY3JldC1kby1ub3QtdXNlLWluLXByb2R1Y3Rpb24=';
 
 /**
- * Seed the scenario's webhook subscription. Declared in `./index`'s `shopModules`; walked by
+ * Seed the scenario's webhook subscription. Collected into `shopModules` (`./shop-modules`); run by
  * `seedShop`.
  *
  * Seeds nothing when `NODE_WEBHOOK_DEMO_SINK_URL` is unset, the default.

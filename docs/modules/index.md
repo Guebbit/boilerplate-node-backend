@@ -166,11 +166,11 @@ flowchart TD
 
 <!-- module-graph:end -->
 
-`antibot`, `feedback` and `locales` are drawn detached because they are: nothing reaches them and
-they reach nothing. Deleting any of them takes exactly one folder and one page with it.
+A module that nothing reaches and that reaches nothing is drawn detached, as the grey dashed nodes
+are. Deleting one takes exactly one folder and one page with it.
 
-Mutual awareness without a cycle is the shape worth noticing. `products` is reached by four modules
-and reaches none — a deleted product still has to leave every cart and wishlist, and that half
+Mutual awareness without a cycle is the shape worth noticing. `products` is reached by many modules
+and reaches only `shop` — a deleted product still has to leave every cart and wishlist, and that half
 travels back as a **domain event** (`product.deleted`) rather than as an import. Same for
 `inventory.reservation_expired` from `inventory` to `orders`. A user's hard delete travels the other
 way, as a `personalData.erase` hook each module declares and `users` runs in one transaction. The arrows above stay

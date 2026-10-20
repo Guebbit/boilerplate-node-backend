@@ -3,7 +3,7 @@
  * Inventory rules. Pure: data in, verdict out — no status codes, no i18n, no database. A product
  * carries two counters, `onHand` (units that exist) and `reserved` (units an open order has
  * claimed), and a third, `backordered`, for units that do not exist yet and are only promised.
- * Nine transitions move those counters, and this file is the one place that says what each does — an
+ * Nine transitions move those counters, and this file is the one place that says what each does — a
  * tenth is one entry here plus one enum value in `openapi.yaml`. What a customer
  * may actually buy from those two counters is `@modules/products`'s `availableStock`
  * (`src/modules/products/domain/stock.ts`), not this module's own concern.

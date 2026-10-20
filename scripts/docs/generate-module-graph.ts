@@ -4,19 +4,19 @@
  * diagram per module page,
  * generated from the imports and subscriptions they describe.
  *
- * Generated rather than hand-drawn: a hand-drawn graph of thirteen modules is a published number
+ * Generated rather than hand-drawn: a hand-drawn graph of the modules is a published number
  * with no guard behind it — correct on the day it is written and quietly wrong after the next
  * import. `dependency-cruiser` already builds the real graph for `check:dependencies`, so the
  * page reads it rather than restating it.
  *
  * WHAT IS SWEPT, and why each narrowing matters:
  *   - `--exclude /tests/` — a co-located spec may legitimately reach a sibling's barrel, manifest
- *     or tests (see `eslint.config.ts`). Left in, the sweep reports 38 edges instead of 19 and
+ *     or tests (see `eslint.config.ts`). Left in, the sweep reports roughly twice the edges and
  *     describes the test suite rather than the architecture.
  *   - `--collapse` to one node per module — the question is which DOMAIN reaches which, not which
  *     file.
  *   - `src/modules.ts` is dropped: the registry imports every manifest by definition, so its
- *     thirteen edges are a fact about the registry and would draw a star over the real shape.
+ *     edges are a fact about the registry and would draw a star over the real shape.
  *
  * The index map stays imports-only, because the prose around it argues about exactly that. The
  * per-module neighbourhoods add the event edges on top, which is the return path an import graph

@@ -488,7 +488,7 @@ const writeSeedTranslations = (productId: string): Promise<void> => {
 };
 
 /**
- * Seed this collection. Declared in `./index`'s `shopModules`; walked by `seedShop`.
+ * Seed this collection. Collected into `shopModules` (`./shop-modules`); run by `seedShop`.
  *
  * Each row writes twice: {@link insertIfAbsent} for the product document (its `title`/
  * `description` are the derived index column, in the fallback locale), then
