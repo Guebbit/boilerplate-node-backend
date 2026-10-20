@@ -113,8 +113,9 @@ export const moneyPath = ({
     get: decimalToNumber,
     validate: {
         validator: isWritableAmount(nonNegative),
-        message: (): string =>
-            `{PATH} must be ${nonNegative ? 'a non-negative ' : 'a finite '}amount`
+        // Mongoose hands a function-form message `{ path }`; the `{PATH}` token only works in a string.
+        message: ({ path }: { path: string }): string =>
+            `${path} must be ${nonNegative ? 'a non-negative ' : 'a finite '}amount`
     },
     ...(initial === undefined ? {} : { default: initial })
 });
