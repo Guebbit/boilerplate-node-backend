@@ -11,6 +11,7 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
+import { formatMoney } from '@domain-primitives/money';
 import { addressLine } from '@modules/shop';
 import type { ReturnPostagePayer, ShopAddress } from '@types';
 
@@ -75,12 +76,7 @@ export const returnNoticeEmail = (
         order: input.orderRef,
         date: stamp(locale, input.at),
         reason: input.declineReason ?? '',
-        amount: input.refund
-            ? new Intl.NumberFormat(locale, {
-                  style: 'currency',
-                  currency: input.refund.currency
-              }).format(input.refund.amount)
-            : ''
+        amount: input.refund ? formatMoney(locale, input.refund.amount, input.refund.currency) : ''
     };
     // Neither a decline nor a closing says anything about postage — there is nothing left to post.
     const postage =

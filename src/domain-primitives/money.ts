@@ -113,6 +113,25 @@ export const toDecimalAmount = (amount: Money, currency: string): number =>
     amount / 10 ** minorUnitExponent(currency);
 
 /**
+ * An amount spelled the way a locale writes money, with the places taken from the pinned ISO 4217
+ * table rather than the runtime's own CLDR data, so a mail and the ledger agree on the scale.
+ * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
+ * @param locale - the reader's language
+ * @param amount - a decimal in `currency`
+ * @param currency - an ISO-4217 code
+ * @returns the formatted string, e.g. `€19.99`
+ */
+export const formatMoney = (locale: string, amount: number, currency: string): string => {
+    const digits = minorUnitExponent(currency);
+    return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits
+    }).format(amount);
+};
+
+/**
  * Whether a decimal amount has no more places than the currency's minor unit — 19.99 EUR does,
  * 19.999 EUR and 100.5 JPY do not. The check that keeps what is stored equal to what is charged.
  * @param amount - a decimal amount

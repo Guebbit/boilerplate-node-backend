@@ -11,18 +11,9 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
+import { formatMoney } from '@domain-primitives/money';
 import { orderFrontendLink, orderTotal, type OrderLines } from '@modules/orders';
 import { shopTimezone } from '@modules/shop';
-
-/**
- * An amount in a currency, spelled the way the recipient's locale writes money.
- * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
- * @param locale - the recipient's language
- * @param amount - a decimal in `currency`
- * @param currency - an ISO-4217 code
- */
-const money = (locale: string, amount: number, currency: string): string =>
-    new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
 
 /**
  * Payment received, sent once `settlePayment` actually commits the stock. The customer's answer
@@ -51,11 +42,11 @@ export const paymentReceivedEmail = (
                 t('payments.email-received.line', {
                     title: item.product.title,
                     quantity: item.quantity,
-                    price: money(locale, item.product.price, order.currency)
+                    price: formatMoney(locale, item.product.price, order.currency)
                 })
             ),
             total: t('payments.email-received.total', {
-                total: money(locale, orderTotal(order), order.currency)
+                total: formatMoney(locale, orderTotal(order), order.currency)
             }),
             linkLabel: t('payments.email-received.link-label'),
             linkUrl: orderFrontendLink({ locale, id: orderId }),
@@ -93,7 +84,7 @@ export const refundIssuedEmail = (
             greeting: t('payments.email-refunded.greeting', { name }),
             body: t('payments.email-refunded.body', {
                 order: orderRef,
-                amount: money(locale, refund.amount, refund.currency)
+                amount: formatMoney(locale, refund.amount, refund.currency)
             }),
             detail: t(`payments.email-refunded.${full ? 'detail-full' : 'detail-partial'}`),
             footer: t('email.footer')
@@ -162,7 +153,7 @@ export const transferInstructionsEmail = (
                 }).format(payBy)
             }),
             total: t('payments.email-transfer.total', {
-                total: money(locale, orderTotal(order), order.currency)
+                total: formatMoney(locale, orderTotal(order), order.currency)
             }),
             linkLabel: t('payments.email-transfer.link-label'),
             linkUrl: orderFrontendLink({ locale, id: orderId }),
@@ -189,7 +180,7 @@ export const transferExpiredEmail = (locale: string, order: OrderLines): EmailCo
             greeting: t('payments.email-transfer-expired.greeting'),
             body: t('payments.email-transfer-expired.body'),
             total: t('payments.email-transfer-expired.total', {
-                total: money(locale, orderTotal(order), order.currency)
+                total: formatMoney(locale, orderTotal(order), order.currency)
             }),
             footer: t('email.footer')
         }

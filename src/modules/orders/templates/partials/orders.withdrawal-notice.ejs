@@ -1,13 +1,13 @@
 <section class="withdrawal">
-    <h2><%= withdrawalHeading %></h2>
-    <% withdrawalTerms.forEach(function (paragraph) { %><p><%= paragraph %></p>
+    <h2><%= withdrawal.heading %></h2>
+    <% withdrawal.terms.forEach(function (paragraph) { %><p><%= paragraph %></p>
     <% }); %>
-    <% if (withdrawalEffects.length > 0) { %>
-    <h3><%= withdrawalEffectsHeading %></h3>
-    <% withdrawalEffects.forEach(function (paragraph) { %><p><%= paragraph %></p>
+    <% if (withdrawal.effects.length > 0) { %>
+    <h3><%= withdrawal.effectsHeading %></h3>
+    <% withdrawal.effects.forEach(function (paragraph) { %><p><%= paragraph %></p>
     <% }); %>
-    <h2><%= withdrawalFormHeading %></h2>
-    <% withdrawalForm.forEach(function (row) { %><p><%= row %></p>
+    <h2><%= withdrawal.formHeading %></h2>
+    <% withdrawal.form.forEach(function (row) { %><p><%= row %></p>
     <% }); %>
     <% } %>
 </section>

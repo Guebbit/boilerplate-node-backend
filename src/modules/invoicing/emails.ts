@@ -9,6 +9,7 @@
 
 import type { TFunction } from 'i18next';
 import { translator } from '@infrastructure/i18n';
+import { minorUnitExponent } from '@domain-primitives/money';
 import { lineTaxFromRateTotals } from '@modules/orders';
 import type { EInvoicingDocument } from './providers';
 import type { InvoiceLine } from './model';
@@ -127,14 +128,20 @@ const buildVatBlock = (
 ): DocumentVatBlock => {
     // One instance, reused for every amount — a real allocation, not worth paying once per cell.
     // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
-    const money = new Intl.NumberFormat(locale, { style: 'currency', currency: document.currency });
+    // Places come from the pinned ISO 4217 table, as in `formatMoney`, never the runtime's CLDR data.
+    const digits = minorUnitExponent(document.currency);
+    const money = new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: document.currency,
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits
+    });
     // A decimal rate (`0.055`) as the document prints it (`"5.5%"`).
     const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 2 });
 
     // Art. 226(8): the unit price printed is EXCLUSIVE of VAT. The frozen `unitPrice` is gross, so
     // it is divided back out, and shown with two places beyond the currency's own — a net unit
     // price is rarely a whole minor unit (19.90 at 22% is 16.3115), and BT-146 allows any precision.
-    const digits = money.resolvedOptions().maximumFractionDigits ?? 2;
     const unitNetMoney = new Intl.NumberFormat(locale, {
         style: 'currency',
         currency: document.currency,

@@ -8,6 +8,7 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
+import { formatMoney } from '@domain-primitives/money';
 import { orderFrontendLink, withdrawalPeriodDays } from './config';
 import { isExcludedFromWithdrawal, isShippedItem, orderTotal } from './domain';
 import {
@@ -69,16 +70,6 @@ export interface WithdrawalNotice {
     /** The model withdrawal form, one row per string. */
     form: string[];
 }
-
-/**
- * An amount in a currency, spelled the way the recipient's locale writes money.
- * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
- * @param locale - the recipient's language
- * @param amount - a decimal in `currency`
- * @param currency - an ISO-4217 code
- */
-const money = (locale: string, amount: number, currency: string): string =>
-    new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
 
 /**
  * Which clock the notice describes: `goods` when a withdrawable line ships (period from receipt),
@@ -268,22 +259,17 @@ export const orderConfirmEmail = (
                 const line = t('orders.email-confirm.line', {
                     title: item.product.title,
                     quantity: item.quantity,
-                    price: money(locale, item.product.price, order.currency)
+                    price: formatMoney(locale, item.product.price, order.currency)
                 });
                 const promise = linePromise(t, locale, item);
                 return promise ? `${line} — ${promise}` : line;
             }),
             total: t('orders.email-confirm.total', {
-                total: money(locale, orderTotal(order), order.currency)
+                total: formatMoney(locale, orderTotal(order), order.currency)
             }),
             linkLabel: t('orders.email-confirm.link-label'),
             linkUrl: orderFrontendLink({ locale, id: orderId }),
-            withdrawalHeading: withdrawal.heading,
-            withdrawalTerms: withdrawal.terms,
-            withdrawalEffectsHeading: withdrawal.effectsHeading,
-            withdrawalEffects: withdrawal.effects,
-            withdrawalFormHeading: withdrawal.formHeading,
-            withdrawalForm: withdrawal.form,
+            withdrawal,
             footer: t('email.footer')
         }
     };
@@ -304,7 +290,7 @@ export const cardHoldExpiredEmail = (locale: string, order: OrderLines): EmailCo
             greeting: t('orders.email-card-expired.greeting'),
             body: t('orders.email-card-expired.body'),
             total: t('orders.email-confirm.total', {
-                total: money(locale, orderTotal(order), order.currency)
+                total: formatMoney(locale, orderTotal(order), order.currency)
             }),
             footer: t('email.footer')
         }
@@ -351,7 +337,7 @@ export const orderCancelledEmail = (
             greeting: t('orders.email-cancelled.greeting', { name }),
             body: t('orders.email-cancelled.body', { order: orderRef }),
             refundNote: t(`orders.email-cancelled.${cancelledRefundKey(!!order.paidAt, refund)}`, {
-                amount: money(locale, orderTotal(order), order.currency)
+                amount: formatMoney(locale, orderTotal(order), order.currency)
             }),
             footer: t('email.footer')
         }

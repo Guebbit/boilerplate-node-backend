@@ -212,10 +212,7 @@ describe('the placed-order email carries the notice', () => {
     it('for every payment method, a bank transfer included', () => {
         const { data } = orderConfirmEmail('en', 'Ada', GOODS, ORDER_ID);
 
-        expect(data.withdrawalHeading).toBe(notice.heading);
-        expect(data.withdrawalTerms).toEqual(notice.terms);
-        expect(data.withdrawalEffects).toEqual(notice.effects);
-        expect(data.withdrawalForm).toEqual(notice.form);
+        expect(data.withdrawal).toEqual(notice);
     });
 });
 
