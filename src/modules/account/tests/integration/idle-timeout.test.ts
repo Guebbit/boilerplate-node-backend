@@ -27,11 +27,11 @@ beforeEach(() => {
 });
 
 /** Signs a role in as a bearer client and answers the account and the `Authorization` header. */
-const signInAs = async (role: 'customer' | 'editor') => {
+const signInAs = async (role: 'customer' | 'editor', remember?: 'short' | 'medium' | 'long') => {
     const user = await createUser({ email: `${role}@example.com`, verifiedAt: new Date() }, role);
     const login = await api()
         .post('/account/login')
-        .send({ email: user.email, password: PLAIN_PASSWORD, transport: 'bearer' });
+        .send({ email: user.email, password: PLAIN_PASSWORD, transport: 'bearer', remember });
     const credential = (login.body.data.token ?? login.body.data.sessionToken) as string;
     return { user, bearer: `Bearer ${credential}` };
 };
@@ -193,7 +193,7 @@ describe.each(MODES)('the staff lifetime cap in %s mode', (mode) => {
         const response = await api().get('/account').set('Authorization', bearer);
 
         expect(response.status).toBe(401);
-        expect(response.body.errors[0].code).not.toBe('SESSION_IDLE');
+        expect(response.body.errors[0].code).toBe('UNAUTHORIZED');
         expect(await sessionRowsOf(user.id)).toEqual([]);
     });
 
@@ -223,6 +223,53 @@ describe.each(MODES)('the staff lifetime cap in %s mode', (mode) => {
         const response = await api().get('/account').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
+    });
+
+    it('keeps a staff session one second inside the cap', async () => {
+        const { user, bearer } = await signInAs('editor');
+        await signedInFor(user.id, CAP - 1);
+
+        const response = await api().get('/account').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+    });
+
+    it('ends a staff session one second past the cap', async () => {
+        const { user, bearer } = await signInAs('editor');
+        await signedInFor(user.id, CAP + 1);
+
+        const response = await api().get('/account').set('Authorization', bearer);
+
+        expect(response.status).toBe(401);
+    });
+
+    it('never caps a remember-me shopper, 25 hours after sign-in', async () => {
+        const { user, bearer } = await signInAs('customer', 'long');
+        await signedInFor(user.id, 25 * 3600);
+
+        const response = await api().get('/account').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+    });
+
+    it('answers SESSION_IDLE, not the cap, for a session both idle and past the cap', async () => {
+        const { user, bearer } = await signInAs('editor');
+        await sessionModel
+            .updateMany(
+                { userId: user.id },
+                {
+                    $set: {
+                        startedAt: new Date(Date.now() - (CAP + 60) * 1000),
+                        lastUsedAt: new Date(Date.now() - (LIMIT + 60) * 1000)
+                    }
+                }
+            )
+            .exec();
+
+        const response = await api().get('/account').set('Authorization', bearer);
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('SESSION_IDLE');
     });
 
     it('caps a customer promoted to staff mid-session, from the next request', async () => {
@@ -263,7 +310,7 @@ describe('the staff lifetime cap at POST /account/refresh (jwt mode)', () => {
         const response = await api().post('/account/refresh').set('Cookie', cookie);
 
         expect(response.status).toBe(401);
-        expect(response.body.errors[0].code).not.toBe('SESSION_IDLE');
+        expect(response.body.errors[0].code).toBe('UNAUTHORIZED');
         expect(await sessionRowsOf(user.id)).toEqual([]);
     });
 });

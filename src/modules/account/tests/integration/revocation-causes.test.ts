@@ -41,12 +41,28 @@ const sleep = (ms: number): Promise<void> =>
         setTimeout(resolve, ms);
     });
 
-/** A login: the access token, and the refresh cookie as a `Cookie` header. */
+/** The two session modes a deployment may run. */
+const MODES = ['jwt', 'cookie'] as const;
+
+/** The mode the running case signs in under; set by the `describe.each` below. */
+let sessionMode: (typeof MODES)[number] = 'jwt';
+
+/**
+ * A login: a bearer for the session, and in `jwt` mode the refresh cookie as a `Cookie` header.
+ * `cookie` mode signs in as a bearer client, which is the shape that holds one session per device.
+ */
 const loginAs = async (email: string) => {
-    const response = await api().post('/account/login').send({ email, password: PLAIN_PASSWORD });
+    const response = await api()
+        .post('/account/login')
+        .send({
+            email,
+            password: PLAIN_PASSWORD,
+            ...(sessionMode === 'cookie' && { transport: 'bearer' })
+        });
+    const credential = (response.body.data.token ?? response.body.data.sessionToken) as string;
     return {
-        bearer: `Bearer ${response.body.data.token as string}`,
-        cookie: cookieHeader(response, '__Host-session')
+        bearer: `Bearer ${credential}`,
+        cookie: sessionMode === 'jwt' ? cookieHeader(response, '__Host-session') : ''
     };
 };
 
@@ -235,24 +251,40 @@ const works = (bearer: string): Promise<boolean> =>
         .set('Authorization', bearer)
         .then((response) => response.status === 200);
 
-describe.each(Object.keys(REVOCATION) as RevocationCause[])('cause %s', (cause) => {
-    const row = REVOCATION[cause];
+/** Causes whose trigger is a jwt-only door (a refresh-token replay has no cookie-mode form). */
+const JWT_ONLY = new Set<RevocationCause>(['refresh-reuse']);
 
-    it('ends the other device, as its row says', async () => {
-        const { userId, victim, fire } = await TRIGGERS[cause]();
-        await sleep(PAST_THE_SECOND_MS);
+describe.each(MODES)('revocation causes in %s mode', (mode) => {
+    beforeEach(() => {
+        sessionMode = mode;
+        setEnvironment({ NODE_SESSION_MODE: mode });
+    });
 
-        await fire();
-        await settleOutboxNudges();
+    describe.each(
+        (Object.keys(REVOCATION) as RevocationCause[]).filter(
+            (cause) => mode === 'jwt' || !JWT_ONLY.has(cause)
+        )
+    )('cause %s', (cause) => {
+        const row = REVOCATION[cause];
 
-        expect(await works(victim)).toBe(false);
-        // The caller keeps exactly one session when the row says so; nobody does otherwise.
-        expect(await sessionRowsOf(userId)).toHaveLength(row.callerKeeps ? 1 : 0);
-        const kept = await tokenTypesOf(userId);
-        expect(kept.includes('verify')).toBe(!row.pending);
-        const announced = await outboxEventModel.find({ name: 'account.sessions-revoked' }).lean();
-        expect(announced.map(({ payload }) => payload)).toEqual(
-            row.announce ? [{ userId, reason: cause }] : []
-        );
+        it('ends the other device, as its row says', async () => {
+            const { userId, victim, fire } = await TRIGGERS[cause]();
+            await sleep(PAST_THE_SECOND_MS);
+
+            await fire();
+            await settleOutboxNudges();
+
+            expect(await works(victim)).toBe(false);
+            // The caller keeps exactly one session when the row says so; nobody does otherwise.
+            expect(await sessionRowsOf(userId)).toHaveLength(row.callerKeeps ? 1 : 0);
+            const kept = await tokenTypesOf(userId);
+            expect(kept.includes('verify')).toBe(!row.pending);
+            const announced = await outboxEventModel
+                .find({ name: 'account.sessions-revoked' })
+                .lean();
+            expect(announced.map(({ payload }) => payload)).toEqual(
+                row.announce ? [{ userId, reason: cause }] : []
+            );
+        });
     });
 });
