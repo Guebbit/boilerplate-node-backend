@@ -638,7 +638,7 @@ sets:
           - display:Product
     - name: ProductManagement
       module: products
-      description: Add, change and remove products.
+      description: Add, change, remove and bring back products.
       rules:
           - create:Product
           - update:Product

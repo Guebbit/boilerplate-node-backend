@@ -254,7 +254,7 @@ components:
                 * `receive` — a supplier delivery. `onHand` up.
                 * `adjust` — a stocktake correction, signed. `onHand` moves either way.
                 * `restock` — returned goods were received back on the shelf. `onHand` up.
-                * `preorder` — an order claimed units that do not exist yet. `backordered` up; the shelf is untouched.
+                * `backorder` — an order claimed units that do not exist yet. `backordered` up; the shelf is untouched.
                 * `allocate` — stock arrived for a paid preorder. `backordered` down, `reserved` up: the claim is now a real hold. Written in the receipt's own transaction, oldest payment first.
 
                 `release` and `expire` of a preorder claim give back the allowance (`backordered` down) instead of `reserved`.
