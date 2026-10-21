@@ -25,11 +25,12 @@ import { createExampleLimiter } from './rate-limits';
 export const router = Router();
 
 /*
- * PUBLIC: reading a published example needs no account. `getAuth` still runs, so a signed-in
- * caller is resolved, but nothing here refuses an anonymous one. Mounted above the guard below
- * rather than carrying an exemption.
+ * PUBLIC: the answer is the same for everyone, so no credential is read. Mounted above the guard
+ * below rather than carrying an exemption.
+ * `privateNoCache`: the title varies by `Accept-Language`, and revalidation stops an archived
+ * example being served.
  */
-router.get('/published/:id', getAuth, privateNoCache, getPublishedExample);
+router.get('/published/:id', privateNoCache, getPublishedExample);
 
 /*
  * Everything below is signed-in, and POSITIONAL: the guard covers routes under it, not above.
