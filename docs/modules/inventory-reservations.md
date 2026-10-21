@@ -255,8 +255,10 @@ while its hold is `released`, and the units it gave up may already belong to som
 | retries exhausted, the row goes `dead`    | unbounded: the order stays `pending`, payable, with no hold |
 
 **The rule: money that lands on a released hold takes the units again, inside the payment's own
-transaction, before the order is written `paid`.** `markPaid` (`orders`) asks
-`inventoryService.retakeReleasedForOrder` first:
+transaction, before the order is written `paid`.** `markPaid` (`orders`) first reads the order in
+that transaction: one that can no longer be paid (the sweep already cancelled it) takes nothing back,
+so the ledger gets no reserve-then-release pair for it. A payable order asks
+`inventoryService.retakeReleasedForOrder`:
 
 - the hold is not released: nothing to do, the normal commit follows.
 - the shelf still covers it: the hold goes `released → held` and every line's counters move again

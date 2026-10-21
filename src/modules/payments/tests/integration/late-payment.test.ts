@@ -131,6 +131,10 @@ describe('a card payment that lands on a released hold', () => {
 
         expect(await orderStatusOf(orderId)).toBe('cancelled');
         expect(await levelOf(productId)).toEqual({ onHand: 5, reserved: 0 });
+        // The cancelled order never reached the retake: the ledger holds the hold and its
+        // expiry, with no reserve-then-release pair added by the late money.
+        const ledger = await inventoryService.listMovements({ productId });
+        expect(ledger.items.map(({ reason }) => reason).toSorted()).toEqual(['expire', 'reserve']);
     });
 });
 

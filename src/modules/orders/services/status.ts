@@ -20,6 +20,7 @@ import { withTimeline } from './timeline';
 import {
     ORDER_EVENTS,
     isDigitalOnlyOrder,
+    isPayable,
     type OrderEventName,
     type TimelineEntryInput,
     conformityUntilFrom,
@@ -131,19 +132,28 @@ export const markPaid = (
     return announceMove(
         session,
         (active) =>
-            // Money that lands after the hold was released takes its units again FIRST. Short, the
-            // order is not written `paid`: `null` sends the payment down the refund path, and the
-            // late cancel ends the order. Retaken but the order could no longer be paid, the
-            // units go back, so a cancelled order never keeps stock.
-            inventoryService.retakeReleasedForOrder(orderId, active).then((retake) => {
-                if (retake === 'short') return null;
-                return movePaid(active).then((order) => {
-                    if (order)
-                        return inventoryService.commitForOrder(orderId, active).then(() => order);
-                    if (retake === 'none') return null;
-                    return inventoryService
-                        .releaseForOrder(orderId, 'release', active)
-                        .then(() => null);
+            // An order that can no longer be paid (the sweep already cancelled it) takes no units
+            // back: the retake would reserve them and the cancel release them again, two ledger
+            // rows for nothing. Only a payable order retakes.
+            orderRepository.findInSession(orderId, active).then((current) => {
+                if (!current || !isPayable(current.status)) return null;
+                // Money that lands after the hold was released takes its units again FIRST.
+                // Short, the order is not written `paid`: `null` sends the payment down the
+                // refund path, and the late cancel ends the order. Retaken but the order was
+                // lost to a racing move meanwhile, the units go back: a cancelled order never
+                // keeps stock.
+                return inventoryService.retakeReleasedForOrder(orderId, active).then((retake) => {
+                    if (retake === 'short') return null;
+                    return movePaid(active).then((order) => {
+                        if (order)
+                            return inventoryService
+                                .commitForOrder(orderId, active)
+                                .then(() => order);
+                        if (retake === 'none') return null;
+                        return inventoryService
+                            .releaseForOrder(orderId, 'release', active)
+                            .then(() => null);
+                    });
                 });
             }),
         () => statusChangedEvent(orderId, from[0], to)
