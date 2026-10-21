@@ -92,7 +92,7 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 | `PaymentAmountMismatch`              | the provider reported a success for an amount, currency or payment that is not the frozen one                                             | critical           |
 | `AccountExportFailing`               | any personal-data export failed in 15 min (the GDPR deadline is running)                                                                  | warning            |
 | `Watchdog`                           | always firing; the heartbeat pushed to `ALERT_HEARTBEAT_URL` (silence there = the pipeline is dead)                                       | none               |
-| `AlertmanagerNotificationsFailing`   | Alertmanager failed to send a notification in 15 min (webhook only: email is what is broken)                                              | warning            |
+| `AlertmanagerNotificationsFailing`   | Alertmanager failed to send a notification in 15 min (a failing email goes to the webhook, any other failing channel goes to email)       | warning            |
 | `PrometheusRuleEvaluationFailures`   | a rule errored while running in the last 15 min                                                                                           | warning            |
 | `DiskAlmostFull`                     | a real mount under 10 % free, or predicted full within 24 h by the last 6 h (needs the `monitoring` profile's node_exporter)              | warning            |
 | `TlsCertExpiringSoon`                | a certificate Traefik serves expires in under 14 days (needs `docker-compose.proxy.yml`)                                                  | warning            |
@@ -124,19 +124,23 @@ Prometheus evaluates the rules; Alertmanager decides who is told. The routing is
 reads no environment variables, and its email `to` / `from` / `smarthost` have no `_file` form.
 Same routing for every client and for dev; only the values differ.
 
-| Alert                              | Goes to                | Why                                                |
-| ---------------------------------- | ---------------------- | -------------------------------------------------- |
-| `Watchdog`                         | the heartbeat URL only | silence on the other end = the pipeline is dead    |
-| `AlertmanagerNotificationsFailing` | the webhook only       | email is the thing that is broken                  |
-| `severity: critical`               | email **and** webhook  | a phone push for what cannot wait                  |
-| everything else                    | email                  | through the app's own SMTP account (`NODE_SMTP_*`) |
+| Alert                              | Goes to                | Why                                                                                                                           |
+| ---------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `Watchdog`                         | the heartbeat URL only | silence on the other end = the pipeline is dead                                                                               |
+| `AlertmanagerNotificationsFailing` | the OTHER channel      | a failing email goes to the webhook, a failing webhook (or the heartbeat) goes to email: never to the receiver that is broken |
+| `severity: critical`               | email **and** webhook  | a phone push for what cannot wait                                                                                             |
+| everything else                    | email                  | through the app's own SMTP account (`NODE_SMTP_*`)                                                                            |
 
-| Knob                                 | Meaning                                                                               |
-| ------------------------------------ | ------------------------------------------------------------------------------------- |
-| `ALERT_EMAIL_TO`, `ALERT_EMAIL_FROM` | who receives the email, and from what address (`from` falls back to `NODE_SMTP_USER`) |
-| `ALERT_WEBHOOK_URL`                  | ntfy, Slack, Telegram, Matrix... the operator's choice                                |
-| `ALERT_HEARTBEAT_URL`, `_TOKEN`      | the off-host service that raises the alarm when the `Watchdog` pings stop             |
+| Knob                                 | Meaning                                                                                  |
+| ------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `ALERT_EMAIL_TO`, `ALERT_EMAIL_FROM` | who receives the email, and from what address (`from` falls back to `NODE_SMTP_USER`)    |
+| `ALERT_WEBHOOK_URL`                  | ntfy (with a templated URL, [recipe below](#webhook-ntfy)) or a bridge for anything else |
+| `ALERT_HEARTBEAT_URL`, `_TOKEN`      | the off-host service that raises the alarm when the `Watchdog` pings stop                |
 
+- **The webhook is Alertmanager's generic one.** It posts a fixed JSON body (`{"version":"4","alerts":[...]}`) that
+  Alertmanager cannot reshape. Slack, Telegram, Discord and Pushover reject that body, and Matrix needs a bridge in
+  front of it. ntfy takes any POST, so it is the one service that works directly; anything else needs a small
+  bridge that turns the JSON into the service's own format.
 - **Empty knob, route off.** Its alerts go to `null` and nothing warns about it at boot. Email needs
   `ALERT_EMAIL_TO`, a sender and `NODE_SMTP_HOST`; with `NODE_SMTP_PASS` empty no SMTP login is sent.
 - **Secrets stay out of the config.** The webhook and heartbeat URLs, the token and the SMTP password are
@@ -146,6 +150,18 @@ Same routing for every client and for dev; only the values differ.
   contain them.
 - **Local stack.** Email defaults to mailpit (`integrations` profile, `http://localhost:8025`) and needs no
   `.env` change.
+
+### The ntfy URL {#webhook-ntfy}
+
+Sent plain, an ntfy push is the raw JSON. A readable one needs ntfy's own templating in the URL, and `p=5` marks
+the push urgent (it can override Do Not Disturb on Android):
+
+```
+ALERT_WEBHOOK_URL='https://ntfy.example.com/alerts?tpl=1&t={{.commonLabels.alertname}}&m={{.commonAnnotations.summary}}&p=5'
+```
+
+`p=5` applies to every alert that reaches the webhook, not only the critical ones. The template fields are ntfy's
+(<https://docs.ntfy.sh/publish/#message-templating>); check the result with the drill below before relying on it.
 
 ### The local drill
 

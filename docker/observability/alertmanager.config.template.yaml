@@ -26,8 +26,14 @@ route:
           group_wait: 0s
           group_interval: 30s
           repeat_interval: 1m
-        # Email is the thing that is broken here, so the webhook only.
+        # A broken channel reports through the OTHER one, never through itself: an alert sent to
+        # the broken receiver is lost. Email is what is broken here, so the webhook...
         - receiver: '@RECEIVER_NOTIFY_FAILING@'
+          matchers: ['alertname="AlertmanagerNotificationsFailing"', 'integration="email"']
+        # ...and when any other channel is (the webhook, or the heartbeat, which is a webhook too),
+        # email. Without this the alert would go to the broken webhook and the failure would be
+        # silent while the heartbeat stayed green.
+        - receiver: '@RECEIVER_DEFAULT@'
           matchers: ['alertname="AlertmanagerNotificationsFailing"']
         # What cannot wait: email and the phone push.
         - receiver: '@RECEIVER_CRITICAL@'

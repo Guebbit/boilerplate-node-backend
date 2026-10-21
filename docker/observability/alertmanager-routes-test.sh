@@ -40,27 +40,31 @@ render ALERT_EMAIL_TO=ops@example.test ALERT_EMAIL_FROM=alerts@example.test \
     ALERT_WEBHOOK_URL=https://ntfy.example.test/alerts \
     ALERT_HEARTBEAT_URL=https://gatus.example.test/api/v1/endpoints/x/external ALERT_HEARTBEAT_TOKEN=token
 expect heartbeat alertname=Watchdog
-expect webhook alertname=AlertmanagerNotificationsFailing severity=warning
+expect webhook alertname=AlertmanagerNotificationsFailing integration=email severity=warning
+expect email alertname=AlertmanagerNotificationsFailing integration=webhook severity=warning
 expect email-and-webhook alertname=ApiDown severity=critical
 expect email alertname=HighErrorRate severity=warning
 
 echo "email only"
 render ALERT_EMAIL_TO=ops@example.test ALERT_EMAIL_FROM=alerts@example.test NODE_SMTP_HOST=smtp.example.test
 expect null alertname=Watchdog
-expect null alertname=AlertmanagerNotificationsFailing
+expect null alertname=AlertmanagerNotificationsFailing integration=email
+expect email alertname=AlertmanagerNotificationsFailing integration=webhook
 expect email alertname=ApiDown severity=critical
 expect email alertname=HighErrorRate severity=warning
 
 echo "webhook only"
 render ALERT_WEBHOOK_URL=https://ntfy.example.test/alerts
-expect webhook alertname=AlertmanagerNotificationsFailing
+expect webhook alertname=AlertmanagerNotificationsFailing integration=email
+expect null alertname=AlertmanagerNotificationsFailing integration=webhook
 expect webhook alertname=ApiDown severity=critical
 expect null alertname=HighErrorRate severity=warning
 
 echo "every knob empty"
 render
 expect null alertname=Watchdog
-expect null alertname=AlertmanagerNotificationsFailing
+expect null alertname=AlertmanagerNotificationsFailing integration=email
+expect null alertname=AlertmanagerNotificationsFailing integration=webhook
 expect null alertname=ApiDown severity=critical
 expect null alertname=HighErrorRate severity=warning
 

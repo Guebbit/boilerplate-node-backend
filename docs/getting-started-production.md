@@ -320,7 +320,7 @@ flowchart LR
 - **You need an alert receiver.** Alerts that fire into nothing are a dashboard nobody opens.
   With no `ALERT_*` knob set, Alertmanager sends every alert to `null`, which notifies no one.
   Set `ALERT_EMAIL_TO` / `ALERT_EMAIL_FROM` (sent through the app's own `NODE_SMTP_*`),
-  `ALERT_WEBHOOK_URL` (ntfy, Slack, Telegram, Matrix: your choice) and `ALERT_HEARTBEAT_URL` in the
+  `ALERT_WEBHOOK_URL` (ntfy with a templated URL, or a bridge for anything else) and `ALERT_HEARTBEAT_URL` in the
   client's `.env`. [Alert routing](tools/prometheus.md#alert-routing) has the table.
 - **Prove it once, on staging.** `docker compose ... stop app`: within about two minutes
   `[FIRING] ApiDown` reaches your `ALERT_*` receiver, and `start app` sends the resolution. Then stop
