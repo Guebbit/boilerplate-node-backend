@@ -574,6 +574,42 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         expect(await statusOfSession(other, mode)).toBe(401);
     });
 
+    it('ends every session when an email change is confirmed through its link', async () => {
+        const { user, session } = await account(mode);
+        const other = await signIn(user.email, mode);
+        await userRepository.updateMany(
+            { _id: user.id },
+            { $set: { pendingEmail: 'confirmed@example.com' } }
+        );
+        await plantToken(user.id, 'email-change', 'confirm-link');
+
+        const confirm = await api()
+            .post('/account/email-change-confirm')
+            .send({ token: 'confirm-link' });
+
+        expect(confirm.status).toBe(200);
+        expect(await sessionRowsOf(user.id)).toEqual([]);
+        expect(await statusOfSession(session, mode)).toBe(401);
+        expect(await statusOfSession(other, mode)).toBe(401);
+    });
+
+    it('ends every session when an email change is undone through its link', async () => {
+        const { user, session } = await account(mode);
+        const other = await signIn(user.email, mode);
+        await userRepository.updateMany(
+            { _id: user.id },
+            { $set: { previousEmail: 'old@example.com' } }
+        );
+        await plantToken(user.id, 'email-change-undo', 'undo-link');
+
+        const undo = await api().post('/account/email-change-undo').send({ token: 'undo-link' });
+
+        expect(undo.status).toBe(200);
+        expect(await sessionRowsOf(user.id)).toEqual([]);
+        expect(await statusOfSession(session, mode)).toBe(401);
+        expect(await statusOfSession(other, mode)).toBe(401);
+    });
+
     it('completes a 2FA login on the right code, with a session that claims the factor', async () => {
         const { user, session } = await account(mode);
         const { secret } = await armTotp(session.headers);
