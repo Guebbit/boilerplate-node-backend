@@ -29,7 +29,7 @@ export const CONFORMITY_REASONS: readonly ReturnReason[] = [
 
 /** What {@link reasonsOpenAt} reads off an order: the deadlines it froze at delivery. */
 export interface FrozenDeadlines {
-    /** Absent while the withdrawal clock has not started. */
+    /** The last instant a withdrawal is accepted. Absent while the withdrawal clock has not started. */
     withdrawUntil?: Date | undefined;
     /** Absent while the order has not been delivered. */
     conformityUntil?: Date | undefined;

@@ -661,7 +661,8 @@ describe('withActions — withdraw', () => {
         const closed = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.delivered
         });
-        await setWithdrawUntil(String(closed._id), new Date(Date.now() - 60_000));
+        // Past the announced last day AND the silent grace day after it.
+        await setWithdrawUntil(String(closed._id), new Date(Date.now() - 86_400_000 - 60_000));
 
         const openBody = await orderService.withActions(
             (await orderRepository.findById(String(open._id)))!,
@@ -675,6 +676,25 @@ describe('withActions — withdraw', () => {
         expect(openBody.actions?.withdraw).toBe(true);
         expect(openBody.actions?.withdrawUntil).toEqual(expect.any(String));
         expect(closedBody.actions?.withdraw).toBe(false);
+    });
+
+    it('still offers the button on the silent grace day, while printing the announced day', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.delivered
+        });
+        // The announced last day ended an hour ago: the client shows that date, the shop still accepts.
+        const announced = new Date(Date.now() - 3_600_000);
+        await setWithdrawUntil(String(order._id), announced);
+
+        const body = await orderService.withActions(
+            (await orderRepository.findById(String(order._id)))!,
+            asUser(user)
+        );
+
+        expect(body.actions?.withdraw).toBe(true);
+        expect(body.actions?.withdrawUntil).toBe(announced.toISOString());
     });
 
     it('is never offered on a cancelled order', async () => {

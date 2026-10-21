@@ -10,10 +10,13 @@ import {
     deliveryClockFor,
     isBeforeDispatch,
     isExcludedFromWithdrawal,
+    withdrawalClosesAt,
     withdrawalRefusalOf,
     withdrawalStartFor,
     withdrawUntilFrom
 } from '../../domain';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const NOW = new Date('2026-03-10T12:00:00Z');
 
@@ -53,6 +56,31 @@ describe('withdrawUntilFrom', () => {
         expect(withdrawUntilFrom(new Date('2026-01-25T00:00:00Z'), 14).toISOString()).toBe(
             '2026-02-08T23:59:59.999Z'
         );
+    });
+});
+
+describe('withdrawalClosesAt', () => {
+    it('is the end of the UTC day after the announced last day', () => {
+        const announced = withdrawUntilFrom(new Date('2026-03-01T10:00:00Z'), 14);
+
+        expect(announced.toISOString()).toBe('2026-03-15T23:59:59.999Z');
+        expect(withdrawalClosesAt(announced).toISOString()).toBe('2026-03-16T23:59:59.999Z');
+    });
+
+    it('is the same whatever time of day the event happened', () => {
+        expect(
+            withdrawalClosesAt(withdrawUntilFrom(new Date('2026-03-01T00:00:00Z'), 14)).getTime()
+        ).toBe(
+            withdrawalClosesAt(withdrawUntilFrom(new Date('2026-03-01T23:59:59Z'), 14)).getTime()
+        );
+    });
+
+    it('crosses a month and a year boundary', () => {
+        expect(
+            withdrawalClosesAt(
+                withdrawUntilFrom(new Date('2026-12-17T08:00:00Z'), 14)
+            ).toISOString()
+        ).toBe('2027-01-01T23:59:59.999Z');
     });
 });
 
@@ -103,8 +131,20 @@ describe('canWithdraw', () => {
         expect(canWithdraw({ status: OrderStatus.delivered, withdrawUntil }, NOW)).toBe(true);
     });
 
-    it('is gone one millisecond after the window closes', () => {
+    it('is still offered the day after the announced last day: the silent grace day', () => {
         const withdrawUntil = new Date(NOW.getTime() - 1);
+
+        expect(canWithdraw({ status: OrderStatus.delivered, withdrawUntil }, NOW)).toBe(true);
+    });
+
+    it('is offered on the very last instant of the grace day', () => {
+        const withdrawUntil = new Date(NOW.getTime() - DAY_MS);
+
+        expect(canWithdraw({ status: OrderStatus.delivered, withdrawUntil }, NOW)).toBe(true);
+    });
+
+    it('is gone one millisecond after the grace day closes', () => {
+        const withdrawUntil = new Date(NOW.getTime() - DAY_MS - 1);
 
         expect(canWithdraw({ status: OrderStatus.delivered, withdrawUntil }, NOW)).toBe(false);
     });
@@ -182,8 +222,8 @@ describe('withdrawalRefusalOf', () => {
         ).toBeUndefined();
     });
 
-    it('says window_closed one millisecond after the window ends', () => {
-        const withdrawUntil = new Date(NOW.getTime() - 1);
+    it('says window_closed one millisecond after the grace day ends', () => {
+        const withdrawUntil = new Date(NOW.getTime() - DAY_MS - 1);
 
         expect(withdrawalRefusalOf({ status: OrderStatus.delivered, withdrawUntil }, NOW)).toBe(
             WithdrawBlockedReason.window_closed

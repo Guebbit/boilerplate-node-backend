@@ -30,7 +30,7 @@
             "meta-title": "Shipment delivered",
             "greeting": "Hello, {{name}}!",
             "body": "Your shipment has arrived.",
-            "withdraw-until": "You may withdraw from the purchase until {{date}}."
+            "withdraw-until": "You may withdraw from the purchase until the end of {{date}}."
         },
         "email-hold-notice": {
             "meta-title": "Part of your order is on hold",

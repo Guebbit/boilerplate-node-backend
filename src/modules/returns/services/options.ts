@@ -31,6 +31,7 @@ import {
 } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { cancellationRefundOn } from './cancellation-refund';
+import { frozenDeadlinesOf } from './deadlines';
 import { cancelRefusalOf } from './cancel-right';
 import { ownOrder } from './ownership';
 
@@ -92,7 +93,9 @@ export const getReturnOptions = (
         ]).then(([returns, shipped, remainders]) => {
             // Only the buyer exercises a right (staff open nothing here), and only for a reason
             // whose deadline is still open: none left means no form.
-            const reasons = isBuyer(order, authContext) ? reasonsOpenAt(order, new Date()) : [];
+            const reasons = isBuyer(order, authContext)
+                ? reasonsOpenAt(frozenDeadlinesOf(order), new Date())
+                : [];
             // Excluded goods (Art. 16) are offered only for a reason that is not the withdrawal:
             // a defect or a wrong item reaches made-to-order goods too.
             const excluded = new Set(

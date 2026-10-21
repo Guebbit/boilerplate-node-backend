@@ -30,7 +30,7 @@
             "meta-title": "Spedizione consegnata",
             "greeting": "Ciao, {{name}}!",
             "body": "La tua spedizione è arrivata.",
-            "withdraw-until": "Puoi recedere dall'acquisto fino al {{date}}."
+            "withdraw-until": "Puoi recedere dall'acquisto fino a tutto il {{date}}."
         },
         "email-hold-notice": {
             "meta-title": "Una parte del tuo ordine è in sospeso",

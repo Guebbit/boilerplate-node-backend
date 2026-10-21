@@ -9,7 +9,12 @@
 
 import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
-import { hasShopStarted, isBuyer, isExcludedFromWithdrawal } from '@modules/orders';
+import {
+    hasShopStarted,
+    isBuyer,
+    isExcludedFromWithdrawal,
+    withdrawalClosesAt
+} from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import type { AuthContext } from '@types';
 import type { ProductQuantity } from '../domain';
@@ -39,7 +44,8 @@ export const cancelRefusalOf = (
             ? undefined
             : 'no-key';
 
-    if (order.withdrawUntil && Date.now() > order.withdrawUntil.getTime()) return 'window-closed';
+    if (order.withdrawUntil && Date.now() > withdrawalClosesAt(order.withdrawUntil).getTime())
+        return 'window-closed';
 
     if (!hasShopStarted(order.status)) return undefined;
 
