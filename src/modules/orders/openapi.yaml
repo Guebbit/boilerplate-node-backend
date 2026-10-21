@@ -1303,9 +1303,11 @@ components:
                     type: string
                     format: date-time
                     description: >-
-                        The last instant a withdrawal is valid, frozen when the period started —
-                        delivery for goods, payment for digital content. Absent before that: the
-                        right already exists, the window has no end yet.
+                        The end of the last day a withdrawal is announced to be valid (UTC), frozen
+                        when the period started — delivery for goods, payment for digital content.
+                        A client prints its date only. The shop accepts a withdrawal one day past
+                        it. Absent before the period starts: the right already exists, the window
+                        has no end yet.
                 invoice:
                     type: boolean
                     description: >-

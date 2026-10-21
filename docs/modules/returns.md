@@ -113,7 +113,7 @@ says the money went back.
 The button is **server-driven**: `OrderActions.withdraw` says whether it is offered,
 `OrderActions.withdrawBlocked` says why not (`all_excluded`, `window_closed` or `nothing_left`, the
 first that applies, from `withdrawalRefusalOf` in `orders/domain/withdrawal.ts` — the same function
-the door asks, so the two cannot disagree) and `OrderActions.withdrawUntil` says until when. A
+the door asks, so the two cannot disagree) and `OrderActions.withdrawUntil` says until when (the last day the buyer is told; a withdrawal is accepted one UTC day past it, [the grace day](./orders.md#the-withdrawal-window)). A
 client shows the button **disabled with the reason**, never hidden. `OrderActions`' own description states the doctrine — a
 client must not re-implement the lifecycle, because "a second copy in a separately deployed client is
 how the two come to disagree". The frontend never counts the days. The clock itself is
@@ -187,10 +187,10 @@ returned quantities would be a second copy of the truth.
 An order freezes two deadlines the moment it is delivered, and a request is judged by the one that
 belongs to its reason:
 
-| Reason                    | Deadline                                                                          | Art. 16 exclusion |
-| ------------------------- | --------------------------------------------------------------------------------- | ----------------- |
-| `withdrawal`, `other`     | `withdrawUntil`: the shop's period (`NODE_WITHDRAWAL_PERIOD_DAYS`, 30 by default) | applies           |
-| `defective`, `wrong_item` | `conformityUntil`: two years from delivery, plus seven days of margin             | does not apply    |
+| Reason                    | Deadline                                                                                              | Art. 16 exclusion |
+| ------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------- |
+| `withdrawal`, `other`     | `withdrawUntil` plus one silent day: the shop's period (`NODE_WITHDRAWAL_PERIOD_DAYS`, 30 by default) | applies           |
+| `defective`, `wrong_item` | `conformityUntil`: two years from delivery, plus seven days of margin                                 | does not apply    |
 
 The second row is the legal guarantee of conformity (Directive 2019/771 Art. 10(1), Art. 21: not
 waivable). Art. 16 CRD only takes the right of **withdrawal** away, so a made-to-order item that

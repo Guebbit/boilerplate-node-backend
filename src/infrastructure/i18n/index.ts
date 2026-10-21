@@ -3,7 +3,8 @@
  * Request-scoped i18n barrel — import `t` from here, never from `'i18next'` directly, since its
  * default export is one global instance with one active language and this file keeps that global
  * out of the request path (see `./context`). Re-exports `./catalog` (translations, including the
- * pure `localeCandidatesFor` chain), `./overrides` (admin overlay), `./context` (per-request `t`)
+ * pure `localeCandidatesFor` chain), `./overrides` (admin overlay), `./served` (which languages a
+ * request may be answered in), `./context` (per-request `t`)
  * and `./boot` (`bootI18n`, the shared instance startup); all ~70 import sites say
  * `@infrastructure/i18n`.
  *
@@ -29,6 +30,7 @@ export {
 export { bootI18n } from './boot';
 
 export {
+    applyLocaleOverlay,
     applyLocaleOverrides,
     getOverrideRefreshMs,
     isLocaleOverrideAvailable,
@@ -37,8 +39,19 @@ export {
     resetLocaleOverrides,
     startLocaleOverrideRefresh,
     stopLocaleOverrideRefresh,
+    type LocaleOverlay,
     type LocaleOverrideProvider
 } from './overrides';
+
+export {
+    dictionaryLocaleFor,
+    hasServedDictionary,
+    isServedLocale,
+    listServedLocales,
+    resetServedLanguages,
+    servedLocaleFor,
+    setServedLanguages
+} from './served';
 
 export {
     createLocaleContext,

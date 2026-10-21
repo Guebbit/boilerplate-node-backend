@@ -81,6 +81,18 @@ The demo ships Spanish, Italian, French and Japanese in deliberately different s
 completeness, for BOTH kinds of content, so a half-translated shop and a half-translated catalogue
 can each be seen behaving — fixing either is this role's job.
 
+## Switching a language on or off
+
+A language has one switch. **On**, shoppers can pick it and it applies everywhere at once: the screens,
+the product names and descriptions, the search and the emails. **Off**, it is a draft: the editor
+can keep writing into it, shoppers never see it, and anyone who had it saved gets the shop's default
+language, in the page and in the emails. Switching it back on needs no deploy and takes effect on the
+next page load.
+
+A language added by hand has no translation file for the shop's own error messages, so those few
+messages show in the default language until a developer adds the file. Everything the editor
+writes (screens, product names) shows in the new language straight away.
+
 ::: warning One role holds both jobs
 `editor` holds the `products.*` keys and the `translations.*` keys together, so a mistranslation CAN
 become a mischarge: the same account that rewrites a title can reach the price.

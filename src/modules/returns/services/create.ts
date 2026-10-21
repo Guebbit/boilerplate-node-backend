@@ -43,6 +43,7 @@ import {
     wireLines
 } from '../domain';
 import type { ProductQuantity } from '../domain';
+import { frozenDeadlinesOf } from './deadlines';
 import { ownOrder } from './ownership';
 import { syncReturnStatus } from './projection';
 import { createCancellation } from './cancel-remainder';
@@ -203,7 +204,7 @@ const openReturn = (
 
         // Each reason has its own deadline: the shop's withdrawal period for a withdrawal or a
         // goodwill return, two years from delivery for a defect or a wrong item.
-        if (!isReasonOpen(order, input.reason, new Date()))
+        if (!isReasonOpen(frozenDeadlinesOf(order), input.reason, new Date()))
             return windowClosed(isGuaranteeReason(input.reason));
 
         // Art. 16: goods the product marks as excluded cannot be withdrawn from. Before dispatch the

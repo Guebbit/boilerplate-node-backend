@@ -7,6 +7,7 @@
 
 import type { LocaleMessages, LocaleApp } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
+import type { LocaleOverlay } from '@infrastructure/i18n';
 import {
     generateSuccess,
     type ResponseReject,
@@ -89,3 +90,15 @@ export const readApiOverrides = (): Promise<Record<string, Record<string, unknow
 
         return overrides;
     });
+
+/**
+ * What one refresh of `@infrastructure/i18n` reads: the API's own overrides, and which registered
+ * languages are switched on or off. One function so the copy and the served-language list come
+ * from the same refresh, and any failed read leaves the last good set of BOTH in place.
+ */
+export const readLocaleOverlay = (): Promise<LocaleOverlay> =>
+    Promise.all([
+        readApiOverrides(),
+        localeRepository.listActiveTags(),
+        localeRepository.listInactiveTags()
+    ]).then(([overrides, activeTags, inactiveTags]) => ({ overrides, activeTags, inactiveTags }));

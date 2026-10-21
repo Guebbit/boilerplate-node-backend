@@ -11,20 +11,23 @@ tags:
 # ── Two tiers, and they never merge ──────────────────────────────────────────────────────────
 #
 # TIER 1 — the API's OWN copy. Files under `src/locales/` and `src/modules/*/locales/`, loaded
-# into i18next at boot. It is what `t()` resolves, what decides `Content-Language`, and what
-# `GET /locales/{locale}` serves. Editable only by a deploy, permanently: it exists to let a
-# client render copy when NO RESPONSE ARRIVES, and putting it behind a database would make it
-# unavailable in exactly the situation it was created for.
+# into i18next at boot. It is what `t()` resolves and what `GET /locales/{locale}` serves.
+# Editable only by a deploy, permanently: it exists to let a client render copy when NO RESPONSE
+# ARRIVES, and putting it behind a database would make it unavailable in exactly the situation it
+# was created for.
 #
 # TIER 2 — the CLIENT's copy. Rows in MongoDB, edited at runtime through the admin routes below
 # and served by `GET /locales/{locale}/messages`. Nothing in the request path reads it, so a
 # database that is down, a half-translated language or a malformed key can cost at most this one
 # endpoint — never the API's ability to answer in its own language.
 #
-# The trap that separation avoids: a language existing in the database does NOT mean the API can
-# answer in it. `GET /locales` therefore reports `apps` per language rather than a bare list, so
-# "may I send `Accept-Language: es`" and "may I download a Spanish UI dictionary" stay two
-# questions with two answers.
+# ONE language is picked per request, from every language that is switched on: a deployed file
+# not switched off, or a registered language that is switched on, or the fallback. It decides the
+# product text, the search, the `Content-Language` label and the language a signup saves. A
+# language registered in the database with no deployed file is therefore served, but the API has
+# no wording of its own in it: each message falls back to the default language, one at a time.
+# `GET /locales` reports `apps` per language so a client can still tell whether the API has its own
+# words in it (the backend app) or a UI dictionary is downloadable (a frontend app).
 #
 # ── Apps ──────────────────────────────────────────────────────────────────────────────────
 #
@@ -57,19 +60,25 @@ paths:
                 actually do.
 
                 `apps` is the field doing the real work: which apps have words in that
-                language. The backend app means the API can answer requests in it — its
+                language. The backend app means the API has its own wording in it — its
                 dictionary is deployed and i18next holds it. A frontend app means a client
                 dictionary is downloadable from `GET /locales/{locale}/messages`. A language can
-                have either, or both, and the two are not the same capability: a language added
-                through the admin routes below carries only the frontend app until a file is
-                deployed for it.
+                have either, or both: a language added through the admin routes below carries
+                only the frontend app until a file is deployed for it, and a request in it is
+                still answered in it, with the API's own messages in the default language.
+
+                `active: false` marks a language switched off. A client that bundles its own copy
+                of a language must stop offering it when it reads that flag; the API never picks
+                it for a request.
 
                 Public, unauthenticated and cacheable. A client that has just failed to reach the
                 API is exactly who needs it.
 
-                An ADMIN gets the same manifest plus the rows a visitor is not offered: inactive
-                languages, each carrying `active: false`. The flag gates selection by visitors and
-                nothing else — the same rule products and users follow.
+                An ADMIN gets the same manifest plus the rows of the languages a visitor never
+                sees: a registered language that is switched off, carrying `active: false`. A
+                language with a deployed file that is switched off is listed for everyone, as
+                `active: false`. The flag gates selection by visitors and nothing else — the same
+                rule products and users follow.
             operationId: getLocales
             security:
                 - {}
@@ -89,9 +98,10 @@ paths:
             description: |
                 Registers a language in the dynamic tier so entries can be translated into it.
 
-                This does NOT teach the API to answer in the new language — that needs a dictionary
-                file and a deploy. A language created here carries only the frontend app until
-                one exists.
+                A language created switched on is served at once: a request in it is answered in
+                it (product text, search, `Content-Language`). The API's own messages have no
+                wording of their own in it until a dictionary file is deployed, so each falls back
+                to the default language. It carries only the frontend app until one exists.
             operationId: createLocale
             security:
                 - bearerAuth: []
@@ -882,8 +892,10 @@ components:
                     example: Español
                 direction:
                     $ref: '#/components/schemas/LocaleDirection'
-                # Inactive means invisible to every PUBLIC route: absent from the manifest, 404 on
-                # the dictionary, and its translated entity text is not served. Staff holding
+                # Inactive means invisible to every PUBLIC route: never picked for a request, 404 on
+                # the dictionary, and its translated entity text is not served. A registered
+                # language is absent from the visitor manifest; one with a deployed file stays in
+                # it, as `active: false`, so a client that bundles it knows to stop offering it. Staff holding
                 # `display:Locale` still see the manifest row and the dictionary, and entity text
                 # can be drafted into it. It is the state a half-finished translation lives in,
                 # and the state a language must be put into before it can be deleted.
@@ -938,10 +950,10 @@ components:
                 direction:
                     $ref: '#/components/schemas/LocaleDirection'
                 # Whether a VISITOR may select the language — the flag's only job, the same rule
-                # products and users follow. Non-admin manifests simply omit inactive rows, so for
-                # them this is always true; an admin's manifest includes every row and reads the
-                # flag to tell them apart. Static-only languages are always true: a deployed file
-                # has no off switch.
+                # products and users follow. A registered language that is switched off is absent
+                # from a visitor's manifest; one with a deployed file is listed as `false`. An
+                # admin's manifest includes every row. Only a deployed file with no row of its own
+                # is always true: it has no off switch.
                 active:
                     type: boolean
                 apps:
@@ -951,9 +963,10 @@ components:
                         $ref: '#/components/schemas/LocaleApp'
                     description: >-
                         Which apps have words in this language. Without it a client seeing `es`
-                        in the list cannot tell whether it may send `Accept-Language: es` and get
-                        Spanish error messages (the backend app), or whether it may download a
-                        Spanish UI dictionary (a frontend app). Those are different questions.
+                        in the list cannot tell whether the API has its own Spanish wording for
+                        error messages (the backend app), or whether it may download a Spanish UI
+                        dictionary (a frontend app). Those are different questions; a request in
+                        the language is answered either way.
                 source:
                     $ref: '#/components/schemas/LocaleSource'
                 # Rows in the dynamic tier. Spots a half-translated language at a glance, and is

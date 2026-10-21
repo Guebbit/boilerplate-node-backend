@@ -11,11 +11,15 @@ info:
         Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs).
 
         Language: every endpoint honours `Accept-Language` (q-weights and region tags
-        included). It selects the language of user-facing copy only — `errors[].message` and a
-        success envelope's `message` — never the response shape, the status code, or a
-        machine-readable field such as `errors[].code`. An unsupported language falls back
-        instead of erroring; `Content-Language` states what was used and `Vary:
-        Accept-Language` is always set. `GET /locales` lists what a deployment supports.
+        included). One language is picked per request, from the languages switched on in
+        `GET /locales`, and it selects the language of user-facing copy and of translated entity
+        fields (a product's `title`, `description`) — `errors[].message`, a success envelope's
+        `message` — never the response shape, the status code, or a machine-readable field such
+        as `errors[].code`. A message the API has no wording for in that language falls back to
+        the default language, one message at a time. An unknown or switched-off language falls
+        back instead of erroring; `Content-Language` states the language picked, the audience the
+        answer is written for (RFC 9110 section 8.5), and `Vary: Accept-Language` is always set.
+        `GET /locales` lists what a deployment offers.
 
         The header is intentionally not declared per operation: it applies to all of them and
         clients set it once in an interceptor, so declaring it on every operation would only add a

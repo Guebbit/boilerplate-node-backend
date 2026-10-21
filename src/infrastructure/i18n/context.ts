@@ -14,6 +14,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import i18next from 'i18next';
 import type { TFunction } from 'i18next';
 import { getDefaultLocale } from './catalog';
+import { dictionaryLocaleFor, servedLocaleFor } from './served';
 
 /**
  * What a request carries: the negotiated locale and a `t` bound to it.
@@ -34,16 +35,27 @@ const localeStorage = new AsyncLocalStorage<LocaleContext>();
  * The primitive the rest of this file is built on, and the one to reach for when the language is
  * known but the caller is not on the request's async chain: `emails.ts` builders resolving copy
  * for a recipient whose language is not the requester's, for instance.
+ *
+ * A language the API has no wording of its own for — a registered language with no deployed file,
+ * or one switched off since the recipient saved it — is bound to the fallback language: the same
+ * words a missing key falls back to, and no `supportedLngs` rejection logged on every call.
  */
-export const translator = (locale: string): TFunction => i18next.getFixedT(locale);
+export const translator = (locale: string): TFunction =>
+    i18next.getFixedT(dictionaryLocaleFor(locale));
 
 /**
  * Binds a `t` to one language without touching the global instance.
+ *
+ * The context's `locale` is what product text is read in and what `Content-Language` says, so a
+ * language that is not served (unregistered, or switched off — also later, for a saved user
+ * language) never becomes one: it is the fallback language instead. A regional tag follows its
+ * base language, and a served language without a dictionary file keeps its own `locale`, and only
+ * its `t` falls back, see {@link translator}.
  */
-export const createLocaleContext = (locale: string): LocaleContext => ({
-    locale,
-    t: translator(locale)
-});
+export const createLocaleContext = (locale: string): LocaleContext => {
+    const served = servedLocaleFor(locale);
+    return { locale: served, t: translator(served) };
+};
 
 /**
  * Runs `callback` — and everything it awaits, however deep — with `context` as the ambient locale.

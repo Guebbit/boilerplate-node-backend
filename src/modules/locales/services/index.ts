@@ -32,7 +32,7 @@ import {
 import { listApps } from '../apps';
 import { createLanguage, updateLanguage, removeLanguage } from './languages';
 import { searchEntries, createEntry, updateEntry, removeEntry, importEntries } from './entries';
-import { readMessages, readApiOverrides } from './messages';
+import { readMessages, readApiOverrides, readLocaleOverlay } from './messages';
 import { setTranslatables } from './translatables';
 import {
     getEntityTranslations,
@@ -59,6 +59,7 @@ export const localeService = {
     findDuplicateKey,
     readMessages,
     readApiOverrides,
+    readLocaleOverlay,
     createLanguage,
     updateLanguage,
     removeLanguage,

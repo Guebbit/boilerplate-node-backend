@@ -140,6 +140,10 @@ back: the shop is not asking "would you like to pay again", it already has the m
   an operator has to confirm the money actually came back before the order shows refunded. Past
   that point the money does not come back on its own: it goes back when the goods do (or when an
   operator chooses to refund), in whole or in part — see [`payments`](../modules/payments.md).
+- **They can withdraw from the purchase** once it has arrived, without giving a reason. The delivery
+  email, the order's history and the withdrawal box all name the same last day, written as "until
+  the end of 5 December", with no time of day. The shop quietly accepts a withdrawal for one more
+  day, so a buyer who counts a day differently is never turned away. → [`orders`](../modules/orders.md#the-withdrawal-window)
 - **They can re-order** — one click puts everything from a past order back in the basket.
 - **They can track the parcel** once it ships. → [`delivery`](../modules/delivery.md)
 
@@ -174,6 +178,18 @@ An address book holds the places they have shipped to, with one marked as the us
 
 Deleting the account is deliberately two steps, and it takes everything with it: the basket, the
 wishlist and the address book all go. → [`account`](../modules/account.md)
+
+## The shop's language
+
+The shopper picks one language and everything follows it: the buttons, the product names and
+descriptions, the search, and the emails the shop sends them. A language the shop has not switched
+on is never offered. If a shopper had saved one that has since been switched off, they get the
+shop's default language instead, in the page and in the emails.
+
+Some of the shop's own messages (an error, a confirmation) may not exist in a language that was
+added by hand and has no translation file yet. Those few show in the default language, one message
+at a time, while the product names and the screens stay in the shopper's language.
+→ [`locales`](../modules/locales.md)
 
 ## The words we used
 

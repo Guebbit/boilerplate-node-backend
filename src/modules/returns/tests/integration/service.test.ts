@@ -561,9 +561,43 @@ describe('a return on goods that have shipped', () => {
         expect(again.success).toBe(true);
     });
 
+    it('still takes a withdrawal on the silent grace day after the announced last day', async () => {
+        const { user, shirt, orderId } = await deliveredOrder();
+        // The announced last day ended an hour ago: the buyer was told "until the end of
+        // yesterday", the shop still accepts it for one more UTC day.
+        await setWithdrawUntil(orderId, new Date(Date.now() - 3_600_000));
+
+        const outcome = await returnService.createReturn(
+            {
+                orderId,
+                reason: 'withdrawal',
+                lines: [{ productId: String(shirt._id), quantity: 1 }]
+            },
+            buyer(user),
+            testCallerContext
+        );
+
+        expect(outcome.success).toBe(true);
+    });
+
+    it('refuses a withdrawal one millisecond after the grace day ends', async () => {
+        const { user, orderId } = await orderIn(OrderStatus.delivered);
+        await setWithdrawUntil(orderId, new Date(Date.now() - 86_400_000 - 1));
+
+        const outcome = await returnService.createReturn(
+            { orderId, reason: 'withdrawal' },
+            buyer(user),
+            testCallerContext
+        );
+
+        expect(!outcome.success && outcome.errors[0]).toMatchObject({
+            code: 'RETURN_WINDOW_CLOSED'
+        });
+    });
+
     it('refuses once the window has closed', async () => {
         const { user, orderId } = await orderIn(OrderStatus.delivered);
-        await setWithdrawUntil(orderId, new Date(Date.now() - 1000));
+        await setWithdrawUntil(orderId, new Date(Date.now() - 86_400_000 - 1000));
 
         const outcome = await returnService.createReturn(
             { orderId, reason: 'withdrawal' },
@@ -578,7 +612,7 @@ describe('a return on goods that have shipped', () => {
 
     it('still takes a defect after the withdrawal period, and refuses the rest of the reasons', async () => {
         const { user, orderId } = await orderIn(OrderStatus.delivered);
-        await setWithdrawUntil(orderId, new Date(Date.now() - 1000));
+        await setWithdrawUntil(orderId, new Date(Date.now() - 86_400_000 - 1000));
 
         const reasons = ['withdrawal', 'other', 'defective', 'wrong_item'] as const;
         const outcomes = await Promise.all(
@@ -603,7 +637,7 @@ describe('a return on goods that have shipped', () => {
 
     it('refuses a defect once the two years are over, in the guarantee’s own words', async () => {
         const { user, orderId } = await orderIn(OrderStatus.delivered);
-        await setWithdrawUntil(orderId, new Date(Date.now() - 2000));
+        await setWithdrawUntil(orderId, new Date(Date.now() - 86_400_000 - 2000));
         await setConformityUntil(orderId, new Date(Date.now() - 1000));
 
         const outcome = await returnService.createReturn(
@@ -1207,7 +1241,7 @@ describe('the options read, by caller and deadline', () => {
 
     it('narrows to the guarantee after the withdrawal period, made-to-order goods marked', async () => {
         const { user, engraved, orderId } = await orderWithExcluded();
-        await setWithdrawUntil(orderId, new Date(Date.now() - 1000));
+        await setWithdrawUntil(orderId, new Date(Date.now() - 86_400_000 - 1000));
 
         const options = await returnService.getReturnOptions(orderId, buyer(user));
 
@@ -1233,7 +1267,7 @@ describe('the options read, by caller and deadline', () => {
 
     it('is empty for the buyer once both deadlines are over', async () => {
         const { user, orderId } = await deliveredOrder();
-        await setWithdrawUntil(orderId, new Date(Date.now() - 2000));
+        await setWithdrawUntil(orderId, new Date(Date.now() - 86_400_000 - 2000));
         await setConformityUntil(orderId, new Date(Date.now() - 1000));
 
         const options = await returnService.getReturnOptions(orderId, buyer(user));

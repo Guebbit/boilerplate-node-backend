@@ -114,9 +114,21 @@ describe('shipmentDeliveredEmail', () => {
         const italian = shipmentDeliveredEmail('it', NAME, { lines: LINES, withdrawUntil });
         const notLast = shipmentDeliveredEmail('en', NAME, { lines: LINES });
 
-        expect(String(last.data.withdraw)).toContain('November 14, 2026');
-        expect(String(italian.data.withdraw)).toContain('14 novembre 2026');
+        expect(String(last.data.withdraw)).toContain('the end of November 14, 2026');
+        expect(String(italian.data.withdraw)).toContain('fino a tutto il 14 novembre 2026');
         expect(notLast.data.withdraw).toBeUndefined();
+    });
+
+    it('prints the announced day, date only, whatever the instant it was frozen at', () => {
+        // Just after UTC midnight is the next calendar day: the mail never rounds it back, and it
+        // never adds a time or the silent grace day.
+        const text = shipmentDeliveredEmail('en', NAME, {
+            lines: LINES,
+            withdrawUntil: new Date(Date.UTC(2026, 10, 15, 0, 0, 0, 1))
+        }).data.withdraw;
+
+        expect(String(text)).toContain('the end of November 15, 2026');
+        expect(String(text)).not.toMatch(/\d:\d\d/);
     });
 
     it('resolves every copy slot rather than echoing a key', () => {

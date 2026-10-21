@@ -4,9 +4,9 @@
  * lives in `./update-locale.ts`, built on the shared PUT/PATCH factory; removal lives in
  * `./delete-locale.ts`.
  *
- * Registering a language does not teach the API to answer in it: `listSupportedLocales()` is read
- * once per worker and i18next registers its resources from it at boot, not per-request, so the
- * negotiated locale and the resolvable one can't disagree.
+ * Registering a language switched on makes it servable at once: the request right after is
+ * negotiated against the new list, product text and search follow, and the API's own messages fall
+ * back to the default language until a dictionary file is deployed for it.
  */
 
 import type { Request, Response } from 'express';

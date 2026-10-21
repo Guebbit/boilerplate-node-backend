@@ -8,7 +8,7 @@
  * why infrastructure may not know a module by name.
  */
 
-import { getDefaultLocale, listSupportedLocales } from '@infrastructure/i18n';
+import { getDefaultLocale, isServedLocale } from '@infrastructure/i18n';
 import { siteConfig } from '@infrastructure/http/config';
 
 /**
@@ -19,12 +19,12 @@ import { siteConfig } from '@infrastructure/http/config';
 const frontendOrigin = (): string => siteConfig().NODE_FRONTEND_URL;
 
 /**
- * `locale`, or the deployment's default when it names a language this API cannot answer in — a
- * link into an unsupported locale segment is a 404 on the frontend's own router, not a working
- * page in an unexpected language.
+ * `locale`, or the deployment's default when it names a language the shop does not serve — unknown,
+ * or switched off since the recipient saved it. A link into such a locale segment is a 404 (or a
+ * redirect) on the frontend's own router, not a working page in an unexpected language.
  */
 const supportedLocale = (locale: string): string =>
-    listSupportedLocales().includes(locale) ? locale : getDefaultLocale();
+    isServedLocale(locale) ? locale : getDefaultLocale();
 
 /**
  * A link into the paired frontend: its origin, the email's own locale, and `template` with every

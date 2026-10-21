@@ -126,6 +126,10 @@ description are translated too, but through a different door — see
 [`products`](../modules/products.md#writing-translated-content).
 :::
 
+A shopper who says "the shop is in English, I picked Spanish" is looking at a language that is switched
+off, or one whose screens are not translated yet. Ask the [editor](./editor.md) to check the language's
+switch; nothing on the shopper's side needs fixing.
+
 → [`locales`](../modules/locales.md)
 
 ## "Is the shop down?"
