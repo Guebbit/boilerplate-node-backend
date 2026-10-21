@@ -13,6 +13,7 @@
 import { reserveForOrder } from './reserve';
 import {
     commitForOrder,
+    retakeReleasedForOrder,
     shipForOrder,
     shipLinesForOrder,
     releaseLinesForOrder,
@@ -29,6 +30,7 @@ import { runReservationSweep } from './sweep';
 import { availableFor, listLevels, lowStockCount, listMovements, listPreorders } from './levels';
 import { receive, adjust, setBackorderLimit } from './admin';
 
+export type { RetakeOutcome } from './holds';
 export type {
     StockLine,
     StockShortfall,
@@ -42,6 +44,7 @@ export type {
 export const inventoryService = {
     reserveForOrder,
     commitForOrder,
+    retakeReleasedForOrder,
     shipForOrder,
     shipLinesForOrder,
     releaseLinesForOrder,

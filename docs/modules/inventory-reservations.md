@@ -199,30 +199,32 @@ Taking a multi-line hold's lines is ordered by product id, so two checkouts list
 products oppositely meet on the same product first, and one goes on rather than both refusing.
 :::
 
-## A paid order with no hold is an incident, not a no-op
+## A paid order with no hold at all is an incident, not a no-op
 
 A paid order always commits its hold, and a shipped one always ships it. When `commitForOrder`'s or
-`shipForOrder`'s claim misses, that is one of two very different facts, and it tells them apart
+`shipForOrder`'s claim misses, that is one of three very different facts, and it tells them apart
 before deciding what to do:
 
 - the hold is already `committed` or `shipped` — a redelivered settlement, or a repeated dispatch
   report; the sale already stands. Silent, correctly: replaying it is not new information.
-- the hold is `released`/`expired`, or never existed — the order is paid and nothing was set aside
-  for it. Alarmed: an `admin.commit.orphaned` audit row, `outcome: 'failure'`, naming the order and the `stage`
-  (`commit` or `ship`).
+- the hold is `released` at **ship**. Silent too: a remainder cancel emptied it after a partial
+  shipment, so nothing is left to take. (At **commit** a `released` hold is not an incident either:
+  the units are taken again, see the next section.)
+- the hold **never existed**. No checkout door can produce that: it means seeded or hand-edited
+  data. Alarmed: an `admin.commit.orphaned` audit row, `outcome: 'failure'`, naming the order and the
+  `stage` (`commit` or `ship`). The only other alarm is a `released` hold at commit whose units were
+  sold in the meantime and cannot be taken back, a safety net for any caller that did not use
+  `markPaid`.
 
-The alarm only **records** the fact; nothing auto-compensates. A missing hold does not mean
-missing goods — the units are still on the shelf, just unreserved — so refunding on that signal
-alone would cancel a sale that may be perfectly fulfillable. A human reads the audit trail and
-decides.
+The alarm only **records** the fact; a human checks the stock and decides ship or refund.
 
-### Money can land on a released hold: paid wins
+### Money can land on a released hold: take the units again
 
 An expiry is two transactions, not one: the sweep releases the hold and writes
 `inventory.reservation_expired` (`expireOne`), and `orders` cancels the order later, when the
 outbox delivers that event (`expireReservationById`). They cannot be one transaction because
 `inventory` may not import `orders`. In between, the order still says `pending` and is payable
-while its hold is `released`.
+while its hold is `released`, and the units it gave up may already belong to someone else.
 
 | Situation                                 | How long the order is payable with no hold                  |
 | ----------------------------------------- | ----------------------------------------------------------- |
@@ -230,6 +232,23 @@ while its hold is `released`.
 | the nudge fails                           | up to a minute (the `sweep:outbox` cron is the backstop)    |
 | the cancel throws                         | backoff retries, up to `NODE_OUTBOX_MAX_ATTEMPTS`           |
 | retries exhausted, the row goes `dead`    | unbounded: the order stays `pending`, payable, with no hold |
+
+**The rule: money that lands on a released hold takes the units again, inside the payment's own
+transaction, before the order is written `paid`.** `markPaid` (`orders`) asks
+`inventoryService.retakeReleasedForOrder` first:
+
+- the hold is not released: nothing to do, the normal commit follows.
+- the shelf still covers it: the hold goes `released → held` and every line's counters move again
+  (one conditional write each, so two late payments racing for the last unit meet in the database
+  and exactly one wins). The order is written `paid` and the hold commits as usual; the late
+  `reservation_expired` cancel then finds a paid order and does nothing.
+- the shelf is short (a line sold meanwhile): the lines already taken are given back, the hold goes
+  back to `released`, and `markPaid` answers `null` without writing `paid`. The payment then takes
+  the existing `lost` path: it is recorded as received and refunded (a card or provider refund is
+  sent; a hand-recorded payment leaves the refund open for the operator to return by hand), and the
+  late cancel ends the order. Nothing is oversold.
+
+It never throws: a throw would abort the very transaction that records the refund.
 
 ```mermaid
 sequenceDiagram
@@ -242,11 +261,17 @@ sequenceDiagram
     S->>X: write reservation_expired, in the same transaction
     Note over O: order still pending and payable
     P->>O: money lands (a transfer is recorded, a late webhook arrives)
-    O->>O: markPaid: the order is paid
-    O->>S: commitForOrder: the claim misses, the hold is released
-    S-->>S: admin.commit.orphaned audit row (the alarm)
-    X->>O: reservation_expired, delivered late
-    O->>O: the system cancel only leaves pending: it refuses, the paid order stands
+    O->>S: retakeReleasedForOrder: take the units again, inside the payment's transaction
+    alt the shelf still covers it
+        O->>O: markPaid: the order is paid, the hold commits
+        X->>O: reservation_expired, delivered late
+        O->>O: the system cancel finds a paid order: nothing to do
+    else the shelf is short
+        O-->>P: not paid (the lost path)
+        P->>P: record the money and refund it
+        X->>O: reservation_expired, delivered late
+        O->>O: the system cancel ends the pending order
+    end
 ```
 
 **Which doors ask first.** Only the card confirm checks the hold before money moves
@@ -254,13 +279,10 @@ sequenceDiagram
 buyer can still be refused before the card is charged. Every other door records money that already
 moved: an operator recording cash or a transfer, a provider reference or webhook, the
 `PaymentActions.pay` view, `orders`' `canRecordPayment` and `markPaid` itself check the status only.
-Refusing there would not un-pay anything.
+Refusing there would not un-pay anything, so they take the units again or refund, as above.
 
-**The policy is deliberate: paid wins.** The payment stands, the `admin.commit.orphaned` alarm above
-fires, and a human decides: ship from the shelf (the units are still there, only unreserved), or
-refund. Nothing refuses a payment on a released hold and nothing refunds on its own. When the
-retries are exhausted the row is `dead`, which the `OutboxEventsDead` alert already raises (see
-[Alert rules](../tools/prometheus.md#alert-rules) and [the outbox](../tools/outbox.md)).
+When the retries are exhausted the row is `dead`, which the `OutboxEventsDead` alert already
+raises (see [Alert rules](../tools/prometheus.md#alert-rules) and [the outbox](../tools/outbox.md)).
 
 ## The ledger is half of the transition, not a reaction to it
 

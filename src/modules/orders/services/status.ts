@@ -94,6 +94,11 @@ const markSystemMove = (
  *
  * Paid means stock committed: the order's own rule, as cancelled means stock released. The hold's
  * `held → committed` claim therefore lands in the same transaction as the status move.
+ *
+ * Money can land after the hold was released (the window closed, the cancel not yet run). The
+ * units are then taken again before the `paid` write: enough, and the order is paid as usual;
+ * short, it is not written `paid` and this answers `null`, so the payment is refunded and the
+ * late cancel ends the order. See `docs/modules/inventory-reservations.md`.
  * @param orderId - the order the payment was for
  * @param paymentMethod - `card` when the provider took the money: the order then says so, even if
  *   checkout chose bank transfer (a customer who changed their mind). Offline money leaves the
@@ -126,9 +131,21 @@ export const markPaid = (
     return announceMove(
         session,
         (active) =>
-            movePaid(active).then((order) =>
-                order ? inventoryService.commitForOrder(orderId, active).then(() => order) : order
-            ),
+            // Money that lands after the hold was released takes its units again FIRST. Short, the
+            // order is not written `paid`: `null` sends the payment down the refund path, and the
+            // late cancel ends the order. Retaken but the order could no longer be paid, the
+            // units go back, so a cancelled order never keeps stock.
+            inventoryService.retakeReleasedForOrder(orderId, active).then((retake) => {
+                if (retake === 'short') return null;
+                return movePaid(active).then((order) => {
+                    if (order)
+                        return inventoryService.commitForOrder(orderId, active).then(() => order);
+                    if (retake === 'none') return null;
+                    return inventoryService
+                        .releaseForOrder(orderId, 'release', active)
+                        .then(() => null);
+                });
+            }),
         () => statusChangedEvent(orderId, from[0], to)
     );
 };
