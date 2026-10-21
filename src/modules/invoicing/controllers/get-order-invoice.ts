@@ -14,6 +14,7 @@ import { requireId } from '@infrastructure/http/ids';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { recordStaffRead } from '@kernel/staff-read';
 import { invoicingAuditActions } from '../audit';
+import { sendPdf } from './send-pdf';
 
 /** GET /orders/:id/invoice — the invoice PDF; non-admin callers see only their own order's. */
 export const getOrderInvoice = (request: Request<{ id?: string }>, response: Response) => {
@@ -37,21 +38,9 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
                 ownerId: buyerIdOf(order)
             });
 
-            return invoicingService.renderInvoicePdf(invoice).then((pdf) =>
-                response
-                    .status(200)
-                    .setHeader('Content-Type', 'application/pdf')
-                    // `inline`, not `attachment`: the frontend holds the blob either way and
-                    // decides what to do with it — download, or a same-tab preview.
-                    .setHeader(
-                        'Content-Disposition',
-                        `inline; filename="invoice-${invoice.number}.pdf"`
-                    )
-                    // Personal and financial data — never a shared/CDN cache, and never the
-                    // browser's own disk cache either.
-                    .setHeader('Cache-Control', 'private, no-store')
-                    .send(pdf)
-            );
+            return invoicingService
+                .renderInvoicePdf(invoice)
+                .then((pdf) => sendPdf(response, `invoice-${invoice.number}.pdf`, pdf));
         })
         .catch(catchAs(response, 'Invoice generation failed'));
 };

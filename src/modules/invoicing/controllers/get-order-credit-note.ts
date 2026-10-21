@@ -13,6 +13,7 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { recordStaffRead } from '@kernel/staff-read';
 import { invoicingAuditActions } from '../audit';
+import { sendPdf } from './send-pdf';
 
 /** GET /orders/:id/credit-notes/:creditNoteId — the credit-note PDF; non-admin callers see only their own order's, and staff need the payments staff read. */
 export const getOrderCreditNote = (
@@ -42,17 +43,9 @@ export const getOrderCreditNote = (
                 ownerId: buyerIdOf(order)
             });
 
-            return invoicingService.renderCreditNotePdf(creditNote).then((pdf) => {
-                response
-                    .status(200)
-                    .setHeader('Content-Type', 'application/pdf')
-                    .setHeader(
-                        'Content-Disposition',
-                        `inline; filename="credit-note-${creditNote.number}.pdf"`
-                    )
-                    .setHeader('Cache-Control', 'private, no-store')
-                    .send(pdf);
-            });
+            return invoicingService
+                .renderCreditNotePdf(creditNote)
+                .then((pdf) => sendPdf(response, `credit-note-${creditNote.number}.pdf`, pdf));
         })
         .catch(catchAs(response, 'Credit note generation failed'));
 };
