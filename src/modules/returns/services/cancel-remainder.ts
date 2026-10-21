@@ -127,13 +127,15 @@ const rowFor = (
  * @param input - the request
  * @param fulfillmentOrderId - the fulfillment order whose remainder is cancelled
  * @param reason - who cancelled it, stored on the fulfillment order
+ * @param actor - the account that cancelled (the buyer or a staff member), for the order's timeline
  * @returns what was cancelled, or why nothing was
  */
 const cancelUnderLock = (
     order: OrderDocument,
     input: CreateReturnInput,
     fulfillmentOrderId: string,
-    reason: FulfillmentCancelReason
+    reason: FulfillmentCancelReason,
+    actor: string | null | undefined
 ): Promise<Cancelled | 'nothing-to-cancel' | 'not-found'> =>
     withTransaction(async (session) => {
         const orderId = String(order._id);
@@ -144,7 +146,8 @@ const cancelUnderLock = (
             fulfillmentOrderId,
             orderId,
             session,
-            reason
+            reason,
+            actor
         );
         if (!cancelled.ok)
             return cancelled.reason === 'not-found' ? 'not-found' : 'nothing-to-cancel';
@@ -291,7 +294,8 @@ export const createCancellation = (
                     order,
                     input,
                     fulfillmentOrderId,
-                    byBuyer ? FulfillmentCancelReason.buyer : FulfillmentCancelReason.staff
+                    byBuyer ? FulfillmentCancelReason.buyer : FulfillmentCancelReason.staff,
+                    context.caller.id
                 )
                     .then((done): CreateReturnOutcome | Promise<CreateReturnOutcome> =>
                         typeof done === 'string'

@@ -197,7 +197,7 @@ const refundAndClose = (
 ): Promise<ReturnDocument> => {
     const owed = received.refundAmount ?? 0;
     const finish = (): Promise<ReturnDocument> =>
-        closeReturn(String(received._id)).then((closed) => closed ?? received);
+        closeReturn(String(received._id), context.caller.id).then((closed) => closed ?? received);
 
     // Nothing owed (a deduction ate it all, or zero-priced lines) — there is no money to wait for.
     if (owed <= 0) return finish();

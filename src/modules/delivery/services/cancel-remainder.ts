@@ -61,13 +61,16 @@ export type RemainderCancel =
  * @param orderId - the order the caller says it belongs to
  * @param session - the caller's transaction
  * @param reason - who cancelled it, stored on the fulfillment order
+ * @param actor - the account that made the cancel (the buyer or a staff member), for the order's
+ *   timeline rows; absent when the system did
  * @throws {ActRefusal} when the fulfillment order or the order moved after the first write
  */
 export const cancelRemainder = async (
     fulfillmentOrderId: string,
     orderId: string,
     session: ClientSession,
-    reason: FulfillmentCancelReason = FulfillmentCancelReason.buyer
+    reason: FulfillmentCancelReason = FulfillmentCancelReason.buyer,
+    actor?: string | null
 ): Promise<RemainderCancel> => {
     const fulfillmentOrder = await fulfillmentOrderRepository.findInSession(
         fulfillmentOrderId,
@@ -111,8 +114,8 @@ export const cancelRemainder = async (
         return refuse(409, ERROR_CODES.DELIVERY_NOT_SHIPPABLE, 'delivery.not-shippable');
 
     const progress = await reportProgress(orderId, session);
-    await settleOrder(orderId, progress.order.status, progress.summary, new Date(), session);
-    await recordRemainderCancelled(cancelled, session);
+    await settleOrder(orderId, progress.order.status, progress.summary, new Date(), session, actor);
+    await recordRemainderCancelled(cancelled, session, actor);
     await announceCancelled(cancelled, session);
     return { ok: true, lines, waitingForStock };
 };
