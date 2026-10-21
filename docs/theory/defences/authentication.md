@@ -154,6 +154,11 @@ Mounted per-route in `account/routes.ts`, `cart/routes.ts` and `payments/routes.
 | MFA fatigue / push bombing            | repeated push prompts until one is approved             | Out of reach by construction: there is no push factor to bomb.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | SIM swap                              | the carrier is social-engineered into moving the number | Out of reach by construction: there is no SMS factor. Email and SMS codes mostly re-verify a channel an attacker may already hold — the mailbox especially, since it is already the reset path.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
+**Email stays a second factor, on purpose.** An emailed code is the weakest factor here: it proves
+the mailbox, which is already the reset path (NIST SP 800-63B-4 §3.1.3.1 on out-of-band
+authenticators). It still beats password-only against credential stuffing, so it is kept and not
+hidden; an account that wants more arms TOTP.
+
 **What 2FA newly exposes.** A defence that lists only what it stops is marketing. Adding TOTP
 makes "OTP / 2FA bypass" a real row against this codebase in the way it is against any TOTP
 implementation — the attempt cap and the replay tracking above are what keep it closed, not what
