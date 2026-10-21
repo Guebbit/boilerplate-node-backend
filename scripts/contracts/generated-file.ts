@@ -5,6 +5,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { hasFlag } from '../cli';
 
 /**
  * Write a generated file, or under `--check` compare it with what is on disk and exit 1 on a
@@ -21,7 +22,7 @@ export const writeOrCheck = (
     label: string,
     fixCommand = 'npm run gen:api'
 ): void => {
-    if (!process.argv.includes('--check')) {
+    if (!hasFlag('check')) {
         // The folder may not exist yet: `regenerate` writes some of these BEFORE orval creates `api/`.
         mkdirSync(path.dirname(output), { recursive: true });
         writeFileSync(output, text, 'utf8');

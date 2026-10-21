@@ -28,9 +28,10 @@ import {
 } from './dependency-groups';
 import { applyMarkerBlocks } from './marker-block';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
+import { hasFlag } from '../cli';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
-const checkOnly = process.argv.includes('--check');
+const checkOnly = hasFlag('check');
 
 /** The page both generated blocks live in. */
 const PAGE = path.join(ROOT, 'docs', 'tools', 'package-dependencies.md');

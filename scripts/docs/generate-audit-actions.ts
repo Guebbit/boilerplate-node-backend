@@ -26,9 +26,10 @@ import path from 'node:path';
 import { coreAuditActions } from '@infrastructure/observability/audit';
 import { applyMarkerBlocks } from './marker-block';
 import { REPO_ROOT as ROOT, modulesWith } from '../modules-on-disk';
+import { hasFlag } from '../cli';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
-const checkOnly = process.argv.includes('--check');
+const checkOnly = hasFlag('check');
 
 /** Every module folder under `src/modules`. */
 const MODULES_ROOT = path.join(ROOT, 'src', 'modules');
