@@ -22,10 +22,12 @@ import { syncReturnStatus } from './projection';
  * @internal The step beneath `receiveReturn` and the refund listener, which own the "money went
  * back" fact: it checks the state, never that the refund settled, so it is not published.
  * @param id - the return
+ * @param actor - the staff member whose receipt led to this close, for the order's timeline;
+ *   absent when the payment sweep closes it later
  * @returns the closed return, or `null` when it was not `received` — already closed, or never
  *   received; both mean there is nothing for this call to do
  */
-export const closeReturn = (id: string): Promise<ReturnDocument | null> =>
+export const closeReturn = (id: string, actor?: string | null): Promise<ReturnDocument | null> =>
     announceInTransaction(
         (session) =>
             returnRepository
@@ -44,6 +46,7 @@ export const closeReturn = (id: string): Promise<ReturnDocument | null> =>
                                   String(closed.orderId),
                                   {
                                       type: 'return_closed',
+                                      actor,
                                       data: {
                                           returnId: id,
                                           refundAmount: closed.refundAmount ?? 0,

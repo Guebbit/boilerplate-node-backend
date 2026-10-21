@@ -567,6 +567,40 @@ describe('the order timeline of a cancelled remainder', () => {
         });
         expect(rows.map(({ type }) => type)).not.toContain('return_requested');
     });
+
+    it('names the buyer who cancelled their own remainder', async () => {
+        const fixture = await partlyShipped();
+
+        created(await buyerCancels(fixture));
+
+        const rows = await timelineOf(fixture.orderId);
+        expect(rows.find(({ type }) => type === 'remainder_cancelled')?.actor).toBe(
+            fixture.user.id
+        );
+    });
+
+    it('names the staff member who cancelled it, and the same one on the delivery it completes', async () => {
+        const fixture = await partlyShipped();
+        await deliverEverything(fixture.orderId);
+
+        created(
+            await returnService.createReturn(
+                {
+                    orderId: fixture.orderId,
+                    reason: 'other',
+                    kind: 'cancellation',
+                    fulfillmentOrderId: fixture.fulfillmentOrderId
+                },
+                asModerator(),
+                callerContextAs('moderator', 'moderator-7')
+            )
+        );
+
+        const rows = await timelineOf(fixture.orderId);
+        expect(rows.find(({ type }) => type === 'remainder_cancelled')?.actor).toBe('moderator-7');
+        // The cancel completed the order in the same transaction: that move is theirs too.
+        expect(rows.find(({ type }) => type === 'delivered')?.actor).toBe('moderator-7');
+    });
 });
 
 describe('staff cancelling what has not shipped', () => {

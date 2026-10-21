@@ -410,7 +410,9 @@ is the one that never refunds twice and never splits it:
 A return writes `return_requested`, `return_approved` (a withdrawal is opened already approved, so
 both at once), `return_declined`, `return_received` and `return_closed` on the order's
 [timeline](./orders.md#the-timeline), each in the transaction of the move it narrates. A row holds
-the return's id, the reason code and, for received and closed, the refund amount. The customer's
+the return's id, the reason code and, for received and closed, the refund amount. A receipt and the
+close it leads to name the staff member who received the goods; a return the payment sweep closes
+later names no one. The customer's
 `note` and staff's `declineReason` are never copied: `reap:returns` owns their clock. A withdrawal
 before dispatch and a cancelled remainder write no return rows, since the order's `cancelled` and
 delivery's `remainder_cancelled` already say it.

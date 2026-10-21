@@ -520,7 +520,9 @@ Each act writes its rows to the order's [timeline](./orders.md#the-timeline) in 
 | `delay_notice_sent`    | the buyer was told: the date moved, or it passed               | fulfillment order id, `reason`, `expectedAt`                 |
 
 A whole-order cancel writes no `remainder_cancelled`: the order's own `cancelled` row says it. The
-shipment row comes first, then the order's own move that it caused (`shipped`, `delivered`).
+shipment row comes first, then the order's own move that it caused (`shipped`, `delivered`). A
+`remainder_cancelled` row, and the `shipped` or `delivered` move the cancel completes, name the
+account that made the cancel: the buyer, or the staff member acting for them.
 
 `release_date_moved` is written by `delivery`, not `orders`: `products` announces the move and
 `orders` cannot import it, while `delivery` already judges every waiting fulfillment order. A
