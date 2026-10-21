@@ -3,9 +3,10 @@
  *
  * Three middlewares with deliberately different failure modes, and the difference is the point:
  *
- *   `getAuth`  — *optional* identification. Fails open by design: a bad token means "anonymous",
- *                not "rejected", because it also guards public routes. It must always call
- *                `next()` exactly once, on every path, or the request hangs.
+ *   `getAuth`  — *optional* identification. A MISS (a bad or expired token) means "anonymous", not
+ *                "rejected", because it also guards public routes; a resolver that REJECTS is a
+ *                fault and goes to `next(error)`. It must always call `next()` exactly once, on
+ *                every path, or the request hangs.
  *   `isAuth`   — *required* identification. Fails closed with 401.
  *   `requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)`  — *required* elevation. Fails closed, and the status says which check refused:
  *                401 with no credentials at all (as `isAuth` does), 403 for a caller without the key.
@@ -69,7 +70,7 @@ jest.mock('@infrastructure/observability/audit', () => {
  *
  *   - resolving `{ miss }` means the token is bad;
  *   - resolving `{ ok: undefined }` means the token was fine but names nobody;
- *   - a rejection is an outage.
+ *   - a rejection is a fault (an outage or anything unanticipated): it goes to the error handler.
  *
  * `requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)` turns the first into 401 and the second into 403, so the two must stay
  * distinguishable in the fake exactly as they are in production.
@@ -169,13 +170,8 @@ const makeCredentialRequest = () =>
         headers: {}
     });
 
-/** `makeResponseStub` doesn't stub `setHeader` — the one extra call `requireFreshAuth` makes. */
-const makeStepUpResponseStub = () =>
-    asStub<Response & { status: jest.Mock; json: jest.Mock; setHeader: jest.Mock }>({
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn().mockReturnThis(),
-        setHeader: jest.fn()
-    });
+/** `requireFreshAuth` sets `WWW-Authenticate` itself, so it reads and writes the stub's headers. */
+const makeStepUpResponseStub = makeResponseStub;
 
 /** `authTime` as `requireFreshAuth` reads it: epoch SECONDS, matching the JWT `auth_time` claim. */
 const nowSeconds = () => Math.floor(Date.now() / 1000);
@@ -207,16 +203,15 @@ const runUntilNext = async (
  */
 const runUntilRefused = async (request: Request) => {
     const response = makeResponseStub();
-    const setHeader = jest.fn();
     const refused = new Promise<void>((resolve) => {
         response.json.mockImplementation(() => {
             resolve();
             return response;
         });
     });
-    getAuth(request, Object.assign(response, { setHeader }), jest.fn());
+    getAuth(request, response, jest.fn());
     await refused;
-    return { response, setHeader };
+    return { response, setHeader: response.setHeader };
 };
 
 describe('getTokenBearer', () => {
@@ -295,17 +290,20 @@ describe('getAuth', () => {
         expect(request.authContext).toBeUndefined();
     });
 
-    it('proceeds anonymously when the user lookup fails for a reason that is not infrastructure', async () => {
-        // Not every rejection is a DB outage — an unrecognised shape must still fail OPEN, the
-        // same as an invalid token, rather than 503ing on anything unfamiliar.
-        mockedVerifyAccessToken.mockRejectedValue(new Error('unexpected'));
+    it('forwards a failure nobody anticipated to the error handler, instead of going anonymous', async () => {
+        // Only a miss proceeds anonymous. A resolver that REJECTS — an outage or anything else —
+        // is a fault, not "your credentials are wrong": it is handed to the global handler (503 for
+        // infrastructure, 500 otherwise, logged), never swallowed into a guest.
+        const failure = new Error('unexpected');
+        mockedVerifyAccessToken.mockRejectedValue(failure);
 
         const request = makeRequest({ authorization: 'Bearer valid.token' });
         const next = await runUntilNext(getAuth, request, makeResponseStub());
 
         expect(next).toHaveBeenCalledTimes(1);
-        expect(next).toHaveBeenCalledWith();
+        expect(next).toHaveBeenCalledWith(failure);
         expect(request.authContext).toBeUndefined();
+        expect(request.caller).toBeUndefined();
     });
 
     // A DB blip must not be told to the client as "your credentials are wrong" (RFC 9110
@@ -451,7 +449,7 @@ describe('getAuth', () => {
     });
 
     // The credential twin of the JWT-path test above: `resolveCredential` failing because
-    // the database is unreachable is not "unknown credential" (which resolves `undefined`, never
+    // the database is unreachable is not "unknown credential" (which resolves a `{ miss }`, never
     // rejects — see `resolveCredential`'s own docblock).
     it('forwards an infrastructure failure on the credential path too, instead of going anonymous', async () => {
         const outage = Object.assign(new Error('server selection timed out'), {
@@ -464,6 +462,18 @@ describe('getAuth', () => {
 
         expect(next).toHaveBeenCalledTimes(1);
         expect(next).toHaveBeenCalledWith(outage);
+        expect(request.caller).toBeUndefined();
+    });
+
+    it('forwards any other credential failure too, and the caller stays unset', async () => {
+        const failure = new Error('unexpected');
+        mockedResolveCredential.mockRejectedValue(failure);
+
+        const request = makeRequest({ authorization: 'Bearer sk_test_abc' });
+        const next = await runUntilNext(getAuth, request, makeResponseStub());
+
+        expect(next).toHaveBeenCalledTimes(1);
+        expect(next).toHaveBeenCalledWith(failure);
         expect(request.caller).toBeUndefined();
     });
 });

@@ -25,8 +25,13 @@
 import { asStub } from './stub';
 import type { Response } from 'express';
 
-/** A `Response` whose `status`/`json` are jest mocks, so tests can assert on what was sent. */
-export type ResponseStub = Response & { status: jest.Mock; json: jest.Mock };
+/** A `Response` whose `status`/`json`/`setHeader` are jest mocks, so tests can assert on what was sent. */
+export type ResponseStub = Response & {
+    status: jest.Mock;
+    json: jest.Mock;
+    setHeader: jest.Mock;
+    hasHeader: jest.Mock;
+};
 
 /**
  * A chainable Express response stub.
@@ -35,9 +40,16 @@ export type ResponseStub = Response & { status: jest.Mock; json: jest.Mock };
  *          response itself, so `status(...).json(...)` works as it does in production code
  */
 export const makeResponseStub = (): ResponseStub => {
+    // Header names set so far, lower-cased as Express compares them: `rejectResponse` asks
+    // `hasHeader` before it adds the default 401 challenge, so the stub has to answer truthfully.
+    const headers = new Set<string>();
     const response = asStub<ResponseStub>({
         status: jest.fn(),
-        json: jest.fn()
+        json: jest.fn(),
+        setHeader: jest.fn((name: string) => {
+            headers.add(name.toLowerCase());
+        }),
+        hasHeader: jest.fn((name: string) => headers.has(name.toLowerCase()))
     });
 
     response.status.mockReturnValue(response);
