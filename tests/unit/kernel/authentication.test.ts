@@ -7,17 +7,11 @@
  */
 
 import { resolveBearer, resolveCookie, cookieAuthenticatesRequests } from '@kernel/authentication';
-import { isInfrastructureError } from '@infrastructure/http/errors';
 
 describe('resolveBearer / resolveCookie with no resolver registered', () => {
-    it('rejects the way a bad token does — never with an outage the guards would answer 503 for', async () => {
-        const rejection: unknown = await resolveBearer('any.token.here').catch(
-            (error: unknown) => error
-        );
-
-        expect(rejection).toBeInstanceOf(Error);
-        expect(isInfrastructureError(rejection)).toBe(false);
-        await expect(resolveCookie('any.token.here')).rejects.toThrow();
+    it('answers a malformed miss — a guest, never an error and never an outage', async () => {
+        await expect(resolveBearer('any.token.here')).resolves.toEqual({ miss: 'malformed' });
+        await expect(resolveCookie('any.token.here')).resolves.toEqual({ miss: 'malformed' });
     });
 
     it('says the cookie authenticates nothing, rather than throwing', () => {

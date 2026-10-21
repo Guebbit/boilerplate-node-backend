@@ -313,6 +313,10 @@ export const rejectResponse = (
     // `Retry-After` is the header form of what `details.retryAfter` already says (RFC 9110 §10.2.3).
     if (status === 429 && retryAfter !== undefined)
         response.setHeader('Retry-After', String(retryAfter));
+    // A 401 MUST carry a challenge (RFC 9110 §15.5.2, §11.6.1): the default says which scheme the
+    // API takes. A guard that names a more specific one (`error="invalid_token"`) sets it first.
+    if (status === 401 && !response.hasHeader('WWW-Authenticate'))
+        response.setHeader('WWW-Authenticate', 'Bearer realm="api"');
     return response.status(status).json(rejection) as Response<ResponseReject>;
 };
 

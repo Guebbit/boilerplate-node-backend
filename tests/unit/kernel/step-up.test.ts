@@ -13,7 +13,8 @@
  *      logged is a control nobody can show was applied.
  */
 
-import type { NextFunction, Request, Response } from 'express';
+import type { NextFunction, Request } from 'express';
+import { makeResponseStub } from '@tests/express';
 import { asStub } from '@tests/stub';
 import { asCustomer, asAdmin } from '../../support/callers';
 import { callerInScope } from '@kernel/permissions';
@@ -54,13 +55,7 @@ const makeRequest = (context: AuthContext) =>
         headers: {}
     });
 
-const makeResponse = () => {
-    const response = { status: jest.fn(), json: jest.fn(), setHeader: jest.fn() };
-    response.status.mockReturnValue(response);
-    response.json.mockReturnValue(response);
-
-    return asStub<Response>(response) as Response & typeof response;
-};
+const makeResponse = makeResponseStub;
 
 beforeEach(() => emitAuditEvent.mockClear());
 

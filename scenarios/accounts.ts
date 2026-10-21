@@ -1,10 +1,9 @@
 /**
  * @module
  * Who the seed accounts are: their ids, how to log in as them, and how they get their roles.
- * Every other scenario file that needs one of these accounts imports its id from here. Two
- * constraints before editing the credentials: they must stay fixed (the frontend's e2e login
- * types them — keep every `NODE_SEED_*_PASSWORD` identical to the paired frontend's own `.env`
- * copy), and the password stays PLAINTEXT — the schema's pre-save hook hashes it.
+ * Every other scenario file that needs one of these accounts imports its id from here. The
+ * password stays PLAINTEXT — the schema's pre-save hook hashes it. The paired frontend's e2e reads
+ * each login from the scenario description (`seedCredentials`), so it keeps no copy.
  *
  * See: docs/tools/demo-profile.md#the-named-accounts
  */

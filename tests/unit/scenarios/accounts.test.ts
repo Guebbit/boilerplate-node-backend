@@ -76,10 +76,9 @@ describe('the seeded passwords', () => {
 
 describe('seedCredentials', () => {
     /*
-     * The paired frontend keeps its own literal login list
-     * (`<paired-frontend>/tests/support/e2e/accounts.ts`), not a copy read from this repo — so a
-     * constant changed here without its entry hands the frontend's suite a password the seeded
-     * account does not actually have, with nothing on either side to notice.
+     * The paired frontend's e2e logs in with exactly what this publishes (`GET /__test/scenario`),
+     * so an entry that disagrees with what the account was seeded with hands it a password the
+     * account does not have.
      */
     it('publishes exactly what each account was seeded with', () => {
         expect(seedCredentials.admin).toEqual({

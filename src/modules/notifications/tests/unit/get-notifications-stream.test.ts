@@ -33,7 +33,13 @@ const admittedRequest = () =>
 const makeResponse = () => {
     const json = jest.fn();
     const status = jest.fn(() => ({ json }));
-    return { response: asStub<Response>({ status }), status, json };
+    // A 401 reads and sets its `WWW-Authenticate` challenge before it answers.
+    const response = asStub<Response>({
+        status,
+        hasHeader: jest.fn(() => false),
+        setHeader: jest.fn()
+    });
+    return { response, status, json };
 };
 
 beforeEach(() => jest.clearAllMocks());

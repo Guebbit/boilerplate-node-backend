@@ -101,7 +101,14 @@ interface SpecDocument {
         schemas?: Record<string, SchemaNode>;
         parameters?: Record<string, ParameterObject>;
         headers?: Record<string, { required?: boolean }>;
+        responses?: Record<string, ResponseObject>;
     };
+}
+
+/** One response as the spec writes it: its own `headers`, or a `$ref` into `components.responses`. */
+interface ResponseObject {
+    $ref?: string;
+    headers?: Record<string, HeaderReference>;
 }
 
 /** The root bundle on disk, built by `npm run contracts:bundle`. */
@@ -277,11 +284,14 @@ const requiredHeadersOf = (
     status: string,
     spec: SpecDocument
 ): string[] => {
-    const declared = (
-        operation.responses as
-            | Record<string, { headers?: Record<string, HeaderReference> } | undefined>
-            | undefined
-    )?.[status]?.headers;
+    const written = (
+        operation.responses as Record<string, ResponseObject | undefined> | undefined
+    )?.[status];
+    // A shared response (`Unauthorized`, `Forbidden`...) carries its headers on the component.
+    const response = written?.$ref
+        ? spec.components?.responses?.[written.$ref.replace('#/components/responses/', '')]
+        : written;
+    const declared = response?.headers;
 
     return Object.entries(declared ?? {})
         .filter(([, header]) => {

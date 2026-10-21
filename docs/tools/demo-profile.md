@@ -73,7 +73,11 @@ answers.
 {
   "scenario": "shop",
   "accounts": {
-    "admin": { "email": "root@root.it", "password": "Demo-Admin1!" },
+    "admin": {
+      "email": "root@root.it",
+      "password": "Demo-Admin1!",
+      "totpSecret": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+    },
     "user": { "email": "customer@example.com", "password": "Demo-User1!" },
     "editor": { "...": "..." },
     "moderator": { "...": "..." }
@@ -124,14 +128,14 @@ Note what is deliberately **not** shared: the account records. A sibling gets th
 name a person without taking on the shape of a user.
 
 ::: warning Two things not to change
-**The credentials must stay fixed.** `cy.loginAs()` in the paired frontend types them into a real
-login form. Everything else about the dataset can move; these are the part a human reads off a
-page and types. Each password is overridable — `NODE_SEED_ADMIN_PASSWORD` for the owner,
-`NODE_SEED_USER_PASSWORD`, `NODE_SEED_EDITOR_PASSWORD`, `NODE_SEED_MODERATOR_PASSWORD`, and one per
-persona and staff account (below) — change both `.env` files together, never one alone.
+**The credentials must stay fixed.** A human reads them off a page and types them into a login form,
+and the paired frontend's e2e reads them from the scenario description. Everything else about the
+dataset can move; these are the part a person types. Each password is overridable —
+`NODE_SEED_ADMIN_PASSWORD` for the owner, `NODE_SEED_USER_PASSWORD`, `NODE_SEED_EDITOR_PASSWORD`,
+`NODE_SEED_MODERATOR_PASSWORD`, and one per persona and staff account (below).
 
 Every staff login also carries an authenticator app (a staff role grants nothing without one), all
-armed with `NODE_SEED_STAFF_TOTP_SECRET`. The login asks a code on top of the password; the
+armed with the same `NODE_SEED_STAFF_TOTP_SECRET`. The login asks a code on top of the password; the
 scenario description publishes the secret beside each staff login as `totpSecret`, so a journey
 computes the code instead of keeping a copy.
 

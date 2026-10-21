@@ -32,13 +32,15 @@ In `cookie` mode there is one credential, a random session id kept hashed in the
 
 If access-token verification fails, protected routes return `401`. The client can then call refresh and retry with the new access token.
 
-**A database outage while resolving a token is not "invalid credentials".** `getAuth` tells the
-two apart (`kernel/middlewares/authorizations.ts`, `infrastructure/http/errors.ts#isInfrastructureError`):
-a Mongo/Redis connection failure is forwarded to the global error handler, which answers `503` with
-`Retry-After`; everything else (a bad signature, an expired token, a user who no longer exists)
-proceeds anonymous. RFC 9110 §15.5.2 vs §15.6.4 — telling a
-client its credentials are wrong when the server is the one that is broken is a lie the client acts
-on, logging out a session that was never invalid.
+**A failure while resolving a token is not "invalid credentials".** `getAuth` tells a _miss_ from a
+_fault_ (`kernel/middlewares/authorizations.ts`, `infrastructure/http/errors.ts#isInfrastructureError`).
+Only a miss proceeds anonymous: a bad signature, an expired token, a user who no longer exists. A
+resolver that **rejects** — a Mongo/Redis connection failure, or anything nobody anticipated — is
+forwarded to the global error handler, which logs it and answers `503` with `Retry-After` for an
+outage and `500` for the rest. The same holds for an `sk_` key. A build with no `account` module has no
+sessions, so every token there is a miss. RFC 9110 §15.5.2 vs §15.6.4 — telling a client its
+credentials are wrong when the server is the one that is broken is a lie the client acts on, logging
+out a session that was never invalid.
 
 ## Signing-key rotation
 
@@ -689,6 +691,11 @@ verified caller who does not hold the rule is 403. The same rule decides what th
 does with a token whose user no longer exists — it resolves `undefined` rather than rejecting, so
 a deleted account gets the same 401 as a bad token, so the answer never tells a caller whether an
 account exists.
+
+Every 401 carries a `WWW-Authenticate` challenge (RFC 9110 §15.5.2): `rejectResponse` adds
+`Bearer realm="api"` by default, and a guard that knows more sets its own first
+(`error="invalid_token"` for an `sk_` key, `error="insufficient_user_authentication"` for a
+step-up). The app's own clients read `errors[].code` and never the header.
 
 An [api-key](#machine-to-machine-credentials) follows the same rule from a third direction: it IS
 a credential, so a route it holds no permission for is 403 like any other refusal — including a

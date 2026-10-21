@@ -408,6 +408,36 @@ describe('rejectResponse', () => {
         expect(setHeader).not.toHaveBeenCalled();
     });
 
+    it('sets the Bearer challenge on a 401 that names none', () => {
+        const response = makeResponseStub();
+
+        rejectResponse(response, 401, ['Unauthorized']);
+
+        expect(response.setHeader).toHaveBeenCalledWith('WWW-Authenticate', 'Bearer realm="api"');
+    });
+
+    it('keeps a challenge the guard already set', () => {
+        const response = makeResponseStub();
+        Reflect.set(
+            response,
+            'hasHeader',
+            jest.fn(() => true)
+        );
+
+        rejectResponse(response, 401, ['Unauthorized']);
+
+        expect(response.setHeader).not.toHaveBeenCalledWith('WWW-Authenticate', expect.anything());
+    });
+
+    it('sets no challenge on any other status', () => {
+        const response = makeResponseStub();
+
+        rejectResponse(response, 403, ['Forbidden']);
+        rejectResponse(response, 404, ['Not found']);
+
+        expect(response.setHeader).not.toHaveBeenCalled();
+    });
+
     it('does not throw, so controllers must return it', () => {
         // Documented: forgetting the `return` lets execution continue and trips Express'
         // "headers already sent". Pinned so the contract cannot change silently.

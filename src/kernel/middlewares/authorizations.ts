@@ -39,7 +39,6 @@ import {
     type StepUpTier
 } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
-import { isInfrastructureError } from '@infrastructure/http/errors';
 import { rejectResponse, type ResponseErrorItem } from '@infrastructure/http/response';
 import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -124,22 +123,6 @@ const noteMiss = (request: Request, kind: CredentialKind, reason: ResolveMissRea
 };
 
 /**
- * `getAuth`'s shared `.catch()`: an infrastructure failure goes to the global error handler as a
- * 503, anything else (an invalid or expired token) proceeds anonymous —
- * see `getAuth`'s own docblock for why the two must not be told apart the same way.
- *
- * @param next - called once, with the error only when it is an infrastructure failure
- * @param error - whatever the resolver's promise rejected with
- */
-const continueOrFailInfra = (next: NextFunction, error: unknown): void => {
-    if (isInfrastructureError(error)) {
-        next(error);
-        return;
-    }
-    next();
-};
-
-/**
  * Pull the bearer token out of the `Authorization` header, if any.
  *
  * @param request - the incoming request
@@ -192,7 +175,7 @@ const resolveOptionsOf = (request: Request): ResolveOptions => ({
  * apart exactly as the port documents.
  *
  * @param request - populated on success
- * @param next - called once, with the error only for an infrastructure failure
+ * @param next - called once, with the error for any failure resolving the credential
  * @param resolution - the resolver's promise for the presented credential
  * @param via - which credential carried it
  * @param onMiss - runs when the credential was refused, after the miss is counted
@@ -216,9 +199,7 @@ const continueWithSession = (
             if (user) applySession(request, user, via);
             next();
         })
-        .catch((error: unknown) => {
-            continueOrFailInfra(next, error);
-        });
+        .catch(next);
 };
 
 /**
@@ -232,7 +213,7 @@ const continueWithSession = (
  *
  * @param request - populated when the cookie names a live session
  * @param response - answered 403 when an unsafe request names a foreign origin
- * @param next - called once, with the error only for an infrastructure failure
+ * @param next - called once, with the error for any failure resolving the cookie
  */
 const continueWithCookie = (request: Request, response: Response, next: NextFunction): void => {
     const cookieToken = cookieAuthenticatesRequests() ? readSessionCookie(request) : undefined;
@@ -283,9 +264,11 @@ const refuseInvalidApiKey = (response: Response): void => {
  *             header, the session cookie, in a deployment whose sessions live in one.
  * No caller:  an absent, invalid or expired token, or one naming a user who no longer exists,
  *             leaves `authContext` unset — `isAuth`/`requirePermission` are what gate a route.
- * Outage:     a resolver failure meaning Mongo/Redis was unreachable goes to `next(error)`, so the
- *             global handler answers 503, never "your credentials are wrong" (RFC 9110 §15.5.2;
- *             see `infrastructure/http/errors.ts#isInfrastructureError`).
+ *             A build with no `account` module has no sessions, so every token is a miss.
+ * Failure:    any failure resolving a credential or a session goes to `next(error)`; only a miss
+ *             proceeds anonymous. The global handler answers 503 for an outage
+ *             (RFC 9110 §15.5.4; see `infrastructure/http/errors.ts#isInfrastructureError`), 500
+ *             for anything else, and logs it — never "your credentials are wrong" (§15.5.2).
  * Credential: `sk_...` (resolved by `@modules/api-keys` when present) that does not resolve is
  *             refused here with a 401 and `WWW-Authenticate: Bearer error="invalid_token"`; a
  *             valid one also gets `apiKeyLimiter`'s 429 for one over its own request budget.
@@ -293,8 +276,8 @@ const refuseInvalidApiKey = (response: Response): void => {
  * @param request - populated with `authContext` (a session) or `caller`/`credentialId` (credential) on success
  * @param response - answers 429 on the credential path's own rate limit, 403 on a cookie-authenticated
  *   unsafe request from a foreign origin
- * @param next - called once on every path but a refused request — with the error for an
- *   infrastructure failure, otherwise with none
+ * @param next - called once on every path but a refused request — with the error for any failure
+ *   resolving the credential or session, otherwise with none
  */
 export const getAuth = (request: Request, response: Response, next: NextFunction) => {
     // Two modules can share a URL prefix (e.g. `account` and `addresses` both under `/account`),
@@ -329,9 +312,7 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
                 request.credentialId = resolution.ok.credentialId;
                 apiKeyLimiter(request, response, next);
             })
-            .catch((error: unknown) => {
-                continueOrFailInfra(next, error);
-            });
+            .catch(next);
         return;
     }
 

@@ -5,7 +5,8 @@
  *
  * Miss:        resolves `{ miss: reason }` — token malformed, expired, wrongly signed or revoked.
  * Nobody:      resolves `{ ok: undefined }` — token verified, user no longer exists.
- * Outage:      rejects — Mongo/Redis unreachable. Never a "your credentials are wrong".
+ * Failure:     rejects — Mongo/Redis unreachable, or anything nobody anticipated. Never a "your
+ *               credentials are wrong": the guard hands it to the global error handler.
  *
  * The guard answers both the first two with 401, so a caller cannot tell a bad token from a deleted
  * account. The miss REASON is what the guard counts and audits.
@@ -112,11 +113,11 @@ export const registerCredentialResolver = (implementation: CredentialResolver): 
 };
 
 /**
- * The registered resolver.
+ * The registered resolver, for the one caller that must reject without one.
  *
  * Unregistered is a real state, not a misconfiguration: a build with no `account` module has no
- * authentication. Rejecting for the same reason a bad token does means the guards need no branch —
- * and a plain `Error` is never an infrastructure failure, so `getAuth` still proceeds anonymous.
+ * authentication. `resolveBearer` and `resolveCookie` answer a `malformed` miss for it (a guest),
+ * as `resolveCredential` does; the stream guard asks for the resolver itself and refuses without.
  * @throws {Error} when no module has registered one
  */
 const requireResolver = (): AuthResolver => {
@@ -127,23 +128,29 @@ const requireResolver = (): AuthResolver => {
     return resolver;
 };
 
-/** Resolve a bearer credential — an access token, or a `ses_…` session id. */
+/** What a session credential resolves to in a build with no `account` module: nobody. */
+const NO_SESSION = { miss: 'malformed' as const };
+
+/**
+ * Resolve a bearer credential — an access token, or a `ses_…` session id. With no resolver
+ * registered (a build with no `account`) it is a `malformed` miss: a guest, never an error.
+ */
 export const resolveBearer = (
     token: string,
     options?: ResolveOptions
 ): Promise<Resolution<AuthContext | undefined>> =>
-    Promise.resolve().then(() => requireResolver().fromBearer(token, options));
+    Promise.resolve().then(() => resolver?.fromBearer(token, options) ?? NO_SESSION);
 
 /** Resolve the session cookie of an SSE stream, keeping what its recheck needs. */
 export const watchCookie = (token: string): Promise<Resolution<StreamWatch>> =>
     Promise.resolve().then(() => requireResolver().watchCookie(token));
 
-/** Resolve the session cookie's value. */
+/** Resolve the session cookie's value; a `malformed` miss when no resolver is registered. */
 export const resolveCookie = (
     token: string,
     options?: ResolveOptions
 ): Promise<Resolution<AuthContext | undefined>> =>
-    Promise.resolve().then(() => requireResolver().fromCookie(token, options));
+    Promise.resolve().then(() => resolver?.fromCookie(token, options) ?? NO_SESSION);
 
 /** Clear a session cookie the resolver refused; a build with no `account` has none to clear. */
 export const clearDeadSessionCookie = (response: Response): void => {

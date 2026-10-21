@@ -71,6 +71,12 @@ public ones included — a caller who presents a credential is told it failed, a
 do. A fake `Bearer sk_` header therefore buys nothing. An expired session bearer is different: it
 still browses as anonymous, because the SPA sends whatever it holds.
 
+A route that never reads a caller does not run `getAuth`, so it never looks at the header: a bad key
+there is ignored, not refused, and a good one is not recognised either (no `lastUsedAt` stamp, no
+refund from the address budget). And a key that cannot be checked at all — the database is down, or
+the resolver failed in a way nobody expected — is not refused as invalid either: the request goes to
+the error handler (`503` or `500`), never to anonymous.
+
 **A key use counts as activity.** Each use stamps the key's own `lastUsedAt` and, at most once a
 day, the minter's `lastApiKeyUseAt` through the `users` service. The inactivity job reads that, so
 an account driven only through its keys is never minimised or reaped as idle

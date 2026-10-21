@@ -394,6 +394,17 @@ components:
             schema:
                 type: string
 
+        WWW-Authenticate:
+            required: true
+            description: >-
+                The challenge a 401 carries (RFC 9110 §11.6.1, §15.5.2; RFC 6750 §3): which scheme the
+                API takes (`Bearer realm="api"`), or, where a guard knows more, why the credential was
+                refused (`error="invalid_token"`, or `error="insufficient_user_authentication"` with a
+                `max_age` for a step-up). A generic HTTP client reads this; this app's own clients read
+                `errors[].code` and never the header.
+            schema:
+                type: string
+
     responses:
         Success:
             description: Success
@@ -413,6 +424,9 @@ components:
                         $ref: '#/components/schemas/ErrorResponse'
         Unauthorized:
             description: Unauthorized
+            headers:
+                WWW-Authenticate:
+                    $ref: '#/components/headers/WWW-Authenticate'
             content:
                 application/json:
                     schema:

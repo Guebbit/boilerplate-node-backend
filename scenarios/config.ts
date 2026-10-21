@@ -1,11 +1,10 @@
 /**
  * @module
- * The seeder's and the demo's own variables, as config slices: the `NODE_SEED_*_PASSWORD`
- * variables, each with its committed, public fallback, and the demo webhook sink's address.
+ * The seeder's and the demo's own variables, as config slices: the `NODE_SEED_*` variables, each
+ * with its committed, public fallback, and the demo webhook sink's address.
  *
  * Not part of the app's boot gate — the seeder is a script, not the app, and production has none of
- * these — but read through the same layer, so the variable list on `docs/tools/configuration.md`
- * is complete and a blank value means "unset" here as everywhere.
+ * these — but read through the same layer, so a blank value means "unset" here as everywhere.
  *
  * See: docs/tools/demo-profile.md#the-named-accounts
  */
@@ -14,45 +13,34 @@ import { defineConfig } from '@infrastructure/config/define';
 import { text } from '@infrastructure/config/fields';
 
 /**
- * One seed password's field. The fallback is a real demo value, not a placeholder: this repo
- * commits its `.env` in the clear, and `scenario:apply` refuses to run outside development/test,
- * which is what stops it reaching a database anyone but a developer or CI can see.
+ * One seed credential's field. The fallback is a real demo value, not a placeholder: it is public
+ * on purpose, and `scenario:apply` refuses to run outside development/test, which is what stops it
+ * reaching a database anyone but a developer or CI can see.
  *
- * @param account - which account, for the description
- * @param fallback - the committed password used when the variable is unset
+ * @param fallback - the committed value used when the variable is unset
  */
-const seedPassword = (account: string, fallback: string) =>
-    text({ default: fallback, sensitive: true });
+const seedPassword = (fallback: string) => text({ default: fallback, sensitive: true });
 
 /** The seed accounts' passwords. */
 export const seedPasswordsConfig = defineConfig({
     name: 'scenario-seeds',
     shape: {
-        NODE_SEED_ADMIN_PASSWORD: seedPassword('owner (`admin`)', 'Demo-Admin1!'),
-        NODE_SEED_USER_PASSWORD: seedPassword('customer', 'Demo-User1!'),
-        NODE_SEED_EDITOR_PASSWORD: seedPassword('editor', 'Demo-Editor1!'),
-        NODE_SEED_MODERATOR_PASSWORD: seedPassword('moderator', 'Demo-Moderator1!'),
-        NODE_SEED_UNVERIFIED_PASSWORD: seedPassword('unverified persona', 'Demo-Unverified1!'),
-        NODE_SEED_TWO_FACTOR_PASSWORD: seedPassword('two-factor persona', 'Demo-TwoFactor1!'),
-        NODE_SEED_PENDING_EMAIL_PASSWORD: seedPassword(
-            'pending-email persona',
-            'Demo-PendingEmail1!'
-        ),
-        NODE_SEED_BANNED_PASSWORD: seedPassword('banned persona', 'Demo-Banned1!'),
-        NODE_SEED_SECOND_SHOPPER_PASSWORD: seedPassword(
-            'second-shopper persona',
-            'Demo-SecondShopper1!'
-        ),
-        NODE_SEED_MANAGER_PASSWORD: seedPassword('manager', 'Demo-Manager1!'),
-        NODE_SEED_WAREHOUSE_PASSWORD: seedPassword('warehouse', 'Demo-Warehouse1!'),
-        NODE_SEED_SUPPORT_PASSWORD: seedPassword('support', 'Demo-Support1!'),
-        NODE_SEED_OPERATOR_PASSWORD: seedPassword('platform operator', 'Demo-Operator1!'),
+        NODE_SEED_ADMIN_PASSWORD: seedPassword('Demo-Admin1!'),
+        NODE_SEED_USER_PASSWORD: seedPassword('Demo-User1!'),
+        NODE_SEED_EDITOR_PASSWORD: seedPassword('Demo-Editor1!'),
+        NODE_SEED_MODERATOR_PASSWORD: seedPassword('Demo-Moderator1!'),
+        NODE_SEED_UNVERIFIED_PASSWORD: seedPassword('Demo-Unverified1!'),
+        NODE_SEED_TWO_FACTOR_PASSWORD: seedPassword('Demo-TwoFactor1!'),
+        NODE_SEED_PENDING_EMAIL_PASSWORD: seedPassword('Demo-PendingEmail1!'),
+        NODE_SEED_BANNED_PASSWORD: seedPassword('Demo-Banned1!'),
+        NODE_SEED_SECOND_SHOPPER_PASSWORD: seedPassword('Demo-SecondShopper1!'),
+        NODE_SEED_MANAGER_PASSWORD: seedPassword('Demo-Manager1!'),
+        NODE_SEED_WAREHOUSE_PASSWORD: seedPassword('Demo-Warehouse1!'),
+        NODE_SEED_SUPPORT_PASSWORD: seedPassword('Demo-Support1!'),
+        NODE_SEED_OPERATOR_PASSWORD: seedPassword('Demo-Operator1!'),
         // Every staff account carries an authenticator app, or its role grants nothing. One shared
         // secret, since a demo fixture gains nothing from seven. Base32, 160 bits.
-        NODE_SEED_STAFF_TOTP_SECRET: seedPassword(
-            'staff authenticator app',
-            'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'
-        )
+        NODE_SEED_STAFF_TOTP_SECRET: seedPassword('JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP')
     }
 });
 
