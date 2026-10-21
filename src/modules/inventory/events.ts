@@ -32,6 +32,14 @@ declare module '@kernel/events' {
          * means the order's preorder units of that product are all covered.
          */
         'inventory.backorder_allocated': { orderId: string; productId: string; waiting: number };
+
+        /**
+         * A payment landed on a hold that had been released, and its units were taken again inside
+         * the payment's transaction. The counters moved there, where the catalogue's stock copy
+         * cannot be written (it would not roll back), so this module refreshes it on the
+         * announcement. Eventual is fine, and a redelivery is harmless: it only re-reads.
+         */
+        'inventory.stock_retaken': { orderId: string; productIds: string[] };
     }
 }
 
@@ -43,3 +51,6 @@ export const RESERVATION_EXPIRED = 'inventory.reservation_expired';
 
 /** See `DomainEventMap['inventory.backorder_allocated']` above for what it carries and who listens. */
 export const PREORDER_ALLOCATED = 'inventory.backorder_allocated';
+
+/** See `DomainEventMap['inventory.stock_retaken']` above; announced by the payment's own transaction. */
+export const STOCK_RETAKEN = 'inventory.stock_retaken';

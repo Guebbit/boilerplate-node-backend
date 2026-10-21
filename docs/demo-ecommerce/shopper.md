@@ -116,6 +116,11 @@ than waited for.
 A refused card is not a failure of the order. The order stays unpaid, the goods stay set aside for
 the rest of the 15 minutes, and the customer can try again.
 
+**A payment that arrives after the 15 minutes** (a bank transfer recorded late, or a card payment
+that was still being confirmed) either completes normally, if the goods are still on the shelf, or
+is **refunded automatically** if they were sold to someone else in the meantime. The customer is
+never charged for goods that are gone.
+
 Once payment goes through, the money and the goods are settled in the same instant: the order
 becomes **paid** and the goods stop being "set aside" and become "sold".
 → [`payments`](../modules/payments.md)

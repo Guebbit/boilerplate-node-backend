@@ -241,15 +241,18 @@ export const announceCancelled = (
  * fulfillment orders with it, and the order's own `cancelled` row already says so.
  * @param fulfillmentOrder - the fulfillment order whose remainder was cancelled
  * @param session - the act's transaction
+ * @param actor - the account that cancelled it; absent when the system did
  */
 export const recordRemainderCancelled = (
     fulfillmentOrder: FulfillmentOrderDocument,
-    session: ClientSession
+    session: ClientSession,
+    actor?: string | null
 ): Promise<void> =>
     orderService.appendTimeline(
         String(fulfillmentOrder.orderId),
         {
             type: 'remainder_cancelled',
+            actor,
             data: { fulfillmentOrderId: String(fulfillmentOrder._id) }
         },
         session
