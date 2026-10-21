@@ -238,6 +238,60 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
 });
 
 /**
+ * The same templates fed the LEAST their builder accepts: every optional input left out. A full
+ * fixture proves the copy; this one proves a template renders when the optional parts are missing,
+ * as they are for most real mails. Only a builder with an optional input has an entry.
+ */
+const minimalContentFor = (locale: string): Record<string, EmailContent> => ({
+    'orders.order-cancelled': orderCancelledEmail(
+        locale,
+        'Ada',
+        {
+            items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+            currency: 'EUR'
+        },
+        '2026-000041',
+        false
+    ),
+    'users.purchase-hold-placed': purchaseHoldPlacedEmail(locale, {
+        until: new Date('2026-10-26T22:00:00.000Z'),
+        reason: 'staff',
+        contactUrl: 'https://shop.example/en/contact?category=account',
+        privacyUrl: 'https://shop.example/en/privacy'
+    }),
+    'delivery.shipment-shipped': shipmentShippedEmail(locale, 'Ada', {
+        lines: [{ title: 'Widget', quantity: 1 }],
+        remainingUnits: 0
+    }),
+    'delivery.shipment-delivered': shipmentDeliveredEmail(locale, 'Ada', {
+        lines: [{ title: 'Widget', quantity: 1 }]
+    }),
+    'delivery.hold-notice': holdNoticeEmail(locale, 'Ada', {
+        notice: 'delayed',
+        orderUrl: 'https://shop.example/orders/an-order-id'
+    }),
+    'delivery.fulfillment-delayed': fulfillmentDelayedEmail(locale, 'Ada', {
+        titles: ['Widget'],
+        agreedAt: new Date(Date.UTC(2026, 11, 1)),
+        reason: 'due',
+        orderUrl: 'https://shop.example/orders/an-order-id'
+    }),
+    'returns.notice': returnNoticeEmail('withdrawal-acknowledged', locale, 'Ada', {
+        orderRef: '2026-000041',
+        at: new Date('2026-08-06T10:30:00Z')
+    })
+});
+
+/**
+ * What a mail job looks like on the other side of the queue. The queue stores JSON, which drops a
+ * key whose value is `undefined`, so every template is rendered from this and not from the
+ * builder's own object.
+ */
+const throughTheQueue = (data: object): Record<string, unknown> =>
+    // eslint-disable-next-line unicorn/prefer-structured-clone -- the queue stores JSON, so a key set to undefined must vanish exactly as it does there; a structured clone would keep it
+    JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
+
+/**
  * Every template, rendered for real, in every supported locale — through the builder that owns
  * its copy.
  *
@@ -254,8 +308,14 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
  * this is about the copy, not the delivery. `root: process.cwd()` matches production
  * (`sendTemplatedEmail`): a template's `/shared/templates/layouts/...` include is root-relative.
  */
-const render = (name: string, locale: string) =>
-    ejs.renderFile(templateFile(name), contentFor(locale)[name].data, { root: process.cwd() });
+const render = (
+    name: string,
+    locale: string,
+    content: Record<string, EmailContent> = contentFor(locale)
+) =>
+    ejs.renderFile(templateFile(name), throughTheQueue(content[name].data), {
+        root: process.cwd()
+    });
 
 describe('email templates render in every supported locale', () => {
     const names = registeredTemplateNames();
@@ -277,22 +337,28 @@ describe('email templates render in every supported locale', () => {
         expect(html).not.toMatch(/>[^<>]*\b[a-z]+(?:\.[\da-z-]+){2,}\b[^<>]*</);
     });
 
-    /**
-     * The mail job crosses the queue as JSON, which drops a key whose value is `undefined`. A
-     * hold notice with no sentence from staff must still render from what arrives on the other
-     * side, and show no empty quote.
-     */
-    it('renders a hold notice that carries no staff message, after the JSON round trip', async () => {
-        const { data } = holdNoticeEmail('en', 'Ada', {
-            notice: 'delayed',
-            orderUrl: 'https://shop.example/orders/an-order-id'
-        });
-        // eslint-disable-next-line unicorn/prefer-structured-clone -- the queue stores JSON, so a key set to undefined must vanish exactly as it does there; a structured clone would keep it
-        const arrived = JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
+    it('has a minimal payload only for collected templates', () => {
+        const minimal = Object.keys(minimalContentFor('en'));
 
-        const html = await ejs.renderFile(templateFile('delivery.hold-notice'), arrived, {
-            root: process.cwd()
-        });
+        expect(minimal.filter((name) => !names.includes(name))).toEqual([]);
+    });
+
+    const minimalCases = listSupportedLocales().flatMap((locale) =>
+        Object.keys(minimalContentFor(locale)).map((name) => [name, locale] as const)
+    );
+
+    it.each(minimalCases)(
+        'renders %s in %s from its minimal payload, with no unresolved keys',
+        async (name, locale) => {
+            const html = await render(name, locale, minimalContentFor(locale));
+
+            expect(html).toContain(`<html lang="${locale}"`);
+            expect(html).not.toMatch(/>[^<>]*\b[a-z]+(?:\.[\da-z-]+){2,}\b[^<>]*</);
+        }
+    );
+
+    it('shows no empty quote for a hold notice that carries no staff message', async () => {
+        const html = await render('delivery.hold-notice', 'en', minimalContentFor('en'));
 
         expect(html).not.toContain('<blockquote>');
     });
