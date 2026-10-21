@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * Every file path the docs CLAIM exists, checked against the files that do — `npm run
- * check:docs-references`. `docs:build` refuses a dead LINK; this refuses a dead FACT.
+ * check`. `docs:build` refuses a dead LINK; this refuses a dead FACT.
  *
  * What is swept and why each narrowing matters: docs/reference/documentation-style.md#what-check-docs-references-sweeps
  *

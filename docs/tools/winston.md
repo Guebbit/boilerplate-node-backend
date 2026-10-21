@@ -112,7 +112,7 @@ convention log backends filter on.
 
 ### Every action
 
-`npm run docs:audit-actions`, checked by `npm run check:docs-audit-actions`. Every action this
+`npm run regenerate`, checked by `npm run check`. Every action this
 build can emit, its owning module, and — where a call site names one — the `targetType` it
 audits. `—` means no call site attaches a target; `(varies)` means the action is fired against more
 than one, from a generic helper that takes the target as a runtime parameter.

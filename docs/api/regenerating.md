@@ -85,7 +85,7 @@ has to sequence the collections for you either, because nothing generates one un
 last — after `regenerate` has settled the contract — and what you get is current by construction.
 There is no committed copy of a collection to go stale in the meantime, and — since `postinstall` —
 the same is true of `openapi.yaml` and `api/` themselves: neither `npm run complete` nor
-`check:contracts-bundle` has a "stale committed copy" to report on any of them.
+the bundle check in `npm run check` has a "stale committed copy" to report on any of them.
 
 The ordering deliberately does not live in `package.json` as commands joined by `&&`: npm appends
 `--` arguments to the LAST command of a chain only, so a narrowing flag would silently apply to one
@@ -142,10 +142,10 @@ across all seven.
 ## Verifying, and what each failure means
 
 ```bash
-npm run check:contracts-bundle    # is any bundle stale against its fragments?
+npm run check    # is any bundle stale against its fragments?
 npm run lint:openapi              # is openapi.yaml a valid spec, per the ruleset?
 npm run lint:asyncapi             # same, for asyncapi.yaml and asyncapi.public.yaml
-npm run check:spec-identity       # does the paired frontend hold the same bytes?
+npm run check       # does the paired frontend hold the same bytes?
 npm run test:contract             # do real responses match the contract?
 ```
 
@@ -153,11 +153,11 @@ npm run test:contract             # do real responses match the contract?
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | `[contracts] STALE — these do not match the fragments`             | a fragment was edited without re-bundling, or a bundle was hand-edited                    | `npm run contracts:bundle`                              |
 | `contract-bundles.test.ts` fails                                    | a committed bundle is structurally wrong (a dangling path, an unresolved channel, a collection missing an operation) — not staleness | fix the fragment the failure points at, then re-bundle |
-| `check:spec-identity` fails                                         | this repo and the frontend hold different bytes of a shared document                       | copy the bundle over; never re-bundle on both sides     |
+| the spec-identity check fails                                         | this repo and the frontend hold different bytes of a shared document                       | copy the bundle over; never re-bundle on both sides     |
 | spectral reports a dangling `$ref`                                   | a schema moved into a module document while another module still references it              | move it to `shared/contracts/openapi.root.yaml`         |
 
-Freshness itself is not `contract-bundles.test.ts`'s job — its own docblock says so. `npm run
-check:contracts-bundle` is the one guard that asks "does the committed file equal a fresh build",
+Freshness itself is not `contract-bundles.test.ts`'s job — its own docblock says so. The bundle
+check in `npm run check` is the one guard that asks "does the committed file equal a fresh build",
 and `contracts-bundle-freshness` is CI's `git diff` re-check of the same question after
 `postinstall` has already rebuilt everything. What `contract-bundles.test.ts` asserts instead,
 on **every** test run: that whatever is currently committed is *structurally* correct — every path
@@ -177,7 +177,7 @@ that, rebuilt by `postinstall`:
 | `src/types/asyncapi.generated.ts`                                | every SSE, domain-event and queue call site                                                              | no — gitignored, rebuilt by `postinstall` |
 | `asyncapi.yaml`                                                 | `gen:asyncapi` · `lint:asyncapi`                                                                         | yes |
 | `asyncapi.public.yaml`                                          | the frontend's whole realtime pipeline · `GET /webhooks/events`                                          | yes |
-| `shared/authorization-keys.yaml`                                | `kernel/permissions.ts` at boot · the PHP twin — assembled by `authorization:bundle` from each module's `authorization.yaml` | yes |
+| `shared/authorization-keys.yaml`                                | `kernel/permissions.ts` at boot · the PHP twin — assembled by `regenerate` from each module's `authorization.yaml` | yes |
 | `contract.{bruno,insomnia,mockoon,postman}.*`                   | you, and whoever explores the API without running it                                                     | no — generated on demand, see above |
 
 For the three gitignored ones: **never hand-edit anything under `api/`, `openapi.yaml`, or
@@ -201,10 +201,10 @@ its client is rebuilt from the contract it was just handed:
 npm run regenerate                  # rebuild here, copy over there, regenerate over there
 npm run sync:frontend -- --dry      # say what would move, write nothing
 npm run sync:frontend -- --forced   # rewrite even the files that already match
-npm run check:spec-identity         # the gate: hashes both sides, fails on a fork
+npm run check         # the gate: hashes both sides, fails on a fork
 ```
 
-`sync:frontend` refuses to run on stale sources — `check:contracts-bundle`
+`sync:frontend` refuses to run on stale sources — the bundle check in `npm run check`
 go first, because copying a stale bundle makes both repos agree on a document neither one's sources
 produce. Everything it copies is produced here, so every difference it finds has one correct
 resolution and it applies it.
@@ -236,7 +236,7 @@ scenarios/<name>.ts                  the demo records — outside src/, see Demo
 Every one is optional: a module with no HTTP surface contributes no OpenAPI fragment, and that is a
 good sign rather than an omission. Deleting a module is `rm -rf` of the folder, its registration out of
 `src/modules.ts` and its `scenarios/<name>.ts` file — the scenario registry is generated from the
-files on disk (`npm run scenarios:generate`), and a `shopModules` key naming an unmounted module is a
+files on disk (`npm run regenerate`), and a `shopModules` key naming an unmounted module is a
 compile error. A module that
 declared probes is also named in `scripts/contracts/client-collections-bundle.ts`, and that one
 announces itself: the import stops compiling.

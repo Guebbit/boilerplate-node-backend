@@ -1,7 +1,7 @@
 /**
  * @module
  * The `shop` scenario: the access model and every `shopModules` fixture as its starting rows, then
- * the order book `flows/shop-history.ts` lives through. Discovered by `npm run scenarios:generate`
+ * the order book `flows/shop-history.ts` lives through. Discovered by `npm run regenerate`
  * (`scenarios/scenarios.generated.ts`), so the strip deletes this file rather than editing the
  * registry that lists it.
  *

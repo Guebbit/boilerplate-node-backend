@@ -11,7 +11,7 @@
  * Only `asyncapi.yaml` and `asyncapi.public.yaml` are COMMITTED — `openapi.yaml` is `.gitignore`d,
  * rebuilt by `postinstall` on every install. The two committed ones can be asked the strongest
  * question: does the file on disk equal a fresh build. Two sources for one document is a fork
- * waiting to happen — `check:contracts-bundle --check` asserts that, so it is not repeated here as
+ * waiting to happen — `npm run check` asserts that, so it is not repeated here as
  * a second Jest case over the same two function calls. In CI, `postinstall` has already rebuilt
  * both files by the time that check runs, so it is the `contracts-bundle-freshness` job's
  * `git diff` against the checkout, not this check, that actually catches a missed re-bundle.

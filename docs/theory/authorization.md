@@ -298,7 +298,7 @@ Each module's page carries a **Who can do what** table, generated from the model
 hand: one row per rule the module declares, the set that bundles it, and a column per role as the
 evaluator answers it (`own` where a condition pins the rule to the caller's own rows, `⚡` where a
 freshly proved session is demanded, and whether an API key can be minted with it).
-`npm run docs:roles` rewrites them; `check:docs-roles` fails the build on drift.
+`npm run regenerate` rewrites them; `npm run check` fails the build on drift.
 
 | Module                                                       | Module                                               | Module                                                              |
 | ------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------- |

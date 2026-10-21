@@ -520,7 +520,7 @@ const seedProductsCollection = (): Promise<SeedOutcome[]> =>
     );
 
 /**
- * This module's entry in the `shop` fixture table. Picked up by `npm run scenarios:generate`
+ * This module's entry in the `shop` fixture table. Picked up by `npm run regenerate`
  * (`scenarios/shop-modules.generated.ts`), so deleting this file deletes the entry.
  * Waits for `locales`: a product write goes through `planTranslations`/`writeTranslations`, which needs the
  * fallback locale to already exist as an ACTIVE row (`@modules/locales/services/translations.ts`'s `planSlot`).

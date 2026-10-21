@@ -1,7 +1,7 @@
 /**
  * @module
  * POST /inventory/reservations/sweep
- * The expiry tick's on-demand door — `npm run sweep:reservations` (`docker/crontab`) is the
+ * The expiry tick's on-demand door — `npm run job sweep:reservations` (`docker/crontab`) is the
  * actual recurring schedule, and never reaches this route. This is for an operator, or a
  * platform scheduler that prefers HTTP. Audited once per run rather than per order (the orders'
  * own cancel path covers those), so a customer asking why their order vanished has something on

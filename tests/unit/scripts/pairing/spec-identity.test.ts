@@ -325,7 +325,7 @@ describe('formatSharedFileProblems', () => {
  * claim that the check can run.
  *
  * It does not fail on `CI` alone. The pipeline's cross-repo guard is the `spec-identity` job, which
- * checks the sibling out itself, passes `FRONTEND_PATH`, runs the `check:spec-identity` CLI and
+ * checks the sibling out itself, passes `FRONTEND_PATH`, runs the spec-identity CLI and
  * fails with "Could not check out the paired frontend" when the sibling is unreachable. That job is
  * this question's one home; asserting it a second time from a job that clones one repo only made
  * `test-unit` fail for something it was never given the means to check.

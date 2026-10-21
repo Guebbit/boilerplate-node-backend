@@ -210,7 +210,7 @@ if (regenerate) {
                 `  The copy stands; finish by hand over there:\n` +
                 `    cd ${frontendRoot}\n` +
                 `    npm run regenerate\n` +
-                `    npm run check:spec-identity`
+                `    npm run check`
         );
     }
 } else

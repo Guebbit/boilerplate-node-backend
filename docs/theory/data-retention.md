@@ -136,13 +136,13 @@ The states are in [Proving an address](../modules/account.md#proving-an-address)
 An order's [timeline](../modules/orders.md#the-timeline) holds one free-text field, `text`: the
 reason a staff member gave for an override. Everything else on a row is an id, a code or a number.
 
-| Rule                         | Why                                                                                                       |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Own clock, from the row      | The order's clock starts only at erasure, so a live customer's text would never go.                       |
-| `npm run reap:orders` unsets | The row, its type and its codes stay: they are the accounting trail.                                      |
-| Never copy a sibling's text  | `reap:returns` clears a return's `note` while a copy here would live on. Ids and codes only.              |
-| Export carries it            | A staff assessment of a person is that person's data (the Nowak ruling above).                            |
-| No staff name to the buyer   | Neither the screen nor the export names the staff member (Pankki S); the export keeps the buyer's own id. |
+| Rule                             | Why                                                                                                       |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Own clock, from the row          | The order's clock starts only at erasure, so a live customer's text would never go.                       |
+| `npm run job reap:orders` unsets | The row, its type and its codes stay: they are the accounting trail.                                      |
+| Never copy a sibling's text      | `reap:returns` clears a return's `note` while a copy here would live on. Ids and codes only.              |
+| Export carries it                | A staff assessment of a person is that person's data (the Nowak ruling above).                            |
+| No staff name to the buyer       | Neither the screen nor the export names the staff member (Pankki S); the export keeps the buyer's own id. |
 
 ## Free text on returns
 
@@ -158,7 +158,7 @@ free-text fields:
 reason), and a defect has to be described. Free text shrinks; it never reaches zero. So it needs
 an end date of its own.
 
-**What happens to it.** `npm run reap:returns` unsets both fields once the return has not changed
+**What happens to it.** `npm run job reap:returns` unsets both fields once the return has not changed
 for `NODE_RETURN_TEXT_RETENTION_DAYS` (3 years by default). Status, lines, amounts and dates stay:
 they are the accounting trail.
 
@@ -197,7 +197,7 @@ Staff can put a fulfillment order on hold, with a reason from a closed set and a
 person: "customer rang twice, sounded drunk", "address looks like a reseller". That is the same shape
 of risk as a return's `declineReason`, so it gets the same treatment: an end date of its own.
 
-**What happens to it.** `npm run reap:delivery` unsets `holdNote` once the fulfillment order has not
+**What happens to it.** `npm run job reap:delivery` unsets `holdNote` once the fulfillment order has not
 changed for `NODE_HOLD_NOTE_RETENTION_DAYS` (one year by default). Lines, status, reason and dates stay:
 they are the record of what was promised and what left. The wipe does not move `updatedAt`, so the
 clock it reads does not reset, and a rerun matches nothing.

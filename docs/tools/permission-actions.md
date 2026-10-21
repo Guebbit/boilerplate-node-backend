@@ -9,7 +9,7 @@ as `actions:` in `shared/authorization-keys.yaml`, and generated into both repos
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
 flowchart LR
     ROOT["shared/contracts/<br/>authorization-keys.root.yaml<br/><i>you edit this</i>"]
-    BUNDLE["authorization:bundle"]
+    BUNDLE["regenerate"]
     KEYS["shared/authorization-keys.yaml"]
     GEN["gen:permission-actions<br/>(also run by gen:api)"]
     BE["api/permission-actions.ts<br/><i>gitignored</i>"]
@@ -49,7 +49,7 @@ runs the same script again because its `rm -rf ./api` removes the file.
 - Backend: `tests/cross-cutting/permission-actions.test.ts` (the generated array equals the yaml,
   and every declared rule's action is in it) and
   `tests/unit/scripts/contracts/permission-actions-render.test.ts`.
-- Frontend: `npm run check:permission-actions` compares the committed file with a fresh render.
-- Pair: `check:spec-identity` fails when the yaml copy differs from the backend's.
+- Frontend: `npm run check` compares the committed file with a fresh render.
+- Pair: the spec-identity check fails when the yaml copy differs from the backend's.
 
 The generator is a shared script, byte-identical in both repos, like `generate-error-codes.ts`.

@@ -1,5 +1,5 @@
 /*
- * The graph rules — `npm run check:dependencies`.
+ * The graph rules — `npm run check`.
  *
  * `eslint.config.ts` already states the tier walls through `eslint-plugin-boundaries`, and that is
  * where a wall belongs: it reports in the editor, at the offending import, while the code is being

@@ -8,7 +8,7 @@
  * entry per module in a literal); everything else — the contract's path index, the test suite's
  * router map, the docs — reads what is on disk or in the registry. A
  * A module's scheduled jobs are declared on its own manifest, so they leave with its folder and
- * `npm run jobs:generate` (a step of `regenerate`) rewrites the crontab and the npm scripts.
+ * `npm run regenerate` rewrites the crontab.
  */
 
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';

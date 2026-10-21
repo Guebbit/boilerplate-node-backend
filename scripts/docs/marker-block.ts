@@ -1,7 +1,8 @@
 /**
  * Shared write-or-report logic for every doc generator that keeps a generated block between
  * `<!-- name:start -->` / `<!-- name:end -->` markers inside an otherwise hand-written page:
- * `docs:graph`, `docs:roles`, `docs:dependencies` and `docs:rate-limits`.
+ * the module graph, the role matrix, the dependency map, the rate-limit budgets and the rest of
+ * `regenerate`'s doc steps.
  *
  * Each block is replaced independently by its own marker pair — everything outside every pair,
  * and any hand-written text between two blocks in the same page, is left untouched. The result is
@@ -35,8 +36,6 @@ export interface MarkerPageOptions {
     checkOnly: boolean;
     /** What the page has drifted from, for the `--check` failure message, e.g. `the module graph`. */
     driftSubject: string;
-    /** The npm script a drifted `--check` run should point at, e.g. `docs:rate-limits`. */
-    rerunScript: string;
 }
 
 /**
@@ -51,8 +50,7 @@ export const applyMarkerBlocks = async ({
     blocks,
     label,
     checkOnly,
-    driftSubject,
-    rerunScript
+    driftSubject
 }: MarkerPageOptions): Promise<number> => {
     const relativeLabel = path.relative(root, file);
     const original = readFileSync(file, 'utf8');
@@ -76,7 +74,7 @@ export const applyMarkerBlocks = async ({
         const prefix = `[${label}] `;
         console.error(
             `${prefix}${relativeLabel} is out of date with ${driftSubject}.\n` +
-                `${' '.repeat(prefix.length)}Run \`npm run ${rerunScript}\` and commit the result.`
+                `${' '.repeat(prefix.length)}Run \`npm run regenerate\` and commit the result.`
         );
         return 1;
     }

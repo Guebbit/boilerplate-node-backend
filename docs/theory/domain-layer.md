@@ -331,7 +331,7 @@ enforces and what it refuses.
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Bounded context        | one folder per module; `rm -rf` deletes the domain                                                                              |
 | Published language     | the module barrel, `index.ts` — lint forbids reaching past it, every module publishes one                                       |
-| Context map            | the edges in `module.yaml#dependsOn` (enforced by `check:dependencies`); each edge's kind and why, in prose on the module pages |
+| Context map            | the edges in `module.yaml#dependsOn` (enforced by `npm run check`); each edge's kind and why, in prose on the module pages      |
 | Ubiquitous language    | the code's own identifiers, per context — see [Glossary](./glossary.md)                                                         |
 | Subdomain distillation | the table in [Strategic DDD](./strategic-ddd.md) §4 — a judgement, re-decided per project                                       |
 | Domain events          | `kernel/events.ts` — `products` emits, `cart` subscribes                                                                        |

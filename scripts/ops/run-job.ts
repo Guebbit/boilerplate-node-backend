@@ -1,8 +1,8 @@
 #!/usr/bin/env tsx
 /**
  * @module
- * The one runner for every scheduled job — `npm run <name>` (e.g. `npm run reap:orders`), which
- * `npm run jobs:generate` points at `tsx scripts/ops/run-job.ts <name>`.
+ * The one runner for every scheduled job — `npm run job <name>` (e.g. `npm run job reap:orders`).
+ * With no name it exits non-zero, listing the jobs there are.
  *
  * A job is declared once, on the manifest of the module that owns the work (`AppModule.jobs`) or in
  * `src/app/jobs.ts` when it belongs to none. This script looks the declaration up, connects,

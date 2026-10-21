@@ -3,7 +3,7 @@
  * Rebuild the documents this repo publishes from their fragments — `npm run contracts:bundle`.
  *
  * Fragments are the source of truth; the bundles are what spectral, orval, Prism and
- * `check:spec-identity` read — `openapi.yaml` is `.gitignore`d and rebuilt on every install,
+ * The spec-identity check read — `openapi.yaml` is `.gitignore`d and rebuilt on every install,
  * `asyncapi.yaml`/`asyncapi.public.yaml` stay COMMITTED. `--check` asserts none of the three are
  * stale instead of rewriting them. Name bundles to narrow the run:
  *

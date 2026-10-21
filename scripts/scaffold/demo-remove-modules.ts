@@ -4,7 +4,7 @@
  * modules: their folders, the registry line that names them, the shared authorization files, the
  * alert rules on their metrics, the validation labels only their fields used, the reap/sweep
  * scripts they own, their scenario files and test doubles and the tests that need them. The
- * registries that listed those files are NOT edited: `npm run scenarios:generate` rebuilds them,
+ * registries that listed those files are NOT edited: `npm run regenerate` rebuilds them,
  * and `regenerate` runs it.
  *
  * `demo-remove.ts` calls this with every `group: shop` module and then does the shop-only work

@@ -171,7 +171,7 @@ if each of THEIR endpoints were at fault. `domain#shouldAutoDisable` requires BO
 cleared on the next one, and on a re-enable, so a disabled subscription turned back on starts a fresh streak) — `webhook_subscriptions_auto_disabled_total` counts how often it fires.
 
 **Delayed retry rides the cron container, not the broker.** `webhookdeliveries.nextAttemptAt`
-carries when a failed row is due again; `npm run sweep:webhook-retries` (`sweep:webhook-retries`)
+carries when a failed row is due again; `npm run job sweep:webhook-retries` (`sweep:webhook-retries`)
 — the one job in `docker/crontab` that runs every minute instead of nightly — publishes every due
 row (and every stranded one, below) to the queue. See
 [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.

@@ -79,7 +79,7 @@ Each public section is a whole document, so it can be linted on its own:
 ```bash
 npm run contracts:bundle        # rebuild both asyncapi bundles (and every other) from their sources
 npm run lint:asyncapi:modules   # lint each section document by itself
-npm run check:contracts-bundle  # fail if a committed bundle is stale
+npm run check  # fail if a committed bundle is stale
 ```
 
 **It is a merge, not `asyncapi bundle`.** The AsyncAPI CLI's `bundle` command dereferences — inlining
@@ -149,7 +149,7 @@ types (`EmailJobPayload`, `ImageDigestJobPayload`, each module's own like
 repo generates from the whole contract rather than the public subset.
 
 `asyncapi.public.yaml` is in `SHARED_FILES` (`scripts/pairing/spec-identity.ts`), so
-`check:spec-identity` fails on the commit that forks it. **This script is not, and neither are the
+The spec-identity check fails on the commit that forks it. **This script is not, and neither are the
 generated outputs.** The script is held to the same shared machinery by hand, not to identical
 bytes — nothing fails if the two drift further, so compare them with `diff` when you change one. It
 is off the list for the reason the list itself gives: everything on it is produced in the backend
@@ -240,7 +240,7 @@ CI runs `lint:asyncapi` against `asyncapi.yaml` and `asyncapi.public.yaml`. Ther
 
 ## Breaking-change gate on the public catalogue
 
-`GET /webhooks/events` serves `asyncapi.public.yaml`, and a subscriber builds against its event names and payload shapes — so a change that drops or narrows one breaks them silently, not loudly. `npm run check:asyncapi-breaking` (`scripts/contracts/check-asyncapi-breaking.ts`) diffs the working tree's bundle against `origin/main`'s, at their merge-base, through `@asyncapi/diff`, and fails on any change it classifies as breaking.
+`GET /webhooks/events` serves `asyncapi.public.yaml`, and a subscriber builds against its event names and payload shapes — so a change that drops or narrows one breaks them silently, not loudly. `npm run check` (`scripts/contracts/check-asyncapi-breaking.ts`) diffs the working tree's bundle against `origin/main`'s, at their merge-base, through `@asyncapi/diff`, and fails on any change it classifies as breaking.
 
 `/info/version` is the one pointer it ignores (an `override` entry in `scripts/contracts/asyncapi-breaking.ts`): a version number is metadata, not a shape a subscriber reads, and `@asyncapi/diff`'s own standard would otherwise fail every bump. Alpha means `0.y.z` everywhere — both roots and every module fragment carry `0.1.0`; the field stays in a fragment because its own Spectral lint requires it, and nothing checks the numbers agree.
 

@@ -12,7 +12,7 @@
  * modules' `tests/factories.ts` back and forth. Run over `src/modules` alone, with `tests/`
  * excluded below, the graph has nothing left to report falsely.
  *
- * Wired into `check:dependencies` alongside the main config, so `complete` and the pre-commit hook
+ * Wired into `npm run check` alongside the main config, so `complete` and the pre-commit hook
  * pick it up with no new gate name to remember.
  */
 

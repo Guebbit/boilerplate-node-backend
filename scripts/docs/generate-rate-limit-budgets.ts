@@ -61,8 +61,7 @@ void applyMarkerBlocks({
     blocks: [{ start: START, end: END, body: budgetTable() }],
     label: 'rate-limit-budgets',
     checkOnly,
-    driftSubject: 'the rate-limit manifests',
-    rerunScript: 'docs:rate-limits'
+    driftSubject: 'the rate-limit manifests'
 }).then((code) => {
     process.exitCode = code;
 });

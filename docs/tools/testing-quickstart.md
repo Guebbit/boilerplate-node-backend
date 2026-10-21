@@ -6,7 +6,7 @@ each row go deeper.
 ## The 30-second version
 
 ```bash
-npm run test:module -- src/modules/products   # one module, every layer it owns, seconds
+npx jest --runInBand -- src/modules/products   # one module, every layer it owns, seconds
 npm run test:unit                             # every unit test
 npm run test:report                           # WHERE the time and the failures are, per module
 npm run complete                              # the whole gate, exactly as CI runs it (about 10 minutes)
@@ -17,20 +17,20 @@ know _which domain_, the third line is the one.
 
 ## Every command, and when to reach for it
 
-| Command                                    | Answers                                                           | Time      | Gate?                |
-| ------------------------------------------ | ----------------------------------------------------------------- | --------- | -------------------- |
-| `test:module -- <path>`                    | Did I break the module I'm editing?                               | seconds   | —                    |
-| `test:unit`                                | Did I break a unit anywhere?                                      | ~15s      | ✅                   |
-| `test:cross-cutting`                       | Do the architectural rules still hold?                            | ~4s       | ✅                   |
-| `test:integration`                         | Does it work against a real (in-memory) Mongo?                    | ~14s      | ✅                   |
-| `test:contract`                            | Does the API match `openapi.yaml`, including what it must reject? | ~50s      | ✅                   |
-| `test:fuzz`                                | Do the rules hold for inputs nobody thought of?                   | ~32s      | ✅                   |
-| `test:unit:report` + `test:report`         | Which module owns the failure, and where did the time go?         | +1s       | ✅ (prints in CI)    |
-| `test:prism`                               | Does the spec's own example server answer?                        | ~5s       | ❌ `complete:manual` |
-| `mutation`                                 | Do the tests **notice** when the source is wrong?                 | minutes   | ❌ every PR (diff)   |
-| `bench`, `bench:orders`, `bench:inventory` | How fast is one endpoint?                                         | 30s each  | ❌ by hand           |
-| `bench:k6`, `bench:k6:checkout`            | Does it hold up under ramping load, with a verdict?               | ~70s each | ❌ by hand           |
-| `complete`                                 | All of the gate, in CI's order                                    | ~10 min   | —                    |
+| Command                            | Answers                                                           | Time      | Gate?                |
+| ---------------------------------- | ----------------------------------------------------------------- | --------- | -------------------- |
+| `npx jest --runInBand <path>`      | Did I break the module I'm editing?                               | seconds   | —                    |
+| `test:unit`                        | Did I break a unit anywhere?                                      | ~15s      | ✅                   |
+| `test:cross-cutting`               | Do the architectural rules still hold?                            | ~4s       | ✅                   |
+| `test:integration`                 | Does it work against a real (in-memory) Mongo?                    | ~14s      | ✅                   |
+| `test:contract`                    | Does the API match `openapi.yaml`, including what it must reject? | ~50s      | ✅                   |
+| `test:fuzz`                        | Do the rules hold for inputs nobody thought of?                   | ~32s      | ✅                   |
+| `test:unit:report` + `test:report` | Which module owns the failure, and where did the time go?         | +1s       | ✅ (prints in CI)    |
+| `test:prism`                       | Does the spec's own example server answer?                        | ~5s       | ❌ `complete:manual` |
+| `mutation`                         | Do the tests **notice** when the source is wrong?                 | minutes   | ❌ every PR (diff)   |
+| `bench [path]`                     | How fast is one endpoint?                                         | 30s each  | ❌ by hand           |
+| `bench:k6 [browse\|checkout]`      | Does it hold up under ramping load, with a verdict?               | ~70s each | ❌ by hand           |
+| `complete`                         | All of the gate, in CI's order                                    | ~10 min   | —                    |
 
 ## Running one thing
 
@@ -39,8 +39,8 @@ script rather than something you type: the contract and integration suites share
 must not run concurrently.
 
 ```bash
-npm run test:module -- src/modules/products      # 8 suites, 92 tests
-npm run test:module -- src/modules/orders/tests/unit
+npx jest --runInBand -- src/modules/products      # 8 suites, 92 tests
+npx jest --runInBand -- src/modules/orders/tests/unit
 ```
 
 **Watch mode** — jest's own flag, no script needed:
@@ -140,7 +140,7 @@ Two tools, deliberately:
 ```bash
 npm run bench            # autocannon: one endpoint, flat load, reports numbers
 npm run bench:k6         # k6: ramping load, several endpoints, PASSES OR FAILS
-npm run bench:k6:checkout  # the write path — login, cart, checkout under contention
+npm run bench:k6 checkout  # the write path — login, cart, checkout under contention
 ```
 
 `bench` tells you how fast something is. `bench:k6` tells you whether it is fast **enough**,
@@ -152,7 +152,7 @@ app, run `npm run bench`, read the p95, and set the threshold to roughly 1.4× i
 threshold is to catch a regression, not to express an ambition; leave headroom or it fires on an
 unlucky afternoon and everyone learns to ignore it.
 
-`bench:k6:checkout` **writes** — it creates orders and moves stock. Point it at a throwaway
+`bench:k6 checkout` **writes** — it creates orders and moves stock. Point it at a throwaway
 database and `npm run scenario:apply:reset` afterwards.
 
 ## Related

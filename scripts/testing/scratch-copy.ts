@@ -60,7 +60,7 @@ export const assembleScratchCopy = (repoRoot: string, scratch: string): void => 
         )
     );
 
-    // `regenerate`'s `docs:graph` asks `git ls-files` which files each module owns.
+    // `regenerate`'s module-graph step asks `git ls-files` which files each module owns.
     if (!runIn(scratch, 'git', ['init', '--quiet']) || !runIn(scratch, 'git', ['add', '--all']))
         throw new Error('[scratch] could not make the scratch copy a git repository.');
 };

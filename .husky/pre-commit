@@ -10,7 +10,7 @@
 #   most of the full gate's minutes;
 # - `docs:build`.
 #
-# `check:spec-identity` SKIPS rather than fails when the paired frontend is not on disk, so a
+# The spec-identity check SKIPS rather than fails when the paired frontend is not on disk, so a
 # half-cloned pair can still commit. It stays fatal under CI, where a missing sibling means the
 # workflow is misconfigured.
 #

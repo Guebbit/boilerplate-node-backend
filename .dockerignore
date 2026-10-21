@@ -34,8 +34,8 @@ tmp
 
 # Generated API-client collections for Bruno, Insomnia, Mockoon and Postman: ~900 KB of developer
 # tooling rebuilt by `npm run contracts:bundle -- bruno insomnia mockoon postman`. Only
-# `tests/cross-cutting/contract-bundles.test.ts` reads them, and the image build runs no tests —
-# `npm run build` is type-check plus lint.
+# `tests/cross-cutting/contract-bundles.test.ts` reads them, and the image build runs no tests,
+# only `ts-check`.
 contract.bruno.yml
 contract.insomnia.json
 contract.mockoon.json

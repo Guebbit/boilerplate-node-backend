@@ -56,10 +56,10 @@ exists at all. See [The client collections](#the-client-collections-generated).
 ```bash
 npm run contracts:bundle              # build the committed specs
 npm run contracts:bundle -- bruno     # one collection, from the committed contract
-npm run check:contracts-bundle        # fail if any committed bundle is stale
+npm run check                         # fail if any committed bundle is stale
 ```
 
-`check:contracts-bundle` asserts every **committed** bundle equals a fresh build, so a fragment
+The bundle check in `npm run check` asserts every **committed** bundle equals a fresh build, so a fragment
 edited without re-bundling fails it locally. `openapi.yaml` is gitignored and rebuilt by
 `postinstall` on every install, so it carries no such check — only `asyncapi.yaml` and
 `asyncapi.public.yaml` are committed and can go stale. In CI, `npm ci`'s `postinstall` rebuilds
@@ -128,7 +128,7 @@ It would be tidier to ship only fragments and bundle on demand. Three reasons no
   match.
 
 That last point is the one that bites. **If the bundle step ever produces different bytes here than
-what the frontend holds, `check:spec-identity` fails and neither repo can build.** Bundle once, commit the
+what the frontend holds, the spec-identity check fails and neither repo can build.** Bundle once, commit the
 result, copy that.
 
 The comments do **not** travel into `openapi.yaml` — a parse cannot keep them, and Redocly parses.
@@ -250,7 +250,7 @@ src/modules/<name>/openapi.yaml       one standalone OpenAPI document per module
 
 ```bash
 npm run contracts:bundle              # rebuild every bundle from the fragments
-npm run check:contracts-bundle        # fail if any committed bundle is stale
+npm run check                         # fail if any committed bundle is stale
 ```
 
 **The root's path index is completed, not trusted.** `scripts/contracts/root-assembly.ts` reads
@@ -286,7 +286,7 @@ ordering lives inside `scripts/contracts/build-bundles.ts` rather than as an `&&
 which is what makes that flag narrow the run instead of silently doing everything else. See
 [Regenerating After a Change](./regenerating.md#regenerate-one-bundle-only).
 
-What `check:contracts-bundle` catches locally versus what `contracts-bundle-freshness` catches in
+What the bundle check in `npm run check` catches locally versus what `contracts-bundle-freshness` catches in
 CI: see [The seven bundles](#the-seven-bundles) above.
 
 ### Why the REST contract stopped concatenating, and the rest did not
@@ -355,7 +355,7 @@ schemas they explain.
 What does not change:
 
 - the module registry, the `basePath` per module, and the one-line enable/disable in `src/modules.ts`
-- `npm run lint:openapi`, `npm run gen:api`, and the `check:spec-identity` check
+- `npm run lint:openapi`, `npm run gen:api`, and the the spec-identity check check
 - the frontend holding a byte-identical copy
 
 ## The other five, and what each one taught
@@ -454,7 +454,7 @@ write.**
 
 ### The demo dataset — not a bundle
 
-Each module's seed records live in `scenarios/<name>.ts`, collected by `npm run scenarios:generate` and imported by
+Each module's seed records live in `scenarios/<name>.ts`, collected by `npm run regenerate` and imported by
 nothing under `src/` — no fragment, no text concatenation. What the API actually answers for a
 seeded row is not published to a file: it is asserted directly, against a real database, by
 `tests/integration/scenarios/shop.test.ts`. The one thing consumers can read is

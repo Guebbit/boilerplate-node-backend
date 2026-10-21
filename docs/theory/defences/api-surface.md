@@ -64,13 +64,13 @@ Listed rather than omitted, because "we do not have that" is a verdict and silen
 
 ## What the contract buys, concretely
 
-| Guarantee                           | Enforced by                                                                      |
-| ----------------------------------- | -------------------------------------------------------------------------------- |
-| A route exists in exactly one place | module manifests → `app/routes.ts`                                               |
-| An undeclared body field is a 422   | `orval.config.ts#override.zod.strict.body`                                       |
-| A declared error is actually thrown | `tests/cross-cutting/contract-error-declarations.test.ts`                        |
-| The bundle matches its fragments    | `tests/cross-cutting/contract-bundles.test.ts`, `npm run check:contracts-bundle` |
-| The spec survives hostile input     | the `fuzz` suite, generating from the contract itself                            |
+| Guarantee                           | Enforced by                                                     |
+| ----------------------------------- | --------------------------------------------------------------- |
+| A route exists in exactly one place | module manifests → `app/routes.ts`                              |
+| An undeclared body field is a 422   | `orval.config.ts#override.zod.strict.body`                      |
+| A declared error is actually thrown | `tests/cross-cutting/contract-error-declarations.test.ts`       |
+| The bundle matches its fragments    | `tests/cross-cutting/contract-bundles.test.ts`, `npm run check` |
+| The spec survives hostile input     | the `fuzz` suite, generating from the contract itself           |
 
 ## Related
 

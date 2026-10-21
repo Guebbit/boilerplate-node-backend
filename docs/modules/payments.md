@@ -208,7 +208,7 @@ flowchart TD
   has to.
 - **A lost order owes a refund record, not a marker.** The record is opened in the same transaction
   as the `succeeded` write, so money is never durable without its way back. The provider is asked
-  after the commit; `npm run sweep:payment-effects` (`retryOpenRefunds`) finishes a refund that
+  after the commit; `npm run job sweep:payment-effects` (`retryOpenRefunds`) finishes a refund that
   failed.
 - **A hold expiring on a paid order is no longer possible.** The commit lands with the `paid` move,
   so the reservation sweep (which only releases `held` holds) never sees a paid order's hold.
@@ -387,7 +387,7 @@ sequenceDiagram
   missed stamp after the last one, so a failing stamp settles nothing and the sweep retries.
 - **A refusal stays open.** The record is `failed`, with a closed `failureReason` (staff only; see
   [the staff Payments page](#the-staff-payments-page)), and keeps its share of `amountRefunded`, so nothing is opened beside it. `retryOpenRefunds` (run by
-  `npm run sweep:payment-effects`) and the next cancel or operator call both finish it.
+  `npm run job sweep:payment-effects`) and the next cancel or operator call both finish it.
 - **The default is everything left.** `POST /payments/order/{orderId}/refund` with no body returns
   all that is still refundable; with an `amount` it returns that part. An `amount` over what is
   left, nothing left included, is a 422 (`PAYMENT_REFUND_EXCEEDS_REMAINING`); with no `amount`,
@@ -653,7 +653,7 @@ The `actor` is the operator who asked or recorded the money; an automatic refund
 | `NODE_PAYMENT_PROVIDER`                 | —       | Which registered implementation answers. Unset: no card payments (`card` is not listed). A name this process does not carry throws at boot rather than silently taking no payments                                                                                                                             |
 | `NODE_PAYMENT_WEBHOOK_SECRET`           | —       | What `POST /payments/webhook` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid. A comma-separated list is a ring for rotating it: the first entry signs, any entry verifies, every entry 16+ characters |
 | `NODE_DEFAULT_CURRENCY`                 | `EUR`   | ISO-4217. Stamped on every payment document at creation; also what `products`, `cart` and `orders` (frozen at checkout) read for their own `currency` field — one shop, one currency                                                                                                                           |
-| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` | `30`    | Days an attempt that never settled may sit untouched before `npm run reap:payments` deletes it. See Retention below.                                                                                                                                                                                           |
+| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` | `30`    | Days an attempt that never settled may sit untouched before `npm run job reap:payments` deletes it. See Retention below.                                                                                                                                                                                       |
 | `NODE_BANK_TRANSFER_BENEFICIARY`        | —       | The account name a transfer is made out to. `bank_transfer` is offered only once this and `_IBAN` are both set                                                                                                                                                                                                 |
 | `NODE_BANK_TRANSFER_IBAN`               | —       | The account IBAN. Validated with `ibantools` at boot — a malformed value refuses to boot rather than silently advertising a dead account                                                                                                                                                                       |
 | `NODE_BANK_TRANSFER_BIC`                | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                                                                                                                                                    |
@@ -693,16 +693,16 @@ never a candidate for `reap:payments`, `reap:orders`, or any other timer in this
 
 **What about a payment that never settles at all** — a declined card nobody retried, a 3-D Secure
 challenge nobody answered? That row was never a transaction: no money moved, so there is no
-invoice to keep. `npm run reap:payments` deletes it once it has sat untouched (`updatedAt`) for
+invoice to keep. `npm run job reap:payments` deletes it once it has sat untouched (`updatedAt`) for
 `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30 days) — an abandoned checkout, not a financial
 record. Retrying resets the clock, the same way editing a cart resets `carts`' own TTL.
 
 | Payment state                                                                  | Kept forever? | Mechanism                                      |
 | ------------------------------------------------------------------------------ | :-----------: | ---------------------------------------------- |
 | `succeeded`                                                                    |      Yes      | Never touched by any timer — it is the invoice |
-| `requires_*`, `processing`, `declined`, `cancelled`, untouched past the window |      No       | `npm run reap:payments` deletes the row        |
+| `requires_*`, `processing`, `declined`, `cancelled`, untouched past the window |      No       | `npm run job reap:payments` deletes the row    |
 
-`npm run reap:payments` runs nightly from `docker/crontab`, alongside the rest of this repo's
+`npm run job reap:payments` runs nightly from `docker/crontab`, alongside the rest of this repo's
 scheduled jobs — see [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism
 and the module-removal convention that goes with owning one.
 

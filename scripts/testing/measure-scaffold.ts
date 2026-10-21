@@ -78,7 +78,11 @@ const CHECKS: readonly Check[] = [
         ]
     },
     { label: "the modules' own tests", command: 'npx', args: ['jest', ...FOLDERS] },
-    { label: 'check:docs-graph', command: 'npm', args: ['run', 'check:docs-graph'] },
+    {
+        label: 'module graph is current',
+        command: 'npx',
+        args: ['tsx', 'scripts/docs/generate-module-graph.ts', '--check']
+    },
     { label: 'test:cross-cutting', command: 'npm', args: ['run', 'test:cross-cutting'] },
     { label: 'docs:build', command: 'npm', args: ['run', 'docs:build'] },
     {

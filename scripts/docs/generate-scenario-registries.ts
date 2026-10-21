@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * `npm run scenarios:generate` — rebuilds the two scenario registries from the file tree
+ * `npm run regenerate` — rebuilds the two scenario registries from the file tree
  * (`scripts/scaffold/scenario-registry.ts`). `--check` reports drift instead of writing, which is
  * what `complete` runs.
  */
@@ -17,7 +17,7 @@ const checkOnly = hasFlag('check');
     ? staleScenarioRegistries(REPO_ROOT, formatWithRepoConfig).then((stale) => {
           for (const file of stale)
               console.error(
-                  `${file} is not what the scenario files generate.\n  Run: npm run scenarios:generate`
+                  `${file} is not what the scenario files generate.\n  Run: npm run regenerate`
               );
           return stale.length === 0 ? 0 : 1;
       })

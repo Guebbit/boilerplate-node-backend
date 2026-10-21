@@ -98,7 +98,7 @@ because of it.
   generated to commit there — see [Regenerating After a Change](../api/regenerating.md).
 - Keep paired branches aligned before merging a contract change: a backend branch and the frontend
   branch that consumes it are one change in two repositories.
-- `npm run check:spec-identity` is the guard. It reports the shared bundles as forked when the two
+- `npm run check` is the guard. It reports the shared bundles as forked when the two
   sides disagree, which is exactly what you want to see before a merge rather than after.
 
 ### `FORKED` usually means _behind_
@@ -113,7 +113,7 @@ checkout is the ordinary explanation, and the two are indistinguishable from the
 
 ### Which frontend a script means
 
-Every pairing script (`sync:frontend`, `check:spec-identity`, `regenerate`, the docs reference
+Every pairing script (`sync:frontend`, the spec-identity check, `regenerate`, the docs reference
 check) asks one resolver, `scripts/pairing/paired-frontend-path.ts`. The first non-empty value
 wins:
 
@@ -188,7 +188,7 @@ There is no analytics event catalogue on the list: pageviews are automatic and e
 request behind it is reported from the handler here that decided it. See
 [Product Analytics](./analytics.md#one-namespace-two-repositories).
 
-**A `check:spec-identity` failure right after switching which backend you're pairing with is usually
+**A the spec-identity check failure right after switching which backend you're pairing with is usually
 not a new defect.** The frontend compares against whichever backend its own `.env` names in
 `BACKEND_PATH` — not whichever one last ran `sync:frontend` — so the fix is to point that at this
 backend (unset, or `../boilerplate-node-backend`, is the default) and then run `sync:frontend` from

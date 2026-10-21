@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * `docker/Dockerfile.dockerignore` — `npm run docker:dockerignore`, part of `regenerate`.
+ * `docker/Dockerfile.dockerignore` — `npm run regenerate`, part of `regenerate`.
  *
  * Docker and Buildah both look for `<dockerfile-name>.dockerignore` next to the Dockerfile before
  * falling back to the root `.dockerignore`, and use it INSTEAD, not merged with it. Hand-keeping a
@@ -62,4 +62,4 @@ const derive = (): string => {
 /** What the override should contain, derived from the root file. */
 const next = derive();
 
-writeOrCheck(TARGET, next, '.dockerignore', 'npm run docker:dockerignore');
+writeOrCheck(TARGET, next, '.dockerignore', 'npm run regenerate');

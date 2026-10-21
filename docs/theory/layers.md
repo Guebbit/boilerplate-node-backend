@@ -55,7 +55,7 @@ Two things hold that beyond what a per-file rule can see:
 - **`boundaries/no-unknown-files`** refuses a file under `src/` that belongs to no tier at all. A
   new top-level directory therefore cannot sit outside the walls unnoticed; together with the
   default above this is what makes them exhaustive instead of merely present.
-- **`npm run check:dependencies`** ([dependency-cruiser](../tools/dependency-graph.md)) asks the
+- **`npm run check`** ([dependency-cruiser](../tools/dependency-graph.md)) asks the
   transitive form of the same questions: not "does this file import mongoose" but "can this tier
   reach it at all", plus cycle detection, which no per-file rule can perform because no file in a
   cycle is doing anything wrong on its own. It is a structural check, not a behavioural one, so it

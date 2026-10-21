@@ -4,7 +4,7 @@
  * give the shop's own modules something to show.
  *
  * It only DELETES. What lists those files (the fixture table, the scenario registry, the doubles
- * registry) is generated from the tree by `npm run scenarios:generate`, and what would otherwise
+ * registry) is generated from the tree by `npm run regenerate`, and what would otherwise
  * name them (`DEFAULT_SCENARIO`, the generated client collections' example values) derives from
  * what is registered. The one exception is the seed images' avatar spread, which is edited by
  * shape — see {@link removeSeedImages}.

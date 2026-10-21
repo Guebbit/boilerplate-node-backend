@@ -39,7 +39,7 @@ const onRegistered = (modules: readonly AppModule[]): void => {
         logger.warn({
             message:
                 'webhooks: no message broker configured, so deliveries are sent by the retry sweep ' +
-                '(npm run sweep:webhook-retries, per minute) instead of at once'
+                '(npm run job sweep:webhook-retries, per minute) instead of at once'
         });
 };
 

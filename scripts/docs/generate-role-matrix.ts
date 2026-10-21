@@ -282,8 +282,7 @@ const run = async (): Promise<number> => {
             ...page,
             root: ROOT,
             checkOnly,
-            driftSubject: 'the permission model',
-            rerunScript: 'docs:roles'
+            driftSubject: 'the permission model'
         });
         worst = Math.max(worst, code);
     }

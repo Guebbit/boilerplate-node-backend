@@ -282,7 +282,7 @@ module's `tests/integration/`, and `unit-layer-stays-database-free` in
 REACH a database, so a helper that pulls one in is caught too. Confirm the unit layer is clean with:
 
 ```bash
-npm run check:dependencies
+npm run check
 ```
 
 That grep, and the incident it used to report, is the load-bearing fact behind the failure mode

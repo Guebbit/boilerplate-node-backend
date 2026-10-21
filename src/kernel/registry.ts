@@ -248,8 +248,8 @@ export interface PersonalDataSubject {
 /**
  * One scheduled job: a unit of background work cron runs on a schedule. Declared once, on the
  * module that owns the work (or in `src/app/jobs.ts` for work that belongs to no module);
- * `npm run jobs:generate` derives `docker/crontab` and the `npm run <name>` scripts from it, and
- * `scripts/ops/run-job.ts <name>` is the one runner. Deleting a module deletes its jobs with it.
+ * `npm run regenerate` derives `docker/crontab` from it, and `npm run job <name>`
+ * (`scripts/ops/run-job.ts`) is the one runner. Deleting a module deletes its jobs with it.
  *
  * See: docs/reference/ops.md#scheduled-jobs
  */
@@ -498,8 +498,8 @@ export interface AppModule {
     rateLimits?: readonly RateLimitBudget[];
 
     /**
-     * The scheduled jobs this module owns — see {@link JobDeclaration}. `npm run jobs:generate`
-     * collects every enabled module's into `docker/crontab` and the `npm run` scripts, so deleting
+     * The scheduled jobs this module owns — see {@link JobDeclaration}. `npm run regenerate`
+     * collects every enabled module's into `docker/crontab`, so deleting
      * the module deletes its schedule.
      */
     jobs?: readonly JobDeclaration[];

@@ -232,7 +232,7 @@ const compile = (scope: AsyncScope): string => {
     }
 
     /* `lineWidth: 0` because a contract line that wraps at a column is a diff nobody asked for:
-     * re-flowing prose on an unrelated edit is exactly the noise `check:contracts-bundle` would
+     * re-flowing prose on an unrelated edit is exactly the noise the bundle check in `npm run check` would
      * then report as staleness. */
     const output = marker(sections) + document_.toString({ indent: 4, lineWidth: 0 });
     compiled.set(scope, output);
@@ -258,7 +258,7 @@ export const asyncapiBundle: ContractBundle = {
  * The shared half, and the file the paired frontend holds as its `asyncapi.yaml`.
  *
  * Committed rather than produced on demand for the reason every shared document is: it is
- * hash-compared across the repos by `check:spec-identity`, and a check cannot compare a file that
+ * hash-compared across the repos by the spec-identity check, and a check cannot compare a file that
  * only exists after someone remembers to build it.
  */
 export const asyncapiPublicBundle: ContractBundle = {

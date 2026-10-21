@@ -443,7 +443,7 @@ applies — a return is the same kind of legal record. `POST /account/export` ca
 section, staff's `declineReason` included: a staff assessment of the customer is the customer's
 data under Art. 15.
 
-The free text is the exception to "kept": `npm run reap:returns` unsets `note` and `declineReason`
+The free text is the exception to "kept": `npm run job reap:returns` unsets `note` and `declineReason`
 once a return has not changed for `NODE_RETURN_TEXT_RETENTION_DAYS`; status, lines, amounts and
 dates stay. No early wipe on account erasure. The reasoning:
 [Data Retention: free text on returns](../theory/data-retention.md#free-text-on-returns).

@@ -289,7 +289,7 @@ const cleanupAfterPartialQuarantine = (
  *
  * Every refusal path (a 422, a 409, a thrown error) funnels through here, so no controller has to
  * remember to clean up after itself. A client that aborts leaves status 200 and is left to
- * `npm run reap:orphaned-images`, which also covers an upload promoted but not yet saved.
+ * `npm run job reap:orphaned-images`, which also covers an upload promoted but not yet saved.
  *
  * @param request - the request the upload was attached to
  * @param response - closes once the answer is sent (or the socket drops)

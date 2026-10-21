@@ -40,7 +40,7 @@ flowchart LR
     subgraph E["what makes it hold"]
         direction TB
         B["index.ts — no barrel, no import"]
-        EL["eslint-plugin-boundaries · check:dependencies"]
+        EL["eslint-plugin-boundaries · npm run check"]
         G["glossary.md"]
     end
     F --> B
@@ -91,7 +91,7 @@ return path an import graph alone cannot show.
 
 Two places, on purpose, for two different questions. **Which** siblings a module may reach lives in
 its own `module.yaml#dependsOn` — a plain array of names, one per module folder, read by
-`.dependency-cruiser.cjs` and enforced as the allow-list behind `check:dependencies`. **What kind**
+`.dependency-cruiser.cjs` and enforced as the allow-list behind `npm run check`. **What kind**
 of reach each edge is, and why it exists, stays in prose: a `# why` comment beside each edge in
 `module.yaml`, the `module.ts` docblock for what crosses and what is deliberately not in the import
 graph, and the kind label itself on the module pages
@@ -103,7 +103,7 @@ would read it at runtime and nothing would enforce it, and it would duplicate th
 this table already classifies.
 
 `module.yaml#dependsOn` carries the edge, and `.dependency-cruiser.cjs` reads it directly as the rule
-it enforces — an import outside a module's own `dependsOn` fails `check:dependencies`, the same gate
+it enforces — an import outside a module's own `dependsOn` fails `npm run check`, the same gate
 CI runs. There is no second copy to drift: the file the config reads IS the map. Which of the four
 kinds (`conformist`, `customer-supplier`, `published-language`, `shared-kernel`) an edge is lives
 in prose, not in a label a script reads: `module.yaml` answers "may it", the comment and the module
@@ -191,7 +191,7 @@ that table.
 
 This table keeps the definitions; the values themselves live on each module's own
 `module.yaml#subdomain` and are read from there into the generated map at `docs/modules/index.md`
-(`npm run docs:graph`) — so the table above is illustrative, not the source of truth for any one
+(`npm run regenerate`) — so the table above is illustrative, not the source of truth for any one
 module's label. `tests/cross-cutting/module-descriptors.test.ts` only holds `subdomain` to being one
 of the three names; it does not check that a classification stays HONEST (nothing stops every module
 drifting to `core`). Placing the value with

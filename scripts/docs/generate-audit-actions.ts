@@ -185,8 +185,7 @@ const main = async (): Promise<void> => {
         blocks: [{ start: START, end: END, body: actionTable(rows) }],
         label: 'audit-actions',
         checkOnly,
-        driftSubject: 'the audit vocabulary',
-        rerunScript: 'docs:audit-actions'
+        driftSubject: 'the audit vocabulary'
     });
 };
 

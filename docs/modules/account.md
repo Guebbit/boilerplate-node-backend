@@ -54,7 +54,7 @@ record belongs to [`users`](./users.md) and is reached through that module's bar
 book lives in its own module, [`addresses`](./addresses.md) — see that page for why.
 
 An account nobody has used in a long time — no login, no API-key use — is a live account with
-less and less live purpose. `npm run reap:inactive-accounts` (`docker/crontab`, nightly) handles it
+less and less live purpose. `npm run job reap:inactive-accounts` (`docker/crontab`, nightly) handles it
 in two independent steps:
 
 - **Minimise**, on by default (`NODE_INACTIVE_MINIMISE_DAYS`, 1095): runs the `personalData.minimise`

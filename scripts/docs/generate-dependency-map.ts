@@ -313,8 +313,7 @@ const apply = async (): Promise<number> => {
         ],
         label: 'dependency-map',
         checkOnly,
-        driftSubject: 'package.json and the source tree',
-        rerunScript: 'docs:dependencies'
+        driftSubject: 'package.json and the source tree'
     });
 };
 

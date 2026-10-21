@@ -33,7 +33,7 @@ Two ways to stay signed in, picked per deployment (`GET /account/session-config`
 Expired sessions and one-time tokens need no sweep: each row carries its own expiry date and the
 database deletes it. The one nightly job here, `reap:previous-emails`
 (`services/previous-email-cleanup.ts`), forgets the previous address of an account whose undo link
-has lapsed. There is no endpoint for it: a manual run is `npm run reap:previous-emails`.
+has lapsed. There is no endpoint for it: a manual run is `npm run job reap:previous-emails`.
 
 ## Products
 

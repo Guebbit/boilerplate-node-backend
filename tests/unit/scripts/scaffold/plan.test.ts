@@ -147,7 +147,7 @@ describe('the generated declarations', () => {
         );
     });
 
-    it('keeps the docs page graph markers `docs:graph` fills', () => {
+    it('keeps the docs page graph markers `regenerate` fills', () => {
         const page = contentOf(OPTIONS, 'docs/modules/field-notes.md');
 
         expect(page).toContain('<!-- module-graph:field-notes:start -->');

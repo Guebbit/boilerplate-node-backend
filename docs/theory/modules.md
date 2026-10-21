@@ -373,7 +373,7 @@ column, and the manifest entry, to drop it.
 | Translatable fields        | the `locales` port's methods on `repository.ts`                             | `translatables`                        | the title, per language                                           |
 | An uploaded image          | `services/cover.ts`, `controllers/put-example-cover.ts`, the route and path | `imageTargets`                         | a cover image                                                     |
 | A typed setting            | `config.ts`                                                                 | `config`                               | the longest body an example may have                              |
-| Demo records               | `scenarios/example.ts`, found by `npm run scenarios:generate`               | (the scenario table)                   | a few seeded examples for the demo profile                        |
+| Demo records               | `scenarios/example.ts`, found by `npm run regenerate`                       | (the scenario table)                   | a few seeded examples for the demo profile                        |
 | Metrics, probes, analytics | `metrics.ts`, `probes.ts`, `analytics.ts`                                   | (found by name, not declared)          | one counter, one probe, one event                                 |
 | Personal data              | `services/personal-data.ts`                                                 | `personalData` (`collect` and `erase`) | exports and erases the person's examples                          |
 
@@ -462,7 +462,7 @@ i18next, `subscribe` attaches the module's event handlers, `onRegistered` runs o
 known — installing a kernel port, or resolving a cross-module lookup like `locales`'
 `translatables`. That is the bar for a field being here at all. The subdomain and the `dependsOn` graph live next to
 the manifest, in the module's own `module.yaml` — one plain file, read by `.dependency-cruiser.cjs`
-as the enforced allow-list behind `check:dependencies`, not by the app at runtime — see
+as the enforced allow-list behind `npm run check`, not by the app at runtime — see
 [Strategic DDD](./strategic-ddd.md) §2 and §4. Demo data is not on the manifest either:
 `scenarios/<module>.ts` reads a module's repository and factories directly.
 

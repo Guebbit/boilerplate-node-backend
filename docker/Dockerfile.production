@@ -65,7 +65,7 @@ COPY . .
 # client and the AsyncAPI types); `ts-check` then stops the build on a type error, so an image that
 # was never checked is an image that fails in front of a user instead of in front of CI.
 #
-# Deliberately NOT `npm run build` (`ts-check && lint`): `local/comment-links` shells out to
+# Deliberately NOT lint as well: `local/comment-links` shells out to
 # `git ls-files`, and `.dockerignore` excludes `.git` from this context, so lint has no repository
 # to query here. Lint already runs in the pre-commit hook and in CI — this gate only needs to catch
 # what a type error can break at runtime, which lint cannot.

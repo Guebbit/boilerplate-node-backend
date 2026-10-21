@@ -196,7 +196,7 @@ isolated from one another. Worth measuring before changing, not assuming.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 60}}}%%
 flowchart LR
-    Change[Code or docs change] --> Build[npm run build]
+    Change[Code or docs change] --> Build[npm run ts-check + lint]
     Build --> Test[npm run test]
     Test --> Docs[npm run docs:build]
     Docs --> Review[Review + keep docs linked]
@@ -301,7 +301,7 @@ rather than a test runner.
 **Why it is not here.** They earn their place when the types **are** the product, as in a published
 library whose consumers see nothing else. This repository's public surface is `openapi.yaml`, and it
 is already defended from three sides: the contract suite exercises it over real HTTP, the generated
-zod schemas are derived from it rather than hand-written, and `check:spec-identity` proves the
+zod schemas are derived from it rather than hand-written, and the spec-identity check proves the
 frontend holds the same file byte for byte. A type-level test would be a fourth check on the
 best-guarded thing here.
 

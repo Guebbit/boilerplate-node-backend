@@ -7,7 +7,7 @@ contract.postman.json
 src/types/asyncapi.generated.ts
 
 # The REST contract. `redocly bundle` decides its layout now — 2-space, its own key order — and
-# `check:contracts-bundle` asserts the committed bytes equal a fresh run. Prettier reformatting it
+# The bundle check in `npm run check` asserts the committed bytes equal a fresh run. Prettier reformatting it
 # afterwards would make that check fail on a file nobody edited. The MODULE documents it is built
 # from are formatted as normal.
 openapi.yaml

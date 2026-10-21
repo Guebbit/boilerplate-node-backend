@@ -316,7 +316,7 @@ an inbox row, `notifications.fulfillment-delayed`.
 
 #### The daily sweep
 
-`npm run sweep:preorders` (02:20 UTC, under a lease; [scheduled jobs](../reference/ops.md#scheduled-jobs))
+`npm run job sweep:preorders` (02:20 UTC, under a lease; [scheduled jobs](../reference/ops.md#scheduled-jobs))
 does one thing, and only to fulfillment orders still `on_hold` for stock: a fulfillment order whose
 **current** `expectedAt` has passed, with no stock and no notice since, tells its buyer once: "we
 have not been able to send it, there is no new date yet, you can cancel any time". It is keyed on
@@ -567,7 +567,7 @@ subject and an apology for the earlier code, only when the code actually changed
 A shipment and a fulfillment order are the buyer's data by way of their order: `POST /account/export`
 carries a `shipments` section (lines, number, tracking, dates) and a `fulfillmentOrders` section
 (lines, dates, hold reason, **staff's hold note**): a note a person typed about a person is that
-person's data, and the record holds no staff id, so none is exported. The note is also **reaped** — `npm run reap:delivery` unsets it once the fulfillment order has not
+person's data, and the record holds no staff id, so none is exported. The note is also **reaped** — `npm run job reap:delivery` unsets it once the fulfillment order has not
 changed for `NODE_HOLD_NOTE_RETENTION_DAYS` (default 365), exactly as `reap:returns` does for a return's
 text ([why](../theory/data-retention.md#free-text-on-holds)). Lines, status and dates stay: they are the
 trail.

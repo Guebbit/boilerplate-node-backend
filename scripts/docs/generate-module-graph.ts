@@ -6,7 +6,7 @@
  *
  * Generated rather than hand-drawn: a hand-drawn graph of the modules is a published number
  * with no guard behind it — correct on the day it is written and quietly wrong after the next
- * import. `dependency-cruiser` already builds the real graph for `check:dependencies`, so the
+ * import. `dependency-cruiser` already builds the real graph for `npm run check`, so the
  * page reads it rather than restating it.
  *
  * WHAT IS SWEPT, and why each narrowing matters:
@@ -302,8 +302,7 @@ const applyTarget = ({ file, start, end, body }: Target): Promise<number> =>
         blocks: [{ start, end, body }],
         label: 'module-graph',
         checkOnly,
-        driftSubject: 'the module graph',
-        rerunScript: 'docs:graph'
+        driftSubject: 'the module graph'
     });
 
 /**

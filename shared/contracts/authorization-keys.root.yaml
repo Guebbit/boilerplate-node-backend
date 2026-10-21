@@ -1,4 +1,4 @@
-# Every permission rule and permission set that exists. Generated — `npm run authorization:bundle`
+# Every permission rule and permission set that exists. Generated — `npm run regenerate`
 # splices this file from one fragment per owning module (`src/modules/<name>/authorization.yaml`)
 # plus this root residual for the app-level `core` rules. A rule or a set is introduced in its
 # owning fragment, never in the bundle directly; `--check` (wired into `complete`) fails the build

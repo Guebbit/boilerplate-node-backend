@@ -8,8 +8,8 @@ import { REPO_ROOT } from '@tests/paths';
 
 /**
  * Guard: every scheduled job is declared once, on a module manifest or in `src/app/jobs.ts`, and
- * is well-formed. `docker/crontab` and the `npm run` scripts are generated from those declarations
- * (`npm run jobs:generate`, held by `npm run check:jobs`), so the old "two files must agree"
+ * is well-formed. `docker/crontab` and the ops jobs table are generated from those declarations
+ * (`npm run regenerate`, held by `npm run check`), so the old "two files must agree"
  * checks became "the declarations obey the rules the generators assume".
  *
  * See: docs/reference/ops.md#scheduled-jobs
@@ -57,7 +57,7 @@ describe('every scheduled job ships in the production image', () => {
         scripts: Record<string, string>;
     };
 
-    it.each(JOBS.map((job) => job.name))('%s runs the runner under scripts/ops/', (name) => {
-        expect(scripts[name]).toBe(`tsx scripts/ops/run-job.ts ${name}`);
+    it('starts every job through the runner under scripts/ops/', () => {
+        expect(scripts.job).toBe('tsx scripts/ops/run-job.ts');
     });
 });

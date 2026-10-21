@@ -77,7 +77,7 @@ library from `package.json` in the same change, once nothing else has started im
 [Libraries a module owns](./modules.md#libraries-a-module-owns).
 
 A module's demo records live in `scenarios/<name>.ts`, which exports a `shopModule`.
-`npm run scenarios:generate` discovers those files into `scenarios/shop-modules.generated.ts`, so
+`npm run regenerate` discovers those files into `scenarios/shop-modules.generated.ts`, so
 there is no hand-kept list of these four: a module need not have demo data at all, and deleting the
 file removes its entry. A `shopModules` key naming a module `enabledModules` does not mount is a
 compile error (`ShopModulesAreMounted` in `scenarios/check.ts`). What the API
@@ -185,9 +185,9 @@ them. Wherever the file format allows a comment, that line carries:
 ```
 
 A module's scheduled jobs are the exception to the exception: they are declared on its manifest
-(`jobs`), and `npm run jobs:generate` writes `docker/crontab` and the `reap:*`/`sweep:*` npm scripts
+(`jobs`), and `npm run regenerate` writes `docker/crontab`
 from them, so there is no line to remember to delete. `tests/cross-cutting/scheduled-jobs.test.ts`
-holds the declarations to their rules, and `npm run check:jobs` holds the generated files to them.
+holds the declarations to their rules, and `npm run check` holds the generated files to them.
 See `sweep:webhook-retries` (`src/modules/webhooks/jobs.ts`) for the pattern.
 
 The manifest is the whole contract between the domain and the application:
@@ -254,7 +254,7 @@ Write `openapi.yaml`; its paths and tags reach the root contract by themselves
 it only chooses where the paths sit; without one the module is appended alphabetically. The same
 goes for `MODULE_ASYNC_ORDER` if you wrote a top-level `asyncapi.yaml` (not `asyncapi.internal.yaml`
 — see below). An `analytics.ts` needs no entry anywhere — the name is swept off disk. A
-`scenarios/<name>.ts`, if the domain has demo data, is found by `npm run scenarios:generate`, which
+`scenarios/<name>.ts`, if the domain has demo data, is found by `npm run regenerate`, which
 writes `scenarios/shop-modules.generated.ts` — the rows themselves are produced by seeding the
 catalogue and driving the real endpoints at boot, not assembled from a committed list.
 
@@ -322,7 +322,7 @@ down.
 and run the identity gate on both sides:
 
 ```bash
-npm run check:spec-identity
+npm run check
 ```
 
 A red `spec-identity` after adding a domain is **correct** — it is the gate saying the frontend has
@@ -487,7 +487,7 @@ Neither repo owns them alone, so both procedures end the same way:
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 40}}}%%
 flowchart LR
     BE["backend<br/><i>fragments → bundle</i>"] -->|copy| FE["frontend"]
-    FE -.->|"check:spec-identity"| GATE{"identical?"}
+    FE -.->|"spec-identity check"| GATE{"identical?"}
     BE -.-> GATE
     GATE -->|no| RED["FORKED — red on both sides"]
     classDef n fill:#dbeafe,stroke:#2563eb,color:#111827;

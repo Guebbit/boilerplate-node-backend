@@ -44,33 +44,27 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 
 ## Validation scripts
 
-| Script                            | Job                                                                                                                                           | Read more                                 |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `ts-check`                        | TypeScript no-emit type check                                                                                                                 | [Testing & Docs](./testing-and-docs.md)   |
-| `lint` / `lint:fix`               | ESLint check or autofix                                                                                                                       | [Testing & Docs](./testing-and-docs.md)   |
-| `prettier:check` / `prettier:fix` | format inspect or rewrite                                                                                                                     | [Testing & Docs](./testing-and-docs.md)   |
-| `build`                           | `ts-check` + `lint` composite gate                                                                                                            | [Testing & Docs](./testing-and-docs.md)   |
-| `check:spec-identity`             | compare the shared contract files against the paired frontend; skips when it is not on disk, fatal under CI                                   | [Testing & Docs](./testing-and-docs.md)   |
-| `check:dependencies`              | fail on a cycle, or on a tier that can REACH something it may not import — the transitive half of the walls, which ESLint cannot see          | [Dependency Graph](./dependency-graph.md) |
-| `complete`                        | the gate: build + lint + both spec lints + prettier:check + every contract check + tests                                                      | [Testing & Docs](./testing-and-docs.md)   |
-| `complete:fix`                    | the same gate, with lint and formatting fixed rather than reported                                                                            | [Testing & Docs](./testing-and-docs.md)   |
-| `test:cluster`                    | boots `src/cluster.ts` with real forked workers and asserts one rate-limit budget across them; needs a Redis                                  | [Cluster Testing](./cluster-testing.md)   |
-| `test:broker`                     | runs the queue adapter against a real RabbitMQ: topology, retry, parking, priority, prefetch, reconnect; needs a broker or a container engine | [Broker Testing](./broker-testing.md)     |
-| `complete:light:gates`            | `complete:light` minus lint and prettier, which the hook runs on staged files only via lint-staged                                            | [Testing & Docs](./testing-and-docs.md)   |
-| `complete:light`                  | the fast subset behind pre-commit: every static check + the unit and cross-cutting suites; nothing that needs `mongod`, no `docs:build`       | [Testing & Docs](./testing-and-docs.md)   |
-| `complete:manual`                 | what the gate cannot run for you: `test:prism`, `test:cluster` and `test:broker`, which bind real ports                                       | [Testing & Docs](./testing-and-docs.md)   |
-| `bench` / `bench:search`          | autocannon against a RUNNING server; reports latency numbers, has no pass/fail — which is why it is not `test:`                               | [Load Testing](./load-testing.md)         |
-| `bench:orders`                    | autocannon against `/orders` — the endpoint that embeds snapshots and derives totals                                                          | [Quick Start](./testing-quickstart.md)    |
-| `bench:inventory`                 | autocannon against `/inventory/levels`                                                                                                        | [Quick Start](./testing-quickstart.md)    |
-| `bench:k6`                        | ramping load over several endpoints, with thresholds — passes or fails rather than reporting. Runs `grafana/k6` through `CONTAINER_ENGINE`    | [Load Testing](./load-testing.md)         |
-| `bench:k6:checkout`               | the write path under contention: login, cart, checkout. **Writes** — throwaway database only                                                  | [Load Testing](./load-testing.md)         |
+| Script                            | Job                                                                                                                                                        | Read more                               |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `ts-check`                        | TypeScript no-emit type check                                                                                                                              | [Testing & Docs](./testing-and-docs.md) |
+| `lint` / `lint:fix`               | ESLint check or autofix                                                                                                                                    | [Testing & Docs](./testing-and-docs.md) |
+| `prettier:check` / `prettier:fix` | format inspect or rewrite                                                                                                                                  | [Testing & Docs](./testing-and-docs.md) |
+| `check`                           | every non-lint check in one run: generated files current, AsyncAPI breaking changes, spec identity with the frontend, doc references, the dependency graph | [Testing & Docs](./testing-and-docs.md) |
+| `complete`                        | the gate: ts-check + lint + both spec lints + prettier:check + `check` + tests                                                                             | [Testing & Docs](./testing-and-docs.md) |
+| `complete:fix`                    | the same gate, with lint and formatting fixed rather than reported                                                                                         | [Testing & Docs](./testing-and-docs.md) |
+| `test:cluster`                    | boots `src/cluster.ts` with real forked workers and asserts one rate-limit budget across them; needs a Redis                                               | [Cluster Testing](./cluster-testing.md) |
+| `test:broker`                     | runs the queue adapter against a real RabbitMQ: topology, retry, parking, priority, prefetch, reconnect; needs a broker or a container engine              | [Broker Testing](./broker-testing.md)   |
+| `complete:light:gates`            | `complete:light` minus lint and prettier, which the hook runs on staged files only via lint-staged                                                         | [Testing & Docs](./testing-and-docs.md) |
+| `complete:light`                  | the fast subset behind pre-commit: every static check + the unit and cross-cutting suites; nothing that needs `mongod`, no `docs:build`                    | [Testing & Docs](./testing-and-docs.md) |
+| `complete:manual`                 | what the gate cannot run for you: `test:prism`, `test:cluster` and `test:broker`, which bind real ports                                                    | [Testing & Docs](./testing-and-docs.md) |
+| `bench` / `bench:search`          | autocannon against a RUNNING server — `bench /orders` names the path, `/products` by default; reports numbers, no pass/fail                                | [Load Testing](./load-testing.md)       |
+| `bench:k6`                        | ramping load with thresholds — passes or fails. `bench:k6 checkout` runs the write path (throwaway database only); `browse` by default                     | [Load Testing](./load-testing.md)       |
 
 ## Test scripts
 
 | Script               | Job                                                                                                                                            | Read more                                                  |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `test`               | run unit, cross-cutting, integration, contract, then fuzz                                                                                      | [Testing & Docs](./testing-and-docs.md)                    |
-| `test:module`        | one module's suites, every layer it owns — `-- src/modules/<name>`; serialised because contract and integration share a database               | [Quick Start](./testing-quickstart.md)                     |
 | `test:unit:report`   | the unit and cross-cutting runs again, writing `tmp/reports/test-report.json` for the reader below                                             | [Quick Start](./testing-quickstart.md)                     |
 | `test:report`        | per-module rollup, slowest suites, failures named by module                                                                                    | [Quick Start](./testing-quickstart.md)                     |
 | `test:unit`          | `tests/unit` plus each module's own `tests/unit` — logic below HTTP                                                                            | [Testing & Docs](./testing-and-docs.md)                    |
@@ -103,23 +97,18 @@ Two stages, and they run in this order: **bundle** the committed documents from 
 fragments, then **generate** code from the bundles. Full cheat sheet in [Regenerating After a
 Change](../api/regenerating.md).
 
-| Script                       | Stage    | Job                                                                                                                                     | Read more                                                  |
-| ---------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `authorization:bundle`       | bundle   | `shared/authorization-keys.yaml` from one fragment per module; `regenerate` runs it first                                               |
-| `contracts:bundle`           | bundle   | rebuild the authored bundles (`openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`) from their fragments; name a target to narrow it | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `check:contracts-bundle`     | verify   | fail if a bundle is stale or a collection is out of date — the CI/`--check` twin                                                        | [Regenerating](../api/regenerating.md)                     |
-| `check:authorization-bundle` | verify   | fail if `shared/authorization-keys.yaml` is stale against its fragments                                                                 | [Regenerating](../api/regenerating.md)                     |
-| `check:asyncapi-breaking`    | verify   | fail if `asyncapi.public.yaml` drops or narrows something a subscriber relies on, diffed against `origin/main`                          | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `check:spec-identity`        | verify   | fail if the paired frontend holds different bytes of a shared document                                                                  | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `gen:permission-actions`     | generate | `api/permission-actions.ts` from `shared/authorization-keys.yaml`; `regenerate` runs it before the first bundle                         | [Permission Actions](permission-actions.md)                |
-| `gen:api`                    | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval, plus the error codes and the permission actions      | [OpenAPI Workflow](../api/openapi-workflow.md)             |
-| `gen:asyncapi`               | generate | regenerate `src/types/asyncapi.generated.ts` from `asyncapi.yaml`                                                                       | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `lint:openapi`               | verify   | lint the bundled `openapi.yaml` with Spectral                                                                                           | [OpenAPI Workflow](../api/openapi-workflow.md)             |
-| `lint:openapi:modules`       | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `shared/contracts/spectral.modules.yaml`                                 | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `lint:asyncapi`              | verify   | validate both bundles — `asyncapi.yaml` and `asyncapi.public.yaml`                                                                      | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `lint:asyncapi:modules`      | verify   | the same for each section document, against `shared/contracts/spectral.asyncapi.modules.yaml`                                           | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `sync:frontend`              | generate | copy the shared documents into the paired frontend checkout, so `check:spec-identity` can go green                                      | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `regenerate`                 | generate | every generator above, in dependency order, then the sync — the one command to run after changing a generator input                     | [Regenerating After a Change](../api/regenerating.md)      |
+| Script                   | Stage    | Job                                                                                                                                     | Read more                                                  |
+| ------------------------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `contracts:bundle`       | bundle   | rebuild the authored bundles (`openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`) from their fragments; name a target to narrow it | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `gen:permission-actions` | generate | `api/permission-actions.ts` from `shared/authorization-keys.yaml`; `regenerate` runs it before the first bundle                         | [Permission Actions](permission-actions.md)                |
+| `gen:api`                | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval, plus the error codes and the permission actions      | [OpenAPI Workflow](../api/openapi-workflow.md)             |
+| `gen:asyncapi`           | generate | regenerate `src/types/asyncapi.generated.ts` from `asyncapi.yaml`                                                                       | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `lint:openapi`           | verify   | lint the bundled `openapi.yaml` with Spectral                                                                                           | [OpenAPI Workflow](../api/openapi-workflow.md)             |
+| `lint:openapi:modules`   | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `shared/contracts/spectral.modules.yaml`                                 | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `lint:asyncapi`          | verify   | validate both bundles — `asyncapi.yaml` and `asyncapi.public.yaml`                                                                      | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `lint:asyncapi:modules`  | verify   | the same for each section document, against `shared/contracts/spectral.asyncapi.modules.yaml`                                           | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `sync:frontend`          | generate | copy the shared documents into the paired frontend checkout, so the spec-identity check can go green                                    | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `regenerate`             | generate | every generator, in dependency order, then the sync — the one command to run after changing a generator input; `-- --check` verifies    | [Regenerating After a Change](../api/regenerating.md)      |
 
 The `:modules` pair exists because each module's contract is a valid document on its own, so it can
 be linted where it is written rather than only after bundling.
@@ -141,21 +130,13 @@ for exactly which is which.
 
 ## Docs scripts
 
-| Script                                            | Job                                                                                                                   | Read more                                         |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `docs:dev` / `docs:build` / `docs:preview`        | local docs authoring, production build, and preview                                                                   | [Testing & Docs](./testing-and-docs.md)           |
-| `docs:graph` / `check:docs-graph`                 | the module graph in `docs/modules/`, from the real import graph                                                       | [Reference: Scripts](../reference/scripts.md)     |
-| `docs:roles` / `check:docs-roles`                 | the effective role matrix in `docs/demo-ecommerce/`                                                                   | [Reference: Scripts](../reference/scripts.md)     |
-| `docs:dependencies` / `check:docs-dependencies`   | the two tables in [Package Dependencies](./package-dependencies.md), from `package.json` and who imports each package | [Package Dependencies](./package-dependencies.md) |
-| `docs:rate-limits` / `check:docs-rate-limits`     | the rate-limit budget table in [Security](./security.md), from every module's manifest                                | [Reference: Scripts](../reference/scripts.md)     |
-| `docs:audit-actions` / `check:docs-audit-actions` | the audit action table in [Winston](./winston.md), from every module's `audit.ts`                                     | [Winston](./winston.md)                           |
-| `check:docs-references`                           | fail when an inline code span in `docs/` names a file that does not exist                                             | [Reference: Scripts](../reference/scripts.md)     |
+| Script                                     | Job                                                 | Read more                               |
+| ------------------------------------------ | --------------------------------------------------- | --------------------------------------- |
+| `docs:dev` / `docs:build` / `docs:preview` | local docs authoring, production build, and preview | [Testing & Docs](./testing-and-docs.md) |
 
-## Docker scripts
-
-| Script                                              | Job                                                                              | Read more                                     |
-| --------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------- |
-| `docker:dockerignore` / `check:docker-dockerignore` | `docker/Dockerfile.dockerignore`, from the root `.dockerignore` (`.git` kept IN) | [Reference: Scripts](../reference/scripts.md) |
+The generated tables in `docs/` — the module graph, the role matrix, the dependency map, the
+rate-limit budgets, the audit actions, the jobs — have no script of their own: `regenerate` writes
+them and `check` verifies them. The list is in [Reference: Scripts](../reference/scripts.md).
 
 ## Database & seed scripts
 
@@ -203,7 +184,7 @@ hostname-redirecting script appears.
 
 ## Container scripts
 
-Five verbs, either engine. Use them instead of a bare `compose up`: they pass the runtime's
+Four verbs, either engine. Use them instead of a bare `compose up`: they pass the runtime's
 Promtail override with `-f`, which is what gives Promtail a host log path to tail.
 
 | Script            | Job                                                                                                                                                                 | Read more                                                 |
@@ -212,10 +193,9 @@ Promtail override with `-f`, which is what gives Promtail a host log path to tai
 | `compose:up:full` | start it with the `observability`, `analytics` and `docs` profiles                                                                                                  | [Docker & Podman](./docker-and-podman.md)                 |
 | `compose:restart` | restart the compose stack                                                                                                                                           | [Docker & Podman](./docker-and-podman.md)                 |
 | `compose:rebuild` | rebuild images and restart the stack                                                                                                                                | [Docker & Podman](./docker-and-podman.md)                 |
-| `compose:kill`    | force-stop this project's compose containers                                                                                                                        | [Docker & Podman](./docker-and-podman.md)                 |
 | `deploy:drill`    | deploy a good image, a broken one (refused, the first comes back) and a second good one, then `--rollback`, on the real production compose (needs Docker or Podman) | [Deploy and rollback](./deploy-and-rollback.md#the-drill) |
 | `backup:drill`    | build the backup image, back up a real replica-set Mongo, restore it, and prove the second machine refuses a delete (needs Docker; CI runs it)                      | [Backups](./backups.md#the-restore-drill)                 |
-| `compose`         | the bare compose invocation the three share; call it directly for one-off subcommands                                                                               | [Docker & Podman](./docker-and-podman.md)                 |
+| `compose`         | the bare compose invocation the others share; call it directly for one-off subcommands                                                                              | [Docker & Podman](./docker-and-podman.md)                 |
 
 ```bash
 npm run compose -- logs -f app                   # any compose subcommand
@@ -236,15 +216,14 @@ live in `.env` and this one cannot.
 | `scaffold:module`    | generate a new module's skeleton                                                                              | [Module scaffolder](./module-scaffolder.md)                                                      |
 | `demo:remove`        | strip the `shop` and `example` modules and the demo scenarios from THIS checkout, to start a real project     | [Getting started: new project](../getting-started-new-project.md)                                |
 | `measure:demo-strip` | the measuring twin: run the strip in a scratch copy and run the gate on the result (CI: `demo-strip-measure`) | [Getting started: new project](../getting-started-new-project.md)                                |
-| `update:all`         | bump dependency ranges with `npm-check-updates`                                                               | [Package Dependencies](./package-dependencies.md)                                                |
 | `postinstall`        | npm lifecycle hook — rebuilds `openapi.yaml`/`api/`/`asyncapi.generated.ts` after `npm install`/`npm ci`      | [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed) |
 | `prepare`            | npm lifecycle hook — installs the husky hooks after `npm install`                                             | not run by hand                                                                                  |
 
 ## Periodic jobs
 
-`reap:*` (retention deletes) and `sweep:*` (retry and repair loops) are the entry points the
-production crontab runs; `reencrypt` is run by hand against a deployment. Each is a script under
-`scripts/ops/`; the schedule table and what each one deletes live in
+`npm run job <name>` runs one scheduled job: `reap:*` (retention deletes) and `sweep:*` (retry and
+repair loops), the names the production crontab uses. With no name it lists them. `reencrypt` is
+run by hand against a deployment. The schedule table and what each one deletes live in
 [Ops](../reference/ops.md).
 
 ## Related pages

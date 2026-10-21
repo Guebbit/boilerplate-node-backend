@@ -63,14 +63,14 @@ flowchart LR
 ```
 
 Verify a link before shipping it. `npm run docs:build` fails on a dead link between two pages, and
-`npm run check:docs-references` fails on a dead file path (and a `#anchor` on a tracked page)
+`npm run check` fails on a dead file path (and a `#anchor` on a tracked page)
 named in an inline code span.
 
 ```bash
-npm run check:docs-references
+npm run check
 ```
 
-### What `check:docs-references` sweeps {#what-check-docs-references-sweeps}
+### What the docs-references check sweeps {#what-check-docs-references-sweeps}
 
 `docs:build` already refuses a dead LINK between two pages. Nothing else refuses a dead FACT: a
 page naming a top-level routes folder in a repo that is organised by module reads as current
@@ -121,7 +121,7 @@ passing a check. Judgement stays with whoever writes the page.
 
 ## Where to go next
 
-| You want to                            | Read                            |
-| -------------------------------------- | ------------------------------- |
-| See the file glossary these docs index | [File Glossary](./)             |
-| Check the file paths the docs name     | `npm run check:docs-references` |
+| You want to                            | Read                |
+| -------------------------------------- | ------------------- |
+| See the file glossary these docs index | [File Glossary](./) |
+| Check the file paths the docs name     | `npm run check`     |

@@ -155,7 +155,7 @@ when money actually moved.
 Each account reads back only its own orders; writing and soft-deleting is admin-only, and an order can be soft-deleted (hidden) only once it is `cancelled`. The
 `userId: 1, deletedAt: 1` index is what makes both of those cheap at once.
 
-Two scheduled jobs via `docker/crontab`. `npm run reap:orders`, nightly, replaces an order's
+Two scheduled jobs via `docker/crontab`. `npm run job reap:orders`, nightly, replaces an order's
 remaining PII (email, shipping name/phone/street, notes) with placeholders once
 `NODE_ORDER_PII_RETENTION_DAYS` has passed from the order's OWN `createdAt` — due at `createdAt`
 plus that many days, or at once when account erasure or inactivity minimisation comes later; a
@@ -457,7 +457,7 @@ outlive the original. The one free text `orders` owns is an override's reason (`
 
 - Rows live as long as the order, and go with it on a hard delete.
 - `text` has its own clock, `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`, counted from the row's own
-  instant and swept by `npm run reap:orders`. The order's clock starts only at erasure or
+  instant and swept by `npm run job reap:orders`. The order's clock starts only at erasure or
   inactivity, so a live customer's text would otherwise never go. The row stays.
 - An erased account loses its name on every row it made (`actor` unset), staff or buyer.
 - The buyer's data export (`orderTimeline` section of `POST /account/export`) carries every row of

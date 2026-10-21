@@ -227,8 +227,8 @@ run scenario:apply -- blank` seeds it against a real database exactly like `shop
 
 ### The scenario registries are generated
 
-Nothing central lists the shop. Each file declares what it is, and `npm run scenarios:generate`
-(a step of `npm run regenerate`, held by `npm run check:scenarios`) collects them:
+Nothing central lists the shop. Each file declares what it is, and `npm run regenerate`
+(a step of `npm run regenerate`, held by `npm run check`) collects them:
 
 | File                                             | Export             | Collected into                                      |
 | ------------------------------------------------ | ------------------ | --------------------------------------------------- |
@@ -240,7 +240,7 @@ Nothing central lists the shop. Each file declares what it is, and `npm run scen
 ```mermaid
 flowchart LR
     Strip["demo:remove<br/>deletes files only"] --> Gone["scenarios/shop.scenario.ts<br/>scenarios/products.ts<br/>scenarios/values/products.ts ..."]
-    Gone --> Gen["npm run scenarios:generate"]
+    Gone --> Gen["npm run regenerate"]
     Gen --> Reg["shop-modules.generated.ts<br/>scenarios.generated.ts<br/>modules.generated.ts"]
     Reg --> Index["scenarios/index.ts<br/>SCENARIOS = shop? + blank"]
     Index --> Default["DEFAULT_SCENARIO<br/>shop if registered, else blank"]

@@ -1,5 +1,5 @@
 /*
- * The clean-checkout bootstrap guard — `npm run check:dependencies`.
+ * The clean-checkout bootstrap guard — `npm run check`.
  *
  * `postinstall` runs `contracts:bundle` BEFORE `gen:api` and `gen:asyncapi`. On a clean checkout
  * `api/` and `src/types/asyncapi.generated.ts` do not exist yet, so the bundler dies with

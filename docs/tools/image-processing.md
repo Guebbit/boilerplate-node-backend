@@ -164,10 +164,10 @@ a record with no image at all, which has no `imageUrl` and is drawn with the fro
 
 ## Maintenance
 
-- **`npm run reap:quarantine`** — deletes quarantine files older than
+- **`npm run job reap:quarantine`** — deletes quarantine files older than
   `NODE_QUARANTINE_RETENTION_HOURS`. Meant to run periodically (cron, a scheduled container task);
   a normal run of the pipeline never leaves a file behind for it to find.
-- **`npm run reap:orphaned-images`** — deletes a promoted image or thumbnail no current document
+- **`npm run job reap:orphaned-images`** — deletes a promoted image or thumbnail no current document
   references and that is over an hour old. Scheduled nightly. Two things leave orphans: a refused
   upload whose request died before the close hook ran (a refused one is deleted by that hook, see
   below), and a repeated `npm run demo`/e2e cycle that reseeds an EPHEMERAL Mongo under files on a

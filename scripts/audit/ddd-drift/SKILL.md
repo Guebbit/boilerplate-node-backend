@@ -131,6 +131,6 @@ worth saying.
 - DELIBERATE needs the sentence that argues for the shape. Without one, it is drift.
 - Prefer three real drifts over thirty maybes. A report full of guesses trains its reader to skip it.
 - The generated regions of `docs/modules/*.md` (between the `module-graph:*` and `module-list` markers)
-  are rewritten by `npm run docs:graph`. Judge them, but name the source of a wrong one, not the region.
+  are rewritten by `npm run regenerate`. Judge them, but name the source of a wrong one, not the region.
 - `tmp/reports/` is gitignored. The report is working evidence, not a deliverable — its conclusions
   belong in a fixed doc, a commit message or a tracked issue.

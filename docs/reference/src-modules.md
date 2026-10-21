@@ -81,12 +81,12 @@ Present when the domain needs it. A module that has none of these is not incompl
 | `src/modules/*/presenter.ts`       | The one place a stored document becomes the contract's shape, so every read path agrees rather than casting `.toJSON()` in each.                                             | [Request Flow](../theory/request-flow.md)                                             |
 | `src/modules/*/rate-limits.ts`     | This module's rate-limit budgets as data (`RateLimitBudget`, declared on `module.ts`'s `rateLimits`), turned into middleware by `buildRateLimiter`.                          | [Security](../tools/security.md#the-rate-limit-budgets)                               |
 | `src/modules/*/pii.ts`             | Field-level encryption of the personal text this module stores (`addresses`, `invoicing`, `orders`), under the shared `NODE_PII_ENCRYPTION_KEY` ring.                        | [Data protection](../theory/data-protection.md)                                       |
-| `src/modules/*/authorization.yaml` | The permission rules and sets this module defines. `npm run authorization:bundle` assembles them into `shared/authorization-keys.yaml`.                                      | [Authorization](../theory/authorization.md)                                           |
+| `src/modules/*/authorization.yaml` | The permission rules and sets this module defines. `npm run regenerate` assembles them into `shared/authorization-keys.yaml`.                                                | [Authorization](../theory/authorization.md)                                           |
 | `src/modules/*/asyncapi.yaml`      | This module's slice of the realtime contract, bundled into the root `asyncapi.yaml` the same way the REST fragments are.                                                     | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                                      |
 
 ::: tip A module's seed records are not in this folder
 `scenarios/<name>.ts`, outside `src/` entirely, upserted through the shared seeding primitive and
-collected from disk by `npm run scenarios:generate` into `scenarios/shop-modules.generated.ts` — what `npm run scenario:apply` and the demo profile put in the
+collected from disk by `npm run regenerate` into `scenarios/shop-modules.generated.ts` — what `npm run scenario:apply` and the demo profile put in the
 database. See [Data](./data.md) and [Demo profile](../tools/demo-profile.md).
 :::
 

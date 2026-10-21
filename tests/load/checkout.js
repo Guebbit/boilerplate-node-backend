@@ -21,7 +21,7 @@
  * than reads and their ceiling is set higher here for that reason, not because they matter less.
  *
  * Usage:
- *   BASE_URL=http://localhost:3000 npm run bench:k6:checkout
+ *   BASE_URL=http://localhost:3000 npm run bench:k6 checkout
  */
 import http from 'k6/http';
 import { check, group } from 'k6';

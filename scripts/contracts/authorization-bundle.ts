@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * `shared/authorization-keys.yaml`, assembled from one fragment per module plus a root residual
- * file for the app-level rules — `npm run authorization:bundle`.
+ * file for the app-level rules — `npm run regenerate`.
  *
  * Each rule and set is defined in its own module's `authorization.yaml`, so a module's rules
  * never outlive its own deletion — a fact about this bundle (it reads only fragments that exist),
@@ -137,9 +137,4 @@ export const assembleAuthorizationKeys = (): string => {
 };
 
 /** The bundle as the fragments say it should read: written, or under `--check` compared. */
-writeOrCheck(
-    OUTPUT_FILE,
-    assembleAuthorizationKeys(),
-    'its fragments',
-    'npm run authorization:bundle'
-);
+writeOrCheck(OUTPUT_FILE, assembleAuthorizationKeys(), 'its fragments', 'npm run regenerate');

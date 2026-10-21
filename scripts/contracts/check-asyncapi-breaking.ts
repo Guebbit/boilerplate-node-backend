@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * Fails when `asyncapi.public.yaml` — the partner-facing webhook event catalogue — drops or
- * narrows something a subscriber already depends on. `npm run check:asyncapi-breaking`.
+ * narrows something a subscriber already depends on. `npm run check`.
  *
  * Diffs the working tree's bundle against `origin/main`'s, at their merge-base: the same "what
  * would this change actually ship" comparison `scripts/mutation/run-diff.ts` uses, not the tip of
@@ -13,8 +13,8 @@
  * @asyncapi/parser first. https://github.com/asyncapi/diff#readme
  *
  * Usage:
- *   npm run check:asyncapi-breaking
- *   npm run check:asyncapi-breaking -- --base=HEAD~3
+ *   npm run check
+ *   npx tsx scripts/contracts/check-asyncapi-breaking.ts --base=HEAD~3
  */
 
 import { execFileSync } from 'node:child_process';

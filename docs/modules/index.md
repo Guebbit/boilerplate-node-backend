@@ -29,9 +29,9 @@ top to bottom: the leaves at the bottom are depended on by everyone and depend o
 what makes them safe to change last and dangerous to change carelessly.
 
 ::: tip Generated, not drawn
-The diagram and table below are produced by `npm run docs:graph`, which reads the graph
-`dependency-cruiser` already builds for `check:dependencies` — so they cannot drift from the
-imports they describe. `check:docs-graph` fails `npm run complete` when they have. Everything
+The diagram and table below are produced by `npm run regenerate`, which reads the graph
+`dependency-cruiser` already builds for `npm run check` — so they cannot drift from the
+imports they describe. `npm run check` fails `npm run complete` when they have. Everything
 outside the markers, including the warning below, is written by hand.
 :::
 
@@ -207,7 +207,7 @@ belongs to (core, supporting, generic) is the colouring of the map above, and is
 [Strategic DDD](../theory/strategic-ddd.md).
 
 ::: tip Generated, not listed
-The list below is produced by `npm run docs:graph` from each module's `module.yaml`
+The list below is produced by `npm run regenerate` from each module's `module.yaml`
 (`group`, `summary`) and the pages beside this one, the same way the sidebar is. A new module
 appears here by declaring them.
 :::

@@ -8,7 +8,7 @@ import type { ModuleNames } from './names';
 import type { ScaffoldOptions } from './options';
 
 /**
- * The module's page under docs/modules, with the graph markers `docs:graph` fills.
+ * The module's page under docs/modules, with the graph markers `regenerate` fills.
  * @param names - the module's spellings
  * @param options - the scaffold options
  * @returns the Markdown text

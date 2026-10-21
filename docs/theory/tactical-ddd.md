@@ -281,7 +281,7 @@ refunded", which is not what it says.
 Returning money on its own is a separate route, `POST /payments/order/{orderId}/refund`, because it
 is a separate act: a goodwill refund leaves the order where it is. It lives in `payments` rather
 than `orders` for a structural reason — `payments` already depends on `orders`, so an order module
-reaching back for a refund would close a cycle `check:dependencies` refuses.
+reaching back for a refund would close a cycle `npm run check` refuses.
 
 ### What is still NOT modelled
 
@@ -328,7 +328,7 @@ response cache keys on the user, so an operator's answer is never served to a cu
 moves are open and whether the order still awaits payment; `payments` says whether money can come
 back. Neither guesses at the other's half, and no new dependency edge is created — which matters,
 because `payments` already depends on `orders` and the reverse would be a cycle
-`dependency-cruiser` rejects at lint time, in `check:dependencies`.
+`dependency-cruiser` rejects at lint time, in `npm run check`.
 
 **Why `pay` appears on both.** They answer different questions. `Order.actions.pay` is "this order
 still awaits payment", which is what decides whether to offer a card form on an order with no

@@ -18,7 +18,7 @@ name: CI
 #                     `postinstall` in package.json — so there is nothing left to go stale for
 #                     them to check.
 #   - observability   alert-rules
-#   - correctness     typecheck, build, test-unit, test-integration, test-contract, cluster, broker
+#   - correctness     typecheck, test-unit, test-integration, test-contract, cluster, broker
 #   - architecture    dependency-graph, docs
 #   - container       container-gate — the same correctness gate again, but inside the image
 #                     `docker/Dockerfile` actually ships, with no services and no network
@@ -232,7 +232,7 @@ jobs:
             - name: Compare the shared contract files
               env:
                   FRONTEND_PATH: .spec-sibling
-              run: npm run check:spec-identity
+              run: npx tsx scripts/pairing/check-spec-identity.ts
 
     alert-rules:
         # The Prometheus alert rules: valid syntax (`check rules`) and the right answers
@@ -318,7 +318,7 @@ jobs:
         # there is nothing committed to diff it against; `lint-openapi` still proves it assembles.
         #
         # `Setup`'s `npm ci` already runs `postinstall`, which reassembles every bundle from its
-        # fragments before this job's own step runs. Running `check:contracts-bundle` here after
+        # fragments before this job's own step runs. Running the bundler's `--check` here after
         # that would only compare the just-rebuilt file with itself — green on every push, whether
         # or not anyone remembered to re-bundle before committing. `git diff` against what the
         # checkout actually has on disk is the real question.
@@ -371,7 +371,7 @@ jobs:
                   node-version: ${{ env.NODE_VERSION }}
 
             - name: Check for breaking changes to the public event catalogue
-              run: npm run check:asyncapi-breaking -- --base=origin/${{ github.base_ref }}
+              run: npx tsx scripts/contracts/check-asyncapi-breaking.ts --base=origin/${{ github.base_ref }}
 
     cluster:
         # The only suite that boots `src/cluster.ts` and forks real workers. It is not in
@@ -470,31 +470,28 @@ jobs:
               with:
                   node-version: ${{ env.NODE_VERSION }}
 
+            # The same three passes `npm run check` makes: the whole graph, the module walls, and
+            # the clean-checkout bootstrap guard.
+            # https://github.com/sverweij/dependency-cruiser/blob/main/doc/cli.md
             - name: Check the dependency graph
-              run: npm run check:dependencies
+              run: |
+                  npx depcruise src tests --output-type err
+                  npx depcruise src/modules --config .dependency-cruiser.modules.cjs --output-type err
+                  npx depcruise scripts/contracts/build-bundles.ts --config .dependency-cruiser.bootstrap.cjs --output-type err
 
     docs:
         # The documentation site is a build like any other: VitePress fails on a dead link between
         # pages, which is the only thing checking that the cross-references in `docs/` still
-        # resolve. `check:docs-graph` is the second half — `docs/modules/index.md` publishes the
-        # module graph, generated from the same dependency-cruiser output the job above uses, so a
-        # new cross-module import that nobody regenerated the page for fails here rather than
-        # leaving a diagram that quietly describes last month's architecture.
+        # resolve.
         #
-        # `check:docs-references` answers the third question neither of those can: a dead LINK
-        # fails the build, a stale GRAPH fails the check, but a page naming a source file that no
+        # `regenerate --check` is the second half: every generated page (the module graph, the role
+        # tables, the dependency tables, the jobs and rate-limit tables) and every other generated
+        # file is compared with a fresh run, so an edit nobody regenerated for fails here rather
+        # than leaving a page that quietly describes last month's code.
+        #
+        # `check-references.ts` answers the third question neither of those can: a dead LINK
+        # fails the build, a stale table fails the check, but a page naming a source file that no
         # longer exists reads as current to everyone who has not opened the tree.
-        #
-        # `check:docs-roles` is the same shape as `check:docs-graph`, over the permission model
-        # instead of the dependency graph: `docs/demo-ecommerce/index.md`'s role tables are
-        # generated from `holdsKey` and `shared/authorization-roles.yaml`, and a role edit that
-        # nobody regenerated the page for fails here rather than leaving a table that quietly
-        # describes a permission model the code no longer has.
-        #
-        # `check:docs-dependencies` is the same shape again, over `package.json`:
-        # `docs/tools/package-dependencies.md`'s tables are read off the manifest and the source
-        # tree's own imports, so an added, removed or re-owned dependency that nobody regenerated
-        # the page for fails here instead of leaving a page that quietly goes stale.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -510,24 +507,17 @@ jobs:
               with:
                   node-version: ${{ env.NODE_VERSION }}
 
-            - name: Check the module graph is current
-              run: npm run check:docs-graph
-
-            - name: Check the role tables are current
-              run: npm run check:docs-roles
-
-            - name: Check the dependency tables are current
-              run: npm run check:docs-dependencies
+            - name: Check every generated artifact is current
+              run: npx tsx scripts/regenerate-artifacts.ts --check
 
             - name: Check every path the docs cite still exists
-              run: npm run check:docs-references
+              run: npx tsx scripts/docs/check-references.ts
 
             - name: Build the documentation site
               run: npm run docs:build
 
     typecheck:
-        # `tsc --noEmit` — types only. `build` below repeats it as part of its own script; this
-        # job exists so a type error is reported as one, not as a build failure.
+        # `tsc --noEmit` — types only.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -545,31 +535,6 @@ jobs:
 
             - name: Type check
               run: npm run ts-check
-
-    build:
-        # Proves the project still builds from a clean checkout.
-        #
-        # `build` is `ts-check && lint`, so this overlaps the two jobs above on purpose: they report
-        # which half failed, this one proves the composite gate a developer actually runs still
-        # passes. It calls `build`, not `build-only` (an alias for `npm run lint` only, which would
-        # make the overlap total rather than partial).
-        runs-on: ubuntu-latest
-        timeout-minutes: 15
-        permissions:
-            contents: read
-        steps:
-            - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-              with:
-                  persist-credentials: false # no step after the checkout needs the token on disk
-
-            - name: Setup
-              uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
-
-            - name: Build
-              run: npm run build
 
     test-unit:
         # The fast suites, unit and cross-cutting: pure functions, services and repositories
@@ -806,9 +771,8 @@ jobs:
         # switching is a one-variable difference — the claim under test is about the image, not
         # about which engine built it.
         #
-        # It duplicates every other job here on purpose, the same reasoning `build` already
-        # documents for overlapping `typecheck`: they answer WHICH thing broke, this one answers
-        # whether the container lane still works AT ALL.
+        # It duplicates every other job here on purpose: they answer WHICH thing broke, this one
+        # answers whether the container lane still works AT ALL.
         #
         # 120 minutes: `npm run complete` is every other job's work in one container, one suite
         # after another, with two jest workers. Measured on this runner: the static checks take 3
@@ -1079,7 +1043,6 @@ jobs:
             - contracts-bundle-freshness
             - asyncapi-breaking
             - typecheck
-            - build
             - cluster
             - broker
             - dependency-graph

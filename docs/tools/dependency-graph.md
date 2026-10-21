@@ -1,6 +1,6 @@
 # Dependency graph
 
-`npm run check:dependencies` — [dependency-cruiser](https://github.com/sverweij/dependency-cruiser)
+`npm run check` — [dependency-cruiser](https://github.com/sverweij/dependency-cruiser)
 over `src/` and `tests/`, configured in `.dependency-cruiser.cjs`. Runs in `complete` and as its own CI job.
 About 1.5 seconds.
 
@@ -83,7 +83,7 @@ dependsOn:
 
 `.dependency-cruiser.cjs` reads every `module.yaml` off disk and generates one `module-coupling-<name>`
 rule per module from it — a module reaching a sibling its own file does not list fails
-`check:dependencies`, reported at the offending import. There is no second copy of the map to drift:
+`npm run check`, reported at the offending import. There is no second copy of the map to drift:
 the file a module's own docblock and `dependsOn` field describe **is** the rule the graph enforces.
 
 ```mermaid
@@ -91,7 +91,7 @@ the file a module's own docblock and `dependsOn` field describe **is** the rule 
 flowchart LR
     Y["src/modules/&lt;name&gt;/module.yaml<br/><i>dependsOn: [...]</i>"] -->|read off disk| G["dependency-cruiser config<br/><i>.dependency-cruiser.cjs</i>"]
     G -->|generates| R["module-coupling-&lt;name&gt;<br/><i>one allow-list rule per module</i>"]
-    R -->|enforced by| C["npm run check:dependencies"]
+    R -->|enforced by| C["npm run check"]
 
     classDef src fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef gen fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -117,7 +117,7 @@ the relationship _kind_ and _reasoning_ stay in `module.ts`'s docblock instead o
 
 `postinstall` bundles the contracts before it generates `api/`, so on a clean checkout the bundler
 may not reach generated code. `.dependency-cruiser.bootstrap.cjs`, the third cruise in
-`check:dependencies`, starts at `scripts/contracts/build-bundles.ts` and fails if its static imports
+`npm run check`, starts at `scripts/contracts/build-bundles.ts` and fails if its static imports
 reach `api/` (bar `api/permission-actions.ts`, built first on purpose) or
 `src/types/asyncapi.generated.ts`.
 
@@ -133,7 +133,7 @@ initialise it, as an `undefined is not a function` at boot, far from either file
 can see one, because no file in a cycle is doing anything wrong on its own — the failure is a
 property of the two modules together, not of either one alone.
 
-`.dependency-cruiser.modules.cjs`, wired into the same `check:dependencies` script, is the rule
+`.dependency-cruiser.modules.cjs`, wired into the same `npm run check` script, is the rule
 that DOES see it: `scope: 'folder'` aggregates every file into its `src/modules/<name>` folder
 first, then runs cycle detection over the folders — so two modules that reach each other through
 different files, several hops apart, still fail here even though no single file-level rule in

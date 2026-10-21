@@ -7,7 +7,7 @@
 # `debian12` binary, so both resolve — took trixie since it's newer and it resolves.
 #
 # Node 24: `node --version` here has to satisfy every devDependency this image actually runs, and
-# `dependency-cruiser` (`npm run check:dependencies`, part of `npm run complete`) hard-exits on
+# `dependency-cruiser` (`npm run check`, part of `npm run complete`) hard-exits on
 # Node 25 — its `engines` field is `^22||^24||>=26`, deliberately skipping Current/non-LTS lines.
 # 24 is Active LTS, and CI (`NODE_VERSION` in `.github/workflows/ci.yml`) and
 # `docker/Dockerfile.production` both match it now.

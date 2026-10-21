@@ -71,7 +71,7 @@ const seedExampleCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(exampleFixtures.map((fixture) => insertIfAbsent(exampleRepository, fixture)));
 
 /**
- * This module's entry in the `shop` fixture table. Picked up by `npm run scenarios:generate`
+ * This module's entry in the `shop` fixture table. Picked up by `npm run regenerate`
  * (`scenarios/shop-modules.generated.ts`), so deleting this file deletes the entry.
  */
 export const shopModule = { seed: seedExampleCollection };

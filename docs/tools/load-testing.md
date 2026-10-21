@@ -8,15 +8,18 @@ actually experienced.
 
 `autocannon` is a devDependency. Nothing about load testing ships in the server.
 
-## k6 (`bench:k6`, `bench:k6:checkout`) runs in a container, not on the host
+## k6 (`bench:k6`) runs in a container, not on the host
 
 Unlike `autocannon`, [k6](https://k6.io/) has no npm package — it is a Go binary nobody installs by
-hand, and this repo does not ask you to. `bench:k6` and `bench:k6:checkout` instead run it through
+hand, and this repo does not ask you to. `bench:k6` instead runs it through
 whichever engine `CONTAINER_ENGINE` already names (`podman` by default):
 
 ```
 ${CONTAINER_ENGINE:-podman} run --rm -i --network=host -e BASE_URL -v ./tests/load:/scripts:Z grafana/k6 run /scripts/browse.js
 ```
+
+The argument picks the script in `tests/load/`: `npm run bench:k6` runs `browse.js`,
+`npm run bench:k6 checkout` runs `checkout.js`.
 
 `-e BASE_URL` passes your shell's `BASE_URL` into k6, so `BASE_URL=https://staging.example npm run bench:k6`
 aims it elsewhere. Unset, the scripts use `http://localhost:3000`.
@@ -47,11 +50,13 @@ Start the stack, then point a run at it:
 ```bash
 npm run compose:restart     # or: npm run dev
 npm run bench          # GET /products      — cached read path
+npm run bench /orders  # any other GET path
 npm run bench:search   # POST /products/search — search query, fixed body
 ```
 
-`bench:orders` and `bench:inventory` exist too, but those routes need a session and the scripts send
-no token: for them use a direct `autocannon` call with `-H 'Authorization: Bearer …'` (below).
+`bench` takes the path as its one argument, `/products` by default. Routes that need a session
+(`/orders`, `/inventory/levels`) get no token from it: for them use a direct `autocannon` call
+with `-H 'Authorization: Bearer …'` (below).
 
 Each uses 20 connections for 30 seconds and prints a latency histogram (`-l`). They read
 `NODE_PORT`, defaulting to 3000.

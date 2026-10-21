@@ -13,7 +13,7 @@ id: 'urn:boilerplate-node-backend:asyncapi:contracts'
 info:
     title: Boilerplate Node Backend Async Contracts
     # Alpha, the same `0.1.0` as `openapi.root.yaml` and every module fragment (SemVer §4:
-    # `0.y.z` is initial development). `check:asyncapi-breaking` ignores this field.
+    # `0.y.z` is initial development). The breaking-change check ignores this field.
     version: 0.1.0
     contact:
         name: Boilerplate maintainers

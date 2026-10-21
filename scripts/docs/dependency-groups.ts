@@ -165,7 +165,7 @@ export const DEV_GROUPS: DependencyGroup[] = [
     },
     {
         name: 'Architecture',
-        purpose: 'the module-boundary rules `check:dependencies` enforces',
+        purpose: 'the module-boundary rules `npm run check` enforces',
         readMore: '[Dependency Graph](./dependency-graph.md)',
         match: ['dependency-cruiser', 'eslint-plugin-boundaries']
     },
@@ -208,9 +208,9 @@ export const DEV_GROUPS: DependencyGroup[] = [
     },
     {
         name: 'Maintenance',
-        purpose: 'dependency bumps and cross-platform env vars in npm scripts',
+        purpose: 'cross-platform env vars in npm scripts',
         readMore: '—',
-        match: ['npm-check-updates', 'cross-env']
+        match: ['cross-env']
     }
 ];
 
