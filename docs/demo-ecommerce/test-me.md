@@ -59,6 +59,11 @@ something outside the job and you get refused, which is what's being shown.
 | **The moderator** | `moderator@example.com` | `Demo-Moderator1!` | [The moderator](./moderator.md)  |
 | **The operator**  | `operator@example.com`  | `Demo-Operator1!`  | [What each role may do][roles]   |
 
+Every staff login then asks for a 6-digit code from an authenticator app. Add this key to any
+authenticator app once, as a manual "setup key" entry under any name:
+`JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP`. It is the same for all seven accounts and survives a restart.
+[Changing it](../tools/demo-profile.md#the-named-accounts).
+
 The admin can do anything **inside the shop**. The same account is also the operator, the person
 who keeps the installation running. The operator account has only that second job: it can see
 the system's health but not a single order. [Why the two jobs are kept apart][roles].
