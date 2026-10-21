@@ -32,10 +32,11 @@ import { localesConfig } from './config';
  * @param modules - every enabled module, this module's own included
  */
 const onRegistered = (modules: readonly AppModule[]): void => {
-    // The backend app's share of this module's collection, handed to `@infrastructure/i18n` so
-    // an override typed into the admin screens reaches `t()`. Touches no database:
-    // `readApiOverrides` only runs on the refresh.
-    registerLocaleOverrideProvider(() => localeService.readApiOverrides());
+    // The backend app's share of this module's collection, plus which registered languages are
+    // switched on or off, handed to `@infrastructure/i18n` so an override typed into the admin
+    // screens reaches `t()` and the language the request is negotiated in is one the shop serves.
+    // Touches no database: `readLocaleOverlay` only runs on the refresh.
+    registerLocaleOverrideProvider(() => localeService.readLocaleOverlay());
 
     // This module's implementation of the translation port — `resolve` is what a read-path
     // decorator batches a page against, `removeAll` is what a product's HARD delete calls to take

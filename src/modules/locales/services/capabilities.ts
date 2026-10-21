@@ -58,18 +58,22 @@ export const describeLanguage = (tag: string, inLanguage: string): string => {
     }
 };
 
-/** How the manifest describes a language that exists only as deployed files. */
-export const staticCapability = (tag: string): LocaleCapability => ({
+/**
+ * How the manifest describes a language that exists only as deployed files.
+ *
+ * @param tag - the language
+ * @param active - whether it is switched on. A deployed file has no off switch of its own: it is
+ *   selectable unless a row registered for the same tag switches it off. A visitor still gets that
+ *   row, as `active: false`, so a client that bundles the language itself knows to stop offering it.
+ */
+export const staticCapability = (tag: string, active = true): LocaleCapability => ({
     tag,
     name: describeLanguage(tag, 'en'),
     nativeName: describeLanguage(tag, tag),
     direction: isRightToLeft(tag) ? LocaleDirection.rtl : LocaleDirection.ltr,
-    // A deployed file has no off switch of its own: this row is always selectable. A language
-    // switched off through its row is dropped from a visitor's manifest before it gets here, see
-    // `listCapabilities`.
-    active: true,
-    // The backend app and only that: the API can answer in it, and there is no dictionary to
-    // download.
+    active,
+    // The backend app and only that: the API has its own wording in it, and there is no dictionary
+    // to download.
     apps: [backendApp()],
     source: LocaleSource.static,
     entryCount: 0,
@@ -103,11 +107,12 @@ export const dynamicCapability = (
 export const mergeCapabilities = (
     staticTags: readonly string[],
     dynamicLanguages: readonly LocaleDocument[],
-    entryCounts: ReadonlyMap<string, number>
+    entryCounts: ReadonlyMap<string, number>,
+    inactiveTags: ReadonlySet<string> = new Set()
 ): LocaleCapability[] => {
     const rows = new Map<string, LocaleCapability>();
 
-    for (const tag of staticTags) rows.set(tag, staticCapability(tag));
+    for (const tag of staticTags) rows.set(tag, staticCapability(tag, !inactiveTags.has(tag)));
 
     for (const language of dynamicLanguages) {
         const dynamic = dynamicCapability(language, entryCounts.get(language.tag) ?? 0);
@@ -178,20 +183,13 @@ export const callerScope = (caller?: Caller) => accessibleFilterFor(caller, 'Loc
  *   only in reach of the admin surface
  */
 export const listCapabilities = (scope?: Record<string, unknown>): Promise<LocaleCapabilities> =>
-    readDynamicTier(scope).then(({ languages, entryCounts, inactiveTags }) => {
-        // A language with a deployed dictionary file is always in `listSupportedLocales()`, and a
-        // visitor's scoped read drops its switched-off row, so merging alone would put it back as
-        // `active: true`. Leave it out unless the caller's own scope still reads its row (staff,
-        // who then see it as `active: false`). A failed read of the flags is an empty set, and the
-        // files are served as before.
-        const readable = new Set(languages.map(({ tag }) => tag));
-        const staticTags = listSupportedLocales().filter(
-            (tag) => !inactiveTags.has(tag) || readable.has(tag)
-        );
-
-        return {
-            locales: mergeCapabilities(staticTags, languages, entryCounts),
-            default: getDefaultLocale(),
-            fallback: getFallbackLocale()
-        };
-    });
+    readDynamicTier(scope).then(({ languages, entryCounts, inactiveTags }) => ({
+        // A language with a deployed dictionary file is always in `listSupportedLocales()`; a
+        // visitor's scoped read drops its switched-off row, so the flags come from the unscoped
+        // set. It stays in the list as `active: false` rather than vanishing: the frontend bundles
+        // its own copy of the language, and only this row tells it to stop offering it. A failed
+        // read of the flags is an empty set, and the files are served as before.
+        locales: mergeCapabilities(listSupportedLocales(), languages, entryCounts, inactiveTags),
+        default: getDefaultLocale(),
+        fallback: getFallbackLocale()
+    }));

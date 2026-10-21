@@ -83,6 +83,13 @@ const listInactiveTags = (): Promise<string[]> =>
     localeModel.distinct('tag', { active: false }).exec();
 
 /**
+ * The tags of the languages switched on. With {@link listInactiveTags}, what the API's served
+ * list is built from: a registered language with no deployed file is served exactly when it is on.
+ */
+const listActiveTags = (): Promise<string[]> =>
+    localeModel.distinct('tag', { active: true }).exec();
+
+/**
  * The languages this deployment offers, unpaginated and sorted by tag.
  *
  * Unpaginated on purpose: a deployment's languages are a handful of rows by construction, and
@@ -552,6 +559,7 @@ export const localeRepository: Repository<LocaleDocument, Language> & {
     findByTag: (tag: string) => Promise<LocaleDocument | null>;
     list: (scope?: Record<string, unknown>) => Promise<LocaleDocument[]>;
     listInactiveTags: () => Promise<string[]>;
+    listActiveTags: () => Promise<string[]>;
     bumpRevision: (tag: string) => Promise<number>;
     deleteLocaleCascade: (locale: LocaleDocument) => Promise<LocaleCascadeCounts>;
 } = {
@@ -559,6 +567,7 @@ export const localeRepository: Repository<LocaleDocument, Language> & {
     findByTag,
     list,
     listInactiveTags,
+    listActiveTags,
     bumpRevision,
     deleteLocaleCascade
 };

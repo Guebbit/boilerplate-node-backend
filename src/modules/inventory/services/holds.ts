@@ -8,14 +8,15 @@ import { logger } from '@infrastructure/adapters/logger';
 import { StockMovementReason } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { nudgeOutbox } from '@kernel/outbox';
+import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { systemCallerContext } from '@kernel/permissions';
 import type { ReservationStatus } from '../model';
 import { reservationRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
+import { STOCK_RETAKEN } from '../events';
 import { takeFromHold } from '../domain';
 import type { StockLine } from './types';
-import { applyToEveryLine, refreshStockCacheForProducts } from './transition';
+import { applyToEveryLine, applyTransition, refreshStockCacheForProducts } from './transition';
 import { allocateWithin } from './allocate';
 
 /**
@@ -115,17 +116,101 @@ const raiseOrphanAlarm = (
 };
 
 /**
+ * What taking a released hold's units again came to.
+ * `none`: the hold was not released, so there was nothing to take. `retaken`: the units are held
+ * again. `short`: the shelf (or the preorder allowance) no longer covers the order; nothing moved.
+ */
+export type RetakeOutcome = 'none' | 'retaken' | 'short';
+
+/**
+ * Take a released hold's units again, in the payment's transaction, so money that lands after the
+ * window closed does not pay for goods that are no longer set aside.
+ *
+ * The claim is conditional and runs inside the caller's transaction (`released → held`), never
+ * decided from a read taken outside it: two late payments racing for the last unit meet in
+ * mongod, and exactly one wins. Each line is then one conditional counter write, in product order
+ * so two orders listing the same products oppositely do not refuse each other. A line that
+ * refuses undoes the lines already taken and puts the hold back to `released`, then reports
+ * `short`: it never throws, because the caller answers `short` by refunding, and a throw would
+ * abort the very transaction that records the refund.
+ *
+ * The caller moves the order to `paid` only after `none` or `retaken`, and commits the hold
+ * (`held → committed`) with {@link commitForOrder} in the same transaction.
+ *
+ * @param orderId - the order whose payment just landed
+ * @param session - the payment's transaction. When units are taken, a `STOCK_RETAKEN` announcement
+ *   rides in it, and this module refreshes the catalogue's stock copy once the commit has landed
+ * @returns what happened; see {@link RetakeOutcome}
+ */
+export const retakeReleasedForOrder = async (
+    orderId: string,
+    session: ClientSession
+): Promise<RetakeOutcome> => {
+    const hold = await reservationRepository.claimStatus(orderId, 'released', 'held', session);
+    if (!hold) return 'none';
+
+    const lines = hold.items
+        .map(({ productId, quantity, kind }) => ({
+            productId: String(productId),
+            quantity,
+            ...(kind === 'backorder' ? { kind: 'backorder' as const } : {})
+        }))
+        .toSorted((a, b) => a.productId.localeCompare(b.productId, 'en'));
+    const note = 'taken again — the payment landed after the hold was released';
+
+    const taken: StockLine[] = [];
+    for (const line of lines) {
+        const reason =
+            line.kind === 'backorder' ? StockMovementReason.backorder : StockMovementReason.reserve;
+        const done = await applyTransition(
+            reason,
+            line.productId,
+            line.quantity,
+            { reference: orderId, note, ...(line.kind ? { kind: line.kind } : {}) },
+            session
+        );
+        if (!done) {
+            // Undo what this call took, then close the hold again: nothing is left half-taken.
+            for (const back of taken)
+                await applyTransition(
+                    StockMovementReason.release,
+                    back.productId,
+                    back.quantity,
+                    {
+                        reference: orderId,
+                        note: 'given back — the rest could not be taken again',
+                        ...(back.kind ? { kind: back.kind } : {})
+                    },
+                    session
+                );
+            await reservationRepository.claimStatus(orderId, 'held', 'released', session);
+            return 'short';
+        }
+        taken.push(line);
+    }
+
+    await enqueueOutboxEvent(
+        STOCK_RETAKEN,
+        { orderId, productIds: lines.map(({ productId }) => productId) },
+        orderId,
+        session
+    );
+    return 'retaken';
+};
+
+/**
  * The body of {@link commitForOrder}, in the caller's transaction: claim the hold, then serve any
  * preorder lines the claim just made eligible.
  *
  * @param orderId - the order that was paid for
  * @param session - the payment's transaction
- * @returns whether the claim landed, and how many preorder allocations it triggered
+ * @returns whether the claim landed, how many preorder allocations it triggered, and whether the
+ *   units had to be taken again first (`retook`)
  */
 const commitWithin = async (
     orderId: string,
     session: ClientSession
-): Promise<{ committed: boolean; allocated: number }> => {
+): Promise<{ committed: boolean; allocated: number; retook?: boolean }> => {
     const hold = await reservationRepository.claimStatus(orderId, 'held', 'committed', session);
     if (hold) {
         // Paid preorder units wait for stock; stock that already arrived serves them now.
@@ -143,6 +228,15 @@ const commitWithin = async (
     if (existing?.status === 'committed' || existing?.status === 'shipped')
         return { committed: false, allocated: 0 };
 
+    // Money landed on a hold that was given up: take the units again and commit them. `orders`
+    // does this before it writes `paid`; this is the net for any other caller. Short means the
+    // order is paid with nothing set aside, the one case left to alarm besides a missing hold.
+    if (
+        existing?.status === 'released' &&
+        (await retakeReleasedForOrder(orderId, session)) === 'retaken'
+    )
+        return commitWithin(orderId, session).then((done) => ({ ...done, retook: true }));
+
     raiseOrphanAlarm(orderId, existing?.status ?? 'none', 'commit');
     return { committed: false, allocated: 0 };
 };
@@ -157,9 +251,10 @@ const commitWithin = async (
  *
  * A missed claim is not automatically a no-op: a redelivered settlement finding the hold already
  * `committed` (or, if the parcel got ahead of a crashed settlement, `shipped`) is a benign
- * replay, but finding it `released`/`expired`, or finding no reservation at all, means the order
- * is paid and nothing is set aside for it. That case is alarmed — see
- * `docs/modules/inventory-reservations.md` — rather than swallowed like the replay is.
+ * replay. A `released` hold is taken again first ({@link retakeReleasedForOrder}); only when the
+ * shelf no longer covers it, or no reservation exists at all, is the order paid with nothing set
+ * aside. That case is alarmed — see `docs/modules/inventory-reservations.md` — rather than
+ * swallowed like the replay is.
  *
  * @param orderId - the order that was paid for
  * @param session - the payment's transaction. The commit then lands with the order's `paid` move
@@ -172,8 +267,8 @@ export const commitForOrder = (orderId: string, session?: ClientSession): Promis
     if (session) return commitWithin(orderId, session).then(({ committed }) => committed);
 
     return withTransaction((active) => commitWithin(orderId, active)).then(
-        ({ committed, allocated }) => {
-            if (allocated === 0) return committed;
+        ({ committed, allocated, retook }) => {
+            if (allocated === 0 && !retook) return committed;
             nudgeOutbox();
             return refreshStockCacheForOrder(orderId).then(() => committed);
         }
@@ -186,8 +281,9 @@ export const commitForOrder = (orderId: string, session?: ClientSession): Promis
  *
  * Runs inside the status move's transaction (`orders`), so the status and the shelf count land
  * together. A hold still `held` — the payment's own commit crashed and the retry sweep has not
- * run — ships too: the goods left either way. No hold, or one already given up, raises the same
- * alarm as a payment with nothing set aside; a hold already `shipped` is a replay and is silent.
+ * run — ships too: the goods left either way. No hold at all raises the same alarm as a payment
+ * with nothing set aside. A hold already `shipped` is a replay, and one already `released` is
+ * benign (a remainder cancel emptied it after a partial shipment): both are silent.
  *
  * @param orderId - the order whose parcel left (or whose digital goods were fulfilled)
  * @param session - the status move's transaction; see {@link refreshStockCacheForOrder}
@@ -199,9 +295,10 @@ export const shipForOrder = async (orderId: string, session?: ClientSession): Pr
         (await claimAndApply(orderId, 'held', 'shipped', StockMovementReason.ship, session));
     if (claimed) return true;
 
+    // Only a hold that never existed is corruption. A `released` one is benign: a remainder
+    // cancel emptied it after a partial shipment, so there is nothing left to take.
     const existing = await reservationRepository.findByOrderId(orderId);
-    if (existing?.status !== 'shipped')
-        raiseOrphanAlarm(orderId, existing?.status ?? 'none', 'ship');
+    if (!existing) raiseOrphanAlarm(orderId, 'none', 'ship');
     return false;
 };
 
@@ -251,8 +348,8 @@ const takeLines = (
  * what has not left yet and ends `shipped` once it is empty. Runs in the shipment's transaction,
  * so the shelf count and the shipment land together.
  *
- * A missing or given-up hold raises the same alarm a payment with nothing set aside does; a hold
- * already `shipped` is a replay and is silent.
+ * A missing hold raises the same alarm a payment with nothing set aside does; a hold already
+ * `shipped` or `released` is silent.
  *
  * @param orderId - the order whose units are leaving
  * @param lines - what the shipment carries
@@ -267,9 +364,9 @@ export const shipLinesForOrder = (
     takeLines(orderId, lines, StockMovementReason.ship, 'shipped', session).then((taken) => {
         if (taken) return true;
 
+        // Only a hold that never existed is corruption; see {@link shipForOrder}.
         return reservationRepository.findByOrderId(orderId).then((existing) => {
-            if (existing?.status !== 'shipped')
-                raiseOrphanAlarm(orderId, existing?.status ?? 'none', 'ship');
+            if (!existing) raiseOrphanAlarm(orderId, 'none', 'ship');
             return false;
         });
     });

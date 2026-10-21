@@ -116,6 +116,11 @@ than waited for.
 A refused card is not a failure of the order. The order stays unpaid, the goods stay set aside for
 the rest of the 15 minutes, and the customer can try again.
 
+**A payment that arrives after the 15 minutes** (a bank transfer recorded late, or a card payment
+that was still being confirmed) either completes normally, if the goods are still on the shelf, or
+is **refunded automatically** if they were sold to someone else in the meantime. The customer is
+never charged for goods that are gone.
+
 Once payment goes through, the money and the goods are settled in the same instant: the order
 becomes **paid** and the goods stop being "set aside" and become "sold".
 → [`payments`](../modules/payments.md)
@@ -173,6 +178,18 @@ An address book holds the places they have shipped to, with one marked as the us
 
 Deleting the account is deliberately two steps, and it takes everything with it: the basket, the
 wishlist and the address book all go. → [`account`](../modules/account.md)
+
+## The shop's language
+
+The shopper picks one language and everything follows it: the buttons, the product names and
+descriptions, the search, and the emails the shop sends them. A language the shop has not switched
+on is never offered. If a shopper had saved one that has since been switched off, they get the
+shop's default language instead, in the page and in the emails.
+
+Some of the shop's own messages (an error, a confirmation) may not exist in a language that was
+added by hand and has no translation file yet. Those few show in the default language, one message
+at a time, while the product names and the screens stay in the shopper's language.
+→ [`locales`](../modules/locales.md)
 
 ## The words we used
 

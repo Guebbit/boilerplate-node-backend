@@ -41,6 +41,10 @@ afterEach(() => jest.restoreAllMocks());
 let orderCounter = 0;
 const anOrderId = () => (++orderCounter).toString(16).padStart(24, 'b');
 
+/** The status of an order's hold, or `undefined` when it has none. */
+const holdStatusOf = (orderId: string) =>
+    reservationRepository.findByOrderId(orderId).then((hold) => hold?.status);
+
 /** `stocklevels` itself — this module's source of truth, `countersOf` above only reads the mirror `syncStockCache` writes into `products`. */
 const levelOf = async (productId: string) => {
     const level = await stockLevelRepository.findByProductId(productId);
@@ -395,7 +399,7 @@ describe('commitForOrder', () => {
         expect(auditSpy).not.toHaveBeenCalled();
     });
 
-    it('cannot commit a hold that was already released, and alarms it', async () => {
+    it("takes a released hold's units again and commits them, when the shelf still has them", async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
@@ -404,12 +408,41 @@ describe('commitForOrder', () => {
         ]);
         await inventoryService.releaseForOrder(orderId);
 
-        expect(await inventoryService.commitForOrder(orderId)).toBe(false);
+        expect(await inventoryService.commitForOrder(orderId)).toBe(true);
+
+        // Set aside again for the order that paid, not given to anyone meanwhile.
         expect(await countersOf(String(product._id))).toEqual({
             onHand: 10,
-            reserved: 0,
-            available: 10
+            reserved: 3,
+            available: 7
         });
+        expect(await holdStatusOf(orderId)).toBe('committed');
+        // Money landing on a released hold that can be kept is not an incident.
+        expect(auditSpy).not.toHaveBeenCalled();
+    });
+
+    it('cannot commit a released hold whose units were sold meanwhile, and alarms it', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const product = await createProduct({ onHand: 4 });
+        const orderId = anOrderId();
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 3 }
+        ]);
+        await inventoryService.releaseForOrder(orderId);
+        // A stranger takes what the released hold gave back.
+        await inventoryService.reserveForOrder(anOrderId(), [
+            { productId: String(product._id), quantity: 3 }
+        ]);
+
+        expect(await inventoryService.commitForOrder(orderId)).toBe(false);
+
+        // Nothing is half-taken: the stranger's units stand, the late hold is released again.
+        expect(await countersOf(String(product._id))).toEqual({
+            onHand: 4,
+            reserved: 3,
+            available: 1
+        });
+        expect(await holdStatusOf(orderId)).toBe('released');
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
@@ -422,6 +455,71 @@ describe('commitForOrder', () => {
                 metadata: { reservationStatus: 'released', stage: 'commit' }
             })
         );
+    });
+
+    it('gives back the lines it took when a later line of a released hold is short', async () => {
+        const first = await createProduct({ onHand: 5 });
+        const second = await createProduct({ onHand: 2 });
+        const orderId = anOrderId();
+        const lines = [
+            { productId: String(first._id), quantity: 2 },
+            { productId: String(second._id), quantity: 2 }
+        ];
+        await inventoryService.reserveForOrder(orderId, lines);
+        await inventoryService.releaseForOrder(orderId);
+        await inventoryService.reserveForOrder(anOrderId(), [
+            { productId: String(second._id), quantity: 2 }
+        ]);
+
+        const outcome = await withTransaction((session) =>
+            inventoryService.retakeReleasedForOrder(orderId, session)
+        );
+
+        expect(outcome).toBe('short');
+        // The first line was taken and given back inside the transaction: no unit stays held.
+        expect(await countersOf(String(first._id))).toMatchObject({ onHand: 5, reserved: 0 });
+        expect(await countersOf(String(second._id))).toMatchObject({ onHand: 2, reserved: 2 });
+        expect(await holdStatusOf(orderId)).toBe('released');
+    });
+
+    it('lets exactly one of two late payments racing for the last unit take it', async () => {
+        const product = await createProduct({ onHand: 1 });
+        const first = anOrderId();
+        const second = anOrderId();
+        for (const orderId of [first, second]) {
+            await reservationRepository.insertHold(
+                orderId,
+                [{ productId: String(product._id), quantity: 1 }],
+                new Date()
+            );
+            await reservationRepository.claimStatus(orderId, 'held', 'released');
+        }
+
+        const outcomes = await Promise.all(
+            [first, second].map((orderId) =>
+                withTransaction((session) =>
+                    inventoryService.retakeReleasedForOrder(orderId, session)
+                )
+            )
+        );
+
+        expect(outcomes.toSorted()).toEqual(['retaken', 'short']);
+        expect(await levelOf(String(product._id))).toEqual({ onHand: 1, reserved: 1 });
+    });
+
+    it('reports nothing to take for a hold that is not released', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: String(product._id), quantity: 3 }
+        ]);
+
+        const outcome = await withTransaction((session) =>
+            inventoryService.retakeReleasedForOrder(orderId, session)
+        );
+
+        expect(outcome).toBe('none');
+        expect(await countersOf(String(product._id))).toMatchObject({ onHand: 10, reserved: 3 });
     });
 
     it('does nothing for an order that never held anything, and alarms it', async () => {
@@ -639,21 +737,34 @@ describe('shipForOrder', () => {
         );
     });
 
-    it('alarms a shipment whose hold was already released', async () => {
+    it('stays silent for a shipment whose hold a remainder cancel already emptied', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
         await inventoryService.reserveForOrder(orderId, [
             { productId: String(product._id), quantity: 3 }
         ]);
-        await inventoryService.releaseForOrder(orderId);
+        await inventoryService.commitForOrder(orderId);
+        auditSpy.mockClear();
+        // One unit shipped in a partial shipment, the other two cancelled as the remainder.
+        await withTransaction(async (session) => {
+            await inventoryService.shipLinesForOrder(
+                orderId,
+                [{ productId: String(product._id), quantity: 1 }],
+                session
+            );
+            await inventoryService.releaseLinesForOrder(
+                orderId,
+                [{ productId: String(product._id), quantity: 2 }],
+                session
+            );
+        });
 
+        // The order is then forced shipped→delivered: nothing is left to take, and that is benign.
         expect(await inventoryService.shipForOrder(orderId)).toBe(false);
 
-        expect(await countersOf(String(product._id))).toMatchObject({ onHand: 10, reserved: 0 });
-        expect(auditSpy).toHaveBeenCalledWith(
-            expect.objectContaining({ metadata: { reservationStatus: 'released', stage: 'ship' } })
-        );
+        expect(await levelOf(String(product._id))).toEqual({ onHand: 9, reserved: 0 });
+        expect(auditSpy).not.toHaveBeenCalled();
     });
 });
 

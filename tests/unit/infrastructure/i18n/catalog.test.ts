@@ -40,8 +40,9 @@ describe('locale discovery', () => {
 
     /**
      * The list is what `i18next.init()` registered its resources from, so re-reading the
-     * directory per call would let negotiation offer a language the instance cannot resolve —
-     * answering `Content-Language: xx` with fallback copy. Cached, the two cannot drift.
+     * directory per call would let the API claim wording it has no resource for. Cached, the
+     * deployed files and what i18next holds cannot drift. A registered language with no file is a
+     * separate matter: it is served, with the fallback's wording (`served.test.ts`).
      */
     it('is cached, so it cannot drift from the resources i18next registered', () => {
         const first = listSupportedLocales();

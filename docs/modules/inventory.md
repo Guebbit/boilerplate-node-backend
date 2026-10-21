@@ -116,8 +116,10 @@ listener can miss is fine for a fact nothing depends on, and wrong for one a cat
 One exception, and it is not a stock write: a payment that serves a preorder moves counters inside
 the payer's transaction, where the catalogue copy cannot be written (it would not roll back). That
 reaction is a listener on this module's own `inventory.backorder_allocated`, which refreshes the
-served product's copy once the commit has landed. A plain payment moves no counter, so it announces
-nothing and refreshes nothing. Eventual is fine there: the copy may already be stale (a failed
+served product's copy once the commit has landed. A payment that lands on a released hold and takes
+its units again does the same through `inventory.stock_retaken`
+([why](./inventory-reservations.md#money-can-land-on-a-released-hold-take-the-units-again)). A plain
+payment moves no counter, so it announces nothing and refreshes nothing. Eventual is fine there: the copy may already be stale (a failed
 sync is left for the next transition to correct), and no confirm response shows stock.
 Write order matters and is deliberate: the counter and its ledger row commit first, as
 `applyTransition` does it — the transition IS the source of truth the moment it commits,

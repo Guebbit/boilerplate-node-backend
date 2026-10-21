@@ -21,7 +21,7 @@ import { isKnownApp } from '../apps';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
-import { refreshOverlay } from './overlay';
+import { refreshOverlayNow } from './overlay';
 import { translatableCacheTags } from './translatables';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 
@@ -83,7 +83,7 @@ export const createLanguage = (
                     metadata: { active: language.active }
                 });
 
-                return generateSuccess(language, 201);
+                return refreshOverlayNow().then(() => generateSuccess(language, 201));
             });
     });
 };
@@ -134,7 +134,10 @@ export const updateLanguage = (
                     metadata: { active: saved.active }
                 });
 
-                return generateSuccess(saved);
+                // The negotiation reads an in-memory list of the served languages, refreshed by
+                // this: switching one on or off must reach this worker's next request, not wait
+                // for the timer.
+                return refreshOverlayNow().then(() => generateSuccess(saved));
             });
     });
 
@@ -173,8 +176,8 @@ export const removeLanguage = (
                     metadata: { removedEntries, removedTranslations }
                 });
 
-                refreshOverlay();
-
-                return generateSuccess({ removedEntries, removedTranslations });
+                return refreshOverlayNow().then(() =>
+                    generateSuccess({ removedEntries, removedTranslations })
+                );
             });
     });

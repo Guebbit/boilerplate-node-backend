@@ -7,7 +7,7 @@
 import type { Request, Response } from 'express';
 import type { LocaleCapabilities, LocaleDictionary } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { listSupportedLocales, readLocaleDictionary, t } from '@infrastructure/i18n';
+import { hasServedDictionary, readLocaleDictionary, t } from '@infrastructure/i18n';
 import { localeService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
 
@@ -34,9 +34,9 @@ export const getLocales = (request: Request, response: Response) =>
 export const getLocaleDictionary = (request: Request<{ locale?: string }>, response: Response) => {
     const { locale } = request.params;
 
-    // `listSupportedLocales` is derived from the directory itself, so this doubles as the 404
-    // check and the path-traversal guard.
-    if (!locale || !listSupportedLocales().includes(locale))
+    // The supported list is derived from the directory itself, so this doubles as the 404 check and
+    // the path-traversal guard. A language switched off answers 404 like an unknown one.
+    if (!locale || !hasServedDictionary(locale))
         return rejectResponse(response, 404, [t('generic.error-invalid-data')]);
 
     return successResponse<LocaleDictionary>(response, {

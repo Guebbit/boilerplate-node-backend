@@ -24,7 +24,7 @@ import { openLevel, removeLevel } from './services/levels';
 import './metrics';
 import { inventoryConfig } from './config';
 import { inventoryJobs } from './jobs';
-import { PREORDER_ALLOCATED } from './events';
+import { PREORDER_ALLOCATED, STOCK_RETAKEN } from './events';
 import { refreshStockCacheForProducts } from './services/transition';
 
 /** This module's manifest entry: routes, the two domain gauges, and locales. */
@@ -59,6 +59,8 @@ export default {
         onDomainEvent(PREORDER_ALLOCATED, ({ productId }) =>
             refreshStockCacheForProducts([productId])
         );
+        // Same reason for a late payment that took a released hold's units again.
+        onDomainEvent(STOCK_RETAKEN, ({ productIds }) => refreshStockCacheForProducts(productIds));
     },
     /*
      * No entry in `scenarios/index.ts`: a hold only exists once someone has checked out, so a
