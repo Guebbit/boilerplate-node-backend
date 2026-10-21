@@ -222,6 +222,18 @@ the other system was down, its URL changed — that shows up in the delivery log
 [the support desk's](./support.md) to read.
 → [`webhooks`](../modules/webhooks.md)
 
+## An alarm: a paid order with no stock set aside
+
+The alert mailbox can get "a paid order has no stock held". It is the one stock alarm that cannot wait: an order is paid,
+or shipping, and nothing was set aside for it. It does not come from a late payment (those fix themselves: the goods are
+taken again, or the customer is refunded). It means somebody edited the data by hand or restored a backup.
+
+You read the audit entry (it names the order and the step), then ask the warehouse to check the shelf and decide:
+restore the reservation, cancel and refund, or record a correction if the parcel is already gone. Until the webhook
+for the phone is set up, **only the email** reaches anyone, so someone must read that mailbox.
+
+→ [the detail](../modules/inventory-reservations.md#orphaned-hold)
+
 ## Everything is written down
 
 Every staff action — a price change, a cancellation, a deleted product — is recorded with who did

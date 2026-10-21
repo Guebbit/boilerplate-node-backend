@@ -417,6 +417,19 @@ groups:
                 summary: 'A payment succeeded for the wrong {{ $labels.field }}'
                 description: 'payment_amount_mismatch_total rose for {{ $labels.field }} in the last 15 minutes: money that does not add up. See the payments log line for the order.'
 
+          # A paid or shipping order has no stock hold to settle (`inventory/services/holds.ts`).
+          # `ship` means no hold exists at all: the database was edited or restored. `commit` is the
+          # same, or a payment that landed on a given-up hold the shelf could no longer cover. A
+          # person checks the stock and decides: `docs/modules/inventory-reservations.md#orphaned-hold`.
+          - alert: PaidOrderWithoutHold
+            expr: sum by (stage) (increase(inventory_commit_orphaned_total[15m])) > 0
+            for: 0m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'A paid order has no stock held ({{ $labels.stage }})'
+                description: 'inventory_commit_orphaned_total rose for {{ $labels.stage }} in the last 15 minutes: an order is paid or shipping with nothing set aside for it. See docs/modules/inventory-reservations.md#orphaned-hold.'
+
           # A person asked for their Art. 15 copy and did not get it, and the one-month deadline of
           # Art. 12(3) is running.
           - alert: AccountExportFailing

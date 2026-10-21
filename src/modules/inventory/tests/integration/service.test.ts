@@ -21,6 +21,7 @@ import { inventoryService } from '../../services';
 import { reservationRepository, stockLevelRepository } from '../../repository';
 import { reservationModel, stockLevelModel } from '../../model';
 import { inventoryAuditActions } from '../../audit';
+import { inventoryCommitOrphanedTotal } from '../../services/orphan-counter';
 import * as auditPort from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { testCallerContext } from '@tests/callers';
@@ -36,6 +37,15 @@ jest.mock('@infrastructure/observability/audit', () =>
 setupTestDb();
 
 afterEach(() => jest.restoreAllMocks());
+
+/**
+ * The orphaned-commit counter's current reading for one stage. The registry is process-wide and
+ * outlives a test, so every case reads it before and after instead of expecting a fixed value.
+ */
+const orphanedCount = (stage: 'commit' | 'ship'): Promise<number> =>
+    inventoryCommitOrphanedTotal
+        .get()
+        .then(({ values }) => values.find((entry) => entry.labels.stage === stage)?.value ?? 0);
 
 /** A syntactically valid order id, distinct per call — holds are keyed by one. */
 let orderCounter = 0;
@@ -434,8 +444,11 @@ describe('commitForOrder', () => {
             { productId: String(product._id), quantity: 3 }
         ]);
 
+        const before = await orphanedCount('commit');
         expect(await inventoryService.commitForOrder(orderId)).toBe(false);
 
+        // The short safety net is a real orphan: counted once, at the commit stage.
+        expect(await orphanedCount('commit')).toBe(before + 1);
         // Nothing is half-taken: the stranger's units stand, the late hold is released again.
         expect(await countersOf(String(product._id))).toEqual({
             onHand: 4,
@@ -526,9 +539,13 @@ describe('commitForOrder', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
+        const before = { commit: await orphanedCount('commit'), ship: await orphanedCount('ship') };
 
         expect(await inventoryService.commitForOrder(orderId)).toBe(false);
 
+        // Counted once, at the stage that found it, and only there.
+        expect(await orphanedCount('commit')).toBe(before.commit + 1);
+        expect(await orphanedCount('ship')).toBe(before.ship);
         // No hold ever existed, so no counter had anything to move.
         expect(await countersOf(String(product._id))).toEqual({
             onHand: 10,
@@ -640,6 +657,7 @@ describe('shipLinesForOrder and releaseLinesForOrder', () => {
     it('raises the alarm for a ship with no hold behind it, and answers false', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({ onHand: 10 });
+        const before = await orphanedCount('ship');
 
         const shipped = await withTransaction((session) =>
             inventoryService.shipLinesForOrder(
@@ -651,6 +669,7 @@ describe('shipLinesForOrder and releaseLinesForOrder', () => {
 
         expect(shipped).toBe(false);
         expect(auditSpy).toHaveBeenCalled();
+        expect(await orphanedCount('ship')).toBe(before + 1);
     });
 
     it('answers false for a release with no open hold, silently', async () => {
@@ -698,11 +717,15 @@ describe('shipForOrder', () => {
         await inventoryService.commitForOrder(orderId);
         await inventoryService.shipForOrder(orderId);
         auditSpy.mockClear();
+        const before = { commit: await orphanedCount('commit'), ship: await orphanedCount('ship') };
 
         expect(await inventoryService.shipForOrder(orderId)).toBe(false);
 
         expect(await countersOf(String(product._id))).toMatchObject({ onHand: 7, reserved: 0 });
         expect(auditSpy).not.toHaveBeenCalled();
+        // A replay is not an incident: neither stage moved.
+        expect(await orphanedCount('commit')).toBe(before.commit);
+        expect(await orphanedCount('ship')).toBe(before.ship);
     });
 
     it('still ships a hold whose payment commit never landed', async () => {
@@ -723,9 +746,11 @@ describe('shipForOrder', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
+        const before = await orphanedCount('ship');
 
         expect(await inventoryService.shipForOrder(orderId)).toBe(false);
 
+        expect(await orphanedCount('ship')).toBe(before + 1);
         expect(await countersOf(String(product._id))).toMatchObject({ onHand: 10, reserved: 0 });
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -760,11 +785,14 @@ describe('shipForOrder', () => {
             );
         });
 
+        const before = await orphanedCount('ship');
+
         // The order is then forced shipped→delivered: nothing is left to take, and that is benign.
         expect(await inventoryService.shipForOrder(orderId)).toBe(false);
 
         expect(await levelOf(String(product._id))).toEqual({ onHand: 9, reserved: 0 });
         expect(auditSpy).not.toHaveBeenCalled();
+        expect(await orphanedCount('ship')).toBe(before);
     });
 });
 

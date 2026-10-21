@@ -68,6 +68,18 @@ Goods usually arrive before a product is published, so the stock form lists draf
 all the warehouse reads beyond the storefront: changing a price or deleting a product stays with
 the manager.
 
+## An alarm: a paid order with no stock set aside
+
+Now and then the shop emails the owner (the alert mailbox, "a paid order has no stock held"). It means an
+order is paid, or on its way, but nothing was set aside for it in the stock. That does not come from a
+late payment: it means the data was edited by hand or restored from a backup.
+
+When the manager passes it on: open the order, then look at the shelf. If the goods are there, tell the
+technician to restore the reservation. If they are not, the order is cancelled and the customer refunded. If the
+parcel already left, record a **correction** so the count is true again. Then ask who changed the data.
+
+→ [the detail](../modules/inventory-reservations.md#orphaned-hold)
+
 ## Clearing expired holds
 
 When a customer checks out but never pays, their goods sit "set aside" for 15 minutes (by default) and then need

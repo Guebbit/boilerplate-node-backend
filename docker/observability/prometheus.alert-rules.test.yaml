@@ -80,6 +80,30 @@ tests:
             exp_alerts: []
     - interval: 1m
       input_series:
+          - series: inventory_commit_orphaned_total{stage="commit"}
+            values: 0 0 0 1 1 1 1 1
+      alert_rule_test:
+          - eval_time: 6m
+            alertname: PaidOrderWithoutHold
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                      stage: commit
+                  exp_annotations:
+                      summary: A paid order has no stock held (commit)
+                      description: 'inventory_commit_orphaned_total rose for commit in the last 15 minutes: an order is paid or shipping with nothing set aside for it. See docs/modules/inventory-reservations.md#orphaned-hold.'
+    - interval: 1m
+      input_series:
+          - series: inventory_commit_orphaned_total{stage="commit"}
+            values: 0x8
+          - series: inventory_commit_orphaned_total{stage="ship"}
+            values: 0x8
+      alert_rule_test:
+          - eval_time: 6m
+            alertname: PaidOrderWithoutHold
+            exp_alerts: []
+    - interval: 1m
+      input_series:
           - series: account_export_failed_total
             values: 0 0 0 1 1 1 1 1
       alert_rule_test:

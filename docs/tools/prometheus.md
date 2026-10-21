@@ -90,6 +90,7 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 | `OneTimeTokenGuessing`               | more than 20 refused one-time link tokens on one flow in 15 min                                                                           | warning            |
 | `RefreshTokenReuse`                  | a refresh token was replayed after rotation                                                                                               | warning            |
 | `PaymentAmountMismatch`              | the provider reported a success for an amount, currency or payment that is not the frozen one                                             | critical           |
+| `PaidOrderWithoutHold`               | a paid or shipping order has no stock hold to settle: [runbook](../modules/inventory-reservations.md#orphaned-hold)                       | critical           |
 | `AccountExportFailing`               | any personal-data export failed in 15 min (the GDPR deadline is running)                                                                  | warning            |
 | `Watchdog`                           | always firing; the heartbeat pushed to `ALERT_HEARTBEAT_URL` (silence there = the pipeline is dead)                                       | none               |
 | `AlertmanagerNotificationsFailing`   | Alertmanager failed to send a notification in 15 min (webhook only: email is what is broken)                                              | warning            |

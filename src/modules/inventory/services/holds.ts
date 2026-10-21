@@ -14,6 +14,7 @@ import type { ReservationStatus } from '../model';
 import { reservationRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
 import { STOCK_RETAKEN } from '../events';
+import { inventoryCommitOrphanedTotal } from './orphan-counter';
 import { takeFromHold } from '../domain';
 import type { StockLine } from './types';
 import { applyToEveryLine, applyTransition, refreshStockCacheForProducts } from './transition';
@@ -91,6 +92,7 @@ const claimAndApply = (
  *
  * Audited as the system, not skipped: no CallerContext exists on these paths — the caller is a
  * payment settlement (possibly a provider webhook) or a status move, with no human behind it.
+ * Also counted (`inventory_commit_orphaned_total{stage}`): the page `PaidOrderWithoutHold` rides on it.
  *
  * @param orderId - the order with nothing set aside
  * @param reservationStatus - what the reservation actually is, `none` when it never existed
@@ -113,6 +115,7 @@ const raiseOrphanAlarm = (
         targetId: orderId,
         metadata: { reservationStatus, stage }
     });
+    inventoryCommitOrphanedTotal.inc({ stage });
 };
 
 /**

@@ -199,7 +199,7 @@ Taking a multi-line hold's lines is ordered by product id, so two checkouts list
 products oppositely meet on the same product first, and one goes on rather than both refusing.
 :::
 
-## A paid order with no hold at all is an incident, not a no-op
+## A paid order with no hold at all is an incident, not a no-op {#orphaned-hold}
 
 A paid order always commits its hold, and a shipped one always ships it. When `commitForOrder`'s or
 `shipForOrder`'s claim misses, that is one of three very different facts, and it tells them apart
@@ -216,7 +216,28 @@ before deciding what to do:
   sold in the meantime and cannot be taken back, a safety net for any caller that did not use
   `markPaid`.
 
-The alarm only **records** the fact; a human checks the stock and decides ship or refund.
+The alarm **records** the fact and **pages**: the counter `inventory_commit_orphaned_total{stage}` rises
+with it, which fires the `PaidOrderWithoutHold` alert (severity `critical`, see
+[Prometheus](../tools/prometheus.md)). A human checks the stock and decides ship or refund.
+
+::: info Where the page goes
+`critical` means email **and** the webhook. Until `ALERT_WEBHOOK_URL` is set, only the email reaches
+anyone, so read the alert mailbox. Setting up a phone push is a deployment choice, not part of this
+module.
+:::
+
+### When the alert fires
+
+1. Read the `admin.commit.orphaned` audit row: it names the order, the `stage` and the
+   `reservationStatus`. `none` means no hold ever existed; `released` at `commit` means the units
+   were sold in the meantime and could not be taken again.
+2. `none` means the database was edited or restored, not that a payment arrived late: no checkout
+   door produces an order without a hold.
+3. **Stage `commit`:** if the units are on the shelf, restore the reservation by hand; if they are
+   not, cancel the order, which refunds it.
+4. **Stage `ship`:** the units left the shelf without a hold behind them. Lower `onHand` with an
+   `adjust` so the count is true again.
+5. Find out who changed the database or what restore put the order out of step with the stock.
 
 ### Money can land on a released hold: take the units again
 
@@ -361,4 +382,4 @@ slice parses the environment once per process: a changed variable takes effect o
 - [Checkout](./cart-checkout.md) — where a hold is taken
 - [`payments`](./payments.md) — where a hold becomes a sale
 - [`orders`](./orders.md) — the listener for `inventory.reservation_expired`
-- [Prometheus](../tools/prometheus.md) — the two gauges this module exports
+- [Prometheus](../tools/prometheus.md) — the two gauges this module exports, and its orphaned-commit counter
