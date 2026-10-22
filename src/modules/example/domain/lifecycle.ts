@@ -1,12 +1,14 @@
 /**
  * @module
- * In any module: the rules that decide, with no I/O. Here, the life of an example —
- * draft, published, archived — and the two small facts that hang off it.
+ * In any module: the rules that decide, with no I/O.
+ * Here: the life of an example — draft, published, archived — the moves it has, the actions a caller
+ * may take on it, and the two small facts that hang off it.
  *
  * See: docs/theory/domain-layer.md
  */
 
 import { ExampleStatus } from '@types';
+import type { ExampleActions } from '@types';
 
 /**
  * Which status each status may move to. Archived goes back to draft and nowhere else: a published
@@ -22,13 +24,35 @@ const TRANSITIONS: Readonly<Record<ExampleStatus, readonly ExampleStatus[]>> = {
 export const initialExampleStatus: ExampleStatus = ExampleStatus.draft;
 
 /**
- * Whether a write may move an example from one status to another. Staying where it is is always
- * fine: a PUT that restates the status must not fail.
+ * Whether the lifecycle has this move. Staying where it is is not a move.
  * @param from - the status the example holds now
- * @param to - the status the write asks for
+ * @param to - the status the move asks for
  */
 export const canTransition = (from: ExampleStatus, to: ExampleStatus): boolean =>
-    from === to || TRANSITIONS[from].includes(to);
+    TRANSITIONS[from].includes(to);
+
+/**
+ * Every status an example in `status` may move to, in the contract's order, its own status
+ * excluded.
+ * @param status - the status the example holds now
+ */
+export const statusesReachableFrom = (status: ExampleStatus): readonly ExampleStatus[] =>
+    TRANSITIONS[status];
+
+/**
+ * What a caller may do to an example in `status`, given what their keys allow on that row. The
+ * moves are the lifecycle's; whether this caller may make any is the `update` key's.
+ * @param status - the status the example holds now
+ * @param permits - the caller's keys on this row, answered by the kernel
+ */
+export const exampleActionsFor = (
+    status: ExampleStatus,
+    permits: { update: boolean; delete: boolean }
+): ExampleActions => ({
+    transitions: permits.update ? [...statusesReachableFrom(status)] : [],
+    update: permits.update,
+    delete: permits.delete
+});
 
 /**
  * Whether anyone, signed in or not, may read an example.

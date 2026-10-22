@@ -305,7 +305,9 @@ re-implementing the rules — a status dropdown listing every enum value, a canc
 deployed codebase, with nothing able to notice when they drift.
 
 So the server sends the answer. `Order.actions` and `PaymentActions` are computed per REQUEST, not
-stored:
+stored. `example` is the minimal worked case: `Example.actions` is `{ transitions, update, delete }`,
+the moves from the domain's table and the two keys asked of the kernel per row (`permitsOnRows`), so
+the own-rows condition in `authorization.yaml` stays its only encoding:
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
@@ -360,6 +362,10 @@ as a second offer to pay.
 The client's side of the bargain is to decide nothing. A control is enabled when the server says so
 and disabled otherwise, which is what makes a rule change on the API move the interface without the
 interface being edited.
+
+Every door a client offers as a control has its flag, including the forced and destructive ones
+(delete, hard delete, a forced ship or arrival, a replay). A refusal described only in the
+operation's prose leaves the client to copy the rule.
 
 ---
 

@@ -6,7 +6,7 @@
  */
 
 import { t } from '@infrastructure/i18n';
-import { OrderStatus, type CallerContext } from '@types';
+import type { CallerContext } from '@types';
 import type { OrderDocument } from '../model';
 import {
     generateReject,
@@ -18,6 +18,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { ordersAuditActions } from '../audit';
 import { orderRepository } from '../repository';
 import { deleteTimelineOf } from './timeline';
+import { hardDeletable, softDeletable } from '../domain';
 import { ERROR_CODES } from '@api/error-codes';
 
 /** The 409 a hard delete answers with once the order is paid: its invoice must survive it. */
@@ -40,8 +41,8 @@ const orderNotCancelled = (): ResponseReject =>
  * @param order - the order as it is now
  */
 const hardDeleteRefusal = (order: OrderDocument): ResponseReject | undefined => {
-    if (order.paidAt) return orderInvoiced();
-    return order.status === OrderStatus.cancelled ? undefined : orderNotCancelled();
+    if (hardDeletable(order)) return undefined;
+    return order.paidAt ? orderInvoiced() : orderNotCancelled();
 };
 
 /**
@@ -110,7 +111,7 @@ export const remove = (
 
     // Hidden means finished: a hidden open order could still be paid or shipped while its buyer
     // can neither see, cancel nor withdraw it. Cancel first (which refunds), then hide.
-    if (order.status !== OrderStatus.cancelled) return Promise.resolve(orderNotCancelled());
+    if (!softDeletable(order)) return Promise.resolve(orderNotCancelled());
 
     order.deletedAt = new Date();
     return orderRepository.save(order).then((saved) => {

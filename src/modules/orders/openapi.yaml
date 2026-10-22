@@ -1219,7 +1219,9 @@ components:
                     override,
                     correctAddress,
                     invoice,
-                    withdraw
+                    withdraw,
+                    delete,
+                    hardDelete
                 ]
             description: >-
                 What the requesting caller may do to this order, decided by the server. A client
@@ -1308,6 +1310,17 @@ components:
                         A client prints its date only. The shop accepts a withdrawal one day past
                         it. Absent before the period starts: the right already exists, the window
                         has no end yet.
+                delete:
+                    type: boolean
+                    description: >-
+                        Whether `DELETE /orders/{id}` would be accepted for this caller: the caller
+                        holds `delete:Order`, the order is `cancelled` and not already hidden.
+                hardDelete:
+                    type: boolean
+                    description: >-
+                        Whether `DELETE /orders/{id}?hardDelete=true` would be accepted for this
+                        caller: the caller holds `delete:Order`, and the order is `cancelled` and was
+                        never paid (a paid order's invoice must survive it).
                 invoice:
                     type: boolean
                     description: >-

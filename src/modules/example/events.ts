@@ -1,8 +1,9 @@
 /**
  * @module
- * Optional capability, in its own file: the domain events this module emits, added by augmenting
- * the kernel's payload map — see `modules/orders/events.ts` for why augmentation rather than a
- * central list. Each one also becomes a public webhook through `module.ts`'s `publicEvents`.
+ * In any module: the domain events it emits, added by augmenting the kernel's payload map — see
+ * `modules/orders/events.ts` for why augmentation rather than a central list.
+ * Here: `example.published`, which also becomes a public webhook through `module.ts`'s `publicEvents`.
+ * Delete it if: the module announces nothing to the rest of the app.
  *
  * See: docs/tools/events-and-logging.md#the-domain-event-bus-and-what-it-is-not
  */

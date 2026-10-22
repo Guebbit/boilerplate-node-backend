@@ -1,8 +1,9 @@
 /**
  * @module
- * Optional capability, in its own file: this module's rate-limit budgets, as data
- * (`RateLimitBudget`, listed on `module.ts`'s `rateLimits`) turned into middleware by the one
- * `buildRateLimiter` every module uses. Delete the file and its route mount to drop it.
+ * In any module: its rate-limit budgets as data (`RateLimitBudget`, listed on `module.ts`'s
+ * `rateLimits`), turned into middleware by the one `buildRateLimiter` every module uses.
+ * Here: a create budget per caller.
+ * Delete it if: the module needs no budget (and its route mount).
  *
  * See: docs/tools/security.md#the-rate-limit-budgets
  */

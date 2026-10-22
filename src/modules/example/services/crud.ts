@@ -2,7 +2,8 @@
  * @module
  * In any module: the service is the one door (`./index.ts` composes it). Controllers and sibling modules call it; it applies
  * the domain rules, talks to the repository and to other modules' barrels, and announces what
- * happened (audit, metric, event). Here: create, read, search, edit and delete.
+ * happened (audit, metric, event). Here: create, read, search, edit and delete. The status is
+ * not edited here: `./transition.ts` is its door.
  *
  * Who may see or change which row is not decided by hand: `accessibleFilterFor` compiles the
  * caller's keys (`authorization.yaml`) into the query, so a row you may not touch is simply not found.
@@ -26,27 +27,18 @@ import {
 } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { accessibleFilterFor } from '@kernel/access/query';
-import { announceInTransaction } from '@kernel/outbox';
 import { exampleAuditActions } from '../audit';
-import { exampleAnalyticsEvents } from '../analytics';
 import { exampleCreatedTotal } from '../metrics';
 import { exampleConfig } from '../config';
-import { EXAMPLE_PUBLISHED } from '../events';
-import {
-    canTransition,
-    fitsBodyLength,
-    initialExampleStatus,
-    isPublished,
-    shouldStampPublishedAt
-} from '../domain';
+import { fitsBodyLength, initialExampleStatus } from '../domain';
 import type { ExampleDocument } from '../model';
 import { presentExampleRow } from '../presenter';
-import { ownerNamesOf, presentWithOwner } from './owner';
+import { ownerNamesOf, presentForCaller, presentPublic } from './owner';
+import { actionsForRows } from './actions';
 import { exampleRepository } from '../repository';
 
 /** Every answer a write gives: the example as the contract shapes it, or the refusal. */
@@ -71,20 +63,6 @@ const bodyTooLong = (body: string | undefined): ResponseReject | undefined => {
     return body !== undefined && !fitsBodyLength(body, maximum)
         ? generateReject(422, [t('example.error-body-too-long', { maximum })])
         : undefined;
-};
-
-/**
- * Record a publish as an analytics event. The domain event is not here: it rides the outbox, in
- * the transaction that wrote the publish.
- * @param example - the example that was just published
- * @param context - the caller, for the analytics base
- */
-const analysePublished = (example: ExampleDocument, context: CallerContext): void => {
-    emitAnalyticsEvent({
-        ...buildAnalyticsBase(context),
-        event: exampleAnalyticsEvents.EXAMPLE_PUBLISHED,
-        properties: { example_id: String(example._id) }
-    });
 };
 
 /**
@@ -118,7 +96,7 @@ export const create = (
                 targetType: 'example',
                 targetId: String(created._id)
             });
-            return presentWithOwner(created);
+            return presentForCaller(created, context);
         })
         .then((example) => generateSuccess(example, 201, t('example.created')));
 };
@@ -133,7 +111,7 @@ export const create = (
 export const getById = (id: string, context: CallerContext): Promise<Example | null> =>
     exampleRepository
         .findScoped(id, scopeOf(context, 'read'))
-        .then((example) => (example ? presentWithOwner(example) : null));
+        .then((example) => (example ? presentForCaller(example, context) : null));
 
 /**
  * One PUBLISHED example, for anyone. The status is part of the query, so a draft and a missing
@@ -145,7 +123,7 @@ export const getById = (id: string, context: CallerContext): Promise<Example | n
 export const getPublishedById = (id: string): Promise<Example | null> =>
     exampleRepository
         .findScoped(id, { status: ExampleStatus.published })
-        .then((example) => (example ? presentWithOwner(example) : null));
+        .then((example) => (example ? presentPublic(example) : null));
 
 /**
  * Search the examples the caller may read, paginated.
@@ -166,112 +144,44 @@ export const search = (
             ...scopeOf(context, 'read'),
             ...(filters.status ? { status: filters.status } : {})
         })
-        .then(({ items, meta }) =>
-            ownerNamesOf(items.map((row) => row.userId)).then((names) => ({
-                items: items.map((row) => presentExampleRow(row, names.get(row.userId) ?? '')),
+        .then(({ items, meta }) => {
+            const actionsFor = actionsForRows(context);
+            return ownerNamesOf(items.map((row) => row.userId)).then((names) => ({
+                items: items.map((row) =>
+                    presentExampleRow(row, names.get(row.userId) ?? '', actionsFor(row))
+                ),
                 meta
-            }))
-        );
+            }));
+        });
 
 /**
- * Write an edit that moves an example INTO published, and announce it through the outbox.
- *
- * The write matches only while the status is still the one read, so of two racing publishes one
- * lands and announces. The loser re-reads and goes through the update again, where the example
- * is already published and nothing is announced.
- *
- * See: docs/tools/outbox.md
- *
- * @param example - the loaded example, already carrying the edit in memory
- * @param before - the status it was read in
- * @param context - the caller
- * @returns the saved example, or `null` when a peer changed the status first
- */
-const publishAndAnnounce = (
-    example: ExampleDocument,
-    before: ExampleDocument['status'],
-    context: CallerContext
-): Promise<ExampleDocument | null> =>
-    announceInTransaction(
-        (session) =>
-            exampleRepository.publishFrom(
-                String(example._id),
-                before,
-                {
-                    title: example.title,
-                    body: example.body,
-                    status: example.status,
-                    publishedAt: example.publishedAt
-                },
-                session
-            ),
-        (saved) => ({
-            name: EXAMPLE_PUBLISHED,
-            payload: {
-                exampleId: String(saved._id),
-                userId: String(saved.userId),
-                title: saved.title
-            },
-            aggregateId: String(saved._id)
-        })
-    ).then((saved) => {
-        if (saved) analysePublished(saved, context);
-        return saved;
-    });
-
-/**
- * Write a validated change onto an example already loaded, then audit and announce it.
+ * Write a validated change onto an example already loaded, then audit it. Plain fields only: the
+ * status has its own door (`./transition.ts`), because a move can announce and a field edit cannot.
  *
  * @param example - the loaded example, already cleared by the scope
  * @param changes - the validated body; an omitted field stays as it is
  * @param context - the caller
- * @returns 422 for an illegal status move, otherwise the saved example
+ * @returns the saved example
  */
 const applyUpdate = (
     example: ExampleDocument,
     changes: UpdateExampleRequest,
     context: CallerContext
 ): Promise<ExampleResult> => {
-    const before = example.status;
-    const next = changes.status ?? before;
-    if (!canTransition(before, next))
-        return Promise.resolve(
-            generateReject(422, [t('example.error-transition', { from: before, to: next })])
-        );
-
     if (changes.title !== undefined) example.title = changes.title.trim();
     if (changes.body !== undefined) example.body = changes.body.trim();
-    example.status = next;
-    if (shouldStampPublishedAt(next, example.publishedAt)) example.publishedAt = new Date();
 
-    const finish = (saved: ExampleDocument): Promise<ExampleResult> => {
+    return exampleRepository.save(example).then((saved) => {
         recordAudit(context, {
             action: exampleAuditActions.EXAMPLE_UPDATED,
             outcome: 'success',
             targetType: 'example',
-            targetId: String(saved._id),
-            metadata: { status: next }
+            targetId: String(saved._id)
         });
-        return presentWithOwner(saved).then((shaped) =>
+        return presentForCaller(saved, context).then((shaped) =>
             generateSuccess(shaped, 200, t('example.updated'))
         );
-    };
-
-    if (isPublished(before) || !isPublished(next))
-        return exampleRepository.save(example).then(finish);
-
-    return publishAndAnnounce(example, before, context).then((saved) =>
-        saved
-            ? finish(saved)
-            : // A peer moved the status first: start over from what it left.
-              exampleRepository
-                  .findScoped(String(example._id), scopeOf(context, 'update'))
-                  .then((fresh) =>
-                      fresh
-                          ? applyUpdate(fresh, changes, context)
-                          : generateReject(404, [t('example.not-found')])
-                  )
-    );
+    });
 };
 
 /**
@@ -282,8 +192,8 @@ const applyUpdate = (
  * @param id - the example's id
  * @param changes - the validated body; an omitted field stays as it is
  * @param context - the caller
- * @returns 404 when the caller may not edit one by that id, 422 for an illegal status move or an
- *   over-long body, otherwise the saved example
+ * @returns 404 when the caller may not edit one by that id, 422 for an over-long body, otherwise
+ *   the saved example
  */
 export const updateById = (
     id: string,

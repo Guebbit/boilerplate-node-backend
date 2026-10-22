@@ -22,7 +22,9 @@ import {
     canWithdraw,
     withdrawalRefusalOf,
     shipsAwaitedStock,
-    isBuyer
+    isBuyer,
+    hardDeletable,
+    softDeletable
 } from '../domain';
 import type { OrderActor } from '../domain';
 import { resolveCurrentImages } from './current';
@@ -204,6 +206,24 @@ const withdrawalActions = (
 };
 
 /**
+ * `DELETE /orders/{id}` and its `?hardDelete=true` form: the caller holds the delete key and the
+ * order is in a state the door accepts — the same predicates the door asks (`remove.ts`).
+ * @param order - the order being served
+ * @param authContext - the caller, or `undefined` for no request behind this read
+ */
+const deleteActions = (
+    order: OrderDocument,
+    authContext: AuthContext | undefined
+): Pick<OrderActions, 'delete' | 'hardDelete'> => {
+    if (!authContext) return { delete: false, hardDelete: false };
+    const mayDelete = holds(callerForSubject(authContext, 'Order'), 'delete', 'Order');
+    return {
+        delete: mayDelete && !order.deletedAt && softDeletable(order),
+        hardDelete: mayDelete && hardDeletable(order)
+    };
+};
+
+/**
  * The actions as the caller's standing allows them: the status-derived moves for the order's buyer
  * (a customer actor) or for an operator, who holds the key; paying is the buyer's own step.
  *
@@ -246,6 +266,7 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
                 ...startAndOverrideActions(order, authContext),
                 ...withdrawalActions(order, authContext),
                 recordPayment: canRecordPayment(order.status, authContext),
+                ...deleteActions(order, authContext),
                 // `paidAt` is stamped in the SAME write that moves an order to `paid`
                 // (`repository.ts#markPaid`), so it is a same-module, no-dependency proxy for
                 // "an invoice was issued" — `invoicing` freezes one from the very same

@@ -725,11 +725,13 @@ describe('withActions', () => {
             start: false,
             override: [],
             invoice: false,
-            withdraw: true
+            withdraw: true,
+            delete: false,
+            hardDelete: false
         });
     });
 
-    it('offers an operator nothing on a terminal order', async () => {
+    it('offers an operator nothing but the delete on a terminal order', async () => {
         const user = await createUser();
         const order = await seedOrder(user);
         await orderService.cancelOnRequestById(String(order._id), asAdmin());
@@ -746,7 +748,9 @@ describe('withActions', () => {
             start: false,
             override: [],
             invoice: false,
-            withdraw: false
+            withdraw: false,
+            delete: true,
+            hardDelete: true
         });
     });
 

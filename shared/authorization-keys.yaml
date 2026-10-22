@@ -873,6 +873,11 @@ sets:
           - create:Example
           - update:Example
           - delete:Example
+    - name: ExampleDisplay
+      module: example
+      description: Read every example, whoever owns it, and edit only one's own.
+      rules:
+          - display:Example
     - name: ExampleManagement
       module: example
       description: Read, edit and remove every example, whoever owns it.

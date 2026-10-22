@@ -1,10 +1,10 @@
 /**
  * @module
- * Optional capability, in its own files: a cover image. The upload middleware has already
- * quarantined the bytes; this applies the result to the row, hands a pending upload to the digest
- * pipeline (`imageTargets` in `module.ts` is where the pipeline writes back), and drops the image
- * it replaced. Delete this file, `../controllers/put-example-cover.ts`, the route, the contract path
- * and the manifest entry to drop it.
+ * In any module: an upload capability applies what the upload middleware produced to the row,
+ * hands a pending image to the digest pipeline (`imageTargets` in `module.ts`) and drops the one it
+ * replaced. Here: an example's cover image.
+ * Delete it if: the module has no upload (with the controller, the route, the contract path and the
+ * manifest entry).
  *
  * See: docs/tools/image-processing.md
  */
@@ -24,7 +24,7 @@ import { afterCommit } from '@infrastructure/runtime/after-commit';
 import type { ImageChanges } from '@infrastructure/http/uploads';
 import { accessibleFilterFor } from '@kernel/access/query';
 import { exampleAuditActions } from '../audit';
-import { presentWithOwner } from './owner';
+import { presentForCaller } from './owner';
 import type { ExampleDocument } from '../model';
 import { exampleRepository } from '../repository';
 
@@ -75,7 +75,7 @@ const applyCover = (
                 targetType: 'example',
                 targetId: String(saved._id)
             });
-            return presentWithOwner(saved);
+            return presentForCaller(saved, context);
         })
         .then((shaped) => generateSuccess(shaped, 200, t('example.cover-changed')));
 };

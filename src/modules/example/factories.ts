@@ -2,6 +2,9 @@
  * @module
  * In any module: how a row is built for a test or a seed. Reachable at `@modules/<name>/factories`
  * and never from the barrel — it writes past the rules a service enforces.
+ * Here: one draft example, with every field defaulted.
+ *
+ * See: docs/theory/modules.md#what-a-module-contains
  */
 
 import { Types } from 'mongoose';

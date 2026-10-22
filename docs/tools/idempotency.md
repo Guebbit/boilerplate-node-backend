@@ -73,18 +73,19 @@ source of truth, so — like every other durable, TTL-bound collection in this r
 
 ## Where it is mounted
 
-| Route                                                     | Why                                                                                        |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `POST /orders`                                            | Admin order creation; a retried request must replay the same order, not mint a second one. |
-| `POST /cart/checkout`                                     | Places the order; a retry after a lost response must replay it, never place a second.      |
-| `POST /cart/merge`                                        | A retry must not add the guest's quantities twice.                                         |
-| `POST /payments/{id}/confirm`                             | Charges the card.                                                                          |
-| `POST /payments/order/{orderId}/offline`                  | An admin recording money by hand; a repeat must not record it twice.                       |
-| `POST /payments/order/{orderId}/refund`                   | Returns money — a double submit must refund once. The key is REQUIRED: no header, a 400.   |
-| `POST /returns`, `POST /returns/{id}/receive`             | A retried return request or receipt must replay, not open or receive twice.                |
-| `POST /inventory/receipts`, `POST /inventory/adjustments` | Stock never moves twice for one delivery or one correction.                                |
-| `POST /account/signup`                                    | Sybil accounts aside, a retried signup must not create two.                                |
-| `POST /feedback/contact`                                  | The public contact form has no other identity to dedupe a retry on.                        |
+| Route                                                     | Why                                                                                              |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `POST /orders`                                            | Admin order creation; a retried request must replay the same order, not mint a second one.       |
+| `POST /cart/checkout`                                     | Places the order; a retry after a lost response must replay it, never place a second.            |
+| `POST /cart/merge`                                        | A retry must not add the guest's quantities twice.                                               |
+| `POST /payments/{id}/confirm`                             | Charges the card.                                                                                |
+| `POST /payments/order/{orderId}/offline`                  | An admin recording money by hand; a repeat must not record it twice.                             |
+| `POST /payments/order/{orderId}/refund`                   | Returns money — a double submit must refund once. The key is REQUIRED: no header, a 400.         |
+| `POST /returns`, `POST /returns/{id}/receive`             | A retried return request or receipt must replay, not open or receive twice.                      |
+| `POST /inventory/receipts`, `POST /inventory/adjustments` | Stock never moves twice for one delivery or one correction.                                      |
+| `POST /account/signup`                                    | Sybil accounts aside, a retried signup must not create two.                                      |
+| `POST /examples`                                          | The template's idempotent create: a retried create replays the first answer, not a second draft. |
+| `POST /feedback/contact`                                  | The public contact form has no other identity to dedupe a retry on.                              |
 
 The refund uses `requireIdempotencyKey`: the IETF Idempotency-Key draft makes a missing key on a
 non-idempotent write a client error, and a refund repeated by a retry returns the money twice. Its

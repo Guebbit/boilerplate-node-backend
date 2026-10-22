@@ -7,7 +7,8 @@
         "not-found": "The example was not found.",
         "owner-unknown": "Unknown owner",
         "cover-missing": "Send the image as the imageUpload field.",
-        "error-transition": "An example cannot go from {{from}} to {{to}}.",
+        "transition-not-allowed": "An example cannot go from {{from}} to {{to}}.",
+        "status-changed": "The example is now {{to}}.",
         "error-body-too-long": "The body may have at most {{maximum}} characters.",
         "email-published": {
             "subject": "Your example is published: {{title}}",

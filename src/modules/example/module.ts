@@ -1,11 +1,10 @@
 /**
  * @module
- * The example module: a small note with an owner and a draft, published, archived life. Its only
- * job is to be copied when you start a new domain, and deleted once you have your own. It depends
- * on `users` (through its barrel) for the owner's name, and nothing depends on it.
- *
  * In any module: the manifest below is everything this module asks the application to do for it.
  * Each optional capability is one entry here plus its own files, and each can be deleted alone.
+ * Here: a small note with an owner and a draft, published, archived life. Its only job is to be
+ * copied when you start a new domain, and deleted once you have your own. It depends on `users`
+ * (through its barrel) for the owner's name, and nothing depends on it.
  *
  * Capability       Files                                      Manifest entry
  * ---------------  -----------------------------------------  ---------------------------
@@ -17,6 +16,12 @@
  * typed setting    ./config.ts                                  config
  * demo seed        ../../../scenarios/example.ts               (the scenario table)
  * metrics, probes, analytics   ./metrics.ts, ./probes.ts, ./analytics.ts   (found by name)
+ * action endpoint   ./services/transition.ts, ./controllers/post-example-transition.ts   (the route)
+ * capabilities     ./services/actions.ts, ./domain/lifecycle.ts  (`actions` on the wire)
+ * idempotent create  `idempotencyKey` in ./routes.ts             (the route)
+ *
+ * Instead see: `orders` for a step-up-gated key (`override:Order`), a scheduled job and a CSV
+ * export; `users` for PII at rest and soft delete; `payments` for an outbound port.
  *
  * See: docs/theory/modules.md#the-module-template
  */

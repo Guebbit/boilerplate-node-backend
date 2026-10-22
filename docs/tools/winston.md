@@ -171,6 +171,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `example`        | `EXAMPLE_COVER_CHANGED`                      | `example.cover_changed`                      | `example`              |
 | `example`        | `EXAMPLE_CREATED`                            | `example.created`                            | `example`              |
 | `example`        | `EXAMPLE_DELETED`                            | `example.deleted`                            | `example`              |
+| `example`        | `EXAMPLE_STATUS_CHANGED`                     | `example.status_changed`                     | `example`              |
 | `example`        | `EXAMPLE_UPDATED`                            | `example.updated`                            | `example`              |
 | `feedback`       | `ADMIN_FEEDBACK_DELETED`                     | `admin.feedback.deleted`                     | `feedback`             |
 | `feedback`       | `ADMIN_FEEDBACK_STATUS_UPDATED`              | `admin.feedback.status_updated`              | `feedback`             |

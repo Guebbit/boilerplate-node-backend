@@ -172,6 +172,8 @@ roles:
           - ReturnManagement
           - AuditDisplay
           - ExampleAuthoring
+          # Other people's examples are readable, never editable: the demo's read-only persona.
+          - ExampleDisplay
 
     - name: admin
       scope: tenant

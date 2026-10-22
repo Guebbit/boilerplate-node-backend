@@ -17,7 +17,7 @@
  * themselves — a file the PHP twin reads byte-for-byte identically.
  */
 
-import { AbilityBuilder, createMongoAbility, type MongoAbility } from '@casl/ability';
+import { AbilityBuilder, createMongoAbility, subject, type MongoAbility } from '@casl/ability';
 import type { Caller } from '@types';
 import { findRule, IMPLIED_ACTIONS, ruleId, type DeclaredRule } from '@kernel/permissions';
 
@@ -164,3 +164,33 @@ export const holds = (caller: Caller, action: string, subject: string): boolean 
  */
 export const heldRules = (caller: Caller): ReadonlySet<string> =>
     new Set(effectiveRules(caller).map((rule) => rule.id));
+
+/**
+ * Which of `actions` the caller may take on THIS row — the per-row twin of `holds` and of the
+ * compiled query filter. The conditions in the shared keys file (`userId: $caller.id`) stay the
+ * only encoding of "own rows": the ability is built once, then asked about each row, so a module
+ * never restates the rule in code.
+ *
+ * @param caller - the caller, in the subject's scope
+ * @param subjectName - the CASL subject, e.g. `Example`
+ * @param actions - the actions to answer, e.g. `['update', 'delete']`
+ * @returns a function from a row to one boolean per action; every answer is `false` for a caller
+ *   with no matching rule
+ */
+export const permitsOnRows = <TAction extends string>(
+    caller: Caller,
+    subjectName: string,
+    actions: readonly TAction[]
+): ((row: Record<string, unknown>) => Record<TAction, boolean>) => {
+    const ability = buildAbility(caller);
+    // CASL `subject(type, object)` tags a plain object with its subject type, so conditions can be
+    // matched against it. The tenant comes from the caller, as in `buildAbility`'s own rules.
+    // https://casl.js.org/v6/en/guide/subject-type-detection
+    return (row) =>
+        Object.fromEntries(
+            actions.map((action) => [
+                action,
+                ability.can(action, subject(subjectName, { ...row, tenantId: caller.tenantId }))
+            ])
+        ) as Record<TAction, boolean>;
+};

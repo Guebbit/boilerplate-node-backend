@@ -8,6 +8,9 @@ tags:
     - name: Examples
       description: The example module - the small, complete domain to copy when starting a new one. Safe to delete.
 
+x-error-codes:
+    EXAMPLE_TRANSITION_NOT_ALLOWED: { status: 409, description: 'The example cannot move from its current status to the one asked, or another request moved it first. `errors[].details` is `{ from, to }`; `Example.actions.transitions` lists the moves still open.' }
+
 # This module's section of the account data export (`POST /account/export`): the bundler
 # adds it to `AccountExportResponse`. Removing the module removes the section.
 x-personal-data:
@@ -80,10 +83,12 @@ paths:
         post:
             tags: [Examples]
             summary: Create an example
-            description: Creates a draft example owned by the caller.
+            description: Creates a draft example owned by the caller. Sending `Idempotency-Key` makes a retry safe, since the same key replays the first answer.
             operationId: createExample
             security:
                 - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:
@@ -101,6 +106,9 @@ paths:
                                 $ref: '#/components/schemas/ExampleEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # `Idempotency-Key` names a request still in flight.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # Also a key reused with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `createExampleLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
@@ -159,7 +167,7 @@ paths:
         put:
             tags: [Examples]
             summary: Replace an example
-            description: Replaces the example's writable fields (RFC 9110 §9.3.4). `title`, `body` and `status` are required, since a PUT names the whole representation.
+            description: Replaces the example's writable fields (RFC 9110 §9.3.4). `title` and `body` are required, since a PUT names the whole representation. The status moves through `POST /examples/{id}/transitions`.
             operationId: replaceExampleById
             security:
                 - bearerAuth: []
@@ -181,7 +189,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # An illegal status move — see `ExampleStatus`.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
@@ -228,6 +235,45 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # Its own door, not a PATCH field: a move into `published` writes an outbox event and mails the
+    # owner, and `update` does not decide (docs/theory/tactical-ddd.md). No `If-Match`: the write is
+    # conditional on the status read, so of two racing moves exactly one lands.
+    /examples/{id}/transitions:
+        post:
+            tags: [Examples]
+            summary: Move an example to another status
+            description: >-
+                Moves the example to `to`. Which moves are open is the caller's
+                `Example.actions.transitions`. A move into `published` stamps `publishedAt` the first
+                time, announces `example.published` and mails the owner. Another person's example
+                answers `404`, as every write here does.
+            operationId: transitionExample
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TransitionExampleRequest'
+            responses:
+                '200':
+                    description: The example, moved
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ExampleEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Not a move the lifecycle has from the current status (staying put included), or a
+                # racing move landed first. `errors[].code` is `EXAMPLE_TRANSITION_NOT_ALLOWED`.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     # Its own route rather than a field on create and update: an upload travels as multipart, and
@@ -344,6 +390,40 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+                # Absent on the public read and in the data export: nobody is acting there.
+                actions:
+                    $ref: '#/components/schemas/ExampleActions'
+
+        ExampleActions:
+            type: object
+            additionalProperties: false
+            required: [transitions, update, delete]
+            description: >-
+                What the requesting caller may do to this example, decided by the server. A client
+                renders its controls from this instead of re-implementing the lifecycle or the
+                ownership rule: both depend on who asks, and a second copy in a separately deployed
+                client is how the two come to disagree.
+            properties:
+                transitions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExampleStatus'
+                    description: The statuses this caller may move the example to through `POST /examples/{id}/transitions`. Never contains the current status; empty when the caller may not edit it.
+                    example: [published, archived]
+                update:
+                    type: boolean
+                    description: Whether `PATCH`/`PUT /examples/{id}` and `PUT /examples/{id}/cover` would be accepted for this caller.
+                delete:
+                    type: boolean
+                    description: Whether `DELETE /examples/{id}` would be accepted for this caller.
+
+        TransitionExampleRequest:
+            type: object
+            additionalProperties: false
+            required: [to]
+            properties:
+                to:
+                    $ref: '#/components/schemas/ExampleStatus'
 
         CreateExampleRequest:
             type: object
@@ -379,7 +459,7 @@ components:
         ReplaceExampleRequest:
             type: object
             additionalProperties: false
-            required: [title, body, status]
+            required: [title, body]
             properties:
                 title:
                     type: string
@@ -389,8 +469,6 @@ components:
                     type: string
                     minLength: 1
                     maxLength: 20000
-                status:
-                    $ref: '#/components/schemas/ExampleStatus'
 
         # PATCH /examples/{id} — RFC 7396: every field optional, omitted means unchanged.
         UpdateExampleRequest:
@@ -405,8 +483,6 @@ components:
                     type: string
                     minLength: 1
                     maxLength: 20000
-                status:
-                    $ref: '#/components/schemas/ExampleStatus'
 
         ReplaceExampleCoverRequestMultipart:
             type: object
