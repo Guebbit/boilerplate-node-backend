@@ -361,6 +361,10 @@ The client's side of the bargain is to decide nothing. A control is enabled when
 and disabled otherwise, which is what makes a rule change on the API move the interface without the
 interface being edited.
 
+Every door a client offers as a control has its flag, including the forced and destructive ones
+(delete, hard delete, a forced ship or arrival, a replay). A refusal described only in the
+operation's prose leaves the client to copy the rule.
+
 ---
 
 ## 3. Money

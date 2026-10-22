@@ -10,6 +10,7 @@ import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
 import { canRecordArrival, canShip, isAwaitingGoods } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
+import { isOpenForShipment } from './ship-gate';
 import type {
     AuthContext,
     FulfillmentOrder,
@@ -21,10 +22,12 @@ import { isFulfillable, isHoldable, isReleasable, isShippable } from '../domain'
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import { presentFulfillmentOrder, presentShipment } from '../presenter';
 
-/** How the caller stands to an order: may they update fulfilment. */
+/** How the caller stands to an order: may they update fulfilment, may they force a move. */
 export interface Standing {
     /** The caller holds `update:Shipment`. */
     staff: boolean;
+    /** The caller holds `override:Order`: the forced ship and the forced arrival. */
+    override: boolean;
 }
 
 /**
@@ -33,8 +36,11 @@ export interface Standing {
  */
 export const standingOn = (authContext: AuthContext | undefined): Standing =>
     authContext
-        ? { staff: holds(callerForSubject(authContext, 'Shipment'), 'update', 'Shipment') }
-        : { staff: false };
+        ? {
+              staff: holds(callerForSubject(authContext, 'Shipment'), 'update', 'Shipment'),
+              override: holds(callerForSubject(authContext, 'Order'), 'override', 'Order')
+          }
+        : { staff: false, override: false };
 
 /**
  * What the caller may do to one fulfillment order.
@@ -48,8 +54,17 @@ export const fulfillmentOrderActions = (
     standing: Standing
 ): FulfillmentOrderActions => {
     const may = standing.staff;
+    const ship = may && canShip(order.status) && isShippable(fulfillmentOrder);
     return {
-        ship: may && canShip(order.status) && isShippable(fulfillmentOrder),
+        ship,
+        // `POST …/shipments` with `forced: true` — the same gate the door applies, the ordinary
+        // door closed (otherwise `ship` already says yes).
+        forceShip:
+            may &&
+            standing.override &&
+            !ship &&
+            isOpenForShipment(order.status, true) &&
+            isShippable(fulfillmentOrder),
         fulfill: may && canShip(order.status) && isFulfillable(fulfillmentOrder),
         hold: may && isAwaitingGoods(order.status) && isHoldable(fulfillmentOrder),
         release: may && isAwaitingGoods(order.status) && isReleasable(fulfillmentOrder)

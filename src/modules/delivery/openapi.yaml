@@ -633,7 +633,7 @@ components:
         FulfillmentOrderActions:
             type: object
             additionalProperties: false
-            required: [ship, fulfill, hold, release]
+            required: [ship, forceShip, fulfill, hold, release]
             description: >-
                 What the requesting caller may do to this fulfillment order, decided by the server so
                 a client renders its controls from this. `ship`, `fulfill`, `hold` and `release` are
@@ -642,6 +642,13 @@ components:
                 ship:
                     type: boolean
                     description: Whether `POST /delivery/fulfillment-orders/{id}/shipments` would be accepted — a physical order, open or in progress, with lines remaining.
+                forceShip:
+                    type: boolean
+                    description: >-
+                        Whether `POST /delivery/fulfillment-orders/{id}/shipments` with `forced: true`
+                        would be accepted and the ordinary door would not: the caller holds
+                        `override:Order`, the order is `paid` (or otherwise not yet `processing`) and
+                        the fulfillment order still has units to ship.
                 fulfill:
                     type: boolean
                     description: Whether `POST /delivery/fulfillment-orders/{id}/fulfill` would be accepted — a `digital` one, open.

@@ -46,16 +46,21 @@ with, and a hand-kept fix is the whole point.
 Severity: **HIGH** a state, money or stock owner can be bypassed · **MED** a rule is known outside
 its owner, or a doc contradicts the code · **LOW** placement or wording.
 
-| #   | Class                          | It is drift when…                                                                                               | It is fine when…                                                                              | Severity                                    |
-| --- | ------------------------------ | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| D1  | Doc claims vs code             | a count, list, example or "only X" disagrees with disk; a `module.yaml` `# why` undersells an edge              | the wording is "for example", or it links to the generated map                                | LOW; MED if a doc rule contradicts the code |
-| D2  | A sibling reads the table      | it imports the owner's transition table, or compares the owner's status literals to decide                      | it reacts to a published event's `to`; it only displays; it is a single terminal-state guard  | MED                                         |
-| D3  | Driving through a third        | module A calls C's write on state that B owns, while B has (or should have) the door                            | the call goes through B's door                                                                | HIGH                                        |
-| D4  | Fake or misplaced domain       | a `domain.ts` _file_ (every domain guard keys on the `domain/` _folder_), or a domain file holding no rule      | —                                                                                             | MED                                         |
-| D5  | Pure rule outside `domain/`    | an import-pure file with two or more callers, or a trap, sits in `session/`, `services/`…                       | it is a config constant, an event/audit/analytics catalogue, a port, or a third-party wrapper | LOW                                         |
-| D6  | Label vs depth                 | a subdomain label disagrees with the logic's complexity, or two theory pages disagree on what a label implies   | —                                                                                             | MED if two pages contradict; LOW per label  |
-| D7  | Shared-kernel or friend growth | friend members added without a doc line; a second shared-kernel edge; a one-caller write door left unrestricted | it is listed and argued in `docs/theory/strategic-ddd.md` §5                                  | MED                                         |
-| D8  | Anemic or bloated services     | a branch that clears the `docs/theory/domain-layer.md` floor sits inline in a service, worst when it is copied  | it is a transaction, a side-effect order, or a one-off with no trap                           | MED if copied; LOW otherwise                |
+| #   | Class                               | It is drift when…                                                                                                                                                                                      | It is fine when…                                                                                     | Severity                                            |
+| --- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| D1  | Doc claims vs code                  | a count, list, example or "only X" disagrees with disk; a `module.yaml` `# why` undersells an edge                                                                                                     | the wording is "for example", or it links to the generated map                                       | LOW; MED if a doc rule contradicts the code         |
+| D2  | A sibling reads the table           | it imports the owner's transition table, or compares the owner's status literals to decide                                                                                                             | it reacts to a published event's `to`; it only displays; it is a single terminal-state guard         | MED                                                 |
+| D3  | Driving through a third             | module A calls C's write on state that B owns, while B has (or should have) the door                                                                                                                   | the call goes through B's door                                                                       | HIGH                                                |
+| D4  | Fake or misplaced domain            | a `domain.ts` _file_ (every domain guard keys on the `domain/` _folder_), or a domain file holding no rule                                                                                             | —                                                                                                    | MED                                                 |
+| D5  | Pure rule outside `domain/`         | an import-pure file with two or more callers, or a trap, sits in `session/`, `services/`…                                                                                                              | it is a config constant, an event/audit/analytics catalogue, a port, or a third-party wrapper        | LOW                                                 |
+| D6  | Label vs depth                      | a subdomain label disagrees with the logic's complexity, or two theory pages disagree on what a label implies                                                                                          | —                                                                                                    | MED if two pages contradict; LOW per label          |
+| D7  | Shared-kernel or friend growth      | friend members added without a doc line; a second shared-kernel edge; a one-caller write door left unrestricted                                                                                        | it is listed and argued in `docs/theory/strategic-ddd.md` §5                                         | MED                                                 |
+| D8  | Anemic or bloated services          | a branch that clears the `docs/theory/domain-layer.md` floor sits inline in a service, worst when it is copied                                                                                         | it is a transaction, a side-effect order, or a one-off with no trap                                  | MED if copied; LOW otherwise                        |
+| C1  | A client control with no capability | a write door refuses on a state or role rule (a 409 or 403 code) for a control a client offers, and the resource's `*Actions` has no flag for it; or the flag and the door compute the rule separately | the refusal is a race (a lost conditional write), or the flag exists and shares the door's predicate | MED; HIGH if the flag and the door already disagree |
+
+C1 mirrors the frontend audit's F2 (`../boilerplate-vue-frontend/scripts/audit/ddd-drift/SKILL.md`):
+one rule seen from each side. An FE ROUTE is the input to this class; the claim is
+`docs/theory/tactical-ddd.md` §2 ("the server sends the answer", "one function, three doors").
 
 D6 is judged against the standard in `docs/theory/strategic-ddd.md` §4: the label sets how much
 modelling a module earns, the complexity of its logic picks the pattern, and a pure rule goes in
@@ -67,7 +72,7 @@ modelling a module earns, the complexity of its logic picks the pattern, and a p
 
 Read `docs/theory/{strategic-ddd,tactical-ddd,domain-layer,modules,module-lifecycle}.md`, the
 in-scope `docs/modules/<module>.md`, the `module.ts` docblocks and the `module.yaml` comments.
-Write one row per checkable claim: a count, a list, an example, an "only", a "never". Freeze the
+Write one row per checkable claim: a count, a list, an example, an "only", a "never" — and turn `tactical-ddd.md` §2 into one claim row per `*Actions` schema. Freeze the
 table before you open any code, so the code cannot talk you into the doc's version.
 
 ### 2 — candidates from searches, not from memory
@@ -90,6 +95,10 @@ rg --files -g 'domain.ts' src/modules
 rg -n "^subdomain:" src/modules/*/module.yaml
 wc -l src/modules/*/services/*.ts src/modules/*/domain/*.ts
 
+# C1 — doors that refuse on state, against the *Actions schemas
+rg -n "^\s+\w+Actions:" src/modules/*/openapi.yaml
+rg -n "409|_NOT_[A-Z]+|_IN_PROGRESS|forced" src/modules/*/openapi.yaml
+
 # D7 — friend lists as they grew, and each users barrel door against its callers
 git log -p -- eslint.config.ts | rg -n "members:|friends:"
 ```
@@ -110,6 +119,15 @@ you could not follow.
 
 For every drift say whether the **code**, the **doc**, or **both** is wrong. A doc that the code
 correctly outgrew is a doc fix, not a code fix. The smallest fix is prose, never code.
+
+## Self-check
+
+A `full` run on commit `3ff7b1587`, before the flags below landed, reports C1 for: `OrderActions`
+(delete, hardDelete), `FulfillmentOrderActions` (forceShip), `ShipmentActions` (forceDeliver, which
+the frontend instead derives from `deliver` plus `override:Order`) and `WebhookDelivery` (replay,
+which the frontend stops disabling by status). After `OrderActions.delete`/`hardDelete` and
+`FulfillmentOrderActions.forceShip` landed, only the last two remain, as DELIBERATE: the flag would
+repeat an answer an existing flag or key already gives. If a run finds none of them, it was too loose.
 
 ## Output
 

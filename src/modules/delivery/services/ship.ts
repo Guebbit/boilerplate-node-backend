@@ -21,12 +21,13 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { canShip, canStartFulfilment, orderService } from '@modules/orders';
+import { canStartFulfilment, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { OrderStatus } from '@types';
 import type { AuthContext, CallerContext, Shipment } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { checkShipLines, findShippingMethod, isShippable } from '../domain';
+import { isOpenForShipment } from './ship-gate';
 import type { ProductQuantity } from '../domain';
 import { deliveryAuditActions } from '../audit';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
@@ -66,8 +67,8 @@ interface Shipped {
 const gateOrder = (status: OrderStatus, forced: boolean): void => {
     if (status === OrderStatus.cancelled || status === OrderStatus.pending)
         refuse(409, ERROR_CODES.DELIVERY_NOT_SHIPPABLE, 'delivery.not-shippable');
-    const open = canShip(status) || (forced && canStartFulfilment(status));
-    if (!open) refuse(409, ERROR_CODES.ORDER_NOT_PROCESSING, 'delivery.not-processing');
+    if (!isOpenForShipment(status, forced))
+        refuse(409, ERROR_CODES.ORDER_NOT_PROCESSING, 'delivery.not-processing');
 };
 
 /**
