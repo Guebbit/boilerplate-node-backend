@@ -310,22 +310,6 @@ describe('updateById', () => {
         ).toBe(404);
     });
 
-    it('refuses an illegal status move with 422, and keeps the old status', async () => {
-        const { user, context } = await aCustomer();
-        const archived = await createExample({ userId: user.id, status: ExampleStatus.archived });
-
-        const refused = asReject(
-            await exampleService.updateById(
-                String(archived._id),
-                { status: ExampleStatus.published },
-                context
-            )
-        );
-
-        expect(refused.status).toBe(422);
-        expect(await fieldOf(String(archived._id), 'status')).toBe(ExampleStatus.archived);
-    });
-
     it('refuses a body over the ceiling', async () => {
         const { user, context } = await aCustomer();
         const mine = await createExample({ userId: user.id });
@@ -339,35 +323,29 @@ describe('updateById', () => {
         });
     });
 
-    it('accepts a status restated unchanged, so a PUT of the same representation succeeds', async () => {
+    it('edits the fields and leaves the status alone, announcing nothing', async () => {
         const { user, context } = await aCustomer();
+        const seen = collectPublished();
         const mine = await createExample({ userId: user.id });
 
         asSuccess(
-            await exampleService.updateById(
-                String(mine._id),
-                { status: ExampleStatus.draft },
-                context
-            )
+            await exampleService.updateById(String(mine._id), { title: 'Reworded' }, context)
         );
+        await settleOutboxNudges();
+
+        expect(await fieldOf(String(mine._id), 'status')).toBe(ExampleStatus.draft);
+        expect(seen).toEqual([]);
     });
 
-    it('audits the edit with the resulting status', async () => {
+    it('audits the edit', async () => {
         const { user, context } = await aCustomer();
         const mine = await createExample({ userId: user.id });
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        await exampleService.updateById(
-            String(mine._id),
-            { status: ExampleStatus.archived },
-            context
-        );
+        await exampleService.updateById(String(mine._id), { title: 'Reworded' }, context);
 
         expect(auditSpy).toHaveBeenCalledWith(
-            expect.objectContaining({
-                action: exampleAuditActions.EXAMPLE_UPDATED,
-                metadata: { status: ExampleStatus.archived }
-            })
+            expect.objectContaining({ action: exampleAuditActions.EXAMPLE_UPDATED })
         );
     });
 });
@@ -383,18 +361,14 @@ const collectPublished = () => {
     return seen;
 };
 
-describe('publishing', () => {
+describe('publishing, through the transition door', () => {
     it('stamps publishedAt and announces the publish once, with the owner and the title', async () => {
         const { user, context } = await aCustomer();
         const seen = collectPublished();
         const mine = await createExample({ userId: user.id, title: 'Out soon' });
 
         const saved = asSuccess(
-            await exampleService.updateById(
-                String(mine._id),
-                { status: ExampleStatus.published },
-                context
-            )
+            await exampleService.transitionById(String(mine._id), ExampleStatus.published, context)
         );
         await settleOutboxNudges();
 
@@ -406,11 +380,7 @@ describe('publishing', () => {
         const { user, context } = await aCustomer();
         const mine = await createExample({ userId: user.id });
 
-        await exampleService.updateById(
-            String(mine._id),
-            { status: ExampleStatus.published },
-            context
-        );
+        await exampleService.transitionById(String(mine._id), ExampleStatus.published, context);
         await settleOutboxNudges();
 
         const rows = await outboxEventModel.find({ name: EXAMPLE_PUBLISHED }).lean().exec();
@@ -418,21 +388,18 @@ describe('publishing', () => {
         expect(rows[0]).toMatchObject({ aggregateId: String(mine._id) });
     });
 
-    it('announces once when two requests publish the same draft', async () => {
+    it('announces once, and refuses the loser, when two requests publish the same draft', async () => {
         const { user, context } = await aCustomer();
         const seen = collectPublished();
         const mine = await createExample({ userId: user.id, title: 'Race' });
         const publish = () =>
-            exampleService.updateById(
-                String(mine._id),
-                { status: ExampleStatus.published },
-                context
-            );
+            exampleService.transitionById(String(mine._id), ExampleStatus.published, context);
 
-        const [first, second] = await Promise.all([publish(), publish()]);
+        const settled = await Promise.all([publish(), publish()]);
         await settleOutboxNudges();
 
-        expect([asSuccess(first).status, asSuccess(second).status]).toEqual([200, 200]);
+        // Exactly one racer lands; the other is told the move is no longer open.
+        expect(settled.map(({ status }) => status).toSorted()).toEqual([200, 409]);
         expect(await outboxEventModel.countDocuments({ name: EXAMPLE_PUBLISHED })).toBe(1);
         expect(seen).toHaveLength(1);
     });
@@ -442,11 +409,7 @@ describe('publishing', () => {
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const mine = await createExample({ userId: user.id });
 
-        await exampleService.updateById(
-            String(mine._id),
-            { status: ExampleStatus.published },
-            context
-        );
+        await exampleService.transitionById(String(mine._id), ExampleStatus.published, context);
 
         expect(analyticsSpy).toHaveBeenCalledWith(
             expect.objectContaining({ event: 'example_published' })
@@ -475,17 +438,160 @@ describe('publishing', () => {
         const id = String(mine._id);
 
         const first = asSuccess(
-            await exampleService.updateById(id, { status: ExampleStatus.published }, context)
+            await exampleService.transitionById(id, ExampleStatus.published, context)
         );
-        await exampleService.updateById(id, { status: ExampleStatus.archived }, context);
-        await exampleService.updateById(id, { status: ExampleStatus.draft }, context);
+        await exampleService.transitionById(id, ExampleStatus.archived, context);
+        await exampleService.transitionById(id, ExampleStatus.draft, context);
         const again = asSuccess(
-            await exampleService.updateById(id, { status: ExampleStatus.published }, context)
+            await exampleService.transitionById(id, ExampleStatus.published, context)
         );
         await settleOutboxNudges();
 
         expect(seen).toHaveLength(2);
         expect(again.data.publishedAt).toEqual(first.data.publishedAt);
+    });
+});
+
+describe('transitionById', () => {
+    it('refuses a move the lifecycle does not have with 409, details and no write', async () => {
+        const { user, context } = await aCustomer();
+        const archived = await createExample({ userId: user.id, status: ExampleStatus.archived });
+
+        const refused = asReject(
+            await exampleService.transitionById(
+                String(archived._id),
+                ExampleStatus.published,
+                context
+            )
+        );
+
+        expect(refused.status).toBe(409);
+        expect(refused.errors[0]).toMatchObject({
+            code: 'EXAMPLE_TRANSITION_NOT_ALLOWED',
+            details: { from: ExampleStatus.archived, to: ExampleStatus.published }
+        });
+        expect(await fieldOf(String(archived._id), 'status')).toBe(ExampleStatus.archived);
+    });
+
+    it('refuses staying where it is: that is not a move', async () => {
+        const { user, context } = await aCustomer();
+        const mine = await createExample({ userId: user.id });
+
+        expect(
+            asReject(
+                await exampleService.transitionById(String(mine._id), ExampleStatus.draft, context)
+            ).status
+        ).toBe(409);
+    });
+
+    it('answers 404, not 409, for someone else’s example, so an id reveals nothing', async () => {
+        const { context } = await aCustomer();
+        const stranger = await createUser({ username: 'bob', email: 'bob@example.com' });
+        const theirs = await createExample({ userId: stranger.id });
+
+        expect(
+            asReject(
+                await exampleService.transitionById(
+                    String(theirs._id),
+                    ExampleStatus.published,
+                    context
+                )
+            ).status
+        ).toBe(404);
+        expect(
+            asReject(
+                await exampleService.transitionById(MISSING_ID, ExampleStatus.published, context)
+            ).status
+        ).toBe(404);
+    });
+
+    it('lets an administrator move anyone’s example', async () => {
+        const { context: admin } = await anAdmin();
+        const owner = await createUser({ username: 'bob', email: 'bob@example.com' });
+        const theirs = await createExample({ userId: owner.id });
+
+        const moved = asSuccess(
+            await exampleService.transitionById(String(theirs._id), ExampleStatus.archived, admin)
+        );
+
+        expect(moved.data.status).toBe(ExampleStatus.archived);
+    });
+
+    it('audits the move with where it came from and went to', async () => {
+        const { user, context } = await aCustomer();
+        const mine = await createExample({ userId: user.id });
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await exampleService.transitionById(String(mine._id), ExampleStatus.archived, context);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: exampleAuditActions.EXAMPLE_STATUS_CHANGED,
+                metadata: { from: ExampleStatus.draft, to: ExampleStatus.archived }
+            })
+        );
+    });
+
+    it('answers with the actions this caller has on the moved example', async () => {
+        const { user, context } = await aCustomer();
+        const mine = await createExample({ userId: user.id });
+
+        const moved = asSuccess(
+            await exampleService.transitionById(String(mine._id), ExampleStatus.published, context)
+        );
+
+        expect(moved.data.actions).toEqual({
+            transitions: [ExampleStatus.archived],
+            update: true,
+            delete: true
+        });
+    });
+});
+
+describe('actions on rows', () => {
+    it('gives a display-only caller no moves and no edits on someone else’s example', async () => {
+        const moderator = await createUser({ username: 'mod', email: 'mod@example.com' });
+        const owner = await createUser({ username: 'bob', email: 'bob@example.com' });
+        const theirs = await createExample({ userId: owner.id });
+
+        const read = await exampleService.getById(
+            String(theirs._id),
+            callerContextAs('moderator', moderator.id)
+        );
+
+        expect(read?.actions).toEqual({ transitions: [], update: false, delete: false });
+    });
+
+    it('gives the author the moves from the current status, and the public read none', async () => {
+        const { user, context } = await aCustomer();
+        const mine = await createExample({
+            userId: user.id,
+            status: ExampleStatus.published,
+            publishedAt: new Date('2026-01-01T00:00:00Z')
+        });
+
+        const own = await exampleService.getById(String(mine._id), context);
+        const publicRead = await exampleService.getPublishedById(String(mine._id));
+
+        expect(own?.actions).toEqual({
+            transitions: [ExampleStatus.archived],
+            update: true,
+            delete: true
+        });
+        expect(publicRead?.actions).toBeUndefined();
+    });
+
+    it('puts the actions on every row of a search', async () => {
+        const { user, context } = await aCustomer();
+        await createExample({ userId: user.id });
+
+        const page = await exampleService.search({}, context);
+
+        expect(page.items[0]?.actions).toEqual({
+            transitions: [ExampleStatus.published, ExampleStatus.archived],
+            update: true,
+            delete: true
+        });
     });
 });
 

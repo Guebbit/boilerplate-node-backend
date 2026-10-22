@@ -12,10 +12,12 @@ import { Router } from 'express';
 import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
+import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { upload } from '@infrastructure/http/middlewares/upload';
 import { getPublishedExample, getExample } from './controllers/get-example';
 import { getExamples } from './controllers/get-examples';
 import { postExample } from './controllers/post-example';
+import { postExampleTransition } from './controllers/post-example-transition';
 import { replaceExample, updateExample } from './controllers/update-example';
 import { deleteExample } from './controllers/delete-example';
 import { putExampleCover } from './controllers/put-example-cover';
@@ -48,8 +50,15 @@ router.post('/search', requirePermission('read', 'Example'), noStore, getExample
 // GET /examples — the caller's own examples, filtered by the query string.
 router.get('/', requirePermission('read', 'Example'), privateNoCache, getExamples);
 
-// `createExampleLimiter` first: a spent budget should not cost a database write.
-router.post('/', requirePermission('create', 'Example'), createExampleLimiter, postExample);
+// `createExampleLimiter` first: a spent budget should not cost a database write, and the ledger
+// records any JSON answer, so a 429 placed behind `idempotencyKey` would be replayed as the result.
+router.post(
+    '/',
+    requirePermission('create', 'Example'),
+    createExampleLimiter,
+    idempotencyKey,
+    postExample
+);
 
 // GET /examples/:id — one example. `privateNoCache`: the browser may keep it, revalidated.
 router.get('/:id', requirePermission('read', 'Example'), privateNoCache, getExample);
@@ -59,6 +68,11 @@ router.put('/:id', requirePermission('update', 'Example'), replaceExample);
 
 // PATCH /examples/:id — change the fields sent.
 router.patch('/:id', requirePermission('update', 'Example'), updateExample);
+
+// POST /examples/:id/transitions — move the example to another status. Declared before the
+// `/:id/cover` mount for readability only; the paths cannot collide. No `If-Match`: the write is
+// conditional on the status read, so of two racing moves exactly one lands.
+router.post('/:id/transitions', requirePermission('update', 'Example'), postExampleTransition);
 
 // DELETE /examples/:id — remove the example.
 router.delete('/:id', requirePermission('delete', 'Example'), deleteExample);

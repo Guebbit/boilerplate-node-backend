@@ -3,6 +3,8 @@
  * In any module: what it holds about one person, for the two things the account does with it — an
  * export (`collect`) and an erasure (`erase`). Declared on the manifest as `personalData`; `account`
  * and `users` call these without importing this module.
+ * Here: the examples an account owns, and their cover images.
+ * Delete it if: the module holds nothing about a person.
  *
  * See: docs/theory/modules.md#the-manifest
  */

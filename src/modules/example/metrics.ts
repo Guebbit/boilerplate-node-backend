@@ -1,7 +1,8 @@
 /**
  * @module
- * Optional capability, in its own file: the Prometheus counters this module owns, registered on
- * the shared registry. Delete the file and the `.inc()` call to drop it.
+ * In any module: the Prometheus counters it owns, registered on the shared registry.
+ * Here: how many examples were created.
+ * Delete it if: the module counts nothing (and drop the `.inc()` call).
  *
  * See: docs/tools/observability.md
  */

@@ -34,11 +34,11 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
     findScoped: (id: string, scope: Record<string, unknown>) => Promise<ExampleDocument | null>;
     deleteAllOf: (userId: string, session: ClientSession) => Promise<string[]>;
     translatable: TranslatableColumns;
-    publishFrom: (
+    moveFrom: (
         id: string,
         before: ExampleDocument['status'],
-        fields: Pick<ExampleDocument, 'title' | 'body' | 'status' | 'publishedAt'>,
-        session: ClientSession
+        fields: Pick<ExampleDocument, 'status' | 'publishedAt'>,
+        session?: ClientSession
     ) => Promise<ExampleDocument | null>;
     writebackImage: ImageWriteback;
 } = {
@@ -85,24 +85,25 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
             ),
 
     /**
-     * Move an example into published, but only while it still holds the status the caller read.
-     * Two requests publishing one draft both read `draft`; only one write matches, so only one
-     * of them announces.
+     * Move an example to another status, but only while it still holds the status the caller read.
+     * Two requests moving one draft both read `draft`; only one write matches, so only one of them
+     * announces.
      *
      * @param id - the example
      * @param before - the status the caller read; the write matches nothing if it has moved
-     * @param fields - the edit to write: the new status, its text and the publish stamp
-     * @param session - the publish's transaction, shared with the outbox row
+     * @param fields - the move to write: the new status and the publish stamp
+     * @param session - the move's transaction when it shares one with the outbox row (a publish)
      * @returns the saved example, or `null` when a peer changed the status first
      */
-    publishFrom: (id, before, fields, session) =>
+    moveFrom: (id, before, fields, session) =>
         exampleModel
             .findOneAndUpdate(
                 { _id: toObjectId(id), status: before },
                 { $set: fields },
-                // `returnDocument: 'after'` answers the written row; `session` joins the transaction.
+                // `returnDocument: 'after'` answers the written row; `session` (when given) joins the
+                // transaction.
                 // https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
-                { returnDocument: 'after', session }
+                { returnDocument: 'after', ...(session && { session }) }
             )
             .exec(),
 

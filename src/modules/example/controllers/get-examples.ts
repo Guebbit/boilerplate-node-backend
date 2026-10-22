@@ -1,8 +1,9 @@
 /**
  * @module
  * In any module: a controller is thin wiring — decode the request, call the service, shape the
- * answer. Here, `GET /examples` and `POST /examples/search`: one search in its query and DTO
- * spellings, built on the shared search-controller factory.
+ * answer.
+ * Here: `GET /examples` and `POST /examples/search`, one search in its query and DTO spellings,
+ * built on the shared search-controller factory.
  *
  * See: docs/theory/request-flow.md
  */

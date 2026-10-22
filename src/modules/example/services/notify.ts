@@ -1,8 +1,10 @@
 /**
  * @module
- * Optional capability, in its own files: the listener that mails an owner when their example is
- * published. `module.ts`'s `subscribe` attaches it to the domain event; the service never knows it
- * exists. Delete this file, `../emails.ts`, `../templates/` and the `subscribe` line to drop it.
+ * In any module: a listener attached by `module.ts`'s `subscribe`; the service that emitted the
+ * event never knows it exists.
+ * Here: mails the owner when their example is published.
+ * Delete it if: nothing reacts to the module's events (with `../emails.ts`, `../templates/` and the
+ * `subscribe` line).
  *
  * See: docs/tools/events-and-logging.md#the-domain-event-bus-and-what-it-is-not
  */

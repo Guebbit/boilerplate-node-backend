@@ -3,6 +3,7 @@
  * In any module: the public barrel, the only surface a sibling may import. It exports services,
  * domain rules, events and emails, and the model's TYPES. Never a repository, the model's runtime
  * value, a wiring file or `factories.ts`.
+ * Here: the example service, its domain rules and the publish event.
  *
  * See: docs/theory/strategic-ddd.md
  */

@@ -1,8 +1,11 @@
 /**
  * @module
- * Optional capability, in its own file: the analytics event names this module fires, declared by
- * augmenting the analytics port's name map. Delete the file and the `emitAnalyticsEvent` call to
- * drop it. Naming rule: docs/tools/analytics.md#naming.
+ * In any module: the analytics event names it fires, declared by augmenting the analytics port's
+ * name map, so the app-wide union grows with the modules that are enabled.
+ * Here: one event, `example_published`, fired when a publish lands.
+ * Delete it if: the module reports nothing to analytics (and drop the `emitAnalyticsEvent` call).
+ *
+ * See: docs/tools/analytics.md#naming
  */
 
 /** The event names this module fires, keyed by intent. */

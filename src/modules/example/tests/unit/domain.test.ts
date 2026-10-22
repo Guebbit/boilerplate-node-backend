@@ -7,10 +7,12 @@
 import { ExampleStatus } from '@types';
 import {
     canTransition,
+    exampleActionsFor,
     fitsBodyLength,
     initialExampleStatus,
     isPublished,
-    shouldStampPublishedAt
+    shouldStampPublishedAt,
+    statusesReachableFrom
 } from '../../domain';
 
 describe('initialExampleStatus', () => {
@@ -37,9 +39,9 @@ describe('canTransition', () => {
     });
 
     it.each(Object.values(ExampleStatus))(
-        'lets %s stay where it is, so a PUT can restate it',
+        'refuses %s staying where it is: that is no move',
         (status) => {
-            expect(canTransition(status, status)).toBe(true);
+            expect(canTransition(status, status)).toBe(false);
         }
     );
 });
@@ -76,5 +78,33 @@ describe('fitsBodyLength', () => {
 
     it('refuses a body one character over it', () => {
         expect(fitsBodyLength('abcd', 3)).toBe(false);
+    });
+});
+
+describe('statusesReachableFrom', () => {
+    it.each([
+        [ExampleStatus.draft, [ExampleStatus.published, ExampleStatus.archived]],
+        [ExampleStatus.published, [ExampleStatus.archived]],
+        [ExampleStatus.archived, [ExampleStatus.draft]]
+    ])('lists the moves from %s, its own status excluded', (status, expected) => {
+        expect(statusesReachableFrom(status)).toEqual(expected);
+    });
+});
+
+describe('exampleActionsFor', () => {
+    it('lists the moves for a caller who may edit', () => {
+        expect(exampleActionsFor(ExampleStatus.draft, { update: true, delete: true })).toEqual({
+            transitions: [ExampleStatus.published, ExampleStatus.archived],
+            update: true,
+            delete: true
+        });
+    });
+
+    it('lists none for a caller who may not edit', () => {
+        expect(exampleActionsFor(ExampleStatus.draft, { update: false, delete: false })).toEqual({
+            transitions: [],
+            update: false,
+            delete: false
+        });
     });
 });

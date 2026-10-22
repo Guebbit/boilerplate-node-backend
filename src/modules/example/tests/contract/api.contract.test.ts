@@ -265,11 +265,10 @@ describe('PUT and PATCH /examples/{id}', () => {
         const response = await api()
             .put(`/examples/${id}`)
             .set('Authorization', bearer)
-            .send({ title: 'Whole', body: 'New', status: 'published' });
+            .send({ title: 'Whole', body: 'New' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toMatchObject({ title: 'Whole', status: 'published' });
-        expect(response.body.data.publishedAt).toBeDefined();
+        expect(response.body.data).toMatchObject({ title: 'Whole', status: 'draft' });
     });
 
     it('answers 422 to a PUT that leaves out a required field', async () => {
@@ -314,18 +313,6 @@ describe('PUT and PATCH /examples/{id}', () => {
         expect(response.status).toBe(200);
     });
 
-    it('answers 422 for an illegal status move', async () => {
-        const { user, bearer } = await authenticateAsRole('editor');
-        const archived = await createExample({ userId: user.id, status: ExampleStatus.archived });
-
-        const response = await api()
-            .patch(`/examples/${String(archived._id)}`)
-            .set('Authorization', bearer)
-            .send({ status: 'published' });
-
-        expect(response.status).toBe(422);
-    });
-
     it('answers 412 when If-Match names a version that has moved on, and changes nothing', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const { id } = await createViaApi(bearer, A_NOTE);
@@ -353,7 +340,7 @@ describe('PUT and PATCH /examples/{id}', () => {
         const put = await api()
             .put(url)
             .set('Authorization', bearer)
-            .send({ title: 'x', body: 'y', status: 'draft' });
+            .send({ title: 'x', body: 'y' });
         const patch = await api().patch(url).set('Authorization', bearer).send({ title: 'x' });
 
         expect([put.status, patch.status]).toEqual([404, 404]);
@@ -471,5 +458,161 @@ describe('POST /account/export', () => {
         expect(
             (response.data.examples as { title: string }[]).map((example) => example.title)
         ).toEqual(['Mine']);
+    });
+});
+
+describe('POST /examples/{id}/transitions', () => {
+    it('moves the example, answers with its actions, and stamps publishedAt', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const { id } = await createViaApi(bearer, A_NOTE);
+
+        const response = await api()
+            .post(`/examples/${id}/transitions`)
+            .set('Authorization', bearer)
+            .send({ to: 'published' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({
+            status: 'published',
+            actions: { transitions: ['archived'], update: true, delete: true }
+        });
+        expect(response.body.data.publishedAt).toBeDefined();
+    });
+
+    it('answers 409 with the code and details for a move not on the table', async () => {
+        const { user, bearer } = await authenticateAsRole('editor');
+        const archived = await createExample({ userId: user.id, status: ExampleStatus.archived });
+
+        const response = await api()
+            .post(`/examples/${String(archived._id)}/transitions`)
+            .set('Authorization', bearer)
+            .send({ to: 'published' });
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0]).toMatchObject({
+            code: 'EXAMPLE_TRANSITION_NOT_ALLOWED',
+            details: { from: 'archived', to: 'published' }
+        });
+    });
+
+    it('answers 404 for someone else’s example and for a malformed id', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const other = await createUser({ email: 'other@example.com' });
+        const theirs = await createExample({ userId: other.id });
+
+        expect(
+            await statusOf(
+                api()
+                    .post(`/examples/${String(theirs._id)}/transitions`)
+                    .set('Authorization', bearer)
+                    .send({ to: 'published' })
+            )
+        ).toBe(404);
+        expect(
+            await statusOf(
+                api()
+                    .post(`/examples/${MALFORMED_ID}/transitions`)
+                    .set('Authorization', bearer)
+                    .send({ to: 'published' })
+            )
+        ).toBe(404);
+    });
+
+    it('answers 422 for a status outside the closed set', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const { id } = await createViaApi(bearer, A_NOTE);
+
+        expect(
+            await statusOf(
+                api()
+                    .post(`/examples/${id}/transitions`)
+                    .set('Authorization', bearer)
+                    .send({ to: 'deleted' })
+            )
+        ).toBe(422);
+    });
+
+    it('makes the ETag a read gave answer 412 on the next edit', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const { id } = await createViaApi(bearer, A_NOTE);
+        const stale = await etagOf(api().get(`/examples/${id}`).set('Authorization', bearer));
+
+        await api()
+            .post(`/examples/${id}/transitions`)
+            .set('Authorization', bearer)
+            .send({ to: 'archived' });
+        const response = await api()
+            .patch(`/examples/${id}`)
+            .set('Authorization', bearer)
+            .set('If-Match', stale)
+            .send({ title: 'Late' });
+
+        expect(response.status).toBe(412);
+    });
+});
+
+describe('Example.actions', () => {
+    it('gives an administrator the moves and the edits on anyone’s example', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const other = await createUser({ email: 'other@example.com' });
+        const theirs = await createExample({ userId: other.id });
+
+        const response = await api()
+            .get(`/examples/${String(theirs._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.body.data.actions).toEqual({
+            transitions: ['published', 'archived'],
+            update: true,
+            delete: true
+        });
+    });
+
+    it('gives a moderator nothing on another person’s example: they may read it, not edit it', async () => {
+        const { bearer } = await authenticateAsRole('moderator');
+        const other = await createUser({ email: 'other@example.com' });
+        const theirs = await createExample({ userId: other.id });
+
+        const response = await api()
+            .get(`/examples/${String(theirs._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.actions).toEqual({
+            transitions: [],
+            update: false,
+            delete: false
+        });
+    });
+
+    it('is absent from the public read', async () => {
+        const { user } = await authenticateAsRole('editor');
+        const published = await createExample({ userId: user.id, status: ExampleStatus.published });
+
+        const response = await api().get(`/examples/published/${String(published._id)}`);
+
+        expect(response.body.data).not.toHaveProperty('actions');
+    });
+});
+
+describe('POST /examples with an Idempotency-Key', () => {
+    it('replays the first answer for the same key and body, and refuses a different body', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const send = (body: { title: string; body: string }) =>
+            api()
+                .post('/examples')
+                .set('Authorization', bearer)
+                .set('Idempotency-Key', 'create-example-1')
+                .send(body);
+
+        const first = await send(A_NOTE);
+        const replay = await send(A_NOTE);
+        const changed = await send({ title: 'Other', body: 'Other' });
+
+        expect(first.status).toBe(201);
+        expect(replay.status).toBe(201);
+        expect(replay.body.data.id).toBe(first.body.data.id);
+        expect(replay.headers['idempotent-replay']).toBe('true');
+        expect(changed.status).toBe(422);
     });
 });

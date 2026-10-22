@@ -112,6 +112,7 @@ When the window is too narrow to hit over HTTP, force it instead. The cancel-vs-
 
 | Path                                                                | Contents                                                                                                                              |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/modules/example/tests/integration/service.test.ts`             | The template's transition race: two publishes of one draft - one 200, one 409, one outbox row                                         |
 | `src/modules/account/tests/integration/auth-races.test.ts`          | Signup, login, session revocation, one-time reset tokens, and the limiter proof                                                       |
 | `tests/integration/concurrency/cart-races.test.ts`                  | Cart upsert under contention, checkout, account deletion racing a cart write                                                          |
 | `tests/integration/concurrency/payment-races.test.ts`               | Double confirm, webhook redelivery, confirm vs webhook, overselling, cancel vs pay                                                    |

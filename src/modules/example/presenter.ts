@@ -1,11 +1,14 @@
 /**
  * @module
  * In any module: the one place a stored row becomes the wire shape `openapi.yaml` declares, so
- * every read and write answers with the same thing. Here, the one field a document cannot supply
- * is `ownerName`, which belongs to `users`.
+ * every read and write answers with the same thing.
+ * Here: the one field a document cannot supply is `ownerName`, which belongs to `users`; `actions`
+ * rides along when someone is acting.
+ *
+ * See: docs/theory/layers.md
  */
 
-import type { Example } from '@types';
+import type { Example, ExampleActions } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import type { ExampleDocument, ExampleRow } from './model';
 
@@ -18,11 +21,17 @@ import type { ExampleDocument, ExampleRow } from './model';
  *
  * @param document - the stored example
  * @param ownerName - the owner's display name, read from `users` by the caller
+ * @param actions - what the caller may do to it; left out where nobody is acting (the public read)
  */
-export const presentExample = (document: ExampleDocument, ownerName: string): Example =>
+export const presentExample = (
+    document: ExampleDocument,
+    ownerName: string,
+    actions?: ExampleActions
+): Example =>
     carryVersion(document, {
         ...(document.toJSON() as ExampleRow),
-        ownerName
+        ownerName,
+        ...(actions && { actions })
     });
 
 /**
@@ -30,9 +39,15 @@ export const presentExample = (document: ExampleDocument, ownerName: string): Ex
  *
  * @param row - one row of a repository search
  * @param ownerName - the owner's display name
+ * @param actions - what the caller may do to this row
  */
-export const presentExampleRow = (row: ExampleRow, ownerName: string): Example =>
+export const presentExampleRow = (
+    row: ExampleRow,
+    ownerName: string,
+    actions?: ExampleActions
+): Example =>
     carryVersion(row, {
         ...row,
-        ownerName
+        ownerName,
+        ...(actions && { actions })
     });

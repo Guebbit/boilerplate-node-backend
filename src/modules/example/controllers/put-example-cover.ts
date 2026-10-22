@@ -1,7 +1,8 @@
 /**
  * @module
- * Optional capability, in its own files: the cover-image upload. The upload middleware has already
- * run (see `routes.ts`); this reads what it left on the request. Here: `PUT /examples/:id/cover`.
+ * In any module: an upload controller reads what the upload middleware left on the request and
+ * hands it to the service. Here: `PUT /examples/:id/cover`.
+ * Delete it if: the module has no upload (with `services/cover.ts`, the route and the contract path).
  *
  * See: docs/tools/image-processing.md
  */

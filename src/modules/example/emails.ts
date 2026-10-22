@@ -1,8 +1,9 @@
 /**
  * @module
- * Optional capability, in its own files: the mail the owner gets when an example is published.
- * In any module, this file is where each mail's copy is turned into finished strings: the language
- * is an argument, the output is text, and whatever renders the template later resolves nothing.
+ * In any module: the place each mail's copy is turned into finished strings — the language is an
+ * argument, the output is text, and whatever renders the template later resolves nothing.
+ * Here: the mail the owner gets when an example is published.
+ * Delete it if: the module sends no mail (with `services/notify.ts` and `templates/`).
  *
  * See: docs/tools/email-and-rendering.md
  */
