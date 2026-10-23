@@ -5,8 +5,8 @@
 country VAT is charged in, the time zone its days follow, the one currency it trades in, the
 countries it ships to, and where returned goods go and who pays the postage. One public read,
 `GET /shop`.
-**Depends on** — nothing. Seven modules read it: `orders`, `products`, `cart`, `delivery`,
-`invoicing`, `returns` and `stats`.
+**Depends on** — nothing. Eight modules read it: `orders`, `products`, `cart`, `delivery`,
+`invoicing`, `payments`, `returns` and `stats`.
 **Breaks if you change** — the `Shop` wire shape, which the paired frontend reads once into its
 shop store: price inputs, the address form's country list and the legal pages all draw on it.
 :::

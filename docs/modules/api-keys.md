@@ -7,7 +7,7 @@ lets an `sk_...` bearer token authenticate a request the way a JWT does.
 for their current role, and [`account`](./account.md) for the `account.sessions-revoked` event.
 **Breaks if you change** — the `sk_` token prefix (`kernel/authentication.ts`'s dispatch between
 this module's credential path and `account`'s JWT path assumes it), or the mint-time/check-time
-permission-floor pair in `services/api-keys.ts` and `module.ts`.
+permission-floor pair in `services/api-keys.ts` and `services/resolver.ts`.
 :::
 
 ## Its neighbourhood
@@ -49,8 +49,7 @@ and carries their whole reach rather than the two endpoints the partner needs. T
 answer: a revocable credential, scoped to a caller-chosen subset of whoever minted it.
 
 **The credential is verified, never decrypted.** `sk_<8-char prefix>_<32 bytes>`, both halves
-`base64url`. Only a sha256 digest is ever stored — `credentials.ts` reuses `hashToken` (`src/infrastructure/security/hash-token.ts`)
-(`@modules/users`), the same one-way primitive refresh/reset tokens use: a high-entropy, one-time
+`base64url`. Only a sha256 digest is ever stored — `credentials.ts` reuses `hashToken` (`@infrastructure/security/hash-token`), the same one-way primitive refresh/reset tokens use: a high-entropy, one-time
 secret has no search space for bcrypt/argon2 to make expensive, so the ~100ms they would cost on
 every authenticated request buys nothing. The prefix is the only part ever stored in the clear —
 it is what turns verification into one indexed lookup instead of a collection scan, and it is not
@@ -58,7 +57,7 @@ secret.
 
 **A key holds a subset of the minter's permissions, floored TWICE.** Once at mint time
 (`services/api-keys.ts#isMintable`, against what the requesting caller holds right now), and again
-on every single use (`module.ts`'s `CredentialResolver`, re-deriving the minter's CURRENT
+on every single use (`services/resolver.ts`, the `CredentialResolver` that `module.ts` registers, re-deriving the minter's CURRENT
 permissions and intersecting them against the key's stored snapshot). The second floor is the one
 that matters after the fact: demote the person who minted a key and every key they ever minted shrinks;
 ban, soft-delete or erase them and every key is refused like a revoked one, and an unban or a

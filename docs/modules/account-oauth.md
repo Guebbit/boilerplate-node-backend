@@ -228,8 +228,8 @@ callback turns that into a generic `?error=provider_error`, and the caller's ret
 | `GET /account/oauth/:provider`          | 302 to the consent screen, `state` cookie set               |
 | `GET /account/oauth/:provider/callback` | 302 back to the frontend, session cookies set               |
 
-All three are public, because this **is** how an unauthenticated caller signs in, and all three sit
-behind `credentialLimiters`.
+All three are public, because this **is** how an unauthenticated caller signs in. The last two sit
+behind `credentialLimiters`; `GET /account/oauth/providers` is informational and has no limiter.
 
 Only two failures answer with a body. Everything past the state check redirects to the frontend
 with `?error=<code>`, because by then the browser is mid-navigation and a JSON body has nowhere to
@@ -254,7 +254,7 @@ read it like any other method. It returns no access token: the frontend's
 
 ## Connected accounts: seeing and removing a link {#connected-accounts}
 
-A linked provider is a way into the account, so its owner can see and remove it. Two routes, both
+A linked provider is a way into the account, so its owner can see and remove it. Three routes, all
 for a signed-in caller, neither public:
 
 | Route                                   | Answers                                                                |

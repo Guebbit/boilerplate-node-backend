@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — the queryable audit trail, kept for `NODE_AUDIT_RETENTION_DAYS` (90 by default), which its TTL index enforces.
-**Depends on** — nothing, for the write side: nothing imports this module, it installs a sink instead.
+**Depends on** — [`access`](./access.md), only for the refusal reasons its read side lists. Nothing, for the write side: nothing imports this module, it installs a sink instead.
 **Breaks if you change** — the retention window (`NODE_AUDIT_RETENTION_DAYS`) on the `timestamp` index. It is the only thing deleting old entries.
 :::
 

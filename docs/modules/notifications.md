@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — the per-user inbox: one row per message, kept until its owner deletes it.
-**Depends on** — [`cart`](./cart.md) and [`wishlist`](./wishlist.md), only for the event names it listens to.
+**Depends on** — [`cart`](./cart.md), [`delivery`](./delivery.md), [`stock-alerts`](./stock-alerts.md) and [`wishlist`](./wishlist.md), only for the event names it listens to.
 **Breaks if you change** — nothing outside this folder. No module imports it: a producer announces an event and never calls in.
 :::
 
@@ -63,7 +63,7 @@ The backend stores a **code and its params, never the sentence**. The frontend t
 from its own locale files, like every other API code, so a row survives a language change and this
 backend keeps no copy in step with the UI.
 
-`Notification` is a discriminated union on `code`, and each variant types its own `params`:
+`Notification` is a discriminated union on `code` (six variants), and each variant types its own `params`:
 
 | `code`                                | `params`                                                         |
 | ------------------------------------- | ---------------------------------------------------------------- |
@@ -72,10 +72,14 @@ backend keeps no copy in step with the UI.
 | `notifications.cart-merge-refused`    | `{ lines: [{ productId, requested, titles }] }`                  |
 | `notifications.fulfillment-delayed`   | `{ orderId, fulfillmentOrderId, titles, agreedAt, expectedAt? }` |
 | `notifications.fulfillment-held`      | `{ orderId, fulfillmentOrderId, notice, message? }`              |
+| `notifications.stock-alert`           | `{ productId, titles }`                                          |
 
 `fulfillment-delayed` is a late preorder's notice ([delivery](./delivery.md#preorders-and-a-moved-date)): it
 informs and offers the cancel, and asks nothing. It is written from `fulfillment_order.delayed`, and an
 erased account has no inbox to write to.
+
+`notifications.stock-alert` is the answer to a back-in-stock request ([stock-alerts](./stock-alerts.md)),
+written from `stock_alert.sent`.
 
 `notifications.fulfillment-held` is a hold the buyer can act on or should read about, written from
 `fulfillment_order.hold_noticed` ([delivery](./delivery.md#holds)): `notice` is `check_address` or `delayed`,
@@ -94,6 +98,7 @@ flowchart LR
     P["products<br/><i>deletes a product</i>"] -. "product.deleted<br/>+ titles" .-> C["cart / wishlist<br/><i>find owners, pull the line</i>"]
     C -. "cart.lines_removed<br/>wishlist.items_removed" .-> N["notifications<br/><i>one row per owner</i>"]
     M["POST /cart/merge"] -. "cart.merge_refused" .-> N
+    A["stock-alerts<br/><i>answers a request</i>"] -. "stock_alert.sent" .-> N
     N --> DB[("notifications")]
     N -->|"SSE"| T["open tab<br/><i>the bell</i>"]
     T -->|"GET /notifications<br/>on load, reload, reconnect"| N
@@ -102,7 +107,7 @@ flowchart LR
     classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;
     class N,DB own;
-    class P,C,M,T peer;
+    class P,C,M,A,T peer;
 ```
 
 ## What decides what

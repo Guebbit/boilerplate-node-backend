@@ -44,9 +44,10 @@ The smallest domain in the repo, and a useful one to read first: it has the same
 [`cart`](./cart.md) — one document per user, product references, a unique index on `userId` — with
 none of checkout's complexity.
 
-Its three arrows are the same one-way arrows the cart declares, for the same reasons. A saved line
-is meaningless without the product it points at; the list belongs to an account; and the
-move-to-cart exit writes a cart line, which is a `customer-supplier` demand on the cart's store.
+It imports two modules, the same one-way arrows the cart declares, for the same reasons. A saved line
+is meaningless without the product it points at (`products`), and the move-to-cart exit writes a cart
+line, which is a `customer-supplier` demand on the cart's store (`cart`). The list belongs to an
+account, but that is a field, not an import: `users`' erase hook reaches it through the manifest.
 
 ::: tip Almost nothing depends on it
 Only `notifications` imports it, for the `wishlist.items_removed` event name. Deleting it means
@@ -86,7 +87,7 @@ shop's live opinion of a product, not something the account holder saved.
 
 ## The pipeline
 
-The whole module. Three arrows out, two events in, one event out.
+The whole module. Two imports out, two events in, one event out.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%

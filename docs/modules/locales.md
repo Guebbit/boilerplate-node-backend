@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — which languages this deployment speaks, and the runtime overrides layered over the bundled copy.
-**Depends on** — nothing. It carries the convenience barrel every module does, but nothing imports it: no sibling needs a translated dictionary directly.
+**Depends on** — nothing. Only [`sitemap`](./sitemap.md) imports it (its `localeService`, for the languages a sitemap lists); no other sibling needs a translated dictionary directly.
 **Breaks if you change** — the `app` field. It decides which of two dictionaries a row patches.
 :::
 

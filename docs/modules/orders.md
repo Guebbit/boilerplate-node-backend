@@ -2,8 +2,8 @@
 
 ::: tip At a glance
 **Owns** — placed orders: the line items frozen at purchase time, the status machine, and what cancelling restores.
-**Depends on** — [`inventory`](./inventory.md) for the units, [`products`](./products.md) for the shape it embeds.
-**Breaks if you change** — the `status` enum. Three other modules react to transitions in it.
+**Depends on** — [`access`](./access.md) for the audit flag of a cancel on the caller's own order, [`inventory`](./inventory.md) for the units, [`products`](./products.md) for the shape it embeds, [`shop`](./shop.md) for the currency and seller, and [`users`](./users.md) for a buyer's locale and the erase hook.
+**Breaks if you change** — the `status` enum. `delivery` (status change, cancel, override), `payments` (cancel) and `invoicing` (status change) react to transitions in it, and `webhooks` relays them.
 :::
 
 ## Its neighbourhood
@@ -155,7 +155,7 @@ when money actually moved.
 Each account reads back only its own orders; writing and soft-deleting is admin-only, and an order can be soft-deleted (hidden) only once it is `cancelled`. The
 `userId: 1, deletedAt: 1` index is what makes both of those cheap at once.
 
-Two scheduled jobs via `docker/crontab`. `npm run job reap:orders`, nightly, replaces an order's
+One scheduled job via `docker/crontab`: `npm run job reap:orders`, nightly, replaces an order's
 remaining PII (email, shipping name/phone/street, notes) with placeholders once
 `NODE_ORDER_PII_RETENTION_DAYS` has passed from the order's OWN `createdAt` — due at `createdAt`
 plus that many days, or at once when account erasure or inactivity minimisation comes later; a
@@ -441,6 +441,7 @@ added there without an audience row fails to compile.
 | --------- | -------------------------------------------------------------------------------------------- | ---------- |
 | Order     | `created`, `paid`, `processing`, `shipped`, `delivered`, `cancelled`                         | yes        |
 | Order     | `status_overridden` (mode, from, to, and the staff's reason as `text`)                       | no         |
+| Order     | `address_corrected` (staff-only)                                                             | no         |
 | Payment   | `payment_declined`, `refund_issued`, `refund_settled`                                        | yes        |
 | Payment   | `refund_failed` (a failure code, never the provider's wording)                               | no         |
 | Shipments | `shipment_shipped`, `shipment_delivered`, `remainder_cancelled`                              | yes        |
@@ -509,8 +510,6 @@ full-width `＝＋－＠` variants: that gap is known and not handled. See
 
 - `orderService.findManyByIds(ids)` answers each order's number and email, nothing more (no lines,
   no addresses). The staff payments list uses it to name its rows.
-- `orderService.findOwedRefunds(cutoff, limit)` lists orders cancelled after payment whose refund
-  is still owed: the payments page's needs-attention read.
 - `orderService.paidBuckets`, `productTotals`, `categoryTotals`, `productSeries`, `customerCounts`,
   `cancellationCohort` and `pipeline` are the grouped reads [`stats`](./stats.md) composes: each
   answers a few hundred rows at most, counts live orders only, and dates a sale by `paidAt`.

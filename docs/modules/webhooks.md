@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — subscriptions, the delivery log, signing, retries and auto-disable for outbound webhook delivery.
-**Depends on** — [`orders`](./orders.md) and [`payments`](./payments.md) for their domain-event constants, `users` for the disable-notice recipient's email — no reach back the other way.
+**Depends on** — [`users`](./users.md) only, for the disable-notice recipient's email. The modules that publish events (`delivery`, `orders`, `payments`, `returns`, `example`) declare them; this module never imports them, and no reach back the other way.
 **Breaks if you change** — an event name in any module's `asyncapi.webhooks.yaml`, or the queue payload shape in `asyncapi.internal.yaml`.
 :::
 
@@ -75,18 +75,18 @@ flowchart LR
 
 ## The story
 
-`orders` and `payments` can tell this module that something happened; this module cannot ask them
-anything back, and it does not even import their event name constants to listen for it.
-Each of the two declares its own `publicEvents` on its `module.ts` manifest — a domain event name
+The publishing modules (`delivery`, `orders`, `payments`, `returns`, `example`) can tell this module
+that something happened; this module cannot ask them anything back, and it does not even import
+their event name constants to listen for it. Each of them declares its own `publicEvents` on its `module.ts` manifest — a domain event name
 mapped to a projection of that event's payload — and `webhooks/module.ts`'s `onRegistered` hook
 collects every registered module's declarations (`kernel/registry.ts`'s `resolvePublicEvents`) and
 subscribes to each one generically on the kernel's domain-event bus, the same shape
 [`delivery`](./delivery.md) uses for `order.status_changed`. The only import left is `users`, for
-the email a disable notice is sent to — never a call back into either module's business logic.
+the email a disable notice is sent to — never a call back into any publishing module's business logic.
 
 **The public event catalogue is a contract, not an accident.** Each module that fires a webhook
-declares its own events in `src/modules/<module>/asyncapi.webhooks.yaml` (`orders`, `payments`,
-`returns`, and `example`, the one to copy). This module's `asyncapi.yaml` keeps only what every
+declares its own events in `src/modules/<module>/asyncapi.webhooks.yaml` (`delivery`, `orders`,
+`payments`, `returns`, and `example`, the one to copy). This module's `asyncapi.yaml` keeps only what every
 event shares: the `subscriberEndpoint` server and the `WebhookHeaders` schema. The bundler merges
 the fragments into the `webhooks` section while this module exists (see
 [Contract Fragmentation](../api/contract-fragmentation.md#module-owned-webhook-events)).
@@ -133,7 +133,7 @@ flowchart LR
 relay is at-least-once, so the subscriber can see one event twice. It keeps the outbox row's id as
 the delivery's `eventId`, and a unique `(subscriptionId, eventId)` index makes the second arrival a
 no-op. A failed fan-out throws, so the relay retries it; subscriptions that already have their row
-are skipped. Today `payment.succeeded` is the one event that travels this way.
+are skipped. Every event announced inside a transaction travels this way: `order.created`, `order.cancelled`, the payment settle and decline events, and `return.requested`, `return.received` and `return.closed`.
 
 The queued message itself carries only `{ deliveryId }` — a Claim Check, not a copy of the
 delivery. The row is the payload's only source of truth once the consumer claims it, which is what
@@ -172,7 +172,7 @@ cleared on the next one, and on a re-enable, so a disabled subscription turned b
 
 **Delayed retry rides the cron container, not the broker.** `webhookdeliveries.nextAttemptAt`
 carries when a failed row is due again; `npm run job sweep:webhook-retries` (`sweep:webhook-retries`)
-— the one job in `docker/crontab` that runs every minute instead of nightly — publishes every due
+— one of two jobs in `docker/crontab` that run every minute instead of nightly, the other being `sweep:outbox` — publishes every due
 row (and every stranded one, below) to the queue. See
 [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
 

@@ -4,7 +4,7 @@
 **Owns** — nothing stored. No collection, no cache: every figure is read on demand.
 **Depends on** — [`invoicing`](./invoicing.md) (every money figure), [`orders`](./orders.md)
 (counts, units, products, customers, the open pipeline), [`payments`](./payments.md) (the mix) and
-[`returns`](./returns.md) (units that came back).
+[`returns`](./returns.md) (units that came back) and [`shop`](./shop.md) (the zone and currency the numbers are counted in).
 **Breaks if you change** — a frozen field on an invoice, a credit note or an order line
 (`netTotal`, `shippingNetAmount`, `items.product.price`, `categories`): the formulas below read
 them by name.

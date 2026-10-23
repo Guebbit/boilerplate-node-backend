@@ -72,7 +72,7 @@ would collapse two URL surfaces into one module for no gain — and the cost of 
 visible on the map as an `account → users` arrow, which this page labels `shared-kernel`, rather than hidden inside a barrel.
 :::
 
-Several modules depend on this one and it depends on none, so it sits at the bottom of the graph —
+Several modules depend on this one and it depends only on `access`, so it sits near the bottom of the graph —
 see the generated diagram above for exactly which ones, and which declare a `personalData.erase` hook; that
 list is checked on every regenerate, so it is never repeated by hand here.
 

@@ -271,14 +271,14 @@ and the reason `sms` is described everywhere as "a third handler and no other ch
 
 ## Libraries
 
-`otplib` is `account`'s alone — see [Package Dependencies](../tools/package-dependencies.md) for
+`account` is the only module that uses `otplib` (the demo scenarios also import it to compute codes) — see [Package Dependencies](../tools/package-dependencies.md) for
 where it sits among everything else this repo depends on.
 
-| Library                             | Maintained             | What it costs you                                                |
-| ----------------------------------- | ---------------------- | ---------------------------------------------------------------- |
-| `otplib` (chosen)                   | active, typed          | RFC 4226/6238 TOTP + HOTP, a QR-ready `keyuri`, nothing else     |
-| `speakeasy`                         | unmaintained for years | the same RFCs, but a security-relevant dependency nobody patches |
-| hand-rolled HMAC-SHA1 time-stepping | —                      | exactly the kind of crypto `CLAUDE.md` rules out writing by hand |
+| Library                             | Maintained             | What it costs you                                                 |
+| ----------------------------------- | ---------------------- | ----------------------------------------------------------------- |
+| `otplib` (chosen)                   | active, typed          | RFC 4226/6238 TOTP + HOTP, a QR-ready `generateURI`, nothing else |
+| `speakeasy`                         | unmaintained for years | the same RFCs, but a security-relevant dependency nobody patches  |
+| hand-rolled HMAC-SHA1 time-stepping | —                      | exactly the kind of crypto `CLAUDE.md` rules out writing by hand  |
 
 ## Related pages
 

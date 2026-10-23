@@ -60,15 +60,17 @@ changes nothing. A product has no stock until a receipt gives it some: `POST /in
 the only transition that creates units, so every unit has a ledger row and a caller holding
 `create:StockMovement`.
 
-| Transition                  | Fired by                                                                     | What it does                                                                                                                               |
-| --------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `reserveForOrder`           | checkout, admin order create                                                 | units held, not sold                                                                                                                       |
-| `commitForOrder`            | payment confirmed                                                            | the claim is settled; nothing moves, so no ledger row — the units stay on the shelf, and the date is the hold's `committedAt`              |
-| `shipForOrder`              | the parcel leaves, or a digital order is fulfilled ([`orders`](./orders.md)) | units leave the shelf: `onHand` and `reserved` fall together, `available` stays                                                            |
-| `releaseForOrder`           | order cancelled, or the sweep (a stale hold timed out)                       | units come back                                                                                                                            |
-| `releaseCommittedForOrder`  | a PAID order cancelled before dispatch                                       | the claim is given up; the units never left the shelf                                                                                      |
-| `receive` (with allocation) | a delivery lands, `POST /inventory/receipts`                                 | the units arrive, then go to the paid [preorders](./inventory-reservations.md#preorders) waiting, oldest payment first, in one transaction |
-| `restockReturnedLines`      | goods a customer sent back are received ([`returns`](./returns.md))          | the returned lines go back on `onHand`, one `restock` movement each — no reservation claimed; the return's own once-only move is the guard |
+| Transition                  | Fired by                                                                                        | What it does                                                                                                                               |
+| --------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `reserveForOrder`           | checkout, admin order create                                                                    | units held, not sold                                                                                                                       |
+| `commitForOrder`            | payment confirmed                                                                               | the claim is settled; nothing moves, so no ledger row — the units stay on the shelf, and the date is the hold's `committedAt`              |
+| `shipLinesForOrder`         | each shipment of a physical order ([`delivery`](./delivery.md), through `orders`'s `shipStock`) | only that shipment's units leave the shelf: `onHand` and `reserved` fall together, `available` stays                                       |
+| `shipForOrder`              | an admin status override past dispatch ([`orders`](./orders.md))                                | whatever is left leaves the shelf: `onHand` and `reserved` fall together, `available` stays                                                |
+| `releaseLinesForOrder`      | a remainder cancel ([`returns`](./returns.md), through `orders`)                                | only the cancelled units come back                                                                                                         |
+| `releaseForOrder`           | order cancelled, or the sweep (a stale hold timed out)                                          | units come back                                                                                                                            |
+| `releaseCommittedForOrder`  | a PAID order cancelled before dispatch                                                          | the claim is given up; the units never left the shelf                                                                                      |
+| `receive` (with allocation) | a delivery lands, `POST /inventory/receipts`                                                    | the units arrive, then go to the paid [preorders](./inventory-reservations.md#preorders) waiting, oldest payment first, in one transaction |
+| `restockReturnedLines`      | goods a customer sent back are received ([`returns`](./returns.md))                             | the returned lines go back on `onHand`, one `restock` movement each — no reservation claimed; the return's own once-only move is the guard |
 
 ::: warning Exactly-once, by construction
 Each transition claims the reservation's status **conditionally**, so a cancel racing the sweep — or
@@ -78,7 +80,7 @@ correctness of this module; there is no lock anywhere else holding it up.
 
 A paid order always commits its hold. `commitForOrder` or `shipForOrder` finding no hold to claim is
 either a benign replay (already `committed` or `shipped`) or an incident — see
-[Reservations](./inventory-reservations.md#a-commit-with-no-hold-is-an-incident-not-a-no-op) for
+[Reservations](./inventory-reservations.md#orphaned-hold) for
 which is which, and what gets recorded.
 
 The ledger is not a reaction to a counter change, it is half of one. `stockmovements` rows are

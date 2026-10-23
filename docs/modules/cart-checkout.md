@@ -44,7 +44,7 @@ flowchart TD
     Q -.->|"cap reached"| R
         C -.->|"not the caller's address;<br/>or an addressId sent when<br/>nothing ships to an address"| R
     D -.->|"product gone"| R
-    E -.->|"rule says no; a physical basket<br/>with no method, or an address-requiring<br/>method with none; no billing address<br/>to use"| R
+    E -.->|"rule says no; a physical basket<br/>with no method, or an address-requiring<br/>method with none; a ship-to country<br/>not served (422); no billing address<br/>to use"| R
     T -.->|"the total moved:<br/>409 CART_TOTAL_CHANGED<br/>with both totals"| R
     F -.->|"stock gone"| R
 
@@ -69,7 +69,9 @@ the caller's default; an explicit `addressId` sent for them is refused
 that means nothing. Step 7 also carries the shipping
 requirement: any `requiresShipping: true` line needs a method (`CART_SHIPPING_METHOD_REQUIRED`
 otherwise), and once a method is chosen, `ShippingMethod.requiresAddress` says whether it also needs
-an address (`CART_ADDRESS_REQUIRED` otherwise) — a digital-only basket needs neither. It then
+an address (`CART_ADDRESS_REQUIRED` otherwise) — a digital-only basket needs neither. A shipping
+address in a country outside `NODE_SHIP_TO_COUNTRIES` is refused with a 422
+`CART_SHIP_TO_COUNTRY_NOT_SUPPORTED`. It then
 resolves the BILLING address, which every order carries because the invoice prints it as the buyer's
 (EU VAT Directive Art. 226): the entry `billingAddressId` names, else "same as shipping" when a
 shipping address was resolved, else the book's default — and with none of those the checkout is

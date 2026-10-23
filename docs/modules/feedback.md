@@ -19,7 +19,7 @@ _Nothing reaches `feedback` and it reaches nothing — no imports either way, no
 **It records an email address rather than referencing a user**, because the form is open to people
 who have no account. That one decision explains everything else about this module: it needs nothing
 from [`users`](./users.md), deleting an account leaves that person's feedback standing, and the
-public write route is the only unauthenticated write in the application.
+contact form is open to anyone, a stranger's write alongside signup, login, password reset, second-factor login and analytics events.
 
 A message may carry a **category** (`order`, `cancellation`, `return`, `payment`, `account`,
 `privacy`, `other`) and the order number the visitor typed (`orderNumber`, free text, never checked
@@ -45,8 +45,8 @@ for.
 
 **The honeypot.** `website` is a field a real browser always submits empty and a bot reliably
 fills — declared in the contract (so an undeclared field wouldn't 422 real browsers too) but never
-persisted or returned. A non-empty value writes the row straight to `status: spam` and skips the
-operator notification; the caller still gets the same `201` a real submission gets, so a bot learns
+persisted or returned. A non-empty value — or an address the email policy `refused` (`checkEmailPolicy`, `service.ts`) —
+writes the row straight to `status: spam` and skips the operator notification; the caller still gets the same `201` a real submission gets, so a bot learns
 nothing from the response. That trades an email amplifier for a storage amplifier, which
 `contactLimiters` bounds and the TTL index below expires.
 
@@ -68,7 +68,7 @@ The status enum _is_ the triage workflow, so drawing one draws the other.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    V["anyone<br/><i>POST /feedback/contact — the only unauthenticated write in the app</i>"] --> L["contactLimiters<br/><i>address + email + block — a SUCCESSFUL post spends every budget</i>"]
+    V["anyone<br/><i>POST /feedback/contact — open to anyone, no account</i>"] --> L["contactLimiters<br/><i>address + email + block — a SUCCESSFUL post spends every budget</i>"]
     L --> H{"honeypot<br/>filled?"}
     H -->|no| N["new"]
     H -->|yes| S["spam<br/><i>no notification — the exit that is neither</i>"]

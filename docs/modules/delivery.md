@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — shipping rates, fulfillment orders (the groups of an order's lines that leave together) and shipments (what actually left, with its tracking code).
-**Depends on** — [`orders`](./orders.md) for the order a fulfillment order is about, and for the stock, mail and status doors it writes through.
+**Depends on** — [`orders`](./orders.md) for the order a fulfillment order is about, and for the stock, mail and status doors it writes through; [`inventory`](./inventory.md) for the allocation event that releases a held fulfillment order; [`products`](./products.md) for the moved-release-date event and the dates staff preview; [`shop`](./shop.md) for the currency a rate is quoted in.
 **Breaks if you change** — `findShippingMethod` or `priceShipping`. The cart prices a checkout through both. `cancelRemainder` and `shippedQuantities`: [`returns`](./returns.md) reads what has shipped and cancels what has not through them.
 :::
 
@@ -77,9 +77,10 @@ enforces: a tracking code is required for a tracked method, on every shipment, r
 422 otherwise.
 
 A method may also declare `minWeight`/`maxWeight`, grams — express caps at 5000g, standard at
-30000g, pickup at neither. Unlike `tracked`, this one IS enforced against the basket: `cart`'s
-checkout refuses a chosen method whose range the real basket doesn't fit
-(`CART_SHIPPING_METHOD_WEIGHT`, 409). A product with no `weight` set counts as 0g, never as a
+30000g, pickup at neither. Unlike `tracked`, this one IS enforced against the basket: `PUT /cart/shipping-method`
+refuses a method whose range the real basket doesn't fit (`CART_SHIPPING_METHOD_WEIGHT`, 409). At
+checkout a stored choice the basket has outgrown counts as none, and a physical basket with none is
+refused (`CART_SHIPPING_METHOD_REQUIRED`, 422) — see [Checkout](./cart-checkout.md). A product with no `weight` set counts as 0g, never as a
 refusal on its own account.
 
 `requiresAddress` says whether the method needs somewhere to ship to — standard and express do,
@@ -331,8 +332,7 @@ time before dispatch. The admin's Late view is where they show.
 
 #### What staff do about a late order
 
-Check the Late list about once a week. For an order that is **very late** (a month past its ship
-date, the assumption this shop starts from), contact the buyer: ask whether they still want it. If
+Check the Late list about once a week. For an order that is **very late** (30 days past the agreed date, `agreedAt`, the assumption this shop starts from; see [FTC 16 CFR 435.2(b)](https://www.ecfr.gov/current/title-16/section-435.2)), contact the buyer: ask whether they still want it. If
 they do not, or the goods will not come, cancel and refund with the existing staff cancel. The
 buyer who does nothing keeps waiting.
 
@@ -531,16 +531,18 @@ date this order was expecting, not the product's previous date.
 
 ## Routes and events
 
-| Route                                                      | Key                 | Answers                                                             |
-| ---------------------------------------------------------- | ------------------- | ------------------------------------------------------------------- |
-| `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`     | [the preorder board](#the-preorder-board)'s two reads               |
-| `GET /delivery/order/{orderId}`                            | the owner, or staff | `{ fulfillmentOrders[], shipments[] }`, each with its own `actions` |
-| `POST /delivery/order/{orderId}/start`                     | `start:Shipment`    | the order, `processing`                                             |
-| `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`   | `201` + the shipment                                                |
-| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment`   | the shipment, delivered                                             |
-| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`   | the fulfillment order                                               |
-| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`   | the shipment, tracking corrected while it is out                    |
-| `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`   | the shipment                                                        |
+| Route                                                      | Key                                | Answers                                                             |
+| ---------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------- |
+| `GET /delivery/methods`                                    | public                             | the shipping methods and what each costs                            |
+| `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`                    | [the preorder board](#the-preorder-board)'s two reads               |
+| `GET /delivery/fulfillment-orders/restock-date-impact`     | `update:Product` + `display:Order` | orders a restock-date move would email, before it is saved          |
+| `GET /delivery/order/{orderId}`                            | the owner, or staff                | `{ fulfillmentOrders[], shipments[] }`, each with its own `actions` |
+| `POST /delivery/order/{orderId}/start`                     | `start:Shipment`                   | the order, `processing`                                             |
+| `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`                  | `201` + the shipment                                                |
+| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment`                  | the shipment, delivered                                             |
+| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`                  | the fulfillment order                                               |
+| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`                  | the shipment, tracking corrected while it is out                    |
+| `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`                  | the shipment                                                        |
 
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
 frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../theory/authorization.md#protecting-people).

@@ -3,7 +3,7 @@
 How this application decides who is making a request — and why none of it is published.
 
 ::: tip At a glance
-**Two modes behind one port** — `strategy.ts` is the port (`issue` · `snapshot` · `reissue` · `remint` · `resolveBearer` · `resolveCookie` · `credentialOf` · `list`), `jwt-strategy.ts` and `cookie-strategy.ts` are its adapters, and `NODE_SESSION_MODE` picks one. The choice and what each defends against: [Two ways to stay signed in](../theory/sessions.md).
+**Two modes behind one port** — `strategy.ts` is the port (`issue` · `snapshot` · `reissue` · `remint` · `resolveBearer` · `resolveCookie` · `watchCookie` · `credentialOf` · `list`), `jwt-strategy.ts` and `cookie-strategy.ts` are its adapters, and `NODE_SESSION_MODE` picks one. The choice and what each defends against: [Two ways to stay signed in](../theory/sessions.md).
 **The files** — `config.ts` reads the mode and the lifetimes, `session.ts` is what controllers call, `resolver.ts` answers the kernel's port, `auth-context.ts` turns a proof into an `AuthContext`, `listing.ts` shapes the session list, `mint-guard.ts` refuses a first session without its second factor or on a stale proof, `activity.ts` stamps `lastActiveAt`, the session-epoch rule lives in `../domain/epoch.ts`, `cookies.ts` sets and clears. `jwt` mode adds `jwt.ts` (sign, verify, rotate) and `key-ring.ts` (a secret's `kid`); `cookie` mode adds `session-id.ts` (the `ses_…` id). `device-cookie.ts` is the familiar-device cookie, `login-observability.ts` records that a login happened.
 **Published** — nothing. `session/` has no barrel and may not be imported from outside the module.
 **Breaks if you change** — the cookie flags or the lifetimes. Every guard in the app resolves through here.
@@ -448,7 +448,7 @@ erDiagram
   rotated-away row can be given an earlier date than its original expiry. The database's monitor
   runs about once a minute, so every read also checks `expiresAt`: a row past it is dead whether or
   not it has been deleted yet.
-- **One live link per kind, atomically.** A reset, verification, email-change and undo link each
+- **One live link per kind, atomically.** A reset, verification, email-change, undo and OAuth-link token each
   allow one live row per account, enforced by a partial unique index on `(userId, type)` for those
   kinds only. Issuing is one upsert, so two simultaneous requests cannot leave two working links. A
   deletion confirmation and an MFA challenge may be several at once, and are not in that index.

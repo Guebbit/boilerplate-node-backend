@@ -27,7 +27,7 @@ default `none` passes every caller and publishes nothing to render. The same sel
 questions: what `GET /antibot/config` reports, and whether `humanChallengeGate` demands a token.
 It is mounted unconditionally in `account/routes.ts` on `/signup`/`/reset` and in
 `feedback/routes.ts` on `/contact`; on `/login` it sits behind `loginChallengeGate` instead, which
-only delegates to it once the per-account failure budget rung 1 tracks is at least half spent —
+only delegates to it once the per-account failure budget rung 1 tracks, or the caller's address-block budget, is at least half spent —
 never on an honest first attempt. Neither route imports this module; all of them import the adapter
 and the middleware directly, which is why the neighbourhood diagram above shows no edges at all.
 

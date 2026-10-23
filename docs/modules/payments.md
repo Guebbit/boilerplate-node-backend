@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — an order's money, behind a provider port. The intent freezes a total; the confirm moves the order to `paid`.
-**Depends on** — [`orders`](./orders.md).
+**Depends on** — [`orders`](./orders.md), [`access`](./access.md) (the audit flag of a money step on the caller's own order) and [`shop`](./shop.md) (the zone of a transfer's pay-by deadline).
 **Breaks if you change** — the confirm path. It is the single moment held units become a sale.
 :::
 
@@ -341,7 +341,7 @@ becomes the offline one.
 **Only an operator can say a `manual` refund actually happened.** There is no provider to ask, so
 money that left the system by hand can only be confirmed returned by a person: the automatic
 listener (a customer's own cancel) leaves the payment `succeeded` and writes an unattended
-`payment.refund_owed_by_hand` audit row instead of guessing; `refundByOrder` — already admin-only,
+`payment.refund_owed_by_hand` audit row instead of guessing; `refundByOrder` — gated by `create:Refund`,
 with the same fresh-session tier as recording one — is the only door that may set
 `refundedByHand: true`. A cancelled hand-paid order therefore shows `succeeded` until an
 operator confirms it, not "refunded" for money nobody actually moved.
@@ -563,7 +563,7 @@ flowchart LR
 
 ## The staff Payments page
 
-Four reads behind one admin page, all `display:Payment` (support, manager, admin) and never
+Four reads behind one admin page, all `display:Payment` (support, manager, moderator, admin) and never
 shared-cached. A payer reads their own payment through `GET /payments/order/{orderId}` only.
 
 | Read                                     | Answers                                                                                                                                                                 |
@@ -732,7 +732,7 @@ sequenceDiagram
     A->>P: confirm(providerRef, ref)
     P->>S: confirm intent
     S-->>P: status
-    P-->>A: one of four words
+    P-->>A: one of five words
     B->>S: finish the challenge (requires_action only)
     B->>A: POST /payments/{id}/sync
     S->>A: webhook, signed over the raw body

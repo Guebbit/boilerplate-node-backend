@@ -9,12 +9,12 @@ fixed window.
 **Breaks if you change** — the conditional status claim. It is the entire correctness of this module.
 :::
 
-## Two counters, six transitions
+## Two counters, nine ledger reasons
 
 Every product row carries `onHand` and `reserved` (and the stock level a third, `backordered`, for
 [preorders](#preorders)). [`products`](./products.md) never writes either,
-and neither does anything else — the six transitions below are the only writers in the
-application.
+and neither does anything else — the transitions below are the only writers in the
+application; between them they write nine ledger reasons (`reserve`, `ship`, `release`, `expire`, `receive`, `adjust`, `restock`, `backorder`, `allocate`).
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 34, 'rankSpacing': 60}}}%%

@@ -3,7 +3,7 @@
 ::: tip At a glance
 **Owns** — the `Invoice`/`CreditNote` collections and their own numbering series, outright.
 **Depends on** — [`orders`](./orders.md) (the VAT breakdown, the seller's jurisdiction, an
-auth-scoped order read) and [`payments`](./payments.md) (`PAYMENT_REFUNDED`).
+auth-scoped order read), [`payments`](./payments.md) (`PAYMENT_REFUNDED`) and [`shop`](./shop.md) (the seller block and the numbering zone).
 **Breaks if you change** — `orders`' `ORDER_STATUS_CHANGED` payload shape, or `payments`'
 `PAYMENT_REFUNDED` one; both listeners below read them by name.
 :::

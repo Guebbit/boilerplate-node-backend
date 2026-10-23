@@ -7,7 +7,8 @@ unshipped remainder was cancelled — its lines, and where it stands. A withdraw
 withdrawal before dispatch becomes), [`inventory`](./inventory.md) (received goods back on sale),
 [`payments`](./payments.md) (the refund, and `payment.refunded` closing the return) and
 [`delivery`](./delivery.md) (what has shipped, what remains of each fulfillment order, and the
-delivery a withdrawal refunds).
+delivery a withdrawal refunds), [`access`](./access.md) (the audit flag of an approve or receive on
+the caller's own order) and [`shop`](./shop.md) (where goods come back to, who pays the postage).
 **Breaks if you change** — `orders`' `OrderActions.withdraw`/`withdrawUntil` (the button reads them)
 and `orders`' `withdrawById`; `payments`' `refundForReturn` and the `returnId` on a refund.
 :::

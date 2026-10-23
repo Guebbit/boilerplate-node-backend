@@ -62,7 +62,7 @@ The catalogue is the model every other context conforms to rather than translate
 order item, a stock movement — each is a statement about a product, which is why this module is
 `core` despite doing nothing more interesting than CRUD.
 
-**It depends on nothing, deliberately.** Products genuinely needs
+**It depends on almost nothing, deliberately** — [`shop`](./shop.md), for the currency, and no more. Products genuinely needs
 something back: when a product disappears, every cart and wishlist holding it has to drop the
 reference. As an import that would be a cycle. As `product.deleted` it is products announcing and
 two modules listening, and the arrow still points one way.
