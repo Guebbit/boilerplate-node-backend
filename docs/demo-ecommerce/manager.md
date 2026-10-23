@@ -87,9 +87,9 @@ flowchart LR
 Neither path can move an order backward, and neither can ever mark one **paid** by hand — money
 landing is still the one fact only the payment system reports. Every correction is written down
 with who, when and why, and read back on the order's timeline (`GET /orders/{id}/timeline`, an
-entry named `status_overridden`, visible to staff only) and through the audit trail — the
+entry named `status_overridden`, visible to staff only) and in the admin-only audit trail — the
 customer's own view of the order never shows it, so a customer support question is answered from
-the timeline or the audit page, not the customer's order page.
+the timeline, not the customer's order page.
 
 ## The catalogue
 
@@ -232,7 +232,7 @@ The alert mailbox can get "a paid order has no stock held". It is the one stock 
 or shipping, and nothing was set aside for it. It does not come from a late payment (those fix themselves: the goods are
 taken again, or the customer is refunded). It means somebody edited the data by hand or restored a backup.
 
-You read the audit entry (it names the order and the step), then ask the warehouse to check the shelf and decide:
+The mail names the order and the step (the audit entry behind it is for an admin), so ask the warehouse to check the shelf and decide:
 restore the reservation, cancel and refund, or record a correction if the parcel is already gone. Until the webhook
 for the phone is set up, **only the email** reaches anyone, so someone must read that mailbox.
 
@@ -241,7 +241,7 @@ for the phone is set up, **only the email** reaches anyone, so someone must read
 ## Everything is written down
 
 Every staff action — a price change, a cancellation, a deleted product — is recorded with who did
-it and when. The record is kept for **90 days** and then disappears on its own.
+it and when; only an admin reads the record. The record is kept for **90 days** and then disappears on its own.
 
 Nobody can turn this off from inside the application, which is the point.
 → [`audit-logs`](../modules/audit-logs.md)
@@ -253,6 +253,6 @@ Nobody can turn this off from inside the application, which is the point.
 | **Soft delete**  | Hidden from customers, kept in the records, restorable. → [`products`](../modules/products.md)               |
 | **Switched off** | Not deleted, just not currently for sale.                                                                    |
 | **Refund**       | Money returned. Happens automatically when a paid order is cancelled. → [`payments`](../modules/payments.md) |
-| **Audit log**    | The 90-day record of who did what. → [`audit-logs`](../modules/audit-logs.md)                                |
+| **Audit log**    | The 90-day record of who did what, for admins. → [`audit-logs`](../modules/audit-logs.md)                    |
 | **Webhook**      | A message the shop sends to another system when something happens. → [`webhooks`](../modules/webhooks.md)    |
 | **Secret**       | The one-time-shown key that proves a webhook message came from this shop.                                    |
