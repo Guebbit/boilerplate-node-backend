@@ -1,7 +1,7 @@
 # App, Kernel & Types
 
-The three files at the top of `src/`, the assembly layer under `src/app/`, the module system under
-`src/kernel/`, and the two supporting directories.
+The five files at the top of `src/`, the assembly layer under `src/app/`, the module system under
+`src/kernel/`, and the three supporting directories (`types/`, `locales/`, `domain-primitives/`).
 
 Read [Architecture](../theory/architecture.md) first if the four tiers are new: dependencies run
 one way — `infrastructure` → `kernel` → `modules` → `app` — and `eslint.config.ts` enforces it.
@@ -54,6 +54,7 @@ handling.
 | `src/app/security-txt.ts`    | The `/.well-known/security.txt` body (RFC 9116), as a pure function over parsed settings so the route and the tests share one source. Off by default, and off again once `Expires` passes.                                                              | [Security](../tools/security.md#reporting-a-vulnerability) |
 | `src/app/config.ts`          | The app tier's own variables (server bounds, security.txt) and `APP_CONFIG_SLICES` — every infrastructure, kernel and app slice the boot gate validates, plus the provider-selector probes — handed to `registerModules`.                               | [Configuration](../tools/configuration.md)                 |
 | `src/app/error-handling.ts`  | The global Express error handler plus the process-level `uncaughtException` / `unhandledRejection` handlers. Grouped because all three answer the same question: what happens to a failure nobody else handled.                                         | [Request Flow](../theory/request-flow.md)                  |
+| `src/app/jobs.ts`            | The scheduled jobs that belong to no module (upload and mail-spool reapers, the orphaned-image sweep, the outbox backstop), declared as data like a module's own. `docker/crontab` is generated from them. See [Ops](./ops.md#scheduled-jobs).          |
 | `src/app/workers.ts`         | Registers every queue consumer at startup. A no-op when RabbitMQ is disabled, so a machine without a broker still boots.                                                                                                                                | [RabbitMQ](../tools/rabbitmq.md)                           |
 
 ## `src/kernel/` — the module system
@@ -92,3 +93,10 @@ The kernel knows what a module _is_. It never knows which modules exist.
 | Pattern              | What it is                                                                                                                                                                                                                                                                                                        | Read next                                                              |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `src/locales/*.json` | App-level translation bundles — the strings that belong to no module: validation defaults, transport errors, the shared envelope. One file per language. Module-owned strings live in `src/modules/*/locales/*.json` instead, and `tests/cross-cutting/locale-namespaces.test.ts` keeps the two from overlapping. | [Internationalisation](../tools/i18n.md) · [Modules](./src-modules.md) |
+
+## `src/domain-primitives/`
+
+| File                             | What it is                                                                                                                                                     |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/domain-primitives/money.ts` | `Money`, an amount as a whole number of minor units, with the currency-aware conversions in and out (ISO 4217 exponents).                                      |
+| `src/domain-primitives/time.ts`  | `DAY_MS`, the shop-day key and the shop-zone day boundaries (`endOfUtcDay`, `dayInZone`, `zonedStartOfDay`), below every tier so `domain/` files can use them. |

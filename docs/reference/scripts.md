@@ -3,8 +3,9 @@
 `scripts/` is the repo's own tooling: every file here is the implementation behind an `npm run`
 entry. Most of it never ships — `scripts/ops/` and `scripts/db/` are the two exceptions,
 because those run against a live deployment rather than from a developer's terminal;
-`docker/Dockerfile.production` copies both into the production image and nothing else under
-`scripts/`. `scripts/eslint/` holds the lint rules this codebase wrote for itself, `scripts/audit/`
+`docker/Dockerfile.production` copies all of `scripts/ops/`, `scripts/run-script.ts` and four named
+files from `scripts/db/` (`index-sync.ts`, `sync-indexes.ts`, `cache-clear.ts`,
+`bootstrap-access.ts`) into the production image and nothing else under `scripts/`. `scripts/eslint/` holds the lint rules this codebase wrote for itself, `scripts/audit/`
 holds the AI audit prompts beside the scripts they run, and `.husky/` holds the git hooks.
 
 Every script's user-facing name and when to run it is on
@@ -31,6 +32,7 @@ scripts/
 ├── ops/                      what runs against a deployment: the scheduled jobs and `reencrypt`
 ├── scaffold/                 adding and removing modules: `scaffold:module`, `demo:remove`
 ├── security/                 rebuilding the committed security data: the breached-password list
+├── setup/                    `npm run setup`: a fresh clone to a filled-in `.env`
 └── eslint/                   the repo's own lint rules, documented below
 ```
 
@@ -156,7 +158,7 @@ skill's own `scripts/` is the one place a filename repeats a folder's word.
 
 | File                                                              | What it is                                                                                                                                                               | Read next                                                                          |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `scripts/audit/*/SKILL.md`                                        | The eight audit prompts. Each is registered with Claude Code by a pointer under `.claude/skills/`.                                                                       | [AI Auditing](../tools/ai-auditing.md)                                             |
+| `scripts/audit/*/SKILL.md`                                        | The ten audit prompts. Each is registered with Claude Code by a pointer under `.claude/skills/`.                                                                         | [AI Auditing](../tools/ai-auditing.md)                                             |
 | `scripts/audit/compliance-rules.yaml`                             | The compliance registry both compliance prompts read, one rule per backend or frontend responsibility.                                                                   | [AI Auditing](../tools/ai-auditing.md)                                             |
 | `scripts/audit/code-shape/scripts/shallow-candidates.ts`          | Counts, through the TypeScript checker, what the `code-shape` audit judges: small functions with 1–2 users, pass-throughs, optional parameters never passed, lazy files. | [AI Auditing](../tools/ai-auditing.md#code-shape-the-tools-count-the-model-judges) |
 | `scripts/audit/code-shape/scripts/generate-shallow-candidates.ts` | Its CLI — `npm run audit:shallow -- <paths>`. Writes `tmp/reports/audit/code-shape/shallow.json`.                                                                        | [AI Auditing](../tools/ai-auditing.md#code-shape-the-tools-count-the-model-judges) |
@@ -172,7 +174,7 @@ skill's own `scripts/` is the one place a filename repeats a folder's word.
 | `scripts/docs/check-references.ts`            | Sweeps every inline code span in `docs/` for a file path it claims exists, and fails on one that does not — the guard against a page naming a file a rename or a move left behind. Part of `npm run check`.                                                                                                                                                                                                                                            | —                                                        |
 | `scripts/docs/generate-audit-actions.ts`      | Writes the audit action reference table in `docs/tools/winston.md` between its markers — `npm run regenerate`.                                                                                                                                                                                                                                                                                                                                         | [Winston & Audit Logs](../tools/winston.md)              |
 
-The three libraries underneath them:
+The five libraries underneath them:
 
 | File                                | What it is                                                                                                                                                                                                 | Read next                                                |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |

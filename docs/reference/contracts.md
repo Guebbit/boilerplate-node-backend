@@ -86,7 +86,9 @@ a valid document must pass.
 
 Four exports of the same contract, one per tool, so a reviewer can open the API in whatever they
 already use. All four are written by the collection generator from `openapi.yaml` — never by hand,
-and never edited to fix a request.
+and never edited to fix a request. None is committed: all four are gitignored and built on demand
+(`npm run contracts:bundle -- <postman|insomnia|bruno|mockoon>`), so a checkout holds only the ones
+somebody has generated.
 
 | File                     | What it is                                                                                                           | Read next                                                   |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
