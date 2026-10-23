@@ -20,7 +20,7 @@ import { registerCheckoutModules } from '@tests/checkout-modules';
 import { registerAuditSink, type AuditEntry } from '@infrastructure/observability/audit';
 import { asAdmin, asModerator, callerContextAs } from '@tests/callers';
 import { asReject } from '@tests/response';
-import { payByCard } from '@modules/payments/tests/factories';
+import { payByCard, refundForOrder } from '@modules/payments/tests/factories';
 
 setupTestDb();
 
@@ -59,6 +59,9 @@ const paymentOf = async (orderId: string) => {
     return payment;
 };
 
+/** The `payment.refund_owed_by_hand` rows so far. */
+const owedRows = () => audited.filter(({ action }) => action === 'payment.refund_owed_by_hand');
+
 /** Settle `refundId` of `paymentId` as an admin. */
 const settle = (paymentId: string, refundId: string) =>
     paymentService.settleRefundByHand(paymentId, refundId, asAdmin(), callerContextAs('admin'));
@@ -81,6 +84,45 @@ describe('the operator refunding a cash payment', () => {
         expect(payment.refunds[0]).toMatchObject({ amount: 30, status: 'pending' });
         await settleOutboxNudges();
         expect(await outboxEventModel.countDocuments({ name: PAYMENT_REFUNDED })).toBe(0);
+        // Owed by hand, once, naming the record and written under the operator who asked.
+        expect(owedRows()).toHaveLength(1);
+        expect(owedRows()[0]).toMatchObject({
+            targetType: 'order',
+            targetId: orderId,
+            metadata: { refundId: String(payment.refunds[0]._id), amount: 30, reason: 'goodwill' }
+        });
+    });
+});
+
+describe('the cancel listener on a cash payment', () => {
+    it('opens one record and one owed row; a redelivery writes nothing more', async () => {
+        const { orderId } = await cashOrder();
+
+        await refundForOrder(orderId);
+        await refundForOrder(orderId);
+
+        const payment = await paymentOf(orderId);
+        expect(payment.refunds).toHaveLength(1);
+        expect(payment.refunds[0]).toMatchObject({ amount: 100, reason: 'cancellation' });
+        expect(owedRows()).toHaveLength(1);
+        // No caller behind the listener: the system is the actor.
+        expect(owedRows()[0].metadata).toMatchObject({ refundId: String(payment.refunds[0]._id) });
+    });
+
+    it('still opens the rest when an operator refund of part of it is already waiting', async () => {
+        const { orderId } = await cashOrder();
+        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+            amount: 30
+        });
+
+        await refundForOrder(orderId);
+
+        const payment = await paymentOf(orderId);
+        expect(payment.refunds.map((refund) => [refund.amount, refund.reason])).toEqual([
+            [30, 'goodwill'],
+            [70, 'cancellation']
+        ]);
+        expect(owedRows()).toHaveLength(2);
     });
 });
 
@@ -113,6 +155,8 @@ describe('settleRefundByHand', () => {
             'admin.payment.refund_settled_by_hand'
         );
         expect(audited.map(({ action }) => action)).not.toContain('admin.payment.refunded');
+        // Confirming the money went back owes nothing new.
+        expect(owedRows()).toHaveLength(2);
     });
 
     it('answers PAYMENT_REFUND_NOT_OPEN to a record that is already settled', async () => {

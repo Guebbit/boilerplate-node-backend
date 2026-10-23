@@ -23,6 +23,7 @@ import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, callerContextAs } from '@tests/callers';
 import { asReject } from '@tests/response';
+import { registerAuditSink, type AuditEntry } from '@infrastructure/observability/audit';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { eventually } from '@tests/eventually';
 
@@ -106,6 +107,8 @@ describe('a card payment that lands on a released hold', () => {
     });
 
     it('leaves the order pending and refunds the money, when the units were sold meanwhile', async () => {
+        const audited: AuditEntry[] = [];
+        registerAuditSink((entry) => audited.push(entry));
         const { orderId, product, productId, providerRef } = await expiredCardOrder(1);
         await heldOrderFor(await createUser({ email: 'stranger@example.com' }), product);
         expect(await levelOf(productId)).toEqual({ onHand: 1, reserved: 1 });
@@ -123,6 +126,10 @@ describe('a card payment that lands on a released hold', () => {
         expect(payment?.refunds).toHaveLength(1);
         // Named for what happened, so staff can tell a lost sale from a cancellation.
         expect(payment?.refunds[0].reason).toBe('late_payment');
+        // A card refund goes back through the provider: nobody is owed anything by hand.
+        expect(audited.filter(({ action }) => action === 'payment.refund_owed_by_hand')).toEqual(
+            []
+        );
 
         // The late cancellation then ends the order, with nothing left to give back.
         await orderService.expireReservationById(orderId);

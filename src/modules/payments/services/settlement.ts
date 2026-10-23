@@ -41,9 +41,15 @@ import {
     SETTLEABLE_PAYMENT_STATUSES,
     SUCCESS_SETTLEABLE_PAYMENT_STATUSES
 } from '../domain';
-import type { PaymentDocument } from '../model';
+import type { PaymentDocument, RefundRecord } from '../model';
 import { payerScope } from './scope';
-import { CANCELLATION_REQUEST, LATE_PAYMENT_REQUEST, openRefund, performRefund } from './refunds';
+import {
+    CANCELLATION_REQUEST,
+    LATE_PAYMENT_REQUEST,
+    openRefund,
+    performRefund,
+    recordOwedByHand
+} from './refunds';
 import { recordDecline } from './announce';
 import { PAYMENT_SUCCEEDED } from '../events';
 import { notPayable, paymentNotFound } from './errors';
@@ -203,7 +209,8 @@ const settleMismatch = (
 /** What the settlement transaction decided, for what must happen once it has committed. */
 type SettlementOutcome =
     | { kind: 'replay'; payment: null }
-    | { kind: 'paid' | 'lost'; payment: PaymentDocument };
+    | { kind: 'paid'; payment: PaymentDocument }
+    | { kind: 'lost'; payment: PaymentDocument; refund: RefundRecord | undefined };
 
 /**
  * The success branch's one atomic step: the payment's `succeeded` write, the order's `paid` move
@@ -257,8 +264,8 @@ const settleWithin = async (
         // Read inside the settlement's own snapshot, the one `markPaid` judged, never a fresh one.
         const current = await orderService.readOrder(orderId, session);
         if (!current || !paymentSettled(current.status)) {
-            await openRefund(succeeded, LATE_PAYMENT_REQUEST, undefined, session);
-            return { kind: 'lost', payment: succeeded };
+            const opened = await openRefund(succeeded, LATE_PAYMENT_REQUEST, undefined, session);
+            return { kind: 'lost', payment: succeeded, refund: opened?.refund };
         }
     }
 
@@ -281,7 +288,8 @@ const settleWithin = async (
  */
 const afterSettlement = (
     payment: PaymentDocument,
-    outcome: SettlementOutcome
+    outcome: SettlementOutcome,
+    context: CallerContext | undefined
 ): Promise<Settlement> => {
     const orderId = String(payment.orderId);
 
@@ -295,6 +303,14 @@ const afterSettlement = (
         }));
 
     nudgeOutbox();
+
+    // Hand-recorded money (a late transfer) has no provider to ask: the record the transaction
+    // opened is the whole refund, owed to an operator. Written here, after the commit, so a row
+    // never describes a record that rolled back.
+    if (outcome.kind === 'lost' && isHandRecorded(outcome.payment)) {
+        if (outcome.refund) recordOwedByHand(outcome.payment, outcome.refund, context);
+        return Promise.resolve({ payment: outcome.payment, orderLost: true, transitioned: true });
+    }
 
     if (outcome.kind === 'lost')
         return performRefund(orderId)
@@ -335,8 +351,8 @@ const afterSettlement = (
  * @param state - what the provider reported
  * @param newAttempt - `true` when the caller is itself a fresh attempt at paying (a confirm), so
  *   a decline of an already-declined payment is a new decline and not a repeat report of one
- * @param actor - the staff member who recorded the money by hand, for the order's timeline; absent
- *   when a provider reported it
+ * @param context - the staff member who recorded the money by hand, for the order's timeline and
+ *   the refund owed when it arrived too late; absent when a provider reported it
  * @internal The step beneath `confirmPayment`, `syncPayment`, `applyWebhookSettlement` and
  *   `recordOfflinePayment`, which carry the scope and order-gate checks; it never leaves the barrel.
  */
@@ -344,7 +360,7 @@ export const settlePayment = (
     payment: PaymentDocument,
     state: ProviderPaymentState,
     newAttempt = false,
-    actor?: string | null
+    context?: CallerContext
 ): Promise<Settlement> => {
     const orderId = String(payment.orderId);
     const extra = state.cardLast4 ? { cardLast4: state.cardLast4 } : {};
@@ -402,8 +418,8 @@ export const settlePayment = (
     // its payment method beside "Paid, card ending …", and the two must agree.
     const paidBy = payment.method === 'card' ? 'card' : undefined;
     return withTransaction((session) =>
-        settleWithin(payment, extra, { paidBy, actor }, session)
-    ).then((outcome) => afterSettlement(payment, outcome));
+        settleWithin(payment, extra, { paidBy, actor: context?.caller.id }, session)
+    ).then((outcome) => afterSettlement(payment, outcome, context));
 };
 
 /**
