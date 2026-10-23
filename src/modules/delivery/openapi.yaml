@@ -707,7 +707,7 @@ components:
                 lastNoticeAt:
                     type: string
                     format: date-time
-                    description: When the buyer was last told the date had moved or passed.
+                    description: When the buyer was last told the date had moved or would be missed.
                 cancelReason:
                     $ref: '#/components/schemas/FulfillmentCancelReason'
                 actions:
@@ -880,7 +880,7 @@ components:
                 lastNoticeAt:
                     type: string
                     format: date-time
-                    description: When the buyer was last told the date had moved or passed.
+                    description: When the buyer was last told the date had moved or would be missed.
                 cancelReason:
                     $ref: '#/components/schemas/FulfillmentCancelReason'
 
