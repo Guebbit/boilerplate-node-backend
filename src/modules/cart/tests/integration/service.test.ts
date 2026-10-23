@@ -1384,7 +1384,7 @@ describe('orderConfirm — paymentMethod', () => {
             });
 
             expect(asReject(result).status).toBe(409);
-            expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT');
+            expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT_REACHED');
             // Plain words for a shopper: no API route in the sentence.
             expect(asReject(result).errors[0].message).not.toMatch(/POST |\/orders\/|\/payments\//);
             // The buyer is told WHICH orders to pay or cancel.
@@ -1413,7 +1413,7 @@ describe('orderConfirm — paymentMethod', () => {
 
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
-        expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT');
+        expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT_REACHED');
     });
 
     describe('a purchase hold', () => {
@@ -1512,7 +1512,7 @@ describe('orderConfirm — paymentMethod', () => {
                     undefined
                 );
 
-                expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT');
+                expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT_REACHED');
             }
         );
     });

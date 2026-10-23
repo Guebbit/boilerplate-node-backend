@@ -144,7 +144,7 @@ const resolvePaymentMethod = async (
             ok: false,
             reject: generateReject(409, [
                 {
-                    code: ERROR_CODES.CART_OPEN_ORDER_LIMIT,
+                    code: ERROR_CODES.CART_OPEN_ORDER_LIMIT_REACHED,
                     message: t('cart.open-order-limit'),
                     details: { orderIds: openOrderIds }
                 }
