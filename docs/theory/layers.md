@@ -88,21 +88,22 @@ flowchart TD
 
 ## Quick map
 
-| Tier              | Folder                  | Main job                                                                                                                                                             |
-| ----------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| App               | `src/app`               | assembles this application; the only tier allowed to know every domain                                                                                               |
-| Registry          | `src/modules.ts`        | the enabled module list — the one file that names every domain                                                                                                       |
-| Modules           | `src/modules/*`         | one domain each, top to bottom; `index.ts` is its only public surface                                                                                                |
-| Kernel            | `src/kernel`            | the module system, PLUS the authn/authz every module's guard shares — most of its code, not a minor detail; see [Modules](./modules.md) for why each earns its place |
-| Domain primitives | `src/domain-primitives` | our own pure, generic code every tier may import, `domain/` included — `Money` and `DAY_MS` today; npm and `@types` are all it imports                               |
-| Infrastructure    | `src/infrastructure`    | technical substrate, Express and Mongoose included — see below                                                                                                       |
-| Scenarios         | `scenarios/`            | the demo records and the flow runner — outside `src/` entirely, see below                                                                                            |
+| Tier              | Folder                  | Main job                                                                                                                                                                                                     |
+| ----------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| App               | `src/app`               | assembles this application; the only tier allowed to know every domain                                                                                                                                       |
+| Registry          | `src/modules.ts`        | the enabled module list — the one file that names every domain                                                                                                                                               |
+| Modules           | `src/modules/*`         | one domain each, top to bottom; `index.ts` is its only public surface                                                                                                                                        |
+| Kernel            | `src/kernel`            | the module system, PLUS the authn/authz every module's guard shares — most of its code, not a minor detail; see [Modules](./modules.md) for why each earns its place                                         |
+| Domain primitives | `src/domain-primitives` | our own pure, generic code every tier may import, `domain/` included — `Money`, `DAY_MS` and the shop-day helpers (`endOfUtcDay`, `dayInZone`, `zonedStartOfDay`) today; npm and `@types` are all it imports |
+| Infrastructure    | `src/infrastructure`    | technical substrate, Express and Mongoose included — see below                                                                                                                                               |
+| Types             | `src/types`             | the contract's generated types and the few shared type declarations; imports no tier, so every tier may import it                                                                                            |
+| Scenarios         | `scenarios/`            | the demo records and the flow runner — outside `src/` entirely, see below                                                                                                                                    |
 
-Five tiers, one alias each — `@app/*`, `@modules/*`, `@kernel/*`, `@domain-primitives/*`, `@infrastructure/*` — so every import
+Four tiers — app, modules, kernel, infrastructure — and two folders every tier may import because they depend on no tier: `domain-primitives` and `types`. One alias each — `@app/*`, `@modules/*`, `@kernel/*`, `@infrastructure/*`, `@domain-primitives/*`, `@types` — so every import
 line says which boundary it crosses. [Modules](./modules.md) has the full picture and the reasoning,
 including why these two are named `kernel` and `infrastructure` rather than `platform` and `core`.
 
-### `scenarios/` — a fifth tier, one direction only
+### `scenarios/` — outside the tiers, one direction only
 
 `scenarios/` is outside `src/` entirely and inverts the usual rule: it imports a module's
 repository, model and factories directly — `@modules/<name>/repository`, never the barrel — which
@@ -228,20 +229,20 @@ domain. A module's slice of the demo records lives in `scenarios/<name>.ts` inst
 outside this list — see [Data](../reference/data.md#the-demo-records).
 
 A module carries one of these only when it has something to declare, so they are not a per-module
-tax: most modules carry some subset of them, and `observability` has none of them. Collapsing them
+tax: most modules carry some subset of them, and some carry only one or two (`observability` has just `audit.ts` and `metrics.ts`). Collapsing them
 into central registries would trade that for a file every domain must edit.
 
-A module does not have to serve HTTP. The manifest is a union of two alternatives — one carrying
-`basePath` **and** `routes`, one carrying neither — so a domain that owns a collection and no URL is
+A module does not have to serve HTTP. `basePath` and `routes` are both optional on the manifest and
+mounted only as a pair, so a domain that owns a collection and no URL is
 a first-class entry rather than a special case. `access` is the example: it owns the tenant and
 membership collections, but nothing in the boilerplate creates a shop or grants a role over the
 wire, so there is no URL of its own to mount — `account`, `api-keys` and `users` reach it only
-through its barrel. The `never` typing means a router without a mount point (or the reverse) is a
-type error at the manifest, not a route that silently never registers.
+through its barrel. `app/routes.ts` mounts a module only when it declares both, so a router without a mount point (or
+the reverse) is skipped at runtime rather than rejected by the type.
 
 There are no layer directories: no top-level `controllers`, `services`, `repositories` or `models`. <!-- doc-paths:ignore -->
 Lint rejects them from inside a module so a re-created folder cannot quietly become a second home
-for domain code.
+for domain code: `boundaries/no-unknown-files` (`eslint.config.ts`) refuses any file under `src/` that no tier element or file category classifies.
 
 There is also no top-level `middlewares/`, `jobs/`, `routes/` or `workers/`: directories named after
 a MECHANISM rather than a tier. Where each kind of file lives instead:
@@ -307,8 +308,9 @@ OAuth handshake was would be holding a business rule.
 Which tier a port belongs to is the same question as everything else on this page: `image-store`
 survives an application with no modules, and `payments/providers` becomes meaningless without the
 domain that charges the card. The pattern is already being copied in the other direction —
-`infrastructure/observability/analytics/index.ts` cites `@modules/payments/providers` by name as the
-shape its own `NODE_ANALYTICS_PROVIDER` seam follows.
+`infrastructure/observability/analytics/index.ts` builds its own `NODE_ANALYTICS_PROVIDER` seam from
+`createProviderRegistry` in `infrastructure/runtime/provider-registry.ts`, the same name-in, implementation-out
+shape `payments/providers` uses.
 
 ## How to read a feature
 
@@ -346,8 +348,8 @@ The entity names are examples.
 
 ### Adding a domain
 
-One folder under `src/modules/` with a `module.ts`, plus one line in `src/modules.ts`. Nothing
-else — not the route mounting, not the lint config.
+One folder under `src/modules/` with a `module.ts`, plus its registration in `src/modules.ts`, and at most
+three hand-kept lists ([the central edits](../tools/module-scaffolder.md#the-central-edits)).
 
 Every module gets an `index.ts`, structurally, whether a sibling imports it today or not — a
 convenience barrel (`export *` from services, domain rules, events and emails, plus `export type *`

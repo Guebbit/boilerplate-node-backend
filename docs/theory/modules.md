@@ -1,7 +1,7 @@
 # Modules
 
-A domain lives in exactly one folder. Adding one is a folder plus its registration in `src/modules.ts`;
-removing one is `rm -rf` plus deleting that registration. Everything on this page exists to make those
+A domain lives in exactly one folder. Adding one is a folder plus its registration in `src/modules.ts`, and at most three hand-kept lists
+([the central edits](../tools/module-scaffolder.md#the-central-edits)); removing one is `rm -rf` plus deleting that registration. Everything on this page exists to make those
 two sentences true; [Adding & removing a module](./module-lifecycle.md) walks the steps.
 
 > New to the words **domain** and **barrel**? They are defined with a picture each in
@@ -213,7 +213,7 @@ flowchart TD
 ```
 
 **One alias per tier**, so an import line states which tier it crosses: `@app/*`, `@modules/*`,
-`@kernel/*`, `@infrastructure/*`.
+`@kernel/*`, `@infrastructure/*`. Two leaf folders no tier forbids — `src/domain-primitives` (`@domain-primitives/*`) and `src/types` (`@types`) — import none of them.
 
 Two naming details worth knowing:
 
@@ -298,9 +298,9 @@ without naming a domain.
 contain the calls the contract describes, and a contract describes valid calls and their declared
 answers — so the requests that prove the API _rejects_ things have nowhere to come from. A module
 declares those as data (method, path, headers, body, and a `why` that becomes the description) and
-the collection generator emits them after its contract-derived requests. A handful of modules carry one, and
-a module deleted without removing its entry from `scripts/contracts/client-collections-bundle.ts` stops
-the build rather than shipping a short collection. See
+the collection generator emits them after its contract-derived requests. A handful of modules carry one. The generator
+finds `probes.ts` files by scanning `src/modules/` (`scripts/contracts/client-collections-bundle.ts`), so there is no list to edit: a
+module that writes one is in the collections, and a deleted module simply has none. See
 [Contract Ownership & Fragmentation](../api/contract-fragmentation.md#the-client-collections-generated).
 
 `providers/` is a **module-tier port**: the same inversion as `AuditSink` and `ImageStore`, owned
@@ -309,9 +309,9 @@ do, ships no implementation (the `fake` is a test double outside `src/`), and se
 means writing `stripe.ts` beside it and changing an env var, while the contract, the service and the <!-- doc-paths:ignore -->
 frontend hear nothing. It belongs to `payments` and not to `infrastructure` for the reason the
 `infrastructure` / `kernel` line already gives: charging a card is this domain's business, and a
-substrate that knew what a charge was would be holding a business rule. The pattern is already being
-copied — `infrastructure/observability/analytics/index.ts` cites it by name for its own
-`NODE_ANALYTICS_PROVIDER` seam.
+substrate that knew what a charge was would be holding a business rule. The shape is shared, not
+copied — `infrastructure/observability/analytics/index.ts` builds its own `NODE_ANALYTICS_PROVIDER`
+seam from `createProviderRegistry` (`infrastructure/runtime/provider-registry.ts`).
 
 `emails.ts` exists for a boundary reason. An email is rendered by
 `infrastructure/adapters/email.worker.ts`, which drains a queue possibly in another process, long after
@@ -389,7 +389,7 @@ whether it exists:
 
 1. **Effects live in the service.** A controller reads input and calls one service method; a
    repository issues one query. Neither may decide to send an email, emit an event or record audit
-   — a rule enforced at both ends would drift the moment one side changed alone, and a controller
+   (bar the few handlers that argue an exception in place, listed in [Request Flow](request-flow.md)) — a rule enforced at both ends would drift the moment one side changed alone, and a controller
    or repository is exactly the layer a future edit reaches for first because it is where the
    request or the query already is. The service is the one place that has BOTH the business
    decision and the authority to act on it, so it is the only place a side effect is written down
@@ -478,15 +478,16 @@ the modules that declare both:
 flowchart LR
     IAM["AppModule"]
     R["<b>routed</b><br/>basePath + routes<br/><i>every other module</i>"]
-    H["<b>headless</b><br/>basePath?: never<br/>routes?: never<br/><i>access</i>"]
+    H["<b>headless</b><br/>no basePath, no routes<br/><i>access</i>"]
     IAM --> R
     IAM --> H
     classDef t fill:#dbeafe,stroke:#2563eb,color:#111827;
     class IAM,R,H t;
 ```
 
-The `never`s are the point: declaring a router with no mount point, or a mount point with nothing to
-mount, is a type error at the manifest rather than a route that silently never registers.
+`AppModule` is a plain interface with both fields optional; the guard is at runtime, not in the type.
+`app/routes.ts` mounts a module only when it has both (`if (basePath && routes)`), so a router with
+no mount point, or a mount point with nothing to mount, is skipped rather than an error.
 
 **Keep it small.** A field only one module fills does not belong here — that module should do the
 thing itself. `subscribe` passes the bar: several modules fill it.
@@ -606,7 +607,8 @@ exists, so every subscription is attached before anything can emit.
 
 ## Adding and removing a domain
 
-Adding one is a folder plus its registration in `src/modules.ts`; removing one is `rm -rf` plus
+Adding one is a folder plus its registration in `src/modules.ts`, and at most three hand-kept
+lists ([the central edits](../tools/module-scaffolder.md#the-central-edits)); removing one is `rm -rf` plus
 deleting that registration. The full procedure — the conditional registries, the bundling, the two-repo step — is
 [Adding & removing a module](./module-lifecycle.md). What belongs on this page is why it works and
 what it measured.
@@ -614,9 +616,7 @@ what it measured.
 **It works because nothing central enumerates domains.** Route mounting, the seeder, the i18n boot,
 the audit vocabulary and the metrics registry all walk the registry rather than naming its entries,
 so none of them is on either checklist. `src/modules.ts` is the registry that names a domain, and
-`scripts/scaffold/central-edits.ts` lists the four files a new module still edits by hand (`src/modules.ts`,
-`shared/authorization-roles.yaml`, `shared/authorization-conformance.yaml` and
-`tests/cross-cutting/replace-patch-parity.test.ts`). The three contract order lists name domains too, but only as a preferred position — membership is read
+`scripts/scaffold/central-edits.ts` lists the files a new module still edits by hand. The three contract order lists name domains too, but only as a preferred position — membership is read
 off disk (`scripts/contracts/section-order.ts`), so they are not a census and never need an edit.
 
 **And it is measured, in both directions.** `wishlist` was added under it with its folder and its registration, and no edit to another module.

@@ -234,8 +234,8 @@ published. See [Reporting a vulnerability](tools/security.md#reporting-a-vulnera
 | Dev (`docker-compose.yml`)                                  | Production (`docker-compose.production.yml`)                                                                                             |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Source bind-mounted, `tsx` watches for changes              | Source baked into the image at build time                                                                                                |
-| API port published to all interfaces                        | API port published to `127.0.0.1` only                                                                                                   |
-| Full observability stack included                           | No observability containers — see [below](#observability-in-production)                                                                  |
+| API port published to `${NODE_HOST:-127.0.0.1}`             | API port published to `127.0.0.1` only                                                                                                   |
+| Full observability stack included                           | No observability containers — see [below](#monitoring-and-alerts)                                                                        |
 | `NODE_ENABLE_CLUSTERING=1` (multi-process in one container) | `NODE_ENABLE_CLUSTERING=0` — one process per container, always                                                                           |
 | Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image, `read_only` root filesystem, all Linux capabilities dropped                           |
 | Mongo is a single-member replica set with no auth           | Mongo is a single-node replica set (`rs0`), a scoped `readWrite` app user behind a root account, both Redis instances require a password |

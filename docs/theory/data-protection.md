@@ -111,8 +111,8 @@ step-up gated, audited, rate-limited and row-capped) can take the order list out
 each customer's email — [why that is acceptable, and how it is guarded](../modules/orders.md#the-csv-export).
 
 The export is a background job that mails a link ([account: data export](../modules/account.md#data-export)),
-built one section at a time. Each paged collection it walks (api keys, orders, delivery, feedback)
-goes through the shared `readAll(fetchPage, pageSize)` helper until a short page signals done, so
+built one section at a time. Each paged collection it walks (api keys, orders, feedback)
+goes through the shared `readAll(fetchPage, pageSize)` helper until a short page signals done (delivery's collector instead reads its shipments for the caller's own order ids in one call), so
 there is no row ceiling and no silently truncated answer. The audit trail reads by cursor instead,
 so a long one costs a pass rather than a count and a skip per page.
 

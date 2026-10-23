@@ -6,7 +6,8 @@ shape; this page is what you actually type.
 Both halves are the same claim read in two directions:
 
 > A domain is one folder plus its registration in `src/modules.ts` (the import, the `enabledModules`
-> entry and the `ModuleName` member). Adding it costs a folder and that registration; removing it
+> entry and the `ModuleName` member), and at most three hand-kept lists
+> ([the central edits](../tools/module-scaffolder.md#the-central-edits)). Adding it costs a folder and those; removing it
 > costs `rm -rf` and deleting it. Anything else that breaks is **real coupling**, and seeing it is the
 > point.
 
@@ -223,9 +224,9 @@ the boundary: the question is easiest to answer now and hardest once the module 
 See [Strategic DDD](./strategic-ddd.md) for the four kinds of relationship worth naming in it.
 
 ::: tip A domain with no URL is a first-class module
-Omit `basePath` and `routes` entirely and you get a headless module — `access` is one. The
-manifest type is a union with `never`s on both alternatives, so declaring a router with no mount
-point is a type error rather than a route that silently never registers.
+Omit `basePath` and `routes` entirely and you get a headless module — `access` is one.
+`AppModule` is a plain interface, and `app/routes.ts` mounts a module only when it has both, so a
+router with no mount point is skipped rather than reported.
 :::
 
 ### 2 · The registration
@@ -298,7 +299,8 @@ follows is three parts:
 - **The story** — why the domain exists, the decisions that are not obvious from the code, the traps
 - **Related pages** — the siblings and the horizontal pages a reader will want next
 
-Copy [`feedback`'s page](../modules/feedback.md) — the same module you copied the code from — and
+The code comes from `example`, which has no page by design (its file headers carry the explanation).
+Copy the page of a module shaped like yours instead — [`feedback`'s](../modules/feedback.md) is a good model — and
 replace it. Do not
 restate what the code already says — the routes are in `src/modules/<name>/routes.ts` and
 `openapi.yaml`, the fields are in `model.ts`, and a page repeating either goes stale the first time
@@ -521,7 +523,7 @@ npx tsc --noEmit                                  # THE assertion: 0 errors in s
                                                   # in src/** from a module that did not DECLARE
                                                   # the dependency in its manifest
 
-# and from client-collections-bundle.ts if any of them declared probes
+# probes are discovered by directory scan, so there is no list to edit
 npm run contracts:bundle
 npx spectral lint openapi.yaml --ruleset shared/contracts/spectral.yaml
 npm test                                          # everything else: a report, not a verdict

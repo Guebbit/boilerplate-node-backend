@@ -153,7 +153,7 @@ The third row is why this page exists. The idea is standard; its presence in a N
 not, so it gets documented rather than assumed.
 
 **When you would not have one at all:** a module whose rules are all "store this, return it" has no
-domain layer, and inventing one produces empty folders. Most modules here have none — see
+domain layer, and inventing one produces empty folders. About half the modules here have none — see
 [the floor](#the-floor-testable-without-a-database-is-necessary-not-sufficient) for the test a rule
 must pass before it earns a place.
 

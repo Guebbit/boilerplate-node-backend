@@ -73,7 +73,7 @@ sequenceDiagram
 Each worker's shutdown sequence lives in `createApp()`'s `stop` (`src/app.ts`, wired to the
 process signals by `src/serve.ts`):
 
-1. Mark `GET /readyz` as draining (503) the moment the signal arrives.
+1. `GET /readyz` is marked draining (503) the moment the signal arrives, by `registerSignalHandlers` (`src/infrastructure/runtime/server-lifecycle.ts`) before `stop` runs.
 2. Close the HTTP server: no new connections, idle keep-alive sockets dropped, in-flight requests
    drain. Anything still open at half the deadline (an SSE stream) is cut.
 3. Stop the locale-override refresh timer, then let started PDF renders and event deliveries
@@ -83,7 +83,7 @@ process signals by `src/serve.ts`):
 6. `shutdownAnalytics()` — flush PostHog if configured.
 7. `shutdownTracing()` — flush remaining OTel spans to Tempo.
 
-Each step swallows its own failure, so a broken Redis cannot stop the database from closing.
+The `stop*` steps swallow their own failure, so a broken Redis cannot stop the database from closing. `shutdownAnalytics` and `shutdownTracing` do not swallow theirs, which is part of why they run last.
 The order lives in `shutdownInfra` (`src/infrastructure/runtime/server-lifecycle.ts`).
 
 If shutdown takes longer than the timeout, the worker (or the primary) force-exits.

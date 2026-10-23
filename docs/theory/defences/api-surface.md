@@ -25,11 +25,11 @@ The zombie-endpoint problem is a bookkeeping problem, and bookkeeping done by ha
 
 The attacker's best move against a typed API is to make it choose a different type.
 
-| Attack                        | How it works                                          | This boilerplate                                                                                                                                 |
-| ----------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Content negotiation confusion | XML accepted where JSON was expected → XXE            | Express is given exactly two parsers — JSON and multipart — so there is no XML branch to negotiate into — `app/security.ts`                      |
-| Content-type sniffing         | `text/plain` parsed as JSON to avoid a CORS preflight | A body is parsed only by the parser its declared content type selects, and every one of the three is bounded. There is no "guess the type" path. |
-| Mass assignment on write      | an undeclared field lands on the model                | Every body schema is `.strict()` — see [Injection](injection.md#into-a-path-or-a-model).                                                         |
+| Attack                        | How it works                                          | This boilerplate                                                                                                                                                                                     |
+| ----------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Content negotiation confusion | XML accepted where JSON was expected → XXE            | Express is given exactly two body parsers — the JSON parser (`app/security.ts`) and multipart via multer (`infrastructure/http/middlewares/upload.ts`) — so there is no XML branch to negotiate into |
+| Content-type sniffing         | `text/plain` parsed as JSON to avoid a CORS preflight | A body is parsed only by the parser its declared content type selects, and each of the two is bounded (the JSON size limit; multer's size and file-count limits). There is no "guess the type" path. |
+| Mass assignment on write      | an undeclared field lands on the model                | Every body schema is `.strict()` — see [Injection](injection.md#into-a-path-or-a-model).                                                                                                             |
 
 ## Bulk access and quotas
 

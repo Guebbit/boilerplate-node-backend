@@ -125,7 +125,11 @@ flowchart LR
 | RabbitMQ                              | Receives heavy async jobs (email, PDF). The HTTP handler responds immediately; a separate worker processes the job at its own pace.                                                                                |
 
 A module records its audit action from `service.ts` or `services/*.ts`, beside the write itself.
-The exceptions are two `account` handlers, each arguing in place why it has to emit itself.
+The exceptions are handlers that each argue in place why they have to emit themselves: the two
+`account` ones below, `get-oauth-callback` (only a genuine login owes the row, known once the
+callback has finished), `orders`' `get-order-item` (a staff read of someone else's order,
+`ADMIN_ORDER_VIEWED`) and `payments`' `post-payment-webhook` (an invalid signature, which never
+reaches a service).
 `post-login` keeps the failure and success emits together at the handler because the success one may
 only fire once the refresh token, the cookies and the access token all exist, which is a step later
 than `login()` proving the credentials matched. `post-reset-request` emits **unconditionally**,
@@ -133,7 +137,7 @@ whether or not the address belongs to an account, because an emit reachable only
 found would make the audit trail leak the existence the identical response deliberately hides — the
 same user-enumeration guarantee, one layer down.
 
-Both exceptions are about a fact the service cannot see: when the emit must fire, and whether it
+The exceptions are all about a fact the service cannot see: when the emit must fire, and whether it
 fires at all. Anything decided by the write itself belongs with the write.
 
 ## Cross-cutting strategies
@@ -198,10 +202,10 @@ produced the change-set.
 **Not factory-backed:**
 
 - **Entity translations** (`PUT`/`PATCH /locales/translations/{entityType}/{id}`) and the locale
-  entries bulk import (`PUT`/`PATCH /locales/{locale}/tenants/{tenant}/entries`) are hand-written.
+  entries bulk import (`PUT`/`PATCH /locales/{locale}/apps/{app}/entries`) are hand-written.
   Their bodies differ by verb where it matters: a PATCH locale entry merges field by field (a
   `null` clears one), a PUT states each locale whole.
-- **PUT-only resources** — `PUT /locales/{locale}/entries/{entryId}`, `PUT /cart/{productId}`,
+- **PUT-only resources** — `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /cart/{productId}`,
   `PUT /cart/shipping-method`, `PUT /wishlist/{productId}`, `PUT /account/addresses/{id}/default` —
   have no PATCH.
 
@@ -296,15 +300,16 @@ which driver failures describe the **request** rather than the server. One funct
 is the same on every model — a call-site `try`/`catch` is invisible to every endpoint that
 did not think to write one.
 
-| Raised by                    | Status | Why it is the caller's problem                                                                                                                               |
-| ---------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `CastError` (Mongoose)       | 422    | A value failed a schema path's cast. A safety net: a malformed id is answered before the database, see [below](#a-malformed-id-has-one-answer-per-position). |
-| `BSONError` (driver)         | 422    | `new ObjectId(...)` itself refused: `''`, `'%00'`, `'undefined'`, anything not 24 hex characters. The same safety net.                                       |
-| `E11000` duplicate key       | 409    | A unique index refused the write: something with that value already exists.                                                                                  |
-| `ValidationError` (Mongoose) | 422    | A schema validator refused — a `required` path left empty, a value outside `min`/`max`, a failed `match`.                                                    |
-| any module's `ConflictError` | 409    | The write was refused for what it would make true — `access`'s `AccessInvariantError` today.                                                                 |
-| `PreconditionFailedError`    | 412    | The caller's `If-Match` no longer describes the row — see [Conditional writes](../api/write-methods.md#conditional-writes-etag-and-if-match).                |
-| anything else                | 500    | Genuinely unrecognised.                                                                                                                                      |
+| Raised by                                                         | Status | Why it is the caller's problem                                                                                                                                                          |
+| ----------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CastError` (Mongoose)                                            | 422    | A value failed a schema path's cast (recognised by its `kind`). A safety net: a malformed id is answered before the database, see [below](#a-malformed-id-has-one-answer-per-position). |
+| `BSONError` (driver)                                              | 422    | `new ObjectId(...)` itself refused: `''`, `'%00'`, `'undefined'`, anything not 24 hex characters. The same safety net.                                                                  |
+| `E11000` duplicate key                                            | 409    | A unique index refused the write: something with that value already exists.                                                                                                             |
+| `ValidationError` (Mongoose)                                      | 422    | A schema validator refused — a `required` path left empty, a value outside `min`/`max`, a failed `match`.                                                                               |
+| any module's `ConflictError`                                      | 409    | The write was refused for what it would make true — `access`'s `AccessInvariantError` today.                                                                                            |
+| `PreconditionFailedError`                                         | 412    | The caller's `If-Match` no longer describes the row — see [Conditional writes](../api/write-methods.md#conditional-writes-etag-and-if-match).                                           |
+| a dependency outage (Mongo or Redis unreachable, or a full queue) | 503    | The server is temporarily broken, not the request: `isInfrastructureError`, answered with `SERVICE_UNAVAILABLE` and a `Retry-After` hint.                                               |
+| anything else                                                     | 500    | Genuinely unrecognised.                                                                                                                                                                 |
 
 Every branch above exists so that something describing the CALLER is not reported as a server
 fault. `POST /products/search` is public and takes an `id` filter, so `{"id": ""}` must not become
@@ -313,7 +318,7 @@ correctness one.
 
 ### Three rules the branches share
 
-- **The four driver/Mongoose branches are detected by `name`, not `instanceof`.** Both `bson` and
+- **The driver/Mongoose branches are detected by shape, not `instanceof`:** `BSONError` and `ValidationError` by `name`, `CastError` by its own `kind` property, E11000 by `isDuplicateKey`. Both `bson` and
   `mongoose` reach this process as transitive dependencies of more than one package, and an
   `instanceof` against the wrong copy silently returns false. `ConflictError` is the one exception:
   it is our own class, defined once, here — a module subclasses it and `instanceof` is exactly the

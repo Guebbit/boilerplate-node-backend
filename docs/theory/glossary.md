@@ -20,12 +20,12 @@ language is kept per context rather than shared.
 
 ## `account`
 
-| Term                 | What it means here                                                                                    |
-| -------------------- | ----------------------------------------------------------------------------------------------------- |
-| **Session**          | Proof of who is asking, carried in cookies. An access token to spend and a refresh token to renew it. |
-| **Access token**     | Short-lived bearer of identity. Never stored — if it is valid it is trusted.                          |
-| **Refresh token**    | Long-lived, revocable, stored on the User record. Losing it is what logging out means.                |
-| **Account deletion** | Two steps — a request that issues a token, and a confirm that destroys the record. Never one call.    |
+| Term                 | What it means here                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Session**          | Proof of who is asking, one row in `sessions`. In `jwt` mode an access token to spend and a refresh token to renew it; in `cookie` mode one opaque session id, with no refresh token. |
+| **Access token**     | Short-lived bearer of identity. Never stored — if it is valid it is trusted.                                                                                                          |
+| **Refresh token**    | `jwt` mode only. Long-lived, revocable, its digest kept in the session row. Losing it is what logging out means.                                                                      |
+| **Account deletion** | Two steps — a request that issues a token, and a confirm that destroys the record. Never one call.                                                                                    |
 
 ## `access`
 
@@ -99,15 +99,15 @@ language is kept per context rather than shared.
 
 ## `inventory`
 
-| Term               | What it means here                                                                                                                                                                                                                              |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **On hand**        | Units physically present, whether or not anyone has claimed them. Stored on this module's own `stocklevels` collection — the source of truth.                                                                                                   |
-| **Reserved**       | Units an open order has claimed. Still on the shelf, no longer for sale.                                                                                                                                                                        |
-| **Available**      | On hand minus reserved, clamped at zero — what a customer may buy. Stored and kept in step by `applyTransition`, the one writer.                                                                                                                |
-| **Reservation**    | One order’s hold on its units, with a deadline. Ends as a commit, a release or an expiry — never by being deleted.                                                                                                                              |
-| **Transition**     | One of the nine ways a counter may move (`reserve`, `ship`, `release`, `expire`, `receive`, `adjust`, `restock`, `preorder`, `allocate`). Each implies a fixed pair of deltas (`domain/transitions.ts`) and each writes exactly one ledger row. |
-| **Stock movement** | A ledger row: which product, which transition, and both signed deltas. Written by the same call that moved the counter, so it cannot be missing.                                                                                                |
-| **Sweep**          | The expiry tick. An operator is the cron — the application ships no scheduler of its own.                                                                                                                                                       |
+| Term               | What it means here                                                                                                                                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **On hand**        | Units physically present, whether or not anyone has claimed them. Stored on this module's own `stocklevels` collection — the source of truth.                                                                                                    |
+| **Reserved**       | Units an open order has claimed. Still on the shelf, no longer for sale.                                                                                                                                                                         |
+| **Available**      | On hand minus reserved, clamped at zero — what a customer may buy. Stored and kept in step by `applyTransition`, the one writer.                                                                                                                 |
+| **Reservation**    | One order’s hold on its units, with a deadline. Ends as a commit, a release or an expiry — never by being deleted.                                                                                                                               |
+| **Transition**     | One of the nine ways a counter may move (`reserve`, `ship`, `release`, `expire`, `receive`, `adjust`, `restock`, `backorder`, `allocate`). Each implies a fixed pair of deltas (`domain/transitions.ts`) and each writes exactly one ledger row. |
+| **Stock movement** | A ledger row: which product, which transition, and both signed deltas. Written by the same call that moved the counter, so it cannot be missing.                                                                                                 |
+| **Sweep**          | The expiry tick (`sweep:reservations`, every 5 minutes). The `cron` service runs it from `docker/crontab`; the application process owns no timer.                                                                                                |
 
 ## `invoicing`
 
@@ -119,12 +119,12 @@ language is kept per context rather than shared.
 
 ## `locales`
 
-| Term           | What it means here                                                                                                                                                                        |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Language**   | A tag this deployment offers, from either tier. Registering one in the database never teaches the API to answer in it — only a deployed file does that.                                   |
-| **Entry**      | One translated string: a language, a dotted key and its text. Stored one row per pair, so a key is editable on its own.                                                                   |
-| **Dictionary** | The nested tree a client consumes, built from entries on read. Never stored in that shape — the rows are flat because flat is what is editable.                                           |
-| **Tenants**    | What a language can do here — the `backend` tenant answers API requests, a frontend tenant offers a downloadable dictionary. The two are independent facts and the manifest reports both. |
+| Term           | What it means here                                                                                                                                                                                 |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Language**   | A tag this deployment offers, from either tier. Registering one in the database never teaches the API to answer in it — only a deployed file does that.                                            |
+| **Entry**      | One translated string: a language, a dotted key and its text. Stored one row per pair, so a key is editable on its own.                                                                            |
+| **Dictionary** | The nested tree a client consumes, built from entries on read. Never stored in that shape — the rows are flat because flat is what is editable.                                                    |
+| **Apps**       | The keyspaces a deployment holds words for — the `backend` app answers API requests, a frontend app offers a downloadable dictionary. The two are independent facts and the manifest reports both. |
 
 ## `notifications`
 

@@ -48,7 +48,7 @@ flowchart TD
 ```
 
 **One domain = one folder** under `src/modules/`. That is the whole rule, and it is what makes
-"adding a domain is a folder plus a line, removing one is `rm -rf`" true.
+"adding a domain is a folder plus a registration, removing one is `rm -rf`" true.
 
 ### The confusing part: a domain contains a folder called `domain/`
 
@@ -122,7 +122,7 @@ surely as no barrel would, since there is nothing in it to reach for.
 ## Main strategies already present in the code
 
 - **Contract first**: the [API section](../api/) starts from [`openapi.yaml`](../api/openapi-workflow.md#openapi-is-the-source-of-truth).
-- **Modular domains**: every domain lives in one folder under `src/modules/`, and adding or removing one is a folder plus a line in `src/modules.ts`. See [Modules](./modules.md).
+- **Modular domains**: every domain lives in one folder under `src/modules/`, and adding one is a folder plus its registration in `src/modules.ts`, and at most three hand-kept lists ([the central edits](../tools/module-scaffolder.md#the-central-edits)); removing one is `rm -rf`. See [Modules](./modules.md).
 - **Layered backend**: routes → middlewares → controllers → services → repositories → models, _inside_ each module. See [Layers](./layers.md).
 - **Database isolation**: [Mongoose](../tools/mongodb-mongoose.md) queries stay near repositories, not scattered through controllers.
 - **Fail-open optional infrastructure**: [Redis](../tools/redis-cache.md), [Winston](../tools/winston.md), [Tempo](../tools/tempo.md), and [product analytics](../tools/analytics.md) improve behavior when configured, but the app keeps running when they are disabled.

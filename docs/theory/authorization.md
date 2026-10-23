@@ -343,13 +343,13 @@ The PHP backend answers all of this **identically** — same roles, same scopes,
 same wire format — with different tools, because the idiomatic library on each side is different
 and forcing one abstraction over both makes both worse.
 
-| Same in both, on purpose                                                               | Allowed to differ                              |
-| -------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| The vocabulary: `action`, `subject`, `conditions`, `fields`, `manage`, `all`, `Caller` | The library doing the evaluating               |
-| The permission rules and sets, and the preset roles seeded on day one                  | How rules become a query                       |
-| The scope model: `tenant` \| `platform`, never both, never derived from a flag         | `guard_name`, which only the PHP package needs |
-| The wire format of `GET /account/abilities`                                            | Everything else about the implementation       |
-| The conformance suite — one fixture file, identical bytes, run by both                 | —                                              |
+| Same in both, on purpose                                                                                            | Allowed to differ                              |
+| ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| The vocabulary: `action`, `subject`, `conditions`, `fields`, `Caller` (no `manage`, no `all`: there is no wildcard) | The library doing the evaluating               |
+| The permission rules and sets, and the preset roles seeded on day one                                               | How rules become a query                       |
+| The scope model: `tenant` \| `platform`, never both, never derived from a flag                                      | `guard_name`, which only the PHP package needs |
+| The wire format of `GET /account/abilities`                                                                         | Everything else about the implementation       |
+| The conformance suite — one fixture file, identical bytes, run by both                                              | —                                              |
 
 Here that is `@casl/ability`, whose rules compile straight into a Mongo query and can be shipped to
 the browser as the same rules. There it is `spatie/laravel-permission` for the storage half only —

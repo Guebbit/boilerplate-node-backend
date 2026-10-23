@@ -72,7 +72,7 @@ both recipes leave a repo that regenerates, type-checks and passes the cross-cut
 flowchart TD
     Names["read every module.yaml,\ncollect group: shop"] --> Folders["rm -rf each\nsrc/modules/&lt;shop module&gt;"]
     Folders --> Registry["edit src/modules.ts"]
-    Registry --> Ops["delete the reap/sweep scripts\na shop module owns, their\npackage.json + docker/crontab lines"]
+    Registry --> Ops["regenerate drops the\nreap/sweep entries a shop module\nowns from docker/crontab"]
     Ops --> Shared["edit the shared files: the roles' permission sets and the conformance\ncases' rules, the scenario fixtures"]
     Shared --> Scenario["delete the demo catalogue's\nown scenario data; drop the shop's\nhistory-drive step; default scenario\nbecomes blank"]
     Scenario --> Report["delete every test that imports\na deleted module, then print\nwhat changed"]
@@ -104,8 +104,8 @@ branch, or after committing whatever you had in progress. It touches:
   The account data-export schema is among them: each module declares its section as
   `x-personal-data` in its own `openapi.yaml`, so a removed module takes its section with it.
 - **The scheduled jobs a shop module owns** (`reap:orders` and friends) leave with its folder: each is
-  declared on the module's own manifest, and `npm run regenerate` rewrites `docker/crontab` and the
-  `package.json` scripts without them.
+  declared on the module's own manifest, and `npm run regenerate` rewrites `docker/crontab` without
+  them (jobs run through `npm run job <name>`; there are no per-job `package.json` scripts).
 - **The removed modules' test doubles** (`scenarios/support/doubles/<module>/`, such as the fake
   payment provider) and the lines that register them. See [Test doubles](./tools/test-doubles.md).
 - **The removed modules' permission sets** in `shared/authorization-roles.yaml` (every role's sets)

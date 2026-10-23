@@ -6,7 +6,7 @@ editing.
 This stack is **container-first**: the shipped `.env` uses compose service hostnames. The default
 profile is lean — 6 containers (`app`, `cron`, `database`, `redis`, `limits`, `rabbitmq`) — with Tempo, Loki,
 Prometheus, Grafana, Alloy and Umami opt-in behind the `observability`/`analytics` profiles
-(`npm run compose:up:full`, or `COMPOSE_PROFILES` in `.env` to keep them across every restart). Host
+(`npm run compose:up:full`, or `COMPOSE_PROFILES` in `.env` to keep them across every restart). The dev profiles are `observability`, `analytics`, `docs` and `integrations`; the `bundled` value `.env-example` ships belongs to the production compose file. Host
 mode is supported and has its own scripts; it is the secondary path.
 
 ## First run
@@ -113,7 +113,7 @@ flowchart LR
 
 `npm run host -- dev` did not put it there. `compose up` starts two things that matter here — the
 `database` container and the `app` container — and `app`'s startup command is
-`npm run db:bootstrap && npm run dev:docker`. The container seeded the fresh volume before it began
+`npm run db:bootstrap && npm run dev:docker` (`dev:docker:cluster` when `NODE_ENABLE_CLUSTERING` is set). The container seeded the fresh volume before it began
 serving.
 
 Your host process then connects to that same mongod and finds a furnished shop. Two app processes,
