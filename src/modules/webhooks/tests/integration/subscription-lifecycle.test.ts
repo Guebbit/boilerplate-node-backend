@@ -14,6 +14,9 @@ import { logger } from '@infrastructure/adapters/logger';
 import { registerWebhookCatalogue } from '../../services/catalogue';
 import {
     create,
+    disable,
+    enable,
+    getById,
     list,
     remove,
     removeSecret,
@@ -118,7 +121,7 @@ describe('listing', () => {
     it('filters by whether a subscription is enabled', async () => {
         const live = await subscribe('https://hooks.example.com/live');
         const parked = await subscribe('https://hooks.example.com/parked');
-        await update(String(parked._id), { enabled: false }, context);
+        await disable(String(parked._id), context);
 
         const enabled = await list(context, { enabled: true });
         const disabled = await list(context, { enabled: false });
@@ -127,6 +130,87 @@ describe('listing', () => {
         expect(enabled.items.map(({ id }) => id)).toEqual([String(live._id)]);
         expect(disabled.items.map(({ id }) => id)).toEqual([String(parked._id)]);
         expect(everything.items).toHaveLength(2);
+    });
+
+    it('tells a pause by hand from the failure guard’s work', async () => {
+        const live = await subscribe('https://hooks.example.com/live');
+        const paused = await subscribe('https://hooks.example.com/paused');
+        const guarded = await subscribe('https://hooks.example.com/guarded');
+        await disable(String(paused._id), context);
+        await webhookSubscriptionRepository.disable(String(guarded._id));
+
+        const byGuard = await list(context, { autoDisabled: true });
+        const notByGuard = await list(context, { autoDisabled: false });
+        const pausedByHand = await list(context, { enabled: false, autoDisabled: false });
+
+        expect(byGuard.items.map(({ id }) => id)).toEqual([String(guarded._id)]);
+        expect(notByGuard.items.map(({ id }) => id).toSorted()).toEqual(
+            [String(live._id), String(paused._id)].toSorted()
+        );
+        expect(pausedByHand.items.map(({ id }) => id)).toEqual([String(paused._id)]);
+    });
+
+    it('orders by the sort asked for, and ends every order on the id', async () => {
+        await subscribe('https://hooks.example.com/b');
+        await subscribe('https://hooks.example.com/a');
+
+        const byUrl = await list(context, { sort: ['url'] });
+        const byUrlDescending = await list(context, { sort: ['-url'] });
+
+        expect(byUrl.items.map(({ url }) => url)).toEqual([
+            'https://hooks.example.com/a',
+            'https://hooks.example.com/b'
+        ]);
+        expect(byUrlDescending.items.map(({ url }) => url)).toEqual([
+            'https://hooks.example.com/b',
+            'https://hooks.example.com/a'
+        ]);
+    });
+
+    it('gives each row the caller’s actions, none of them for a caller who cannot write', async () => {
+        const created = await subscribe();
+        const reader = {
+            caller: {
+                ...callerAs('manager'),
+                unrestricted: false,
+                permissions: ['read:WebhookSubscription']
+            },
+            analyticsConsent: false
+        };
+
+        const asManager = await list(context, {});
+        const asReader = await list(reader, {});
+
+        expect(asManager.items[0].actions).toMatchObject({ update: true, disable: true });
+        expect(asReader.items[0].id).toBe(String(created._id));
+        expect(asReader.items[0].actions).toEqual({
+            update: false,
+            delete: false,
+            enable: false,
+            disable: false,
+            rotateSecret: false,
+            removeSecret: false
+        });
+    });
+});
+
+describe('reading one', () => {
+    it('answers the subscription, and nothing for an unknown id or another tenant’s', async () => {
+        const created = await subscribe();
+        const foreign = await webhookSubscriptionRepository.create({
+            tenant: 'another-tenant',
+            url: 'https://hooks.example.com/foreign',
+            eventTypes: ['*'],
+            secrets: [mintRingSecret().entry]
+        });
+
+        const own = await getById(String(created._id), context);
+        const unknown = await getById('a'.repeat(24), context);
+        const other = await getById(String(foreign._id), context);
+
+        expect(own).toMatchObject({ id: String(created._id), enabled: true });
+        expect(unknown).toBeUndefined();
+        expect(other).toBeUndefined();
     });
 });
 
@@ -183,7 +267,7 @@ describe('what a create refuses', () => {
         );
     });
 
-    it('says when the tenant is at its limit, and checks nothing about the URL then', async () => {
+    it('says when the tenant is at its limit with a 409 and its code, and checks nothing about the URL then', async () => {
         setEnvironment({ NODE_WEBHOOK_SUBSCRIPTION_CAP: '1' });
         await subscribe();
         mockChecked.length = 0;
@@ -195,7 +279,9 @@ describe('what a create refuses', () => {
 
         expect(result.success).toBe(false);
         if (result.success) throw new Error('unreachable — asserted above');
+        expect(result.status).toBe(409);
         expect(result.errors[0]).toMatchObject({
+            code: 'WEBHOOK_SUBSCRIPTION_LIMIT_REACHED',
             message: 'This shop has reached its webhook subscription limit.'
         });
         expect(mockChecked).toEqual([]);
@@ -240,13 +326,13 @@ describe('updating', () => {
             secrets: [mintRingSecret().entry]
         });
 
-        const unknown = await update('a'.repeat(24), { enabled: false }, context);
-        const other = await update(String(foreign._id), { enabled: false }, context);
+        const unknown = await update('a'.repeat(24), { description: 'x' }, context);
+        const other = await update(String(foreign._id), { description: 'x' }, context);
 
         expect([unknown, other].map((result) => !result.success && result.status)).toEqual([
             404, 404
         ]);
-        expect(await read(String(foreign._id), 'enabled')).toBe(true);
+        expect(await read(String(foreign._id), 'description')).toBeUndefined();
     });
 
     it('refuses event types outside the catalogue and leaves the row as it was', async () => {
@@ -306,52 +392,6 @@ describe('updating', () => {
         expect(cleared?.eventTypes).toEqual(['order.paid']);
     });
 
-    it('re-arms a disabled subscription: failure streak, failing-since date and disabled stamp are cleared', async () => {
-        const created = await subscribe();
-        const row = await stored(String(created._id));
-        if (!row) throw new Error('setup failed');
-        row.enabled = false;
-        row.consecutiveFailures = 7;
-        row.disabledAt = new Date();
-        row.failingSince = new Date(Date.now() - 4 * 86_400_000);
-        await webhookSubscriptionRepository.save(row);
-
-        await update(String(created._id), { enabled: true }, context);
-
-        const after = await stored(String(created._id));
-        expect(after).toMatchObject({ enabled: true, consecutiveFailures: 0 });
-        expect(after?.disabledAt).toBeUndefined();
-        // The age floor starts over, or the next five exhausted chains would disable it at once.
-        expect(after?.failingSince).toBeUndefined();
-    });
-
-    it('leaves a building failure streak alone when an enabled subscription is saved as enabled again', async () => {
-        const created = await subscribe();
-        const row = await stored(String(created._id));
-        if (!row) throw new Error('setup failed');
-        row.consecutiveFailures = 4;
-        await webhookSubscriptionRepository.save(row);
-
-        await update(String(created._id), { enabled: true, description: 'touched' }, context);
-
-        expect(await read(String(created._id), 'consecutiveFailures')).toBe(4);
-    });
-
-    it('disabling keeps the streak and does not stamp a re-arm', async () => {
-        const created = await subscribe();
-        const row = await stored(String(created._id));
-        if (!row) throw new Error('setup failed');
-        row.consecutiveFailures = 2;
-        await webhookSubscriptionRepository.save(row);
-
-        await update(String(created._id), { enabled: false }, context);
-
-        expect(await stored(String(created._id))).toMatchObject({
-            enabled: false,
-            consecutiveFailures: 2
-        });
-    });
-
     it('audits an update with the subscription’s id', async () => {
         const created = await subscribe();
 
@@ -364,6 +404,127 @@ describe('updating', () => {
                 targetId: String(created._id)
             })
         ]);
+    });
+
+    it('audits what changed: the event filter by value, the url and description by name only', async () => {
+        const created = await subscribe('https://hooks.example.com/a', ['order.created']);
+
+        await update(
+            String(created._id),
+            {
+                url: 'https://hooks.example.com/token-in-the-path',
+                description: 'personal note',
+                eventTypes: ['order.paid']
+            },
+            context
+        );
+
+        const [event] = auditedAs(webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED);
+        expect(event.metadata).toEqual({
+            changes: { eventTypes: { from: ['order.created'], to: ['order.paid'] } },
+            changedFields: ['url', 'description']
+        });
+        expect(JSON.stringify(event.metadata)).not.toContain('token-in-the-path');
+        expect(JSON.stringify(event.metadata)).not.toContain('personal note');
+    });
+
+    it('records no change for a request that moves nothing', async () => {
+        const created = await subscribe('https://hooks.example.com/a', ['order.created']);
+
+        await update(
+            String(created._id),
+            { url: 'https://hooks.example.com/a', eventTypes: ['order.created'] },
+            context
+        );
+
+        const [event] = auditedAs(webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED);
+        expect(event.metadata).toEqual({});
+    });
+});
+
+describe('switching on and off', () => {
+    it('disables by hand: stamps disabledAt only, keeps the streak, audits it', async () => {
+        const created = await subscribe();
+        const row = await stored(String(created._id));
+        if (!row) throw new Error('setup failed');
+        row.consecutiveFailures = 2;
+        await webhookSubscriptionRepository.save(row);
+
+        const result = await disable(String(created._id), context);
+
+        expect(result.success).toBe(true);
+        const after = await stored(String(created._id));
+        expect(after).toMatchObject({ consecutiveFailures: 2 });
+        expect(after?.disabledAt).toBeInstanceOf(Date);
+        expect(after?.autoDisabledAt).toBeUndefined();
+        expect(auditedAs(webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_DISABLED)).toHaveLength(1);
+    });
+
+    it('enables a disabled subscription: streak, failing-since date and both stamps are cleared', async () => {
+        const created = await subscribe();
+        const row = await stored(String(created._id));
+        if (!row) throw new Error('setup failed');
+        row.consecutiveFailures = 7;
+        row.disabledAt = new Date();
+        row.autoDisabledAt = row.disabledAt;
+        row.failingSince = new Date(Date.now() - 4 * 86_400_000);
+        await webhookSubscriptionRepository.save(row);
+
+        const result = await enable(String(created._id), context);
+
+        expect(result.success).toBe(true);
+        const after = await stored(String(created._id));
+        expect(after?.consecutiveFailures).toBe(0);
+        expect(after?.disabledAt).toBeUndefined();
+        expect(after?.autoDisabledAt).toBeUndefined();
+        // The age floor starts over, or the next five exhausted chains would disable it at once.
+        expect(after?.failingSince).toBeUndefined();
+        expect(auditedAs(webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_ENABLED)).toHaveLength(1);
+    });
+
+    it('refuses a repeat with a 409 and its code, writing and auditing nothing', async () => {
+        const created = await subscribe();
+        const row = await stored(String(created._id));
+        if (!row) throw new Error('setup failed');
+        row.consecutiveFailures = 4;
+        await webhookSubscriptionRepository.save(row);
+
+        const enabledAgain = await enable(String(created._id), context);
+        await disable(String(created._id), context);
+        mockEmitAuditEvent.mockClear();
+        const disabledAgain = await disable(String(created._id), context);
+
+        expect(enabledAgain).toMatchObject({
+            success: false,
+            status: 409,
+            errors: [expect.objectContaining({ code: 'WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED' })]
+        });
+        expect(disabledAgain).toMatchObject({
+            success: false,
+            status: 409,
+            errors: [expect.objectContaining({ code: 'WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED' })]
+        });
+        // The refused enable did not reset the streak of a healthy subscription.
+        expect(await read(String(created._id), 'consecutiveFailures')).toBe(4);
+        expect(mockEmitAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('answers 404 for an unknown id and for another tenant’s subscription', async () => {
+        const foreign = await webhookSubscriptionRepository.create({
+            tenant: 'another-tenant',
+            url: 'https://hooks.example.com/foreign',
+            eventTypes: ['*'],
+            secrets: [mintRingSecret().entry]
+        });
+
+        const results = await Promise.all([
+            enable('a'.repeat(24), context),
+            disable('a'.repeat(24), context),
+            disable(String(foreign._id), context)
+        ]);
+
+        expect(results.map((result) => !result.success && result.status)).toEqual([404, 404, 404]);
+        expect(await read(String(foreign._id), 'disabledAt')).toBeUndefined();
     });
 });
 

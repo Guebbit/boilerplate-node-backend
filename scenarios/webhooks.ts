@@ -78,7 +78,6 @@ export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
         url: `${sinkBaseUrl.replace(/\/+$/, '')}/${WEBHOOK_SESSION_ID}`,
         description: 'Demo sink (webhook-tester)',
         eventTypes: ['*'],
-        enabled: true,
         consecutiveFailures: 0,
         secrets: [entry]
     } as WebhookSubscriptionDocument;
