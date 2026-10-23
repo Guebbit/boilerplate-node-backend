@@ -22,7 +22,7 @@ export const postPaymentRefundSettle = (
     const paymentId = requireId(request, response, { notFound: 'payments.not-found' });
     if (!paymentId) return;
     const refundId = requireId(request, response, {
-        notFound: 'payments.refund-not-found',
+        notFound: 'payments.not-found',
         name: 'refundId'
     });
     if (!refundId) return;

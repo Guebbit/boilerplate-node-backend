@@ -15,7 +15,6 @@
         "refund-success": "Pagamento rimborsato.",
         "refund-left-open": "Rimborso registrato. Restituisci il denaro fuori dall’app, poi segnalo come restituito.",
         "refund-settled-by-hand": "Segnato come restituito.",
-        "refund-not-found": "Nessun rimborso con questo id su questo pagamento.",
         "refund-not-open": "Questo rimborso è già stato concluso.",
         "refund-not-by-hand": "Questo rimborso passa dal gestore della carta; non si può segnare come restituito a mano.",
         "in-flight": "Per questo ordine è già in corso un pagamento con carta — attendi che si concluda prima di registrare un pagamento a mano.",

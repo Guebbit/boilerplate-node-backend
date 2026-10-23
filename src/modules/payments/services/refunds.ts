@@ -833,7 +833,8 @@ export const settleRefundByHand = (
     paymentRepository.findByIdScoped(paymentId, callerScope(authContext)).then((payment) => {
         if (!payment) return paymentNotFound();
         const refund = payment.refunds.find((record) => String(record._id) === refundId);
-        if (!refund) return generateReject(404, [t('payments.refund-not-found')]);
+        // The same 404 as an unknown payment: a refund id is read only through its payment.
+        if (!refund) return paymentNotFound();
 
         const refusal = handSettlementRefusal(payment, refund);
         if (refusal) return refusal;

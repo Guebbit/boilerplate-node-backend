@@ -15,7 +15,6 @@
         "refund-success": "Payment refunded.",
         "refund-left-open": "Refund recorded. Return the money outside the app, then mark it returned.",
         "refund-settled-by-hand": "Marked as returned.",
-        "refund-not-found": "No refund with that id was found on this payment.",
         "refund-not-open": "This refund has already been settled.",
         "refund-not-by-hand": "This refund goes back through the card provider; it cannot be marked returned by hand.",
         "in-flight": "A card payment is already in progress for this order — wait for it to resolve before recording money by hand.",
