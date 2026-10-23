@@ -11,7 +11,6 @@ import type { Request, Response } from 'express';
 import type { Payment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { paymentService } from '../services';
-import { presentPayment } from '../presenter';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -26,7 +25,11 @@ export const postPaymentSync = (request: Request<{ id?: string }>, response: Res
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse<Payment>(response, presentPayment(result.data), 200, result.message);
+            return paymentService
+                .presentWithActions(result.data, request.authContext)
+                .then((payment) => {
+                    successResponse<Payment>(response, payment, 200, result.message);
+                });
         })
         .catch(catchAs(response, 'postPaymentSync'));
 };

@@ -30,7 +30,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { AuthContext } from '@types';
-import { RefundFailureReason, type CallerContext, type RefundReason } from '@types';
+import { RefundFailureReason, RefundStatus, type CallerContext, type RefundReason } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { DomainEventMap } from '@kernel/events';
 import { announceInTransaction } from '@kernel/outbox';
@@ -79,10 +79,24 @@ export interface RefundRequest {
 /** The request the automatic callers make: everything left, for a cancellation. */
 export const CANCELLATION_REQUEST: RefundRequest = Object.freeze({ reason: 'cancellation' });
 
+/**
+ * The request for money that arrived after the order could no longer be paid: everything, named
+ * for what happened so staff can tell a lost sale from a cancellation.
+ */
+export const LATE_PAYMENT_REQUEST: RefundRequest = Object.freeze({ reason: 'late_payment' });
+
 /** A refund that was just opened, with the payment as it stood right after. */
 export interface OpenedRefund {
     payment: PaymentDocument;
     refund: RefundRecord;
+}
+
+/** What a refund attempt ended in. */
+export interface RefundOutcome {
+    /** The payment as it now stands. */
+    payment: PaymentDocument;
+    /** `true` when the record was opened but not settled: hand-paid money waits for an operator. */
+    leftOpen: boolean;
 }
 
 /** How much of a provider's own wording one log line carries. */
@@ -117,35 +131,64 @@ export const remainingOf = (payment: PaymentDocument): Money =>
     );
 
 /**
- * Record, unattended, that a hand-paid order's refund is left for an operator — the automatic
- * listener path only; `refundByOrder`'s own admin call never reaches this. There is no provider to
- * ask and no one to say the cash went back, so the refund record is opened and left `pending`: it
- * is what the needs-attention list shows, and the operator's own refund settles it by hand.
+ * Put a hand-paid refund on file as owed: an audit row naming the order, the record and the money,
+ * so a person sees there is cash or a transfer to hand back outside the app. The row is the only
+ * place that says so besides `GET /payments/attention`.
  *
- * Idempotent: a redelivery finds the record already open and writes nothing more.
- * @param orderId - the order whose payment stays `succeeded` until an operator confirms it
- * @param payment - the payment left untouched
+ * Idempotent by construction: it is called once per record, right after the record opens, and a
+ * redelivery opens no second record.
+ *
+ * @param payment - the hand-recorded payment
+ * @param refund - the record that just opened
+ * @param context - the caller who caused it, when there is one; absent, the system is the actor
  */
-const leaveForOperator = (orderId: string, payment: PaymentDocument): Promise<PaymentDocument> => {
-    if (hasOpenRefund(payment)) return Promise.resolve(payment);
+export const recordOwedByHand = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    context?: CallerContext
+): void =>
+    recordAudit(context ?? systemCallerContext('Payment'), {
+        action: paymentsAuditActions.PAYMENT_REFUND_OWED_BY_HAND,
+        outcome: 'success',
+        targetType: 'order',
+        targetId: String(payment.orderId),
+        metadata: {
+            refundId: String(refund._id),
+            amount: refund.amount,
+            reason: refund.reason
+        }
+    });
 
-    return openRefund(payment, CANCELLATION_REQUEST).then((opened) => {
+/**
+ * Open a hand-paid payment's refund and leave it `pending`. There is no provider to ask and
+ * nobody here to say the money went back, so the record waits for an operator's own
+ * `settleRefundByHand`: it is what the needs-attention list shows. No caller, however privileged,
+ * settles it on the spot — receiving a parcel or withdrawing a basket is not returning cash.
+ *
+ * Idempotent: the record reserves the amount, so a redelivery finds nothing left to open and
+ * writes nothing.
+ *
+ * @param payment - the payment, still `succeeded`
+ * @param request - what to return; a cancellation takes everything still left
+ * @param context - the caller, absent for the `order.cancelled` listener
+ * @returns the payment with the record open, or `null` when nothing was left to open
+ */
+const leaveForOperator = (
+    payment: PaymentDocument,
+    request: RefundRequest,
+    context: CallerContext | undefined
+): Promise<RefundOutcome | null> =>
+    openRefund(payment, request, context?.caller.id).then((opened) => {
+        if (!opened) return null;
         // Stryker disable all
         logger.warn(
-            `Payment for order ${orderId} was paid by hand — left \`succeeded\` for an operator to confirm the money actually went back.`
+            `Payment for order ${String(payment.orderId)} was paid by hand — the refund is left \`pending\` for an operator to confirm the money actually went back.`
         );
         // Stryker restore all
-        // No `actorRole`/`actorUserId` override needed: `buildAuditEvent`'s defaults already read
-        // them off `SYSTEM_ACTOR`'s own caller.
-        recordAudit(systemCallerContext('Payment'), {
-            action: paymentsAuditActions.PAYMENT_REFUND_OWED_BY_HAND,
-            outcome: 'success',
-            targetType: 'order',
-            targetId: orderId
-        });
-        return opened?.payment ?? payment;
+        auditRefundRequested(opened.payment, opened.refund, context);
+        recordOwedByHand(opened.payment, opened.refund, context);
+        return { payment: opened.payment, leftOpen: true };
     });
-};
 
 /**
  * What a refund's timeline rows carry: its id, the money and the closed reason code. Never the
@@ -266,12 +309,14 @@ const isFullyRefunded = (payment: PaymentDocument): boolean =>
  * @param refund - the record that settled
  * @param context - present only for the admin request; audited only then
  * @param outcome - `failure` when the status moved but no money actually went back
+ * @param byHand - the operator confirmed hand-paid money returned (`settleRefundByHand`)
  */
 const announceRefund = (
     payment: PaymentDocument,
     refund: RefundRecord,
     context: CallerContext | undefined,
-    outcome: 'success' | 'failure'
+    outcome: 'success' | 'failure',
+    byHand: boolean
 ): void => {
     const orderId = String(payment.orderId);
     // Stryker disable all
@@ -282,7 +327,9 @@ const announceRefund = (
     );
     // Stryker restore all
     recordAudit(context, {
-        action: paymentsAuditActions.ADMIN_PAYMENT_REFUNDED,
+        action: byHand
+            ? paymentsAuditActions.ADMIN_PAYMENT_REFUND_SETTLED_BY_HAND
+            : paymentsAuditActions.ADMIN_PAYMENT_REFUNDED,
         outcome,
         targetType: 'order',
         targetId: orderId,
@@ -430,7 +477,7 @@ const settleRefund = (
             aggregateId: String(final.orderId)
         })
     ).then((final) => {
-        if (final) announceRefund(final, refund, context, outcome);
+        if (final) announceRefund(final, refund, context, outcome, fields.refundedByHand === true);
         return final;
     });
 
@@ -497,12 +544,12 @@ const sendToProvider = (
         );
 
 /**
- * Carry one open refund to its end: settle it by hand, log the impossible row, or ask the provider.
+ * Carry one open refund to its end: log the impossible row, or ask the provider. A hand-paid
+ * refund is never carried here: only `settleRefundByHand` may say the cash went back.
  *
  * @param payment - the payment the refund belongs to
  * @param refund - the record to carry through
- * @param context - present only for the admin request. Also what tells a hand-paid refund apart
- *   from the automatic path: only the operator's own call may say the cash went back
+ * @param context - present only for the admin request
  * @returns the payment after the refund settled, or `null` when it did not settle here
  */
 const attemptRefund = (
@@ -510,11 +557,8 @@ const attemptRefund = (
     refund: RefundRecord,
     context: CallerContext | undefined
 ): Promise<PaymentDocument | null> => {
-    // Money recorded by hand has no provider to ask.
-    if (isHandRecorded(payment))
-        return context
-            ? settleRefund(payment, refund, { refundedByHand: true }, context)
-            : Promise.resolve(null);
+    // Money recorded by hand has no provider to ask, and nothing here may declare it returned.
+    if (isHandRecorded(payment)) return Promise.resolve(null);
 
     if (!payment.providerRef) {
         // Only a `succeeded` payment reaches here, and nothing can succeed before the provider
@@ -581,50 +625,64 @@ const settledElsewhere = (orderId: string, refund: RefundRecord): Promise<Paymen
         );
 
 /**
- * Refund an order's payment — the operator action, and the listener's compensation.
- *
- * Any refund still open is finished first, so a retried cancel completes the refund it already
- * started instead of opening a second one for the same money.
+ * The card half of {@link performRefund}: finish what is open, then open and send the rest.
  *
  * @param orderId - the order whose payment is being returned
- * @param context - present only for the admin request (`refundByOrder`); the `order.cancelled`
- *  listener (`refundForOrder`) has none. Also what tells a hand-paid refund apart from the two
- *  callers: present means the operator asked (audited `success`), absent means the automatic
- *  listener did (left for an operator, audited `PAYMENT_REFUND_OWED_BY_HAND` instead).
+ * @param payment - the `succeeded`, not-yet-fully-refunded provider payment
+ * @param context - present only for the admin request
+ * @param request - the amount and the reason
+ * @returns the payment after the refund settled, or `null` when nothing settled here
+ */
+const performCardRefund = (
+    orderId: string,
+    payment: PaymentDocument,
+    context: CallerContext | undefined,
+    request: RefundRequest
+): Promise<PaymentDocument | null> =>
+    settleOpenRefunds(payment, context).then(({ payment: current, settled }) => {
+        if (remainingOf(current) <= 0) return settled ? current : null;
+
+        return openRefund(current, request, context?.caller.id).then((opened) => {
+            if (!opened) return null;
+            auditRefundRequested(opened.payment, opened.refund, context);
+            return attemptRefund(opened.payment, opened.refund, context).then(
+                (after) => after ?? settledElsewhere(orderId, opened.refund)
+            );
+        });
+    });
+
+/**
+ * Refund an order's payment — the operator action, and the listener's compensation.
+ *
+ * A card payment finishes any refund still open first, so a retried cancel completes the refund it
+ * already started instead of opening a second one for the same money. A hand-paid payment only
+ * ever gets a record opened and left `pending` ({@link leaveForOperator}), whoever asked.
+ *
+ * @param orderId - the order whose payment is being returned
+ * @param context - present only for a request with a caller (`refundByOrder`, `refundForReturn`);
+ *  the `order.cancelled` listener (`refundForOrder`) has none
  * @param request - the amount and the reason; omitted, it is everything left, for a cancellation
  * @returns the payment as it now stands — always still `succeeded`, whatever was returned (its
- *   `displayStatus` says how much) — or `null` when there was nothing to return
+ *   `displayStatus` says how much) — and whether the record was left open for an operator; or
+ *   `null` when there was nothing to return
  * @internal The step beneath `refundByOrder`, `refundForOrder` and `refundForReturn`, which carry
  *   the scope and permission checks; it never leaves the barrel.
  */
 export const performRefund = (
     orderId: string,
     context?: CallerContext,
-    request?: RefundRequest
-): Promise<PaymentDocument | null> =>
+    request: RefundRequest = CANCELLATION_REQUEST
+): Promise<RefundOutcome | null> =>
     paymentRepository.findByOrderId(orderId).then((payment) => {
         if (payment?.status !== REFUNDABLE_PAYMENT_STATUS) return null;
-        // Everything is back already: a repeated cancel, or the hand-paid listener, has nothing to
-        // leave for anyone.
+        // Everything is back already: a repeated cancel has nothing to leave for anyone.
         if (isFullyRefunded(payment)) return null;
 
-        // Only the operator's own call (`context` present) may say hand-paid cash went back; the
-        // automatic listener leaves it standing.
-        if (isHandRecorded(payment) && !context) return leaveForOperator(orderId, payment);
+        if (isHandRecorded(payment)) return leaveForOperator(payment, request, context);
 
-        return settleOpenRefunds(payment, context).then(({ payment: current, settled }) => {
-            if (remainingOf(current) <= 0) return settled ? current : null;
-
-            return openRefund(current, request ?? CANCELLATION_REQUEST, context?.caller.id).then(
-                (opened) => {
-                    if (!opened) return null;
-                    auditRefundRequested(opened.payment, opened.refund, context);
-                    return attemptRefund(opened.payment, opened.refund, context).then(
-                        (after) => after ?? settledElsewhere(orderId, opened.refund)
-                    );
-                }
-            );
-        });
+        return performCardRefund(orderId, payment, context, request).then((settled) =>
+            settled ? { payment: settled, leftOpen: false } : null
+        );
     });
 
 /**
@@ -662,9 +720,16 @@ const refusalFor = (
     return undefined;
 };
 
+/** The 409 for a payment with nothing left to return. */
+const notRefundable = (): ResponseReject =>
+    generateReject(409, [
+        { code: ERROR_CODES.PAYMENT_NOT_REFUNDABLE, message: t('payments.not-refundable') }
+    ]);
+
 /**
  * The operator's refund of a payment that exists: refuse a body that cannot stand, otherwise
- * refund and answer with the payment as it now stands.
+ * refund and answer with the payment as it now stands. On a hand-paid payment that is the record
+ * left `pending`: `settleRefundByHand` is what says the money went back.
  * @param orderId - the order whose payment is refunded
  * @param payment - the payment, read through the caller's scope
  * @param body - the amount to return, or none for what is left
@@ -678,17 +743,20 @@ const refundFoundPayment = (
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> => {
     const invalid = refusalFor(payment, body);
     if (invalid) return Promise.resolve(invalid);
+    // The `PaymentActions.refund` rule. A card refund still open (pending or failed) stays with the
+    // refund sweep: asking again would re-send it past the sweep's grace window.
+    if (payment.status !== REFUNDABLE_PAYMENT_STATUS || remainingOf(payment) <= 0)
+        return Promise.resolve(notRefundable());
 
     return performRefund(orderId, context, { amount: body.amount, reason: 'goodwill' }).then(
         (refunded) =>
             refunded
-                ? generateSuccess(refunded, 200, t('payments.refund-success'))
-                : generateReject(409, [
-                      {
-                          code: ERROR_CODES.PAYMENT_NOT_REFUNDABLE,
-                          message: t('payments.not-refundable')
-                      }
-                  ])
+                ? generateSuccess(
+                      refunded.payment,
+                      200,
+                      t(refunded.leftOpen ? 'payments.refund-left-open' : 'payments.refund-success')
+                  )
+                : notRefundable()
     );
 };
 
@@ -713,6 +781,71 @@ export const refundByOrder = (
         .then((payment) =>
             payment ? refundFoundPayment(orderId, payment, body, context) : paymentNotFound()
         );
+
+/**
+ * The refusal `settleRefundByHand` earns before anything is written, if any.
+ *
+ * @param payment - the payment the refund sits on
+ * @param refund - the record the operator names
+ */
+const handSettlementRefusal = (
+    payment: PaymentDocument,
+    refund: RefundRecord
+): ResponseReject | undefined => {
+    // A card refund belongs to the provider and the sweep, never to an operator's say-so.
+    if (!isHandRecorded(payment))
+        return generateReject(409, [
+            {
+                code: ERROR_CODES.PAYMENT_REFUND_NOT_BY_HAND,
+                message: t('payments.refund-not-by-hand')
+            }
+        ]);
+    if (refund.status === RefundStatus.pending) return undefined;
+    return handRefundNotOpen();
+};
+
+/** The 409 for a hand-paid refund someone else already settled. */
+const handRefundNotOpen = (): ResponseReject =>
+    generateReject(409, [
+        { code: ERROR_CODES.PAYMENT_REFUND_NOT_OPEN, message: t('payments.refund-not-open') }
+    ]);
+
+/**
+ * `POST /payments/:id/refunds/:refundId/settle` — the operator confirming that hand-paid money
+ * (cash or a transfer) was returned outside the app. The only door that settles a hand-paid
+ * refund: nothing else says the money went back.
+ *
+ * The settlement is the same one a provider refund gets (the `payment.refunded` event, hence the
+ * credit note, and the close of a return that waits on it), with `refundedByHand` on the record.
+ *
+ * @param paymentId - the payment carrying the refund
+ * @param refundId - the refund record to settle
+ * @param authContext - the caller, for the read that distinguishes 404 from 409
+ * @param context - the operator, audited on the settlement
+ * @returns the payment as it now stands, or a refusal naming which case it was
+ */
+export const settleRefundByHand = (
+    paymentId: string,
+    refundId: string,
+    authContext: AuthContext | undefined,
+    context: CallerContext
+): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
+    paymentRepository.findByIdScoped(paymentId, callerScope(authContext)).then((payment) => {
+        if (!payment) return paymentNotFound();
+        const refund = payment.refunds.find((record) => String(record._id) === refundId);
+        // The same 404 as an unknown payment: a refund id is read only through its payment.
+        if (!refund) return paymentNotFound();
+
+        const refusal = handSettlementRefusal(payment, refund);
+        if (refusal) return refusal;
+
+        // `null` is the loser of a two-staff race: the conditional write found it settled already.
+        return settleRefund(payment, refund, { refundedByHand: true }, context).then((final) =>
+            final
+                ? generateSuccess(final, 200, t('payments.refund-settled-by-hand'))
+                : handRefundNotOpen()
+        );
+    });
 
 /**
  * Whether a payment holds a refund still waiting to settle — `pending` at the provider, `failed`
@@ -790,8 +923,9 @@ const mayReturnMoney = (
  *   remainder `cancellation`, how much (a decimal in the payment's currency), and
  *   which goods and delivery that amount covers — what the credit note credits at their own rates
  * @param context - the staff member who received the goods, audited on the refund
- * @returns the payment as it now stands, or `null` when there is nothing to return — no succeeded
- *   payment, nothing left of it, or a zero amount
+ * @returns the payment as it now stands, and whether the refund was left open for an operator (a
+ *   hand-paid payment: the return stays `received` until `settleRefundByHand`); or `null` when
+ *   there is nothing to return — no succeeded payment, nothing left of it, or a zero amount
  * @throws Error when money would move and the caller is not one {@link mayReturnMoney} allows; the
  *   refusal is audited as `security.forbidden`. The amount is the caller's word, so the caller must
  *   be one that already judged the return.
@@ -806,7 +940,7 @@ export const refundForReturn = (
         reason?: Extract<RefundReason, 'return' | 'cancellation'>;
     },
     context: CallerContext
-): Promise<PaymentDocument | null> =>
+): Promise<RefundOutcome | null> =>
     paymentRepository.findByOrderId(orderId).then((payment) => {
         if (payment?.status !== REFUNDABLE_PAYMENT_STATUS) return null;
 

@@ -21,7 +21,7 @@ import {
     type PaymentProvider
 } from '../providers';
 import type { PaymentDocument } from '../model';
-import { presentPayment } from '../presenter';
+import { withActions } from './view';
 import { paymentRepository } from '../repository';
 import { cardNotAvailable, notPayable, orderNotFound } from './errors';
 import { mailTransferExpired } from './notify';
@@ -136,7 +136,7 @@ export const createIntent = async (
     if (stored && stored.providerRef !== providerRef)
         return rejectStrayIntent(provider, providerRef, orderId);
     const prepared = {
-        ...presentPayment(stored ?? payment),
+        ...withActions(stored ?? payment, order, authContext),
         clientSecret
     };
 
