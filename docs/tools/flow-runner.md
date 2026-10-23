@@ -69,11 +69,11 @@ concurrent replays of the same copy would collide on `_id`.
 The flows run at boot, so without correction every order in the demo shop would be dated the
 minute the container started — no trend on an analytics chart, no "last 30 days" filter with
 anything outside it. `scenarios/flows/backdate.ts` moves each order's whole trail into the past
-— the order, its payment, its shipment, its reservation, its stock movements and its audit rows —
-by the same number of days, so all six still agree with one another about when any of it happened.
+— the order, its payment, its fulfillment orders, its shipments, its reservation, its stock movements
+and its audit rows — by the same number of days, so all seven still agree with one another about when any of it happened.
 
 It moves PER ORDER, never with one blanket shift across the collection: `TRAILS` closes over each
-of the six models separately (an order's date columns are not a payment's, and `stockmovements`/
+of the seven models separately (an order's date columns are not a payment's, and `stockmovements`/
 `auditlogs` hold the order id as a free-text string rather than an `ObjectId` reference), and the
 write itself is a `$dateSubtract` aggregation pipeline with `timestamps: false` — without that flag
 Mongoose would re-stamp `updatedAt` with the current time on the very row the pass is trying to

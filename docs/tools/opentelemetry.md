@@ -28,7 +28,7 @@ All of this is wired in `src/infrastructure/runtime/otel-sdk.ts`. `startTracing(
 | `OTEL_TRACES_SAMPLER`         | Sampling, per the OTel spec (default `parentbased_always_on`: every trace is kept).       |
 | `NODE_SERVICE_NAME`           | The `service.name` resource attribute used by Tempo/Grafana (default `api`).              |
 
-Local docker-compose sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318` automatically.
+Local docker-compose leaves `OTEL_EXPORTER_OTLP_ENDPOINT` empty (no export), because the `observability` profile is opt-in. Set it to `http://otel-collector:4318` in `.env` when you start that profile.
 
 ## Trace flow (with OTel Collector)
 

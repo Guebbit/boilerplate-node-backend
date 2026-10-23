@@ -31,12 +31,11 @@ ship in `docker-compose.yml` (`alloy`; `umami` behind the opt-in `analytics` pro
 Put the **Grafana Faro Web SDK** in the frontend and add **one** container,
 `grafana/alloy`, as the browser-facing collector. It routes into the stack you already run:
 
-- errors + browser logs → **Loki**
-- frontend traces → the **existing Tempo** (a backend request carries a **link** to the browser
+- errors + browser logs + web-vitals → **Loki** (web-vitals arrive as log lines, not as metrics)
+- frontend traces → the **existing OTel Collector**, which fans out to **Tempo** (a backend request carries a **link** to the browser
   span that caused it: the two are findable from each other, but they are separate traces, since
   the API never adopts a caller-chosen trace id — see
   [OpenTelemetry](./opentelemetry.md#who-may-name-a-trace))
-- web-vitals → **Prometheus**
 - everything visualized in **Grafana**, next to backend signals
 
 ### Product analytics → Umami (or Plausible)
@@ -52,30 +51,29 @@ flowchart LR
     Umami["Umami / Plausible\n(1 container + DB)"]
 
     subgraph Existing["Core observability stack"]
-        Loki["Loki\nlogs/errors"]
+        Loki["Loki\nlogs · errors · web-vitals"]
         Tempo["Tempo\ntraces"]
-        Prom["Prometheus\nweb-vitals"]
+        Collector["OTel Collector"]
         Grafana["Grafana\nUI"]
     end
 
     FE -->|"errors · traces · web-vitals"| Alloy
     FE -->|"pageviews · product events"| Umami
     Alloy --> Loki
-    Alloy --> Tempo
-    Alloy --> Prom
+    Alloy --> Collector
+    Collector --> Tempo
     Loki --> Grafana
     Tempo --> Grafana
-    Prom --> Grafana
 
     classDef fe fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef new fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef existing fill:#ede9fe,stroke:#7c3aed,color:#111827;
     class FE fe;
     class Alloy,Umami new;
-    class Loki,Tempo,Prom,Grafana existing;
+    class Loki,Tempo,Collector,Grafana existing;
 ```
 
-**Cost:** 2 extra containers on top of the core stack, everything else reused. **Trade-off:** no polished
+**Cost:** four extra containers on top of the core stack (`alloy`, plus Umami's `umami`, `umami-db` and `umami-init`), everything else reused. **Trade-off:** no polished
 "Issues" triage UI for errors (you build Grafana panels), and Umami is web analytics,
 not full product analytics (no rich funnels/retention/feature flags).
 

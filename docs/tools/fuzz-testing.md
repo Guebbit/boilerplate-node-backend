@@ -84,7 +84,7 @@ the validator. `tests/unit/support/spec-walk.test.ts` pins the fold.
 
 ## The merge-patch body
 
-A `PATCH` that declares `application/merge-patch+json` is also fuzzed with it (10 operations, admin
+A `PATCH` that declares `application/merge-patch+json` is also fuzzed with it (12 operations, admin
 caller). Same field schemas, different content type and a different reading of `null` (clear), so
 it is its own route through the body parser. A test asserts the set is non-empty and all `PATCH`,
 the same guard the multipart set has.

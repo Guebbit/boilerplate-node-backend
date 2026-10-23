@@ -78,7 +78,7 @@ Repo files: [`/docker/observability/prometheus.config.yaml`](../../docker/observ
 
 **What it does:** groups/routes alerts to notification receivers.
 
-Repo file: [`/docker/observability/alertmanager.config.template.yaml`](../../docker/observability/alertmanager.config.yaml)
+Repo file: [`/docker/observability/alertmanager.config.template.yaml`](../../docker/observability/alertmanager.config.template.yaml)
 
 | Config section                                             | What it does                       | Why local value                                  | Common tweak                     | Dev vs prod                             |
 | ---------------------------------------------------------- | ---------------------------------- | ------------------------------------------------ | -------------------------------- | --------------------------------------- |
@@ -92,11 +92,11 @@ Repo file: [`/docker/observability/alertmanager.config.template.yaml`](../../doc
 
 Repo files: [`/docker/observability/grafana.datasources.yaml`](../../docker/observability/grafana.datasources.yaml), [`/docker/observability/grafana.dashboard-providers.yaml`](../../docker/observability/grafana.dashboard-providers.yaml), [`/docker/observability/grafana/dashboards/api-traces.json`](../../docker/observability/grafana/dashboards/api-traces.json)
 
-| Config section                                       | What it does                                | Why local value                    | Common tweak                         | Dev vs prod                                |
-| ---------------------------------------------------- | ------------------------------------------- | ---------------------------------- | ------------------------------------ | ------------------------------------------ |
-| `datasources[]`                                      | provisions Tempo/Prometheus/Loki at startup | no manual UI setup on each restart | add auth headers / extra datasources | prod often adds RBAC, auth, cloud backends |
-| `tracesToLogsV2`, `tracesToMetrics`, `derivedFields` | enables cross-signal jumps                  | fast local debugging workflow      | map labels to your service naming    | prod requires strict label consistency     |
-| `providers[].options.path`                           | auto-loads dashboard JSON files             | keeps dashboards in git            | add folders/providers                | prod may split folders/org permissions     |
+| Config section                    | What it does                                | Why local value                    | Common tweak                         | Dev vs prod                                |
+| --------------------------------- | ------------------------------------------- | ---------------------------------- | ------------------------------------ | ------------------------------------------ |
+| `datasources[]`                   | provisions Tempo/Prometheus/Loki at startup | no manual UI setup on each restart | add auth headers / extra datasources | prod often adds RBAC, auth, cloud backends |
+| `tracesToLogsV2`, `derivedFields` | enables cross-signal jumps                  | fast local debugging workflow      | map labels to your service naming    | prod requires strict label consistency     |
+| `providers[].options.path`        | auto-loads dashboard JSON files             | keeps dashboards in git            | add folders/providers                | prod may split folders/org permissions     |
 
 ### Tempo
 

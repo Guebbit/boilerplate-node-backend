@@ -59,14 +59,14 @@ number that predicts whether the next worker survives.
 **Sharding only starts where the machine runs out.** The per-shard size is the budget, capped by a
 guard rail (`MAX_SHARD_PEAK_MB`, 8 GB) that exists only to stop a momentarily-idle machine sizing
 one enormous shard it cannot sustain an hour later. The rail sits high on purpose: 8 GB is ~101
-files per shard, so a machine with real headroom runs the integration layer in two shards, and a
+files per shard, so a machine with real headroom runs the integration layer in a handful of shards, and a
 layer with fewer files than that (cross-cutting, unit) in one, where `--shard` is never passed.
 
-| Machine                                     | files/shard | integration shards | sharding cost     |
-| ------------------------------------------- | ----------- | ------------------ | ----------------- |
-| roomy box, 8 GB or more spare               | ~101        | 2                  | one extra boot    |
-| a 6.6 GB-free box, unpinned                 | ~50         | 4                  | three extra boots |
-| the same box, `JEST_PROCESS_BUDGET_MB=2600` | ~21         | 9                  | eight extra boots |
+| Machine                                     | files/shard | integration shards                  | sharding cost    |
+| ------------------------------------------- | ----------- | ----------------------------------- | ---------------- |
+| roomy box, 8 GB or more spare               | ~101        | the layer's files ÷ 101, rounded up | few extra boots  |
+| a 6.6 GB-free box, unpinned                 | ~50         | the layer's files ÷ 50, rounded up  | more extra boots |
+| the same box, `JEST_PROCESS_BUDGET_MB=2600` | ~21         | the layer's files ÷ 21, rounded up  | many extra boots |
 
 A constrained machine does not rely on the rail — it sets `JEST_PROCESS_BUDGET_MB` below it. 2600 is
 the figure measured green here: 19 files in one in-band shard peaked at 2407 MB RSS and passed,
@@ -98,8 +98,8 @@ Each has a floor because a vacuous suite is worse than a slow one: `numRuns: 0` 
 both pass by construction. Nonsense reads as unset rather than as zero, so a typo gets the
 documented default instead of silent green.
 
-`TEST_RACE_SIZE` only goes **down** usefully. `tests/support/setup.ts` raises the auth limiters to
-1000 under test, so there is no ceiling to hit on the way up — only more simultaneous requests and
+`TEST_RACE_SIZE` only goes **down** usefully. `tests/support/setup-environment.ts` raises the auth limiters to
+10000 under test, so there is no ceiling to hit on the way up — only more simultaneous requests and
 DB writes for a machine that may not have the memory to spare.
 
 ## What does not fit, at any setting

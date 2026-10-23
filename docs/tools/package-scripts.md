@@ -25,7 +25,7 @@ was the same string copied N times:
 | `npm run host -- <script>` | the seven `db:*:host` / `dev:host` twins | `npm run host -- scenario:apply:reset` |
 | `npm run compose -- <cmd>` | `podman:compose` and `docker:compose`    | `npm run compose -- logs -f app`       |
 
-`host` blanks `NODE_DB_URI` / `NODE_REDIS_URL` and points both hostnames at `localhost`, then hands
+`host` blanks `NODE_DB_URI` / `NODE_REDIS_URL` and points both hostnames at `127.0.0.1`, then hands
 off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `compose` expands to
 `${CONTAINER_ENGINE:-podman} compose` — see [Container scripts](#container-scripts).
 
@@ -97,18 +97,18 @@ Two stages, and they run in this order: **bundle** the committed documents from 
 fragments, then **generate** code from the bundles. Full cheat sheet in [Regenerating After a
 Change](../api/regenerating.md).
 
-| Script                   | Stage    | Job                                                                                                                                     | Read more                                                  |
-| ------------------------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `contracts:bundle`       | bundle   | rebuild the authored bundles (`openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`) from their fragments; name a target to narrow it | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `gen:permission-actions` | generate | `api/permission-actions.ts` from `shared/authorization-keys.yaml`; `regenerate` runs it before the first bundle                         | [Permission Actions](permission-actions.md)                |
-| `gen:api`                | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval, plus the error codes and the permission actions      | [OpenAPI Workflow](../api/openapi-workflow.md)             |
-| `gen:asyncapi`           | generate | regenerate `src/types/asyncapi.generated.ts` from `asyncapi.yaml`                                                                       | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `lint:openapi`           | verify   | lint the bundled `openapi.yaml` with Spectral                                                                                           | [OpenAPI Workflow](../api/openapi-workflow.md)             |
-| `lint:openapi:modules`   | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `shared/contracts/spectral.modules.yaml`                                 | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `lint:asyncapi`          | verify   | validate both bundles — `asyncapi.yaml` and `asyncapi.public.yaml`                                                                      | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `lint:asyncapi:modules`  | verify   | the same for each section document, against `shared/contracts/spectral.asyncapi.modules.yaml`                                           | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `sync:frontend`          | generate | copy the shared documents into the paired frontend checkout, so the spec-identity check can go green                                    | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `regenerate`             | generate | every generator, in dependency order, then the sync — the one command to run after changing a generator input; `-- --check` verifies    | [Regenerating After a Change](../api/regenerating.md)      |
+| Script                   | Stage    | Job                                                                                                                                                           | Read more                                                  |
+| ------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `contracts:bundle`       | bundle   | rebuild the authored bundles (`openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`) from their fragments; name a target to narrow it                       | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `gen:permission-actions` | generate | `api/permission-actions.ts` from `shared/authorization-keys.yaml`; `regenerate` runs it before the first bundle                                               | [Permission Actions](permission-actions.md)                |
+| `gen:api`                | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval, plus the error codes, the request content types and the permission actions | [OpenAPI Workflow](../api/openapi-workflow.md)             |
+| `gen:asyncapi`           | generate | regenerate `src/types/asyncapi.generated.ts` from `asyncapi.yaml`                                                                                             | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `lint:openapi`           | verify   | lint the bundled `openapi.yaml` with Spectral                                                                                                                 | [OpenAPI Workflow](../api/openapi-workflow.md)             |
+| `lint:openapi:modules`   | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `shared/contracts/spectral.modules.yaml`                                                       | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `lint:asyncapi`          | verify   | validate both bundles — `asyncapi.yaml` and `asyncapi.public.yaml`                                                                                            | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `lint:asyncapi:modules`  | verify   | the same for each section document, against `shared/contracts/spectral.asyncapi.modules.yaml`                                                                 | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `sync:frontend`          | generate | copy the shared documents into the paired frontend checkout, so the spec-identity check can go green                                                          | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `regenerate`             | generate | every generator, in dependency order, then the sync — the one command to run after changing a generator input; `-- --check` verifies                          | [Regenerating After a Change](../api/regenerating.md)      |
 
 The `:modules` pair exists because each module's contract is a valid document on its own, so it can
 be linted where it is written rather than only after bundling.
@@ -192,7 +192,7 @@ Promtail override with `-f`, which is what gives Promtail a host log path to tai
 | `compose:up`      | start the stack detached                                                                                                                                            | [Docker & Podman](./docker-and-podman.md)                 |
 | `compose:up:full` | start it with the `observability`, `analytics` and `docs` profiles                                                                                                  | [Docker & Podman](./docker-and-podman.md)                 |
 | `compose:restart` | restart the compose stack                                                                                                                                           | [Docker & Podman](./docker-and-podman.md)                 |
-| `compose:rebuild` | rebuild images and restart the stack                                                                                                                                | [Docker & Podman](./docker-and-podman.md)                 |
+| `compose:rebuild` | `down -v` (deletes the volumes, Mongo data included), rebuild every image with `--no-cache`, and start the stack                                                    | [Docker & Podman](./docker-and-podman.md)                 |
 | `deploy:drill`    | deploy a good image, a broken one (refused, the first comes back) and a second good one, then `--rollback`, on the real production compose (needs Docker or Podman) | [Deploy and rollback](./deploy-and-rollback.md#the-drill) |
 | `backup:drill`    | build the backup image, back up a real replica-set Mongo, restore it, and prove the second machine refuses a delete (needs Docker; CI runs it)                      | [Backups](./backups.md#the-restore-drill)                 |
 | `compose`         | the bare compose invocation the others share; call it directly for one-off subcommands                                                                              | [Docker & Podman](./docker-and-podman.md)                 |
@@ -210,14 +210,15 @@ live in `.env` and this one cannot.
 
 ## Maintenance & publishing scripts
 
-| Script               | Job                                                                                                           | Read more                                                                                        |
-| -------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `setup`              | first run: copies `.env-example` to `.env` if absent and fills the placeholder secrets                        | [First run](./configuration.md#first-run-npm-run-setup)                                          |
-| `scaffold:module`    | generate a new module's skeleton                                                                              | [Module scaffolder](./module-scaffolder.md)                                                      |
-| `demo:remove`        | strip the `shop` and `example` modules and the demo scenarios from THIS checkout, to start a real project     | [Getting started: new project](../getting-started-new-project.md)                                |
-| `measure:demo-strip` | the measuring twin: run the strip in a scratch copy and run the gate on the result (CI: `demo-strip-measure`) | [Getting started: new project](../getting-started-new-project.md)                                |
-| `postinstall`        | npm lifecycle hook — rebuilds `openapi.yaml`/`api/`/`asyncapi.generated.ts` after `npm install`/`npm ci`      | [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed) |
-| `prepare`            | npm lifecycle hook — installs the husky hooks after `npm install`                                             | not run by hand                                                                                  |
+| Script                       | Job                                                                                                                             | Read more                                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `setup`                      | first run: copies `.env-example` to `.env` if absent and fills the placeholder secrets                                          | [First run](./configuration.md#first-run-npm-run-setup)                                          |
+| `refresh:breached-passwords` | rebuild the committed breached-password list the signup/password check reads (`scripts/security/refresh-breached-passwords.ts`) | [Breached passwords](../theory/defences/authentication.md)                                       |
+| `scaffold:module`            | generate a new module's skeleton                                                                                                | [Module scaffolder](./module-scaffolder.md)                                                      |
+| `demo:remove`                | strip the `shop` and `example` modules and the demo scenarios from THIS checkout, to start a real project                       | [Getting started: new project](../getting-started-new-project.md)                                |
+| `measure:demo-strip`         | the measuring twin: run the strip in a scratch copy and run the gate on the result (CI: `demo-strip-measure`)                   | [Getting started: new project](../getting-started-new-project.md)                                |
+| `postinstall`                | npm lifecycle hook — rebuilds `openapi.yaml`/`api/`/`asyncapi.generated.ts` after `npm install`/`npm ci`                        | [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed) |
+| `prepare`                    | npm lifecycle hook — installs the husky hooks after `npm install`                                                               | not run by hand                                                                                  |
 
 ## Periodic jobs
 

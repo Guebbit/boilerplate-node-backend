@@ -46,9 +46,9 @@ The whole point of a race is that some participants lose, and **losing is the co
 
 ## Two things that quietly make these tests worthless
 
-**Rate limiting.** `credentialLimiters` is mounted on exactly the endpoints these tests hammer — signup, login, reset. It is a PAIR of budgets, one per account named and one per address calling, and only failed attempts spend either. At the shipped budgets a ten-participant signup race sits close to the per-address limit and twelve starts returning 429s, so `tests/support/setup.ts` raises both — raising one alone just moves which of them the suite trips over.
+**Rate limiting.** `credentialLimiters` is mounted on exactly the endpoints these tests hammer — signup, login, reset. It is a set of four budgets — one per account named, one per address calling, one per address block and one per device — and only failed attempts spend any of them. At the shipped budgets a ten-participant signup race sits close to the per-address limit and twelve starts returning 429s, so `tests/support/setup-environment.ts` raises them all — raising one alone just moves which of them the suite trips over.
 
-The trap is that the test still **passes**: "not two users" is trivially true when two of the requests never reached the handler. So the limits are raised in `tests/support/setup.ts`, and the shared assertion rejects a 429 explicitly rather than lumping it into "not a success". One case keeps a small, freshly-constructed limiter to prove the budget is still enforced rather than switched off.
+The trap is that the test still **passes**: "not two users" is trivially true when two of the requests never reached the handler. So the limits are raised in `tests/support/setup-environment.ts`, and the shared assertion rejects a 429 explicitly rather than lumping it into "not a success". One case keeps a small, freshly-constructed limiter to prove the budget is still enforced rather than switched off.
 
 **`--runInBand`.** It serialises test _files_, not the requests inside a test. `Promise.allSettled` is still genuinely concurrent. Removing the flag would not make these "more concurrent" — it would make them flaky for an unrelated reason, because parallel jest workers would share one in-memory Mongo.
 
@@ -120,7 +120,7 @@ When the window is too narrow to hit over HTTP, force it instead. The cancel-vs-
 | `src/modules/delivery/tests/integration/order-status-races.test.ts` | Two simultaneous status changes on one order: one move wins, the email follows only a write that landed                               |
 | `tests/integration/conditional-writes.test.ts`                      | Two editors on one `ETag`: exactly one write lands, the other is a 412 — the lost update, for products, users, orders and the account |
 | `tests/support/race.ts`                                             | `raceN`, status helpers, and the shared "no 5xx, no 429, nobody hung up" assertion                                                    |
-| `tests/support/setup.ts`                                            | Where the rate-limit budgets are raised, and why they are raised rather than disabled                                                 |
+| `tests/support/setup-environment.ts`                                | Where the rate-limit budgets are raised, and why they are raised rather than disabled                                                 |
 
 The lost update between two _editors_ is the one race here with a client-facing answer: an `If-Match` makes the loser a 412 instead of a silent overwrite. See [Conditional writes](../api/write-methods.md#conditional-writes-etag-and-if-match).
 

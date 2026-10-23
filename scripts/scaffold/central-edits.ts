@@ -3,12 +3,12 @@
  * The edits a new module still makes OUTSIDE its own folder, as pure text transforms. Today that
  * is four files, and each is here because something reads a hand-kept list:
  *
- * | file                                            | why a module is named there                  |
- * | ----------------------------------------------- | -------------------------------------------- |
- * | `src/modules.ts`                                | the registry: import, array, `ModuleName`    |
- * | `shared/authorization-roles.yaml`               | admin (and so system) lists every set by name |
- * | `shared/authorization-conformance.yaml`         | its fixture copy of the admin list           |
- * | `tests/cross-cutting/replace-patch-parity.test.ts` | the exact set of PUT/PATCH pairs          |
+ * | file                                            | when                  | why a module is named there                  |
+ * | ----------------------------------------------- | --------------------- | -------------------------------------------- |
+ * | `src/modules.ts`                                | always                | the registry: import, array, `ModuleName`    |
+ * | `shared/authorization-roles.yaml`               | the module has a set  | admin (and so system) lists every set by name |
+ * | `shared/authorization-conformance.yaml`         | the module has a set  | its fixture copy of the admin list           |
+ * | `tests/cross-cutting/replace-patch-parity.test.ts` | a Replace/Update pair | the exact set of PUT/PATCH pairs          |
  *
  * Each transform throws when its anchor is gone, so a file that changed shape refuses the
  * scaffold before anything is written instead of being silently skipped.

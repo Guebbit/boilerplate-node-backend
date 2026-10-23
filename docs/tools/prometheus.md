@@ -56,7 +56,7 @@ derived from the URL grows the registry for the life of the process.
 
 ## Alert rules
 
-Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`. The last three rows live in `docker/observability/prometheus.infra-rules.yaml` instead: they read Prometheus's and Alertmanager's own metrics (and, later, the host's and the proxy's), not the app's, which `tests/cross-cutting/alert-rules-metrics.test.ts` would reject. Both compose files mount it next to the first. The `security.rules` group (login, 2FA, audit, 401/403, rate-limit and rejection signals) is sized for a quiet shop: every threshold carries a "tune to your traffic" comment, and none should be trusted before it has seen yours.
+Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`. The last five rows (`Watchdog`, `AlertmanagerNotificationsFailing`, `PrometheusRuleEvaluationFailures`, `DiskAlmostFull`, `TlsCertExpiringSoon`) live in `docker/observability/prometheus.infra-rules.yaml` instead: they read Prometheus's and Alertmanager's own metrics (and, later, the host's and the proxy's), not the app's, which `tests/cross-cutting/alert-rules-metrics.test.ts` would reject. Both compose files mount it next to the first. The `security.rules` group (login, 2FA, audit, 401/403, rate-limit and rejection signals) is sized for a quiet shop: every threshold carries a "tune to your traffic" comment, and none should be trusted before it has seen yours.
 
 | Alert                                | Condition                                                                                                                                 | Severity           |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
@@ -203,7 +203,7 @@ Use this for live widgets in a custom UI. For historical charts, query your back
 ## Works with
 
 - **[Grafana](./grafana.md)** — Grafana is the primary consumer of Prometheus data. Every metric chart and KPI panel in the dashboard reads from Prometheus. You rarely need to query Prometheus directly; Grafana's Explore view is the normal entry point. → [Works with Prometheus](./grafana.md#works-with)
-- **Alertmanager** — Prometheus evaluates the rules in `docker/observability/prometheus.alert-rules.yaml` and pushes firing alerts to Alertmanager, which groups and routes them to notification receivers. The receivers are chosen by the `ALERT_*` knobs; with none set, everything goes to `null` (no notifications). Both share the same [Observability Reference](./observability-reference.md) config tables.
+- **Alertmanager** — Prometheus evaluates the rules in `docker/observability/prometheus.alert-rules.yaml` and pushes firing alerts to Alertmanager, which groups and routes them to notification receivers. The receivers are chosen by the `ALERT_*` knobs; locally the email route defaults to mailpit, and a knob set to empty switches its route off (to `null`, no notification). Both share the same [Observability Reference](./observability-reference.md) config tables.
 
 ## External references
 

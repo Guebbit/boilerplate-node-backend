@@ -36,8 +36,8 @@ export const RUNTIME_GROUPS: DependencyGroup[] = [
         name: 'Security and auth',
         purpose:
             'request guardrails, capability-based authorization, password hashing, anti-bot ' +
-            'proof-of-work, blocking disposable email domains at signup, and the SSRF guard’s ' +
-            'resolved-IP range checks',
+            'proof-of-work, blocking disposable email domains at signup, TOTP two-factor codes, and the SSRF ' +
+            'guard’s resolved-IP range checks',
         readMore: '[Security](./security.md)',
         match: [
             'helmet',
@@ -48,7 +48,8 @@ export const RUNTIME_GROUPS: DependencyGroup[] = [
             '@casl/mongoose',
             'altcha-lib',
             'disposable-email-domains-js',
-            'ipaddr.js'
+            'ipaddr.js',
+            'otplib'
         ]
     },
     {

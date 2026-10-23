@@ -83,7 +83,7 @@ Nothing to write. These already speak a protocol somebody else's server also spe
 | Concern                     | Protocol                 | Default                                                                            | Where to read                                 |
 | --------------------------- | ------------------------ | ---------------------------------------------------------------------------------- | --------------------------------------------- |
 | **Transactional email**     | SMTP (nodemailer)        | any SMTP host; a JSON transport under test, and the demo outbox in demo mode       | [Email & PDF](./email-and-rendering.md)       |
-| **Cache**                   | Redis                    | in-memory when no URL is set                                                       | [Redis Cache](./redis-cache.md)               |
+| **Cache**                   | Redis                    | caching is off when no Redis URL is set (or `NODE_REDIS_CACHE_ENABLED=0`)          | [Redis Cache](./redis-cache.md)               |
 | **Rate-limit counters**     | Redis                    | in-memory; its own Redis instance (`noeviction`), so a cache flood cannot evict it | [Security](./security.md)                     |
 | **Message queue**           | AMQP 0-9-1 (amqplib)     | RabbitMQ in the compose stack                                                      | [RabbitMQ](./rabbitmq.md)                     |
 | **Database**                | MongoDB 8 wire           | the bundled container                                                              | [MongoDB](./mongodb-mongoose.md)              |

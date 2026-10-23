@@ -95,13 +95,14 @@ npm run compose -- --profile integrations up -d mailpit   # inbox at http://loca
 
 ### SMTP configuration
 
-| Env var          | Meaning                                                   |
-| ---------------- | --------------------------------------------------------- |
-| `NODE_SMTP_HOST` | SMTP server hostname.                                     |
-| `NODE_SMTP_PORT` | Defaults to `587` (STARTTLS). `465` enables implicit TLS. |
-| `NODE_SMTP_USER` | SMTP username.                                            |
-| `NODE_SMTP_PASS` | SMTP password / app password.                             |
-| `NODE_SMTP_NAME` | EHLO/HELO name (optional).                                |
+| Env var            | Meaning                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| `NODE_SMTP_HOST`   | SMTP server hostname.                                                                     |
+| `NODE_SMTP_PORT`   | Defaults to `587` (STARTTLS). `465` enables implicit TLS.                                 |
+| `NODE_SMTP_USER`   | SMTP username.                                                                            |
+| `NODE_SMTP_PASS`   | SMTP password / app password.                                                             |
+| `NODE_SMTP_NAME`   | EHLO/HELO name (optional).                                                                |
+| `NODE_SMTP_SENDER` | The `From` address (and display name) of every mail; required with the user and password. |
 
 Every send is wrapped in an OTel span (`withSpan`) so failures show up in [Tempo](./tempo.md) alongside the request that triggered them.
 

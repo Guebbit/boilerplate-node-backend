@@ -242,7 +242,11 @@ next person to notice the gap deserves the argument rather than a rediscovery.
 
 Each entry says what the thing **is**, why it is not here, and what would change that answer.
 
-### Scale and performance testing
+### Performance budgets, soak runs and query-shape tests
+
+**What exists.** Load can be applied by hand: `npm run bench` and `bench:search` (autocannon) and
+`npm run bench:k6` (the `browse` and `checkout` scripts in `tests/load/`). None of it runs in CI or
+asserts a budget; that is what the rest of this entry is about.
 
 **What it is.** Everything above asks "is the answer correct?". This family asks "is the answer
 _fast enough_, and does it stay correct under volume?" — behaviour as a function of load and time
@@ -318,8 +322,7 @@ change to a widely-imported module re-tests most of its dependents — so the sa
 rather than proportional to the diff. And a stale-but-trusted cache is a quiet failure: it reports
 green for mutants nobody re-ran.
 
-**What would change it.** The run outgrowing its window, or a decision to run mutation on pull
-requests rather than nightly. Both make the trade worth re-examining; neither is true today.
+**What would change it.** The run outgrowing its window, or a decision to run the whole-repo mutation more often than monthly. Both make the trade worth re-examining; neither is true today.
 
 ## Related pages
 

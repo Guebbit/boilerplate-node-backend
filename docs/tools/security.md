@@ -381,7 +381,7 @@ catalogue.
 (an office, a school, CGNAT) does not lock its own users out for succeeding. Only failures count,
 which is exactly the signal worth limiting.
 
-The test suites raise the budget tenfold — see `tests/support/setup.ts`.
+The test suites raise the budgets — the global one to 100000 and each auth budget to 10000 — see `tests/support/setup-environment.ts`.
 
 **Every budget's store carries its own prefix.** `express-rate-limit` refuses to count one request
 twice in the same store (`ERR_ERL_DOUBLE_COUNT`) and tells stores apart by `store.prefix`. The
@@ -390,7 +390,7 @@ Without it, two budgets keyed alike on one request — the account-keyed attempt
 on `POST /payments/:id/confirm` — were reported as one hit counted twice, though each counted once
 in its own namespace.
 
-**A third budget, the same shape as neither.** `submissionLimiter` guards `feedback`'s
+**A third budget, the same shape as neither.** The contact budgets (`contactLimiters`: `submissionLimiter` per address, plus a per-email and a per-address-block budget) guard `feedback`'s
 `POST /contact` — a public write that causes an outbound email (signup and reset also do, under their own budgets; this one reaches the operator) — and it inverts the rule
 above: `skipSuccessfulRequests` is deliberately **off**. A credential attempt is abusive when it
 FAILS (a wrong guess); a contact-form submission is abusive when it SUCCEEDS (a bot posts a
@@ -398,7 +398,8 @@ well-formed body, gets a `201`, and an operator gets an email). Mounting `creden
 `/contact` would therefore change nothing at all — it would count zero of the requests that matter.
 `submissionLimiter` spends its budget on every request, success or failure, keyed on the caller's
 address like the global limiter, at a much smaller default (`NODE_SUBMISSION_RATE_LIMIT_MAX=5`) —
-a person files a contact request once.
+a person files a contact request once. The other two are `NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX` (5) and
+`NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX` (20).
 
 **A fourth budget, same shape as the third.** `uploadLimiter` guards every route that accepts an
 image (`upload.single('imageUpload')`, across `products`, `users` and `account`). The cost here
@@ -543,7 +544,7 @@ shaped like `submissionLimiter` instead: every request spends the budget, succes
 
 **Every one of these budgets is three, not one**: identity (the submitted email, normalised
 and hashed like `identityOf`), single address, and address BLOCK — an IPv4 /24, an IPv6 /48 (the single-address key masks IPv6 to the library's /56, so the block is the wider bucket on both families).
-`contactLimiters` adds the same two dimensions on top of the pre-existing `submissionLimiter`. The
+`contactLimiters` adds the same two dimensions (email and block) on top of `submissionLimiter`, which is the address one. The
 block dimension also extends `credentialLimiters` itself, so login gets the same third bucket.
 A dual-stack listener reports an IPv4 caller as `::ffff:a.b.c.d`, so the key is built by unmapping
 FIRST (`ipKeyGenerator`) and masking the IPv4 result to its /24 after; masking before would leave
@@ -644,12 +645,11 @@ below reads it. The failure it closes: a safety switch that turned on only for t
 | Session and OAuth cookies             | `Secure`                     | not `Secure`, so local HTTP works |
 | `scenario:apply` (the seeder)         | refuses to run               | runs                              |
 | Presence rules marked production-only | checked                      | skipped                           |
-| Stripe `sk_test_` key                 | refused at boot              | accepted                          |
 | Stack traces in logs                  | left out                     | kept                              |
 | Log level, console format             | `info`, JSON                 | `debug`, pretty on a terminal     |
 | Cache `max-age`, `autoIndex`          | as declared, `autoIndex` off | clamped, Mongoose's default       |
 
-A staging server therefore cannot seed demo data or use a Stripe test key. That is intended: a
+A staging server therefore cannot seed demo data. That is intended: a
 switch that must differ gets its own explicit variable, never a relaxed `NODE_ENV`. Standards:
 [OWASP secure by default](https://devguide.owasp.org/en/04-design/02-web-app-checklist/01-secure-by-default/),
 [Node.js: run with `NODE_ENV=production`](https://nodejs.org/en/learn/getting-started/nodejs-the-difference-between-development-and-production),

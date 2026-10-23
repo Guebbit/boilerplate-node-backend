@@ -109,7 +109,8 @@ host and port; the boot log names the broker and its source.
 ## Docker Compose
 
 The `docker-compose.yml` includes a `rabbitmq` service with the management plugin, `rabbitmq:4-management` —
-matching `docker-compose.production.yml`'s own image, which is what makes quorum queues' 4.x
+the same 4.x line as `docker-compose.production.yml`'s digest-pinned `rabbitmq:4-alpine` image (the
+dev one adds the management UI), which is what makes quorum queues' 4.x
 behaviour ([Queue type: quorum](#queue-type-quorum), [Priority](#priority)) the same in dev as in
 production:
 
@@ -193,10 +194,10 @@ flowchart LR
 Every work queue is declared with two companions, all through the same `dead-letter` exchange (a
 `direct` exchange — a routing key names exactly one queue):
 
-| Name            | What it is                                                                                                                                    |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<queue>.retry` | No consumer. `x-message-ttl` set to `NODE_QUEUE_RETRY_DELAY_SECONDS`; dead-letters BACK to `<queue>` once a message sits out its wait.        |
-| `<queue>.dead`  | The parking lot. No consumer, no `x-dead-letter-*` of its own. The work queue dead-letters into it, bound to the exchange under its own name. |
+| Name            | What it is                                                                                                                                                                                                        |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<queue>.retry` | No consumer. `x-message-ttl` set to `NODE_QUEUE_RETRY_DELAY_SECONDS`; dead-letters BACK to `<queue>` once a message sits out its wait.                                                                            |
+| `<queue>.dead`  | The parking lot. No consumer, no `x-dead-letter-*` of its own; `x-message-ttl` of 7 days, after which a parked message is dropped. The work queue dead-letters into it, bound to the exchange under its own name. |
 
 The work queue's OWN dead-letter target is `<queue>.dead`: a `nack(msg, false, false)` and a spent
 `x-delivery-limit` both park the message, so nothing is ever dropped. A retry is never a

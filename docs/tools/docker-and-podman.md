@@ -167,12 +167,12 @@ rather than always-on.
 
 ## Service groups
 
-| Group         | Services                                                                                        | Why they are here                                                     |
-| ------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| App runtime   | `app`, `cron`                                                                                   | runs the backend and its scheduled jobs                               |
-| Core data     | `database`, `redis`, `limits`, `rabbitmq`                                                       | persistence, cache, rate-limit counters, and async jobs               |
-| Observability | `otel-collector`, `tempo`, `prometheus`, `alertmanager`, `loki`, `promtail`, `alloy`, `grafana` | traces, metrics, logs, and dashboards                                 |
-| Integrations  | `webhook-tester`, `webhook-tester-tls`, `mailpit`                                               | opt-in sinks for outbound webhooks and mail; `--profile integrations` |
+| Group         | Services                                                                                                 | Why they are here                                                     |
+| ------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| App runtime   | `app`, `cron`                                                                                            | runs the backend and its scheduled jobs                               |
+| Core data     | `database`, `redis`, `limits`, `rabbitmq`                                                                | persistence, cache, rate-limit counters, and async jobs               |
+| Observability | `otel-collector`, `tempo`, `prometheus`, `alertmanager`, `gatus`, `loki`, `promtail`, `alloy`, `grafana` | traces, metrics, logs, and dashboards                                 |
+| Integrations  | `webhook-tester`, `webhook-tester-tls`, `mailpit`                                                        | opt-in sinks for outbound webhooks and mail; `--profile integrations` |
 
 ### The `integrations` profile is where a real consumer would go
 
@@ -253,7 +253,7 @@ docker/boot-check.sh boot-check
 ## How to think about the setup
 
 - **Compose is the local truth**: one file wires together the app plus all sidecars needed for demos and local debugging.
-- **The `app` container owns the seeding**, not you: its startup command is `npm run db:bootstrap && npm run dev:docker`, so a fresh volume arrives furnished — [Which database am I looking at?](../getting-started.md#which-database-am-i-looking-at).
+- **The `app` container owns the seeding**, not you: its startup command is `npm run db:bootstrap && npm run dev:docker` (`dev:docker:cluster` when `NODE_ENABLE_CLUSTERING` is set), so a fresh volume arrives furnished — [Which database am I looking at?](../getting-started.md#which-database-am-i-looking-at).
 - **The Dockerfile is intentionally simple**: install dependencies once, add Chromium for PDF support, then let compose decide runtime commands.
 - **Podman is treated as a compatible local engine**, not a separate architecture.
 

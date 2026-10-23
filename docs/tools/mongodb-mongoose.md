@@ -86,8 +86,9 @@ reach, since every other test runs against a database that has never disagreed w
 
 ### TTL windows
 
-`auditlogs`, `carts` and `feedbackrequests` expire rows with a TTL index whose `expireAfterSeconds`
-is computed from an env var. Mongo will not modify an existing window in place: after changing one,
+Several collections expire rows with a TTL index: `auditlogs`, `carts`, `feedbackrequests`, the
+outbox, the idempotency ledger, and collections in `account`, `orders` and `webhooks`. The
+`expireAfterSeconds` of those is computed from an env var. Mongo will not modify an existing window in place: after changing one,
 `npm run db:sync` replaces the index: it drops it and rebuilds it. In development and test, where `autoIndex` is on,
 skipping that and just restarting **fails to boot** — Mongo refuses the conflicting options.
 Production's `autoIndex` is off precisely so a restart never asks Mongo to rebuild anything; `setup`
@@ -150,7 +151,7 @@ The dataset is split by ROLE, and the split matters:
 | `src/modules/<name>/factories.ts` | The **builder** — `makeProduct(overrides)`. States only what the schema requires; anything carrying a `default:` is deliberately left out, so a row records what the model really does. Shared with that module's tests, which is what a factory is for |
 | `scenarios/<name>.ts`             | The **records** — the demo catalogue, the two accounts, the order book. Built from the factory, but living outside `src/` entirely: `scenarios/index.ts` tables it by name, and `scenarios/apply.ts` walks that table                                   |
 | `scenarios/accounts.ts`           | The **shared literals** — the seed accounts' ids and credentials, plus the write that gives them their roles. Outside `src/` entirely, like the records above, since only scenario files need a piece of them                                           |
-| `scenarios/subjects.ts`           | The **named ids** a consumer that cannot import module code still needs — a generated API client collection, a future `GET /__test/scenario`. Import-free, so it resolves before `api/` exists                                                          |
+| `scenarios/subjects.ts`           | The **named ids** a consumer that cannot import module code still needs — a generated API client collection, a future `GET /__test/scenario`. Imports only the plain literals of `@scenarios/accounts`, so it resolves before `api/` exists             |
 
 ### Conformance is a test, not a build step
 

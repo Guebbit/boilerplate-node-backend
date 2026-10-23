@@ -88,7 +88,7 @@ syft <image>:<tag> -o cyclonedx-json > sbom.cdx.json
 Attach it to the image rather than leaving it in a CI log, which expires with the log. Then a CVE
 question becomes a query over stored SBOMs instead of a rebuild.
 
-`docker sbom` and `trivy image --format cyclonedx` produce the same thing if syft is unwelcome.
+`docker sbom` produces the same thing if syft is unwelcome. Trivy is deliberately not used here: it was ruled out after the March 2026 `trivy-action` supply-chain compromise (see `.github/workflows/image-scan.yml`).
 
 ### Signing
 
@@ -113,8 +113,11 @@ is actually running.
 | Registry must accept referrers | any OCI 1.1 registry does; some older self-hosted ones do not                                          |
 | Verification must be enforced  | a signature nobody checks at deploy is decoration                                                      |
 
-**Where it goes in this repo:** `.github/workflows/ci.yml`, beside the existing `audit` job, and
-like `audit` it should **alert rather than gate** — a missing SBOM must not block a merge.
+**Where it stands in this repo:** the SBOM and the vulnerability scan exist. `.github/workflows/image-scan.yml`
+runs Syft into Grype over the image the production Dockerfile ships (a report on a push, a gate on
+the Monday schedule), and the `publish-image` job in `.github/workflows/ci.yml` attaches build
+provenance and an SBOM attestation to the pushed image. What is not done is the cosign signature
+above; like the scan, it should **alert rather than gate** — a missing signature must not block a merge.
 
 ## Edge rate limiting and WAF
 

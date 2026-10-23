@@ -336,7 +336,7 @@ mongod data directories under `tmp/test/`, which are live files being written by
 while Stryker copies the project into its sandbox — so copying them is both pointless (every jest
 instance starts its own server) and racy. A WiredTiger file removed mid-copy fails the entire run
 with an `ENOENT` naming a filename nothing in the project mentions. `scripts/mutation/stryker-run.ts`
-clears `tmp/test` before it starts, which hid this until two runs overlapped.
+clears its own scratch root, `tmp/test-mutation`, before it starts (a plain `npm test`'s `tmp/test` is left alone), which hid this until two runs overlapped.
 
 `ignorePatterns` also lists `.claude/**` — Claude Code's local state, mostly untracked: the whole
 worktree checkouts it creates there exist only on a developer's machine, which is why CI never hits
@@ -989,7 +989,7 @@ flowchart TB
         direction LR
         S1["mutate\nmodels/users.ts schema"] --> S2["reload everything,\nrun ALL 991 tests"] --> S3["~33s each"]
     end
-    Normal --> Cost["~5% of mutants are static\nbut cause ~90% of the work"]
+    Normal --> Cost["a minority of mutants are static\nbut cause most of the work"]
     Static --> Cost
 
     classDef good fill:#dcfce7,stroke:#16a34a,color:#111827;
@@ -1003,8 +1003,8 @@ flowchart TB
 **One static mutant runs the entire suite.** The share is worth measuring rather than guessing: the run's summary prints `tests per mutant on average`, and the JSON reporter labels each mutant `static`, so counting them per file names the handful that dominate the wall clock.
 
 The mutate scope has one real number now, from `observability` — its cheapest module, at 5 files and
-421 mutants: **49m35s at `--concurrency 2`, ~7.1 seconds per mutant.** The other 398 files in
-`stryker.json`'s `mutate` (43,847 declared mutable lines in total) have never completed a run;
+421 mutants: **49m35s at `--concurrency 2`, ~7.1 seconds per mutant.** The other files in
+`stryker.json`'s `mutate` (`scopeWithLines()` in `scripts/mutation/mutate-scope.ts` counts the scope: 918 files, 93,921 mutable lines on 2026-10-22) have never completed a run;
 extrapolating that one file's rate to the whole scope is what the sharding in
 [Why the full sweep is sharded](#why-the-full-sweep-is-sharded)
 is sized from, and it is a single data point rather than a settled average — re-measure per-shard
@@ -1021,13 +1021,13 @@ For a static mutant `netTime` is the whole suite, which is what makes those time
 
 ### `ignoreStatic` — rejected permanently {#static-mutants-open-question}
 
-| Option                                 | Effect                                                            | Status                                                                       |
-| -------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Raise `concurrency`                    | Near-linear speed-up, **changes no measurement**                  | **Done** — 8 locally, 3 in CI                                                |
-| `incremental: true`                    | PR runs re-mutate only changed files                              | Not done — the diff run narrows via `--mutate` and `--force`s past any cache |
-| Split the sweep into one job per layer | Wall-clock becomes the slowest group, not the sum                 | Not done; probably unnecessary if the cost is fixed at the source            |
-| `ignoreStatic: true`                   | Removes the whole-suite reruns — but stops measuring some mutants | **Rejected permanently, 2026-09-20 — see below.**                            |
-| Move logic out of module scope         | The only fix that costs nothing in measurement                    | Invasive; module-scope schemas are idiomatic Mongoose                        |
+| Option                                 | Effect                                                            | Status                                                                                                      |
+| -------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Raise `concurrency`                    | Near-linear speed-up, **changes no measurement**                  | **Done** — `stryker.json` sets 4, the CI shard jobs pass 1, and `STRYKER_CONCURRENCY` raises it per machine |
+| `incremental: true`                    | PR runs re-mutate only changed files                              | Not done — the diff run narrows via `--mutate` and `--force`s past any cache                                |
+| Split the sweep into one job per layer | Wall-clock becomes the slowest group, not the sum                 | Not done; probably unnecessary if the cost is fixed at the source                                           |
+| `ignoreStatic: true`                   | Removes the whole-suite reruns — but stops measuring some mutants | **Rejected permanently, 2026-09-20 — see below.**                                                           |
+| Move logic out of module scope         | The only fix that costs nothing in measurement                    | Invasive; module-scope schemas are idiomatic Mongoose                                                       |
 
 `ignoreStatic` is a real, documented Stryker option, and Stryker's own description of it says "it might make sense to ignore static mutants". But **its default is `false`**, and that default is a judgement by the people who wrote the tool: measuring those mutants is the safer behaviour.
 
@@ -1101,7 +1101,7 @@ flowchart TB
 
 | Run               | Trigger                   | Setting                                      | Purpose                                            |
 | ----------------- | ------------------------- | -------------------------------------------- | -------------------------------------------------- |
-| PR (diff)         | push                      | `--force`                                    | Always a clean measurement of the changed files    |
+| PR (diff)         | `pull_request`            | `--force`                                    | Always a clean measurement of the changed files    |
 | Local full sweep  | `npm run mutation:full`   | `incremental` per shard, `--force` on demand | Fast by default; refreshed from scratch on request |
 | GitHub full sweep | cron (monthly) / dispatch | nothing restored — from scratch every time   | Slow, and never stale                              |
 
@@ -1113,6 +1113,7 @@ flowchart TB
 "mutate": [
     "src/infrastructure/**/*.ts",
     "src/kernel/**/*.ts",
+    "src/domain-primitives/**/*.ts",
     "src/modules/*/**/*.ts",
     "!src/modules/*/index.ts",
     "!src/modules/*/tests/**"
@@ -1153,7 +1154,7 @@ them**, so they dragged the global number down permanently while telling nobody 
 put a global `break` of 70 out of reach by construction rather than by neglect.
 
 So the tier was excluded, taking the global score from ~65.7% to ~68.3%. What is lost is a standing
-reminder, and it is recorded here and in `stryker.json` instead: **the Express wiring has no
+reminder, and it is recorded here instead (`stryker.json`'s `mutate` simply does not list `src/app`): **the Express wiring has no
 unit tests.** If that changes, put it back in scope — then its number would mean something.
 
 The bar this cleared, and that a future exclusion has to clear too: _no configured suite can reach
@@ -1217,7 +1218,7 @@ never drops a file it did not measure. A half-covered scope left on disk is not 
 ## The three commands {#the-three-commands}
 
 One ruler, one baseline, three commands. Before 2026-09-20 there were two configs, two baselines and
-nine npm scripts between them; D1–D5 in the decision record below collapse that into this:
+nine npm scripts between them; the rework collapsed that into this:
 
 ```
 npm run mutation          # the files this branch changed, graded against the baseline
@@ -1237,10 +1238,10 @@ recording an intentional change (§[The per-file ratchet](#the-per-file-ratchet)
 
 ### Why the full sweep is sharded {#why-the-full-sweep-is-sharded}
 
-The mutate scope is measured, not estimated, at **399 files, 43,847 declared mutable lines**
-(`stryker.json`'s `mutate`), and `observability` — its cheapest module — took 49m35s for 421
-mutants, ~7.1 seconds each at `--concurrency 2`. Applied to the whole scope that is **~86
-runner-hours**: no per-shard timeout GitHub allows, and no number of module-shaped shards, makes
+The mutate scope is measured, not estimated: `scopeWithLines()` in `scripts/mutation/mutate-scope.ts`
+reports **918 files, 93,921 mutable lines** on 2026-10-22 (`stryker.json`'s `mutate`), and `observability` — its cheapest module — took 49m35s for 421
+mutants, ~7.1 seconds each at `--concurrency 2`. Applied to the whole scope that is on the
+order of **a hundred and more runner-hours** (it grows with the line total): no per-shard timeout GitHub allows, and no number of module-shaped shards, makes
 that fit in one run, because splitting work does not shrink the total, it only changes how many
 shards run in parallel.
 
@@ -1390,11 +1391,11 @@ npm run mutation:pull     # newest unexpired report from a sweep of main, baseli
 git diff mutation-baseline.json
 ```
 
-**Cost.** 340 shards for the scope as of 2026-09-30, so wave 1 is full and the rest spills into
-wave 2. Measured on the 2026-09-27 sweep: a median 0.43 runner-minutes per line at two workers
-(a floor — the 11 shards that timed out are heavier). One worker is _assumed_ to double that, which
-makes about 850 runner-hours plus roughly 15 minutes of setup per shard: **six to ten days** at
-6 in parallel, retries included. Every sweep starts from scratch; nothing is carried between runs.
+**Cost.** The shard count follows the scope's line total (`SHARD_LINES` in
+`scripts/mutation/ci/waves.ts`), so wave 1 fills and the rest spills into wave 2. Measured on the
+2026-09-27 sweep: a median 0.43 runner-minutes per line at two workers (a floor — the shards that
+timed out are heavier). One worker is _assumed_ to double that, plus roughly 15 minutes of setup per
+shard: **days, not hours**, at 6 in parallel, retries included, and more as the scope grows. Every sweep starts from scratch; nothing is carried between runs.
 Re-measure the per-line figure from the first finished sweep and update both this paragraph and
 `SHARD_LINES` in `scripts/mutation/ci/waves.ts`.
 

@@ -1,7 +1,7 @@
 # Cluster testing
 
 `npm run test:cluster` — the only suite that boots `src/cluster.ts` and forks real worker
-processes. Two clusters, about 25 seconds, and it needs a Redis.
+processes. Two clusters, about 25 seconds, and it needs a Redis. A third case, `tests/cluster/redis-idle.test.ts`, forks nothing: it leaves one real shared Redis client idle past its socket ceiling and checks the keepalive holds it open.
 
 ## What it is for, and why nothing else could do it
 
@@ -21,7 +21,7 @@ the configuration says so.
 
 ## The shape of the assertion
 
-Two cases, and the second is what makes the first mean anything:
+Two cases in `rate-limit.test.ts`, and the second is what makes the first mean anything:
 
 | Case                                  | Store     | Expected                          |
 | ------------------------------------- | --------- | --------------------------------- |

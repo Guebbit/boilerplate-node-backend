@@ -28,7 +28,7 @@ flowchart LR
     classDef sink fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef cross fill:#ede9fe,stroke:#7c3aed,color:#111827;
     class LOG,AUDIT,ANALYTICS,METRICS,TRACES,STREAM,QUEUE sig;
-    class STDOUT,LOKI,MONGO,POSTHOG,PROM,TEMPO sink;
+    class STDOUT,LOKI,MONGO,SINK,PROM,TEMPO sink;
     class SSE,RMQ cross;
 ```
 

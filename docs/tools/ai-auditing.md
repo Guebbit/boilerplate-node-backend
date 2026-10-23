@@ -6,7 +6,7 @@ Stryker cannot read `docs/theory/domain-layer.md`. Schemathesis cannot read a ti
 notice that the docs promise a rule the contract never encodes.
 
 **Prose ↔ code is the gap**, and it is the one place a language model beats a program rather than
-approximating one. This repo has ~56 files under `docs/` stating rules no schema enforces.
+approximating one. This repo has many files under `docs/` stating rules no schema enforces.
 
 `scripts/audit/` holds the prompts that work in that gap, plus two that judge something else:
 `code-shape` judges design, `test-honesty` judges whether a test can fail at all. They are plain

@@ -125,8 +125,7 @@ Why that is acceptable here, and the two conditions that would change it:
 - **It would change** if `prism` moved into the production image, or if the chain ever ran against
   a spec this repo does not author.
 
-The alternative — dropping `@stoplight/prism-cli` — closes all six at the cost of `test:prism` and
-the `schemathesis.yml` workflow that mocks against it. Weighed and declined: the smoke test catches
+The alternative — dropping `@stoplight/prism-cli` — closes all six at the cost of `test:prism`. Weighed and declined: the smoke test catches
 a spec whose examples do not satisfy its own schema, which no other check here does.
 
 ## If a rule keeps getting skipped

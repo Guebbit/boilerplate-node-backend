@@ -144,7 +144,7 @@ prevent.
 
 ### express-rate-limit
 
-**What it is.** A middleware that counts requests per IP address over a sliding window and returns `429 Too Many Requests` when the limit is exceeded.
+**What it is.** A middleware that counts requests per IP address over a fixed window and returns `429 Too Many Requests` when the limit is exceeded.
 
 **Problem it solves.** Without rate limiting, a single client can flood the API with requests, degrading it for everyone else or escalating a brute-force credential attack.
 
@@ -322,7 +322,7 @@ Observability is the ability to understand what a running system is doing from i
 
 **Problem it solves.** If Prometheus fired an alert directly to every receiver every 15 seconds during an outage you would be spammed with hundreds of identical messages. Alertmanager batches related alerts, applies repeat intervals, and applies silence rules — so on-call teams get one actionable notification, not a flood.
 
-**In this repo.** Local dev uses a `null` receiver so no real notifications are sent. Alert rules (`prometheus.alert-rules.yaml`) cover availability, errors and latency, queue and outbox failures, stale scheduled jobs, and a `security.rules` group — the table is in [Prometheus](./prometheus.md#alert-rules). Replace the receiver with Slack or PagerDuty for staging/production.
+**In this repo.** Local dev delivers alert mail to mailpit (a sink, so no real notification is sent); a route whose knob is set to empty goes to a `null` receiver. Alert rules (`prometheus.alert-rules.yaml`) cover availability, errors and latency, queue and outbox failures, stale scheduled jobs, and a `security.rules` group — the table is in [Prometheus](./prometheus.md#alert-rules). Replace the receiver with Slack or PagerDuty for staging/production.
 
 → [Prometheus](./prometheus.md) · [Observability Reference](./observability-reference.md)
 

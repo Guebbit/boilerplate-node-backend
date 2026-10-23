@@ -82,14 +82,14 @@ flowchart LR
 | Observability | **[Grafana](./grafana.md)**                                 | Dashboard UI reading Prometheus, Tempo, and Loki in one place — the normal entry point for all observability work.                         |
 | Observability | **[Product Analytics](./analytics.md)**                     | Business events behind one provider port: Umami (default), PostHog, or none.                                                               |
 | Observability | **[Frontend Observability](./frontend-observability.md)**   | How the paired frontend reuses this stack (Faro + Alloy, Umami) instead of Sentry/PostHog cloud — plus the heavy upgrade path.             |
-| Project       | **[Testing & Docs](./testing-and-docs.md)**                 | Vitest, Supertest, Bruno, and VitePress: how the repo tests itself and generates this docs site.                                           |
+| Project       | **[Testing & Docs](./testing-and-docs.md)**                 | Jest, Supertest, Bruno, and VitePress: how the repo tests itself and generates this docs site.                                             |
 | Project       | **[Package Dependencies](./package-dependencies.md)**       | Guided tour of `package.json` grouped by concern (runtime, dev, optional, peer).                                                           |
 | Project       | **[External Services](./external-services.md)**             | Which third-party services plug in where: the four provider ports, the config-only swaps, the gaps.                                        |
 | Project       | **[Dependency Vetting](./dependency-vetting.md)**           | Rules for what earns a place in `package.json` — measure the transitive weight, grep for telemetry, before it lands.                       |
-| Project       | **[Pending Major Upgrades](./pending-major-upgrades.md)**   | nodemailer 10, dotenv 18, TypeScript 7: what breaks, what it costs, when to take each.                                                     |
+| Project       | **[Pending Major Upgrades](./pending-major-upgrades.md)**   | dotenv 18, TypeScript 7, prom-client replacement: what breaks, what it costs, when to take each.                                           |
 | Project       | **[Permission Actions](./permission-actions.md)**           | The action vocabulary, written once in the shared yaml and generated into both repos.                                                      |
 | Project       | **[Package Scripts](./package-scripts.md)**                 | What every `npm run <script>` does and when to reach for it.                                                                               |
-| Project       | **[Docker & Podman](./docker-and-podman.md)**               | 11-container local stack: what each container is for and how to run it.                                                                    |
+| Project       | **[Docker & Podman](./docker-and-podman.md)**               | The local stack and its opt-in profiles: what each container is for and how to run it.                                                     |
 | Project       | **[Health checks](./health-checks.md)**                     | What each container's check tests: `/livez` for the web process, its own check per worker, none for a one-shot job.                        |
 | API           | **[API](../api/)**                                          | OpenAPI Generator, Spectral, Prism, Bruno, Mockoon: contract-first API tooling.                                                            |
 

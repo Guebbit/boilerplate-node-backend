@@ -103,10 +103,9 @@ The name is deliberately generic rather than backend-specific: seeded generation
 
 The PRNGs stay separate — Mulberry32 here, faker's Mersenne Twister there — and given one seed the two produce entirely unrelated values. That is intended, not a defect to fix later. The two generators produce **opposite halves of the same contract** (requests here, responses there) from different schema surfaces (zod `_zod.def` here, orval factories there); making the streams agree would buy nothing and would couple two implementations that are independently correct. What the shared name buys is a shared vocabulary, not shared output.
 
-## Every write operation, not just seven
+## Every write operation
 
-The seven `describe` blocks are the operations that needed hand-written glue to reach a 2xx. The
-rest of the write surface is **walked**, not listed: `listOperations()` yields every `POST`, `PUT`
+No write endpoint is listed by hand. The write surface is **walked**, not listed: `listOperations()` yields every `POST`, `PUT`
 and `PATCH` with a JSON body, and each gets the same four kinds of case, so a write
 added to the spec is covered on the next run.
 
@@ -130,11 +129,15 @@ undeclared 409.
 
 ## Endpoint-specific glue
 
-The walker only knows what a zod schema can express. Three things it structurally can't:
+The walker only knows what a zod schema can express. Three things it structurally can't, and the
+glue for each is **data**, not a `describe` per endpoint: the file has two top-level `describe`s
+(the query-parameter walk and the write-operation walk), and the endpoint-specific parts are tables
+in `request-contract.test.ts` (`FIELD_OVERRIDES` relinks a field per operation; `NEEDS_STATE_OR_SIGNATURE`
+names the operations a legal body cannot reach a 2xx on, with the reason):
 
-- **Cross-field rules.** `SignupBody.passwordConfirm` has its own independent `.min(8)`, with no `.refine()` tying it to `password` — the "must match" rule lives in application code, not the schema. `request-contract.test.ts` patches `passwordConfirm = payload.password` after generating, skipping that patch only for the one test case where `passwordConfirm` itself is the field under test.
+- **Cross-field rules.** `SignupBody.passwordConfirm` has its own independent `.min(8)`, with no `.refine()` tying it to `password` — the "must match" rule lives in application code, not the schema. `FIELD_OVERRIDES` relinks `passwordConfirm = payload.password` after generating (for `signup`, `changePassword`, `confirmPasswordReset`), and the relink is skipped only for the one test case where `passwordConfirm` itself is the field under test.
 - **Strings for an arbitrary `pattern`.** Producing a value from a regex is a whole library's worth of work, and not worth it for a handful of patterns. `tests/support/pattern-samples.ts` holds a hand-written sample per tricky pattern, keyed on the regex source, and `satisfyPattern()` **throws** when a pattern has no entry — because ignoring the `pattern` would hand the endpoint a payload the contract forbids, and the resulting 422 would read as an endpoint bug rather than a generator gap. The fuzz generator reads the same table; see [Fuzz Testing](./fuzz-testing.md#the-tripwires-on-itself).
-- **Referential validity.** `CreateOrderBody.userId` / `items[].productId` are opaque strings to the schema — nothing in `openapi.yaml` can say "must reference a real document". The test file creates a real product and a real user first and patches their ids in, again skipping the patch for whichever field a given `invalidPayloads()` case is actually testing (skipping it wrongly would silently "fix" every one of that field's own violation cases — worth knowing if you're extending this pattern to a new endpoint).
+- **Referential validity.** `CreateOrderBody.userId` / `items[].productId` are opaque strings to the schema — nothing in `openapi.yaml` can say "must reference a real document". The test file creates a real product and a real user first (the `world`) and `FIELD_OVERRIDES` patches their ids in, again skipping the patch for whichever field a given `invalidPayloads()` case is actually testing (skipping it wrongly would silently "fix" every one of that field's own violation cases — worth knowing if you're extending this pattern to a new endpoint).
 
 ## Real findings, left as findings
 
@@ -157,12 +160,12 @@ Worth remembering when extending the walker: `unwrapField` had handled `'default
 
 ## File map
 
-| Path                                      | Contents                                                                                                                                                                                                                                                                                    |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/support/contract-data.ts`          | The walker: `validPayload`, `invalidPayloads`, the PRNG, the zod introspection helpers                                                                                                                                                                                                      |
-| `tests/contract/request-contract.test.ts` | One `describe` per hand-glued write endpoint (`/users`, `/products`, `/orders`, `/cart`, `/feedback/contact`, `/account/signup`, `/account/login`), then [the walk over every other write](#every-write-operation-not-just-seven); the endpoint-specific glue lives here, not in the walker |
-| `tests/support/spec-world.ts`             | The seeded rows a templated path names (`{id}`, `{tenant}`, ...), shared with the fuzz suite                                                                                                                                                                                                |
-| `api/schemas.zod.ts`                      | The generated `*Body` schemas this file walks                                                                                                                                                                                                                                               |
+| Path                                      | Contents                                                                                                                                                                                                                                      |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/support/contract-data.ts`          | The walker: `validPayload`, `invalidPayloads`, the PRNG, the zod introspection helpers                                                                                                                                                        |
+| `tests/contract/request-contract.test.ts` | Two top-level `describe`s: the invalid-query walk, and [the walk over every write operation](#every-write-operation); the endpoint-specific glue lives here as data tables (`FIELD_OVERRIDES`, `NEEDS_STATE_OR_SIGNATURE`), not in the walker |
+| `tests/support/spec-world.ts`             | The seeded rows a templated path names (`{id}`, `{app}`, ...), shared with the fuzz suite                                                                                                                                                     |
+| `api/schemas.zod.ts`                      | The generated `*Body` schemas this file walks                                                                                                                                                                                                 |
 
 ## Commands
 
