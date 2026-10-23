@@ -179,6 +179,11 @@ Adding a hidden product stays a 404 (`POST /cart`, a wishlist add, `PUT /cart/{i
 must not reveal that a hidden product exists. An off-sale product is accepted, as a sold-out one
 is. The states themselves are in [products](./products.md#product-states).
 
+The cart answers two flags so a client holds no copy of the rule: each line's `canIncrease`
+(`quantity` below `NODE_CART_LINE_MAX`) and the cart's `checkoutable` (not empty, every line
+`in_stock`, `preorder` or `backorder`: `isBuyable` in `domain/availability.ts`, the same test
+checkout's refusal uses). A shipping method and an address are separate steps and not part of it.
+
 ## Merging a guest cart
 
 A cart built while signed out lives in the browser. At sign-in the client sends it in one call,

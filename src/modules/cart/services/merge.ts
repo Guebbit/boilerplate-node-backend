@@ -21,7 +21,7 @@ import { cartLineMax } from '../config';
 import { cartRepository, QUANTITY_LIMIT } from '../repository';
 import { cartGetForBadge, trackLineWrite } from './items';
 import { isListed, readShelf, shelfAvailability, type Shelf } from './shelf';
-import type { CartView } from './view';
+import type { CartView } from '../presenter';
 
 /** What a merge answers with: the cart as it now stands, and what became of each guest line. */
 export interface MergeResult {

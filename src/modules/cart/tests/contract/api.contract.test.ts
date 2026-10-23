@@ -73,8 +73,46 @@ describe('GET /cart', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toEqual([
-            { productId: String(scarce._id), quantity: 3, availability: 'insufficient_stock' }
+            {
+                productId: String(scarce._id),
+                quantity: 3,
+                availability: 'insufficient_stock',
+                canIncrease: true
+            }
         ]);
+        expect(response.body.data.checkoutable).toBe(false);
+    });
+
+    it('says a line at the per-line ceiling cannot grow, and a buyable cart is checkoutable', async () => {
+        const { bearer } = await authenticateAs('user');
+        const product = await createProduct();
+        // The default per-line ceiling is 10.
+        await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 10 });
+
+        const response = await api().get('/cart').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items[0]).toMatchObject({ quantity: 10, canIncrease: false });
+        expect(response.body.data.checkoutable).toBe(true);
+    });
+
+    it('echoes the total in the minor units checkout compares against', async () => {
+        const { bearer } = await authenticateAs('user');
+        const product = await createProduct({ price: 25.5 });
+        await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 2 });
+
+        const response = await api().get('/cart').set('Authorization', bearer);
+
+        expect(response.body.data.summary.expectedTotal).toEqual({
+            amount: 5100,
+            currency: response.body.data.summary.currency
+        });
     });
 });
 

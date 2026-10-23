@@ -4,7 +4,7 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-import { lineAvailability, type LineAvailability } from './availability';
+import { isBuyable, lineAvailability, type LineAvailability } from './availability';
 
 /**
  * A cart line as the rules see it. `product: null` is what the service-level join
@@ -180,10 +180,7 @@ export const evaluateCheckout = (lines: readonly CartLineCandidate[]): CheckoutV
 
     // Off sale and sold out join the stock refusal, each naming its own availability.
     const shortfalls = judged.flatMap(({ line, availability }) =>
-        availability === 'in_stock' ||
-        availability === 'preorder' ||
-        availability === 'backorder' ||
-        availability === 'removed'
+        isBuyable(availability) || availability === 'removed'
             ? []
             : [
                   {

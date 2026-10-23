@@ -58,8 +58,11 @@ const EMPTY_CART = {
         itemsTotal: 0,
         shippingCost: 0,
         totalPrice: 0,
-        currency: 'EUR'
+        currency: 'EUR',
+        expectedTotal: { amount: 0, currency: 'EUR' }
     },
+    // Nothing to buy is not something checkout can run on.
+    checkoutable: false,
     // An empty basket needs no shipment — `shippingOptionsFor` reads `needsShipping` as false
     // for an empty line list, the same as an all-digital one.
     shipping: { required: false, selected: null, options: [] }
@@ -230,9 +233,19 @@ describe('getForBadge', () => {
 
         // `CartResponseItem` is additionalProperties:false — an extra key here is a contract violation.
         expect(items).toEqual([
-            { productId: String(product._id), quantity: 2, availability: 'in_stock' }
+            {
+                productId: String(product._id),
+                quantity: 2,
+                availability: 'in_stock',
+                canIncrease: true
+            }
         ]);
-        expect(Object.keys(items[0])).toEqual(['productId', 'quantity', 'availability']);
+        expect(Object.keys(items[0])).toEqual([
+            'productId',
+            'quantity',
+            'availability',
+            'canIncrease'
+        ]);
     });
 
     it('computes the summary across several lines', async () => {
@@ -252,7 +265,9 @@ describe('getForBadge', () => {
             itemsTotal: 80,
             shippingCost: 0,
             totalPrice: 80,
-            currency: 'EUR'
+            currency: 'EUR',
+            // 80.00 EUR in cents: what a checkout is sent back as `expectedTotal`.
+            expectedTotal: { amount: 8000, currency: 'EUR' }
         });
     });
 
@@ -370,15 +385,24 @@ describe('setItemById', () => {
 
         expect(result.success).toBe(true);
         expect(result.data).toEqual({
-            items: [{ productId: String(product._id), quantity: 2, availability: 'in_stock' }],
+            items: [
+                {
+                    productId: String(product._id),
+                    quantity: 2,
+                    availability: 'in_stock',
+                    canIncrease: true
+                }
+            ],
             summary: {
                 itemsCount: 1,
                 totalQuantity: 2,
                 itemsTotal: 50,
                 shippingCost: 0,
                 totalPrice: 50,
-                currency: 'EUR'
+                currency: 'EUR',
+                expectedTotal: { amount: 5000, currency: 'EUR' }
             },
+            checkoutable: true,
             // A weightless product fits every method's range, so all three are on offer, priced
             // against this basket's own `itemsTotal` (50 — under `standard`'s 100 free-above).
             shipping: {

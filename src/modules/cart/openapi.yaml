@@ -703,7 +703,7 @@ components:
         CartSummaryResponse:
             type: object
             additionalProperties: false
-            required: [itemsCount, totalQuantity, itemsTotal, shippingCost, totalPrice, currency]
+            required: [itemsCount, totalQuantity, itemsTotal, shippingCost, totalPrice, currency, expectedTotal]
             properties:
                 itemsCount:
                     type: integer
@@ -739,11 +739,17 @@ components:
                 currency:
                     type: string
                     description: ISO-4217 currency code (e.g. USD)
+                expectedTotal:
+                    allOf: [{ $ref: '#/components/schemas/ExpectedTotal' }]
+                    description: >-
+                        `totalPrice` in minor units, exactly as `POST /cart/checkout` compares it:
+                        send it back unchanged as the checkout's `expectedTotal`. A client never
+                        converts the decimal itself, so it needs no table of currency exponents.
 
         CartResponse:
             type: object
             additionalProperties: false
-            required: [items, summary, shipping]
+            required: [items, summary, shipping, checkoutable]
             properties:
                 items:
                     type: array
@@ -753,11 +759,18 @@ components:
                     $ref: '#/components/schemas/CartSummaryResponse'
                 shipping:
                     $ref: '#/components/schemas/CartShipping'
+                checkoutable:
+                    type: boolean
+                    description: >-
+                        Whether every line can be bought as it stands (each line's `availability`
+                        is `in_stock`, `preorder` or `backorder`) and the cart is not empty. Checkout
+                        refuses the others (`CART_INSUFFICIENT_STOCK`, `CART_PRODUCT_UNAVAILABLE`);
+                        a shipping method and an address are separate steps and not part of this.
 
         CartResponseItem:
             type: object
             additionalProperties: false
-            required: [productId, quantity, availability]
+            required: [productId, quantity, availability, canIncrease]
             description: >-
                 One line of the basket as the cart answers it: the stored line plus whether it can
                 be bought as it stands. Not `CartItem`, which stays the bare stored line the export and the
@@ -777,6 +790,13 @@ components:
                 # a line has gone short or unavailable.
                 availability:
                     $ref: '#/components/schemas/LineAvailability'
+                canIncrease:
+                    type: boolean
+                    description: >-
+                        Whether the line can hold one more unit: `quantity` is below the shop's
+                        per-line ceiling (`NODE_CART_LINE_MAX`). Stock plays no part, as for
+                        `POST /cart`. A client disables its "+" on `false` instead of copying
+                        the ceiling.
 
         CartShippingOption:
             type: object

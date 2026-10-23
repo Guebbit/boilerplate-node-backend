@@ -25,7 +25,8 @@ import { cartAuditActions } from '../audit';
 import { basketWeight, needsShipping } from '../domain';
 import { cartRepository, QUANTITY_LIMIT } from '../repository';
 import { cartLineMax } from '../config';
-import { readCartLines, toCartView, isJoined, type CartLine, type CartView } from './view';
+import { readCartLines, toCartView, isJoined, type CartLine } from './view';
+import type { CartView } from '../presenter';
 import { ERROR_CODES } from '@api/error-codes';
 import { shippingMethodNotFound } from './errors';
 
