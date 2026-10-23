@@ -15,6 +15,8 @@ x-error-codes:
     PAYMENT_NOT_REFUNDABLE: { status: 409, description: 'The payment is not in a state that can still be refunded, or nothing of it is left to refund.' }
     PAYMENT_REFUND_EXCEEDS_REMAINING: { status: 422, description: 'The refund asks for more than the payment still has left to give back.' }
     PAYMENT_ORDER_NOT_PAYABLE: { status: 409, description: 'The order is not in a state that can still accept a payment.' }
+    PAYMENT_REFUND_NOT_OPEN: { status: 409, description: 'The refund was already settled (another operator confirmed it first).' }
+    PAYMENT_REFUND_NOT_BY_HAND: { status: 409, description: 'The refund goes back through the card provider and its sweep; an operator cannot mark it returned by hand.' }
     PAYMENT_CARD_NOT_AVAILABLE: { status: 409, description: 'This deployment has no card payment provider, so a card payment cannot be started.' }
 
 # This module's section of the account data export (`POST /account/export`): the bundler
@@ -198,12 +200,12 @@ paths:
             summary: Payments that need a person (staff)
             description: >-
                 Only problems still recorded on a document, so a fixed one disappears: refunds
-                open past `NODE_PAYMENT_ATTENTION_MINUTES`, refunds owed by hand on a `manual`
-                payment (the sweep never finishes those, so they show at any age), payments
-                whose stock commit is still owed, and orders whose refund is still owed after a
-                cancel. Oldest first, each source capped at 100 rows. An amount mismatch is not
-                here: it is an audit row (`payment.amount_mismatch`), not stored state. Needs
-                `display:Payment`.
+                open past `NODE_PAYMENT_ATTENTION_MINUTES` (`stale_refund`), and refunds owed by
+                hand on a `manual` payment (`manual_refund_owed`: the sweep never finishes those,
+                so they show at any age). A cancelled order's refund is one of them, because its
+                record opens before the provider is asked. Oldest first, each source capped at
+                100 rows. An amount mismatch is not here: it is an audit row
+                (`payment.amount_mismatch`), not stored state. Needs `display:Payment`.
             operationId: listPaymentAttention
             security:
                 - bearerAuth: []
@@ -357,7 +359,14 @@ paths:
                 the payment as it now stands: `refunds` carries the new record, `amountRefunded`
                 the running total. The reservation of the amount is conditional on the payment
                 still having that much left, so a double submit cannot return the money twice — the
-                second call answers 409 (nothing left) or 422 (asks for more than is left).
+                second call answers 409 (nothing left, which includes a refund still open: a card
+                refund the provider has not confirmed belongs to the refund sweep) or 422 (asks for
+                more than is left).
+
+                On a hand-paid payment (cash, a transfer) the record is only OPENED: it stays
+                `pending` and the payment's `actions.settleByHand` lists it, because nobody here
+                can tell the money went back. `POST /payments/{id}/refunds/{refundId}/settle` is
+                what confirms it.
                 Requires an `Idempotency-Key` header: a retry that repeats the key replays the first
                 answer instead of returning the money again, and a request without it answers 400
                 `IDEMPOTENCY_KEY_REQUIRED`.
@@ -391,6 +400,55 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Nothing to return: the payment never succeeded, or all of it already went back
                 # (`PAYMENT_NOT_REFUNDABLE`) — or `Idempotency-Key` names a request still in flight.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /payments/{id}/refunds/{refundId}/settle:
+        post:
+            tags: [Payments]
+            summary: Mark a hand-paid refund as returned
+            description: >-
+                An operator confirming that money already handed back outside the application
+                (cash given back, a bank transfer sent) was returned, on a refund left `pending` by
+                `POST /payments/order/{orderId}/refund`, a cancellation, a received return or a
+                withdrawal. Nothing is sent anywhere: the refund record settles with
+                `refundedByHand`, `payment.refunded` fires as for any refund (the credit note is
+                issued, a return waiting on it closes), and the audit row is
+                `admin.payment.refund_settled_by_hand`. The refund is named by its own id, so one
+                payment carrying several open refunds settles each separately. Only a hand-paid
+                (`manual`) payment's refund can be settled this way; a card refund belongs to the
+                provider and its sweep (409 `PAYMENT_REFUND_NOT_BY_HAND`). A refund two operators
+                settle at once settles once, and the loser answers 409
+                `PAYMENT_REFUND_NOT_OPEN`. Needs `create:Refund`, which carries the same fresh-session
+                requirement as the refund itself: a valid-but-stale token answers 401 with
+                `errors[].code` `REAUTH_REQUIRED`. `Idempotency-Key` is optional.
+            operationId: settleRefundByHand
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The payment carrying the refund
+                - name: refundId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The refund record to mark as returned
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+            responses:
+                '200':
+                    description: The payment, with that refund `succeeded` and `refundedByHand` set
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # The payment, or a refund with that id on it, does not exist.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Already settled (`PAYMENT_REFUND_NOT_OPEN`), a card refund
+                # (`PAYMENT_REFUND_NOT_BY_HAND`), or `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -663,7 +721,7 @@ components:
         Payment:
             type: object
             additionalProperties: false
-            required: [id, orderId, amount, currency, status, displayStatus, provider, method, amountRefunded, refunds]
+            required: [id, orderId, amount, currency, status, displayStatus, provider, method, amountRefunded, refunds, actions]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -765,7 +823,9 @@ components:
                     description: >-
                         `true` once a refunded `manual` payment has had its money returned to the
                         customer outside this application — there is no provider to ask, so this is
-                        the admin's own record that it was done. Absent otherwise.
+                        the operator's own record that it was done
+                        (`POST /payments/{id}/refunds/{refundId}/settle`). Set by that route alone.
+                        Absent otherwise.
                 clientSecret:
                     type: string
                     description: >-
@@ -1064,25 +1124,52 @@ components:
         PaymentActions:
             type: object
             additionalProperties: false
-            required: [pay, refund]
+            required: [pay, sync, refund, settleByHand]
             description: >-
                 What the requesting caller may do to this payment. Money is this module's to answer
                 for; the order's own moves are on `Order.actions`, and a client that needs both
-                composes them rather than deciding either for itself.
+                composes them rather than deciding either for itself. Every response that carries a
+                payment carries these, including the answer to each write, so a client never has to
+                re-read to learn the next step.
             properties:
                 pay:
                     type: boolean
                     description: >-
-                        Whether `POST /payments/{id}/confirm` would be accepted — the payment is
-                        awaiting confirmation or retryable after a decline, AND the order can still
-                        reach `paid`, AND the caller is the payer and holds `checkout:Cart`
-                        (staff reading the payment are never offered it).
+                        Whether the buyer may start or retry paying — the payment is awaiting
+                        confirmation or retryable after a decline (then `POST /payments/{id}/confirm`),
+                        or it is a bank transfer still waiting for its money and a card provider is
+                        configured (then `POST /payments/intent` takes it over with a card), AND the
+                        order can still reach `paid`, AND the caller is the payer and holds
+                        `checkout:Cart` (staff reading the payment are never offered it). An
+                        in-flight payment is deliberately not payable: its next step is `sync`.
+                sync:
+                    type: boolean
+                    description: >-
+                        Whether the buyer may finish at the provider with `POST /payments/{id}/sync` —
+                        the payment is `requires_action` or `processing`, it went through the
+                        provider, and the caller is the payer holding `checkout:Cart`. Narrower than
+                        the route on purpose: the route also accepts a payment that is awaiting
+                        confirmation or was declined, whose next step is `pay`. Never true together
+                        with `pay`.
                 refund:
                     type: boolean
                     description: >-
-                        Whether `POST /payments/order/{orderId}/refund` would be accepted. False
-                        once nothing is left to refund (fully refunded, or the rest already asked back), which is what greys the control out rather than letting
-                        the operator discover it by clicking.
+                        Whether `POST /payments/order/{orderId}/refund` would be accepted: the caller
+                        holds `create:Refund`, the payment is `succeeded` and something is left to
+                        refund. False once nothing is left (fully refunded, or the rest already asked
+                        back, a refund still open included), which is what greys the control out
+                        rather than letting the operator discover it by clicking. On a hand-paid
+                        payment the refund only opens a record; `settleByHand` confirms it.
+                settleByHand:
+                    type: array
+                    items:
+                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                    description: >-
+                        The ids of the refunds this caller may mark as returned with
+                        `POST /payments/{id}/refunds/{refundId}/settle`: the caller holds
+                        `create:Refund`, the payment is `succeeded` and hand-paid, and the refund is
+                        `pending`. An array because the route takes a target; empty when there is
+                        none.
 
         PaymentWebhookEvent:
             type: object

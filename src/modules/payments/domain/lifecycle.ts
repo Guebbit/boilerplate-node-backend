@@ -30,6 +30,15 @@ export const CONFIRMABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
 ];
 
 /**
+ * The statuses of a payment in flight at the provider: the browser has a challenge to answer
+ * (`requires_action`) or the provider has not decided yet (`processing`). The next step is `sync`.
+ */
+export const IN_FLIGHT_PAYMENT_STATUSES: readonly PaymentStatus[] = [
+    'requires_action',
+    'processing'
+];
+
+/**
  * The statuses a settlement (confirm, sync, or the provider's webhook) may move a payment away
  * from — every non-terminal one. `succeeded` and `cancelled` are absent, which is what makes
  * `settlePayment` at-most-once: a webhook retried after `succeeded` has landed finds nothing left

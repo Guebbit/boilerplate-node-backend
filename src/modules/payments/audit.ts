@@ -7,7 +7,7 @@
  *
  * `refundForOrder` (the refund half of the `order.cancelled` listener) logs a
  * real-provider refund rather than auditing it — there is no request behind it, like a sweep —
- * but still audits `PAYMENT_REFUND_OWED_BY_HAND` for a hand-paid order left
+ * but still audits `PAYMENT_REFUND_OWED_BY_HAND` for a hand-paid refund left
  * for an operator, since that one needs a human to see it.
  */
 
@@ -24,10 +24,19 @@ export const paymentsAuditActions = {
      * no caller behind it. `ADMIN_PAYMENT_REFUNDED` is the settlement, which a sweep never audits.
      */
     ADMIN_PAYMENT_REFUND_REQUESTED: 'admin.payment.refund_requested',
+    /**
+     * An operator confirmed that a hand-paid refund's money went back outside the application
+     * (`settleRefundByHand`). The only audit row that says so; `ADMIN_PAYMENT_REFUNDED` is a
+     * provider refund's settlement.
+     */
+    ADMIN_PAYMENT_REFUND_SETTLED_BY_HAND: 'admin.payment.refund_settled_by_hand',
     PAYMENT_RECORDED_OFFLINE: 'payment.recorded_offline',
     /**
-     * A cancel owed a refund on a hand-paid order, and the automatic listener left it alone
-     * — only an operator's own `refundByOrder` may say the cash actually went back.
+     * A refund record opened on a hand-paid payment and was left `pending`: the money is
+     * cash or a transfer an operator must hand back outside the application, then confirm with
+     * `settleRefundByHand`. Written for every way a record opens (a cancel, a late payment on a
+     * cancelled order, an operator's refund, a received return, a buyer's withdrawal); the
+     * metadata names the record and the money.
      */
     PAYMENT_REFUND_OWED_BY_HAND: 'payment.refund_owed_by_hand',
     /**

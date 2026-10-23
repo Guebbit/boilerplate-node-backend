@@ -308,7 +308,7 @@ const afterSettlement = (
                 return null;
             })
             .then((refunded) => ({
-                payment: refunded ?? outcome.payment,
+                payment: refunded?.payment ?? outcome.payment,
                 orderLost: true,
                 transitioned: true
             }));

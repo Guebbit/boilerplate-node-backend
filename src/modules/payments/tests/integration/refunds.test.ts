@@ -354,18 +354,24 @@ describe('a refund the provider refuses', () => {
             expect(presentPayment(after).displayStatus).toBe('refunded');
         }));
 
-    it('is completed, not doubled, when the operator retries the same refund', async () => {
-        const { orderId } = await paidOrder();
-        jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
-        await expect(refund(orderId)).rejects.toThrow('down');
+    it('is completed by the sweep, not doubled: the operator asking again is a 409', () =>
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
+            const { orderId } = await paidOrder();
+            const spy = jest.spyOn(fakePaymentProvider, 'refund');
+            spy.mockRejectedValueOnce(new Error('down'));
+            await expect(refund(orderId)).rejects.toThrow('down');
 
-        const retried = await refund(orderId);
+            // The failed record still holds the money, so a click is not a second send.
+            const asked = await refund(orderId);
 
-        expect(retried.success).toBe(true);
-        const payment = await paymentOf(orderId);
-        expect(payment.status).toBe('succeeded');
-        expect(payment.refunds).toHaveLength(1);
-    });
+            expect(asked.success).toBe(false);
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(await paymentService.retryOpenRefunds()).toBe(1);
+            const payment = await paymentOf(orderId);
+            expect(payment.status).toBe('succeeded');
+            expect(payment.refunds).toHaveLength(1);
+            expect(payment.refunds[0].status).toBe('succeeded');
+        }));
 });
 
 describe('cancelling an order that was already partly refunded', () => {
@@ -387,7 +393,7 @@ describe('cancelling an order that was already partly refunded', () => {
 });
 
 describe('a partial refund on a payment recorded by hand', () => {
-    it('is recorded as returned by hand, and finishes the payment when it adds up', async () => {
+    it('only opens the records; settling each by hand finishes the payment when it adds up', async () => {
         const user = await createUser();
         const product = await createProduct({ price: 50 });
         const order = await createOrder(user, [toOrderItem(product, 2)]);
@@ -400,14 +406,29 @@ describe('a partial refund on a payment recorded by hand', () => {
         const providerSpy = jest.spyOn(fakePaymentProvider, 'refund');
 
         await refund(orderId, { amount: 40 });
-        const { status: statusNow } = await paymentOf(orderId);
-        expect(statusNow).toBe('succeeded');
         await refund(orderId);
+        const opened = await paymentOf(orderId);
+        expect(opened.refundedByHand).toBeUndefined();
+        expect(opened.refunds.map((entry) => [entry.amount, entry.status])).toEqual([
+            [40, 'pending'],
+            [60, 'pending']
+        ]);
+
+        for (const record of opened.refunds) {
+            const settled = await paymentService.settleRefundByHand(
+                String(opened._id),
+                String(record._id),
+                asAdmin(),
+                callerContextAs('admin')
+            );
+            expect(settled.success).toBe(true);
+        }
 
         const payment = await paymentOf(orderId);
         expect(payment.status).toBe('succeeded');
         expect(payment.refundedByHand).toBe(true);
         expect(payment.refunds.every((entry) => entry.providerRefundRef === undefined)).toBe(true);
+        expect(presentPayment(payment).displayStatus).toBe('refunded');
         expect(providerSpy).not.toHaveBeenCalled();
     });
 });
