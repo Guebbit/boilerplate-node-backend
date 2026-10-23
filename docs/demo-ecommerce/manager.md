@@ -18,11 +18,11 @@ shop manager (purple).
 flowchart LR
     P["waiting for payment"] -->|"💳 the customer pays"| PA["paid"]
     PA -->|"🧑‍💼 you start packing"| PR["being prepared"]
-    PR -->|"📦 warehouse records<br/>the parcel's handover"| SH["shipped"]
+    PR -->|"📦 warehouse records<br/>the last parcel's handover"| SH["shipped"]
     SH -->|"📦 warehouse records<br/>the parcel's arrival"| DE["delivered"]
     P -.->|"customer cancels,<br/>or 15 min passed"| CA["cancelled"]
     PA -.->|"🧑‍💼 you cancel it"| CA
-    CA -.->|"money goes back<br/>unless you say otherwise"| RF["refunded"]
+    CA -.->|"money goes back<br/>unless you say otherwise"| RF["payment shows<br/>refunded<br/><i>(a payment status, not an order status)</i>"]
 
     classDef open fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
@@ -38,7 +38,10 @@ a fact from outside the application, not a button:
 - **The warehouse marks it shipped by recording the handover**, not the other way around — they
   scan or type the tracking code (when the method needs one) into the shipment screen, and THAT is
   what creates the parcel record, moves the order to **shipped**, and sends the customer their
-  tracking email. There is no separate "mark shipped" switch to forget.
+  tracking email. There is no separate "mark shipped" switch to forget. The door is
+  `POST /delivery/fulfillment-orders/{id}/shipments`, and the order moves `processing` to `shipped`
+  only when nothing remains to ship; until then it stays `processing` (fulfilment
+  `partially_fulfilled` after a first partial shipment).
 - Cancelling a **paid** order refunds it by default. Cancelling an unpaid one has nothing to refund,
   so it does not try.
 
@@ -83,9 +86,10 @@ flowchart LR
 
 Neither path can move an order backward, and neither can ever mark one **paid** by hand — money
 landing is still the one fact only the payment system reports. Every correction is written down
-with who, when and why on the order document itself, and read back through the audit trail — the
-customer-facing order response never carries it, so a customer support question is answered from
-the audit page, not the order page.
+with who, when and why, and read back on the order's timeline (`GET /orders/{id}/timeline`, an
+entry named `status_overridden`, visible to staff only) and through the audit trail — the
+customer's own view of the order never shows it, so a customer support question is answered from
+the timeline or the audit page, not the customer's order page.
 
 ## The catalogue
 
@@ -120,7 +124,7 @@ There is a separate, permanent delete for when a record genuinely has to go.
 
 ## Hidden two different ways
 
-The demo has one of each, which is why the shop shows 136 products but the manager sees all 138:
+The demo has one of each, which is why the shop shows 137 products but the manager sees all 139:
 
 | Product                                              | State            | What it means                                           |
 | ---------------------------------------------------- | ---------------- | ------------------------------------------------------- |
@@ -151,8 +155,8 @@ new date yet", and how to cancel), and it never cancels on its own: a buyer who 
 waiting. So the routine is a person's:
 
 1. **About once a week**, open the Late view.
-2. For an order that is **very late** (a month past its ship date, the threshold this shop starts
-   from), write to the buyer and ask whether they still want it.
+2. For an order that is **very late** (30 days past the agreed date, `agreedAt`, the threshold this shop starts
+   from; [FTC 16 CFR 435.2(b)](https://www.ecfr.gov/current/title-16/section-435.2)), write to the buyer and ask whether they still want it.
 3. If they do not, or the goods will not come, **cancel and refund** with the ordinary staff cancel.
 
 Before you move a release or restock date, the product form shows how many orders would get an
@@ -162,11 +166,11 @@ email. → [`delivery`](../modules/delivery.md#what-staff-do-about-a-late-order)
 
 Product prices are set per product. Delivery prices are fixed rules, not settings:
 
-| Delivery   | Costs | Rule                             |
-| ---------- | ----- | -------------------------------- |
-| Standard   | €5    | free once the basket passes €100 |
-| Express    | €15   | only for baskets up to 5 kg      |
-| Pick it up | €0    | —                                |
+| Delivery   | Costs | Rule                        |
+| ---------- | ----- | --------------------------- |
+| Standard   | €5    | free from €100 up           |
+| Express    | €15   | only for baskets up to 5 kg |
+| Pick it up | €0    | —                           |
 
 The customer's basket is priced by those same rules, so what they are quoted at checkout and what
 they are charged cannot disagree. → [`delivery`](../modules/delivery.md)
@@ -218,8 +222,8 @@ came from this shop. Copy it somewhere safe immediately; if you lose it, rotate 
 
 **Rotating** a secret does not break anything mid-flight: the old one keeps working until you
 separately remove it, so the other system has time to switch over. If a delivery keeps failing —
-the other system was down, its URL changed — that shows up in the delivery log, which is
-[the support desk's](./support.md) to read.
+the other system was down, its URL changed — that shows up in the delivery log, which you read (and can
+replay from) yourself; [the support desk](./support.md) cannot open it and will pass the complaint to you.
 → [`webhooks`](../modules/webhooks.md)
 
 ## An alarm: a paid order with no stock set aside

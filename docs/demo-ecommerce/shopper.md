@@ -35,7 +35,7 @@ flowchart LR
 ## Before buying
 
 **Browsing needs no account.** Anyone can look at the shop, search it, filter by category
-(`dogs`, `cats`, `rabbits`, `birds`, `reptiles`, `small-animals`, `food`, `bundles`), and see what
+(`dogs`, `cats`, `rabbits`, `birds`, `reptiles`, `small-animals`, `food`, `bundles`, `seasonal`, `training`, `limited-edition`, `personalised` and the like), and see what
 is in stock. Out-of-stock items are still shown — that is why the Heavy-Duty Cat Scratching Post
 exists in the demo — because hiding them makes a shop look emptier than it is.
 
@@ -88,7 +88,8 @@ Setting goods aside is a promise with a deadline.
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     A["checkout succeeds"] --> B["set aside<br/><i>15 minutes</i>"]
-    B -->|"pays in time"| C["sold<br/><i>leaves the shelf</i>"]
+    B -->|"pays in time"| P["paid<br/><i>still set aside, still on the shelf</i>"]
+    P -->|"the parcel leaves"| C["sold<br/><i>leaves the shelf</i>"]
     B -.->|"15 minutes pass"| D["back on the shelf<br/><i>the order is cancelled</i>"]
     B -.->|"they cancel"| D
 
@@ -97,7 +98,7 @@ flowchart LR
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
     classDef bad fill:#fee2e2,stroke:#b91c1c,color:#111827;
     class A act;
-    class B hold;
+    class B,P hold;
     class C done;
     class D bad;
 ```
@@ -122,7 +123,8 @@ is **refunded automatically** if they were sold to someone else in the meantime.
 never charged for goods that are gone.
 
 Once payment goes through, the money and the goods are settled in the same instant: the order
-becomes **paid** and the goods stop being "set aside" and become "sold".
+becomes **paid**. The goods stay "set aside" — still on the shelf, promised to that order — until
+the parcel leaves, and only then become "sold".
 → [`payments`](../modules/payments.md)
 
 **When the card form shows at all.** An order only awaits payment while it is still `pending` — the
@@ -135,9 +137,10 @@ back: the shop is not asking "would you like to pay again", it already has the m
 - **They can download an invoice** as a PDF. It shows the VAT charged on each item, on the
   shipping fee (charged at the same rate as the goods it delivered, split across rates if the
   basket mixed two), and a summary table totalling every rate on the order at a glance.
-- **They can cancel** until the order ships. If they paid by card, the money goes back
+- **They can cancel** while the order is still pending or paid. Once packing has started, only
+  staff (or a withdrawal) can cancel it. If they paid by card, the money goes back
   automatically; if they paid by an offline method (a bank transfer an operator recorded by hand),
-  an operator has to confirm the money actually came back before the order shows refunded. Past
+  an operator has to confirm the money actually came back before the order's payment shows refunded. Past
   that point the money does not come back on its own: it goes back when the goods do (or when an
   operator chooses to refund), in whole or in part — see [`payments`](../modules/payments.md).
 - **They can withdraw from the purchase** once it has arrived, without giving a reason. The delivery
@@ -193,10 +196,10 @@ at a time, while the product names and the screens stay in the shopper's languag
 
 ## The words we used
 
-| Word          | In plain terms                                                                                                        |
-| ------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **Set aside** | Stock promised to an unpaid order. Not sold yet, but nobody else can buy it. → [`inventory`](../modules/inventory.md) |
-| **Checkout**  | The single moment the basket becomes an order. → [`cart`](../modules/cart.md)                                         |
-| **Order**     | A frozen record of what was bought, at the prices of that day. → [`orders`](../modules/orders.md)                     |
-| **Invoice**   | The PDF receipt for an order.                                                                                         |
-| **Session**   | One logged-in device. Logging out everywhere ends all of them. → [`account`](../modules/account.md)                   |
+| Word          | In plain terms                                                                                                                     |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Set aside** | Stock promised to an order that has not shipped yet, paid or not. Nobody else can buy it. → [`inventory`](../modules/inventory.md) |
+| **Checkout**  | The single moment the basket becomes an order. → [`cart`](../modules/cart.md)                                                      |
+| **Order**     | A frozen record of what was bought, at the prices of that day. → [`orders`](../modules/orders.md)                                  |
+| **Invoice**   | The PDF receipt for an order.                                                                                                      |
+| **Session**   | One logged-in device. Logging out everywhere ends all of them. → [`account`](../modules/account.md)                                |

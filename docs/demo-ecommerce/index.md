@@ -39,7 +39,7 @@ other page in this section is one of those boxes, opened up.
 
 ## What the shop sells
 
-138 products — a pet-supply retailer. Ten are hand-picked, each there to show the shop behaving
+139 products — a pet-supply retailer. Eleven are hand-picked, each there to show the shop behaving
 differently; the other 128 are a combinatorial grid (six animals × seven product types × three
 quality tiers) plus two downloadable guides, so lists, pagination and the category filters have
 enough real rows to work with. The grid carries shipping weights, and three of its product types
@@ -60,10 +60,11 @@ receipt per product, recorded through the inventory module, so every unit is acc
 | Limited-Edition Brass Pet Bowl                       | €24   | **1**    | the last unit — one checkout holds it, a second fails |
 | Hand-Painted Personalised Pet Bowl                   | €80   | 20       | made to order — no right of withdrawal                |
 | Extra-Large Cat Tree, 12kg                           | €40   | 10       | too heavy for express delivery                        |
+| Heated Orthopedic Pet Bed — Winter Edition           | €120  | 15       | **off sale** — the cart takes it, checkout refuses it |
 | _...128 more_                                        | —     | —        | a generated catalogue, e.g. "Premium Bird Carrier"    |
 
-So a visitor sees **136** products (the eight public named ones, plus all 128 generated).
-Staff see all 138. That difference is deliberate and it is explained on
+So a visitor sees **137** products (the nine public named ones, plus all 128 generated).
+Staff see all 139. That difference is deliberate and it is explained on
 [the shop manager's page](./manager.md).
 
 ## The people in it
@@ -150,11 +151,11 @@ The rules behind them, and why a role cannot span both scopes, are in
 
 Prices are in **euros**. Delivery is picked by the customer at checkout:
 
-| Delivery   | Costs | Note                                      |
-| ---------- | ----- | ----------------------------------------- |
-| Standard   | €5    | **free** on orders over €100; up to 30 kg |
-| Express    | €15   | always €15; up to 5 kg                    |
-| Pick it up | €0    | the customer collects it                  |
+| Delivery   | Costs | Note                               |
+| ---------- | ----- | ---------------------------------- |
+| Standard   | €5    | **free** from €100 up; up to 30 kg |
+| Express    | €15   | always €15; up to 5 kg             |
+| Pick it up | €0    | the customer collects it           |
 
 Paying is fake. There is no real card processing and no real money — any made-up card is
 accepted, and one specific test method (`pm_card_declined`) is always refused, so the "your card was

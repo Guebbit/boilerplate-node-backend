@@ -6,8 +6,7 @@ Log in as `support@example.com`. The password is on [Test it yourself](./test-me
 
 ## The contact form
 
-Anyone can send a message — no account needed. It is the only thing in the whole application a
-complete stranger can write to.
+Anyone can send a message — no account needed. Along with signing up and logging in, it is one of the few things a complete stranger can write to.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
@@ -71,8 +70,9 @@ A person can see every device currently signed in to their account and end any o
 them, themselves. → [`account`](../modules/account.md)
 
 ::: warning An unverified account still works
-Signing up sends a verification email, but nothing in the shop refuses an unverified customer. If
-someone says "I never got the email but I can still order" — that is correct, not a bug.
+Signing up sends a verification email. An unverified customer can browse, fill a basket, keep a
+wishlist and read their own orders, but cannot check out until the address is proven. If someone
+says "I never got the email and I cannot order" — that is correct, not a bug: resend the email.
 :::
 
 ## "Where is my order?"
@@ -134,8 +134,8 @@ switch; nothing on the shopper's side needs fixing.
 
 ## "Is the shop down?"
 
-There is a health page that answers plainly, plus a live activity view that updates by itself while
-you watch it — useful for "is anything happening at all right now".
+There is a health page that answers plainly. The live activity view that updates by itself is the
+platform operator's, not this desk's (the support role holds no observability permission).
 
 And there is the **90-day record of every staff action**: who changed that price, who cancelled that
 order, when. Most "what happened here?" questions end there, but not from this desk: the record is
@@ -150,10 +150,16 @@ When a shop is wired up to notify another system — accounting software, a mail
 attempt to deliver that notification is logged: what event, when, whether it succeeded, and why it
 didn't when it didn't.
 
+::: warning Not readable from this desk
+The support role holds no webhook permission: the delivery log (and replaying a delivery) belongs to
+[the manager](./manager.md) and the administrator. This desk's part is to pass the partner's
+complaint on, and to know what the manager will look at.
+:::
+
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    Q["a partner says<br/>'we stopped hearing from you'"] --> L["open the delivery log,<br/>filter to their subscription"]
+    Q["a partner says<br/>'we stopped hearing from you'"] --> L["the manager opens the delivery log,<br/>filters to their subscription"]
     L -->|"all failed"| U["their URL or server<br/>is the problem"]
     L -->|"all succeeded"| T["the problem is on their side<br/>after receiving it"]
     L -->|"nothing there at all"| S["the subscription itself<br/>may be switched off"]
@@ -167,7 +173,7 @@ flowchart LR
 Filtering the log by subscription and by status is usually the whole investigation — the error
 column says what actually went wrong (timed out, refused, a wrong status code back).
 
-::: tip Replay does not wait for the retry schedule
+::: tip Replay does not wait for the retry schedule (manager and administrator only)
 A failed delivery retries itself automatically for a while, then gives up. Once whatever was
 wrong is fixed, **replay** sends that exact attempt again immediately, right now, without waiting
 for a next scheduled try or asking the other system to trigger the event over again.
@@ -193,9 +199,9 @@ Worth knowing before promising anything to a customer:
 | Word             | In plain terms                                                                                                        |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------- |
 | **Triage**       | Deciding what a new message is and who deals with it. → [`feedback`](../modules/feedback.md)                          |
-| **Verified**     | Confirmed their email. Informational here — nothing is refused without it.                                            |
+| **Verified**     | Confirmed their email. Until then an account can shop but not check out.                                              |
 | **Session**      | One signed-in device. → [`account`](../modules/account.md)                                                            |
 | **Audit log**    | The 90-day record of staff actions, read by the moderator and the manager. → [`audit-logs`](../modules/audit-logs.md) |
 | **Health check** | A page that says whether the shop is running. → [`observability`](../modules/observability.md)                        |
 | **Delivery**     | One attempt to notify another system of one event. → [`webhooks`](../modules/webhooks.md)                             |
-| **Replay**       | Resending a delivery right now, instead of waiting for its next automatic retry.                                      |
+| **Replay**       | Resending a delivery right now, instead of waiting for its next automatic retry. Manager only.                        |

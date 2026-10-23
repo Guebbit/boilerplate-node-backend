@@ -6,13 +6,13 @@ what it looks like — plus the words on every screen, in every language the sho
 Log in as `editor@example.com` — a real, narrower account, not the owner's. The password is on
 [Test it yourself](./test-me.md).
 
-## Three families, one job
+## Three subjects, one job
 
-| Family           | Keys held                                                   | What it grants                                                                                                       |
-| ---------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `products.*`     | `.any.read` / `.any.create` / `.any.update` / `.any.delete` | The whole Product record, price included, drafts included.                                                           |
-| `locales.*`      | `.any.read` / `.any.create` / `.any.update` / `.any.delete` | The shop's own dictionary — every phrase, every language, and registering a language the shop has not spoken before. |
-| `translations.*` | `.any.read` / `.any.update`                                 | A translatable entity's own words — a product's `title`/`description`, per language.                                 |
+| Subject       | Keys held                                  | What it grants                                                                                                       |
+| ------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `Product`     | `display` / `create` / `update` / `delete` | The whole Product record, price included, drafts included.                                                           |
+| `Locale`      | `display` / `create` / `update` / `delete` | The shop's own dictionary — every phrase, every language, and registering a language the shop has not spoken before. |
+| `Translation` | `read` / `update`                          | A translatable entity's own words — a product's `title`/`description`, per language.                                 |
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
@@ -56,19 +56,19 @@ today. See [`products`](../modules/products.md#writing-translated-content) for t
 
 ## What this role cannot reach, and why each one is a different reason
 
-| Cannot touch           | Because                                                                           |
-| ---------------------- | --------------------------------------------------------------------------------- |
-| **Stock**              | A different family — `inventory.*` — which this role holds none of.               |
-| **A delivery rule**    | Delivery pricing is a fixed table, not a product field.                           |
-| **An order**           | No `orders.*` key at all — an editor cannot even read one.                        |
-| **An account**         | No `users.*` key — cannot see who bought anything.                                |
-| **The action history** | No `read:AuditLog` — that is [the moderator's](./moderator.md) key, not this one. |
+| Cannot touch           | Because                                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------- |
+| **Stock**              | A different subject — `StockLevel` and `StockMovement` — which this role holds none of. |
+| **A delivery rule**    | Delivery pricing is a fixed table, not a product field.                                 |
+| **An order**           | No `display:Order` key — an editor reads only its own orders, and has none.             |
+| **An account**         | No `User` key — cannot see who bought anything.                                         |
+| **The action history** | No `read:AuditLog` — that is [the moderator's](./moderator.md) key, not this one.       |
 
 Try it: log in as the editor and open `/users` — a 403, and not a bug in the demo: it is the whole
-reason this account exists rather than everyone sharing the owner's. `/orders` answers differently,
-not because the editor can reach it but because nothing routes a list read through a permission
-check at all — with no `orders.*` key to match, the row-scoping filter matches nothing and the
-list comes back 200 and empty, the same shape as a shop with no orders. Open one specific order
+reason this account exists rather than everyone sharing the owner's. `/orders` answers differently:
+every signed-in account may read its OWN orders (the `read:Order` own-row rule), and the editor has
+placed none, so the row-scoping filter matches nothing and the list comes back 200 and empty, the
+same shape as a shop with no orders. Open one specific order
 (`/orders/:id`) and it 404s instead, for the same underlying reason.
 
 ## Existing wording only
@@ -77,9 +77,10 @@ Editing replaces what a phrase, or a product's copy, currently says. It never in
 or a new screen — that is a developer's job in both cases; this role only decides what an existing
 slot currently reads, in whichever language it is editing.
 
-The demo ships Spanish, Italian, French and Japanese in deliberately different states of
-completeness, for BOTH kinds of content, so a half-translated shop and a half-translated catalogue
-can each be seen behaving — fixing either is this role's job.
+The demo ships Spanish, Italian, French and Japanese screens in deliberately different states of
+completeness, so a half-translated shop can be seen behaving. Product copy is seeded only in English
+and Italian, so in Spanish, French and Japanese the catalogue falls back to English until this role
+writes the copy — fixing either is this role's job.
 
 ## Switching a language on or off
 
@@ -94,12 +95,12 @@ messages show in the default language until a developer adds the file. Everythin
 writes (screens, product names) shows in the new language straight away.
 
 ::: warning One role holds both jobs
-`editor` holds the `products.*` keys and the `translations.*` keys together, so a mistranslation CAN
+`editor` holds the `display`/`create`/`update`/`delete:Product` keys and the `read`/`update:Translation` keys together, so a mistranslation CAN
 become a mischarge: the same account that rewrites a title can reach the price.
 
 The separation still exists at the level of KEYS. `Translation` is its own CASL subject, entirely
 separate from `Product`, so `update:Translation` grants no way to touch a price by itself — a
-deployment that wants a words-only person cuts a role holding the `locales.*` and `translations.*`
+deployment that wants a words-only person cuts a role holding the `create`/`update`/`delete:Locale` and `read`/`update:Translation`
 keys and gets exactly that. `shared/authorization-conformance.yaml` pins it.
 :::
 
@@ -107,8 +108,8 @@ keys and gets exactly that. `shared/authorization-conformance.yaml` pins it.
 
 | Word                     | In plain terms                                                                                                              |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| **`products.*`**         | The whole Product record, unconditionally — price included.                                                                 |
-| **`locales.*`**          | Every language, every screen phrase, unconditionally.                                                                       |
+| **`<action>:Product`**   | The whole Product record, unconditionally — price included.                                                                 |
+| **`<action>:Locale`**    | Every language, every screen phrase, unconditionally.                                                                       |
 | **`update:Translation`** | Write a translatable entity's words. Never grants a read or write on the entity's own record.                               |
 | **Switched off**         | Not deleted, just not currently for sale — an editor sees these, a visitor does not. → [`products`](../modules/products.md) |
 | **Soft delete**          | Hidden from customers, kept in the records, restorable.                                                                     |

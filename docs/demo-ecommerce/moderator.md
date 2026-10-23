@@ -12,7 +12,7 @@ on [Test it yourself](./test-me.md).
 | ----------------------------------------------------------- | --------------------------------------------------------- |
 | `read:User` / `.create` / `.update` / `.delete`, `ban:User` | Add, edit, erase an account — and ban one.                |
 | `display:Order` / `.update`                                 | Read and update any order in the shop, not only your own. |
-| `display:Payment` / `.create` / `.update`                   | Read any payment, and refund it.                          |
+| `display:Payment` / `create:Payment` / `create:Refund`      | Read any payment, record one, and refund it.              |
 | `read:Return` / `.update`                                   | Read any return request, and approve or decline it.       |
 | `read:AuditLog`                                             | Read the history of what everyone with a key did.         |
 

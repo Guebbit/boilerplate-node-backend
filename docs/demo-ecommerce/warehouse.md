@@ -42,9 +42,9 @@ number can always be rebuilt from its history.
 
 → [`inventory`](../modules/inventory.md)
 
-## Two numbers, not one
+## Three numbers, not one
 
-Every product carries two figures, and confusing them is the classic warehouse mistake:
+Every product carries three figures, and confusing them is the classic warehouse mistake:
 
 | Figure        | Means                                                      |
 | ------------- | ---------------------------------------------------------- |
@@ -86,8 +86,9 @@ When a customer checks out but never pays, their goods sit "set aside" for 15 mi
 releasing.
 
 ::: warning This does not happen by itself
-The shop does not ship with anything that runs on a timer. **Somebody or something has to trigger
-the sweep** — the job that finds expired holds and puts the goods back.
+In the normal deployment a `cron` service runs the sweep every 5 minutes. **The demo (`npm run demo`)
+has no such timer**, so somebody or something has to trigger the sweep — the job that finds expired
+holds and puts the goods back.
 
 Until it runs, those goods are invisible to customers even though nobody is buying them. Run it at
 least as often as the hold lasts.
@@ -131,7 +132,9 @@ the manager's: see [Late orders](./manager.md#late-orders).
 
 The same rule as the stock diary above applies here: **you record what happened, and the status
 follows from it — you never set the status directly.** There is no "mark it shipped" switch on its
-own; recording the handover IS what marks it shipped.
+own; recording the handover (`POST /delivery/fulfillment-orders/{id}/shipments`) IS what marks it
+shipped — once nothing remains to ship. Until then the order stays `processing`, and its fulfilment
+reads `partially_fulfilled` after a first partial shipment.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
@@ -139,7 +142,7 @@ flowchart LR
     A["order is paid"] --> B["pack it"]
     B --> C["record the handover<br/><i>tracking code, if the method needs one</i>"]
     C --> D["parcel record created"]
-    C --> E["order becomes<br/>shipped"]
+    C --> E["order becomes<br/>shipped<br/><i>when nothing remains</i>"]
     C --> F["customer emailed<br/><i>in their own language</i>"]
     D --> G["record the arrival"]
     G --> H["order becomes<br/>delivered"]
@@ -173,11 +176,11 @@ just carries a reason and skips the ordinary gate.
 
 ## The words we used
 
-| Word           | In plain terms                                                                          |
-| -------------- | --------------------------------------------------------------------------------------- |
-| **On hand**    | Physically present on the shelf.                                                        |
-| **Set aside**  | On the shelf, but promised to an unpaid order. → [`inventory`](../modules/inventory.md) |
-| **Available**  | On hand minus set aside. What can still be sold.                                        |
-| **The sweep**  | The job that releases holds nobody paid for. Must be triggered.                         |
-| **Adjustment** | A recorded correction after counting the shelf.                                         |
-| **Receipt**    | A recorded delivery from a supplier.                                                    |
+| Word           | In plain terms                                                                                   |
+| -------------- | ------------------------------------------------------------------------------------------------ |
+| **On hand**    | Physically present on the shelf.                                                                 |
+| **Set aside**  | On the shelf, but promised to an order not yet shipped. → [`inventory`](../modules/inventory.md) |
+| **Available**  | On hand minus set aside. What can still be sold.                                                 |
+| **The sweep**  | The job that releases holds nobody paid for. Must be triggered.                                  |
+| **Adjustment** | A recorded correction after counting the shelf.                                                  |
+| **Receipt**    | A recorded delivery from a supplier.                                                             |

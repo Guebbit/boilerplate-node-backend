@@ -12,7 +12,7 @@ the [overview](/demo-ecommerce/) if you landed here first.
 
 - **One shop, one organisation, one country's VAT.** This isn't a marketplace or a multi-tenant
   platform — it's the shop a single business runs.
-- **Standard shipping only**, at a flat rate per method. No live carrier rates, no split shipments.
+- **Three shipping methods** (standard, express and pickup), each at a flat rate. No live carrier rates. An order can ship in several shipments, so partial shipments exist.
 - **Guest checkout isn't offered yet** — every order belongs to a signed-in account.
 - **No coupons, no discounts, no chargebacks.** A price is the price; a dispute is handled by hand,
   outside the shop.
