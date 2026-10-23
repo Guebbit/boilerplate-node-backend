@@ -5,7 +5,7 @@
 
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import type { User } from '@types';
+import type { Account } from '@types';
 import { userService } from '@modules/users';
 import { accountService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -35,7 +35,10 @@ export const getAccount = (request: Request, response: Response): void => {
             }
             // The version a profile edit sends back as `If-Match`.
             setEtag(response, user);
-            successResponse<User>(response, userService.toUser(user, authContext.roles.tenant));
+            successResponse<Account>(
+                response,
+                userService.toAccount(user, authContext.roles.tenant)
+            );
         })
         .catch(catchAs(response, 'getAccount'));
 };

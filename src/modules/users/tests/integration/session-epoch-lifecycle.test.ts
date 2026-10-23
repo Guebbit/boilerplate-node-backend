@@ -44,12 +44,8 @@ describe('deactivating an account', () => {
         // The epoch and the token's `auth_time` compare in whole seconds.
         await nextSecond();
 
-        const ban = { username: target.username, role: null, active: false };
-        await api().put(`/users/${target.id}`).set('Authorization', admin).send(ban);
-        await api()
-            .put(`/users/${target.id}`)
-            .set('Authorization', admin)
-            .send({ ...ban, active: true });
+        await api().post(`/users/${target.id}/deactivate`).set('Authorization', admin);
+        await api().post(`/users/${target.id}/activate`).set('Authorization', admin);
 
         expect(await statusWith(held)).toBe(401);
     });
@@ -57,19 +53,15 @@ describe('deactivating an account', () => {
     it('lets the owner sign in again after the reactivation', async () => {
         const { bearer: admin } = await authenticateAs('admin');
         const target = await createUser({ verifiedAt: new Date() }, 'customer');
-        const ban = { username: target.username, role: null, active: false };
-        await api().put(`/users/${target.id}`).set('Authorization', admin).send(ban);
-        await api()
-            .put(`/users/${target.id}`)
-            .set('Authorization', admin)
-            .send({ ...ban, active: true });
+        await api().post(`/users/${target.id}/deactivate`).set('Authorization', admin);
+        await api().post(`/users/${target.id}/activate`).set('Authorization', admin);
 
         await nextSecond();
 
         expect(await statusWith(await loginAs(target.email))).toBe(200);
     });
 
-    it('does not end sessions when the update leaves the account active', async () => {
+    it('does not end sessions on an ordinary edit', async () => {
         const { bearer: admin } = await authenticateAs('admin');
         const target = await createUser({ verifiedAt: new Date() }, 'customer');
         const held = await loginAs(target.email);
@@ -77,7 +69,7 @@ describe('deactivating an account', () => {
         await api()
             .put(`/users/${target.id}`)
             .set('Authorization', admin)
-            .send({ username: 'renamed', role: null, active: true });
+            .send({ username: 'renamed', role: null });
 
         expect(await statusWith(held)).toBe(200);
     });

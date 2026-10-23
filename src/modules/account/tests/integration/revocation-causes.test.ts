@@ -209,9 +209,8 @@ const viaBan: Trigger = async () => {
         victim: victim.bearer,
         fire: () =>
             api()
-                .patch(`/users/${user.id}`)
+                .post(`/users/${user.id}/deactivate`)
                 .set('Authorization', admin.bearer)
-                .send({ active: false })
                 .then(() => undefined)
     };
 };

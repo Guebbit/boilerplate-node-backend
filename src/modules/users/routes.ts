@@ -16,7 +16,7 @@ import {
 } from '@kernel/middlewares/authorizations';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
-import { powersChangeRequested } from './services/update';
+import { roleChangeRequested } from './services/update';
 import { getUsers } from './controllers/get-users';
 import { createUser } from './controllers/create-user';
 import { replaceUser, updateUser } from './controllers/update-user';
@@ -24,21 +24,21 @@ import { deleteUsers } from './controllers/delete-users';
 import { restoreUsers } from './controllers/restore-users';
 import { getUserItem } from './controllers/get-user-item';
 import { deletePurchaseHold, putPurchaseHold } from './controllers/purchase-hold';
+import { postActivate, postDeactivate } from './controllers/activation';
 import { noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
 /**
- * Whether this write changes who holds powers, and the caller manages staff: a role that actually
- * changes (handing one out, taking it away with `role: null`), or a ban or unban. Changing a
- * person's powers is the one admin act a stolen session must not do quietly, so it asks for a
- * fresh session at the tier minting an API key does.
+ * Whether this write changes who holds powers, and the caller manages staff: a role that
+ * actually changes (handing one out, taking it away with `role: null`), or an account created
+ * deactivated. Changing a person's powers
+ * is the one admin act a stolen session must not do quietly, so it asks for a fresh session at the
+ * tier minting an API key does.
  *
  * Only a caller holding `assign:Role` is asked. Anyone else is refused by the service with an
  * audited 403 `ROLE_MANAGEMENT_REQUIRED`, which is the better answer than a login they could
  * never use. A PUT carries `role` every time, so "named" is not "changed": the stored role is
- * compared, as the service does. A ban keeps the role, so unbanning a banned administrator hands
- * every power back and banning every other administrator locks the shop out. A moderator who bans
- * a customer holds no `assign:Role` and is never asked.
+ * compared, as the service does.
  *
  * Read from the body, so this guard comes after `upload.image()`, which populates it for a
  * multipart request.
@@ -48,15 +48,25 @@ const changesPowers = (request: Request): Promise<boolean> => {
 
     const body = request.body as { role?: string | null; active?: boolean | string } | undefined;
 
-    // No stored account to compare on a create: naming a role, or a ban flag, is the change.
+    // No stored account to compare on a create: naming a role, or creating it deactivated (a
+    // multipart body is read before validation turns its string into a boolean), is the change.
     if (typeof request.params.id !== 'string')
         return Promise.resolve(
             body?.role != null || body?.active === false || body?.active === 'false'
         );
 
     // A failed read cannot prove "no change", so it asks.
-    return powersChangeRequested(request.params.id, body).catch(() => true);
+    return roleChangeRequested(request.params.id, body?.role).catch(() => true);
 };
+
+/**
+ * Whether this switch is one a role manager must prove a fresh session for. A ban keeps the role,
+ * so activating a deactivated administrator hands every power back, and deactivating every other
+ * administrator locks the shop out. A moderator who deactivates a customer holds no `assign:Role`
+ * and is never asked.
+ */
+const switchesAccount = (request: Request): Promise<boolean> =>
+    Promise.resolve(Boolean(request.caller && holds(request.caller, 'assign', 'Role')));
 
 /** Express router for user management (admin only). */
 export const router = Router();
@@ -121,6 +131,21 @@ router.delete('/:id', requirePermission('delete', 'User'), deleteUsers);
 // ban's permission: both are a staff act on a buyer's standing, and neither touches their login.
 router.put('/:id/purchase-hold', requirePermission('ban', 'User'), putPurchaseHold);
 router.delete('/:id/purchase-hold', requirePermission('ban', 'User'), deletePurchaseHold);
+
+// POST /users/:id/activate and /deactivate — switch an account on or off. A deactivation is a
+// ban today, so both ride the ban's permission; each answers 409 when the account is there already.
+router.post(
+    '/:id/activate',
+    requirePermission('ban', 'User'),
+    requireFreshAuthWhen(switchesAccount, 'critical'),
+    postActivate
+);
+router.post(
+    '/:id/deactivate',
+    requirePermission('ban', 'User'),
+    requireFreshAuthWhen(switchesAccount, 'critical'),
+    postDeactivate
+);
 
 // POST /users/:id/restore — undo a soft delete; a second DELETE never does
 router.post('/:id/restore', requirePermission('delete', 'User'), restoreUsers);

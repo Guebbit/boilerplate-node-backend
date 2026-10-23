@@ -18,17 +18,16 @@ on [Test it yourself](./test-me.md).
 
 ## Banning is its own key
 
-There is no separate "ban" button in the data model. Banning an account **is** setting `active` to
-`false` on it — the same field, the same endpoint, that an edit uses — but changing that one field
-needs `ban:User`, a key [support](./support.md) does not hold. A role that fixes a customer's
-phone number should not, by that alone, be able to lock them out:
+Banning an account **is** deactivating it (`POST /users/{id}/deactivate`), and bringing it back is
+`activate`. Both need `ban:User`, a key [support](./support.md) does not hold. A role that fixes a
+customer's phone number should not, by that alone, be able to lock them out:
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    A["moderator sets active: false"] --> B["every session ends<br/><i>defence in depth</i>"]
+    A["moderator deactivates"] --> B["every session ends<br/><i>defence in depth</i>"]
     A --> C["the history records<br/><i>admin.user.banned</i>"]
-    D["moderator sets active: true"] --> E["the history records<br/><i>admin.user.unbanned</i>"]
+    D["moderator activates"] --> E["the history records<br/><i>admin.user.unbanned</i>"]
 
     classDef act fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef effect fill:#ccfbf1,stroke:#0f766e,color:#111827;
@@ -36,10 +35,8 @@ flowchart LR
     class B,C,E effect;
 ```
 
-What makes it show up as a **ban** rather than an ordinary edit is the action history, not a new
-code path: flipping `active` from true to false is recorded as `admin.user.banned`, and flipping it
-back is `admin.user.unbanned` — everything else that changes on the same request is still recorded
-as a plain update. → [`users`](../modules/users.md)
+The two moves are recorded under their own names in the action history: `admin.user.banned` and
+`admin.user.unbanned`. An ordinary edit never touches `active`. → [`users`](../modules/users.md)
 
 ## "Needs review": checking an account the shop flagged
 
@@ -121,6 +118,6 @@ No `products.*` — a moderator cannot change what a thing costs or looks like; 
 
 | Word               | In plain terms                                                                    |
 | ------------------ | --------------------------------------------------------------------------------- |
-| **Ban**            | `active: false` on an account, recorded under its own name in the history.        |
+| **Ban**            | Deactivating an account, recorded under its own name in the history.              |
 | **Refund**         | Money returned on a payment already taken. → [`payments`](../modules/payments.md) |
 | **Action history** | Who did what, when, to which row. → [`audit-logs`](../modules/audit-logs.md)      |

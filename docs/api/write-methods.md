@@ -61,6 +61,20 @@ flowchart TD
 - An action may create a record on the side (a shipment, a stock movement). It still answers the
   thing the caller acts on next.
 
+### Repeating an action (409)
+
+An action whose target state is already reached is **refused**, not answered with a second success:
+`409` with a `<RESOURCE>_ALREADY_<STATE>` code and a plain message. This is the lifecycle rule
+(RFC 9110 §15.5.10: a conflict with the current state; Google's AIP-216 "state transition not
+allowed", with 409 where Google says 400).
+
+- `POST /users/{id}/activate` on an active account: `USER_ALREADY_ACTIVE`; `deactivate` on a
+  deactivated one: `USER_ALREADY_INACTIVE`.
+- `DELETE /users/{id}/purchase-hold` on an account with no hold and no review flag:
+  `USER_PURCHASE_HOLD_NOT_SET`.
+- `DELETE` of a resource stays idempotent (RFC 9110 §9.2.2): a retried delete answers as the first did.
+- The caller's `actions` flag for the move is `false` in that state, so a screen never offers it.
+
 ### Search → 200
 
 `POST /x/search` is a read that needs a body — see

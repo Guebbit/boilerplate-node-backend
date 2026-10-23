@@ -196,9 +196,8 @@ describe('a key follows its minter', () => {
             .send({ role: 'editor' })
             .expect(200);
         await api()
-            .patch(`/users/${banned.user.id}`)
+            .post(`/users/${banned.user.id}/deactivate`)
             .set('Authorization', admin)
-            .send({ active: false })
             .expect(200);
 
         await api().get('/webhooks/subscriptions').set('Authorization', demoted.key).expect(403);

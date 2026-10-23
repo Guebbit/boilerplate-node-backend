@@ -307,7 +307,10 @@ deployed codebase, with nothing able to notice when they drift.
 So the server sends the answer. `Order.actions` and `PaymentActions` are computed per REQUEST, not
 stored. `example` is the minimal worked case: `Example.actions` is `{ transitions, update, delete }`,
 the moves from the domain's table and the two keys asked of the kernel per row (`permitsOnRows`), so
-the own-rows condition in `authorization.yaml` stays its only encoding:
+the own-rows condition in `authorization.yaml` stays its only encoding. `User.actions` is the
+account-side case: one flag per endpoint (`activate`, `restore`, `setPurchaseHold`…), assembled in
+`users/services/actions.ts` from the caller's keys, `access`'s pure `mayChangeAccount` and the row's
+own state, and only mapped by the presenter ([users](../modules/users.md#actions)):
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%

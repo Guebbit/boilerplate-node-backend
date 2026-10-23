@@ -88,7 +88,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
         put:
             tags: [Account]
@@ -112,7 +112,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # Changing the email to an address another account already holds.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
@@ -145,7 +145,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # Changing the email to an address another account already holds.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
@@ -1040,7 +1040,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountEnvelope'
                 # The BODY is identical when rung 2 of the anti-automation ladder refuses the
                 # address: a fabricated profile from a document that was never saved, so a script
                 # gets nothing to iterate on. Only the refresh cookie tells the two apart, since
@@ -1231,7 +1231,7 @@ components:
                     type: string
                     format: date-time
                 profile:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Account'
 
         AccountExportRequest:
             type: object

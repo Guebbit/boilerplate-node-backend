@@ -53,8 +53,7 @@ export const PROTECTION_ROWS: readonly ProtectionRow[] = [
         key: 'update:User',
         prepare: onUser('put', '', (owner) => ({
             username: 'protection-check',
-            role: owner.role,
-            active: true
+            role: owner.role
         }))
     },
     {
@@ -84,6 +83,16 @@ export const PROTECTION_ROWS: readonly ProtectionRow[] = [
         route: 'users DELETE /:id/purchase-hold',
         key: 'ban:User',
         prepare: onUser('delete', '/purchase-hold')
+    },
+    {
+        route: 'users POST /:id/activate',
+        key: 'ban:User',
+        prepare: onUser('post', '/activate')
+    },
+    {
+        route: 'users POST /:id/deactivate',
+        key: 'ban:User',
+        prepare: onUser('post', '/deactivate')
     },
     {
         route: 'users DELETE /',

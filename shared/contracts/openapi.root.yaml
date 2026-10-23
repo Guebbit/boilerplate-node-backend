@@ -739,11 +739,27 @@ components:
                 data:
                     $ref: '#/components/schemas/User'
 
-        User:
+        AccountEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Account'
+
+        # The account as its OWN holder sees it: `/account`, the signup answer and the data export's
+        # `profile`. The admin view of the same record, with what the caller may do to it, is `User`.
+        Account:
             type: object
             additionalProperties: false
             required: [id, email, username]
-            properties:
+            properties: &accountProperties
                 id:
                     $ref: '#/components/schemas/Id'
                 email:
@@ -831,19 +847,28 @@ components:
                 deletedAt:
                     type: string
                     format: date-time
-                # What the CALLER may do to this account, decided by the server — present on the
-                # `/users` reads and writes, absent on `/account` (a person's own record has no
-                # one to protect). A client renders its controls from this rather than from the
-                # role names: the answer is the route's key AND the protection of staff accounts
-                # ("does it hold a role only a role manager may touch?"), and a second copy of that
-                # in a separately deployed client is how the two come to disagree.
-                actions:
-                    $ref: '#/components/schemas/UserActions'
                 # Present only while a purchase hold is in force: expired or lifted holds are left
                 # out. The buyer reads their own on `/account` (for a cart banner), staff read it
                 # on `/users`, and the data export carries it with the rest of the profile.
                 purchaseHold:
                     $ref: '#/components/schemas/PurchaseHold'
+
+        # The account as STAFF see it on the `/users` reads and writes: every `Account` field, plus
+        # what the caller may do to this row and the shop's own review flag. A separate schema rather
+        # than an optional `actions` on `Account`, so `actions` can be required.
+        User:
+            type: object
+            additionalProperties: false
+            required: [id, email, username, actions]
+            properties:
+                <<: *accountProperties
+                # What the CALLER may do to this account, decided by the server — on every
+                # `/users` read and write, list rows included. A client renders its controls from this rather than from the
+                # role names: the answer is the route's key AND the protection of staff accounts
+                # ("does it hold a role only a role manager may touch?"), and a second copy of that
+                # in a separately deployed client is how the two come to disagree.
+                actions:
+                    $ref: '#/components/schemas/UserActions'
                 # Staff-facing, so only on the `/users` reads (never on `/account`): the shop's rule
                 # flagged this account for a person to look at. It stays until a staff member sets or
                 # lifts a hold, even after the automatic hold ended by itself. The data export
@@ -886,12 +911,24 @@ components:
         UserActions:
             type: object
             additionalProperties: false
-            required: [update, ban, delete]
+            required:
+                [
+                    update,
+                    assignRole,
+                    delete,
+                    hardDelete,
+                    restore,
+                    setPurchaseHold,
+                    liftPurchaseHold,
+                    activate,
+                    deactivate
+                ]
             description: >-
-                What the requesting caller may do to this account. Each is the route's permission
-                key AND the protection of staff accounts: an account that holds a staff role is
-                `false` for all three unless the caller holds `assign:Role`; the caller's own
-                account is judged by the keys alone.
+                What the requesting caller may do to this account, one flag per endpoint. Each is the
+                route's permission key AND the protection of staff accounts: an account that holds a
+                staff role is `false` for all of them unless the caller holds `assign:Role`; the
+                caller's own account is judged by the keys alone. A flag also reads the account's
+                state, so a control never offers a move the server would refuse with a 409.
             properties:
                 update:
                     type: boolean
@@ -900,17 +937,54 @@ components:
                         — `update:User`, and the account is not a staff account the caller may not manage. Never covers
                         a credential: no caller changes another person's email, password or second
                         factor.
-                ban:
+                assignRole:
                     type: boolean
                     description: >-
-                        Whether the account may be deactivated or reactivated — `ban:User`,
-                        and the account is not a staff account the caller may not manage.
+                        Whether the `role` field of `PUT`/`PATCH /users/{id}` would be accepted —
+                        `update` AND the caller holds `assign:Role`. No rule refuses the caller's
+                        own account.
                 delete:
                     type: boolean
                     description: >-
-                        Whether `DELETE /users/{id}` (soft or hard) and `POST /users/{id}/restore`
-                        would be accepted — `delete:User`, and the account is not a staff
-                        account the caller may not manage.
+                        Whether `DELETE /users/{id}` would soft-delete the account — `delete:User`,
+                        the account is not a staff account the caller may not manage, and it is
+                        not deleted already.
+                hardDelete:
+                    type: boolean
+                    description: >-
+                        Whether `DELETE /users/{id}/hard` would erase the account for good —
+                        `delete:User`, and the account is not a staff account the caller may not
+                        manage. A soft-deleted account can be erased.
+                restore:
+                    type: boolean
+                    description: >-
+                        Whether `POST /users/{id}/restore` would be accepted — `delete:User`, the
+                        account is not a staff account the caller may not manage, and it is
+                        soft-deleted.
+                setPurchaseHold:
+                    type: boolean
+                    description: >-
+                        Whether `PUT /users/{id}/purchase-hold` would be accepted — `ban:User`, and
+                        the account is not a staff account the caller may not manage. A hold can be
+                        placed again to extend it.
+                liftPurchaseHold:
+                    type: boolean
+                    description: >-
+                        Whether `DELETE /users/{id}/purchase-hold` would be accepted — `ban:User`,
+                        the account is not a staff account the caller may not manage, and there is
+                        a hold or a review flag to clear.
+                activate:
+                    type: boolean
+                    description: >-
+                        Whether `POST /users/{id}/activate` would be accepted — `ban:User`, the
+                        account is not a staff account the caller may not manage, and it is
+                        deactivated.
+                deactivate:
+                    type: boolean
+                    description: >-
+                        Whether `POST /users/{id}/deactivate` would be accepted — `ban:User`, the
+                        account is not a staff account the caller may not manage, and it is
+                        active. Deactivating ends every session of the account.
 
         # For the path-form deletes, which need no id — `{id}` already carries it — but do
         # read the flag from a body as readily as from the query.

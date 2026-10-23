@@ -7,7 +7,7 @@
 import type { Request, Response } from 'express';
 import { accountService } from '../services';
 import { rejectResponse, createdResponse } from '@infrastructure/http/response';
-import type { SignupRequest, User } from '@types';
+import type { Account, SignupRequest } from '@types';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { authSignupTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -86,7 +86,11 @@ export const postSignup = (
                 authSignupTotal.inc({ status: 'refused' });
                 // No role, exactly what a genuine signup's response shows, which is the whole
                 // point of this branch being indistinguishable.
-                createdResponse<User>(response, userService.toUser(data, null), SIGNUP_LOCATION);
+                createdResponse<Account>(
+                    response,
+                    userService.toAccount(data, null),
+                    SIGNUP_LOCATION
+                );
                 return;
             }
 
@@ -104,7 +108,7 @@ export const postSignup = (
              * address browse freely and stops it only at `checkout:Cart`, so a second login
              * before reaching that state would be friction with no security benefit.
              *
-             * Cookies only, and the body stays `User` — the frontend's `POST /account/refresh`
+             * Cookies only, and the body stays `Account` — the frontend's `POST /account/refresh`
              * bootstrap mints the access token, exactly as it does after the OAuth callback. That
              * also keeps rung 2's refused 201 byte-identical in the BODY; only the absence of
              * Set-Cookie distinguishes it, which is as close as indistinguishability gets once
@@ -113,7 +117,11 @@ export const postSignup = (
              */
             return issueSession(request, response, data.id, proof).then(() => {
                 // Self-service signup grants no role, so there is none to look up.
-                createdResponse<User>(response, userService.toUser(data, null), SIGNUP_LOCATION);
+                createdResponse<Account>(
+                    response,
+                    userService.toAccount(data, null),
+                    SIGNUP_LOCATION
+                );
             });
         })
         .catch((error: unknown) => {

@@ -1,18 +1,15 @@
 /**
  * @module
- * The one place a stored account becomes the `User` contract — `account`'s own controllers reach
- * this through `userService.toUser`/`toUserContract`, never `./model` directly (the persistence
- * wall): a controller may not reach a module's model layer, so the shaping helper it needs rides
- * through the service.
+ * The one place a stored account becomes the `Account` or `User` contract — `account`'s own
+ * controllers reach this through `userService.toAccount`, never `./model` directly (the
+ * persistence wall): a controller may not reach a module's model layer, so the shaping helper it
+ * needs rides through the service. Pure: the lookups and the `actions` rules sit in `./services`.
  */
 
-import type { Caller, User, UserActions } from '@types';
+import type { Account, User, UserActions } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { decryptPii } from '@infrastructure/security/pii-encryption';
-import { heldRules } from '@kernel/ability';
-import { accessService } from '@modules/access';
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { phoneAad, type UserDocument, type UserWire } from './model';
+import { phoneAad, type UserWire } from './model';
 import { activeHoldOf } from './services/purchase-hold';
 
 /**
@@ -21,7 +18,7 @@ import { activeHoldOf } from './services/purchase-hold';
  *
  * @param document - the account
  */
-const presentPurchaseHold = (document: UserWire): Pick<User, 'purchaseHold'> => {
+const presentPurchaseHold = (document: UserWire): Pick<Account, 'purchaseHold'> => {
     const hold = activeHoldOf(document, new Date());
     return hold === undefined
         ? {}
@@ -36,137 +33,78 @@ const presentPurchaseHold = (document: UserWire): Pick<User, 'purchaseHold'> => 
 };
 
 /**
- * Maps a loaded account straight onto the `User` contract, ISO-stringifying the four fields
- * {@link UserWire} redeclares as `Date`. Takes {@link UserWire} rather than {@link UserDocument}:
- * a hydrated document satisfies it too (a superset), and `search()`'s already-normalized rows
- * — which never carry `password`/`tokens`/2FA credential material to begin with — need no
- * document methods this only ever reads plain fields off anyway.
+ * The fields `Account` and `User` share, ISO-stringifying the four {@link UserWire} redeclares as
+ * `Date`. Takes {@link UserWire} rather than {@link UserDocument}: a hydrated document satisfies it
+ * too (a superset), and `search()`'s already-normalized rows — which never carry
+ * `password`/`tokens`/2FA credential material to begin with — need no document methods this only
+ * ever reads plain fields off anyway.
  *
+ * @param document - the account
  * @param role - the caller's CURRENT tenant role, read from the membership store by whoever calls
  *   this — never off the document, which holds no role of its own. `null` prints as absent, the
  *   same as every other optional field below.
- * @param actions - what the requesting caller may do to this account ({@link userActionsFor}),
- *   for the `/users` reads and writes; absent where there is no caller to rank (`/account`)
  */
-export const presentUser = (document: UserWire, role: string | null, actions?: UserActions): User =>
+const sharedFields = (document: UserWire, role: string | null): Account => ({
+    id: document.id,
+    email: document.email,
+    username: document.username,
+    ...(role === null ? {} : { role }),
+    ...(document.active === undefined ? {} : { active: document.active }),
+    ...(document.verifiedAt ? { verifiedAt: document.verifiedAt.toISOString() } : {}),
+    ...(document.pendingEmail === undefined ? {} : { pendingEmail: document.pendingEmail }),
+    ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
+    ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
+    ...(document.locale === undefined ? {} : { locale: document.locale }),
+    // Stored encrypted (`./services/update`, under `NODE_PII_ENCRYPTION_KEY`) — this is the
+    // one place a document's `phone` reaches the wire, hydrated or lean/searched alike, so it's
+    // the one place that decrypts it.
+    ...(document.phone === undefined
+        ? {}
+        : { phone: decryptPii(document.phone, phoneAad(document.id), 'user phone') }),
+    ...(document.website === undefined ? {} : { website: document.website }),
+    ...(document.analyticsConsent === undefined
+        ? {}
+        : { analyticsConsent: document.analyticsConsent }),
+    ...(document.analyticsConsentAt
+        ? { analyticsConsentAt: document.analyticsConsentAt.toISOString() }
+        : {}),
+    ...(document.termsAcceptedAt
+        ? { termsAcceptedAt: document.termsAcceptedAt.toISOString() }
+        : {}),
+    ...(document.termsVersion === undefined ? {} : { termsVersion: document.termsVersion }),
+    ...(document.twoFactorEnabledAt
+        ? { twoFactorEnabledAt: document.twoFactorEnabledAt.toISOString() }
+        : {}),
+    ...(document.createdAt ? { createdAt: document.createdAt.toISOString() } : {}),
+    ...(document.updatedAt ? { updatedAt: document.updatedAt.toISOString() } : {}),
+    ...(document.deletedAt ? { deletedAt: document.deletedAt.toISOString() } : {}),
+    ...presentPurchaseHold(document)
+});
+
+/**
+ * An account as its own holder sees it (`/account`, the signup answer): no `actions`, and not the
+ * shop's flag for staff.
+ *
+ * @param document - the account
+ * @param role - the account's CURRENT tenant role, `null` for none
+ */
+export const presentAccount = (document: UserWire, role: string | null): Account =>
+    carryVersion(document, sharedFields(document, role));
+
+/**
+ * An account as staff see it on the `/users` reads and writes: every shared field, the finished
+ * `actions` block ({@link userActionsFor}, assembled by the caller) and the review flag. Only maps;
+ * the rules behind `actions` live in `./services/actions`.
+ *
+ * @param document - the account
+ * @param role - the account's CURRENT tenant role, `null` for none
+ * @param actions - what the requesting caller may do to this account
+ */
+export const presentUser = (document: UserWire, role: string | null, actions: UserActions): User =>
     carryVersion(document, {
-        id: document.id,
-        email: document.email,
-        username: document.username,
-        ...(role === null ? {} : { role }),
-        ...(actions === undefined ? {} : { actions }),
-        ...(document.active === undefined ? {} : { active: document.active }),
-        ...(document.verifiedAt ? { verifiedAt: document.verifiedAt.toISOString() } : {}),
-        ...(document.pendingEmail === undefined ? {} : { pendingEmail: document.pendingEmail }),
-        ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
-        ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
-        ...(document.locale === undefined ? {} : { locale: document.locale }),
-        // Stored encrypted (`./services/update`, under `NODE_PII_ENCRYPTION_KEY`) — this is the
-        // one place a document's `phone` reaches the wire, hydrated or lean/searched alike, so it's
-        // the one place that decrypts it.
-        ...(document.phone === undefined
-            ? {}
-            : { phone: decryptPii(document.phone, phoneAad(document.id), 'user phone') }),
-        ...(document.website === undefined ? {} : { website: document.website }),
-        ...(document.analyticsConsent === undefined
-            ? {}
-            : { analyticsConsent: document.analyticsConsent }),
-        ...(document.analyticsConsentAt
-            ? { analyticsConsentAt: document.analyticsConsentAt.toISOString() }
-            : {}),
-        ...(document.termsAcceptedAt
-            ? { termsAcceptedAt: document.termsAcceptedAt.toISOString() }
-            : {}),
-        ...(document.termsVersion === undefined ? {} : { termsVersion: document.termsVersion }),
-        ...(document.twoFactorEnabledAt
-            ? { twoFactorEnabledAt: document.twoFactorEnabledAt.toISOString() }
-            : {}),
-        ...(document.createdAt ? { createdAt: document.createdAt.toISOString() } : {}),
-        ...(document.updatedAt ? { updatedAt: document.updatedAt.toISOString() } : {}),
-        ...(document.deletedAt ? { deletedAt: document.deletedAt.toISOString() } : {}),
-        ...presentPurchaseHold(document),
-        // Staff-facing: the `/users` reads carry `actions`, `/account` does not, and a buyer is not
-        // shown the shop's own note to staff about them.
-        ...(actions === undefined || document.purchaseHoldFlaggedAt === undefined
+        ...sharedFields(document, role),
+        actions,
+        ...(document.purchaseHoldFlaggedAt === undefined
             ? {}
             : { purchaseHoldFlaggedAt: document.purchaseHoldFlaggedAt.toISOString() })
     });
-
-/**
- * What `caller` may do to one account: each route's key AND the protection of staff accounts. The
- * caller's own account is judged by the keys alone; one that holds a staff role is reachable only
- * with `assign:Role`.
- *
- * @param ownerId - the account being described
- * @param ownerHoldsRole - whether it holds a staff role, in the shop or over the installation
- * @param caller - `request.caller`
- */
-export const userActionsFor = (
-    ownerId: string,
-    ownerHoldsRole: boolean,
-    caller: Caller
-): UserActions => {
-    const held = heldRules(caller);
-    const reachable = caller.id === ownerId || !ownerHoldsRole || held.has('assign:Role');
-
-    return {
-        update: reachable && held.has('update:User'),
-        ban: reachable && held.has('ban:User'),
-        delete: reachable && held.has('delete:User')
-    };
-};
-
-/**
- * The contract `User` for an already-loaded document — resolves its CURRENT role fresh from the
- * membership store (the document holds none of its own) and applies {@link presentUser} in one
- * call, so a controller does not chain the two itself. Single-document counterpart to
- * `rolesOfMany` (see `GET /users`'s own list read).
- *
- * @param caller - `request.caller` for an admin read or write, so the row says what that caller
- *   may do to it; omitted by `account`, whose subject is the caller themselves
- */
-export const presentUserWithCurrentRole = (user: UserDocument, caller?: Caller): Promise<User> =>
-    accessService
-        .rolesOf(String(user._id), DEPLOYMENT_TENANT_ID)
-        .then((roles) =>
-            presentUser(
-                user,
-                roles.tenant,
-                caller
-                    ? userActionsFor(
-                          String(user._id),
-                          roles.tenant !== null || roles.platform !== null,
-                          caller
-                      )
-                    : undefined
-            )
-        );
-
-/**
- * {@link presentUserWithCurrentRole} for a whole page of already-loaded rows: the roles in one
- * `$in` query and who holds a staff role in two more, never a lookup per row. Takes {@link UserWire} — the
- * lean, already-normalised rows `search()` returns.
- *
- * @param rows - the page's accounts
- * @param caller - `request.caller`, so each row says what that caller may do to it; absent means
- *   no `actions`
- */
-export const presentUsersWithCurrentRoles = (
-    rows: readonly UserWire[],
-    caller?: Caller
-): Promise<User[]> => {
-    const ids = rows.map((user) => user.id);
-
-    return Promise.all([
-        accessService.rolesOfMany(ids, DEPLOYMENT_TENANT_ID),
-        accessService.staffHoldersAmong(ids)
-    ]).then(([roles, staff]) =>
-        rows.map((user) =>
-            presentUser(
-                user,
-                roles.get(user.id) ?? null,
-                caller && userActionsFor(user.id, staff.has(user.id), caller)
-            )
-        )
-    );
-};

@@ -25,7 +25,7 @@ import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbo
 import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
-import { presentUser } from '../../presenter';
+import { presentAccount } from '../../presenter';
 import type { UserDocument } from '../../model';
 import { logger } from '@infrastructure/adapters/logger';
 import { seedMembership } from '@modules/access/tests/factories';
@@ -125,7 +125,7 @@ describe('userService.search', () => {
         expect(result.items).toHaveLength(1);
     });
 
-    it('decrypts phone through presentUser on a lean/searched item, the same as a hydrated one', async () => {
+    it('decrypts phone through presentAccount on a lean/searched item, the same as a hydrated one', async () => {
         const user = await createUser({ email: 'phoned@example.com', username: 'phoned' });
         await userService.updateById(
             user._id.toString(),
@@ -134,9 +134,9 @@ describe('userService.search', () => {
         );
 
         // `search()` is the `.lean()` path (`create-repository.ts#findAll`) — unlike every other
-        // read in this suite, `presentUser` receives a plain object here, not a hydrated document.
+        // read in this suite, `presentAccount` receives a plain object here, not a hydrated document.
         const result = await userService.search({ username: 'phoned' });
-        expect(presentUser(result.items[0], null).phone).toBe('+1 555 0100');
+        expect(presentAccount(result.items[0], null).phone).toBe('+1 555 0100');
     });
 
     it('filters on the active column, not on soft-deletion', async () => {
@@ -461,20 +461,20 @@ describe('userService.updateById', () => {
         expect(changed!.getTime()).toBeGreaterThan(first!.getTime());
     });
 
-    it('stores phone encrypted, never as the plaintext submitted, and decrypts it back through presentUser', async () => {
+    it('stores phone encrypted, never as the plaintext submitted, and decrypts it back through presentAccount', async () => {
         const user = await createUser();
         const id = user._id.toString();
 
         await userService.updateById(id, { phone: '+1 555 0100' }, callerContextAs('admin'));
 
-        // Bypasses `presentUser` on purpose — this is what a raw DB read, or a stolen disk/backup,
+        // Bypasses `presentAccount` on purpose — this is what a raw DB read, or a stolen disk/backup,
         // would actually see.
         const stored = await userRepository.findById(id);
         expect(stored!.phone).not.toBe('+1 555 0100');
         // Versioned-secret's own wire format — see infrastructure/security/versioned-secret.ts.
         expect(stored!.phone).toMatch(/^v\d+(?::[\da-f]+){3}$/);
 
-        expect(presentUser(stored!, null).phone).toBe('+1 555 0100');
+        expect(presentAccount(stored!, null).phone).toBe('+1 555 0100');
     });
 
     it('refuses a phone ciphertext copied onto another account: the user id is in the AAD', async () => {
@@ -490,7 +490,7 @@ describe('userService.updateById', () => {
         // What an attacker with database write access does: paste one row's ciphertext on another.
         victim!.phone = stored!.phone;
 
-        expect(() => presentUser(victim!, null)).toThrow();
+        expect(() => presentAccount(victim!, null)).toThrow();
     });
 
     it('returns reject result when the user does not exist', async () => {
@@ -589,11 +589,7 @@ describe('userService.updateById', () => {
         const user = await createUser();
         const id = user._id.toString();
 
-        const result = await userService.updateById(
-            id,
-            { active: false },
-            callerContextAs('admin')
-        );
+        const result = await userService.deactivate(id, callerContextAs('admin'));
 
         expect(result.success).toBe(true);
         expect((result as { data: UserDocument }).data.active).toBe(false);
@@ -601,16 +597,16 @@ describe('userService.updateById', () => {
         expect(refreshed!.active).toBe(false);
     });
 
-    it('rejects an escalated role grant and leaves active untouched, rather than committing it first', async () => {
-        const user = await createUser({ active: true });
+    it('rejects an escalated role grant and leaves the rest of the edit unwritten, rather than committing it first', async () => {
+        const user = await createUser({ active: true, username: 'before-grant' });
         const id = user._id.toString();
 
-        // A moderator cannot grant `admin` — the escalation must be
-        // refused BEFORE the deactivation half of this same request is allowed to land. It is
-        // answered as a 403 envelope, the same shape `create()`'s own escalation refusal has.
+        // A moderator cannot grant `admin` — the escalation must be refused BEFORE the username
+        // half of this same request is allowed to land. It is answered as a 403 envelope, the same
+        // shape `create()`'s own escalation refusal has.
         const result = await userService.updateById(
             id,
-            { active: false, role: 'admin' },
+            { username: 'after-grant', role: 'admin' },
             callerContextAs('moderator')
         );
 
@@ -621,7 +617,7 @@ describe('userService.updateById', () => {
         });
 
         const refreshed = await userRepository.findById(id);
-        expect(refreshed!.active).toBe(true);
+        expect(refreshed!.username).toBe('before-grant');
     });
 
     it.each(['no-such-role', 'customer'])(
@@ -644,20 +640,16 @@ describe('userService.updateById', () => {
     );
 
     /*
-     * A PUT carries `role` and `active` on every save. Resending what the user already has (no
-     * staff role, spelled `null`) must not be a role change: support may edit a customer but could
-     * never GRANT or REVOKE a role, and the save must not count a second deactivation.
+     * A PUT carries `role` on every save. Resending what the user already has (no staff role,
+     * spelled `null`) must not be a role change: support may edit a customer but could never GRANT
+     * or REVOKE a role.
      */
     it('treats the role already held as no change: no grant check, no role audit', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({}, 'customer');
         const id = user._id.toString();
 
-        const result = await userService.updateById(
-            id,
-            { role: null, active: true },
-            callerContextAs('support')
-        );
+        const result = await userService.updateById(id, { role: null }, callerContextAs('support'));
 
         expect(result.success).toBe(true);
         expect(auditSpy).not.toHaveBeenCalledWith(
@@ -666,7 +658,7 @@ describe('userService.updateById', () => {
         );
     });
 
-    it('counts a deactivation once, not again on every save of an inactive user', async () => {
+    it('counts a deactivation once: a repeat is refused, not counted', async () => {
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const deactivated = expect.objectContaining({
             event: usersAnalyticsEvents.USER_DEACTIVATED
@@ -674,20 +666,20 @@ describe('userService.updateById', () => {
         const user = await createUser({ active: true });
         const id = user._id.toString();
 
-        await userService.updateById(id, { active: false }, callerContextAs('admin'));
-        await userService.updateById(id, { active: false }, callerContextAs('admin'));
+        await userService.deactivate(id, callerContextAs('admin'));
+        await userService.deactivate(id, callerContextAs('admin'));
 
         expect(
             analyticsSpy.mock.calls.filter(([event]) => deactivated.asymmetricMatch(event))
         ).toHaveLength(1);
     });
 
-    it('records a ban, not a plain update, when active flips from true to false', async () => {
+    it('records a ban when an account is deactivated', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ active: true });
         const id = user._id.toString();
 
-        await userService.updateById(id, { active: false }, callerContextAs('admin'));
+        await userService.deactivate(id, callerContextAs('admin'));
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -698,12 +690,12 @@ describe('userService.updateById', () => {
         );
     });
 
-    it('records an unban when active flips from false to true', async () => {
+    it('records an unban when an account is activated', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ active: false });
         const id = user._id.toString();
 
-        await userService.updateById(id, { active: true }, callerContextAs('admin'));
+        await userService.activate(id, callerContextAs('admin'));
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -714,23 +706,7 @@ describe('userService.updateById', () => {
         );
     });
 
-    it('records a plain update, not a ban, when active is sent unchanged', async () => {
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-        const user = await createUser({ active: true, username: 'stays-active' });
-        const id = user._id.toString();
-
-        await userService.updateById(
-            id,
-            { active: true, username: 'renamed' },
-            callerContextAs('admin')
-        );
-
-        expect(auditSpy).toHaveBeenCalledWith(
-            expect.objectContaining({ action: usersAuditActions.ADMIN_USER_UPDATED })
-        );
-    });
-
-    it('records a plain update, not a ban, when active is not mentioned at all', async () => {
+    it('records a plain update, not a ban, for an ordinary edit', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ active: true });
         const id = user._id.toString();

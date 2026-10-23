@@ -17,6 +17,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import type { AfterErase } from '@kernel/registry';
+import { ERROR_CODES } from '@api/error-codes';
 import { accessService } from '@modules/access';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
@@ -147,7 +148,10 @@ export const restoreById = (
 
         return accessService.roleProtectedRefusal(context, id).then((refusal) => {
             if (refusal) return refusal;
-            if (!user.deletedAt) return generateReject(409, [t('users.not-deleted')]);
+            if (!user.deletedAt)
+                return generateReject(409, [
+                    { code: ERROR_CODES.USER_NOT_DELETED, message: t('users.not-deleted') }
+                ]);
             user.deletedAt = undefined;
             user.deletedBy = undefined;
             return userRepository.save(user).then((saved) => {

@@ -1,8 +1,8 @@
 /**
  * @module
  * Who may change whom, through `userService` — the refusals an admin write owes after the
- * route's own key: the key a CHANGED field needs (`ban:User` for `active`), the protection of
- * an account that holds a staff role (only a holder of `assign:Role` may change one, the
+ * route's own key: the protection of an account that holds a staff role (only a holder of
+ * `assign:Role` may change one, the
  * caller's own excepted), and the same key for handing a role out.
  *
  * Driven through the service rather than the route so each cell names the caller's role and what
@@ -50,69 +50,49 @@ const refusalCode = (result: { success: boolean }): string | undefined => {
     return (result as ResponseReject).errors[0]?.code;
 };
 
-describe('ban:User — the key a ban needs', () => {
-    it('refuses support a ban, though it may edit the same account', async () => {
+describe('activate and deactivate', () => {
+    it('lets a moderator deactivate and an admin activate', async () => {
         const target = await accountHolding('customer');
 
-        const edit = await userService.updateById(
-            target.id,
-            { phone: '+39 06 0000 0000' },
-            callerContextAs('support')
-        );
-        const ban = await userService.updateById(
-            target.id,
-            { active: false },
-            callerContextAs('support')
-        );
+        const deactivated = await userService.deactivate(target.id, callerContextAs('moderator'));
+        const wasActive = await activeOf(target.id);
+        const activated = await userService.activate(target.id, callerContextAs('admin'));
 
-        expect(edit.success).toBe(true);
-        expect(refusalCode(ban)).toBe('FORBIDDEN');
+        expect(deactivated.success).toBe(true);
+        expect(wasActive).toBe(false);
+        expect(activated.success).toBe(true);
         expect(await activeOf(target.id)).toBe(true);
     });
 
-    it('lets a moderator and an admin ban, and lift it', async () => {
+    it('refuses a repeat with the code of the state it is already in', async () => {
         const target = await accountHolding('customer');
 
-        const banned = await userService.updateById(
-            target.id,
-            { active: false },
+        const activeAgain = await userService.activate(target.id, callerContextAs('moderator'));
+        await userService.deactivate(target.id, callerContextAs('moderator'));
+        const inactiveAgain = await userService.deactivate(target.id, callerContextAs('moderator'));
+
+        expect(activeAgain).toMatchObject({ success: false, status: 409 });
+        expect(refusalCode(activeAgain)).toBe('USER_ALREADY_ACTIVE');
+        expect(inactiveAgain).toMatchObject({ success: false, status: 409 });
+        expect(refusalCode(inactiveAgain)).toBe('USER_ALREADY_INACTIVE');
+    });
+
+    it('answers 404 for an account that does not exist', async () => {
+        const result = await userService.deactivate(
+            '64b64b64b64b64b64b64b64b',
             callerContextAs('moderator')
         );
-        const lifted = await userService.updateById(
-            target.id,
-            { active: true },
-            callerContextAs('admin')
-        );
 
-        expect(banned.success).toBe(true);
-        expect(lifted.success).toBe(true);
-        expect(await activeOf(target.id)).toBe(true);
+        expect(result).toMatchObject({ success: false, status: 404 });
     });
 
-    // A PUT carries `active` on every save; resending what the account already has is no ban.
-    it('does not ask for the key when `active` is resent unchanged', async () => {
-        const target = await accountHolding('customer');
+    it('leaves a protected account as it was, for a caller without role management', async () => {
+        const admin = await accountHolding('admin');
 
-        const result = await userService.updateById(
-            target.id,
-            { username: 'renamed', active: true },
-            callerContextAs('support')
-        );
+        const result = await userService.deactivate(admin.id, callerContextAs('moderator', 'else'));
 
-        expect(result.success).toBe(true);
-    });
-
-    it('needs every key a mixed body asks for, and writes nothing when one is missing', async () => {
-        const target = await accountHolding('customer');
-
-        const result = await userService.updateById(
-            target.id,
-            { username: 'half-applied', active: false },
-            callerContextAs('support')
-        );
-
-        expect(refusalCode(result)).toBe('FORBIDDEN');
-        expect(await usernameOf(target.id)).not.toBe('half-applied');
+        expect(refusalCode(result)).toBe('ROLE_MANAGEMENT_REQUIRED');
+        expect(await activeOf(admin.id)).toBe(true);
     });
 });
 

@@ -287,13 +287,10 @@ const driveCatalogueEdits = async (owner: Caller): Promise<void> => {
  * Last of all, and after every shopper has signed out: he places two of the orders above, and a
  * banned account cannot use the session it placed them with.
  *
- * `PATCH`, not `PUT`: a PUT replaces the whole user, and would clear his avatar, locale, phone and
- * website along with the one field this changes.
+ * `POST …/deactivate`, the action endpoint: a status change is not a field of PUT or PATCH.
  */
 const banOneCustomer = (owner: Caller): Promise<void> =>
-    owner
-        .call('PATCH', `/users/${SEED_CUSTOMER_IDS.marcus}`, { active: false })
-        .then(() => undefined);
+    owner.call('POST', `/users/${SEED_CUSTOMER_IDS.marcus}/deactivate`).then(() => undefined);
 
 /**
  * Every caller signs out of every device — `POST /account/logout-all`.

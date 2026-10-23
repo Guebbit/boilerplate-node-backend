@@ -27,6 +27,9 @@ jest.mock('@infrastructure/observability/audit', () =>
     jest.requireActual<typeof import('@tests/ports')>('@tests/ports').auditPortMock()
 );
 
+/** The stored `active` flag of one account. */
+const activeOf = (id: string) => userRepository.findById(id).then((user) => user?.active);
+
 // Serializes the payload and checks for credential fields/values that must never leave the API.
 const assertNoCredentials = (payload: unknown) => {
     const serialized = JSON.stringify(payload);
@@ -209,8 +212,7 @@ describe('PUT /users/{id}', () => {
             .set('Authorization', bearer)
             .send({
                 username: 'replacedfull',
-                role: null,
-                active: true
+                role: null
             });
 
         expect(response.status).toBe(200);
@@ -218,7 +220,7 @@ describe('PUT /users/{id}', () => {
         expect(response.body.data.phone).toBeUndefined();
     });
 
-    // `username`/`role`/`active` are the Replace schema's `required` set — an omitted one is a
+    // `username`/`role` are the Replace schema's `required` set — an omitted one is a
     // malformed PUT, not a value to fill in.
     it('refuses a body missing one of the required identity fields', async () => {
         const { bearer } = await authenticateAs('admin');
@@ -247,8 +249,7 @@ describe('PUT /users/{id}', () => {
             .set('Authorization', bearer)
             .send({
                 username: 'editednocredential',
-                role: null,
-                active: true
+                role: null
             });
 
         expect(response.status).toBe(200);
@@ -271,7 +272,7 @@ describe('PUT /users/{id}', () => {
         const response = await api()
             .put(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
-            .send({ username: 'putcredential', role: null, active: true, ...extra });
+            .send({ username: 'putcredential', role: null, ...extra });
 
         expect(response.status).toBe(422);
         const after = await userRepository.findByIdWithCredentials(String(target._id));
@@ -435,6 +436,110 @@ describe('POST /users/{id}/restore', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('USER_NOT_DELETED');
+    });
+});
+
+/** A status change is an action endpoint, not a field of PUT/PATCH; a repeat is a 409 with a code. */
+describe('POST /users/{id}/activate and /deactivate', () => {
+    it('deactivates, ends the account’s sessions, and activates again', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const user = await createUser();
+
+        const off = await api().post(`/users/${user.id}/deactivate`).set('Authorization', bearer);
+        const on = await api().post(`/users/${user.id}/activate`).set('Authorization', bearer);
+
+        expect(off.status).toBe(200);
+        expect(off.body.data).toMatchObject({ active: false });
+        expect(off.body.data.actions).toMatchObject({ activate: true, deactivate: false });
+        expect(on.status).toBe(200);
+        expect(on.body.data).toMatchObject({ active: true });
+        expect(on.body.data.actions).toMatchObject({ activate: false, deactivate: true });
+    });
+
+    it.each([
+        ['activate', true, 'USER_ALREADY_ACTIVE'],
+        ['deactivate', false, 'USER_ALREADY_INACTIVE']
+    ])('answers 409 %s when the account is already there', async (action, active, code) => {
+        const { bearer } = await authenticateAs('admin');
+        const user = await createUser({ active });
+
+        const response = await api()
+            .post(`/users/${user.id}/${action}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe(code);
+    });
+
+    it.each(['activate', 'deactivate'])(
+        '%s answers 404 for an account that is not there',
+        async (action) => {
+            const { bearer } = await authenticateAs('admin');
+
+            const response = await api()
+                .post(`/users/000000000000000000000000/${action}`)
+                .set('Authorization', bearer);
+
+            expect(response.status).toBe(404);
+        }
+    );
+
+    // `ban:User` is the key a deactivation takes, and support does not hold it.
+    it.each(['activate', 'deactivate'])(
+        'refuses %s to a caller without ban:User',
+        async (action) => {
+            const { bearer } = await authenticateAsRole('support');
+            const user = await createUser();
+
+            const response = await api()
+                .post(`/users/${user.id}/${action}`)
+                .set('Authorization', bearer);
+
+            expect(response.status).toBe(403);
+            expect(await activeOf(user.id)).toBe(true);
+        }
+    );
+
+    it('refuses a moderator an administrator’s account, and leaves it active', async () => {
+        const { bearer } = await authenticateAsRole('moderator');
+        const admin = await createUser({}, 'admin');
+
+        const response = await api()
+            .post(`/users/${admin.id}/deactivate`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+        expect(response.body.errors[0].code).toBe('ROLE_MANAGEMENT_REQUIRED');
+        expect(await activeOf(admin.id)).toBe(true);
+    });
+
+    it('no longer takes `active` in a PATCH or a PUT body', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const user = await createUser();
+
+        const patch = await api()
+            .patch(`/users/${user.id}`)
+            .set('Authorization', bearer)
+            .send({ active: false });
+
+        expect(patch.status).toBe(422);
+        expect(await activeOf(user.id)).toBe(true);
+    });
+});
+
+/** Lifting a hold that is not there is a conflict, not a second success. */
+describe('DELETE /users/{id}/purchase-hold', () => {
+    it('answers 409 USER_PURCHASE_HOLD_NOT_SET for an account with nothing to lift', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const user = await createUser();
+
+        const response = await api()
+            .delete(`/users/${user.id}/purchase-hold`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('USER_PURCHASE_HOLD_NOT_SET');
     });
 });
 
@@ -558,42 +663,103 @@ const actionsSeenBy = async (callerRole: string) => {
     };
 };
 
+/** Every flag `false`: the answer for an account the caller may not touch at all. */
+const noActions = {
+    update: false,
+    assignRole: false,
+    delete: false,
+    hardDelete: false,
+    restore: false,
+    setPurchaseHold: false,
+    liftPurchaseHold: false,
+    activate: false,
+    deactivate: false
+};
+
+/**
+ * What a caller who holds every user key gets on a live, active account with no hold: everything
+ * but the moves that need another state (`restore`, `liftPurchaseHold`, `activate`).
+ */
+const liveAccountActions = {
+    ...noActions,
+    update: true,
+    delete: true,
+    hardDelete: true,
+    setPurchaseHold: true,
+    deactivate: true
+};
+
 /**
  * `actions` is what the caller may do to each account: the route's key AND the protection of staff
- * accounts, so a client renders a ban button only where the ban would be accepted. One column per
- * role, one row per kind of account.
+ * accounts AND the account's own state, so a client renders a button only where the call would be
+ * accepted. One column per role, one row per kind of account.
  */
 describe('GET /users — what the caller may do to each account', () => {
-    it('lets a moderator edit, ban and erase a customer, and nothing on staff or an admin', async () => {
+    it('lets a moderator edit, hold, deactivate and erase a customer, and nothing on staff or an admin', async () => {
         const seen = await actionsSeenBy('moderator');
 
         expect(seen).toMatchObject({
             status: 200,
-            'row-customer': { update: true, ban: true, delete: true },
-            'row-support': { update: false, ban: false, delete: false },
-            'row-admin': { update: false, ban: false, delete: false }
+            'row-customer': liveAccountActions,
+            'row-support': noActions,
+            'row-admin': noActions
         });
     });
 
     it('lets an admin, who manages roles, act on a customer, on staff and on another admin', async () => {
         const seen = await actionsSeenBy('admin');
+        const adminActions = { ...liveAccountActions, assignRole: true };
 
         expect(seen).toMatchObject({
-            'row-customer': { update: true, ban: true, delete: true },
-            'row-support': { update: true, ban: true, delete: true },
-            'row-admin': { update: true, ban: true, delete: true },
-            self: { update: true, ban: true, delete: true }
+            'row-customer': adminActions,
+            'row-support': adminActions,
+            'row-admin': adminActions,
+            self: adminActions
         });
     });
 
-    // `ban` is its own key: support may correct a profile and may not lock someone out.
-    it('gives support the edit but not the ban, and no erase', async () => {
+    // `ban:User` is its own key: support may correct a profile and may not lock someone out.
+    it('gives support the edit but not the holds or the switch, and no erase', async () => {
         const seen = await actionsSeenBy('support');
 
         expect(seen).toMatchObject({
-            'row-customer': { update: true, ban: false, delete: false },
-            'row-support': { update: false, ban: false, delete: false }
+            'row-customer': { ...noActions, update: true },
+            'row-support': noActions
         });
+    });
+
+    it('reads the account’s state: a deleted one offers restore, a deactivated one activate, a held one lift', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+        await createUser(
+            { email: 'gone@row.test', username: 'row-gone', deletedAt: new Date() },
+            'customer'
+        );
+        await createUser({ email: 'off@row.test', username: 'row-off', active: false }, 'customer');
+        await createUser(
+            {
+                email: 'held@row.test',
+                username: 'row-held',
+                purchaseHold: {
+                    until: new Date(Date.now() + 86_400_000),
+                    reason: 'staff',
+                    setAt: new Date()
+                }
+            },
+            'customer'
+        );
+
+        const response = await api().get('/users?pageSize=50').set('Authorization', bearer);
+        const byName = new Map(
+            (
+                response.body as {
+                    data: { items: { username: string; actions: Record<string, boolean> }[] };
+                }
+            ).data.items.map((item) => [item.username, item.actions])
+        );
+
+        expect(byName.get('row-gone')).toMatchObject({ delete: false, restore: true });
+        expect(byName.get('row-off')).toMatchObject({ activate: true, deactivate: false });
+        expect(byName.get('row-held')).toMatchObject({ liftPurchaseHold: true });
     });
 
     it('carries the same answer on the single read and on a write’s response', async () => {
@@ -609,8 +775,8 @@ describe('GET /users — what the caller may do to each account', () => {
             .set('Authorization', bearer)
             .send({ username: 'row-edited' });
 
-        expect(read.body.data.actions).toEqual({ update: true, ban: true, delete: true });
-        expect(edit.body.data.actions).toEqual({ update: true, ban: true, delete: true });
+        expect(read.body.data.actions).toEqual(liveAccountActions);
+        expect(edit.body.data.actions).toEqual(liveAccountActions);
     });
 
     it('is absent from the account’s own record, which has no one to protect', async () => {
@@ -679,29 +845,31 @@ describe('the step-up on naming a role', () => {
         expect(response.status).toBe(200);
     });
 
-    it.each([false, true])(
-        '401s REAUTH_REQUIRED for a stale role manager flipping active to %s, and writes nothing',
-        async (active) => {
+    it.each([
+        ['deactivate', true],
+        ['activate', false]
+    ])(
+        '401s REAUTH_REQUIRED for a stale role manager calling %s, and writes nothing',
+        async (action, wasActive) => {
             freezeDate();
             const { bearer } = await authenticateAsRole('admin');
-            // The flip is the change: the account holds the opposite of what is asked.
             const target = await createUser(
-                { email: 'stale3@target.test', username: 'stalethree', active: !active },
+                { email: 'stale3@target.test', username: 'stalethree', active: wasActive },
                 'support'
             );
             advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
 
             const response = await api()
-                .patch(`/users/${target.id}`)
-                .set('Authorization', bearer)
-                .send({ active });
+                .post(`/users/${target.id}/${action}`)
+                .set('Authorization', bearer);
 
             expect(response.status).toBe(401);
             expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+            expect(await activeOf(target.id)).toBe(wasActive);
         }
     );
 
-    it('lets a stale role manager PUT an account unchanged: the role and active it carries are what is stored', async () => {
+    it('lets a stale role manager PUT an account unchanged: the role it carries is what is stored', async () => {
         freezeDate();
         const { bearer } = await authenticateAsRole('admin');
         const target = await createUser(
@@ -713,7 +881,7 @@ describe('the step-up on naming a role', () => {
         const response = await api()
             .put(`/users/${target.id}`)
             .set('Authorization', bearer)
-            .send({ username: 'renamedfive', role: 'support', active: true });
+            .send({ username: 'renamedfive', role: 'support' });
 
         expect(response.status).toBe(200);
         expect(response.body.data.role).toBe('support');
@@ -731,7 +899,7 @@ describe('the step-up on naming a role', () => {
         const response = await api()
             .put(`/users/${target.id}`)
             .set('Authorization', bearer)
-            .send({ username: 'stalesix', role: 'manager', active: true });
+            .send({ username: 'stalesix', role: 'manager' });
 
         expect(response.status).toBe(401);
         expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
@@ -744,9 +912,8 @@ describe('the step-up on naming a role', () => {
         advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
 
         const response = await api()
-            .patch(`/users/${target.id}`)
-            .set('Authorization', bearer)
-            .send({ active: false });
+            .post(`/users/${target.id}/deactivate`)
+            .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
     });
@@ -764,7 +931,7 @@ describe('PUT /users/{id} from an API key', () => {
         const response = await api()
             .put(`/users/${target.id}`)
             .set('Authorization', `Bearer ${secret}`)
-            .send({ username: 'keyedrenamed', role: null, active: true });
+            .send({ username: 'keyedrenamed', role: null });
 
         expect(response.status).toBe(200);
     });
@@ -776,7 +943,7 @@ describe('PUT /users/{id} from an API key', () => {
         const response = await api()
             .put(`/users/${target.id}`)
             .set('Authorization', `Bearer ${secret}`)
-            .send({ username: 'keyedtwo', role: 'support', active: true });
+            .send({ username: 'keyedtwo', role: 'support' });
 
         expect(response.status).toBe(403);
         expect(response.body.errors[0].code).toBe('ROLE_MANAGEMENT_REQUIRED');

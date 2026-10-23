@@ -14,7 +14,8 @@ import { userService } from '../services';
 
 /**
  * `PUT /users/:id` and `PATCH /users/:id` — one handler pair over `userService.updateById`, which
- * merges the fields and audits the change itself (the ban/unban split included).
+ * merges the fields and audits the change itself. `active` is not one of them:
+ * `POST /users/:id/activate` and `/deactivate` own that move.
  */
 export const { replace: replaceUser, update: updateUser } = createUpdateController({
     versioned: true,
@@ -22,13 +23,11 @@ export const { replace: replaceUser, update: updateUser } = createUpdateControll
     notFoundKey: 'users.not-found',
     replaceSchema: ReplaceUserByIdBody,
     patchSchema: UpdateUserByIdBody,
-    // The one boolean an edit carrying an avatar (multipart) sends as a string.
-    input: { booleans: ['active'] },
     // A client cannot send the current avatar back, so a PUT that omits it keeps it.
     keptWhenOmitted: ['imageUrl'],
     update: (id, changes, request) =>
         writeWithUploadedImage(request, changes.imageUrl, (image) =>
             userService.updateById(id, { ...changes, ...image }, callerContextOf(request))
         ),
-    present: (user, request) => userService.toUserContract(user, request.caller)
+    present: (user, request) => userService.toUserContract(user, callerContextOf(request).caller)
 });

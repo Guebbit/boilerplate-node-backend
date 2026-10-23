@@ -3,10 +3,14 @@
  * Admin search and single-document reads.
  */
 
-import type { SearchUsersRequest } from '@types';
+import type { Caller, SearchUsersRequest, User } from '@types';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { accessService } from '@modules/access';
 import type { UserDocument, UserWire } from '../model';
+import { presentUser } from '../presenter';
 import { userRepository } from '../repository';
+import { userActionsFor } from './actions';
 
 /**
  * The scope a search adds for the two purchase-hold questions, or none.
@@ -43,6 +47,51 @@ export const search = (
 export const getById = (id?: string): Promise<UserDocument | undefined> => {
     if (!id) return Promise.resolve(undefined);
     return userRepository.findById(id).then((user) => user ?? undefined);
+};
+
+/**
+ * The contract `User` for an already-loaded document: resolves its CURRENT role fresh from the
+ * membership store (the document holds none of its own), asks whether it holds a staff role, and
+ * hands both to the presenter with the finished `actions`. Single-document counterpart to
+ * {@link toUserContracts}.
+ *
+ * @param user - the account
+ * @param caller - `request.caller`, so the row says what that caller may do to it
+ */
+export const toUserContract = (user: UserDocument, caller: Caller): Promise<User> =>
+    accessService
+        .rolesOf(String(user._id), DEPLOYMENT_TENANT_ID)
+        .then((roles) =>
+            presentUser(
+                user,
+                roles.tenant,
+                userActionsFor(user, roles.tenant !== null || roles.platform !== null, caller)
+            )
+        );
+
+/**
+ * {@link toUserContract} for a whole page of already-loaded rows: the roles in one `$in` query and
+ * who holds a staff role in two more, never a lookup per row. Takes {@link UserWire} — the lean,
+ * already-normalised rows `search()` returns.
+ *
+ * @param rows - the page's accounts
+ * @param caller - `request.caller`, so each row says what that caller may do to it
+ */
+export const toUserContracts = (rows: readonly UserWire[], caller: Caller): Promise<User[]> => {
+    const ids = rows.map((user) => user.id);
+
+    return Promise.all([
+        accessService.rolesOfMany(ids, DEPLOYMENT_TENANT_ID),
+        accessService.staffHoldersAmong(ids)
+    ]).then(([roles, staff]) =>
+        rows.map((user) =>
+            presentUser(
+                user,
+                roles.get(user.id) ?? null,
+                userActionsFor(user, staff.has(user.id), caller)
+            )
+        )
+    );
 };
 
 /**
