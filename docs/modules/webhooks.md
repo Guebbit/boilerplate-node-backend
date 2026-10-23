@@ -226,6 +226,52 @@ a `lookup` override pinned to that one validated address. A second, independent 
 connect time would reopen exactly the TOCTOU window this exists to close, which is why the guard is
 infrastructure and not `domain/`: it does I/O.
 
+### On, off, and auto-off
+
+A subscription is stored with two timestamps and no `enabled` flag, so the states cannot disagree.
+The wire's `enabled` is derived (`!disabledAt`, in the model's serialisation transform, because the
+list reads lean rows and never meets a presenter).
+
+| State         | `disabledAt` | `autoDisabledAt`   | How it got there                                                    |
+| ------------- | ------------ | ------------------ | ------------------------------------------------------------------- |
+| enabled       | absent       | absent             | created, or `POST …/enable`                                         |
+| paused        | set          | absent             | `POST …/disable`                                                    |
+| auto-disabled | set          | set (same instant) | the failure guard: 5+ exhausted chains in a row AND 3+ days failing |
+
+```mermaid
+stateDiagram-v2
+    [*] --> enabled
+    enabled --> paused: POST …/disable
+    enabled --> autoDisabled: failure guard
+    paused --> enabled: POST …/enable
+    autoDisabled --> enabled: POST …/enable
+```
+
+- **Enable and disable are their own endpoints**, not a field in `PUT`/`PATCH`: enabling also resets
+  the failure streak, a side effect a form save must not carry, and each move has its own audit
+  action (`admin.webhook_subscription.enabled` / `.disabled`).
+- **A repeat is refused**, not repeated: 409 `WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED` /
+  `_ALREADY_DISABLED` ([the rule](../api/write-methods.md#an-action-whose-target-state-is-already-reached)).
+  Enabling an enabled subscription would otherwise zero a streak that is still building.
+- **A paused subscription is not relabelled.** The guard only matches a row with no `disabledAt`,
+  so it never stamps `autoDisabledAt` over a pause.
+- **Nothing is delivered while it is off**, and an event that fires meanwhile is not queued for it.
+- **Replay is refused too**: `POST /webhooks/deliveries/{id}/replay` answers 409
+  `WEBHOOK_SUBSCRIPTION_DISABLED` (before it claims the row, so the row stays as it was), and each
+  delivery's `actions.replay` is false. The list computes the flag with one `$in` read per page.
+- **`retiringSecrets`** lists each superseded secret that is still signing and the instant it
+  stops (its successor's mint time plus `NODE_WEBHOOK_SECRET_OVERLAP_HOURS`), so no client has to
+  know the window.
+
+### What an update records
+
+`PUT`/`PATCH` write an `admin.webhook_subscription.updated` audit row whose `metadata` says what
+moved, through the shared `auditChanges` (`infrastructure/observability/audit-changes.ts`). The
+event filter is recorded as `{ from, to }`. The `url` (a bearer secret: a receiver's address can
+carry a token) and the `description` (free text) are recorded by name in `changedFields`, never by
+value: the audit collection is append-only and never scrubbed on erasure, so a value that could be
+personal must not enter it.
+
 ::: tip What deleting this module actually costs
 Every ingredient it is built from — the domain-event bus, the queue, the cron container, the public
 AsyncAPI bundle — is still there and still used by whatever remains. `orders` and `payments` lose
@@ -238,7 +284,7 @@ stay unmerged. Nothing is left to prune by hand.
 ## Managing it
 
 Subscriptions, the secret ring and the delivery log all have an admin screen in the paired
-`boilerplate-vue-frontend` — `webhooks` there, its own five routes over this module's ten
+`boilerplate-vue-frontend` — `webhooks` there, its own five routes over this module's thirteen
 endpoints. "Usable via any HTTP client" is true too (nothing here requires the UI). See that repo's `docs/modules/webhooks.md` for the client side, including why
 `rotateSecret`'s response never gets cached client-side.
 
@@ -337,12 +383,12 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 <!-- permissions:start -->
 
-| Rule                         | Set                 | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                                                                              |
-| ---------------------------- | ------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read:WebhookSubscription`   | `WebhookDisplay`    | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Read this shop's webhook subscriptions, delivery log and event catalogue.                                                                                                                                         |
-| `create:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Add a subscription, minting its first secret.                                                                                                                                                                     |
-| `update:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Change a subscription, rotate or drop a secret from its ring, and replay a delivery. The blast radius of all three is the same — a party this shop did not intend gets signed deliveries — so they share one key. |
-| `delete:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Remove a subscription. Separate from update because the blast radius is.                                                                                                                                          |
+| Rule                         | Set                 | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                                                                                                                                          |
+| ---------------------------- | ------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read:WebhookSubscription`   | `WebhookDisplay`    | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Read this shop's webhook subscriptions, delivery log and event catalogue.                                                                                                                                                                                                     |
+| `create:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Add a subscription, minting its first secret.                                                                                                                                                                                                                                 |
+| `update:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Change a subscription, switch it on or off, rotate or drop a secret from its ring, and replay a delivery. The blast radius of all of them is the same — a party this shop did not intend gets signed deliveries, or the right one stops getting them — so they share one key. |
+| `delete:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Remove a subscription. Separate from update because the blast radius is.                                                                                                                                                                                                      |
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in

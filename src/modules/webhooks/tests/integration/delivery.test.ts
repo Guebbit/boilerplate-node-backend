@@ -110,7 +110,6 @@ const createSubscription = (
         tenant: TEST_TENANT_ID,
         url,
         eventTypes,
-        enabled: true,
         consecutiveFailures: 0,
         ownerUserId,
         secrets: [entry]
@@ -367,7 +366,7 @@ describe('a 500 response', () => {
             String(subscription._id)
         );
         expect(reloadedSubscription?.consecutiveFailures).toBe(1);
-        expect(reloadedSubscription?.enabled).toBe(true);
+        expect(reloadedSubscription?.disabledAt).toBeUndefined();
     });
 });
 
@@ -391,7 +390,6 @@ describe('sustained failure', () => {
             String(subscription._id)
         );
         expect(reloadedSubscription?.consecutiveFailures).toBe(WEBHOOK_MAX_CONSECUTIVE_FAILURES);
-        expect(reloadedSubscription?.enabled).toBe(true);
         expect(reloadedSubscription?.disabledAt).toBeUndefined();
     });
 
@@ -411,8 +409,9 @@ describe('sustained failure', () => {
             String(subscription._id)
         );
         expect(reloadedSubscription?.consecutiveFailures).toBe(WEBHOOK_MAX_CONSECUTIVE_FAILURES);
-        expect(reloadedSubscription?.enabled).toBe(false);
         expect(reloadedSubscription?.disabledAt).toBeInstanceOf(Date);
+        // The guard's work, told from a pause by hand: both stamps, the same instant.
+        expect(reloadedSubscription?.autoDisabledAt).toEqual(reloadedSubscription?.disabledAt);
     });
 
     it('notifies the subscription owner once auto-disabled', async () => {
@@ -534,7 +533,7 @@ describe('sustained failure', () => {
             String(subscription._id)
         );
         expect(reloadedSubscription?.consecutiveFailures).toBe(0);
-        expect(reloadedSubscription?.enabled).toBe(true);
+        expect(reloadedSubscription?.disabledAt).toBeUndefined();
         expect(reloadedSubscription?.failingSince).toBeUndefined();
     });
 });

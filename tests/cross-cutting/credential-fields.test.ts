@@ -57,6 +57,14 @@ const PUBLISHABLE: { model: string; key: string; because: string }[] = [
             'sign a delivery.'
     },
     {
+        model: 'WebhookSubscription',
+        key: 'retiringSecrets',
+        because:
+            'Ring entry ids paired with the instant each stops signing — never the ciphertext ' +
+            'or a decrypted secret. It is what lets a client say when a rotation ends without ' +
+            'knowing the overlap window.'
+    },
+    {
         model: 'AuditLog',
         key: 'actorCredentialId',
         because:

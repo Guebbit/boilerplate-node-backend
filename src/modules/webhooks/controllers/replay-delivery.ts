@@ -11,7 +11,6 @@ import { requireId } from '@infrastructure/http/ids';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import type { WebhookDelivery } from '@types';
 import { webhooksService } from '../services';
-import { presentWebhookDelivery } from '../presenters';
 
 /**
  * POST /webhooks/deliveries/:id/replay
@@ -26,7 +25,7 @@ export const replayWebhookDelivery = (request: Request<{ id: string }>, response
         .replayDelivery(id, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            return successResponse<WebhookDelivery>(response, presentWebhookDelivery(result.data));
+            return successResponse<WebhookDelivery>(response, result.data);
         })
         .catch(catchAs(response, 'replayWebhookDelivery'));
 };

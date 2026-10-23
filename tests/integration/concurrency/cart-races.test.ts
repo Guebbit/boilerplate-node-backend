@@ -322,7 +322,6 @@ describe('R2 — a checkout that lost the cart race announces nothing', () => {
             tenant: 'shop',
             url: 'https://example.test/inbox',
             eventTypes: ['order.created'],
-            enabled: true,
             consecutiveFailures: 0,
             secrets: [entry]
         });

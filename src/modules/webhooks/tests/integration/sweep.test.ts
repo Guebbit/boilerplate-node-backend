@@ -41,7 +41,6 @@ const createSubscription = (): Promise<WebhookSubscriptionDocument> => {
         tenant: TEST_TENANT_ID,
         url: 'https://example.invalid/hook',
         eventTypes: ['*'],
-        enabled: true,
         consecutiveFailures: 0,
         secrets: [entry]
     });
