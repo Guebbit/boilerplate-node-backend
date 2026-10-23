@@ -42,7 +42,7 @@ export interface FulfillmentOrderDelayed {
     agreedAt: string;
     /** The date now expected, absent when there is none (the date was cleared). */
     expectedAt?: string;
-    /** `moved`: the date was changed. `due`: the expected date passed and there is still no stock. */
+    /** `moved`: the date was changed. `due`: the expected date is a day away or gone and there is still no stock. */
     reason: 'moved' | 'due';
 }
 
@@ -92,7 +92,7 @@ declare module '@kernel/events' {
         'fulfillment_order.cancelled': { orderId: string; fulfillmentOrderId: string };
 
         /**
-         * A waiting preorder's buyer was told its date moved or passed (PRODUCT_STATES P5). Written
+         * A waiting preorder's buyer was told its date moved or will be missed (PRODUCT_STATES P5). Written
          * in the same transaction as the change to the fulfillment order. `notifications` turns it
          * into an inbox row, `fulfillment-delayed`; the email is sent by this module from the same
          * event. The shop only tells: it asks nothing and cancels nothing on its own.

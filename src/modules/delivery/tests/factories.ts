@@ -45,7 +45,9 @@ export const fulfillmentOrdersOf = (orderId: string): Promise<FulfillmentOrderDo
  */
 export const setFulfillmentOrderState = (
     fulfillmentOrderId: string,
-    fields: Partial<Pick<FulfillmentOrderDocument, 'agreedAt' | 'expectedAt' | 'lastNoticeAt'>>
+    fields: Partial<
+        Pick<FulfillmentOrderDocument, 'agreedAt' | 'expectedAt' | 'lastNoticeAt' | 'dueNoticeFor'>
+    >
 ): Promise<unknown> =>
     fulfillmentOrderModel.updateOne({ _id: fulfillmentOrderId }, { $set: fields }).exec();
 
