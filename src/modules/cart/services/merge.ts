@@ -103,11 +103,11 @@ const mergeLine = (
 
 /**
  * Merge every guest line through {@link mergeLine} — one at a time, in request order, because each
- * add reads and rewrites the same cart document (see `./reorder`'s `addLinesToCart`), and a
+ * add reads and rewrites the same cart document (`./reorder` reuses this loop for the same reason), and a
  * product listed twice must see its first line's result. One bad line is a result, never a throw:
  * it must not strand the rest.
  */
-const mergeLines = async (
+export const mergeLines = async (
     userId: string,
     lines: AddCartItemRequest[],
     context: CallerContext

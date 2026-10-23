@@ -989,11 +989,20 @@ describe('POST /cart/reorder/{orderId}', () => {
 
         expect(response.status).toBe(200);
         // Ids, not counts: the cart must hold exactly the order's products.
-        const items: { productId: string; quantity: number }[] = response.body.data.items;
+        const items: { productId: string; quantity: number }[] = response.body.data.cart.items;
         expect(items.map(({ productId }) => productId).toSorted()).toEqual(
             [String(keyboard._id), String(mouse._id)].toSorted()
         );
-        expect(response.body.data.summary.totalQuantity).toBe(3);
+        expect(response.body.data.cart.summary.totalQuantity).toBe(3);
+        expect(
+            response.body.data.lines.map(({ requested, resulting }: Record<string, number>) => [
+                requested,
+                resulting
+            ])
+        ).toEqual([
+            [2, 2],
+            [1, 1]
+        ]);
     });
 
     it('adds on top of what the cart already holds', async () => {
@@ -1013,7 +1022,53 @@ describe('POST /cart/reorder/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.summary.totalQuantity).toBe(5);
+        expect(response.body.data.cart.summary.totalQuantity).toBe(5);
+        expect(response.body.data.lines).toMatchObject([
+            { requested: 3, resulting: 5, reason: 'summed' }
+        ]);
+    });
+
+    it('reports a line clamped at the per-line cap as capped, not as added', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const product = await createProduct();
+        // The default per-line cap is 10: the cart holds 8, the order asks for 5 more.
+        const seeded = await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 8 });
+        expect(seeded.status).toBe(201);
+        const order = await createOrder(user, [toOrderItem(product, 5)]);
+
+        const response = await api()
+            .post(`/cart/reorder/${String(order._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.lines).toMatchObject([
+            { productId: String(product._id), requested: 5, resulting: 10, reason: 'capped' }
+        ]);
+    });
+
+    it('reports a line already at the cap as capped with nothing added', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const product = await createProduct();
+        const kept = await createProduct({ title: 'Kept' });
+        const seeded = await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 10 });
+        expect(seeded.status).toBe(201);
+        const order = await createOrder(user, [toOrderItem(product, 1), toOrderItem(kept, 1)]);
+
+        const response = await api()
+            .post(`/cart/reorder/${String(order._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.lines).toMatchObject([
+            { productId: String(product._id), requested: 1, resulting: 10, reason: 'capped' },
+            { productId: String(kept._id), requested: 1, resulting: 1 }
+        ]);
     });
 
     it('skips products that have left the public catalogue and lands the rest', async () => {
@@ -1027,8 +1082,12 @@ describe('POST /cart/reorder/{orderId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        const items: { productId: string }[] = response.body.data.items;
+        const items: { productId: string }[] = response.body.data.cart.items;
         expect(items.map(({ productId }) => productId)).toEqual([String(alive._id)]);
+        expect(response.body.data.lines).toMatchObject([
+            { productId: String(alive._id), resulting: 1 },
+            { productId: String(retired._id), requested: 4, resulting: 0, reason: 'removed' }
+        ]);
     });
 
     it('answers 409 when nothing on the order is still available', async () => {

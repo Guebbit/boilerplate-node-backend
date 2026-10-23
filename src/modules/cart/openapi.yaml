@@ -376,7 +376,7 @@ paths:
         post:
             tags: [Cart]
             summary: Reorder (refill cart from a past order)
-            description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the returned cart view is the record of what actually landed. A line that would pass the per-line ceiling (`NODE_CART_LINE_MAX`) is clamped to what room is left instead, and skipped outright once there is none — the same best-effort treatment as an unavailable product. Any signed-in account, staff included, reorders only its own orders — the cart being filled is the caller's.
+            description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the answer holds the cart as it now stands and ONE RESULT PER ORDER LINE, in the order's own order, by the same rule and in the same shape as `POST /cart/merge` (`requested`, `resulting`, `reason`, `availability`). A line that would pass the per-line ceiling (`NODE_CART_LINE_MAX`) is clamped to what room is left (`capped`), and adds nothing once there is none; an unavailable product is `removed`. Neither is a failure. Any signed-in account, staff included, reorders only its own orders — the cart being filled is the caller's.
             operationId: reorder
             security:
                 - bearerAuth: []
@@ -385,11 +385,11 @@ paths:
                   description: One of the caller's own orders
             responses:
                 '200':
-                    description: The updated cart
+                    description: The updated cart, and what happened to each order line
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
+                                $ref: '#/components/schemas/ReorderResponseEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # Well-formed order id that matches none of the caller's own orders.
@@ -510,7 +510,7 @@ components:
         MergeLineReason:
             type: string
             description: >-
-                Why a guest line did not land exactly as asked. Absent when it did.
+                Why a merged guest line or a reordered order line did not land exactly as asked. Absent when it did.
 
                 - `summed`: the cart already held some of the product, so `resulting` is the sum.
                 - `capped`: the sum would pass the per-line cap (`NODE_CART_LINE_MAX`); `resulting` is the cap.
@@ -530,11 +530,11 @@ components:
                 requested:
                     type: integer
                     minimum: 1
-                    description: What the guest line asked for.
+                    description: What the guest line (or the order line) asked for.
                 resulting:
                     type: integer
                     minimum: 0
-                    description: What the cart holds for this product after the merge.
+                    description: What the cart holds for this product after the merge or reorder.
                 reason:
                     $ref: '#/components/schemas/MergeLineReason'
                 # What `resulting` can do right now. Never the number left. Independent of
@@ -568,6 +568,33 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/MergeCartResponse'
+
+        ReorderResponse:
+            type: object
+            additionalProperties: false
+            required: [cart, lines]
+            properties:
+                cart:
+                    $ref: '#/components/schemas/CartResponse'
+                lines:
+                    type: array
+                    description: One result per order line, in the order's own order.
+                    items:
+                        $ref: '#/components/schemas/MergeLineResult'
+
+        ReorderResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ReorderResponse'
 
         UpdateCartItemByIdRequest:
             type: object
