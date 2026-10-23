@@ -12,6 +12,7 @@ import type {
     LocaleApp,
     ReplaceLocaleEntryRequest
 } from '@types';
+import { ERROR_CODES } from '@api/error-codes';
 import { t } from '@infrastructure/i18n';
 import {
     generateReject,
@@ -31,7 +32,9 @@ import { refreshOverlay } from './overlay';
 
 /** Not found, phrased the one way {@link findEntryInLanguage} and its two callers all mean it. */
 const entryNotFound = (): ResponseReject =>
-    generateReject(404, [t('locales.error-entry-not-found')]);
+    generateReject(404, [
+        { code: ERROR_CODES.LOCALE_ENTRY_NOT_FOUND, message: t('locales.error-entry-not-found') }
+    ]);
 
 /**
  * The entry named in the path, scoped to the language and the app also named in the path.
@@ -108,7 +111,12 @@ export const createEntry = async (
     const existingKeys = await localeEntryRepository.listKeys(language.tag, app);
 
     if (existingKeys.includes(key))
-        return generateReject(409, [t('locales.error-key-exists', { key })]);
+        return generateReject(409, [
+            {
+                code: ERROR_CODES.LOCALE_ENTRY_KEY_EXISTS,
+                message: t('locales.error-key-exists', { key })
+            }
+        ]);
 
     const unusable = rejectUnusableKey(key, existingKeys);
     if (unusable) return unusable;
@@ -216,17 +224,29 @@ const rejectBadBatch = (
     mode: 'replace' | 'merge'
 ): ResponseReject | undefined => {
     if (mode === 'merge' && inputs.length === 0)
-        return generateReject(422, [t('locales.error-entries-empty')]);
+        return generateReject(422, [
+            { code: ERROR_CODES.LOCALE_ENTRIES_EMPTY, message: t('locales.error-entries-empty') }
+        ]);
 
     const keys = inputs.map(({ key }) => key);
 
     const badKey = keys.find((key) => !isKeyLengthValid(key));
     if (badKey !== undefined)
-        return generateReject(422, [t('locales.error-key-invalid', { key: badKey })]);
+        return generateReject(422, [
+            {
+                code: ERROR_CODES.LOCALE_ENTRY_KEY_INVALID,
+                message: t('locales.error-key-invalid', { key: badKey })
+            }
+        ]);
 
     const duplicate = findDuplicateKey(keys);
     if (duplicate !== undefined)
-        return generateReject(409, [t('locales.error-key-exists', { key: duplicate })]);
+        return generateReject(409, [
+            {
+                code: ERROR_CODES.LOCALE_ENTRY_KEY_EXISTS,
+                message: t('locales.error-key-exists', { key: duplicate })
+            }
+        ]);
 
     return undefined;
 };
@@ -267,10 +287,13 @@ export const importEntries = async (
     const batchCollision = findBatchCollision(written);
     if (batchCollision)
         return generateReject(409, [
-            t('locales.error-key-collision', {
-                key: batchCollision[0],
-                existing: batchCollision[1]
-            })
+            {
+                code: ERROR_CODES.LOCALE_ENTRY_KEY_COLLISION,
+                message: t('locales.error-key-collision', {
+                    key: batchCollision[0],
+                    existing: batchCollision[1]
+                })
+            }
         ]);
 
     /*

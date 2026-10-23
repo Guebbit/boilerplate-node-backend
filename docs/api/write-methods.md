@@ -181,10 +181,15 @@ A create body declares no `'null'` type — there is nothing to clear yet, so `n
 | 200 | an update, an action, a search, an idempotent refresh |
 | 201 | a create — something new exists, and `Location` says where |
 | 404 | the target does not exist (or the caller may not know it does) |
-| 409 | the write conflicts with the current state — a duplicate, a lifecycle refusal |
+| 409 | the write conflicts with the current state — a duplicate, a lifecycle refusal, an action whose target state is already reached (`<RESOURCE>_ALREADY_<STATE>`) |
 | 412 | an `If-Match` that no longer matches — see [Conditional writes](#conditional-writes-etag-and-if-match) |
 | 415 | a body in a type the operation does not declare |
 | 422 | the body breaks the contract or a domain rule |
+
+An action endpoint (`POST …/activate`) whose target state is already reached is refused, not
+answered with a silent 200: **409** with `<RESOURCE>_ALREADY_<STATE>` and a plain message, as
+Google AIP-216 asks for a state that cannot be moved to, kept at 409 because RFC 9110 §15.5.10
+defines it as a conflict with the current state. `DELETE` stays idempotent (RFC 9110 §9.2.2).
 
 The app-wide ones (400, 413, 429, 503) come from `x-app-level-responses` — see
 [Regenerating](./regenerating.md).

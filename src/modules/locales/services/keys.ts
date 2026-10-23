@@ -6,6 +6,7 @@
  * folder.
  */
 
+import { ERROR_CODES } from '@api/error-codes';
 import { t } from '@infrastructure/i18n';
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { isPlainObject } from '@infrastructure/object-guards';
@@ -157,12 +158,21 @@ export const rejectUnusableKey = (
     others: Iterable<string>
 ): ResponseReject | undefined => {
     const unsafe = findUnsafeKeySegment(key);
-    if (unsafe !== undefined) return generateReject(422, [t('locales.error-key-invalid', { key })]);
+    if (unsafe !== undefined)
+        return generateReject(422, [
+            {
+                code: ERROR_CODES.LOCALE_ENTRY_KEY_INVALID,
+                message: t('locales.error-key-invalid', { key })
+            }
+        ]);
 
     const collision = findKeyCollision(key, others);
     if (collision !== undefined)
         return generateReject(409, [
-            t('locales.error-key-collision', { key, existing: collision })
+            {
+                code: ERROR_CODES.LOCALE_ENTRY_KEY_COLLISION,
+                message: t('locales.error-key-collision', { key, existing: collision })
+            }
         ]);
 
     return undefined;

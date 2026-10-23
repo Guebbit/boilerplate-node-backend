@@ -365,12 +365,39 @@ describe('deactivating a language', () => {
     it('refuses to deactivate the fallback locale', async () => {
         await givenLanguage(FALLBACK);
 
-        const result = await localeService.updateLanguage(FALLBACK, { active: false });
+        const result = await localeService.deactivateLanguage(FALLBACK);
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
         const stored = await localeRepository.findByTag(FALLBACK);
         expect(stored?.active).toBe(true);
+    });
+
+    it('switches another language off, then back on', async () => {
+        await givenLanguage('es');
+
+        const off = await localeService.deactivateLanguage('es');
+        const on = await localeService.activateLanguage('es');
+
+        expect(off.data?.active).toBe(false);
+        expect(on.data?.active).toBe(true);
+    });
+
+    it('409s on a move to the state the language is already in', async () => {
+        await givenLanguage('es');
+        await givenLanguage('fr', {}, { active: false });
+
+        const alreadyOn = await localeService.activateLanguage('es');
+        const alreadyOff = await localeService.deactivateLanguage('fr');
+
+        expect([alreadyOn.status, alreadyOff.status]).toEqual([409, 409]);
+    });
+
+    it('404s for a language nobody registered', async () => {
+        const activated = await localeService.activateLanguage('zz');
+        const deactivated = await localeService.deactivateLanguage('zz');
+
+        expect([activated.status, deactivated.status]).toEqual([404, 404]);
     });
 
     it('leaves the fallback locale updatable on every other field', async () => {
@@ -859,9 +886,10 @@ describe('createLanguage and updateLanguage', () => {
     it('leaves alone every field an update does not mention', async () => {
         await givenLanguage('es');
 
-        const result = await localeService.updateLanguage('es', { active: false });
+        const result = await localeService.updateLanguage('es', { direction: 'rtl' });
 
-        expect(result.data?.active).toBe(false);
+        expect(result.data?.direction).toBe('rtl');
+        expect(result.data?.active).toBe(true);
         expect(result.data?.name).toBe('es');
         expect(result.data?.nativeName).toBe('es');
     });

@@ -107,7 +107,7 @@ describe('GET /locales', () => {
     it('hides an inactive language entirely', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
-        await api().patch('/locales/pt').set('Authorization', bearer).send({ active: false });
+        await api().post('/locales/pt/deactivate').set('Authorization', bearer);
 
         const response = await api().get('/locales');
 
@@ -125,7 +125,7 @@ describe('GET /locales', () => {
     it('lists an inactive language to an API key minted with display:Locale, and not to a stranger', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
-        await api().patch('/locales/pt').set('Authorization', bearer).send({ active: false });
+        await api().post('/locales/pt/deactivate').set('Authorization', bearer);
         const secret = await credentialHolding(['display:Locale']);
         const asKey = await api().get('/locales').set('Authorization', `Bearer ${secret}`);
         const asStranger = await api().get('/locales');
@@ -243,7 +243,7 @@ describe('GET /locales/:locale/messages', () => {
     it('404s for an inactive language, exactly as for an unknown one', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
-        await api().patch('/locales/pt').set('Authorization', bearer).send({ active: false });
+        await api().post('/locales/pt/deactivate').set('Authorization', bearer);
 
         const hidden = await api().get('/locales/pt/messages');
         const unknown = await api().get('/locales/zz/messages');
@@ -255,7 +255,7 @@ describe('GET /locales/:locale/messages', () => {
     it('serves an inactive language to staff, and to a key minted with display:Locale', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
-        await api().patch('/locales/pt').set('Authorization', bearer).send({ active: false });
+        await api().post('/locales/pt/deactivate').set('Authorization', bearer);
         const secret = await credentialHolding(['display:Locale']);
 
         const asStaff = await api().get('/locales/pt/messages').set('Authorization', bearer);
@@ -352,17 +352,29 @@ describe('PUT /locales/:locale', () => {
         const response = await api().put('/locales/pt').set('Authorization', bearer).send({
             name: 'Portuguese',
             nativeName: 'Português (Brasil)',
-            direction: 'ltr',
-            active: false
+            direction: 'ltr'
         });
 
         expect(response.status).toBe(200);
         expect(response.body.data.nativeName).toBe('Português (Brasil)');
-        expect(response.body.data.active).toBe(false);
     });
 
-    // A PUT body IS the new resource (RFC 9110 §9.3.4) — none of this resource's four fields has
-    // a legal "cleared" state, so all four are required.
+    it('refuses `active` in the body — activate and deactivate own it', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api().put('/locales/pt').set('Authorization', bearer).send({
+            name: 'Portuguese',
+            nativeName: 'Português',
+            direction: 'ltr',
+            active: false
+        });
+
+        expect(response.status).toBe(422);
+    });
+
+    // A PUT body IS the new resource (RFC 9110 §9.3.4) — none of this resource's three fields has
+    // a legal "cleared" state, so all three are required.
     it('refuses a PUT body missing a required field', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
@@ -370,7 +382,7 @@ describe('PUT /locales/:locale', () => {
         const response = await api()
             .put('/locales/pt')
             .set('Authorization', bearer)
-            .send({ nativeName: 'Português (Brasil)', active: false });
+            .send({ nativeName: 'Português (Brasil)' });
 
         expect(response.status).toBe(422);
     });
@@ -381,7 +393,7 @@ describe('PUT /locales/:locale', () => {
         const response = await api()
             .put('/locales/zz')
             .set('Authorization', bearer)
-            .send({ name: 'X', nativeName: 'X', direction: 'ltr', active: false });
+            .send({ name: 'X', nativeName: 'X', direction: 'ltr' });
 
         expect(response.status).toBe(404);
     });
@@ -395,7 +407,7 @@ describe('PUT /locales/:locale', () => {
         const response = await api()
             .put('/locales/pt')
             .set('Authorization', bearer)
-            .send({ name: '   ', nativeName: 'Português', direction: 'ltr', active: true });
+            .send({ name: '   ', nativeName: 'Português', direction: 'ltr' });
 
         expect(response.status).toBe(422);
     });
@@ -409,12 +421,24 @@ describe('PATCH /locales/:locale', () => {
         const response = await api()
             .patch('/locales/pt')
             .set('Authorization', bearer)
-            .send({ nativeName: 'Português (Brasil)', active: false });
+            .send({ nativeName: 'Português (Brasil)' });
 
         expect(response.status).toBe(200);
         expect(response.body.data.nativeName).toBe('Português (Brasil)');
-        expect(response.body.data.active).toBe(false);
+        expect(response.body.data.active).toBe(true);
         expect(response.body.data.name).toBe('Portuguese');
+    });
+
+    it('refuses `active` in the body — activate and deactivate own it', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api()
+            .patch('/locales/pt')
+            .set('Authorization', bearer)
+            .send({ active: false });
+
+        expect(response.status).toBe(422);
     });
 
     it('404s for a language that does not exist', async () => {
@@ -423,7 +447,7 @@ describe('PATCH /locales/:locale', () => {
         const response = await api()
             .patch('/locales/zz')
             .set('Authorization', bearer)
-            .send({ active: false });
+            .send({ name: 'X' });
 
         expect(response.status).toBe(404);
     });
@@ -441,6 +465,156 @@ describe('PATCH /locales/:locale', () => {
     });
 });
 
+describe('POST /locales/:locale/activate and /deactivate', () => {
+    it('matches the contract when switching a language off and back on', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const off = await api().post('/locales/pt/deactivate').set('Authorization', bearer);
+        const on = await api().post('/locales/pt/activate').set('Authorization', bearer);
+
+        expect(off.status).toBe(200);
+        expect(off.body.data.active).toBe(false);
+        expect(on.status).toBe(200);
+        expect(on.body.data.active).toBe(true);
+    });
+
+    it('carries the flags that follow the move on the response', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const off = await api().post('/locales/pt/deactivate').set('Authorization', bearer);
+
+        expect(off.body.data.actions).toEqual({
+            update: true,
+            activate: true,
+            deactivate: false,
+            delete: true
+        });
+    });
+
+    it('409s with a code when the language is already in the state asked for', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const alreadyOn = await api().post('/locales/pt/activate').set('Authorization', bearer);
+        await api().post('/locales/pt/deactivate').set('Authorization', bearer);
+        const alreadyOff = await api().post('/locales/pt/deactivate').set('Authorization', bearer);
+
+        expect(alreadyOn.status).toBe(409);
+        expect(alreadyOn.body.errors[0].code).toBe('LOCALE_LANGUAGE_ALREADY_ACTIVE');
+        expect(alreadyOff.status).toBe(409);
+        expect(alreadyOff.body.errors[0].code).toBe('LOCALE_LANGUAGE_ALREADY_INACTIVE');
+    });
+
+    it('refuses to switch the fallback language off, with its code', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer, {
+            ...PORTUGUESE,
+            tag: getFallbackLocale()
+        });
+
+        const response = await api()
+            .post(`/locales/${getFallbackLocale()}/deactivate`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('LOCALE_LANGUAGE_IS_FALLBACK');
+    });
+
+    it('404s for a language nobody registered', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api().post('/locales/zz/activate').set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+        expect(response.body.errors[0].code).toBe('LOCALE_LANGUAGE_NOT_FOUND');
+    });
+
+    it('is closed to a customer', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().post('/locales/pt/deactivate').set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+    });
+});
+
+/** The `actions` block of one language in a `GET /locales` answer. */
+const flagsOf = (
+    response: { body: { data: { locales: { tag: string; actions: unknown }[] } } },
+    tag: string
+) => response.body.data.locales.find((row) => row.tag === tag)?.actions;
+
+describe('actions on a language', () => {
+    it('gives a guest every flag false, so the shared cache never carries a real one', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const asGuest = await api().get('/locales');
+
+        expect(flagsOf(asGuest, 'pt')).toEqual({
+            update: false,
+            activate: false,
+            deactivate: false,
+            delete: false
+        });
+    });
+
+    it('tells an admin what each language can do, and why delete is blocked', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        await createLanguage(bearer, {
+            tag: 'fr',
+            name: 'French',
+            nativeName: 'Français',
+            active: false
+        });
+
+        const asAdmin = await api().get('/locales').set('Authorization', bearer);
+
+        expect(flagsOf(asAdmin, 'pt')).toEqual({
+            update: true,
+            activate: false,
+            deactivate: true,
+            delete: false,
+            deleteBlocked: 'still_active'
+        });
+        expect(flagsOf(asAdmin, 'fr')).toEqual({
+            update: true,
+            activate: true,
+            deactivate: false,
+            delete: true
+        });
+    });
+
+    it('keeps a deployed file with no row of its own at every flag false, even for an admin', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const asAdmin = await api().get('/locales').set('Authorization', bearer);
+
+        expect(flagsOf(asAdmin, getFallbackLocale())).toEqual({
+            update: false,
+            activate: false,
+            deactivate: false,
+            delete: false
+        });
+    });
+
+    it('names the fallback, not the switch, as what blocks deleting it', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer, { ...PORTUGUESE, tag: getFallbackLocale() });
+
+        const asAdmin = await api().get('/locales').set('Authorization', bearer);
+
+        expect(flagsOf(asAdmin, getFallbackLocale())).toMatchObject({
+            deactivate: false,
+            delete: false,
+            deleteBlocked: 'fallback'
+        });
+    });
+});
+
 describe('DELETE /locales/:locale', () => {
     it('refuses while the language is still active', async () => {
         const { bearer } = await authenticateAs('admin');
@@ -455,7 +629,7 @@ describe('DELETE /locales/:locale', () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
-        await api().patch('/locales/pt').set('Authorization', bearer).send({ active: false });
+        await api().post('/locales/pt/deactivate').set('Authorization', bearer);
 
         const response = await api().delete('/locales/pt').set('Authorization', bearer);
 
@@ -987,7 +1161,7 @@ describe('a locale only the API has', () => {
     it('stops picking it the moment it is switched off', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
-        await api().patch('/locales/pt').set('Authorization', bearer).send({ active: false });
+        await api().post('/locales/pt/deactivate').set('Authorization', bearer);
 
         const response = await api().get('/locales').set('Accept-Language', 'pt');
 

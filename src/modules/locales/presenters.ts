@@ -6,14 +6,18 @@
  * needs the cast these presenters replace.
  */
 
-import type { Language, LocaleEntry } from '@types';
+import type { Language, LanguageActions, LocaleEntry } from '@types';
 import type { LocaleDocument, LocaleEntryDocument } from './model';
 
 /**
  * `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the document is
- * typed as stored, not as the wire shape `Language` promises.
+ * typed as stored, not as the wire shape `Language` promises. `actions` is the caller's finished
+ * block (`services/actions.ts`), only mapped on here.
  */
-export const presentLocale = (document: LocaleDocument): Language => document.toJSON() as Language;
+export const presentLocale = (document: LocaleDocument, actions: LanguageActions): Language => ({
+    ...(document.toJSON() as Omit<Language, 'actions'>),
+    actions
+});
 
 /**
  * `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the document is

@@ -30,6 +30,8 @@ const ADMIN = [
     'POST /',
     'PUT /:locale',
     'PATCH /:locale',
+    'POST /:locale/activate',
+    'POST /:locale/deactivate',
     'DELETE /:locale',
     'GET /:locale/entries',
     'GET /:locale/apps/:app/entries',

@@ -74,7 +74,7 @@ describe('the names a message outlives its product with', () => {
             it: 'Tazza blu'
         });
 
-        await localeService.updateLanguage('fr', { active: true });
+        await localeService.activateLanguage('fr');
 
         await expect(productService.titlesById(id)).resolves.toEqual({
             en: 'Blue mug',

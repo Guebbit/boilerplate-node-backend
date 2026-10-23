@@ -2,6 +2,8 @@
     "locales": {
         "error-language-not-found": "That language is not available.",
         "error-language-exists": "The language {{tag}} is already registered.",
+        "error-language-already-active": "The language {{tag}} is already switched on.",
+        "error-language-already-inactive": "The language {{tag}} is already switched off.",
         "error-language-active": "Deactivate the language before deleting it — this removes every string translated into it.",
         "error-entry-not-found": "That translation no longer exists.",
         "error-key-exists": "The key {{key}} is already translated in this language.",

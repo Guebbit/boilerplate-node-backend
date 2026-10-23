@@ -3,6 +3,22 @@ info:
     title: locales — module contract
     version: '0.1.0'
 
+x-error-codes:
+    LOCALE_LANGUAGE_NOT_FOUND: { status: 404, description: 'No language is registered under that tag.' }
+    LOCALE_LANGUAGE_EXISTS: { status: 409, description: 'A language is already registered under that tag.' }
+    LOCALE_LANGUAGE_ACTIVE: { status: 409, description: 'The language is still switched on — deactivate it before deleting it.' }
+    LOCALE_LANGUAGE_IS_FALLBACK: { status: 409, description: 'The deployment''s fallback language cannot be deactivated or deleted: every translatable row''s source lives there.' }
+    LOCALE_LANGUAGE_ALREADY_ACTIVE: { status: 409, description: 'The language is already switched on.' }
+    LOCALE_LANGUAGE_ALREADY_INACTIVE: { status: 409, description: 'The language is already switched off.' }
+    LOCALE_ENTRY_NOT_FOUND: { status: 404, description: 'No entry with that id exists under that language and app.' }
+    LOCALE_ENTRY_KEY_EXISTS: { status: 409, description: 'The key is already translated in this language and app, or a batch names it twice.' }
+    LOCALE_ENTRY_KEY_COLLISION: { status: 409, description: 'The key is a strict dotted prefix of another key, or has one as a prefix: no dictionary tree can hold both.' }
+    LOCALE_ENTRY_KEY_INVALID: { status: 422, description: 'The key is empty, longer than 200 characters, or has an empty or reserved segment.' }
+    LOCALE_ENTRIES_EMPTY: { status: 422, description: 'A merge patch named no entry at all.' }
+    LOCALE_APP_UNKNOWN: { status: 422, description: 'No app with that id is configured on this deployment — see `GET /locales/apps`.' }
+    LOCALE_ENTITY_TYPE_UNKNOWN: { status: 404, description: 'The entity type is not a registered translatable.' }
+    LOCALE_ENTITY_NOT_FOUND: { status: 404, description: 'The module that owns the entity type holds no entity with that id.' }
+
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Locales
@@ -79,6 +95,11 @@ paths:
                 language with a deployed file that is switched off is listed for everyone, as
                 `active: false`. The flag gates selection by visitors and nothing else — the same
                 rule products and users follow.
+
+                Each row carries `actions`: what the caller may do to that language. Only a
+                caller who holds `display:Locale` is answered outside the shared cache, so only
+                such a caller gets a flag set to `true`; everyone else's answer is the cached one,
+                with every flag `false`.
             operationId: getLocales
             security:
                 - {}
@@ -188,14 +209,13 @@ paths:
             tags: [Locales]
             summary: Replace a language
             description: |
-                Replaces a language's display names, writing direction and visibility (RFC 9110
-                §9.3.4 — every writable field is required, none of them has a legal "cleared"
-                state). The tag itself is immutable — it is what every entry references, so
-                changing it would be a rename of the whole dictionary rather than an edit of this
-                record.
+                Replaces a language's display names and writing direction (RFC 9110 §9.3.4 — every
+                writable field is required, none of them has a legal "cleared" state). The tag
+                itself is immutable — it is what every entry references, so changing it would be a
+                rename of the whole dictionary rather than an edit of this record.
 
-                Refuses with 409 when it would deactivate the deployment's fallback language: every
-                translatable row's source lives there.
+                Whether the language is switched on is not a field here: `POST
+                /locales/{locale}/activate` and `/deactivate` move it.
             operationId: replaceLocale
             security:
                 - bearerAuth: []
@@ -218,20 +238,19 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
             tags: [Locales]
             summary: Edit a language
             description: |
-                Merges a language's display names, writing direction or visibility (RFC 7396, an
-                omitted field is left unchanged). The tag itself is immutable — it is what every
+                Merges a language's display names or writing direction (RFC 7396, an omitted field is
+                left unchanged). The tag itself is immutable — it is what every
                 entry references, so changing it would be a rename of the whole dictionary rather
                 than an edit of this record.
 
-                Refuses with 409 when it would deactivate the deployment's fallback language: every
-                translatable row's source lives there.
+                Whether the language is switched on is not a field here: `POST
+                /locales/{locale}/activate` and `/deactivate` move it.
             operationId: updateLocale
             security:
                 - bearerAuth: []
@@ -257,7 +276,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
@@ -266,9 +284,12 @@ paths:
             description: |
                 Removes the language AND every entry translated into it.
 
-                Refuses with 409 while the language is still active. That two-step is deliberate:
-                this destroys a day's translation work, and a mis-click should cost a toggle rather
-                than the work. Deactivate first, then delete.
+                Refuses with 409 `LOCALE_LANGUAGE_ACTIVE` while the language is still active, and
+                with 409 `LOCALE_LANGUAGE_IS_FALLBACK` for the deployment's fallback language. The
+                two steps are deliberate: this destroys a day's translation work, and a mis-click
+                should cost a toggle rather than the work. `POST /locales/{locale}/deactivate`
+                first, then delete. `actions.delete` on the language says whether it would be
+                accepted now.
             operationId: deleteLocale
             security:
                 - bearerAuth: []
@@ -277,6 +298,70 @@ paths:
                 - $ref: '#/components/parameters/LocalePathParam'
             responses:
                 '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /locales/{locale}/activate:
+        post:
+            tags: [Locales]
+            summary: Switch a language on
+            description: |
+                Switches a registered language on: a visitor may now select it, requests in it are
+                answered in it, and its translated entity text is served. Clears the cached
+                translated text and refreshes the served-language list, so the next request sees it.
+
+                Refuses with 409 `LOCALE_LANGUAGE_ALREADY_ACTIVE` when it is already on — an action
+                endpoint answers a state it cannot move to, never a silent success.
+                `actions.activate` says whether it would be accepted.
+            operationId: activateLocale
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+            responses:
+                '200':
+                    description: The language, now active
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LanguageEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /locales/{locale}/deactivate:
+        post:
+            tags: [Locales]
+            summary: Switch a language off
+            description: |
+                Switches a registered language off: it becomes invisible to every public route
+                (never picked for a request, 404 on its dictionary, its entity text not served)
+                while staff holding `display:Locale` still see it. This is the state a language
+                must be put into before it can be deleted.
+
+                Refuses with 409 `LOCALE_LANGUAGE_IS_FALLBACK` for the deployment's fallback
+                language (every translatable row's source lives there), and with 409
+                `LOCALE_LANGUAGE_ALREADY_INACTIVE` when it is already off.
+                `actions.deactivate` says whether it would be accepted.
+            operationId: deactivateLocale
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+            responses:
+                '200':
+                    description: The language, now inactive
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LanguageEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -856,10 +941,54 @@ components:
                 Which tier a language came from — deployed files, the database, or both.
             example: both
 
+        LanguageDeleteBlockedReason:
+            type: string
+            enum: [still_active, fallback]
+            description: >-
+                Why `actions.delete` is false for a caller who holds `delete:Locale` and could
+                otherwise act. `still_active`: switch it off first (`actions.deactivate`).
+                `fallback`: the deployment's fallback language can never be deleted. Absent when
+                the caller lacks the permission (the control is hidden, not explained) or when
+                `delete` is true.
+
+        LanguageActions:
+            type: object
+            additionalProperties: false
+            required: [update, activate, deactivate, delete]
+            description: >-
+                What THIS caller may do to THIS language right now, so a client never restates the
+                rules. A caller without the permission, and a language with no registered row (a
+                deployed file alone), get every flag `false`. Served only on reads that are not
+                shared between callers: a visitor's `GET /locales` carries all `false`.
+            properties:
+                update:
+                    type: boolean
+                    description: >-
+                        Whether `PUT` or `PATCH /locales/{locale}` would be accepted: the caller
+                        holds `update:Locale` and a registered row exists.
+                activate:
+                    type: boolean
+                    description: >-
+                        Whether `POST /locales/{locale}/activate` would be accepted: `update` and
+                        the language is off.
+                deactivate:
+                    type: boolean
+                    description: >-
+                        Whether `POST /locales/{locale}/deactivate` would be accepted: `update`,
+                        the language is on, and it is not the deployment's fallback.
+                delete:
+                    type: boolean
+                    description: >-
+                        Whether `DELETE /locales/{locale}` would be accepted: the caller holds
+                        `delete:Locale`, a registered row exists, the language is off, and it is
+                        not the deployment's fallback.
+                deleteBlocked:
+                    $ref: '#/components/schemas/LanguageDeleteBlockedReason'
+
         Language:
             type: object
             additionalProperties: false
-            required: [id, tag, baseLanguage, name, nativeName, direction, active, revision]
+            required: [id, tag, baseLanguage, name, nativeName, direction, active, revision, actions]
             description: >-
                 A language registered in the DYNAMIC tier. Its existence means entries can be
                 translated into it and a client can download the result — never that the API can
@@ -911,6 +1040,8 @@ components:
                 revision:
                     type: integer
                     minimum: 0
+                actions:
+                    $ref: '#/components/schemas/LanguageActions'
                 createdAt:
                     type: string
                     format: date-time
@@ -935,7 +1066,7 @@ components:
         LocaleCapability:
             type: object
             additionalProperties: false
-            required: [tag, name, nativeName, direction, active, apps, source, entryCount, revision]
+            required: [tag, name, nativeName, direction, active, apps, source, entryCount, revision, actions]
             description: >-
                 One language as the manifest describes it: a merge of whatever the two tiers each
                 know about it. A tag present in both appears once, carrying both apps.
@@ -979,6 +1110,8 @@ components:
                 revision:
                     type: integer
                     minimum: 0
+                actions:
+                    $ref: '#/components/schemas/LanguageActions'
 
         LocaleCapabilities:
             type: object
@@ -1188,13 +1321,13 @@ components:
                     default: true
 
         # PUT /locales/{locale} — RFC 9110 §9.3.4: the body IS the new resource. Every field is
-        # required because none of the four has a legal "cleared" state — `name`/`nativeName` are
-        # always set, and `direction`/`active` always hold a concrete value (a Mongoose schema
-        # default, never an absence).
+        # required because none of the three has a legal "cleared" state — `name`/`nativeName` are
+        # always set, and `direction` always holds a concrete value (a Mongoose schema default,
+        # never an absence). `active` is not here: `activate` and `deactivate` move it.
         ReplaceLocaleRequest:
             type: object
             additionalProperties: false
-            required: [name, nativeName, direction, active]
+            required: [name, nativeName, direction]
             properties:
                 name:
                     type: string
@@ -1206,8 +1339,6 @@ components:
                     minLength: 1
                 direction:
                     $ref: '#/components/schemas/LocaleDirection'
-                active:
-                    type: boolean
 
         UpdateLocaleRequest:
             type: object
@@ -1226,8 +1357,6 @@ components:
                     minLength: 1
                 direction:
                     $ref: '#/components/schemas/LocaleDirection'
-                active:
-                    type: boolean
 
         # The collision rule that governs `key` is documented once, on `entries` of
         # `ReplaceLocaleEntriesRequest`.

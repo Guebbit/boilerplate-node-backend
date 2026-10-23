@@ -20,6 +20,7 @@ import { getLocaleMessages } from './controllers/get-locale-messages';
 import { getLocaleApps } from './controllers/get-locale-apps';
 import { createLocale } from './controllers/create-locale';
 import { replaceLocale, updateLocale } from './controllers/update-locale';
+import { activateLocale, deactivateLocale } from './controllers/activate-locale';
 import { deleteLocale } from './controllers/delete-locale';
 import { getLocaleEntries, getAppLocaleEntries } from './controllers/get-locale-entries';
 import {
@@ -116,6 +117,25 @@ router.patch(
     requirePermission('update', 'Locale'),
     invalidateCache(['locales']),
     updateLocale
+);
+
+// POST /locales/:locale/activate and /deactivate — switch a language on or off. `update:Locale`
+// like the edit: it was the same PATCH until `active` left the body.
+router.post(
+    '/:locale/activate',
+    getAuth,
+    isAuthOrCredential,
+    requirePermission('update', 'Locale'),
+    invalidateCache(['locales']),
+    activateLocale
+);
+router.post(
+    '/:locale/deactivate',
+    getAuth,
+    isAuthOrCredential,
+    requirePermission('update', 'Locale'),
+    invalidateCache(['locales']),
+    deactivateLocale
 );
 
 // DELETE /locales/:locale — remove a language (the fallback one cannot be removed).
