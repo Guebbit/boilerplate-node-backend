@@ -14,7 +14,6 @@ on [Test it yourself](./test-me.md).
 | `display:Order` / `.update`                                 | Read and update any order in the shop, not only your own. |
 | `display:Payment` / `create:Payment` / `create:Refund`      | Read any payment, record one, and refund it.              |
 | `read:Return` / `.update`                                   | Read any return request, and approve or decline it.       |
-| `read:AuditLog`                                             | Read the history of what everyone with a key did.         |
 
 ## Banning is its own key
 
@@ -93,14 +92,6 @@ An order already `paid` refuses a second recording, the same rule that refuses a
 intent — `orders` alone decides whether an order still awaits payment, and every door that could
 open a new one asks it before doing anything else. → [`payments`](../modules/payments.md)
 
-## Reading the shop's own history
-
-`read:AuditLog` opens `GET /audit` — this role's own window onto who did what, scoped to this shop.
-It is the same underlying trail [the observability dashboard](../modules/observability.md) reads
-for the platform operator, reached through a different door with a different key: this one asks
-nothing about the platform, only about this shop, which is exactly the key a shop's own staff can
-be handed. → [`audit-logs`](../modules/audit-logs.md)
-
 ## What a moderator protects
 
 An account that holds a staff role may be changed only by a holder of `assign:Role`
@@ -119,8 +110,8 @@ No `products.*` — a moderator cannot change what a thing costs or looks like; 
 
 ## The words we used
 
-| Word               | In plain terms                                                                    |
-| ------------------ | --------------------------------------------------------------------------------- |
-| **Ban**            | `active: false` on an account, recorded under its own name in the history.        |
-| **Refund**         | Money returned on a payment already taken. → [`payments`](../modules/payments.md) |
-| **Action history** | Who did what, when, to which row. → [`audit-logs`](../modules/audit-logs.md)      |
+| Word               | In plain terms                                                                                       |
+| ------------------ | ---------------------------------------------------------------------------------------------------- |
+| **Ban**            | `active: false` on an account, recorded under its own name in the history.                           |
+| **Refund**         | Money returned on a payment already taken. → [`payments`](../modules/payments.md)                    |
+| **Action history** | Who did what, when, to which row; only an admin reads it. → [`audit-logs`](../modules/audit-logs.md) |
