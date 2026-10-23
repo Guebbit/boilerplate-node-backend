@@ -139,6 +139,7 @@ describe('add', () => {
         const result = await wishlistService.add(user.id, String(product._id), testCallerContext);
 
         expect(result.success).toBe(true);
+        expect(result.status).toBe(201);
         expect(await savedIds(user.id)).toEqual([String(product._id)]);
     });
 
@@ -150,6 +151,7 @@ describe('add', () => {
         const second = await wishlistService.add(user.id, String(product._id), testCallerContext);
 
         expect(second.success).toBe(true);
+        expect(second.status).toBe(200);
         expect(await savedIds(user.id)).toEqual([String(product._id)]);
     });
 

@@ -32,7 +32,7 @@ const authenticateWithWishlist = async () => {
         .put(`/wishlist/${String(product._id)}`)
         .set('Authorization', bearer);
 
-    if (response.status !== 200)
+    if (response.status !== 201)
         throw new Error(
             `wishlist setup failed: PUT /wishlist/{productId} returned ${response.status} — ${JSON.stringify(response.body)}`
         );
@@ -69,7 +69,8 @@ describe('PUT /wishlist/{productId}', () => {
             .put(`/wishlist/${String(product._id)}`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(201);
+        expect(response.headers.location).toBe(`/wishlist/${String(product._id)}`);
         expect(response.body.data.items).toEqual([
             { productId: String(product._id), availability: 'in_stock' }
         ]);

@@ -206,7 +206,7 @@ produced the change-set.
   Their bodies differ by verb where it matters: a PATCH locale entry merges field by field (a
   `null` clears one), a PUT states each locale whole.
 - **PUT-only resources** — `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /cart/{productId}`,
-  `PUT /cart/shipping-method`, `PUT /wishlist/{productId}`, `PUT /account/addresses/{id}/default` —
+  `PUT /cart/shipping-method`, `PUT /wishlist/{productId}`, `PUT /stock-alerts/{productId}`, `PUT /account/addresses/{id}/default` —
   have no PATCH.
 
 ```mermaid

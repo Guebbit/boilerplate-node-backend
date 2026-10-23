@@ -37,7 +37,8 @@ const list = (userId: string): Promise<StockAlertsResponse> =>
  * Ask to be told when a product can be ordered again.
  *
  * Refused while the product can be ordered now: the button is only offered when it cannot, and a
- * mail for something already on sale would be noise. Asking twice is the same request.
+ * mail for something already on sale would be noise. Asking twice is the same request, and
+ * answers 200 where the first answered 201.
  *
  * @param userId - the signed-in buyer
  * @param productId - the product they cannot order
@@ -56,10 +57,12 @@ const ask = (
                 }
             ]);
 
-        return stockAlertRepository
-            .ask(userId, productId)
-            .then(() => list(userId))
-            .then((view) => generateSuccess(view, 200, t('stock-alerts.asked')));
+        return stockAlertRepository.ask(userId, productId).then(({ added }) =>
+            list(userId).then((view) =>
+                // 201 only when this call recorded the request (RFC 9110 §9.3.4).
+                generateSuccess(view, added ? 201 : 200, t('stock-alerts.asked'))
+            )
+        );
     });
 
 /**

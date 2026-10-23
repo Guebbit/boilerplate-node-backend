@@ -55,8 +55,8 @@ const exportLines = (userId: string): Promise<{ productId: string }[]> =>
  *
  * The product must exist AND be publicly visible — saving a hidden or soft-deleted product from
  * a stale tab would otherwise plant a line the storefront can never render. Adding what is
- * already saved is idempotent (`$addToSet`), so a double-click answers the same 200 and fires no
- * second `WISHLIST_ITEM_ADDED`.
+ * already saved is idempotent (`$addToSet`): a double-click answers 200 instead of 201 and fires
+ * no second `WISHLIST_ITEM_ADDED`.
  */
 const add = (
     userId: string,
@@ -73,8 +73,9 @@ const add = (
                     event: wishlistAnalyticsEvents.WISHLIST_ITEM_ADDED,
                     properties: { product_id: productId }
                 });
+            // 201 only when this call saved it (RFC 9110 §9.3.4); the repeat answers 200.
             return present(wishlist).then((view) =>
-                generateSuccess(view, 200, t('wishlist.added'))
+                generateSuccess(view, added ? 201 : 200, t('wishlist.added'))
             );
         });
     });
