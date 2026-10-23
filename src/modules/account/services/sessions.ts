@@ -9,6 +9,7 @@
 import type { ClientSession } from 'mongoose';
 import type { ExportSession, Session } from '@types';
 import { sessionRepository, verificationTokenRepository } from '../repository';
+import { presentExportSession } from '../presenter';
 import { newestPerFamily } from '../session/listing';
 import { activeStrategy, type SessionRequest } from '../session/strategy';
 
@@ -32,17 +33,9 @@ export const sessionsList = (userId: string, request: SessionRequest): Promise<S
  * @param userId - the account being exported
  */
 export const exportSessions = (userId: string): Promise<ExportSession[]> =>
-    sessionRepository.listLive(userId, undefined, new Date()).then((rows) =>
-        newestPerFamily(rows).map(
-            (row): ExportSession => ({
-                id: String(row.familyId),
-                createdAt: row.startedAt.toISOString(),
-                expiration: row.expiresAt.toISOString(),
-                ...(row.lastUsedAt ? { lastUsedAt: row.lastUsedAt.toISOString() } : {}),
-                ...(row.device ? { device: row.device } : {})
-            })
-        )
-    );
+    sessionRepository
+        .listLive(userId, undefined, new Date())
+        .then((rows) => newestPerFamily(rows).map((row) => presentExportSession(row)));
 
 /**
  * Erase everything this module keeps to sign an account in or prove a link: its sessions and its

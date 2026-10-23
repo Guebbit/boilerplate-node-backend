@@ -11,6 +11,7 @@ import { accessService } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { sessionRepository, type SessionRow } from '../repository';
 import { predatesSessionEpoch } from '../domain/epoch';
+import { presentSession } from '../presenter';
 import { hasIdledOut, hasOutlivedStaffCap, staffCapEndsAt } from './idle';
 import type { SessionMode } from '../session-mode';
 
@@ -34,31 +35,18 @@ export const newestPerFamily = (rows: readonly SessionRow[]): SessionRow[] => {
 };
 
 /**
- * Maps one session row to the wire's `Session`.
+ * When the session ends: its row's expiry, or the staff lifetime cap when that comes first.
  *
  * @param row - the family's newest live row
- * @param currentFamilies - the families the caller's own credential belongs to, to mark `current`
  * @param roles - the caller's roles, since the staff lifetime cap can end a session before its row expires
  */
-const toSession = (
-    row: SessionRow,
-    currentFamilies: ReadonlySet<string>,
-    roles: AuthContext['roles']
-): Session => ({
-    id: String(row.familyId),
-    createdAt: row.startedAt.toISOString(),
-    expiration: new Date(
+const endsAt = (row: SessionRow, roles: AuthContext['roles']): Date =>
+    new Date(
         Math.min(
             row.expiresAt.getTime(),
             staffCapEndsAt(row.startedAt, roles)?.getTime() ?? Infinity
         )
-    ).toISOString(),
-    // Absent until this session has been used at least once — an unused session reads as unused
-    // rather than as one that happens to share the moment it was issued.
-    ...(row.lastUsedAt ? { lastUsedAt: row.lastUsedAt.toISOString() } : {}),
-    ...(row.device ? { device: row.device } : {}),
-    current: currentFamilies.has(String(row.familyId))
-});
+    );
 
 /**
  * The account's live sessions of one mode, newest sign-in first.
@@ -92,5 +80,7 @@ export const listSessions = (
         const current = new Set(
             rows.filter((row) => row.tokenHash === digest).map((row) => String(row.familyId))
         );
-        return newestPerFamily(rows).map((row) => toSession(row, current, roles));
+        return newestPerFamily(rows).map((row) =>
+            presentSession(row, endsAt(row, roles), current.has(String(row.familyId)))
+        );
     });
