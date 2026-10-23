@@ -15,6 +15,7 @@ import { generateReject, generateSuccess } from '@infrastructure/http/response';
 import { etagOf, fencedSave } from '@infrastructure/persistence/versioning';
 import {
     clearableFields,
+    createPatchController,
     createUpdateController,
     type UpdateControllerSpec,
     type UpdateIdSource
@@ -318,5 +319,23 @@ describe('createUpdateController — conditional writes', () => {
         await patch(makeRequest({ title: 'x' }), response);
 
         expect(response.setHeader).toHaveBeenCalledWith('ETag', etagOf(LOADED_REVISION));
+    });
+});
+
+describe('createPatchController', () => {
+    it('hands the merge exactly what the caller sent, and nothing is filled in', async () => {
+        const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
+        const patch = createPatchController({
+            entity: 'widget',
+            versioned: false,
+            patchSchema,
+            update,
+            present: (row) => row,
+            notFoundKey: NOT_FOUND_KEY
+        });
+
+        await patch(makeRequest({ title: 'x' }), makeResponseStub());
+
+        expect(update).toHaveBeenCalledWith(VALID_ID, { title: 'x' }, expect.anything());
     });
 });

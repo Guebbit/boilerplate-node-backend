@@ -79,7 +79,6 @@ describe('Replace/Update schema parity', () => {
             Account: 'account',
             Address: 'addresses',
             Example: 'example',
-            FeedbackRequestStatus: 'feedback',
             Locale: 'locales',
             OrderById: 'orders',
             Product: 'products',
