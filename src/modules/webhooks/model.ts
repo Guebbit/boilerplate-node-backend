@@ -65,9 +65,7 @@ export const webhookSubscriptionSchema = new Schema<
     WebhookSubscriptionModel
 >(
     {
-        // The organisation this row belongs to — not `locales/model.ts`'s own `tenant` field,
-        // a translation keyspace with the same name and nothing else in common. See
-        // docs/theory/tenancy.md's glossary.
+        // The organisation this row belongs to. See docs/theory/tenancy.md.
         tenant: {
             type: String,
             required: true,

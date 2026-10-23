@@ -5,8 +5,8 @@
  * what the API answers for each against the generated response schema. A field a record omits
  * falls to `@modules/products/model`'s `default:` — see `@modules/products/factories`.
  *
- * Six named rows carry the branch coverage the storefront and repositories actually exercise
- * (soft-deleted, out of stock, inactive, minimal); `./products-filler` supplies a further 128 rows
+ * One named row per `SEED_PRODUCT_IDS` entry carries the branch coverage the storefront and
+ * repositories actually exercise (soft-deleted, out of stock, inactive, minimal); `./products-filler` supplies further rows
  * combinatorially, so the catalogue reads like a real pet-supply retailer rather than a list of
  * edge cases. Every image comes from `./products-images.generated.json` (`npm run scenario:images`) —
  * none is hand-placed. The filler rows share a fixed pool of 20 images by cycling through it
@@ -21,7 +21,7 @@ import { FILLER_IMAGE_ROLE_KEYS, FILLER_PRODUCTS, fillerProductId } from './prod
 
 /**
  * Re-exported so `./wishlist` and `scenarios/flows/shop-history.ts` can address a specific filler
- * row (for variety beyond the six named products) through this file rather than reaching into
+ * row (for variety beyond the named products) through this file rather than reaching into
  * `./products-filler` directly.
  */
 export { fillerProductId } from './products-filler';
@@ -424,7 +424,7 @@ const OPENING_STOCK: ReadonlyMap<string, number> = new Map([
 export const openingStockFor = (productId: string): number => OPENING_STOCK.get(productId) ?? 0;
 
 /**
- * Every product's copy, keyed by its seeded id — the named six from {@link NAMED_PRODUCT_COPY},
+ * Every product's copy, keyed by its seeded id — the named rows from {@link NAMED_PRODUCT_COPY},
  * the filler rows from `./products-filler`'s own `translations` field.
  * {@link seedProductsCollection} is the only reader.
  */

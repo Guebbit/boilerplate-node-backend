@@ -72,7 +72,7 @@ export default {
     // The provider signs over the exact bytes it sent — relative to `basePath`, composed by the
     // app tier, so the mount point is stated once and the two cannot drift.
     rawBodyPaths: ['/webhook'],
-    // The webhook secret, the Stripe key gate and the bank-transfer values: see `./config`. The
+    // The webhook secret and the bank-transfer values: see `./config`. The
     // provider selector is probed beside its registry, since the resolver imports the config.
     config: [paymentsConfig.slice, paymentProviderProbe.slice],
     personalData: [

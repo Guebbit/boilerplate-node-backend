@@ -560,11 +560,10 @@ const refusalForPlaceOrder = (
  * the previous one resolved, and any throw here still rejects through the caller's `.catch`.
  *
  * CONCURRENCY. Read cart → write order → empty cart is three statements; nothing ties the third
- * to the first unless the cart write is conditional on the `__v` it was read at — exactly one of
- * two racing checkouts wins that write. The order is written (and stock held) before the cart is
- * cleared, so the loser deletes its own order and answers 409 rather than double-charging —
- * a briefly-created order is recoverable, a cart emptied with no order is not. `../repository`'s
- * `clearLinesIfUnchanged` documents why this is a conditional write, not a transaction.
+ * to the first unless the cart clear is conditional on the `__v` it was read at. The clear runs
+ * inside the order's transaction (`commitWith`): the loser's clear matches nothing and aborts it,
+ * so no order is written and the caller gets 409 `CART_CHANGED`. `../repository`'s
+ * `clearLinesIfUnchanged` documents why the guard is the `__v` match.
  *
  * @param userId - the caller's id
  * @param choices - what the buyer chose in the request body; see {@link CheckoutChoices}

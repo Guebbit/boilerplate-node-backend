@@ -32,9 +32,7 @@ export type ApiKeyModel = Model<ApiKeyDocument>;
 /** Credential collection schema. */
 export const apiKeySchema = new Schema<ApiKeyDocument, ApiKeyModel>(
     {
-        // The organisation this key belongs to — same field, same reasoning as
-        // `webhooks/model.ts`'s own `tenant` column. See docs/theory/tenancy.md's glossary for
-        // the OTHER "tenant" in this codebase, `locales/model.ts`'s translation keyspace.
+        // The organisation this key belongs to, as in `webhooks/model.ts`.
         tenant: {
             type: String,
             required: true,
