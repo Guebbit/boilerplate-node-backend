@@ -4,9 +4,22 @@
  * one token per body item) is `parseFormCsvList`, tested in `request.test.ts`. See
  * docs/api/sorting.md.
  */
-import { resolveSort, sortOf } from '@infrastructure/persistence/search';
+import { resolveSort, sortOf, withTiebreaker } from '@infrastructure/persistence/search';
 
 const sortable = { price: 'price', title: 'titleColumn', createdAt: 'createdAt' };
+
+describe('withTiebreaker', () => {
+    it('ends a sort that is not total in _id', () => {
+        expect(Object.entries(withTiebreaker({ key: 1 }))).toEqual([
+            ['key', 1],
+            ['_id', -1]
+        ]);
+    });
+
+    it('leaves a sort that already names _id alone, direction included', () => {
+        expect(withTiebreaker({ available: 1, _id: 1 })).toEqual({ available: 1, _id: 1 });
+    });
+});
 
 describe('resolveSort', () => {
     it('ignores a non-string entry rather than throwing on it', () => {

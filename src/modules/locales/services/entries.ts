@@ -71,11 +71,12 @@ export const searchEntries = (
 
         /*
          * Scoped to this language, and sorted by key rather than by the shared `createdAt` default:
-         * a translator reads an alphabetical list, and `(locale, key)` is unique, so sorting on it
-         * is already the total order that keeps a row off two pages.
+         * a translator reads an alphabetical list. The unique index is `(locale, app, key)`, so
+         * without an `app` filter one key repeats once per app: `app` breaks that tie, and the
+         * repository closes the order with `_id`.
          */
         return localeEntryRepository
-            .search(filters, { locale: language.tag }, { key: 1 })
+            .search(filters, { locale: language.tag }, { key: 1, app: 1 })
             .then((result) => generateSuccess(result));
     });
 

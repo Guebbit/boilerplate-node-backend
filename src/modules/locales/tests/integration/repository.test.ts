@@ -738,6 +738,32 @@ describe('searchEntries', () => {
         expect(result.data?.items.map(({ key }) => key)).toEqual(['a.key', 'b.key', 'c.key']);
     });
 
+    // The same key lives once per app, so `key` alone ties. The order is key, then app, and a page
+    // boundary inside a tie neither repeats nor skips a row.
+    it('breaks a key shared by two apps by app, across a page boundary', async () => {
+        await givenLanguage('es');
+        for (const key of ['a.key', 'b.key', 'c.key']) {
+            await givenEntry('es', FRONTEND, key, 'fe');
+            await givenEntry('es', BACKEND, key, 'be');
+        }
+
+        const pages = await Promise.all(
+            [1, 2, 3].map((page) => localeService.searchEntries('es', { page, pageSize: 2 }))
+        );
+        const rows = pages.flatMap((result) =>
+            (result.data?.items ?? []).map(({ key, app }) => `${key}@${app}`)
+        );
+
+        expect(rows).toEqual([
+            `a.key@${BACKEND}`,
+            `a.key@${FRONTEND}`,
+            `b.key@${BACKEND}`,
+            `b.key@${FRONTEND}`,
+            `c.key@${BACKEND}`,
+            `c.key@${FRONTEND}`
+        ]);
+    });
+
     it('404s for a language that does not exist', async () => {
         const result = await localeService.searchEntries('zz');
 
