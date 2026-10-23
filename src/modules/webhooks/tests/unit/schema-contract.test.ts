@@ -24,21 +24,20 @@ const DELIVERY_RETENTION_SECONDS =
 
 describe('webhookSubscriptionSchema', () => {
     it('requires the fan-out fields, and nothing else', () => {
-        // `description` is optional (nothing to say), `disabledAt` is optional (never disabled
-        // yet), and `secrets` defaults to `[]` rather than being required — a subscription that
+        // `description` is optional (nothing to say), `disabledAt`/`autoDisabledAt` are optional
+        // (never disabled yet), and `secrets` defaults to `[]` rather than being required — a subscription that
         // has not minted a secret yet is a contradiction `create()` never produces, not a shape
         // this schema needs to forbid on its own.
         expect(requiredPaths(webhookSubscriptionSchema)).toEqual([
             'consecutiveFailures',
-            'enabled',
             'eventTypes',
             'tenant',
             'url'
         ]);
     });
 
-    it('starts a subscription enabled, with a clean failure streak', () => {
-        expect(defaultOf(webhookSubscriptionSchema, 'enabled')).toBe(true);
+    it('starts a subscription with a clean failure streak, and stores no `enabled` at all', () => {
+        expect(webhookSubscriptionSchema.path('enabled')).toBeUndefined();
         expect(defaultOf(webhookSubscriptionSchema, 'consecutiveFailures')).toBe(0);
     });
 
@@ -61,7 +60,7 @@ describe('webhookSubscriptionSchema', () => {
 
     it('declares the tenant listing and the fan-out matching indexes', () => {
         expect(indexSpecs(webhookSubscriptionSchema)).toEqual([
-            'enabled_1_eventTypes_1: enabled+1, eventTypes+1',
+            'disabledAt_1_eventTypes_1: disabledAt+1, eventTypes+1',
             'tenant_1_createdAt_-1: tenant+1, createdAt-1'
         ]);
     });
@@ -70,7 +69,7 @@ describe('webhookSubscriptionSchema', () => {
         // A unique index on either would reject a second subscription — the cap in
         // `services/subscriptions.ts` is the ONLY thing allowed to limit how many a tenant holds.
         expect(indexOptionSpecs(webhookSubscriptionSchema)).toEqual([
-            'enabled_1_eventTypes_1: (none)',
+            'disabledAt_1_eventTypes_1: (none)',
             'tenant_1_createdAt_-1: (none)'
         ]);
     });

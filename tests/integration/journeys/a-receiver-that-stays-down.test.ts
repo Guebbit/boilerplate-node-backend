@@ -6,7 +6,7 @@
  * six attempts along the backoff ladder and then gives up. Five given-up chains in a row are not
  * enough on their own: the subscription must also have been failing for three days. Once both
  * hold it switches itself off, tells its owner, and leaves a system audit row. Switching it back
- * on starts a clean streak.
+ * on, through its own endpoint, starts a clean streak.
  *
  * Asserts the chain across modules only; the ladder itself has its own tests.
  */
@@ -96,6 +96,9 @@ it('switches itself off after five dead chains and three failing days, then star
     await placeOne();
     await runLadder();
     expect(await subscription()).toMatchObject({ enabled: false });
+    // The guard's work, not a pause: the wire says so through `autoDisabledAt`.
+    const autoDisabled = await subscription();
+    expect(autoDisabled?.autoDisabledAt).toBeDefined();
     expect(mailsTo(admin.email, 'webhooks.subscription-disabled')).toHaveLength(1);
     const audit = bodyOf(
         await api()
@@ -111,11 +114,12 @@ it('switches itself off after five dead chains and three failing days, then star
     // Switched back on, the streak is gone: the counter is zero and so is its start date, so the
     // three-day floor begins again.
     await api()
-        .patch(`/webhooks/subscriptions/${subscriptionId}`)
+        .post(`/webhooks/subscriptions/${subscriptionId}/enable`)
         .set('Authorization', await loginBearer(admin.email))
-        .send({ enabled: true })
         .expect(200);
     expect(await subscription()).toMatchObject({ enabled: true, consecutiveFailures: 0 });
+    const reEnabled = await subscription();
+    expect(reEnabled?.autoDisabledAt).toBeUndefined();
     const stored = await webhookSubscriptionRepository.findById(subscriptionId);
     expect(stored?.failingSince).toBeUndefined();
 });

@@ -244,6 +244,8 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `webhooks`       | `ADMIN_WEBHOOK_DELIVERY_REPLAYED`            | `admin.webhook_delivery.replayed`            | `webhook_delivery`     |
 | `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_CREATED`         | `admin.webhook_subscription.created`         | `webhook_subscription` |
 | `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_DELETED`         | `admin.webhook_subscription.deleted`         | `webhook_subscription` |
+| `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_DISABLED`        | `admin.webhook_subscription.disabled`        | `webhook_subscription` |
+| `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_ENABLED`         | `admin.webhook_subscription.enabled`         | `webhook_subscription` |
 | `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_SECRET_REMOVED`  | `admin.webhook_subscription.secret_removed`  | `webhook_subscription` |
 | `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_SECRET_ROTATED`  | `admin.webhook_subscription.secret_rotated`  | `webhook_subscription` |
 | `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED`         | `admin.webhook_subscription.updated`         | `webhook_subscription` |

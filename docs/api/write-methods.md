@@ -61,6 +61,23 @@ flowchart TD
 - An action may create a record on the side (a shipment, a stock movement). It still answers the
   thing the caller acts on next.
 
+#### An action whose target state is already reached
+
+`POST …/enable` on an enabled subscription, `POST …/disable` on a disabled one: **409**, with
+`<RESOURCE>_ALREADY_<STATE>` (`WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED`) and a plain message. Not
+200, because an action may carry an effect a repeat must not re-run (enabling resets the failure
+streak). Not 400, which Google's [AIP-216](https://google.aip.dev/216) uses: the lifecycle rule is
+"a refusal that depends on the current state is 409 + code" (RFC 9110 §15.5.10). A `DELETE` stays
+idempotent (RFC 9110 §9.2.2): deleting what is gone is not an action's refusal.
+
+### An item write has an item read
+
+A resource that can be changed by id can be read by id. Without `GET /x/{id}` a detail or edit page
+has to find its record in a list: past the page size it never finds it, and it cannot tell "gone"
+from "not loaded". The read is scoped like the list's rows (a row the caller may not see is a 404,
+never a 403 that confirms it exists), and answers the same shape the list rows carry. Webhook
+subscriptions are the example: `GET /webhooks/subscriptions/{id}`.
+
 ### Search → 200
 
 `POST /x/search` is a read that needs a body — see
@@ -181,7 +198,7 @@ A create body declares no `'null'` type — there is nothing to clear yet, so `n
 | 200 | an update, an action, a search, an idempotent refresh |
 | 201 | a create — something new exists, and `Location` says where |
 | 404 | the target does not exist (or the caller may not know it does) |
-| 409 | the write conflicts with the current state — a duplicate, a lifecycle refusal |
+| 409 | the write conflicts with the current state — a duplicate, a lifecycle refusal, an action whose target state is already reached, a cap reached (`WEBHOOK_SUBSCRIPTION_LIMIT_REACHED`: deleting a record would let the same request through) |
 | 412 | an `If-Match` that no longer matches — see [Conditional writes](#conditional-writes-etag-and-if-match) |
 | 415 | a body in a type the operation does not declare |
 | 422 | the body breaks the contract or a domain rule |
@@ -233,9 +250,9 @@ and the bundler adds the header parameter, the 412 and the response header from 
 | the caller's account | `GET /account` | `PUT`, `PATCH /account` |
 | example | `GET /examples/{id}` | `PUT`, `PATCH`, `DELETE /examples/{id}` |
 
-Not versioned: a resource with no item read to take a tag from (feedback, webhook subscriptions,
-locales, an address inside its book) and anything with its own concurrency rule (cart lines,
-stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
+Not versioned: a resource with no item read to take a tag from (feedback, locales, an address
+inside its book), a resource that has an item read but no `If-Match` (webhook subscriptions) and
+anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
 
 ### What the tag is
 

@@ -501,9 +501,10 @@ rules:
       module: webhooks
       scope: tenant
       description: >-
-          Change a subscription, rotate or drop a secret from its ring, and replay a delivery. The
-          blast radius of all three is the same — a party this shop did not intend gets signed
-          deliveries — so they share one key.
+          Change a subscription, switch it on or off, rotate or drop a secret from its ring, and
+          replay a delivery. The blast radius of all of them is the same — a party this shop did
+          not intend gets signed deliveries, or the right one stops getting them — so they share
+          one key.
     - action: delete
       subject: WebhookSubscription
       module: webhooks

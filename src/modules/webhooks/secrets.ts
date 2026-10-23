@@ -96,6 +96,29 @@ export const liveRingEntries = (
 };
 
 /**
+ * The live entries that have been superseded, with the instant each stops signing: its
+ * successor's mint time plus the overlap window. The newest never retires, so it is absent.
+ *
+ * @param ring - the stored ring, oldest first
+ * @param now - the instant to judge against
+ */
+export const retiringRingSecrets = (
+    ring: readonly WebhookSecretRingEntry[],
+    now: Date = new Date()
+): { id: string; retiresAt: Date }[] => {
+    const overlapMs = getWebhookSecretOverlapMs();
+    return liveRingEntries(ring, now)
+        .slice(0, -1)
+        .map((entry) => ({
+            id: entry.id,
+            retiresAt: new Date(
+                ring[ring.findIndex(({ id }) => id === entry.id) + 1].createdAt.getTime() +
+                    overlapMs
+            )
+        }));
+};
+
+/**
  * Every live secret in a ring, decrypted — what a delivery attempt signs with. Ring order is
  * preserved (oldest first), which is also the header's own order: `webhook-signature` lists the
  * newest-minted signature last, so a consumer reading left-to-right sees the secret it is about

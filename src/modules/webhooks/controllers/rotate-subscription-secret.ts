@@ -10,7 +10,7 @@ import { requireId } from '@infrastructure/http/ids';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import type { WebhookSubscriptionCreated } from '@types';
 import { webhooksService } from '../services';
-import { presentWebhookSubscription } from '../presenters';
+import { viewSubscription } from '../services/actions';
 
 /**
  * POST /webhooks/subscriptions/:id/rotate-secret
@@ -24,12 +24,13 @@ export const rotateWebhookSubscriptionSecret = (
     const id = requireId(request, response, { notFound: 'generic.error-not-found' });
     if (!id) return;
 
+    const context = tenantCallerContextOf(request);
     return webhooksService
-        .rotateSubscriptionSecret(id, tenantCallerContextOf(request))
+        .rotateSubscriptionSecret(id, context)
         .then((result) => {
             if (refused(response, result)) return;
             return successResponse<WebhookSubscriptionCreated>(response, {
-                ...presentWebhookSubscription(result.data.subscription),
+                ...viewSubscription(result.data.subscription, context.caller),
                 newSecret: result.data.newSecret
             });
         })

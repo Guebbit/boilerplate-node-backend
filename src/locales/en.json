@@ -91,7 +91,6 @@
             "direction": "Direction",
             "displayStatus": "Display status",
             "email": "Email",
-            "enabled": "Enabled",
             "entries": "Entries",
             "event": "Event",
             "eventTypes": "Event types",
