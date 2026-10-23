@@ -24,9 +24,9 @@ import { deleteLocale } from './controllers/delete-locale';
 import { getLocaleEntries, getAppLocaleEntries } from './controllers/get-locale-entries';
 import {
     createLocaleEntry,
-    updateLocaleEntry,
+    replaceLocaleEntry,
     replaceLocaleEntries,
-    mergeLocaleEntries
+    updateLocaleEntries
 } from './controllers/write-locale-entries';
 import { deleteLocaleEntry } from './controllers/delete-locale-entry';
 import { getEntityTranslations } from './controllers/get-entity-translations';
@@ -176,7 +176,7 @@ router.patch(
     isAuthOrCredential,
     requirePermission('update', 'Locale'),
     invalidateCache(['locales']),
-    mergeLocaleEntries
+    updateLocaleEntries
 );
 
 // PUT /locales/:locale/apps/:app/entries/:entryId — change one entry.
@@ -186,7 +186,7 @@ router.put(
     isAuthOrCredential,
     requirePermission('update', 'Locale'),
     invalidateCache(['locales']),
-    updateLocaleEntry
+    replaceLocaleEntry
 );
 
 // DELETE /locales/:locale/apps/:app/entries/:entryId — remove one entry.

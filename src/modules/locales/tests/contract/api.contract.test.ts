@@ -769,7 +769,7 @@ describe('the app is the path', () => {
         const replaced = await api()
             .put('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
-            .send({ entries: [{ key: 'cart.empty', value: 'Vazio' }] });
+            .send({ entries: { 'cart.empty': 'Vazio' } });
         const slice = await api()
             .get('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer);
@@ -789,7 +789,7 @@ describe('the app is the path', () => {
         const response = await api()
             .put('/locales/pt/apps/nobody/entries')
             .set('Authorization', bearer)
-            .send({ entries: [] });
+            .send({ entries: {} });
 
         expect(response.status).toBe(422);
     });
@@ -815,7 +815,7 @@ describe('PUT vs PATCH /locales/:locale/apps/:app/entries', () => {
         const response = await api()
             .put('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
-            .send({ entries: [{ key: 'cart.title', value: 'O seu carrinho' }] });
+            .send({ entries: { 'cart.title': 'O seu carrinho' } });
 
         expect(response.status).toBe(200);
         expect(response.body.data).toMatchObject({ created: 0, updated: 1, removed: 1 });
@@ -831,7 +831,7 @@ describe('PUT vs PATCH /locales/:locale/apps/:app/entries', () => {
         const response = await api()
             .patch('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
-            .send({ entries: [{ key: 'cart.title', value: 'O seu carrinho' }] });
+            .send({ entries: { 'cart.title': 'O seu carrinho' } });
 
         expect(response.status).toBe(200);
         expect(response.body.data).toMatchObject({ created: 0, updated: 1, removed: 0 });
@@ -842,6 +842,46 @@ describe('PUT vs PATCH /locales/:locale/apps/:app/entries', () => {
         });
     });
 
+    it('PATCH deletes a key sent as null and ignores a null for a key it never had', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await seedTwoKeys(bearer);
+
+        const response = await api()
+            .patch('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer)
+            .send({ entries: { 'cart.empty': null, 'cart.never': null } });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({ created: 0, updated: 0, removed: 1 });
+
+        const dictionary = await api().get('/locales/pt/messages');
+        expect(dictionary.body.data.messages).toEqual({ cart: { title: 'Carrinho' } });
+    });
+
+    it('PATCH 422s on an empty map', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api()
+            .patch('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer)
+            .send({ entries: {} });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('PUT 422s on a null value, which only PATCH reads as a delete', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await seedTwoKeys(bearer);
+
+        const response = await api()
+            .put('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer)
+            .send({ entries: { 'cart.title': null } });
+
+        expect(response.status).toBe(422);
+    });
+
     it('reports the revision the import produced, so a client need not re-read the manifest', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
@@ -849,7 +889,7 @@ describe('PUT vs PATCH /locales/:locale/apps/:app/entries', () => {
         const response = await api()
             .patch('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
-            .send({ entries: [{ key: 'cart.title', value: 'Carrinho' }] });
+            .send({ entries: { 'cart.title': 'Carrinho' } });
 
         expect(response.body.data.revision).toBe(1);
     });
@@ -861,24 +901,19 @@ describe('PUT vs PATCH /locales/:locale/apps/:app/entries', () => {
         const response = await api()
             .patch('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
-            .send({
-                entries: [
-                    { key: 'products.list', value: 'Lista' },
-                    { key: 'products.list.title', value: 'Catálogo' }
-                ]
-            });
+            .send({ entries: { 'products.list': 'Lista', 'products.list.title': 'Catálogo' } });
 
         expect(response.status).toBe(409);
     });
 
-    it('422s on a body that is not an entry list', async () => {
+    it('422s on a body that is not a key-to-text map', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
         const response = await api()
             .put('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
-            .send({ entries: [{ key: 'cart.title' }] });
+            .send({ entries: ['cart.title'] });
 
         expect(response.status).toBe(422);
     });
@@ -999,7 +1034,7 @@ describe('apps on the write routes', () => {
         const response = await api()
             .patch('/locales/pt/apps/nobody/entries')
             .set('Authorization', bearer)
-            .send({ entries: [{ key: 'cart.title', value: 'Carrinho' }] });
+            .send({ entries: { 'cart.title': 'Carrinho' } });
 
         expect(response.status).toBe(422);
 

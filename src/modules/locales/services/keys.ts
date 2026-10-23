@@ -90,6 +90,13 @@ export const buildMessageTree = (
     return tree;
 };
 
+/** The longest key the API stores; `CreateLocaleEntryRequest.key` declares the same bound. */
+const KEY_MAX_LENGTH = 200;
+
+/** Whether a (trimmed) key is the 1 to 200 characters the API stores. */
+export const isKeyLengthValid = (key: string): boolean =>
+    key.length > 0 && key.length <= KEY_MAX_LENGTH;
+
 /** The offending segment of a key no tree could address, or `undefined` when it is fine. */
 export const findUnsafeKeySegment = (key: string): string | undefined =>
     key.split('.').find((segment) => segment.length === 0 || UNSAFE_KEY_SEGMENTS.has(segment));

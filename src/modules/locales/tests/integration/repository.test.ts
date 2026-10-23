@@ -581,10 +581,7 @@ describe('importEntries, through the service', () => {
         const result = await localeService.importEntries(
             'es',
             FRONTEND,
-            [
-                { key: 'products.list', value: 'Lista' },
-                { key: 'products.list.title', value: 'Catálogo' }
-            ],
+            { 'products.list': 'Lista', 'products.list.title': 'Catálogo' },
             'merge'
         );
 
@@ -598,7 +595,7 @@ describe('importEntries, through the service', () => {
         const result = await localeService.importEntries(
             'es',
             FRONTEND,
-            [{ key: 'products.list', value: 'Lista' }],
+            { 'products.list': 'Lista' },
             'merge'
         );
 
@@ -617,7 +614,7 @@ describe('importEntries, through the service', () => {
         const result = await localeService.importEntries(
             'es',
             FRONTEND,
-            [{ key: 'products.list', value: 'Lista' }],
+            { 'products.list': 'Lista' },
             'replace'
         );
 
@@ -625,20 +622,77 @@ describe('importEntries, through the service', () => {
         expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['products.list']);
     });
 
-    it('refuses a batch naming one key twice', async () => {
+    it('refuses two keys that are the same once trimmed', async () => {
         await givenLanguage('es');
 
         const result = await localeService.importEntries(
             'es',
             FRONTEND,
-            [
-                { key: 'cart.title', value: 'Carrito' },
-                { key: 'cart.title', value: 'Tu carrito' }
-            ],
+            { 'cart.title': 'Carrito', ' cart.title': 'Tu carrito' },
             'merge'
         );
 
         expect(result.status).toBe(409);
+    });
+
+    it.each([
+        ['empty once trimmed', '   '],
+        ['longer than 200 characters', 'k'.repeat(201)]
+    ])('refuses a key that is %s, even when its value is null', async (_label, key) => {
+        await givenLanguage('es');
+
+        const result = await localeService.importEntries('es', FRONTEND, { [key]: null }, 'merge');
+
+        expect(result.status).toBe(422);
+    });
+
+    it('refuses an empty merge', async () => {
+        await givenLanguage('es', { 'cart.title': 'Carrito' });
+
+        const result = await localeService.importEntries('es', FRONTEND, {}, 'merge');
+
+        expect(result.status).toBe(422);
+    });
+
+    it('deletes the keys a merge sets to null and keeps the rest', async () => {
+        await givenLanguage('es', { 'cart.title': 'Carrito', 'cart.empty': 'Vacío' });
+
+        const result = await localeService.importEntries(
+            'es',
+            FRONTEND,
+            { 'cart.empty': null },
+            'merge'
+        );
+
+        expect(result.data).toMatchObject({ created: 0, updated: 0, removed: 1 });
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
+    });
+
+    it('treats a null for a key that is not stored as a no-op that leaves the revision alone', async () => {
+        await givenLanguage('es', { 'cart.title': 'Carrito' });
+
+        const result = await localeService.importEntries(
+            'es',
+            FRONTEND,
+            { 'cart.gone': null },
+            'merge'
+        );
+
+        expect(result.data).toEqual({ created: 0, updated: 0, removed: 0, revision: 0 });
+    });
+
+    it('lets a merge delete a key and write one that would have collided with it', async () => {
+        await givenLanguage('es', { 'products.list.title': 'Catálogo' });
+
+        const result = await localeService.importEntries(
+            'es',
+            FRONTEND,
+            { 'products.list.title': null, 'products.list': 'Lista' },
+            'merge'
+        );
+
+        expect(result.success).toBe(true);
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['products.list']);
     });
 
     it('reports the revision the import produced, so a client need not re-read the manifest', async () => {
@@ -647,7 +701,7 @@ describe('importEntries, through the service', () => {
         const result = await localeService.importEntries(
             'es',
             FRONTEND,
-            [{ key: 'cart.title', value: 'Carrito' }],
+            { 'cart.title': 'Carrito' },
             'merge'
         );
 

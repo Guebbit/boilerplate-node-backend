@@ -39,6 +39,12 @@ export interface EntryInput {
     value: string;
 }
 
+/** One key of a bulk import: a value to write, or `null` to delete the key. */
+export interface EntryChange {
+    key: string;
+    value: string | null;
+}
+
 /** What a bulk import did. */
 export interface ImportCounts {
     created: number;
@@ -230,8 +236,8 @@ const removeEntry = (entry: LocaleEntryDocument): Promise<number> =>
  * Write a whole set of entries, and bump once for the batch — unless the batch changed nothing,
  * so the same import sent twice leaves the revision where the first one put it.
  *
- * `replace` is the only difference between the two bulk routes — a single `deleteMany` of keys the
- * caller did not send. One `bulkWrite` rather than a loop of upserts: five hundred keys is the
+ * `replace` also deletes every key the caller did not send; a `null` value deletes its key under
+ * either mode (a `null` for a key that is not stored removes nothing). One `bulkWrite` rather than a loop of upserts: five hundred keys is the
  * size an import actually arrives in.
  *
  * D17e-2: the upsert and the removal run in one transaction — the repo's first. Unlike the
@@ -243,13 +249,21 @@ const removeEntry = (entry: LocaleEntryDocument): Promise<number> =>
 const importEntries = async (
     locale: string,
     app: LocaleApp,
-    inputs: EntryInput[],
+    inputs: EntryChange[],
     { replace }: { replace: boolean }
 ): Promise<{ counts: ImportCounts; revision: number }> => {
     const existing = await valuesByKey(locale, app);
-    const incoming = new Map(inputs.map(({ key, value }) => [key, value]));
+    const incoming = new Map(
+        inputs.flatMap(({ key, value }): [string, string][] =>
+            value === null ? [] : [[key, value]]
+        )
+    );
+    const nulled = inputs.filter(({ value }) => value === null).map(({ key }) => key);
 
-    const removedKeys = replace ? [...existing.keys()].filter((key) => !incoming.has(key)) : [];
+    const removedKeys = [
+        ...(replace ? [...existing.keys()].filter((key) => !incoming.has(key)) : []),
+        ...nulled.filter((key) => existing.has(key))
+    ];
     // Only what actually differs is written — `timestamps` would otherwise stamp `updatedAt` on
     // an unchanged row, and "updated" would count keys re-sent with the value they already had.
     const changedEntries = [...incoming].filter(([key, value]) => existing.get(key) !== value);
@@ -591,7 +605,7 @@ export const localeEntryRepository: Repository<LocaleEntryDocument, LocaleEntry>
     importEntries: (
         locale: string,
         app: LocaleApp,
-        inputs: EntryInput[],
+        inputs: EntryChange[],
         options: { replace: boolean }
     ) => Promise<{ counts: ImportCounts; revision: number }>;
 } = {
