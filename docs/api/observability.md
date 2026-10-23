@@ -10,7 +10,7 @@ each carry their own guard rather than a bearer token, because neither caller ca
 `EventSource` cannot set an `Authorization` header, and a Prometheus scraper is not a user.
 
 - **`read:ObservabilitySnapshot` via bearer token**: `/observability/health`, `/observability/metrics/overview`, `/observability/audit`
-- **`read:ObservabilitySnapshot` via refresh cookie**: `/observability/events` (`requirePermissionViaCookie`)
+- **`read:ObservabilitySnapshot` via the `__Host-session` cookie** (the refresh token in `jwt` mode, the session id in `cookie` mode): `/observability/events` (`requirePermissionViaCookie`)
 - **Scrape credential**: `/observability/metrics` (`isMetricsScraper` — `Bearer $NODE_METRICS_TOKEN`; with the variable unset the route answers 503 to everyone)
 
 ## Available endpoints

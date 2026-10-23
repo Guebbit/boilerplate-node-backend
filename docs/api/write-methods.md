@@ -55,7 +55,8 @@ flowchart TD
 
 ### Action → 200
 
-- `POST /orders/{id}/cancel`, `/ship`, `/restore`, `/rotate-secret`: a state change on a thing that
+- `POST /orders/{id}/cancel`, `/restore`, `/status-override`, `POST
+  /delivery/fulfillment-orders/{id}/shipments`, `/rotate-secret`: a state change on a thing that
   already exists. 200, with the thing as it now stands.
 - An action may create a record on the side (a shipment, a stock movement). It still answers the
   thing the caller acts on next.
@@ -307,10 +308,10 @@ stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declar
 | --- | --- | --- |
 | `PUT /account` | `email` is stored as `pendingEmail` | an address is proven before it replaces the old one |
 | `POST /account/signup` | a refused address still gets a 201 and the same `Location: /account`, and nothing is created | antibot: the refusal must look like a success |
-| `PUT /cart/{productId}`, `PUT /cart/shipping-method`, `PUT /locales/{locale}/entries/{entryId}`, `PUT /wishlist/{productId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
+| `PUT /cart/{productId}`, `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /wishlist/{productId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
 | `POST /cart` | adds to an existing line instead of creating a second one; 201 only when the line is new | "add to cart" — Shopify, commercetools, WooCommerce and Magento all grow the line |
 | `POST /payments/intent`, `POST /payments/order/{id}/offline` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |
-| `PUT`/`PATCH /locales/{locale}/tenants/{tenant}/entries` | the tenant is a path segment | a PUT replaces exactly what the GET on the same URI lists |
+| `PUT`/`PATCH /locales/{locale}/apps/{app}/entries` | the app is a path segment | a PUT replaces exactly what the GET on the same URI lists |
 
 ## How it is kept true
 

@@ -7,14 +7,15 @@ repositories and is easy to get wrong from either side.
 ## The one-line version
 
 > This repository **owns** the shared, domain-shaped documents. The frontend **holds
-> byte-identical copies** of the two it consumes and never edits them.
+> byte-identical copies** of the six shared files (the two contract bundles, the authorization keys
+> and three webhook-sink TLS files) and never edits them.
 
 **One backend, one paired frontend, lockstep.** `asyncapi.public.yaml` does reach a second
 consumer — any webhook subscriber, guarded by the `asyncapi-breaking` job — but nothing here is
 versioned or published for a second consumer to pin an *older* copy of. That is a deliberate
 choice, not a gap: a versioned, publishable contract artefact is worth building once a second real
 API consumer exists (a second frontend, a mobile client, a partner integration), not before. Until
-then, `sync:frontend` copying two files on every change is the cheapest correct thing, and
+then, `sync:frontend` copying the shared files on every change is the cheapest correct thing, and
 `spec-identity` (both repos) and `contracts-bundle-freshness` are what make "lockstep" a checked
 claim rather than a hope. The nightly Schemathesis run fuzzes this repo against its own spec — it
 compares nothing across repos, so it isn't part of that lockstep guarantee.
@@ -24,6 +25,8 @@ compares nothing across repos, so it isn't part of that lockstep guarantee.
 `openapi.yaml` is not a special case. Seven documents are produced here from per-module
 sources; two of them — `openapi` and `asyncapi-public` — also exist in
 `boilerplate-vue-frontend` as byte-identical copies, because the frontend's toolchain reads them.
+Four more shared files travel with them (`shared/authorization-keys.yaml` and three webhook-sink TLS
+PEMs); the full list is `SHARED_FILES` in `scripts/pairing/spec-identity.ts`.
 The four client collections stay in this repo only — they are derived from `openapi.yaml`, so a
 frontend copy could never disagree without the spec disagreeing first, and nothing there reads
 them:
@@ -79,7 +82,7 @@ full contract is compared against nothing and is marked `shared: false` to say s
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
 flowchart TD
-    subgraph BE["boilerplate-node-api-mongodb-mongoose  (owns the contract)"]
+    subgraph BE["boilerplate-node-backend  (owns the contract)"]
         H["shared/contracts/openapi.root.yaml<br/><i>preamble · shared components · GET /</i>"] --> AR["assembleRoot<br/><i>paths + tags from the fragments</i>"] --> B["redocly bundle"]
         F1["modules/products/openapi.yaml"] --> B
         F2["modules/orders/openapi.yaml"] --> B
@@ -165,6 +168,11 @@ paths it owns:
 | `example`       | `/examples`       | `Examples`                          |
 | `api-keys`      | `/api-keys`       | `ApiKeys`                             |
 | `antibot`       | `/antibot`        | `Antibot`                               |
+| `analytics`     | `/analytics`      | `Analytics`                             |
+| `shop`          | `/shop`           | `Shop`                                  |
+| `sitemap`       | `/sitemap`        | `Sitemap`                               |
+| `stats`         | `/stats`          | `Stats`                                 |
+| `stock-alerts`  | `/stock-alerts`   | `StockAlerts`                           |
 | `audit-logs`    | `/audit`          | `Audit`                                   |
 | `access`        | —                  | —                                          |
 
@@ -355,7 +363,7 @@ schemas they explain.
 What does not change:
 
 - the module registry, the `basePath` per module, and the one-line enable/disable in `src/modules.ts`
-- `npm run lint:openapi`, `npm run gen:api`, and the the spec-identity check check
+- `npm run lint:openapi`, `npm run gen:api`, and the spec-identity check
 - the frontend holding a byte-identical copy
 
 ## The other five, and what each one taught
@@ -401,7 +409,7 @@ internally. That file's header is the full argument. See also
 
 The `webhooks` section is the one section that is not complete on its own. Its file keeps the server
 and the headers schema every event shares; each event is declared by the module that fires it, in
-`src/modules/<module>/asyncapi.webhooks.yaml` (`orders`, `payments`, `returns`, `example`).
+`src/modules/<module>/asyncapi.webhooks.yaml` (`delivery`, `orders`, `payments`, `returns`, `example`).
 `scripts/contracts/asyncapi-webhook-events.ts` finds those files on disk and
 `withWebhookEvents` folds them into the section before it joins the bundle: one call, in
 `asyncapi-bundles.ts`. The same collision refusal applies, so two modules claiming one event name
@@ -410,6 +418,7 @@ fail the bundle.
 ```mermaid
 flowchart LR
     W["webhooks/asyncapi.yaml<br/>server + WebhookHeaders"] --> S["webhooks section"]
+    D["delivery/asyncapi.webhooks.yaml"] --> S
     O["orders/asyncapi.webhooks.yaml"] --> S
     P["payments/asyncapi.webhooks.yaml"] --> S
     R["returns/asyncapi.webhooks.yaml"] --> S

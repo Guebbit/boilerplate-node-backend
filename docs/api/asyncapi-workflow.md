@@ -59,7 +59,7 @@ src/modules/<module>/asyncapi.yaml             a module's public events (observa
                                                exactly as it carries one openapi.yaml
 src/modules/<module>/asyncapi.internal.yaml    a module's own queue (webhooks, account)
 src/modules/<module>/asyncapi.webhooks.yaml    a module's own webhook events, merged into the
-                                               `webhooks` section (orders, payments, returns, example)
+                                               `webhooks` section (delivery, orders, payments, returns, example)
 shared/contracts/asyncapi.workers.yaml         the RabbitMQ queues, which belong to no domain
 shared/contracts/asyncapi.root.yaml            version, id, info, tags — no channels, no servers
 ```
@@ -85,7 +85,7 @@ npm run check  # fail if a committed bundle is stale
 **It is a merge, not `asyncapi bundle`.** The AsyncAPI CLI's `bundle` command dereferences — inlining
 every payload into every channel that names it, 239 lines to 819, and leaving
 `scripts/contracts/generate-asyncapi-types.ts` with no `$ref` to follow.
-`scripts/contracts/asyncapi-bundles.ts` copies four maps instead and refuses on a collision; its
+`scripts/contracts/asyncapi-bundles.ts` copies five maps instead and refuses on a collision; its
 header carries the full argument, and is the file to read before reaching for that command again —
 the CLI itself is not in this repo's dependencies; see [Package
 Dependencies](../tools/package-dependencies.md).

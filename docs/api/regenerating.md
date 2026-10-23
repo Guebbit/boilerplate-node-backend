@@ -142,10 +142,10 @@ across all seven.
 ## Verifying, and what each failure means
 
 ```bash
-npm run check    # is any bundle stale against its fragments?
+npm run check                    # is any bundle stale against its fragments, and does the paired
+                                 # frontend hold the same bytes?
 npm run lint:openapi              # is openapi.yaml a valid spec, per the ruleset?
 npm run lint:asyncapi             # same, for asyncapi.yaml and asyncapi.public.yaml
-npm run check       # does the paired frontend hold the same bytes?
 npm run test:contract             # do real responses match the contract?
 ```
 
@@ -186,8 +186,10 @@ fully derived — there is no diff to review because there is nothing committed 
 
 ## Handing the contract to the frontend
 
-The frontend holds **byte-identical copies** of the two bundles it consumes — `openapi.yaml` and
-`asyncapi.public.yaml` — plus `shared/authorization-keys.yaml` (for its `actions:` list only), and never bundles or authors them. The
+The frontend holds **byte-identical copies** of the six shared files in `SHARED_FILES`
+(`scripts/pairing/spec-identity.ts`): the two bundles it consumes — `openapi.yaml` and
+`asyncapi.public.yaml` — `shared/authorization-keys.yaml` (for its `actions:` list only) and three
+webhook-sink TLS PEMs, and never bundles or authors them. The
 four client collections stay here, and are not committed at all: they are derived from
 `openapi.yaml`, so a copy there could not disagree without the spec disagreeing first, and nothing
 in either repo reads them.

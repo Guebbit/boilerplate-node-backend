@@ -95,12 +95,12 @@ import type { CreateProductRequest, Product } from '@types';
 **Importing enum const objects** — orval generates enums as `as const` objects (not TypeScript enum declarations). Import the const object to use it with `z.nativeEnum()` or for runtime value checks:
 
 ```typescript
-import { UpdateFeedbackRequestStatusRequestStatus } from '@types';
+import { FeedbackRequestStatus } from '@types';
 
-z.nativeEnum(UpdateFeedbackRequestStatusRequestStatus)
+z.nativeEnum(FeedbackRequestStatus)
 ```
 
-The enum naming convention is: schema name + property name, PascalCase. For example, `UpdateFeedbackRequestStatusRequest.status` → `UpdateFeedbackRequestStatusRequestStatus`.
+A shared enum is a named schema (`FeedbackRequestStatus`) that every property `$ref`s, and the const keeps that name. An enum declared inline on a property is named schema name + property name, PascalCase. For example, `HealthPing.status` → `HealthPingStatus`.
 
 ## Commands used in this repo
 
@@ -136,7 +136,7 @@ Every operation declares `security`, and the `operation-security-declared` Spect
 | `[{}, {bearerAuth: []}, {apiKeyAuth: []}]` | as above, and an API key may also be the credential: the three product reads, where a key holding the wider keys sees drafts and stock |
 | `[{bearerAuth: []}]` | a session token is required, and an API key is refused |
 | `[{bearerAuth: []}, {apiKeyAuth: []}]` | a session token or an `sk_...` API key: the route mounts `isAuthOrCredential` and its permission has no step-up |
-| `[{cookieAuth: []}]` | the refresh cookie is required: the two SSE streams, since `EventSource` cannot set a header |
+| `[{cookieAuth: []}]` | the `__Host-session` cookie (the refresh token in `jwt` mode, the session id in `cookie` mode) is required: the two SSE streams, since `EventSource` cannot set a header |
 | `[{metricsBearer: []}]` | the static scrape credential, for `GET /observability/metrics` |
 
 `apiKeyAuth` is written by hand on each operation a key can use, and `tests/cross-cutting/api-key-security.test.ts` derives the list from the mounted guards: an operation names it exactly when its route mounts `isAuthOrCredential` and its permission has no `stepUp` (a key can never re-authenticate). A route that gains or loses the guard fails the test until the spec follows. The three optional product reads mount no guard, so the test lists them by hand.

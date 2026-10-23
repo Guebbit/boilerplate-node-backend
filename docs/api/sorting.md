@@ -16,7 +16,7 @@ and not just the ten rows on screen. One parameter, one grammar, everywhere.
 | Query form | `?sort=-price,title` — comma-separated; a repeated key (`?sort=a&sort=b`) is accepted too |
 | Body form | `{ "sort": ["-price", "title"] }` — one token per item, exactly as sent |
 | Direction | `field` ascending, `-field` descending |
-| Several fields | the earlier one ranks first; at most 3 |
+| Several fields | the earlier one ranks first; the cap is the enum's `maxItems` (3 for most resources, 2 for `PaymentSort`, 5 for `OrderSort`) |
 | Absent or blank | the resource's default order, newest first. Blank means absent on the **query only** (`?sort=`); a blank body `sort` is a 422 |
 | A repeated field | the first mention wins: `price,-price` sorts by price ascending |
 | A CSV inside a body item | **422** — only the query string is split on commas |
@@ -28,14 +28,15 @@ case-insensitively (`Apple` before `banana`).
 ## Who can be sorted, by what
 
 The list is an **enum per resource** in that module's `openapi.yaml` (`ProductSort`, `UserSort`,
-`OrderSort`, `FeedbackRequestSort`, `ExampleSort`). It is a whitelist on purpose: an unindexed or derived field
+`OrderSort`, `PaymentSort`, `FeedbackRequestSort`, `ExampleSort`). It is a whitelist on purpose: an unindexed or derived field
 would let a stranger ask for a collection scan.
 
 | Resource | Sortable fields |
 | --- | --- |
 | Products | `createdAt` · `price` · `title` (the fallback-locale column) |
 | Users | `createdAt` · `email` · `username` |
-| Orders | `createdAt` · `status` · `email` — `totalPrice` is derived, not a column |
+| Orders | `createdAt` · `status` · `email` · `payBy` · `paidAt` — `totalPrice` is derived, not a column |
+| Payments | `createdAt` · `amount` · `payBy` (a payment with no bank-transfer deadline counts as the earliest) |
 | Feedback | `createdAt` · `status` · `email` |
 | Examples | `createdAt` · `title` · `status` |
 
