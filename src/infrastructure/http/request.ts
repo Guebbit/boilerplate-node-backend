@@ -1,10 +1,10 @@
 /**
  * @module
- * Request input: a value may arrive as a route param, a query string or a JSON body field, and
- * the same endpoint often accepts more than one — which is what lets one controller serve `GET
- * /products?text=x` and `POST /products/search {text}` without duplicating the handler. This
- * module owns the *rules* of that polymorphism, behind one entry point, `readInput`, so
- * controllers don't re-assemble them.
+ * Multi-source input binding: a value may arrive as a route param, a query string or a JSON body
+ * field, and the same endpoint often accepts more than one — which is what lets one controller
+ * serve an operation and its aliases (`GET /products?text=x` and `POST /products/search {text}`)
+ * without duplicating the handler. This module owns the binding *rules*, behind one entry point,
+ * `readInput`, so controllers don't re-assemble them.
  *
  * See: docs/theory/request-input.md
  */

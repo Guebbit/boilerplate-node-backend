@@ -1,13 +1,20 @@
 # Request Input
 
 A value an endpoint needs may arrive as a route param, a query-string entry or a body field, and
-the same endpoint often accepts more than one of those. That is deliberate: it lets a single
-controller serve `GET /products?text=x` and `POST /products/search {"text":"x"}` without
-duplicating the handler, which is what keeps long filter sets out of URLs.
+the same endpoint often accepts more than one of those. That is deliberate, and it has two names:
 
-What is _not_ deliberate is re-deriving the rules of that polymorphism at every call site. This
-page is the single written statement of which sources each endpoint reads, in what order, and what
-happens to the value on the way in.
+- **Operation aliases** — the contract practice. One canonical operation, plus alternate forms of
+  it: `POST /products/search {"text":"x"}` beside `GET /products?text=x`, or `DELETE /products`
+  with an `{id}` body beside `DELETE /products/{id}`. An alias carries `x-alias-of: <canonical
+operationId>` in its module's `openapi.yaml`.
+- **Multi-source input binding** — the mechanism behind them. One entry point, `readInput`, reads
+  a value from the route params, the query string or the body, in a fixed precedence order. One
+  controller then serves every alias of an operation without duplicating the handler, which is
+  what keeps long filter sets out of URLs.
+
+What is _not_ deliberate is re-deriving the binding rules at every call site. This page is the
+single written statement of which sources each endpoint reads, in what order, and what happens to
+the value on the way in.
 
 ## The shape in one picture
 
@@ -55,14 +62,14 @@ happened to pass — and a seventh combination has to be added there deliberatel
 reviewed against the spec. `tests/contract/request-sources.test.ts` pins the set for exactly that
 reason: adding one fails that test once, which is the prompt to update this page alongside it.
 
-| Surface  | Sources (highest first) | Used by                                                                  |
-| -------- | ----------------------- | ------------------------------------------------------------------------ |
-| `search` | body, query             | the four endpoints with a `POST …/search` sibling                        |
-| `list`   | query                   | the four GET-only collection reads, which have no such sibling           |
-| `write`  | params, body            | `updateProduct`, cart PUT                                                |
-| `create` | body                    | `createProduct`, and the PUT/PATCH factory's body (its id is read apart) |
-| `delete` | params, query, body     | the three soft/hard delete controllers                                   |
-| `path`   | params                  | `DELETE /cart/{productId}`, which declares no body; `writeOrders`        |
+| Surface  | Sources (highest first) | Used by                                                                                                          |
+| -------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `search` | body, query             | the endpoints with a `POST …/search` sibling (`example`, `orders`, `payments`, `feedback`, `products`, `users`)  |
+| `list`   | query                   | the GET-only collection reads, which have no such sibling                                                        |
+| `write`  | params, body            | `DELETE /cart/{productId}` (with its body-only alias), cart PUT                                                  |
+| `create` | body                    | `createProduct`, `createUser`, and the PUT/PATCH factory's body, `updateProduct` included (its id is read apart) |
+| `delete` | params, query, body     | the three soft/hard delete controllers                                                                           |
+| `path`   | params                  | `requireId`'s default, for a path id with no body to fall back on                                                |
 
 `search` and `list` differ on one question: **is there a route that can carry a body?** A GET
 cannot — RFC 9110 §9.3.1 gives content on a GET no defined semantics and the Fetch spec refuses to
@@ -108,14 +115,14 @@ declaring a body on its GET.
 | `GET /inventory/levels`                                                 | `page`, `pageSize`, `lowOnly`                   | query                                      | `lowOnly` decoded as a boolean, then Zod                                                  |
 | `GET /inventory/movements`                                              | `productId`                                     | query                                      | first non-empty wins                                                                      |
 |                                                                         | `page`, `pageSize`, `reason`                    | query                                      | then Zod                                                                                  |
-| `GET /locales/{locale}/entries`                                         | `page`, `pageSize`, `text`, `tenant`            | query                                      | then the shared pagination schema                                                         |
-| `GET /locales/{locale}/tenants/{tenant}/entries`                        | `tenant`                                        | params                                     | overrides any `?tenant=`; the rest as above                                               |
+| `GET /locales/{locale}/entries`                                         | `page`, `pageSize`, `text`                      | query                                      | then the shared pagination schema                                                         |
+| `GET /locales/{locale}/apps/{app}/entries`                              | `app`                                           | params                                     | the rest as above                                                                         |
 | `GET /observability/audit`                                              | `actor`, `action`, `outcome`, `since`           | query                                      | then Zod; a repeated key is a 422                                                         |
 |                                                                         | `page`, `pageSize`                              | query                                      | then the shared pagination schema                                                         |
 
 Pagination has exactly two authorities, and they answer different questions. `@infrastructure/http/schemas`
 owns the **bounds** — `openapi.yaml` declares `minimum: 1` / `maximum: 100`, and every one of the
-four search endpoints answers 422 for anything outside that, `GET /feedback` included.
+search endpoints answers 422 for anything outside that, `GET /feedback` included.
 `normalizePagination` (`@infrastructure/persistence/search`) owns the **defaults** — page 1, ten per page, or
 `NODE_SETTINGS_PAGINATION_PAGE_SIZE` — and it runs on every search, which is why a controller
 leaves an unspecified page absent rather than filling it in. Neither clamps: an out-of-range
@@ -242,8 +249,7 @@ generating them from the spec would make the discrepancies below _unwritable_: a
 not read a source the contract does not declare, because nobody would be writing the source list.
 
 It is not done, and the order matters. Four things stand in the way, none fatal: one controller
-serves several operations (`writeOrders` covers two operationIds with two different declared
-bodies), so a generated per-operation declaration would have to be wired per route rather
+can serve several operations with different declared bodies, so a generated per-operation declaration would have to be wired per route rather
 than per controller; `booleans`/`stringArrays` derive from the `multipart` schema variant, not the
 JSON one; `GET /products` and `POST /products/search` are two operations deliberately sharing one
 controller, so their declarations would need unioning; and orval generates clients and schemas,
