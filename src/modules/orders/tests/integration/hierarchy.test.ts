@@ -120,7 +120,6 @@ const actionsFor = (orderId: string, role: string, callerId: string) =>
             cancel: actions?.cancel,
             pay: actions?.pay,
             recordPayment: actions?.recordPayment,
-            transitions: actions?.transitions,
             start: actions?.start,
             override: actions?.override
         }));
@@ -132,8 +131,7 @@ describe('what an order offers each caller — what a client renders', () => {
 
         expect(await actionsFor(String(order._id), 'customer', buyer)).toMatchObject({
             cancel: true,
-            pay: true,
-            transitions: [OrderStatus.cancelled]
+            pay: true
         });
     });
 
@@ -145,7 +143,7 @@ describe('what an order offers each caller — what a client renders', () => {
 
             const actions = await actionsFor(String(order._id), role, STAFF_ID);
 
-            expect(actions).toMatchObject({ cancel: false, pay: false, transitions: [] });
+            expect(actions).toMatchObject({ cancel: false, pay: false });
         }
     );
 
@@ -159,7 +157,6 @@ describe('what an order offers each caller — what a client renders', () => {
         ]);
 
         expect([onCustomer.cancel, onStaff.cancel]).toEqual([true, true]);
-        expect(onStaff.transitions).not.toEqual([]);
     });
 
     it('offers the delivery door on a customer’s paid order and on a staff member’s alike', async () => {

@@ -291,7 +291,7 @@ way a handle does. What it never publishes, no matter how convenient:
   the model's does, `export type * from './presenter'`; the function itself never does, in any
   form. A sibling that needs the transform asks the service for it, the same door it already goes
   through for a repository read — `orderService.withActions` is `orders/presenter.ts`'s
-  `presentOrder`, reached this way by `cart`, `delivery` and `payments` alike.
+  `presentOrder` plus the caller's `actions` (`orders/services/actions.ts`), reached this way by `cart`, `delivery` and `payments` alike.
 - **Wiring** — `routes.ts`, `controllers/`, `module.ts`, `probes.ts`, `metrics.ts`, `analytics.ts`,
   `audit.ts`. The app registers these; a sibling never calls them.
 - **`factories.ts`.** A builder writes past the domain rules a service enforces — the same

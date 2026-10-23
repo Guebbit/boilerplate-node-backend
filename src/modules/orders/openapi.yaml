@@ -16,6 +16,8 @@ x-error-codes:
     ORDER_LINE_LIMIT_EXCEEDED: { status: 422, description: 'An admin-created order has more lines, or a larger quantity on one line, than this deployment allows (`NODE_ADMIN_ORDER_MAX_LINES`, `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`). The message names the limit.' }
     ORDER_NOT_CANCELLABLE: { status: 409, description: 'The order is not in a state that can still be cancelled.' }
     ORDER_NOT_CANCELLED: { status: 409, description: 'A delete, soft or hard, needs a cancelled order: this one is still open. Cancel it first (`POST /orders/{id}/cancel`), which refunds a paid one.' }
+    ORDER_HAS_MONEY_HISTORY: { status: 409, description: 'A hard delete is refused: money was recorded on the order after it was cancelled (a late payment and its refund still point at it). Soft delete it instead.' }
+    ORDER_NOT_DELETED: { status: 409, description: 'A restore is refused: the order is not soft-deleted.' }
     ORDER_OVERRIDE_NOT_ALLOWED: { status: 409, description: 'This status transition is not on the admin override''s allowed list.' }
     ORDER_ADDRESS_LOCKED: { status: 409, description: 'The order cannot be redirected: something has shipped, or it has no shipping address (a pickup, a digital order).' }
     ORDER_OVERRIDE_AWAITING_STOCK: { status: 409, description: 'The order still has units awaiting stock; overriding it forward would ship goods the stock ledger never counted out.' }
@@ -181,7 +183,7 @@ paths:
         delete:
             tags: [Orders]
             summary: Delete order
-            description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record, which is only allowed for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid); a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete hides a cancelled order from its buyer (409 `ORDER_NOT_CANCELLED` while it is open), is safe to repeat, and is undone with `POST /orders/{id}/restore`.
+            description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record, which is only allowed for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid, 409 `ORDER_HAS_MONEY_HISTORY` once money was recorded after the cancel); a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete hides a cancelled order from its buyer (409 `ORDER_NOT_CANCELLED` while it is open), is safe to repeat, and is undone with `POST /orders/{id}/restore`.
             operationId: deleteOrder
             x-alias-of: deleteOrderById
             security:
@@ -204,7 +206,8 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # A delete refused. `errors[].code` is `ORDER_NOT_CANCELLED` for an order still open
                 # (soft or hard: only a cancelled order may be deleted), and `ORDER_INVOICED` for a
-                # hard delete of an order that was paid.
+                # hard delete of an order that was paid, `ORDER_HAS_MONEY_HISTORY` for one that was
+                # handed money after its cancel.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -429,7 +432,7 @@ paths:
         delete:
             tags: [Orders]
             summary: Delete order
-            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record, which is only allowed for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid). A soft delete hides a cancelled order from its buyer (409 `ORDER_NOT_CANCELLED` while it is open), is safe to repeat, and is undone with `POST /orders/{id}/restore`. Functionally equivalent to `DELETE /orders`.
+            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record, which is only allowed for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid, 409 `ORDER_HAS_MONEY_HISTORY` once money was recorded after the cancel). A soft delete hides a cancelled order from its buyer (409 `ORDER_NOT_CANCELLED` while it is open), is safe to repeat, and is undone with `POST /orders/{id}/restore`. Functionally equivalent to `DELETE /orders`.
             operationId: deleteOrderById
             security:
                 - bearerAuth: []
@@ -449,7 +452,8 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # A delete refused. `errors[].code` is `ORDER_NOT_CANCELLED` for an order still open
                 # (soft or hard: only a cancelled order may be deleted), and `ORDER_INVOICED` for a
-                # hard delete of an order that was paid.
+                # hard delete of an order that was paid, `ORDER_HAS_MONEY_HISTORY` for one that was
+                # handed money after its cancel.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -460,7 +464,7 @@ paths:
         post:
             tags: [Orders]
             summary: Restore order
-            description: Undoes the soft delete of the order identified by `{id}`. Answers 409 when the order is not soft-deleted, so a restore can never be mistaken for an ordinary read.
+            description: Undoes the soft delete of the order identified by `{id}`. Answers 409 `ORDER_NOT_DELETED` when the order is not soft-deleted, so a restore can never be mistaken for an ordinary read.
             operationId: restoreOrderById
             security:
                 - bearerAuth: []
@@ -501,7 +505,8 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # A delete refused. `errors[].code` is `ORDER_NOT_CANCELLED` for an order still open
                 # (soft or hard: only a cancelled order may be deleted), and `ORDER_INVOICED` for a
-                # hard delete of an order that was paid.
+                # hard delete of an order that was paid, `ORDER_HAS_MONEY_HISTORY` for one that was
+                # handed money after its cancel.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -745,7 +750,7 @@ components:
         OrderTimelineEntry:
             type: object
             additionalProperties: false
-            required: [id, at, type, data]
+            required: [id, at, type, audience, data]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -754,6 +759,14 @@ components:
                     format: date-time
                 type:
                     $ref: '#/components/schemas/OrderTimelineType'
+                audience:
+                    type: string
+                    enum: [buyer, staff]
+                    description: >-
+                        Who the row is for, decided per `type` by the server. `staff` rows are
+                        private (an override's reason, a hold, a provider's refusal): a buyer's
+                        timeline never contains one, so a client only tells staff which of their
+                        rows the buyer cannot see. The account export carries both.
                 actor:
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -1211,7 +1224,6 @@ components:
             additionalProperties: false
             required:
                 [
-                    transitions,
                     cancel,
                     pay,
                     recordPayment,
@@ -1221,7 +1233,8 @@ components:
                     invoice,
                     withdraw,
                     delete,
-                    hardDelete
+                    hardDelete,
+                    restore
                 ]
             description: >-
                 What the requesting caller may do to this order, decided by the server. A client
@@ -1230,14 +1243,6 @@ components:
                 how the two come to disagree. Pay is the BUYER's (reading an order is not owning
                 it); an operator who holds the key moves any order, a staff member's own included.
             properties:
-                transitions:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/OrderStatus'
-                    description: >-
-                        The statuses this caller may move the order to. Empty on a terminal order,
-                        and never contains the order's current status.
-                    example: [processing, cancelled]
                 cancel:
                     type: boolean
                     description: >-
@@ -1250,9 +1255,9 @@ components:
                     description: >-
                         Whether this order is still awaiting payment — it can reach `paid`, which
                         only a confirmed charge writes — and the caller may pay it: the buyer, who
-                        holds the shopper's checkout key (staff and administrators do not). Not in `transitions`, because no request may
-                        make that move: a client starts the flow with `POST /payments/intent` and
-                        the provider's yes does the rest.
+                        holds the shopper's checkout key (staff and administrators do not). Not a status
+                        move any request makes: a client starts the flow with `POST /payments/intent`
+                        and the provider's yes does the rest.
                 recordPayment:
                     type: boolean
                     description: >-
@@ -1264,8 +1269,8 @@ components:
                     type: boolean
                     description: >-
                         Whether `POST /delivery/order/{id}/start` would be accepted for this
-                        caller. Not in `transitions`: `paid → processing` is `system`-only there,
-                        reached only by reporting the fact through `delivery`'s own door.
+                        caller. `paid → processing` is `system`-only in the lifecycle, reached
+                        only by reporting the fact through `delivery`'s own door.
                 override:
                     type: array
                     items:
@@ -1301,15 +1306,6 @@ components:
                         otherwise withdrawable. Absent when `withdraw` is `true`, for anyone who is
                         not the buyer, and for an order whose status offers no withdrawal (cancelled).
                         A client shows the button disabled with this reason rather than hiding it.
-                withdrawUntil:
-                    type: string
-                    format: date-time
-                    description: >-
-                        The end of the last day a withdrawal is announced to be valid (UTC), frozen
-                        when the period started — delivery for goods, payment for digital content.
-                        A client prints its date only. The shop accepts a withdrawal one day past
-                        it. Absent before the period starts: the right already exists, the window
-                        has no end yet.
                 delete:
                     type: boolean
                     description: >-
@@ -1319,8 +1315,14 @@ components:
                     type: boolean
                     description: >-
                         Whether `DELETE /orders/{id}?hardDelete=true` would be accepted for this
-                        caller: the caller holds `delete:Order`, and the order is `cancelled` and was
-                        never paid (a paid order's invoice must survive it).
+                        caller: the caller holds `delete:Order`, and the order is `cancelled`, was
+                        never paid (a paid order's invoice must survive it) and holds no money
+                        recorded after the cancel (a late payment and its refund still point at it).
+                restore:
+                    type: boolean
+                    description: >-
+                        Whether `POST /orders/{id}/restore` would be accepted for this caller: the
+                        caller holds `delete:Order` and the order is soft-deleted (`deletedAt` is set).
                 invoice:
                     type: boolean
                     description: >-
@@ -1529,13 +1531,23 @@ components:
                 returnStatus:
                     $ref: '#/components/schemas/OrderReturnStatus'
                 # Computed per CALLER, not stored: what this requester may do to this order right
-                # now. Present on every response carrying ONE order — the read, the writes and the
-                # cancel — so a client that replaces its cached record from a write does not lose
-                # the block and collapse its own controls. Absent from the list, where it would be
-                # answered per row for a question only the detail view asks.
+                # now. Present on every read of orders — the single read, the list rows and the
+                # writes — so a client that replaces its cached record from a write does not lose
+                # the block and collapse its own controls. Absent from the account export, which
+                # is the buyer's data and not a screen (an `actions` block is never exported).
                 # See docs/theory/tactical-ddd.md.
                 actions:
                     $ref: '#/components/schemas/OrderActions'
+                withdrawUntil:
+                    type: string
+                    format: date-time
+                    readOnly: true
+                    description: >-
+                        The end of the last day a withdrawal is announced to be valid (UTC), frozen
+                        when the period started — delivery for goods, payment for digital content.
+                        A client prints its date only. The shop accepts a withdrawal one day past
+                        it. Absent before the period starts: the right already exists, the window
+                        has no end yet.
                 # When the order reached `paid`: the buyer's own fact, and the date a sale is
                 # counted on. Absent while unpaid. An offline payment's is when the admin recorded
                 # it, not when the money arrived.

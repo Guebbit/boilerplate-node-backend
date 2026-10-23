@@ -21,7 +21,7 @@ import { paymentRepository } from '@modules/payments/repository';
 import paymentsModule from '@modules/payments/module';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { asCustomer, callerContextAs } from '@tests/callers';
+import { asAdmin, asCustomer, callerContextAs } from '@tests/callers';
 import { asReject } from '@tests/response';
 
 setupTestDb();
@@ -193,5 +193,32 @@ describe('a hand-recorded payment that lands on a released hold', () => {
         expect(await orderStatusOf(orderId)).toBe('paid');
         expect(await inventoryService.isStockBoundToOrder(orderId)).toBe(true);
         expect(await levelOf(String(product._id))).toEqual({ onHand: 5, reserved: 1 });
+    });
+});
+
+describe('an order handed money it could not take', () => {
+    it('is kept from a hard delete, and says so on its flag', async () => {
+        const { orderId, product, providerRef } = await expiredCardOrder(1);
+        await heldOrderFor(await createUser({ email: 'stranger3@example.com' }), product);
+        await fakePaymentProvider.confirm(providerRef, 'pm_card_visa');
+        await paymentService.applyWebhookSettlement(providerRef);
+        // The late cancellation ends the order: cancelled, never paid, a succeeded payment and a
+        // refund pointing at it.
+        await orderService.expireReservationById(orderId);
+        await settleOutboxNudges();
+        const cancelled = await orderService.getById(orderId);
+        expect(cancelled?.status).toBe('cancelled');
+        expect(cancelled?.paidAt).toBeUndefined();
+
+        const flags = await orderService.withActions(cancelled!, asAdmin());
+        const refused = await orderService.removeById(orderId, true);
+
+        expect(flags.actions).toMatchObject({ delete: true, hardDelete: false });
+        expect(asReject(refused).status).toBe(409);
+        expect(asReject(refused).errors[0].code).toBe('ORDER_HAS_MONEY_HISTORY');
+        // The soft delete is still open to it, and the row is still there.
+        const hidden = await orderService.removeById(orderId);
+        expect(hidden.success).toBe(true);
+        expect(await orderService.getById(orderId)).not.toBeNull();
     });
 });
