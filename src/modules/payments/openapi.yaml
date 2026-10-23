@@ -1096,11 +1096,14 @@ components:
 
         RefundReason:
             type: string
-            enum: [cancellation, goodwill, return]
+            enum: [cancellation, goodwill, return, late_payment]
             description: >-
                 Why the money went back. `cancellation` — the order was cancelled after payment, or the
                 unshipped remainder of one fulfillment order was (then `returnId` names that cancellation);
-                `return` — goods came back and were received; `goodwill` — an operator chose to.
+                `return` — goods came back and were received; `goodwill` — an operator chose to;
+                `late_payment` — the money arrived after the order could no longer be paid (its stock
+                reservation had expired or it was cancelled), so the sale was lost and the money went back.
+                The buyer is mailed it like a cancellation's refund.
 
         RefundPaymentRequest:
             type: object

@@ -43,7 +43,7 @@ import {
 } from '../domain';
 import type { PaymentDocument } from '../model';
 import { payerScope } from './scope';
-import { CANCELLATION_REQUEST, openRefund, performRefund } from './refunds';
+import { CANCELLATION_REQUEST, LATE_PAYMENT_REQUEST, openRefund, performRefund } from './refunds';
 import { recordDecline } from './announce';
 import { PAYMENT_SUCCEEDED } from '../events';
 import { notPayable, paymentNotFound } from './errors';
@@ -257,7 +257,7 @@ const settleWithin = async (
         // Read inside the settlement's own snapshot, the one `markPaid` judged, never a fresh one.
         const current = await orderService.readOrder(orderId, session);
         if (!current || !paymentSettled(current.status)) {
-            await openRefund(succeeded, CANCELLATION_REQUEST, undefined, session);
+            await openRefund(succeeded, LATE_PAYMENT_REQUEST, undefined, session);
             return { kind: 'lost', payment: succeeded };
         }
     }

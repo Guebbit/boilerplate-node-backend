@@ -23,10 +23,19 @@ import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, callerContextAs } from '@tests/callers';
 import { asReject } from '@tests/response';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { eventually } from '@tests/eventually';
+
+jest.mock('@infrastructure/adapters/mailer', () => ({
+    __esModule: true,
+    enqueueEmail: jest.fn()
+}));
+const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
 
 beforeEach(() => {
+    mockEnqueueEmail.mockClear();
     registerCheckoutModules([paymentsModule]);
 });
 
@@ -112,12 +121,32 @@ describe('a card payment that lands on a released hold', () => {
         const payment = await paymentRepository.findByOrderId(orderId);
         expect(payment?.status).toBe('succeeded');
         expect(payment?.refunds).toHaveLength(1);
+        // Named for what happened, so staff can tell a lost sale from a cancellation.
+        expect(payment?.refunds[0].reason).toBe('late_payment');
 
         // The late cancellation then ends the order, with nothing left to give back.
         await orderService.expireReservationById(orderId);
         await settleOutboxNudges();
         expect(await orderStatusOf(orderId)).toBe('cancelled');
         expect(await levelOf(productId)).toEqual({ onHand: 1, reserved: 1 });
+    });
+
+    it("mails the buyer the refund, as it does a cancellation's", async () => {
+        const { orderId, product, providerRef } = await expiredCardOrder(1);
+        await heldOrderFor(await createUser({ email: 'rival@example.com' }), product);
+        await fakePaymentProvider.confirm(providerRef, 'pm_card_visa');
+
+        await paymentService.applyWebhookSettlement(providerRef);
+
+        await eventually(() =>
+            settleOutboxNudges().then(() =>
+                mockEnqueueEmail.mock.calls.some(
+                    ([, template]) => template === 'payments.refund-issued'
+                )
+            )
+        );
+        const [refund] = await refundsOf(orderId);
+        expect(refund.reason).toBe('late_payment');
     });
 
     it('does not keep the units of an order that was cancelled before the money landed', async () => {

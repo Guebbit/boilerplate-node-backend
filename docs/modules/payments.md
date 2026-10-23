@@ -415,6 +415,9 @@ sequenceDiagram
   are received) opens a refund with `reason: return` and the return's `returnId`, clamped to what the
   payment has left. `payment.refunded` carries the `returnId`, so `returns` closes the return when
   the refund lands — including later, when the sweep completes one the provider first refused.
+- **A late payment is named.** Money that lands after the order could no longer be paid (its hold
+  expired or it was cancelled) is refunded with `reason: late_payment`, not `cancellation`, so staff
+  can tell a lost sale from a cancellation. The buyer is mailed it like any refund outside a return.
 - **A refund can pay for a cancelled remainder.** The same door takes `reason: cancellation` for the
   unshipped part of an order that shipped in part ([`returns`](./returns.md#cancelling-what-has-not-shipped)).
   The `returnId` names the cancellation, which is closed at birth, so nothing waits on it; and because

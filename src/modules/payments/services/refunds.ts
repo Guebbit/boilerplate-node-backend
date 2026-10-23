@@ -79,6 +79,12 @@ export interface RefundRequest {
 /** The request the automatic callers make: everything left, for a cancellation. */
 export const CANCELLATION_REQUEST: RefundRequest = Object.freeze({ reason: 'cancellation' });
 
+/**
+ * The request for money that arrived after the order could no longer be paid: everything, named
+ * for what happened so staff can tell a lost sale from a cancellation.
+ */
+export const LATE_PAYMENT_REQUEST: RefundRequest = Object.freeze({ reason: 'late_payment' });
+
 /** A refund that was just opened, with the payment as it stood right after. */
 export interface OpenedRefund {
     payment: PaymentDocument;
