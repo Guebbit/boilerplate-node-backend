@@ -128,7 +128,8 @@ membership row survives the user it points at.
 
 A key says what kind of thing; it never said whose. An account that holds a staff role may be
 changed only by a holder of `assign:Role`, or it is a `403 ROLE_MANAGEMENT_REQUIRED`.
-`canChangeAccount` answers it for a user id, `roleProtectedRefusal` wraps it into the envelope the
+`mayChangeAccount` is the rule as a pure function (`users` asks it of a whole page of rows for the
+`actions` block); `canChangeAccount` answers it for a user id after a lookup, `roleProtectedRefusal` wraps it into the envelope the
 services return, and `holdsStaffRole` / `staffHoldersAmong` read from the memberships whether an
 account holds a role in either scope. A role has no level and nothing ranks. The rule, its
 exemptions and where each service asks it are on

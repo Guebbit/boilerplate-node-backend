@@ -34,6 +34,7 @@ export type { GrantRefusal } from './grants';
 export { DEPLOYMENT_TENANT_SLUG } from './memberships';
 export {
     isOwnThing,
+    mayChangeAccount,
     ownOrderFlag,
     roleManagementRequired,
     ROLE_PROTECTED_REASON,
