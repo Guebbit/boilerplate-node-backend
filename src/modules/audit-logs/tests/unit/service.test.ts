@@ -31,7 +31,8 @@ jest.mock('@modules/audit-logs/repository', () => ({
         search: jest.fn(),
         // The real fragment builder, not a stub: what the service must be shown to do is hand
         // `since` to `scope`, and a stubbed one would pass whether it did or not.
-        sinceScope: (since?: Date) => (since ? { timestamp: { $gt: since } } : {})
+        sinceScope: (since?: Date) => (since ? { timestamp: { $gt: since } } : {}),
+        ownOrderScope: () => ({})
     }
 }));
 

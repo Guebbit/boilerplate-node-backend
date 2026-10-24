@@ -58,6 +58,11 @@ paths:
                       type: string
                       format: date-time
                   description: Return events strictly after this ISO-8601 timestamp — an exclusive bound
+                - name: ownOrder
+                  in: query
+                  required: false
+                  schema: { type: boolean }
+                  description: Filter by whether the action was taken on the caller's own order. `true` keeps only the entries flagged `metadata.ownOrder`; `false` keeps the rest. Absent keeps both.
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
             responses:
@@ -123,6 +128,24 @@ components:
                 metadata:
                     type: object
                     additionalProperties: true
+                    description: What the action carried. The keys below are the ones every consumer may rely on; an action may add its own.
+                    properties:
+                        ownOrder:
+                            type: boolean
+                            description: Set (`true`) when staff acted on an order they placed themselves. Absent otherwise.
+                        changes:
+                            type: object
+                            description: An `*.updated` action's non-personal fields that moved, by field name.
+                            additionalProperties:
+                                type: object
+                                required: [from, to]
+                                properties:
+                                    from: { description: 'The value before; `null` when it was unset.' }
+                                    to: { description: 'The value after; `null` when it was cleared.' }
+                        changedFields:
+                            type: array
+                            description: An `*.updated` action's free-text and personal fields that moved, by NAME only. The audit trail is never scrubbed on erasure, so their values never enter it.
+                            items: { type: string }
                 timestamp: { type: string, format: date-time }
                 level:
                     type: string
