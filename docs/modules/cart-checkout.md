@@ -142,6 +142,9 @@ units, so two totals compare as integers). A mismatch of amount or currency answ
 buyer confirms by sending it back. The cart's own version cannot do this job: a catalogue price change
 does not bump it.
 
+`GET /cart` answers the number to send: `summary.expectedTotal`, `totalPrice` converted by the same
+function the check uses. A client echoes it and holds no table of currency exponents.
+
 The field is required by the contract, so a client that did not show a total cannot place an order. The
 service itself tolerates a call without one (the tests that are not about the price), because only the
 HTTP edge is the buyer's.

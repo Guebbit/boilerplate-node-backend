@@ -17,82 +17,14 @@ import {
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { orderService } from '@modules/orders';
-import type { OrderDocument } from '@modules/orders';
-import type { AuthContext } from '@types';
-import type { CallerContext } from '@types';
+import type { AuthContext, CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { cartLineMax } from '../config';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
-import { planMergeLine } from '../domain';
-import { cartRepository, QUANTITY_LIMIT } from '../repository';
-import { isListed, readShelf } from './shelf';
-import { toCartView, type CartView } from './view';
+import { mergeLines, type MergeResult } from './merge';
+import { cartGetForBadge } from './items';
 import { ERROR_CODES } from '@api/error-codes';
-
-/** A line the order asks for, kept because the product can still be bought. */
-interface ReorderLine {
-    productId: string;
-    quantity: number;
-}
-
-/**
- * Resolve an order's lines against today's catalogue, keeping only what can still be added.
- *
- * A vanished, inactive or soft-deleted product is dropped here, not refused — a single
- * unavailable line must not block the rest of the order. The caller rejects the whole reorder
- * only once none come through. One read of the shelf for every line, the same one the merge
- * makes.
- * @param order - the order being reordered
- */
-const resolveReorderLines = (order: OrderDocument): Promise<ReorderLine[]> => {
-    const requested = order.items.map((item) => ({
-        productId: String(item.product._id),
-        quantity: item.quantity
-    }));
-
-    return readShelf(requested.map(({ productId }) => productId)).then((shelves) =>
-        requested.filter(({ productId }) => {
-            const shelf = shelves.get(productId);
-            return shelf !== undefined && isListed(shelf);
-        })
-    );
-};
-
-/**
- * Add each resolved line to the caller's cart, one line at a time.
- *
- * One at a time, in the original order: each `upsertLine` reads and rewrites the same cart
- * document, so a parallel add would lose lines to a last-write-wins race — which is also what
- * lets `quantities` below track each write without re-reading the cart per line. How much of a
- * line fits is the merge's own rule ({@link planMergeLine}), so the two cannot disagree.
- * @param userId - the caller whose cart is being filled
- * @param lines - the addable lines, as resolved by {@link resolveReorderLines}
- */
-const addLinesToCart = async (userId: string, lines: ReorderLine[]): Promise<void> => {
-    const existingCart = await cartRepository.findByUserId(userId);
-    const quantities = new Map(
-        (existingCart?.items ?? []).map((item) => [String(item.productId), item.quantity])
-    );
-
-    for (const line of lines) {
-        const held = quantities.get(line.productId) ?? 0;
-        const { add } = planMergeLine({
-            requested: line.quantity,
-            held,
-            listed: true,
-            lineMax: cartLineMax()
-        });
-        if (add <= 0) continue;
-
-        const result = await cartRepository.upsertLine(userId, line.productId, add, 'add');
-        // QUANTITY_LIMIT here means `quantities` was already stale by write time (a
-        // concurrent change to this same cart) — best-effort, so the line is skipped
-        // rather than retried.
-        if (result !== QUANTITY_LIMIT) quantities.set(line.productId, held + add);
-    }
-};
 
 /**
  * Copy an order's lines back into the caller's cart.
@@ -103,27 +35,32 @@ const addLinesToCart = async (userId: string, lines: ReorderLine[]): Promise<voi
  * from MY history — an admin reordering must not be able to refill their basket from a stranger's
  * purchase. `deletedAt: null` alongside it, since `ownerScope` alone (unlike `callerScope`,
  * whose `read:Order` condition already carries it) does not exclude a soft-deleted order.
- * Lines are re-resolved against today's catalogue via `findPublicById`, and a vanished/inactive
- * product is SKIPPED, not refused, unlike `./items`' `upsertCartItem` — a total skip answers 409
- * `REORDER_UNAVAILABLE` rather than an empty 200. A line already at (or requesting past)
- * `cartLineMax()` is clamped to what room is left, and skipped outright once none is — the same
- * best-effort treatment as an unavailable product, not a refusal. Writes to the cart happen
- * sequentially; see {@link addLinesToCart} for why.
+ *
+ * The lines go through the merge's own rule ({@link mergeLines}), so the two cannot disagree and
+ * the answer is the same per-line report: a vanished or hidden product is `removed`, a line past
+ * `cartLineMax()` is `capped` to what room is left. None of that is a failure, unlike
+ * `./items`' `upsertCartItem`; only an order with nothing addable at all answers 409
+ * `REORDER_UNAVAILABLE` rather than an empty 200.
  */
 export const reorderIntoCart = (
     authContext: AuthContext,
     orderId: string,
     context: CallerContext
-): Promise<ResponseSuccess<CartView> | ResponseReject> => {
+): Promise<ResponseSuccess<MergeResult> | ResponseReject> => {
     const userId = authContext.id;
 
     return orderService
         .getById(orderId, orderService.ownLiveScope(userId))
-        .then<ResponseSuccess<CartView> | ResponseReject>((order) => {
+        .then<ResponseSuccess<MergeResult> | ResponseReject>((order) => {
             if (!order) return generateReject(404, [t('cart.reorder.order-not-found')]);
 
-            return resolveReorderLines(order).then((addable) => {
-                if (addable.length === 0)
+            const requested = order.items.map((item) => ({
+                productId: String(item.product._id),
+                quantity: item.quantity
+            }));
+
+            return mergeLines(userId, requested, context).then((lines) => {
+                if (lines.every(({ reason }) => reason === 'removed'))
                     return generateReject(409, [
                         {
                             code: ERROR_CODES.REORDER_UNAVAILABLE,
@@ -131,11 +68,8 @@ export const reorderIntoCart = (
                         }
                     ]);
 
-                return addLinesToCart(userId, addable).then(() =>
-                    cartRepository
-                        .findByUserId(userId)
-                        .then((cart) => toCartView(cart))
-                        .then((view) => generateSuccess(view, 200, t('cart.reorder.success')))
+                return cartGetForBadge(userId).then((cart) =>
+                    generateSuccess({ cart, lines }, 200, t('cart.reorder.success'))
                 );
             });
         })

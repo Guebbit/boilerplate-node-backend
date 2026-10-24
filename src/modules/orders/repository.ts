@@ -374,6 +374,23 @@ const replaceShippingAddress = (
         .exec();
 
 /**
+ * Record that money landed on an order that could no longer take it, so the order is never
+ * hard-deleted out from under the payment and refund that now point at it. Set once; a repeat
+ * keeps the first instant.
+ * @param id - the order
+ * @param session - the settlement's transaction, so the stamp commits with the money
+ */
+const markMoneyReceived = (id: string, session?: ClientSession): Promise<void> =>
+    orderModel
+        .updateOne(
+            { _id: toObjectId(id), moneyReceivedAt: { $exists: false } },
+            { $set: { moneyReceivedAt: new Date() } },
+            { session }
+        )
+        .exec()
+        .then(() => undefined);
+
+/**
  * Write one of the projections another module owns (`paymentStatus`, `returnStatus`). Unconditional
  * on purpose: a projection is a report of a fact the owner already decided, so a repeat writes the
  * same value, and `undefined` clears it — "no return holds goods" is the absence of the field.
@@ -665,10 +682,10 @@ const incrementOrderNumberCounter = (year: number): Promise<number> =>
     incrementYearlyCounter(orderNumberCounterModel, year);
 
 /**
- * Permanently remove an order that is cancelled and was never paid, as one conditional write: the
- * delete's own filter carries both, so a settlement or a status move that landed after the caller
- * read the document stops it (Optimistic Offline Lock). Checked against the request's `If-Match`
- * like `deleteOne`.
+ * Permanently remove an order that is cancelled, was never paid and holds no late money, as one
+ * conditional write: the delete's own filter carries all three, so a settlement or a status move
+ * that landed after the caller read the document stops it (Optimistic Offline Lock). Checked
+ * against the request's `If-Match` like `deleteOne`.
  *
  * @param document - the order, as the caller read it
  * @returns `false` when nothing was removed: the order moved on meanwhile, or is already gone
@@ -678,11 +695,17 @@ const deleteCancelledUnpaid = (document: OrderDocument): Promise<boolean> => {
 
     return checkedDelete(document, () => {
         // Mongoose merges a document's `$where` into its delete filter. `null` matches a missing
-        // `paidAt`, so an order never paid matches. Cleared after, as `versioning.ts` does, so a
-        // second use of the same object is not filtered on this one.
+        // field, so an order never paid (`paidAt`) and never handed late money
+        // (`moneyReceivedAt`) matches. Cleared after, as `versioning.ts` does, so a second use of
+        // the same object is not filtered on this one.
         // https://mongoosejs.com/docs/api/document.html#Document.prototype.$where
         Object.assign(document, {
-            $where: { ...(document.$where as object), status: OrderStatus.cancelled, paidAt: null }
+            $where: {
+                ...(document.$where as object),
+                status: OrderStatus.cancelled,
+                paidAt: null,
+                moneyReceivedAt: null
+            }
         });
         return (document.deleteOne() as Promise<DeleteOutcome>)
             .then((outcome) => {
@@ -716,6 +739,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         scope?: Record<string, unknown>
     ) => Promise<OrderDocument | undefined>;
     deleteCancelledUnpaid: (document: OrderDocument) => Promise<boolean>;
+    markMoneyReceived: (id: string, session?: ClientSession) => Promise<void>;
     ownerScope: (userId: string) => Record<string, unknown>;
     updateStatusIfIn: (
         id: string,
@@ -778,6 +802,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     streamMatching,
     findByIdScoped,
     deleteCancelledUnpaid,
+    markMoneyReceived,
     ownerScope,
     updateStatusIfIn,
     markPaid,

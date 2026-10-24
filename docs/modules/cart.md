@@ -82,7 +82,7 @@ wire line are the same shape, and there is no mapper between them to keep in syn
 
 **A line holds at most `NODE_CART_LINE_MAX` units** (default 10, the contract's hard ceiling is 999):
 a `PUT` past it and an add that would push a line past it answer 422
-`CART_QUANTITY_LIMIT`, a reorder clamps to what room is left instead, and checkout re-checks every line, so a basket
+`CART_QUANTITY_LIMIT`, a reorder clamps to what room is left instead and reports it per line (`capped`), and checkout re-checks every line, so a basket
 filled before the ceiling was lowered is refused with the lines named rather than quietly trimmed.
 It is one of three caps on denial of inventory, with `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` and
 `NODE_RESERVATION_TTL_MINUTES` — see [checkout](./cart-checkout.md).
@@ -179,6 +179,11 @@ Adding a hidden product stays a 404 (`POST /cart`, a wishlist add, `PUT /cart/{i
 must not reveal that a hidden product exists. An off-sale product is accepted, as a sold-out one
 is. The states themselves are in [products](./products.md#product-states).
 
+The cart answers two flags so a client holds no copy of the rule: each line's `canIncrease`
+(`quantity` below `NODE_CART_LINE_MAX`) and the cart's `checkoutable` (not empty, every line
+`in_stock`, `preorder` or `backorder`: `isBuyable` in `domain/availability.ts`, the same test
+checkout's refusal uses). A shipping method and an address are separate steps and not part of it.
+
 ## Merging a guest cart
 
 A cart built while signed out lives in the browser. At sign-in the client sends it in one call,
@@ -249,11 +254,11 @@ flowchart LR
 
 ## Configuration
 
-| Variable                                  | Default | What it does                                                                                                                                                                                           |
-| ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `NODE_CART_RETENTION_DAYS`                | `365`   | Days an untouched cart survives before the TTL index drops it                                                                                                                                          |
-| `NODE_CART_LINE_MAX`                      | `10`    | Most units one line may hold, 1 to 999. See [the story](#the-story)                                                                                                                                    |
-| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` | `2`     | How many unpaid (`pending`) orders one account may hold, whatever the payment method; each holds stock. Checkout refuses the next with 409 `CART_OPEN_ORDER_LIMIT`. Admin `POST /orders` is not capped |
+| Variable                                  | Default | What it does                                                                                                                                                                                                   |
+| ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_CART_RETENTION_DAYS`                | `365`   | Days an untouched cart survives before the TTL index drops it                                                                                                                                                  |
+| `NODE_CART_LINE_MAX`                      | `10`    | Most units one line may hold, 1 to 999. See [the story](#the-story)                                                                                                                                            |
+| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` | `2`     | How many unpaid (`pending`) orders one account may hold, whatever the payment method; each holds stock. Checkout refuses the next with 409 `CART_OPEN_ORDER_LIMIT_REACHED`. Admin `POST /orders` is not capped |
 
 The open-order cap is a checkout rule, not an order rule: the error code, the message and the
 checkout-only scope are all `cart`'s. Checkout asks `orders` for `openUnpaidOrderIds` and compares

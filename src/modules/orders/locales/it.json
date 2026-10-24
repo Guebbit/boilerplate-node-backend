@@ -19,6 +19,7 @@
             "too-large": "Questa esportazione conterrebbe più di {{max}} ordini. Restringi i filtri e riprova."
         },
         "invoiced": "Questo ordine ha una fattura emessa e non può più essere eliminato definitivamente.",
+        "has-money-history": "Questo ordine ha pagamenti registrati e non può più essere eliminato definitivamente.",
         "not-cancelled": "Annulla questo ordine prima di eliminarlo definitivamente.",
         "email-confirm": {
             "subject": "Ordine ricevuto — in attesa di pagamento",

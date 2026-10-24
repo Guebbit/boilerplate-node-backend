@@ -339,7 +339,6 @@ describe('orderActionsFor', () => {
             for (const status of EVERY_STATUS) {
                 const actions = orderActionsFor(status, actor);
 
-                expect(actions.transitions).toEqual(statusesReachableFrom(status, actor));
                 expect(actions.cancel).toBe(
                     statusesReachableFrom(status, actor).includes(OrderStatus.cancelled)
                 );
@@ -352,12 +351,10 @@ describe('orderActionsFor', () => {
         // call, so a wrong entry in `ORDER_LIFECYCLE` would pass it just as easily. These pin
         // actual values, independent of that function.
         expect(orderActionsFor(OrderStatus.pending, 'customer')).toEqual({
-            transitions: [OrderStatus.cancelled],
             cancel: true,
             pay: true
         });
         expect(orderActionsFor(OrderStatus.paid, 'admin')).toEqual({
-            transitions: [OrderStatus.cancelled],
             cancel: true,
             pay: false
         });
@@ -370,16 +367,11 @@ describe('orderActionsFor', () => {
             expect(orderActionsFor(OrderStatus.cancelled, actor).cancel).toBe(false);
     });
 
-    it('keeps `pay` out of the transitions it offers a REQUEST', () => {
+    it('offers `pay` on a pending order to both actors that reach the HTTP surface', () => {
         // Paying is a move no request makes: the answer is published so a client can offer the
-        // card form, not so it can write the status. Asserted over the two actors that reach the
-        // HTTP surface — `system` is the one that owns the move, and no request may claim it.
-        for (const actor of REQUEST_ACTORS) {
-            const actions = orderActionsFor(OrderStatus.pending, actor);
-
-            expect(actions.pay).toBe(true);
-            expect(actions.transitions).not.toContain(OrderStatus.paid);
-        }
+        // card form, not so it can write the status. `system` owns the move.
+        for (const actor of REQUEST_ACTORS)
+            expect(orderActionsFor(OrderStatus.pending, actor).pay).toBe(true);
     });
 
     it('withdraws `pay` once the money has landed or the order is over', () => {

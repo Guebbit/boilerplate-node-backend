@@ -9,13 +9,13 @@ import { cartService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
-import type { CartResponse } from '@types';
+import type { ReorderResponse } from '@types';
 
 /**
  * POST /cart/reorder/:orderId
  * Copy one of the caller's own orders back into their cart. The order is only read — this
- * writes to the cart, hence living here. Lines whose product left the catalogue are skipped;
- * an order with nothing left to add answers 409 rather than a hollow 200.
+ * writes to the cart, hence living here. Each line reports what became of it, like the merge: a product that
+ * left the catalogue is `removed`, one at the cap is `capped`; an order with nothing left to add answers 409 rather than a hollow 200.
  */
 export const postReorder = (request: Request<{ orderId: string }>, response: Response) => {
     const orderId = requireId(request, response, {
@@ -29,7 +29,7 @@ export const postReorder = (request: Request<{ orderId: string }>, response: Res
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse<CartResponse>(response, result.data, 200, result.message);
+            successResponse<ReorderResponse>(response, result.data, 200, result.message);
         })
         .catch(catchAs(response, 'postReorder'));
 };

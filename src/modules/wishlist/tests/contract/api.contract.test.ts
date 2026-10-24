@@ -169,7 +169,12 @@ describe('POST /wishlist/{productId}/move-to-cart', () => {
 
         const cart = await api().get('/cart').set('Authorization', bearer);
         expect(cart.body.data.items).toEqual([
-            { productId: String(product._id), quantity: 1, availability: 'in_stock' }
+            {
+                productId: String(product._id),
+                quantity: 1,
+                availability: 'in_stock',
+                canIncrease: true
+            }
         ]);
     });
 

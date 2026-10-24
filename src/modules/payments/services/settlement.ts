@@ -164,7 +164,11 @@ const settleMismatch = (
         );
         // The money is real the moment it is recorded, so its way back is opened with it: never
         // durable without the record that returns it.
-        if (recorded) await openRefund(recorded, CANCELLATION_REQUEST, undefined, session);
+        if (recorded) {
+            await openRefund(recorded, CANCELLATION_REQUEST, undefined, session);
+            // The order now has a succeeded payment and a refund pointing at it: no hard delete.
+            await orderService.markMoneyReceived(orderId, session);
+        }
         return recorded;
     }).then(async (recorded) => {
         if (!recorded) return { payment, orderLost: true, transitioned: false };
@@ -265,6 +269,8 @@ const settleWithin = async (
         const current = await orderService.readOrder(orderId, session);
         if (!current || !paymentSettled(current.status)) {
             const opened = await openRefund(succeeded, LATE_PAYMENT_REQUEST, undefined, session);
+            // Money on an order that never reached `paid`: keep the order from a hard delete.
+            await orderService.markMoneyReceived(orderId, session);
             return { kind: 'lost', payment: succeeded, refund: opened?.refund };
         }
     }

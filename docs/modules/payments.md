@@ -486,7 +486,7 @@ stateDiagram-v2
   stored `expiresAt`. See [Inventory Reservations](./inventory-reservations.md#the-sweep).
 - **A week-long hold is free to take, so an account is capped, for every method.**
   `cart` owns the cap: `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` (default 2) counts that account's own unpaid (`pending`)
-  orders, a `processing` card included; a third checkout is refused with `CART_OPEN_ORDER_LIMIT`,
+  orders, a `processing` card included; a third checkout is refused with `CART_OPEN_ORDER_LIMIT_REACHED`,
   naming the open orders, before anything is written.
 - **Nothing asks a provider about it.** The reconcile sweep skips hand-recorded rows, and the
   browser's `POST /payments/{id}/sync` answers the payment as it stands: only an operator recording
