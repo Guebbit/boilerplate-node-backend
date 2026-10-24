@@ -54,7 +54,7 @@ flowchart TD
   with the new `Refund` and `Location: /payments/{id}/refunds/{refundId}`. The payment's running
   totals are one `GET /payments/{id}` away.
 - **A 201 means something was created** (RFC 9110 §15.3.2). An intent that only refreshes the
-  order's one payment row, or a cart "add" that only grows a line, answers **200**.
+  order's one payment row answers **200**.
 - Anything the contract does not declare is a 422 (`additionalProperties: false`), never a column.
 
 ### Action → 200
@@ -63,6 +63,37 @@ flowchart TD
   thing that already exists. 200, with the thing as it now stands.
 - An action may create a record on the side (a shipment, a stock movement). It still answers the
   thing the caller acts on next.
+
+### A line is written through its parent
+
+A **line** is a part of a per-user parent with no life of its own: a cart line, a saved product, a
+back-in-stock request, an OAuth link, a webhook subscription's secret. It is written through the
+parent, never on a URL of its own.
+
+| Parent                    | Line collection         | Add                                  | Change                              | Remove                                            |
+| ------------------------- | ----------------------- | ------------------------------------ | ----------------------------------- | ------------------------------------------------- |
+| the cart                  | `/cart/items`           | `POST /cart/items {productId, quantity}` | `PATCH /cart/items/{productId}` | `DELETE /cart/items/{productId}`, all: `DELETE /cart/items` |
+| the wishlist              | `/wishlist/items`       | `POST /wishlist/items {productId}`   | none (a line is a yes/no)           | `DELETE /wishlist/items/{productId}`              |
+| the stock-alert list      | `/stock-alerts` itself  | `POST /stock-alerts {productId}`     | none                                | `DELETE /stock-alerts/{productId}`                |
+| the caller's OAuth links  | `/account/oauth/links`  | `POST /account/oauth/links/{provider}` (a redirect flow) | none         | `DELETE /account/oauth/links/{provider}`          |
+
+- The collection is `/items` when the parent holds one kind of line, the line's own noun when it
+  has one (`/secrets`, `/links`), and the parent itself when it is nothing but the list.
+- Every write answers **200 + the whole parent**: no 201, no `Location`, no GET of one line. A GET
+  on the line collection is a 405 naming the writes; the parent's GET is the read.
+- **A PUT never creates**, and a PATCH on a line the parent does not hold is a 404.
+- A repeat is not an error: adding what is saved is the same 200 and fires nothing twice. A
+  cart add GROWS an existing line instead (Shopify, commercetools).
+- Names: a line add is `create*` (`add*` for a cart line, which may grow instead), its removal
+  `delete*` or `remove*`, its change `update*`.
+
+Why: a 201 says a resource was created at a URL, and a line has none (RFC 9110 §9.3.3 makes the
+`Location` of a 201 a SHOULD; §9.3.4 makes a PUT that creates a MUST-201). The parent is what the
+client re-renders, so the parent is the answer (§15.3.1: a 200 carries "the result of the
+action"). Medusa v2 (`POST`/`DELETE /store/carts/{id}/line-items[/{line_id}]`), BigCommerce
+(`POST /carts/{id}/items`, `POST`/`DELETE /wishlists/{id}/items[/{item_id}]`), Shopify's
+`cartLinesAdd`/`Update`/`Remove`, commercetools' cart update actions and Auth0's identity unlink
+all answer the parent.
 
 ### Repeating an action (409)
 
@@ -75,7 +106,8 @@ allowed", with 409 where Google says 400).
   deactivated one: `USER_ALREADY_INACTIVE`.
 - `DELETE /users/{id}/purchase-hold` on an account with no hold and no review flag:
   `USER_PURCHASE_HOLD_NOT_SET`.
-- `DELETE` of a resource stays idempotent (RFC 9110 §9.2.2): a retried delete answers as the first did.
+- A retried `DELETE` leaves the same state (RFC 9110 §9.2.2). What is already gone answers 404, as
+  Google's [AIP-135](https://google.aip.dev/135) does.
 - The caller's `actions` flag for the move is `false` in that state, so a screen never offers it.
 
 #### An action whose target state is already reached
@@ -149,19 +181,14 @@ GET → edit → PUT round trip would delete the picture.
 to the stored one is no change — no second email, no role re-grant, no version or revision bump.
 Logging each request is allowed.
 
-**A PUT with no body sets a flag or a membership.** When the URI is the whole statement, the
-body is empty: `PUT /wishlist/{productId}` (this product is saved), `PUT
-/account/addresses/{id}/default` (this address is the default). Sent twice, nothing changes —
-the GitHub-stars pattern (`PUT`/`DELETE /user/starred/{owner}/{repo}`).
+**A PUT with no body points at something.** When the URI is the whole statement, the body is
+empty: `PUT /account/addresses/{id}/default` (this address is the default). Sent twice, nothing
+changes — Shopify's `PUT …/addresses/{id}/default.json` is the same shape. A line of a parent
+(a saved product, a cart line) is not this: it is written through the parent, see
+[A line is written through its parent](#a-line-is-written-through-its-parent).
 
-**Naming a body-less PUT.** Spectral bans a `put*` operation id. A PUT that only states a
-membership is `create*` and its DELETE `delete*` (`createWishlistItem`, `deleteWishlistItem`); one
-that carries a value is `update*` or `replace*` (`updateCartItemById`).
-
-**Create by PUT only where the client names the thing.** A PUT on an id that does not exist is a
-404. The one exception is a URI the caller owns by construction — a cart line, `PUT
-/cart/{productId}`: it creates the line and answers **201**, or updates it and answers 200
-(RFC 9110 §9.3.4).
+**A PUT never creates.** A PUT on an id that does not exist is a 404 (a PUT that creates MUST
+answer 201, RFC 9110 §9.3.4, and nothing here has a URL the client may name).
 
 **Offer a PUT only when the body can be the whole resource.** A route that sets two fields of a
 bigger record is a PATCH alone (`PATCH /feedback/{id}`), never a PUT that clears the rest.
@@ -388,8 +415,7 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
 | --- | --- | --- |
 | `PUT /account` | `email` is stored as `pendingEmail` | an address is proven before it replaces the old one |
 | `POST /account/signup` | a refused address still gets a 201 and the same `Location: /account`, and nothing is created | antibot: the refusal must look like a success |
-| `PUT /cart/{productId}`, `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /wishlist/{productId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
-| `POST /cart` | adds to an existing line instead of creating a second one; 201 only when the line is new | "add to cart" — Shopify, commercetools, WooCommerce and Magento all grow the line |
+| `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
 | `POST /payments`, `POST /payments/orders/{id}/offline` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |
 | `PUT`/`PATCH /locales/{locale}/apps/{app}/entries` | the app is a path segment | a PUT replaces exactly what the GET on the same URI lists |
 

@@ -49,13 +49,13 @@ Stock is read-only on this surface. `onHand`, `reserved` and `available` are ser
 
 > The domain behind these routes: [`cart`](../modules/cart.md) · routes and middleware: `src/modules/cart/routes.ts`
 
-Per-user, server-side cart. Items are scoped to the authenticated user. `POST /cart` is "add to cart": a new product gets a line (201), one already there grows (200). `PUT /cart/{productId}` sets a quantity. `POST /cart/checkout` converts the cart into an order, clears the cart, records the `cartCheckoutTotal` metric and emits a `checkout_completed` analytics event.
+Per-user, server-side cart. Items are scoped to the authenticated user. A line is written through the cart's `/items` collection and every write answers 200 with the whole cart: `POST /cart/items` is "add to cart" (a new product gets a line, one already there grows), `PATCH /cart/items/{productId}` sets a quantity of a line the cart holds (404 otherwise), `DELETE /cart/items/{productId}` removes one and `DELETE /cart/items` empties the cart. `POST /cart/checkout` converts the cart into an order, clears the cart, records the `cartCheckoutTotal` metric and emits a `checkout_completed` analytics event.
 
 ## Wishlist
 
 > The domain behind these routes: [`wishlist`](../modules/wishlist.md) · routes and middleware: `src/modules/wishlist/routes.ts`
 
-Per-user saved products — ids only, joined client-side like the cart's lines. `PUT /wishlist/:productId` saves one (idempotent, no body) and `DELETE` on the same URI removes it. `POST /wishlist/:productId/move-to-cart` is the exit: the saved line becomes a cart line (quantity 1, incremented if already present) and leaves the wishlist.
+Per-user saved products — ids only, joined client-side like the cart's lines. `POST /wishlist/items {productId}` saves one (idempotent: saving what is saved is the same 200) and `DELETE /wishlist/items/:productId` removes it. `POST /wishlist/items/:productId/move-to-cart` is the exit: the saved line becomes a cart line (quantity 1, incremented if already present) and leaves the wishlist.
 
 ## Orders
 
@@ -205,7 +205,7 @@ Staff-only sales numbers (`read:Stats`), never cached: `GET /stats/sales`, `/pro
 
 > The domain behind these routes: [`stock-alerts`](../modules/stock-alerts.md) · routes and middleware: `src/modules/stock-alerts/routes.ts`
 
-A signed-in caller asks to be told once when a product they cannot order can be again: `GET /stock-alerts` lists their requests, `POST /stock-alerts/{productId}` makes one, `DELETE /stock-alerts/{productId}` cancels it.
+A signed-in caller asks to be told once when a product they cannot order can be again: `GET /stock-alerts` lists their requests, `POST /stock-alerts {productId}` makes one, `DELETE /stock-alerts/{productId}` cancels it.
 
 ## Realtime
 

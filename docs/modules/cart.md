@@ -109,7 +109,7 @@ callers holding `read:StockLevel` ([Reading the shelf](../theory/defences/author
 That is also why the merge never lowers a short line: lowering it to what is for sale would let
 anyone read the stock by merging 999.
 
-`POST /cart` and `PUT` do not refuse a line for stock or for being off sale, so the gate that
+`POST /cart/items` and `PATCH /cart/items/{productId}` do not refuse a line for stock or for being off sale, so the gate that
 refuses is checkout.
 
 ## Line availability
@@ -175,7 +175,7 @@ flowchart TD
     K -- no --> S[in_stock]
 ```
 
-Adding a hidden product stays a 404 (`POST /cart`, a wishlist add, `PUT /cart/{id}`): a new add
+Adding a hidden product stays a 404 (`POST /cart/items`, a wishlist add, `PATCH /cart/items/{id}`): a new add
 must not reveal that a hidden product exists. An off-sale product is accepted, as a sold-out one
 is. The states themselves are in [products](./products.md#product-states).
 
@@ -187,7 +187,7 @@ checkout's refusal uses). A shipping method and an address are separate steps an
 ## Merging a guest cart
 
 A cart built while signed out lives in the browser. At sign-in the client sends it in one call,
-`POST /cart/merge`, and the cart folds it in by `POST /cart`'s own rule: a product held in both
+`POST /cart/merge`, and the cart folds it in by `POST /cart/items`' own rule: a product held in both
 carts ends at the sum, capped at `NODE_CART_LINE_MAX`. The answer is the cart as it now stands plus
 **one result per submitted line, in request order**: what the guest asked for (`requested`), what the
 cart holds now (`resulting`), a `reason` when the two differ, and the line's `availability`.
@@ -202,7 +202,7 @@ sequenceDiagram
     FE->>API: guest lines + Idempotency-Key
     API->>P: one read of every product and its stock
     loop each line, in order
-        API->>C: add what POST /cart would (sum, cap)
+        API->>C: add what POST /cart/items would (sum, cap)
         API->>API: availability for what the cart now holds
     end
     API-->>N: cart.merge_refused, only for hidden or deleted products
