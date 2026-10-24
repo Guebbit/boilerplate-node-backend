@@ -512,6 +512,12 @@ re-minted, and which session modes it applies to. `revokeFor(cause, userId)` in
 and so the cases `api-keys` mails about, are derived from the rows that announce. Adding a cause
 means adding a row, and the compiler asks for its test trigger.
 
+`deletion-scheduled` is the row for `DELETE /account` ([scheduled deletion](./account.md#scheduled-deletion)):
+the epoch rides `users`' own save, the pending links (reset, verification, email change, login challenges)
+are purged, nothing is announced to `api-keys` (the keys are suspended by the resolver, not revoked, and
+come back on restore), and the caller is not re-minted. The `account-restore` link is minted after
+this purge, and is deliberately not among the links it kills.
+
 **Where the epoch is written.** In the credential's own write, so a second write failing cannot
 leave an old session live: the password's transaction, the swap's `save`, the factor's `save`. Two
 cases stand apart. Logout everywhere writes the epoch and its `account.sessions-revoked`

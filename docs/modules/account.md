@@ -1,7 +1,7 @@
 # account
 
 ::: tip At a glance
-**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, two-step deletion, and the [data export](#data-export). Three collections of its own: `sessions`, `verificationtokens` and `accountexports`; the address book is [`addresses`](./addresses.md).
+**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, [scheduled deletion](#scheduled-deletion), and the [data export](#data-export). Three collections of its own: `sessions`, `verificationtokens` and `accountexports`; the address book is [`addresses`](./addresses.md).
 **Depends on** — [`users`](./users.md), whose record it authenticates. The repo's only `shared-kernel` edge.
 **Breaks if you change** — the token lifetimes or the cookie flags. Every guard in the app resolves through this module.
 :::
@@ -249,6 +249,26 @@ up-to-24-hours between the two.
 | the old address's undo link         | 7 days                                                                                                                     |
 | the account restore link            | until `purgeAt` (`account-deletion.ts`)                                                                                    |
 | a login's two-factor challenge      | 5 minutes, 10 when a delivered factor (email) is armed, since the code must cross a mail queue (`two-factor-challenge.ts`) |
+
+## Scheduled deletion {#scheduled-deletion}
+
+`DELETE /account` (a critically fresh session, and a second-factor proof when one is armed) locks the
+account, ends its sessions (revocation cause `deletion-scheduled`), mails a restore link and answers
+`202 {requestedAt, purgeAt}`. `purgeAt` is `min(requestedAt + NODE_ACCOUNT_DELETION_GRACE_DAYS,
+one calendar month later)`: the reasoning, the GDPR clock and the table of what a locked account
+loses are in [the retention page](../theory/data-retention.md#self-deletion-a-grace-under-one-month).
+
+| Way back        | Route                                        | Proof                                                               |
+| --------------- | -------------------------------------------- | ------------------------------------------------------------------- |
+| the mailed link | `POST /account/restore {token}`              | the `account-restore` token; it does not sign anyone in             |
+| signing in      | `POST /account/login`, then `/login/restore` | password (and second factor), then a `deletion-restore` claim check |
+| staff           | `POST /users/{id}/restore`                   | `delete:User`; `account` hears `user.deletion-cancelled`            |
+
+The purge is `reap:scheduled-deletions` (hourly, leased). Per due account it copies the address and
+name, runs `eraseScheduledDeletion` (the whole erase cascade), then mails the goodbye and records
+`auth.account_delete.completed`. Audit: `.scheduled`, `.cancelled` (`metadata.via` is `link`,
+`sign-in` or `staff`), `.completed`. Metric `auth_account_delete_total{status}`; analytics
+`account_deletion_scheduled` and `account_restored` (the purge fires nothing).
 
 ## Data export {#data-export}
 

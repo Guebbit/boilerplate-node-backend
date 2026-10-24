@@ -273,7 +273,7 @@ way a handle does. What it never publishes, no matter how convenient:
     The same rule holds for the raw write a `…ById` door delegates to (`update(doc)`, `remove(doc)`):
     the barrel publishes the door, not the write. When a sibling has a legitimate reason to hold the
     loaded document, the module names a narrower door for it: `users` serves `account` through
-    `updateOwnProfile`, `eraseOwnAccount`, `softDeleteInactive` and `eraseInactive`, see
+    `updateOwnProfile`, `scheduleOwnDeletion`, `restoreOwnAccount`, `eraseScheduledDeletion`, `softDeleteInactive` and `eraseInactive`, see
     [users](../modules/users.md#the-doors-a-sibling-module-may-use).
 
     **A step exactly one other module must call** cannot be hidden this way: it has to be published.
