@@ -174,7 +174,7 @@ servers:
 # behind it: it goes stale silently, and the next app-level response repeats the whole exercise.
 #
 # `appliesTo` — `all` for what any request can trigger, `requestBody` for what only a request
-# carrying a body can.
+# carrying a body can, `requestBodyOrDelete` for the 415, which a body-less DELETE answers too.
 x-app-level-responses:
     '400':
         response: BadRequest
@@ -184,7 +184,7 @@ x-app-level-responses:
         appliesTo: requestBody
     '415':
         response: UnsupportedMediaType
-        appliesTo: requestBody
+        appliesTo: requestBodyOrDelete
     '429':
         response: TooManyRequests
         appliesTo: all
@@ -483,7 +483,8 @@ components:
             description: >-
                 The body's media type is not one the operation declares (`details.accepted` lists
                 them), or its charset or encoding cannot be read. Refused before any route runs,
-                like `413` above. A request with no body is never judged.
+                like `413` above. A request with no body is never judged. A `DELETE` that declares no
+                body refuses any body, and `details.accepted` is then empty.
             content:
                 application/json:
                     schema:
@@ -989,16 +990,6 @@ components:
                         Whether `POST /users/{id}/deactivate` would be accepted — `ban:User`, the
                         account is not a staff account the caller may not manage, and it is
                         active. Deactivating ends every session of the account.
-
-        # For the path-form deletes, which need no id — `{id}` already carries it — but do
-        # read the flag from a body as readily as from the query.
-        HardDeleteRequest:
-            type: object
-            additionalProperties: false
-            properties:
-                hardDelete:
-                    type: boolean
-                    default: false
 
         # ---------- system — the schemas only this module's paths reference. ----------
         HealthPing:

@@ -27,6 +27,16 @@ const carriesBody = (request: Request): boolean =>
     Number(request.headers['content-length'] ?? 0) > 0;
 
 /**
+ * Whether the request's body type is one the operation declares.
+ *
+ * @param request - the incoming request, known to carry a body
+ * @param types - the declared media types; empty when the operation takes no body
+ * @returns `false` for any body on a body-less operation, else type-is's verdict
+ */
+const acceptsBody = (request: Request, types: readonly string[]): boolean =>
+    types.length > 0 && request.is([...types]) !== false;
+
+/**
  * Builds the guard from the generated operation table.
  *
  * Only a request that carries a body is judged: an action POST with no body has nothing to
@@ -47,8 +57,10 @@ export const requireDeclaredContentType = (
             (candidate) => candidate.method === request.method && candidate.pattern.test(path)
         );
 
-        // `request.is` (type-is): `false` when the type is not listed.
-        if (operation && carriesBody(request) && request.is([...operation.types]) === false)
+        // `request.is` (type-is): `false` when the type is not listed. An empty list means the
+        // operation takes no body at all, and `request.is([])` would answer with the request's own
+        // type instead of `false`, so that case is decided here.
+        if (operation && carriesBody(request) && !acceptsBody(request, operation.types))
             return rejectResponse(response, 415, [
                 {
                     code: ERROR_CODES.UNSUPPORTED_MEDIA_TYPE,

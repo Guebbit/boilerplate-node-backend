@@ -23,6 +23,7 @@ const TABLE: readonly RequestContentType[] = [
         parameterCount: 1,
         types: ['application/json', 'application/merge-patch+json']
     },
+    { method: 'DELETE', pattern: /^\/things\/[^/]+$/, parameterCount: 1, types: [] },
     {
         method: 'POST',
         pattern: /^\/things\/[^/]+\/restore$/,
@@ -117,6 +118,24 @@ describe('requireDeclaredContentType', () => {
         });
 
         expect(outcome.status).toBe(415);
+    });
+
+    it('refuses any body on an operation that declares none, naming no accepted type', () => {
+        const outcome = run({ method: 'DELETE', path: '/things/abc', type: 'application/json' });
+
+        expect(outcome.status).toBe(415);
+        expect(outcome.body).toMatchObject({ errors: [{ details: { accepted: [] } }] });
+        expect(outcome.passed).toBe(false);
+    });
+
+    it('refuses a body with no content type on an operation that declares none', () => {
+        expect(run({ method: 'DELETE', path: '/things/abc' }).status).toBe(415);
+    });
+
+    it('lets a body-less DELETE through', () => {
+        const outcome = run({ method: 'DELETE', path: '/things/abc', length: 0 });
+
+        expect(outcome.passed).toBe(true);
     });
 
     it('does not judge a request with no bytes, even one that names a type', () => {

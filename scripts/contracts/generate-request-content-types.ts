@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /*
  * Generates the request media-type table from `openapi.yaml`: for every operation that declares a
- * `requestBody`, the content types it accepts. The 415 guard
+ * `requestBody`, the content types it accepts; a DELETE without one is listed with none, so any body is refused. The 415 guard
  * (`src/infrastructure/http/middlewares/content-type.ts`) reads it, so a body in a type the
  * contract does not declare is refused instead of arriving as an empty `{}`. Each row carries its
  * path matcher as a regex literal, so the guard compiles nothing at boot.
@@ -93,8 +93,11 @@ const renderRows = (): string[] =>
     Object.entries(document.paths)
         .flatMap(([route, operations]) =>
             BODY_METHODS.flatMap((method) => {
-                const types = Object.keys(operations[method]?.requestBody?.content ?? {});
-                if (types.length === 0) return [];
+                const operation = operations[method];
+                const types = Object.keys(operation?.requestBody?.content ?? {});
+                // A DELETE with no declared body refuses any body (`types: []`): a gateway that
+                // strips a body must not turn a body-carrying request into a different one.
+                if (types.length === 0 && (method !== 'delete' || !operation)) return [];
                 const { literal, parameterCount } = compileTemplate(route);
                 return [
                     {

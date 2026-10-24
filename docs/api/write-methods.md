@@ -188,6 +188,11 @@ The guard is `requireDeclaredContentType`, built from `api/request-content-types
 `npm run gen:api` derives from the contract's own `requestBody` media types. A request with no
 bytes is not judged: a missing required body is the schema's own 422.
 
+A `DELETE` that declares no body is listed with no types at all (`types: []`), and the guard refuses
+ANY body on it, `details.accepted` empty. That is why `DELETE /products/{id}` takes no `{hardDelete}`
+body: a client or gateway that drops it would turn a hard delete into a soft one, so the flag lives
+in the query or the `/hard` path and a body is refused instead of ignored.
+
 ## A known path with the wrong method
 
 A path the contract declares, asked with a method it does not give it, answers **405** with an

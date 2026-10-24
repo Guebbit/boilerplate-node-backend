@@ -189,8 +189,9 @@ paths:
             security:
                 - bearerAuth: []
             # The flag is readable from the query here too, exactly as it is on the `{id}` form:
-            # one controller serves both, and `surface: 'delete'` reads params, query and body on
-            # whichever route it is mounted on. Declared rather than merely tolerated.
+            # one controller serves both, and the flag is read from the path flag, the query and
+            # the body on whichever route it is mounted on. The id is the body's alone here, and the
+            # path's alone on the `{id}` form. Declared rather than merely tolerated.
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
             requestBody:
@@ -439,12 +440,6 @@ paths:
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/HardDeleteRequest'
             responses:
                 '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }

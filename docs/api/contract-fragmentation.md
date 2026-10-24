@@ -341,7 +341,7 @@ file (`../orders/openapi.yaml#/components/schemas/Order`). Only what has no sing
 | Scalars | `Id`, `Email`, `Locale`, `Page`, `PageSize`, `Text`, `ImageUrl` | referenced everywhere |
 | Envelope machinery | `EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`, `PaginationMeta`, `MessageResponse`, `ErrorItem`, `ErrorResponse`, `ValidationErrorResponse` | every operation's success and failure shape |
 | The user record | `User`, `UserEnvelope`, `UserActions` | `account` authenticates the record `users` administers: the repo's one shared kernel |
-| Cross-domain requests | `HardDeleteRequest`, `RequiredIdempotencyKeyHeader` | products, users and orders all take the first; the second belongs to a middleware in `infrastructure` |
+| Cross-domain requests | `RequiredIdempotencyKeyHeader` | belongs to a middleware in `infrastructure` |
 | The shell's own | `HealthPing`, `HealthPingEnvelope`, the `System` tag | `GET /` belongs to no module, so neither does its answer |
 
 The root file is the authority for the exact set. Everything else is owned: `Product` and its tax
