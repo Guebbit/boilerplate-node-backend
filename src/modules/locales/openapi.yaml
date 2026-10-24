@@ -10,7 +10,6 @@ x-error-codes:
     LOCALE_LANGUAGE_IS_FALLBACK: { status: 409, description: 'The deployment''s fallback language cannot be deactivated or deleted: every translatable row''s source lives there.' }
     LOCALE_LANGUAGE_ALREADY_ACTIVE: { status: 409, description: 'The language is already switched on.' }
     LOCALE_LANGUAGE_ALREADY_INACTIVE: { status: 409, description: 'The language is already switched off.' }
-    LOCALE_ENTRY_NOT_FOUND: { status: 404, description: 'No entry with that id exists under that language and app.' }
     LOCALE_ENTRY_KEY_EXISTS: { status: 409, description: 'The key is already translated in this language and app, or a batch names it twice.' }
     LOCALE_ENTRY_KEY_COLLISION: { status: 409, description: 'The key is a strict dotted prefix of another key, or has one as a prefix: no dictionary tree can hold both.' }
     LOCALE_ENTRY_KEY_INVALID: { status: 422, description: 'The key is empty, longer than 200 characters, or has an empty or reserved segment.' }

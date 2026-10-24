@@ -32,9 +32,7 @@ import { refreshOverlay } from './overlay';
 
 /** Not found, phrased the one way {@link findEntryInLanguage} and its two callers all mean it. */
 const entryNotFound = (): ResponseReject =>
-    generateReject(404, [
-        { code: ERROR_CODES.LOCALE_ENTRY_NOT_FOUND, message: t('locales.error-entry-not-found') }
-    ]);
+    generateReject(404, [t('locales.error-entry-not-found')]);
 
 /**
  * The entry named in the path, scoped to the language and the app also named in the path.
