@@ -176,6 +176,9 @@ describe('who reads what', () => {
         // The override is staff-only whole, so the buyer's view holds the payment alone.
         expect(typesOf(buyer)).toEqual(['paid']);
         expect(buyer[0]).not.toHaveProperty('actor');
+        // Each row names its own audience, whoever reads it.
+        expect(staff.map((row) => row.audience)).toEqual(['buyer', 'staff']);
+        expect(buyer[0].audience).toBe('buyer');
     });
 
     it('keeps the buyer from reading staff text on any row', async () => {
@@ -311,5 +314,6 @@ describe('the buyer`s data export', () => {
 
         expect(exported.map((row) => row.type)).toContain('status_overridden');
         for (const row of exported) expect(row.actor).not.toBe('admin-1');
+        expect(exported.find((row) => row.type === 'status_overridden')?.audience).toBe('staff');
     });
 });

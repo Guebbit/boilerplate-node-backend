@@ -15,6 +15,7 @@ import { testCallerContext } from '@tests/callers';
 import { asReject } from '@tests/response';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
+import { tokenRowsOf } from '../factories';
 import { rateLimitRefusalsTotal } from '@infrastructure/observability/metrics-rate-limit';
 
 setupTestDb();
@@ -137,6 +138,19 @@ describe('the service doors — the recipient is chosen by the server', () => {
             expect(sent.success).toBe(true);
             expect(asReject(refused).status).toBe(429);
             expect(asReject(refused).errors[0].code).toBe('RATE_LIMITED');
+        }));
+
+    it('charges an account-deletion request to the mailbox, and mints no token when refused', () =>
+        withBudget(1, async () => {
+            const first = await createUser({ email: 'doomed+a@example.com' });
+            const second = await createUser({ email: 'doomed+b@example.com' });
+
+            const sent = await accountService.requestAccountDeletion(first, testCallerContext);
+            const refused = await accountService.requestAccountDeletion(second, testCallerContext);
+
+            expect(sent).toBeUndefined();
+            expect(refused?.status).toBe(429);
+            expect(await tokenRowsOf(second.id)).toEqual([]);
         }));
 
     it('counts a refusal the service answers, as a limiter would', () =>

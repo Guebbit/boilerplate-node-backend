@@ -141,7 +141,7 @@ describe('productService.search', () => {
         await createProduct({ title: 'Expensive', price: 100, active: true });
 
         const result = await productService.search(
-            { minPrice: 50 },
+            { priceMin: 50 },
             productService.callerScope(GUEST)
         );
 
@@ -154,7 +154,7 @@ describe('productService.search', () => {
         await createProduct({ title: 'Expensive', price: 100, active: true });
 
         const result = await productService.search(
-            { maxPrice: 10 },
+            { priceMax: 10 },
             productService.callerScope(GUEST)
         );
 

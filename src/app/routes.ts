@@ -9,6 +9,8 @@
 import type { Express, Request, Response } from 'express';
 import { rejectResponse } from '@infrastructure/http/response';
 import { enabledModules } from '../modules';
+import { methodNotAllowed } from '@infrastructure/http/middlewares/method-not-allowed';
+import { OPERATION_ROUTES } from '@api/operation-routes';
 
 import { router as systemRoutes } from './system-routes';
 
@@ -54,6 +56,12 @@ export const installRoutes = (app: Express): void => {
      * REST API routes — domain-driven routing.
      */
     app.use('/', systemRoutes);
+
+    /**
+     * 405 + `Allow` for a contract path asked with another method; anything else falls through
+     * to the 404 below. Only the modules this build mounts count as known paths.
+     */
+    app.use(methodNotAllowed(OPERATION_ROUTES, new Set(enabledModules.map(({ name }) => name))));
 
     /**
      * 404 handler — unmatched routes.

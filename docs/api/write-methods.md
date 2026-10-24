@@ -49,15 +49,16 @@ flowchart TD
   contract declares it `required` on every 201, and the shared response check
   (`tests/support/response-contract.ts`) fails a 201 without it.
 - A retried create under its `Idempotency-Key` replays the `Location` with the body.
+- A sub-collection create is a create too: `POST /delivery/fulfillment-orders/{id}/shipments`
+  answers 201 with `Location` naming the shipment.
 - **A 201 means something was created** (RFC 9110 §15.3.2). An intent that only refreshes the
   order's one payment row, or a cart "add" that only grows a line, answers **200**.
 - Anything the contract does not declare is a 422 (`additionalProperties: false`), never a column.
 
 ### Action → 200
 
-- `POST /orders/{id}/cancel`, `/restore`, `/status-override`, `POST
-  /delivery/fulfillment-orders/{id}/shipments`, `/rotate-secret`: a state change on a thing that
-  already exists. 200, with the thing as it now stands.
+- `POST /orders/{id}/cancel`, `/restore`, `/status-override`, `/rotate-secret`: a state change on a
+  thing that already exists. 200, with the thing as it now stands.
 - An action may create a record on the side (a shipment, a stock movement). It still answers the
   thing the caller acts on next.
 
@@ -121,10 +122,17 @@ body is empty: `PUT /wishlist/{productId}` (this product is saved), `PUT
 /account/addresses/{id}/default` (this address is the default). Sent twice, nothing changes —
 the GitHub-stars pattern (`PUT`/`DELETE /user/starred/{owner}/{repo}`).
 
+**Naming a body-less PUT.** Spectral bans a `put*` operation id. A PUT that only states a
+membership is `create*` and its DELETE `delete*` (`createWishlistItem`, `deleteWishlistItem`); one
+that carries a value is `update*` or `replace*` (`updateCartItemById`).
+
 **Create by PUT only where the client names the thing.** A PUT on an id that does not exist is a
 404. The one exception is a URI the caller owns by construction — a cart line, `PUT
 /cart/{productId}`: it creates the line and answers **201**, or updates it and answers 200
 (RFC 9110 §9.3.4).
+
+**Offer a PUT only when the body can be the whole resource.** A route that sets two fields of a
+bigger record is a PATCH alone (`PATCH /feedback/{id}`), never a PUT that clears the rest.
 
 **A server may transform.** RFC 9110 lets the stored state differ from the body. Here that is one
 case: `PUT /account`'s `email` becomes `pendingEmail` until the new address is proven.
@@ -165,6 +173,24 @@ flowchart LR
 The guard is `requireDeclaredContentType`, built from `api/request-content-types.ts`, which
 `npm run gen:api` derives from the contract's own `requestBody` media types. A request with no
 bytes is not judged: a missing required body is the schema's own 422.
+
+## A known path with the wrong method
+
+A path the contract declares, asked with a method it does not give it, answers **405** with an
+`Allow` header (RFC 9110 §15.5.6) — never the catch-all's 404. `DELETE /feedback/{id}` is fine,
+`PUT /feedback/{id}` is a 405 naming `DELETE, PATCH`.
+
+- **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged: the CORS layer answers
+  a preflight before any route runs.
+- **A trailing slash is the same path.** `/things/` reads as `/things`.
+- **A module this build does not serve stays a 404**: its paths are in the table, but nothing is
+  mounted to ask.
+- **Not declared per operation.** The 405 belongs to a request that matched no operation, so no
+  operation's `responses` could carry it; its code, `METHOD_NOT_ALLOWED`, is in the contract's
+  `x-error-codes`.
+
+The guard is `methodNotAllowed`, built from `api/operation-routes.ts`, which `npm run gen:api`
+derives from the contract's paths and mounted right before the 404 in `src/app/routes.ts`.
 
 ## Empty, `null`, omitted
 

@@ -167,6 +167,11 @@ const STATUS_ENVELOPE: Readonly<Partial<Record<number, StatusEnvelope>>> = {
     },
     403: { code: 'FORBIDDEN', message: 'Forbidden', messageKey: 'generic.error-forbidden' },
     404: { code: 'NOT_FOUND', message: 'Not Found', messageKey: 'generic.error-nothing-found' },
+    405: {
+        code: 'METHOD_NOT_ALLOWED',
+        message: 'Method Not Allowed',
+        messageKey: 'generic.error-method-not-allowed'
+    },
     409: { code: 'CONFLICT', message: 'Conflict', messageKey: 'generic.error-conflict' },
     412: {
         code: 'PRECONDITION_FAILED',

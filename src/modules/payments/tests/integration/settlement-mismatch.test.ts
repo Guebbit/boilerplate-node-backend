@@ -126,6 +126,21 @@ describe('a mismatch recorded', () => {
         expect(payment!.refunds[0].amount).toBe(47.5);
     });
 
+    it('keeps the cancelled order from a hard delete: a payment and a refund point at it', async () => {
+        const { user, orderId, paymentId, providerRef } = await openIntent();
+        setFakeReceipt(providerRef, { amountReceived: 1 });
+        await paymentService.confirmPayment(
+            paymentId,
+            GOOD_METHOD,
+            asCustomer(user.id),
+            testCallerContext
+        );
+
+        const refused = await orderService.removeById(orderId, true);
+
+        expect(asReject(refused).errors[0].code).toBe('ORDER_HAS_MONEY_HISTORY');
+    });
+
     it('is audited as payment.amount_mismatch by the system actor, not under security.*', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const { user, paymentId, providerRef } = await openIntent();

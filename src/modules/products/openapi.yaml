@@ -50,14 +50,14 @@ paths:
                   schema:
                       type: string
                       maxLength: 200
-                - name: minPrice
+                - name: priceMin
                   in: query
                   required: false
                   schema:
                       type: number
                       format: double
                       minimum: 0
-                - name: maxPrice
+                - name: priceMax
                   in: query
                   required: false
                   schema:
@@ -769,11 +769,11 @@ components:
                     minItems: 1
                     maxItems: 100
                     items: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id' }
-                minPrice:
+                priceMin:
                     type: number
                     format: double
                     minimum: 0
-                maxPrice:
+                priceMax:
                     type: number
                     format: double
                     minimum: 0

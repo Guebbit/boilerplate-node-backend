@@ -16,7 +16,7 @@ import {
 import { withTransaction } from '@infrastructure/runtime/database';
 import { overrideStatus } from '../../services/override';
 import { recordForcedFulfilment } from '../../services/fulfillment';
-import { withActions } from '../../services/scope';
+import { withActions } from '../../services/actions';
 import { orderModel } from '../../model';
 import { orderRepository } from '../../repository';
 import { ORDER_STATUS_CHANGED, ORDER_STATUS_OVERRIDDEN } from '../../events';

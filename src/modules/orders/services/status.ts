@@ -307,6 +307,16 @@ export const markPaymentStatus = (
 ): Promise<boolean> => orderRepository.setProjection(orderId, { paymentStatus }, session);
 
 /**
+ * Report that money landed on an order that could no longer take it (a payment that succeeded
+ * after the cancel): from then on the order is never hard-deleted. `payments`' door for this.
+ *
+ * @param orderId - the order the money was recorded for
+ * @param session - the settlement's transaction, so the stamp commits with the money
+ */
+export const markMoneyReceived = (orderId: string, session?: ClientSession): Promise<void> =>
+    orderRepository.markMoneyReceived(orderId, session);
+
+/**
  * Report where the order's returns stand. `returns`' own door for this. `undefined` clears it: no
  * return holds goods, which is the `none` a reader sees.
  *

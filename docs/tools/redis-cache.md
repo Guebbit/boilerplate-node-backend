@@ -146,7 +146,7 @@ absent.
 The key is built BEFORE the controller validates anything, so what feeds it is bounded on purpose:
 
 - **Parsed, where the route can.** A route may hand `setCache` a `keyValues` function: the search
-  routes run the controller's own merge and schema, so `minPrice: "0e0"`, `"0x0"` and `0` are one
+  routes run the controller's own merge and schema, so `priceMin: "0e0"`, `"0x0"` and `0` are one
   key, and a request the controller would refuse never gets one. Without it, the raw body or
   query value feeds the key.
 - **Scalars only.** A string, number, boolean or null, or an array of those. Anything else (a

@@ -18,6 +18,8 @@ per endpoint. This page is the *why* around both.
 
 A minimal root endpoint used to verify the process is alive.
 
+An unknown path answers 404. A path the contract knows, asked with a method it does not give it, answers 405 with an `Allow` header ([why and how](./write-methods.md#a-known-path-with-the-wrong-method)).
+
 ## Observability
 
 > The domain behind these routes: [`observability`](../modules/observability.md) · routes and middleware: `src/modules/observability/routes.ts`
