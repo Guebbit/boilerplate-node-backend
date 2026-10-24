@@ -163,7 +163,7 @@ paths:
                                 $ref: '#/components/schemas/OrderEnvelope'
                     links:
                         PayOrder:
-                            operationId: createPaymentIntent
+                            operationId: createPayment
                             parameters:
                                 orderId: '$response.body#/data/id'
                             description: The new order's id is the `orderId` to freeze into a payment intent.
@@ -1251,7 +1251,7 @@ components:
                         Whether this order is still awaiting payment — it can reach `paid`, which
                         only a confirmed charge writes — and the caller may pay it: the buyer, who
                         holds the shopper's checkout key (staff and administrators do not). Not a status
-                        move any request makes: a client starts the flow with `POST /payments/intent`
+                        move any request makes: a client starts the flow with `POST /payments`
                         and the provider's yes does the rest.
                 recordPayment:
                     type: boolean

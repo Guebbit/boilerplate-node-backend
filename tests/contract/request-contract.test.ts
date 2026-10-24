@@ -258,6 +258,8 @@ const NEEDS_STATE_OR_SIGNATURE: Record<string, string> = {
     undoEmailChange: 'the token is issued by the change notice mailed to the old address',
     confirmTwoFactorMethod: 'a setup for that method must be under way',
     regenerateBackupCodes: 'two-factor must already be enabled on the account',
+    disableTwoFactor: 'two-factor must already be enabled on the account',
+    removeTwoFactorMethod: 'that method must already be armed on the account',
     receivePaymentWebhook:
         'a provider-signed request: the signature is checked before the body, and a bad one is 400'
 };
@@ -316,7 +318,7 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
     },
     // The generated quantity is the contract's hard ceiling (999); the shop's per-line cap refuses it.
     updateCartItemById: { quantity: () => 1 },
-    createPaymentIntent: { orderId: (world) => world.orderId },
+    createPayment: { orderId: (world) => world.orderId },
     createReturn: {
         orderId: (world) => world.orderId,
         lines: (world) => [{ productId: world.productId, quantity: 1 }],

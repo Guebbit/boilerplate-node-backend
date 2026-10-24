@@ -97,7 +97,7 @@ const canRecordPayment = (status: OrderStatus, authContext: AuthContext | undefi
     holds(callerForSubject(authContext, 'Order'), 'create', 'Payment');
 
 /**
- * Whether the caller may spend a basket at all — the key `POST /payments/intent` and the other card
+ * Whether the caller may spend a basket at all — the key `POST /payments` and the other card
  * steps ask. `pay` is offered only to a caller who holds it: an unproven address is told to confirm it,
  * so it is not offered a step the server refuses.
  *

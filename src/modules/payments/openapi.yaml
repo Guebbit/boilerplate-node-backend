@@ -122,6 +122,56 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        post:
+            tags: [Payments]
+            summary: Create a payment
+            description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact) and answers 200, so a retry needs no `Idempotency-Key` (a stored replay would hand back the first answer's `clientSecret` for as long as the ledger keeps it). The caller's intents and syncs share one budget per hour (429) — 201 says a payment was created, and a refresh created nothing (RFC 9110 §15.3.2). An order whose money already moved answers 409, and so does a deployment with no card payment provider (`PAYMENT_CARD_NOT_AVAILABLE`). The intent is the thing the card dialog confirms.
+            operationId: createPayment
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreatePaymentRequest'
+            responses:
+                '201':
+                    description: The payment intent, ready to confirm
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                    links:
+                        ConfirmPayment:
+                            operationId: confirmPayment
+                            parameters:
+                                id: '$response.body#/data/id'
+                '200':
+                    description: The order already had an intent; it was refreshed and is ready to confirm
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                    links:
+                        ConfirmPayment:
+                            operationId: confirmPayment
+                            parameters:
+                                id: '$response.body#/data/id'
+                            description: The intent's id is confirmed here to complete the charge.
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Not `pending`, or already paid (`PAYMENT_ORDER_NOT_PAYABLE`), or no card provider
+                # is configured (`PAYMENT_CARD_NOT_AVAILABLE`), or the provider opened a second
+                # intent for a payment that already holds one (`PAYMENT_IN_FLIGHT`).
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `paymentIntentLimiter`, one budget per account shared with `POST /payments/{id}/sync`.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /payments/search:
         post:
@@ -220,63 +270,11 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /payments/intent:
-        post:
-            tags: [Payments]
-            summary: Create a payment intent
-            description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact) and answers 200, so a retry needs no `Idempotency-Key` (a stored replay would hand back the first answer's `clientSecret` for as long as the ledger keeps it). The caller's intents and syncs share one budget per hour (429) — 201 says a payment was created, and a refresh created nothing (RFC 9110 §15.3.2). An order whose money already moved answers 409, and so does a deployment with no card payment provider (`PAYMENT_CARD_NOT_AVAILABLE`). The intent is the thing the card dialog confirms.
-            operationId: createPaymentIntent
-            security:
-                - bearerAuth: []
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/CreatePaymentIntentRequest'
-            responses:
-                '201':
-                    description: The payment intent, ready to confirm
-                    headers:
-                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/PaymentEnvelope'
-                    links:
-                        ConfirmPayment:
-                            operationId: confirmPayment
-                            parameters:
-                                id: '$response.body#/data/id'
-                '200':
-                    description: The order already had an intent; it was refreshed and is ready to confirm
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/PaymentEnvelope'
-                    links:
-                        ConfirmPayment:
-                            operationId: confirmPayment
-                            parameters:
-                                id: '$response.body#/data/id'
-                            description: The intent's id is confirmed here to complete the charge.
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Not `pending`, or already paid (`PAYMENT_ORDER_NOT_PAYABLE`), or no card provider
-                # is configured (`PAYMENT_CARD_NOT_AVAILABLE`), or the provider opened a second
-                # intent for a payment that already holds one (`PAYMENT_IN_FLIGHT`).
-                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                # `paymentIntentLimiter`, one budget per account shared with `POST /payments/{id}/sync`.
-                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
     /payments/orders/{orderId}:
         get:
             tags: [Payments]
             summary: Get the payment behind an order
-            description: The payment record for one of the caller's orders, so a reload mid-flow finds the intent and its status again. A caller holding `display:Payment` reads anyone's. No intent yet is a 404 — absence is an answer, the client starts the flow with `POST /payments/intent`.
+            description: The payment record for one of the caller's orders, so a reload mid-flow finds the intent and its status again. A caller holding `display:Payment` reads anyone's. No intent yet is a 404 — absence is an answer, the client starts the flow with `POST /payments`.
             operationId: getPaymentByOrder
             security:
                 - bearerAuth: []
@@ -613,7 +611,7 @@ paths:
                 # Declined (`PAYMENT_DECLINED`), or the payment never reached the provider
                 # (`PAYMENT_NOT_CONFIRMABLE`).
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                # `paymentIntentLimiter`, one budget per account shared with `POST /payments/intent`.
+                # `paymentIntentLimiter`, one budget per account shared with `POST /payments`.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -829,7 +827,7 @@ components:
                 clientSecret:
                     type: string
                     description: >-
-                        Returned by `POST /payments/intent` alone, never stored and never read
+                        Returned by `POST /payments` alone, never stored and never read
                         back: it authorises completing this payment against the provider from the
                         browser. Absent from every other response.
                 cardLast4:
@@ -1141,7 +1139,7 @@ components:
                         Whether the buyer may start or retry paying — the payment is awaiting
                         confirmation or retryable after a decline (then `POST /payments/{id}/confirm`),
                         or it is a bank transfer still waiting for its money and a card provider is
-                        configured (then `POST /payments/intent` takes it over with a card), AND the
+                        configured (then `POST /payments` takes it over with a card), AND the
                         order can still reach `paid`, AND the caller is the payer and holds
                         `checkout:Cart` (staff reading the payment are never offered it). An
                         in-flight payment is deliberately not payable: its next step is `sync`.
@@ -1209,7 +1207,7 @@ components:
                 data:
                     $ref: '#/components/schemas/Payment'
 
-        CreatePaymentIntentRequest:
+        CreatePaymentRequest:
             type: object
             additionalProperties: false
             required: [orderId]
@@ -1298,7 +1296,7 @@ components:
                 method:
                     type: string
                     enum: [bank_transfer, cash, other]
-                    description: How the money arrived. `card` is not offered here — that path is `POST /payments/intent`.
+                    description: How the money arrived. `card` is not offered here — that path is `POST /payments`.
                 reference:
                     type: string
                     minLength: 1

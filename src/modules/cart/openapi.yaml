@@ -16,7 +16,7 @@ x-error-codes:
     CART_CHANGED: { status: 409, description: 'The cart changed between the request that read it and this write — reload and retry.' }
     CART_EMPTY: { status: 409, description: 'Checkout was attempted on a cart with no lines.' }
     CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines cannot be bought as they stand — see `errors[].details.lines`, one entry per refused line with its `productId`, `title`, the `requested` quantity and its `availability` (`insufficient_stock`, `out_of_stock` or `unavailable`, so the client picks the message). The number left is not part of the answer: exact stock is for callers who read it (`read:StockLevel`).' }
-    CART_OPEN_ORDER_LIMIT_REACHED: { status: 409, description: 'The account already holds `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, whatever their payment method — each holds stock. `errors[].details.orderIds` names them: pay one (`POST /payments/intent`) or cancel one (`POST /orders/{id}/cancel`), then check out again.' }
+    CART_OPEN_ORDER_LIMIT_REACHED: { status: 409, description: 'The account already holds `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, whatever their payment method — each holds stock. `errors[].details.orderIds` names them: pay one (`POST /payments`) or cancel one (`POST /orders/{id}/cancel`), then check out again.' }
     CART_PAYMENT_METHOD_NOT_AVAILABLE: { status: 409, description: 'The chosen payment method is not enabled for this deployment or this cart.' }
     CART_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line references a product that was deleted or hidden (`active: false`) since it was added: its `availability` is `removed`. A product merely taken off sale is `unavailable` and refused as `CART_INSUFFICIENT_STOCK`.' }
     CART_PURCHASE_HOLD: { status: 409, description: 'The account is under a purchase hold: a protective pause after repeated cancellations, or one set by staff. `errors[].details` carries `until` (when checkout opens again), `reason` (`repeated_cancellations` or `staff`) and, for a staff hold, the `note` written for the buyer. Paying an existing order, cancelling, a withdrawal and a return are never blocked; the buyer can contest it through the contact form.' }
@@ -281,7 +281,7 @@ paths:
                                 $ref: '#/components/schemas/CheckoutResponseEnvelope'
                     links:
                         PayOrder:
-                            operationId: createPaymentIntent
+                            operationId: createPayment
                             parameters:
                                 orderId: '$response.body#/data/id'
                             description: The new order's id is the `orderId` to freeze into a payment intent.

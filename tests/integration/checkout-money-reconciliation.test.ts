@@ -2,7 +2,7 @@
  * @module
  * One basket, three prices, one number: what the cart shows (`GET /cart`), what the order is
  * written for (`POST /cart/checkout`) and what the payment intent asks the provider to take
- * (`POST /payments/intent`) must be the SAME amount, to the last minor unit.
+ * (`POST /payments`) must be the SAME amount, to the last minor unit.
  *
  * `delivery/tests/unit/money-reconciliation.property.test.ts` proves the pure composition; this
  * drives the three real doors, which is where a number is assembled a second time. The expected
@@ -113,7 +113,7 @@ const priceThroughHttp = async (
     const checkout = await checkoutAs(bearer);
     expect(checkout.status).toBe(201);
     const intent = await api()
-        .post('/payments/intent')
+        .post('/payments')
         .set('Authorization', bearer)
         .send({ orderId: checkout.body.data.id })
         .expect(201);

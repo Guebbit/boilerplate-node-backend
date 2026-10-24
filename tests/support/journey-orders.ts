@@ -7,7 +7,7 @@
 import {
     Checkout201Response,
     ConfirmPayment200Response,
-    CreatePaymentIntent201Response,
+    CreatePayment201Response,
     GetOrderById200Response,
     GetPaymentByOrder200Response,
     GetProductAdmin200Response,
@@ -80,8 +80,8 @@ export const placeOrder = async (
  */
 export const openIntent = async (bearer: string, orderId: string) =>
     bodyOf(
-        await api().post('/payments/intent').set('Authorization', bearer).send({ orderId }),
-        CreatePaymentIntent201Response
+        await api().post('/payments').set('Authorization', bearer).send({ orderId }),
+        CreatePayment201Response
     ).data;
 
 /**

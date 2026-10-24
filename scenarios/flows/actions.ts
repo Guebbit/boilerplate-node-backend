@@ -126,7 +126,7 @@ export const checkout = async (
  * @returns the payment's id
  */
 export const openPayment = (caller: Caller, orderId: string): Promise<string> =>
-    caller.call<PaymentData>('POST', '/payments/intent', { orderId }).then((payment) => payment.id);
+    caller.call<PaymentData>('POST', '/payments', { orderId }).then((payment) => payment.id);
 
 /**
  * Submit a card against an open payment.

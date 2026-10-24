@@ -149,7 +149,7 @@ It also drives **one request at a time**. `create order → pay → cancel → p
 
 ## Stateful fuzzing: sequences, not single requests
 
-That gap is real enough to change the answer above. `openapi.yaml` now declares `links` on the operations that chain into an order's lifecycle (`createOrder`/`checkout` → `createPaymentIntent` → `confirmPayment` → `refundPaymentByOrder`/`cancelOrderById`) — contract work, in the leaf `src/modules/*/openapi.yaml` fragments, independent of any test. See [OpenAPI Workflow](../api/openapi-workflow.md).
+That gap is real enough to change the answer above. `openapi.yaml` now declares `links` on the operations that chain into an order's lifecycle (`createOrder`/`checkout` → `createPayment` → `confirmPayment` → `refundPaymentByOrder`/`cancelOrderById`) — contract work, in the leaf `src/modules/*/openapi.yaml` fragments, independent of any test. See [OpenAPI Workflow](../api/openapi-workflow.md).
 
 Following those links to build a legal, in-order **sequence** of requests is not something the hand-rolled walk above does, and re-implementing it would be re-implementing Schemathesis's one genuinely hard feature. So `.github/workflows/schemathesis.yml` runs the real [`schemathesis`](https://schemathesis.readthedocs.io/) CLI, from its own Docker image, against the app booted via `npm run demo`:
 

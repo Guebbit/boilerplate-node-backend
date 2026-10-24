@@ -96,7 +96,7 @@ those is either harmless or already guarded by the domain.
 `POST /payments/{id}/sync` deliberately has no `idempotencyKey`: it is already idempotent by
 construction, keyed on the provider's own payment reference rather than a client-supplied one.
 
-`POST /payments/intent` has none either, and for a second reason: the ledger stores the replayed
+`POST /payments` has none either, and for a second reason: the ledger stores the replayed
 response, and that response carries the `clientSecret`. Asking again already refreshes the same
 intent, so a retry needs no key. The two share one per-account hourly budget instead
 (`NODE_PAYMENT_INTENT_RATE_LIMIT_MAX`, 30).

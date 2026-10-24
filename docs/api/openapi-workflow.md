@@ -43,7 +43,7 @@ How the file is meant to be split per module and how it travels between the two 
 ## Declaring state-machine `links`
 
 A response's `links` block names the operation a legal next request would call, and how to read
-its parameters out of this response — e.g. `createOrder`'s `201` names `createPaymentIntent`,
+its parameters out of this response — e.g. `createOrder`'s `201` names `createPayment`,
 reading `orderId` from `$response.body#/data/id`. Declared per leaf fragment, same as everything
 else in the contract, on the response object that starts the transition.
 

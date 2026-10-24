@@ -93,10 +93,7 @@ const orderAwaitingPayment = async (productId: string, quantity: number) => {
     if (checkout.status !== 201) throw new Error(`checkout: ${JSON.stringify(checkout.body)}`);
     const orderId = String(checkout.body.data.id);
 
-    const intent = await api()
-        .post('/payments/intent')
-        .set('Authorization', bearer)
-        .send({ orderId });
+    const intent = await api().post('/payments').set('Authorization', bearer).send({ orderId });
     if (intent.status !== 201) throw new Error(`intent: ${JSON.stringify(intent.body)}`);
 
     return { bearer, orderId, paymentId: String(intent.body.data.id) };

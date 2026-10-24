@@ -39,7 +39,7 @@ describe('payment routes', () => {
             'POST /search',
             'GET /refunds',
             'GET /attention',
-            'POST /intent',
+            'POST /',
             'GET /orders/:orderId',
             'GET /order-by-reference',
             'POST /orders/:orderId/refund',
@@ -137,8 +137,8 @@ describe('payment routes', () => {
     it('spends one pooled per-account budget on the intent and the sync, and keys neither', () => {
         // `/intent` has no `idempotencyKey`: the ledger would store the response, the
         // `clientSecret` included. Asking again already refreshes the same intent.
-        expect(withoutHandler('POST /intent')).toEqual(withoutHandler('POST /:id/sync'));
-        expect(withoutHandler('POST /intent')).not.toContain('idempotencyKey');
+        expect(withoutHandler('POST /')).toEqual(withoutHandler('POST /:id/sync'));
+        expect(withoutHandler('POST /')).not.toContain('idempotencyKey');
         expect(withoutHandler('POST /:id/sync')).not.toContain('idempotencyKey');
         expect(withoutHandler('POST /:id/confirm')).not.toContain(INTENT_BUDGET);
     });

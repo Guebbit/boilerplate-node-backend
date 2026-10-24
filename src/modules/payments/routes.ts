@@ -19,7 +19,7 @@
  *                mail at an inbox nobody confirmed. `cart` owns the key; `payments` mounts it, the
  *                same as `products/routes.ts` mounts `locales`-owned `translations.*`.
  * Card testing:  `POST /:id/confirm` alone additionally carries the payment-velocity budgets — the
- *                confirm is where a card number is actually validated, `/intent` merely freezes a
+ *                confirm is where a card number is actually validated, `POST /` merely freezes a
  *                price. See `paymentConfirmAttemptLimiter`/`paymentConfirmDeclineLimiter`/`paymentConfirmDeclineBlockLimiter`.
  */
 
@@ -42,7 +42,7 @@ import {
     idempotencyKey,
     requireIdempotencyKey
 } from '@infrastructure/http/middlewares/idempotency';
-import { postPaymentIntent } from './controllers/post-payment-intent';
+import { postPayment } from './controllers/post-payment';
 import { postPaymentConfirm } from './controllers/post-payment-confirm';
 import { postPaymentSync } from './controllers/post-payment-sync';
 import { postPaymentWebhook } from './controllers/post-payment-webhook';
@@ -84,15 +84,15 @@ router.get(
     getPaymentAttention
 );
 
-// POST /payments/intent — freeze an order's price, ready to confirm. No idempotencyKey: asking again
+// POST /payments — freeze an order's price, ready to confirm. No idempotencyKey: asking again
 // already refreshes the same intent, and the idempotency ledger would store the response, the
 // `clientSecret` included. `paymentIntentLimiter` is shared with `/sync` below.
 router.post(
-    '/intent',
+    '/',
     requirePermission('checkout', 'Cart'),
     requireFreshAuth('critical'),
     paymentIntentLimiter,
-    postPaymentIntent
+    postPayment
 );
 
 // GET /payments/orders/:orderId — the payment behind an order
@@ -154,7 +154,7 @@ router.post(
 // POST /payments/:id/sync — the browser reporting it finished at the provider. No idempotencyKey
 // here: it is already idempotent by construction, keyed on the provider's own payment reference
 // rather than a client-supplied one, so a second sync call settles the same outcome, not a
-// second one. It spends the same per-account budget as `/intent`: both end in a provider call.
+// second one. It spends the same per-account budget as `POST /`: both end in a provider call.
 router.post(
     '/:id/sync',
     requirePermission('checkout', 'Cart'),

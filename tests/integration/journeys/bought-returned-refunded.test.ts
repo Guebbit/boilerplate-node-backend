@@ -19,7 +19,7 @@ import {
     Checkout201Response,
     ConfirmEmailVerification200Response,
     ConfirmPayment200Response,
-    CreatePaymentIntent201Response,
+    CreatePayment201Response,
     CreateReturn201Response,
     DeliverShipment200Response,
     GetFulfillmentByOrder200Response,
@@ -114,11 +114,8 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
 
     // Pay by card.
     const intent = bodyOf(
-        await api()
-            .post('/payments/intent')
-            .set('Authorization', shopper)
-            .send({ orderId: order.id }),
-        CreatePaymentIntent201Response
+        await api().post('/payments').set('Authorization', shopper).send({ orderId: order.id }),
+        CreatePayment201Response
     ).data;
     const paid = bodyOf(
         await api()
@@ -281,11 +278,8 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
         Checkout201Response
     ).data;
     const intent = bodyOf(
-        await api()
-            .post('/payments/intent')
-            .set('Authorization', moderator)
-            .send({ orderId: order.id }),
-        CreatePaymentIntent201Response
+        await api().post('/payments').set('Authorization', moderator).send({ orderId: order.id }),
+        CreatePayment201Response
     ).data;
     bodyOf(
         await api()

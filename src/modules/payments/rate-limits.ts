@@ -129,7 +129,7 @@ const INTENT_SYNC_BUDGET: RateLimitBudget = {
     windowMs: PAYMENT_VELOCITY_WINDOW_MS,
     keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
     bounds:
-        'Calls to `POST /payments/intent` and `POST /payments/:id/sync`, pooled — each reaches ' +
+        'Calls to `POST /payments` and `POST /payments/:id/sync`, pooled — each reaches ' +
         'the payment provider.',
     audited: true,
     keyGenerator: accountIdOf

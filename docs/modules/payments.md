@@ -137,7 +137,7 @@ cancel lifecycle itself (`statusesLeadingTo`, `orders/domain/lifecycle.ts`) has 
 Two different questions, asked at two different moments, both owned by `orders`:
 
 - **The pre-check** — `orders.isPayable(order.status)` — gates every door that could open a new
-  payment: `POST /payments/intent`, `POST /payments/orders/{orderId}/offline`, and `getForOrder`'s
+  payment: `POST /payments`, `POST /payments/orders/{orderId}/offline`, and `getForOrder`'s
   `PaymentActions.pay`. `pending` only; a `paid` order answers `false` even though `system` may
   still write a `paid → paid` echo underneath it (the payment webhook's own retries) — that echo is
   not a fresh offer to pay. This module never compares a status literal to decide whether to open a
@@ -244,7 +244,7 @@ Neither net adds a marker or a field: the payment's own status and `updatedAt` a
 
 ## Status transitions
 
-`requires_confirmation` is entered once, by `POST /payments/intent`, and never again — nothing a
+`requires_confirmation` is entered once, by `POST /payments`, and never again — nothing a
 provider reports is ever that value. From there, every non-terminal status can settle to any other
 non-terminal status. Three sets in `domain/lifecycle.ts` say which write may run from where:
 
@@ -266,7 +266,7 @@ opens the refund for the whole amount in the same transaction.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> requires_confirmation: POST /payments/intent
+    [*] --> requires_confirmation: POST /payments
     requires_confirmation --> requires_action: confirm
     requires_confirmation --> processing: confirm
     requires_confirmation --> succeeded: confirm
@@ -746,7 +746,7 @@ sequenceDiagram
     participant A as This API
     participant P as Your adapter
     participant S as Provider
-    B->>A: POST /payments/intent
+    B->>A: POST /payments
     A->>P: prepare(charge, metadata)
     P->>S: create intent, idempotent on paymentId
     S-->>P: providerRef + client secret

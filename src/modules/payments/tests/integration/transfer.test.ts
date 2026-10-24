@@ -185,7 +185,7 @@ describe('what the buyer may still do', () => {
         expect(asSuccess(read).data.actions?.pay).toBe(true);
     });
 
-    // The take-over goes through `POST /payments/intent`, which answers 409 without a provider.
+    // The take-over goes through `POST /payments`, which answers 409 without a provider.
     it('withholds the card form when the deployment has no card provider to take it over with', () =>
         withEnvironmentOverrides({ NODE_PAYMENT_PROVIDER: undefined }, async () => {
             const user = await createUser();

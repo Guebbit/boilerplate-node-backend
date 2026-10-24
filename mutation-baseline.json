@@ -172,7 +172,7 @@
         "src/modules/orders/routes.ts": 0,
         "src/modules/payments/controllers/get-payment-by-order.ts": 0,
         "src/modules/payments/controllers/post-payment-confirm.ts": 0,
-        "src/modules/payments/controllers/post-payment-intent.ts": 0,
+        "src/modules/payments/controllers/post-payment.ts": 0,
         "src/modules/payments/controllers/post-payment-refund.ts": 0,
         "src/modules/payments/metrics.ts": 0,
         "src/modules/payments/model.ts": 0,

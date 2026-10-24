@@ -1310,16 +1310,14 @@ paths:
     # ---------- payments ----------
     /payments/methods:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1methods'
-    /payments/intent:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1intent'
     /payments/orders/{orderId}:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}'
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1orders~1{orderId}'
     /payments/order-by-reference:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order-by-reference'
     /payments/orders/{orderId}/refund:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}~1refund'
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1orders~1{orderId}~1refund'
     /payments/orders/{orderId}/offline:
-        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}~1offline'
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1orders~1{orderId}~1offline'
     /payments/{id}/confirm:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1confirm'
     /payments/{id}/sync:
@@ -1331,9 +1329,9 @@ paths:
     /delivery/methods:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1methods'
     /delivery/orders/{orderId}:
-        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}'
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1orders~1{orderId}'
     /delivery/orders/{orderId}/start:
-        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1start'
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1orders~1{orderId}~1start'
     /delivery/fulfillment-orders:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders'
     /delivery/fulfillment-orders/summary:

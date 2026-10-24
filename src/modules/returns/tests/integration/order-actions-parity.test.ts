@@ -153,7 +153,7 @@ const ACTS: Act[] = [
         name: 'pay',
         flag: (actions) => actions.pay,
         door: (caller, orderId) =>
-            api().post('/payments/intent').set('Authorization', caller.bearer).send({ orderId })
+            api().post('/payments').set('Authorization', caller.bearer).send({ orderId })
     },
     {
         name: 'delete',

@@ -78,7 +78,7 @@ cards. Only an UNSET variable means no provider.
 :::
 
 ::: tip No provider is a valid deployment
-Unset, `GET /payments/methods` lists no `card`, `POST /payments/intent` answers 409
+Unset, `GET /payments/methods` lists no `card`, `POST /payments` answers 409
 `PAYMENT_CARD_NOT_AVAILABLE`, `POST /payments/webhook` answers 404, and checkout refuses `card` (and
 a request that names no method, which defaults to it) with `CART_PAYMENT_METHOD_NOT_AVAILABLE`.
 With a bank transfer configured, checkout still works.

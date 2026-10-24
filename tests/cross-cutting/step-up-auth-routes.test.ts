@@ -57,7 +57,7 @@ const ROUTERS: Record<string, Router> = {
  */
 const STEP_UP_ROUTES: Record<string, string[]> = {
     'cart POST /checkout': [`requireFreshAuth(critical)`],
-    'payments POST /intent': [`requireFreshAuth(critical)`],
+    'payments POST /': [`requireFreshAuth(critical)`],
     'payments POST /:id/confirm': [`requireFreshAuth(critical)`],
     // The sync settles money just as the confirm does, from the provider's answer rather than
     // from a method the caller supplied — so it sits at the same tier, not a lower one.

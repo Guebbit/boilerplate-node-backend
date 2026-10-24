@@ -46,13 +46,13 @@ const authenticateWithOrder = async () => {
 const authenticateWithIntent = async () => {
     const { bearer, order } = await authenticateWithOrder();
     const response = await api()
-        .post('/payments/intent')
+        .post('/payments')
         .set('Authorization', bearer)
         .send({ orderId: String(order._id) });
 
     if (response.status !== 201)
         throw new Error(
-            `payments setup failed: POST /payments/intent returned ${response.status} — ${JSON.stringify(response.body)}`
+            `payments setup failed: POST /payments returned ${response.status} — ${JSON.stringify(response.body)}`
         );
 
     return { bearer, order, paymentId: String(response.body.data.id) };
@@ -114,11 +114,11 @@ describe('with no card payment provider configured', () => {
         );
     });
 
-    it('POST /payments/intent answers 409 PAYMENT_CARD_NOT_AVAILABLE and opens nothing', async () => {
+    it('POST /payments answers 409 PAYMENT_CARD_NOT_AVAILABLE and opens nothing', async () => {
         const { bearer, order } = await authenticateWithOrder();
 
         const response = await api()
-            .post('/payments/intent')
+            .post('/payments')
             .set('Authorization', bearer)
             .send({ orderId: String(order._id) });
 
@@ -140,12 +140,12 @@ describe('with no card payment provider configured', () => {
     });
 });
 
-describe('POST /payments/intent', () => {
+describe('POST /payments', () => {
     it('matches the contract for a fresh intent', async () => {
         const { bearer, order } = await authenticateWithOrder();
 
         const response = await api()
-            .post('/payments/intent')
+            .post('/payments')
             .set('Authorization', bearer)
             .send({ orderId: String(order._id) });
 
@@ -167,7 +167,7 @@ describe('POST /payments/intent', () => {
         const { bearer, order } = await authenticateWithOrder();
         const ask = () =>
             api()
-                .post('/payments/intent')
+                .post('/payments')
                 .set('Authorization', bearer)
                 .send({ orderId: String(order._id) });
 
@@ -188,7 +188,7 @@ describe('POST /payments/intent', () => {
         const { bearer, order } = await authenticateWithOrder();
 
         const intent = await api()
-            .post('/payments/intent')
+            .post('/payments')
             .set('Authorization', bearer)
             .send({ orderId: String(order._id) });
         const readBack = await api()
@@ -205,7 +205,7 @@ describe('POST /payments/intent', () => {
         const { bearer } = await authenticateAs('user');
 
         const response = await api()
-            .post('/payments/intent')
+            .post('/payments')
             .set('Authorization', bearer)
             .send({ orderId: MISSING_ID });
 
@@ -215,7 +215,7 @@ describe('POST /payments/intent', () => {
     it('matches the error contract for an invalid body', async () => {
         const { bearer } = await authenticateAs('user');
 
-        const response = await api().post('/payments/intent').set('Authorization', bearer).send({});
+        const response = await api().post('/payments').set('Authorization', bearer).send({});
 
         expect(response.status).toBe(422);
     });
@@ -382,7 +382,7 @@ const preparedPayment = async () => {
  */
 describe('the card steps — who may pay', () => {
     it.each([
-        ['POST /payments/intent', '/payments/intent'],
+        ['POST /payments', '/payments'],
         ['POST /payments/{id}/confirm', `/payments/${MISSING_ID}/confirm`],
         ['POST /payments/{id}/sync', `/payments/${MISSING_ID}/sync`]
     ])('%s refuses an unverified account with EMAIL_NOT_VERIFIED', async (_step, url) => {
@@ -399,7 +399,7 @@ describe('the card steps — who may pay', () => {
         afterEach(() => jest.useRealTimers());
 
         it.each([
-            ['POST /payments/intent', '/payments/intent'],
+            ['POST /payments', '/payments'],
             ['POST /payments/{id}/confirm', `/payments/${MISSING_ID}/confirm`],
             ['POST /payments/{id}/sync', `/payments/${MISSING_ID}/sync`]
         ])('%s still answers an unverified account 403 EMAIL_NOT_VERIFIED', async (_step, url) => {
@@ -847,7 +847,7 @@ describe('POST /payments/orders/{orderId}/offline', () => {
         const { bearer: adminBearer } = await authenticateAs('admin');
         const { bearer, order } = await authenticateWithOrder();
         await api()
-            .post('/payments/intent')
+            .post('/payments')
             .set('Authorization', bearer)
             .send({ orderId: String(order._id) });
 
