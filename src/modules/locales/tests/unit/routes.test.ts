@@ -36,6 +36,7 @@ const ADMIN = [
     'POST /:locale/apps/:app/entries',
     'PUT /:locale/apps/:app/entries',
     'PATCH /:locale/apps/:app/entries',
+    'GET /:locale/apps/:app/entries/:entryId',
     'PUT /:locale/apps/:app/entries/:entryId',
     'DELETE /:locale/apps/:app/entries/:entryId',
     'GET /translations/:entityType/:id',
@@ -43,8 +44,12 @@ const ADMIN = [
     'PATCH /translations/:entityType/:id'
 ];
 
-/** The two entry reads — the editing screen, uncached, and never a reason to invalidate. */
-const ENTRY_READS = new Set(['GET /:locale/entries', 'GET /:locale/apps/:app/entries']);
+/** The entry reads — the editing screen, uncached, and never a reason to invalidate. */
+const ENTRY_READS = new Set([
+    'GET /:locale/entries',
+    'GET /:locale/apps/:app/entries',
+    'GET /:locale/apps/:app/entries/:entryId'
+]);
 
 /**
  * The three translator-door routes: uncached like `GET /:locale/entries` (the editing screen), and

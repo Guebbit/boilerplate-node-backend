@@ -10,6 +10,7 @@ import { fromBearerToken } from './resolver';
 /** The module's one door — controllers and siblings call through this, never the bare functions. */
 export const apiKeysService = {
     listApiKeys: apiKeys.list,
+    getApiKey: apiKeys.get,
     mintApiKey: apiKeys.mint,
     revokeApiKey: apiKeys.revoke,
     findOwnApiKeys: apiKeys.findOwnApiKeys,

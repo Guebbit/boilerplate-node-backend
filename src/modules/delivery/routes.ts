@@ -25,6 +25,7 @@ import {
     postHoldFulfillmentOrder,
     postReleaseFulfillmentOrder
 } from './controllers/post-hold-fulfillment-order';
+import { getShipment } from './controllers/get-shipment';
 import { patchShipment } from './controllers/patch-shipment';
 import { getReleaseDateImpact, getRestockDateImpact } from './controllers/get-date-impact';
 import {
@@ -143,6 +144,10 @@ router.post(
     requirePermission('update', 'Shipment'),
     postReleaseFulfillmentOrder
 );
+
+// GET /delivery/shipments/:id — one shipment, behind the key that corrects it. A buyer reads
+// their shipments through `GET /delivery/orders/:orderId`.
+router.get('/shipments/:id', getAuth, isAuth, requirePermission('update', 'Shipment'), getShipment);
 
 // PATCH /delivery/shipments/:id — correct a tracking code (RFC 7396).
 router.patch(

@@ -95,6 +95,26 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /api-keys/{id}:
+        get:
+            tags: [ApiKeys]
+            summary: Get a machine-to-machine credential
+            description: One credential of this shop, with the same `status` the list gives it. Never its secret — that exists only in the response of the call that minted it. Another shop's credential, an unknown id and a malformed one are the same 404.
+            operationId: getApiKey
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The credential
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiKeyEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [ApiKeys]
             summary: Revoke a machine-to-machine credential
@@ -245,6 +265,16 @@ components:
                     type: string
                     format: date-time
                     description: The latest `expiresAt` a mint accepts right now (one calendar year from this response). A later one is refused with 422, so a form can bound its date picker without copying the rule.
+
+        ApiKeyEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
+                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
+                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
+                data: { $ref: '#/components/schemas/ApiKey' }
 
         ApiKeyCreatedEnvelope:
             type: object

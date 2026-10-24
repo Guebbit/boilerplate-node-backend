@@ -528,6 +528,35 @@ paths:
     # It lives under its app's collection, the one a POST answers with in `Location`; an id that
     # belongs to another language or app is a 404 here.
     /locales/{locale}/apps/{app}/entries/{entryId}:
+        get:
+            tags: [Locales]
+            summary: Get one translation entry
+            description: |
+                One entry of one app's slice of a language, at the address the single-entry writes
+                target. Guarded like the list it comes from (`update:Locale`, the editing screen's
+                key). An entry of another app or language, an unknown id and a malformed one are
+                the same 404.
+            operationId: getLocaleEntry
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+                - $ref: '#/components/parameters/AppPathParam'
+                - $ref: '#/components/parameters/EntryIdPathParam'
+            responses:
+                '200':
+                    description: The entry
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleEntryEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # An app this deployment does not serve.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [Locales]
             summary: Edit one translation entry

@@ -28,6 +28,21 @@ export const sessionsList = (userId: string, request: SessionRequest): Promise<S
 };
 
 /**
+ * One of the authenticated user's live sessions of the active mode.
+ *
+ * @param userId - the authenticated caller's own id
+ * @param sessionId - the session id `GET /account/sessions` gave out
+ * @param request - the caller's own request, so the row can be marked `current`
+ * @returns the session, or `undefined` for one that is not the caller's, is not live, or never was
+ */
+export const sessionGet = (
+    userId: string,
+    sessionId: string,
+    request: SessionRequest
+): Promise<Session | undefined> =>
+    sessionsList(userId, request).then((rows) => rows.find((row) => row.id === sessionId));
+
+/**
  * This caller's own live sessions for the data export: metadata only, never a credential.
  *
  * @param userId - the account being exported

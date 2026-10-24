@@ -13,6 +13,7 @@
 import { listMethods, startFulfilment } from './start';
 import {
     getForOrder,
+    getShipment,
     shippedQuantities,
     remainderOptions,
     findShipmentsForOrders,
@@ -49,6 +50,7 @@ export { ActRefusal } from './act';
 export const deliveryService = {
     listMethods,
     getForOrder,
+    getShipment,
     startFulfilment,
     shipFulfillmentOrder,
     deliverShipment,

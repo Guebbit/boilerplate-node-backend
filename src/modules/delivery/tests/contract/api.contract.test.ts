@@ -408,6 +408,48 @@ describe('POST /delivery/fulfillment-orders/{id}/hold and /release', () => {
     });
 });
 
+describe('GET /delivery/shipments/{id}', () => {
+    it('reads a shipment for the staff who may correct it', async () => {
+        const { order } = await authenticateWithShipment();
+        const { bearer } = await authenticateAs('admin');
+        const [shipment] = await shipmentsOf(String(order._id));
+
+        const response = await api()
+            .get(`/delivery/shipments/${String(shipment._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({
+            id: String(shipment._id),
+            trackingCode: 'TRK-CONTRACT1'
+        });
+    });
+
+    it('answers 404 for an unknown id and a malformed one', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const unknown = await api()
+            .get(`/delivery/shipments/${MISSING_ID}`)
+            .set('Authorization', bearer);
+        const malformed = await api()
+            .get('/delivery/shipments/not-an-id')
+            .set('Authorization', bearer);
+
+        expect([unknown.status, malformed.status]).toEqual([404, 404]);
+    });
+
+    it('refuses the buyer with 403, who reads shipments through their order', async () => {
+        const { bearer: customer, order } = await authenticateWithShipment();
+        const [shipment] = await shipmentsOf(String(order._id));
+
+        const response = await api()
+            .get(`/delivery/shipments/${String(shipment._id)}`)
+            .set('Authorization', customer);
+
+        expect(response.status).toBe(403);
+    });
+});
+
 describe('PATCH /delivery/shipments/{id}', () => {
     it('corrects a tracking code, in JSON or as a merge patch, while the shipment is out', async () => {
         const { bearer: customer, order } = await authenticateWithShipment();

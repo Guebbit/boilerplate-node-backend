@@ -62,6 +62,30 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/addresses/{addressId}:
+        get:
+            tags: [Account]
+            summary: Get an address
+            description: One entry of the caller's own book. Someone else's entry, an unknown id and a malformed one are the same 404.
+            operationId: getAddress
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: addressId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Address identifier from `GET /account/addresses`
+            responses:
+                '200':
+                    description: The address
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [Account]
             summary: Replace an address

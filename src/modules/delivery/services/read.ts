@@ -14,12 +14,12 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { orderService } from '@modules/orders';
-import type { AuthContext, OrderFulfillment } from '@types';
+import type { AuthContext, OrderFulfillment, Shipment } from '@types';
 import { remainderLines, remainingOfLine } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { fulfillmentOrderRepository, shipmentRepository } from '../repository';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
-import { standingOn, fulfillmentOrderActions, shipmentActions } from './actions';
+import { standingOn, fulfillmentOrderActions, shipmentActions, viewShipment } from './actions';
 import { ensureFulfillmentOrders } from './ensure';
 import { presentFulfillmentOrder, presentShipment } from '../presenter';
 
@@ -64,6 +64,30 @@ export const getForOrder = (
                     )
                 });
             });
+    });
+
+/**
+ * One shipment by its own id — the item read of the shipments `getForOrder` lists, at the address
+ * `PATCH /delivery/shipments/:id` writes. Staff's door: the route holds the shipment key.
+ *
+ * @param shipmentId - the shipment
+ * @param authContext - the caller, for the record's own `actions`
+ * @returns the shipment, or the 404 a missing one earns
+ */
+export const getShipment = (
+    shipmentId: string,
+    authContext?: AuthContext
+): Promise<ResponseSuccess<Shipment> | ResponseReject> =>
+    shipmentRepository.findById(shipmentId).then((found) => {
+        if (!found) return generateReject(404, [t('delivery.shipment-not-found')]);
+
+        return orderService
+            .getById(String(found.orderId))
+            .then((order) =>
+                order
+                    ? generateSuccess(viewShipment(found, order, authContext))
+                    : generateReject(404, [t('delivery.order-not-found')])
+            );
     });
 
 /**

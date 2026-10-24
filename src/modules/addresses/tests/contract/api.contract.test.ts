@@ -250,3 +250,57 @@ describe('the address book: /account/addresses', () => {
         expect(response.status).toBe(404);
     });
 });
+
+describe('GET /account/addresses/{addressId}', () => {
+    const OFFICE = {
+        label: 'office',
+        fullName: 'Ada Lovelace',
+        street: 'Via Milano 2',
+        city: 'Modena',
+        zip: '41121',
+        country: 'IT'
+    };
+
+    it('reads one entry of the caller’s own book', async () => {
+        const { bearer } = await authenticateAs('user');
+        const added = await api()
+            .post('/account/addresses')
+            .set('Authorization', bearer)
+            .send(OFFICE);
+        const addressId = String(added.body.data.id);
+
+        const response = await api()
+            .get(`/account/addresses/${addressId}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({ id: addressId, label: 'office', default: true });
+    });
+
+    it('answers the same 404 for an unknown id, a malformed one and another account’s entry', async () => {
+        const owner = await authenticateAs('user');
+        const added = await api()
+            .post('/account/addresses')
+            .set('Authorization', owner.bearer)
+            .send(OFFICE);
+        const stranger = await authenticateAs('admin');
+
+        const unknown = await api()
+            .get(`/account/addresses/${MISSING_ID}`)
+            .set('Authorization', owner.bearer);
+        const malformed = await api()
+            .get('/account/addresses/not-an-id')
+            .set('Authorization', owner.bearer);
+        const others = await api()
+            .get(`/account/addresses/${String(added.body.data.id)}`)
+            .set('Authorization', stranger.bearer);
+
+        expect([unknown.status, malformed.status, others.status]).toEqual([404, 404, 404]);
+    });
+
+    it('answers 401 without a session', async () => {
+        const response = await api().get(`/account/addresses/${MISSING_ID}`);
+
+        expect(response.status).toBe(401);
+    });
+});

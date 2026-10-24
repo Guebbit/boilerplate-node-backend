@@ -431,6 +431,27 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /delivery/shipments/{id}:
+        get:
+            tags: [Delivery]
+            summary: Get a shipment
+            description: One shipment by its own id, at the address `PATCH` corrects it. Staff's read, behind the key that corrects a shipment (`update:Shipment`); a buyer reads their shipments through `GET /delivery/orders/{orderId}`. An unknown or malformed id is a 404.
+            operationId: getShipment
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The shipment
+            responses:
+                '200':
+                    description: The shipment
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShipmentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
             tags: [Delivery]
             summary: Correct a shipment's tracking code

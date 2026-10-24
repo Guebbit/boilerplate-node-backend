@@ -1023,6 +1023,44 @@ describe('POST /account/logout', () => {
     });
 });
 
+describe('GET /account/sessions/{sessionId}', () => {
+    it('reads one of the caller’s own sessions, flagged current via the cookie', async () => {
+        const { bearer, jwtCookie } = await loginWithCookie();
+        const listing = await api()
+            .get('/account/sessions')
+            .set('Authorization', bearer)
+            .set('Cookie', jwtCookie);
+        const [session] = listing.body.data.sessions as { id: string }[];
+
+        const response = await api()
+            .get(`/account/sessions/${session.id}`)
+            .set('Authorization', bearer)
+            .set('Cookie', jwtCookie);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({ id: session.id, current: true });
+    });
+
+    it('answers 404 for an unknown id and a malformed one alike', async () => {
+        const { bearer } = await loginWithCookie();
+
+        const unknown = await api()
+            .get('/account/sessions/000000000000000000000000')
+            .set('Authorization', bearer);
+        const malformed = await api()
+            .get('/account/sessions/not-an-id')
+            .set('Authorization', bearer);
+
+        expect([unknown.status, malformed.status]).toEqual([404, 404]);
+    });
+
+    it('answers 401 without a session', async () => {
+        const response = await api().get('/account/sessions/000000000000000000000000');
+
+        expect(response.status).toBe(401);
+    });
+});
+
 describe('GET /account/sessions', () => {
     it('lists the one session a fresh login has, flagged current via the cookie', async () => {
         const { bearer, jwtCookie } = await loginWithCookie();

@@ -21,7 +21,11 @@ import { getLocaleApps } from './controllers/get-locale-apps';
 import { createLocale } from './controllers/create-locale';
 import { replaceLocale, updateLocale } from './controllers/update-locale';
 import { deleteLocale } from './controllers/delete-locale';
-import { getLocaleEntries, getAppLocaleEntries } from './controllers/get-locale-entries';
+import {
+    getLocaleEntries,
+    getAppLocaleEntries,
+    getLocaleEntry
+} from './controllers/get-locale-entries';
 import {
     createLocaleEntry,
     updateLocaleEntry,
@@ -177,6 +181,15 @@ router.patch(
     requirePermission('update', 'Locale'),
     invalidateCache(['locales']),
     mergeLocaleEntries
+);
+
+// GET /locales/:locale/apps/:app/entries/:entryId — one entry, guarded like the list it comes from.
+router.get(
+    '/:locale/apps/:app/entries/:entryId',
+    getAuth,
+    isAuthOrCredential,
+    requirePermission('update', 'Locale'),
+    getLocaleEntry
 );
 
 // PUT /locales/:locale/apps/:app/entries/:entryId — change one entry.

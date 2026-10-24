@@ -132,6 +132,27 @@ export const createEntry = async (
 };
 
 /**
+ * One entry of one app's slice of a language — the item read of the list the translator edits.
+ *
+ * @param tag - the language
+ * @param app - the app the URI names; the entry must belong to it
+ * @param entryId - the entry
+ * @returns the entry, or the 404 a missing one (or one of another app or language) earns
+ */
+export const getEntry = (
+    tag: string,
+    app: string,
+    entryId: string
+): Promise<ResponseSuccess<LocaleEntryDocument> | ResponseReject> => {
+    const unknownApp = rejectUnknownApp(app);
+    if (unknownApp) return Promise.resolve(unknownApp);
+
+    return findEntryInLanguage(entryId, tag, app).then((entry) =>
+        entry ? generateSuccess(entry) : entryNotFound()
+    );
+};
+
+/**
  * Change one entry's text.
  * @param app - the app the URI names; the entry must belong to it
  */

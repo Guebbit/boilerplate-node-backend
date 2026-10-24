@@ -32,6 +32,22 @@ const list = (userId: string): Promise<AddressesView> =>
     addressBookRepository.findByUserId(userId).then((book) => presentAddresses(book));
 
 /**
+ * One entry of the caller's own book; someone else's id is the same 404 as a bogus one.
+ *
+ * @param userId - the caller
+ * @param addressId - the entry
+ * @returns the entry on the wire, or the 404
+ */
+const get = (
+    userId: string,
+    addressId: string
+): Promise<ResponseSuccess<Address> | ResponseReject> =>
+    addressBookRepository.findByUserId(userId).then((book) => {
+        const address = presentAddressOf(book, addressId);
+        return address ? generateSuccess(address) : generateReject(404, [t('addresses.not-found')]);
+    });
+
+/**
  * Add an entry. The repository decides the default slot — see `addEntry`. Answers the entry it
  * created, 201, or 409 `ADDRESS_BOOK_LIMIT_REACHED` once the book holds `NODE_ADDRESS_BOOK_MAX`.
  */
@@ -120,6 +136,7 @@ const minimise = (userId: string): Promise<void> => addressBookRepository.delete
 /** The module's one door — every controller and sibling reads and writes the address book through this. */
 export const addressService = {
     list,
+    get,
     create,
     update,
     setDefault,

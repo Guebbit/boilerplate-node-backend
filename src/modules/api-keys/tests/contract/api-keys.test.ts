@@ -85,6 +85,57 @@ describe('GET /api-keys', () => {
     });
 });
 
+/** Mints one credential and returns its id. */
+const mintOne = async (bearer: string): Promise<string> => {
+    const created = await api()
+        .post('/api-keys')
+        .set('Authorization', bearer)
+        .send({
+            name: 'one to read back',
+            permissions: ['read:WebhookSubscription'],
+            expiresAt: IN_A_WEEK()
+        });
+    return String(created.body.data.id);
+};
+
+describe('GET /api-keys/:id', () => {
+    it('reads a credential back with its status, never a secret', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+        const id = await mintOne(bearer);
+
+        const response = await api().get(`/api-keys/${id}`).set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({
+            id,
+            name: 'one to read back',
+            status: 'active'
+        });
+        expect(response.body.data.secret).toBeUndefined();
+    });
+
+    it('answers 404 for an unknown id and a malformed one alike', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+
+        const unknown = await api()
+            .get('/api-keys/000000000000000000000000')
+            .set('Authorization', bearer);
+        const malformed = await api().get('/api-keys/not-an-id').set('Authorization', bearer);
+
+        expect([unknown.status, malformed.status]).toEqual([404, 404]);
+    });
+
+    it('refuses a caller without read:ApiKey with 403', async () => {
+        const { bearer: adminBearer } = await authenticateAsRole('admin');
+        const id = await mintOne(adminBearer);
+        const { bearer } = await authenticateAsRole('customer');
+
+        const response = await api().get(`/api-keys/${id}`).set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+    });
+});
+
 describe('POST /api-keys', () => {
     it('mints a credential and returns its one-time secret', async () => {
         const { bearer } = await authenticateAsRole('admin');

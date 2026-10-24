@@ -241,6 +241,37 @@ describe('POST /feedback/search', () => {
     });
 });
 
+describe('GET /feedback/{id}', () => {
+    it('matches the contract for the admin who may read the list', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createFeedbackRequest();
+
+        const response = await api().get(`/feedback/${id}`).set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({ id, subject: CONTACT_PAYLOAD.subject });
+    });
+
+    it('answers 404 for a request that does not exist and for a malformed id', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const missing = await api().get(`/feedback/${MISSING_ID}`).set('Authorization', bearer);
+        const malformed = await api().get('/feedback/not-an-id').set('Authorization', bearer);
+
+        expect([missing.status, malformed.status]).toEqual([404, 404]);
+    });
+
+    it('refuses a caller without read:Feedback with 403, and a guest with 401', async () => {
+        const id = await createFeedbackRequest();
+        const { bearer } = await authenticateAs('user');
+
+        const shopper = await api().get(`/feedback/${id}`).set('Authorization', bearer);
+        const guest = await api().get(`/feedback/${id}`);
+
+        expect([shopper.status, guest.status]).toEqual([403, 401]);
+    });
+});
+
 describe('PATCH /feedback/{id}', () => {
     // A triage state is two fields of a bigger record, so no PUT is offered (RFC 9110 §15.5.6).
     it('answers a PUT 405 with the methods it does allow', async () => {
@@ -252,7 +283,7 @@ describe('PATCH /feedback/{id}', () => {
             .send({ status: 'resolved' });
 
         expect(response.status).toBe(405);
-        expect(response.headers.allow).toBe('DELETE, PATCH');
+        expect(response.headers.allow).toBe('DELETE, GET, HEAD, PATCH');
     });
 
     it('matches the contract when changing status and notes together', async () => {

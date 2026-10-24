@@ -95,6 +95,22 @@ from "not loaded". The read is scoped like the list's rows (a row the caller may
 never a 403 that confirms it exists), and answers the same shape the list rows carry. Webhook
 subscriptions are the example: `GET /webhooks/subscriptions/{id}`.
 
+The item reads, and what each is scoped by:
+
+| Item read                                              | Scoped by                                          |
+| ------------------------------------------------------ | -------------------------------------------------- |
+| `GET /webhooks/subscriptions/{id}`                     | the shop's own subscriptions                       |
+| `GET /payments/{id}`                                   | the payer's own, or `display:Payment`              |
+| `GET /payments/{id}/refunds/{refundId}`                | the payment's scope; a record it does not hold     |
+| `GET /feedback/{id}`                                   | `read:Feedback`, the list's key                    |
+| `GET /api-keys/{id}`                                   | this shop's credentials, `read:ApiKey`             |
+| `GET /account/addresses/{addressId}`                   | the caller's own book                              |
+| `GET /account/sessions/{sessionId}`                    | the caller's own live sessions                     |
+| `GET /locales/{locale}/apps/{app}/entries/{entryId}`   | `update:Locale`, the editing screen's key          |
+| `GET /delivery/shipments/{id}`                         | `update:Shipment`, the key that corrects one       |
+
+A row the caller may not see, an unknown id and a malformed one are the same 404.
+
 ### Search → 200
 
 `POST /x/search` is a read that needs a body — see

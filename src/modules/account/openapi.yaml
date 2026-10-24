@@ -593,6 +593,34 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/sessions/{sessionId}:
+        get:
+            tags: [Account]
+            summary: Get one session
+            description: >-
+                One of the caller's own live sessions, by the id `GET /account/sessions` gave out.
+                Scoped like the list: another account's session, a session that has ended, an
+                invented id and a malformed one are the same 404. The `current` marker is judged
+                against the credential this request carries.
+            operationId: getSession
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: sessionId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Session identifier from `GET /account/sessions`
+            responses:
+                '200':
+                    description: The session
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Account]
             summary: Revoke one session
@@ -2252,6 +2280,20 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/Session'
+
+        SessionEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Session'
 
         SessionsEnvelope:
             type: object

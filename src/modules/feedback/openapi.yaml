@@ -137,6 +137,27 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /feedback/{id}:
+        get:
+            tags: [Feedback]
+            summary: Get a feedback request
+            description: One feedback request of the admin queue, by id. The same rows `GET /feedback` lists, so anyone who may read the list reads any of them. An unknown or malformed id is a 404.
+            operationId: getFeedbackRequest
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The feedback request
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FeedbackRequestEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
             tags: [Feedback]
             summary: Update feedback request status

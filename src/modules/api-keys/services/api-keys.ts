@@ -182,6 +182,23 @@ export const list = (
     );
 
 /**
+ * One of this tenant's credentials, with the same `status` the list gives it. Never a secret.
+ *
+ * @param id - the credential
+ * @param context - the caller; another tenant's credential is the same 404 as a missing one
+ * @returns the credential, or the 404
+ */
+export const get = (
+    id: string,
+    context: TenantCallerContext
+): Promise<ResponseSuccess<ApiKey> | ResponseReject> =>
+    apiKeyRepository.findById(id).then((apiKey) => {
+        if (apiKey?.tenant !== context.caller.tenantId)
+            return generateReject(404, [t('generic.error-not-found')]);
+        return withStatus([presentApiKey(apiKey)]).then(([row]) => generateSuccess(row));
+    });
+
+/**
  * Mint a credential. `body.permissions` must be a non-empty subset of what the minter currently
  * holds — enforced here, at mint time; re-checked again on every request the key later makes
  * (`module.ts`'s `CredentialResolver`), so a minter demoted after the fact cannot leave a

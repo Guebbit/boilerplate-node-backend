@@ -31,7 +31,14 @@ import {
 } from './capabilities';
 import { listApps } from '../apps';
 import { createLanguage, updateLanguage, removeLanguage } from './languages';
-import { searchEntries, createEntry, updateEntry, removeEntry, importEntries } from './entries';
+import {
+    searchEntries,
+    getEntry,
+    createEntry,
+    updateEntry,
+    removeEntry,
+    importEntries
+} from './entries';
 import { readMessages, readApiOverrides, readLocaleOverlay } from './messages';
 import { setTranslatables } from './translatables';
 import {
@@ -64,6 +71,7 @@ export const localeService = {
     updateLanguage,
     removeLanguage,
     searchEntries,
+    getEntry,
     createEntry,
     updateEntry,
     removeEntry,

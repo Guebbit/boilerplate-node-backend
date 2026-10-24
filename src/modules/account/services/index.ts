@@ -102,6 +102,7 @@ export const accountService = {
     undoEmailChange: verification.undoEmailChange,
     recordOneTimeTokenRejected: tokens.recordOneTimeTokenRejected,
     sessionsList: sessions.sessionsList,
+    sessionGet: sessions.sessionGet,
     reapLapsedPreviousEmails: previousEmailCleanup.reapLapsedPreviousEmails,
     reapExpiredExports: exportRows.reapExpiredExports,
     loginOrCreateFromOAuth: oauth.loginOrCreateFromOAuth,

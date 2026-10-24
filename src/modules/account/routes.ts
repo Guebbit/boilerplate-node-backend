@@ -70,6 +70,7 @@ import { deleteAccountConfirm } from './controllers/delete-account-confirm';
 import { getOAuthProviders } from './controllers/get-oauth-providers';
 import { getSessionConfig } from './controllers/get-session-config';
 import { postSessionTouch } from './controllers/post-session-touch';
+import { getSession } from './controllers/get-session';
 import { getOAuthLinks } from './controllers/get-oauth-links';
 import { deleteOAuthLink } from './controllers/delete-oauth-link';
 import { postOAuthLinkStart } from './controllers/post-oauth-link-start';
@@ -288,6 +289,9 @@ router.get('/sessions', isAuth, getSessions);
 
 // POST /account/sessions/current/touch — counts the session as active and answers its idle clock.
 router.post('/sessions/current/touch', isAuth, postSessionTouch);
+
+// GET /account/sessions/:sessionId — one of the caller's own live sessions (requires auth)
+router.get('/sessions/:sessionId', isAuth, getSession);
 
 // DELETE /account/sessions/:sessionId — revoke one session (requires auth). Sensitive, same
 // reasoning as logout-all.
