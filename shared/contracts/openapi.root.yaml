@@ -560,6 +560,31 @@ components:
                 which language tags a deployment supports.
             pattern: '^[A-Z]{2}$'
             example: IT
+        # One address, field by field: `OrderAddress` (frozen on an order), `Address` (the book) and
+        # its three write bodies all `$ref` these, so a limit moves in one place. `minLength: 1`
+        # because `''` is never a synonym for "absent".
+        AddressFullName:
+            type: string
+            minLength: 1
+            maxLength: 100
+            description: The name the parcel is addressed to.
+        AddressStreet:
+            type: string
+            minLength: 1
+            maxLength: 200
+        AddressCity:
+            type: string
+            minLength: 1
+            maxLength: 100
+        AddressZip:
+            type: string
+            minLength: 1
+            maxLength: 20
+            description: Postal code, free-form (formats differ per country).
+        AddressPhone:
+            type: string
+            minLength: 1
+            maxLength: 32
         ImageUrl:
             type: string
             format: uri-reference

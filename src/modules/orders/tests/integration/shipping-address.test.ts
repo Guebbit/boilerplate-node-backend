@@ -168,4 +168,16 @@ describe('PUT /orders/{id}/shipping-address', () => {
 
         expect(response.status).toBe(422);
     });
+
+    it('refuses an empty field, as the address book does', async () => {
+        const { order } = await seedPaidOrder();
+        const { bearer } = await authenticateAsRole('admin');
+
+        const response = await api()
+            .put(`/orders/${String(order._id)}/shipping-address`)
+            .set('Authorization', bearer)
+            .send({ ...AFTER, street: '' });
+
+        expect(response.status).toBe(422);
+    });
 });
