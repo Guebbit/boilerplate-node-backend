@@ -74,6 +74,33 @@ describe('the publish mail', () => {
         );
     });
 
+    it.each([
+        ['banned', { active: false }],
+        [
+            'in the grace of its own deletion',
+            {
+                deletedAt: new Date(),
+                deletedBy: 'owner' as const,
+                purgeAt: new Date(Date.now() + 1e9)
+            }
+        ]
+    ])('sends nothing when the owner is %s', async (_state, locked) => {
+        const owner = await createUser({
+            email: 'locked@example.com',
+            username: 'locked',
+            ...locked
+        });
+        subscribe();
+
+        await emitDomainEvent(EXAMPLE_PUBLISHED, {
+            exampleId: MISSING_ID,
+            userId: owner.id,
+            title: 'Ciao'
+        });
+
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+
     it('sends nothing when the owner no longer exists', async () => {
         subscribe();
 

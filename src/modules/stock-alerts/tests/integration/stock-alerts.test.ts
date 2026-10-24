@@ -22,6 +22,7 @@ import { stockAlertModel } from '../../model';
 import { STOCK_ALERT_SENT } from '../../events';
 import { enabledModules } from '../../../../modules';
 import { testCallerContext } from '@tests/callers';
+import { userRepository } from '@modules/users/tests/factories';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -168,6 +169,29 @@ describe('the signal', () => {
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         expect(mockEnqueueEmail.mock.calls[0]?.[1]).toBe('stock-alerts.back-in-stock');
         expect(await sentEvents()).toMatchObject([{ productId }]);
+        expect(await stockAlertModel.countDocuments()).toBe(0);
+    });
+
+    it('answers the request of a locked account without mailing it', async () => {
+        const { bearer, user } = await shopper();
+        const productId = await soldOut();
+        await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        // The owner asked to delete the account after asking for the alert.
+        await userRepository.updateMany(
+            { _id: user.id },
+            {
+                $set: {
+                    deletedAt: new Date(),
+                    deletedBy: 'owner',
+                    purgeAt: new Date(Date.now() + DAY_MS)
+                }
+            }
+        );
+
+        await inventoryService.receive(productId, 3, undefined, testCallerContext);
+        await settleOutboxNudges();
+
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
         expect(await stockAlertModel.countDocuments()).toBe(0);
     });
 
