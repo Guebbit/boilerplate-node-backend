@@ -19,9 +19,11 @@ flowchart LR
     account["account<br/><i>this module</i>"]
     access["access"]
     api_keys["api-keys"]
+    shop["shop"]
     users["users"]
 
     api_keys --> account
+    shop --> account
     account --> access
     account --> users
     users -. "user.deactivated" .-> account
@@ -33,6 +35,7 @@ flowchart LR
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
+    class shop supporting;
     class access,api_keys,users generic;
     class account centre;
 ```

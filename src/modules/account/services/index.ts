@@ -52,6 +52,7 @@ export {
     EMAIL_CHANGE_TOKEN_TYPE,
     EMAIL_CHANGE_UNDO_TOKEN_TYPE
 } from '../token-types';
+export { termsVersion } from '../consent-record';
 export { RESET_REQUEST_SECONDS } from './password-reset-request';
 export { amrAfterReauth } from './reauth';
 export { VERIFY_RESEND_SECONDS } from './verification';

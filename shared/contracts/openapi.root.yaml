@@ -824,7 +824,7 @@ components:
                 analyticsConsentAt:
                     type: string
                     format: date-time
-                # When the account accepted the terms, and which text (`NODE_TERMS_VERSION` at that
+                # When the account accepted the terms, and which text (`GET /shop`'s `termsVersion` at that
                 # moment). Stamped by a signup, or by the first sign-in with a provider; absent on
                 # an account an administrator created. There is no re-acceptance flow.
                 termsAcceptedAt:
