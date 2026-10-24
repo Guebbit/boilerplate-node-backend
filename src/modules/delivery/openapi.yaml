@@ -165,7 +165,7 @@ paths:
                   description: Only those still waiting for stock whose expected date falls within this many days.
             responses:
                 '200':
-                    description: A page of fulfillment orders, the earliest expected first
+                    description: A page of fulfillment orders, the earliest expected first (a queue, so no `sort`)
                     content:
                         application/json:
                             schema:
@@ -198,7 +198,7 @@ paths:
                   description: Only this product.
             responses:
                 '200':
-                    description: A page of product summaries, the earliest promise first
+                    description: A page of product summaries, the earliest promise first (a queue, so no `sort`)
                     content:
                         application/json:
                             schema:

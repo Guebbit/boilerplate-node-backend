@@ -352,7 +352,7 @@ paths:
                       $ref: '#/components/schemas/WebhookDeliveryStatus'
             responses:
                 '200':
-                    description: Delivery list
+                    description: Delivery list, newest first (a log, so no `sort`)
                     content:
                         application/json:
                             schema:

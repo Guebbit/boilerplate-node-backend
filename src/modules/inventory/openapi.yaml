@@ -33,7 +33,7 @@ paths:
                   description: Only products at or under the deployment's low-availability threshold.
             responses:
                 '200':
-                    description: A page of levels, most scarce first
+                    description: A page of levels, most scarce first (a queue, so no `sort`)
                     content:
                         application/json:
                             schema:
@@ -60,7 +60,7 @@ paths:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
             responses:
                 '200':
-                    description: A page of preorder allowances, the most outstanding first
+                    description: A page of preorder allowances, the most outstanding first (a queue, so no `sort`)
                     content:
                         application/json:
                             schema:
@@ -133,7 +133,7 @@ paths:
                   description: Narrow to one kind of transition
             responses:
                 '200':
-                    description: The latest movements
+                    description: The latest movements, newest first (a log, so no `sort`)
                     content:
                         application/json:
                             schema:

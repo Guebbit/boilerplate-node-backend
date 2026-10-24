@@ -62,7 +62,7 @@ paths:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
             responses:
                 '200':
-                    description: Action history
+                    description: Action history, newest first (a log, so no `sort`)
                     content:
                         application/json:
                             schema:

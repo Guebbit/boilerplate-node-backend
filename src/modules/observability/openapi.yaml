@@ -160,7 +160,7 @@ paths:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
             responses:
                 '200':
-                    description: Audit events
+                    description: Audit events, newest first (a log, so no `sort`)
                     content:
                         application/json:
                             schema:
