@@ -112,12 +112,12 @@ describe('grouping a paid backorder', () => {
 });
 
 describe('the daily sweep', () => {
-    it('tells a buyer promised the 30-day default once it has passed, and not earlier', async () => {
+    it('tells a buyer promised the 30-day default on day 30, and not earlier', async () => {
         const { orderId } = await paidBackorderOrder({ quantity: 1, shelf: 0 });
         await waitingOf(orderId);
 
         const early = await deliveryService.runPreorderSweep(inDays(28.5));
-        const due = await deliveryService.runPreorderSweep(inDays(30.5));
+        const due = await deliveryService.runPreorderSweep(inDays(29.5));
         await settleOutboxNudges();
 
         expect([early, due]).toEqual([{ notified: 0 }, { notified: 1 }]);

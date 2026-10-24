@@ -86,7 +86,7 @@ process it.
 
 ## "My order is late"
 
-The customer already got an email and an inbox note when the date moved or passed. It says the new
+The customer already got an email and an inbox note when the date moved or would be missed. It says the new
 date (or that there is none yet), and that they can **cancel from their order page for a full
 refund** any time before it ships. Nothing is asked of them and the shop never cancels for them:
 silence means they keep waiting. Staff look at the **Late** list weekly
