@@ -21,17 +21,16 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale } from '@infrastructure/i18n';
 import { userService } from '@modules/users';
 import type { TenantCallerContext } from '@types';
-import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import { heldRules } from '@kernel/ability';
 import { findRule, systemCallerContext } from '@kernel/permissions';
 import type { Caller } from '@types';
-import type { MintApiKeyRequest, ApiKeyCreated, ApiKey } from '@types';
-import { apiKeyRepository } from '../repository';
+import type { MintApiKeyRequest, ApiKeyCreated, ApiKey, ApiKeysResponse } from '@types';
+import { apiKeyRepository, type StoredApiKey } from '../repository';
 import { mintApiKey, displayIdOf } from '../credentials';
 import { apiKeysAuditActions } from '../audit';
 import { ERROR_CODES } from '@api/error-codes';
-import { presentApiKey } from '../presenter';
+import { apiKeyStatus, presentApiKey } from '../presenter';
 import { apiKeyMintedEmail, apiKeysRevokedEmail, type KeysRevokedReason } from '../emails';
 import type { ApiKeyDocument } from '../model';
 
@@ -123,6 +122,7 @@ const notifyMinted = (minterId: string, apiKey: ApiKeyDocument): void => {
  * @param userId - the caller's own id
  */
 export const findOwnApiKeys = (userId: string): Promise<ApiKey[]> =>
+    // The subject is exporting their own data, so their keys' minter can sign in (`true`).
     readAll(
         (page) =>
             apiKeyRepository
@@ -133,7 +133,7 @@ export const findOwnApiKeys = (userId: string): Promise<ApiKey[]> =>
                 )
                 .then((result) => result.items),
         MAX_CONFIGURED_PAGE_SIZE
-    );
+    ).then((rows) => rows.map((row) => ({ ...row, status: apiKeyStatus(row, true) })));
 
 /**
  * What a hard account deletion owes this collection — the `personalData.erase` hook (see
@@ -142,15 +142,43 @@ export const findOwnApiKeys = (userId: string): Promise<ApiKey[]> =>
 export const apiKeysDeleteByUserId = (userId: string, session: ClientSession): Promise<void> =>
     apiKeyRepository.deleteByUserId(userId, session);
 
-/** List this tenant's credentials, newest first. Never returns a secret — see `model.ts`'s transform. */
+/**
+ * Gives each stored row its `status`. A minter who can no longer sign in suspends their keys, and
+ * that is a fact about the users collection: one lookup per DISTINCT minter, not per row.
+ *
+ * @param rows - the stored credentials of one page
+ */
+const withStatus = (rows: StoredApiKey[]): Promise<ApiKey[]> =>
+    apiKeyRepository.mintersOf(rows.map((row) => row.id)).then((minterOf) =>
+        Promise.all(
+            [...new Set(minterOf.values())].map((minterId) =>
+                userService
+                    .findAuthenticatableById(minterId)
+                    .then((user) => [minterId, user !== null] as const)
+            )
+        ).then((entries) => {
+            const canSignIn = new Map(entries);
+            return rows.map((row) => ({
+                ...row,
+                status: apiKeyStatus(row, canSignIn.get(minterOf.get(row.id) ?? '') ?? false)
+            }));
+        })
+    );
+
+/**
+ * List this tenant's credentials, newest first unless `sort` says otherwise. Never returns a
+ * secret — see `model.ts`'s transform. `maxExpiresAt` is the latest expiry a mint accepts now.
+ */
 export const list = (
     context: TenantCallerContext,
-    filters: { page?: unknown; pageSize?: unknown }
-): Promise<PaginatedResult<ApiKey>> =>
-    apiKeyRepository.search(
-        filters,
-        { tenant: context.caller.tenantId },
-        { createdAt: -1, _id: -1 }
+    filters: { page?: unknown; pageSize?: unknown; sort?: string[] }
+): Promise<ApiKeysResponse> =>
+    apiKeyRepository.search(filters, { tenant: context.caller.tenantId }).then(({ items, meta }) =>
+        withStatus(items).then((rows) => ({
+            items: rows,
+            meta,
+            maxExpiresAt: latestExpiry().toISOString()
+        }))
     );
 
 /**
