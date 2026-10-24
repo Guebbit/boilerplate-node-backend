@@ -116,7 +116,8 @@ describe('GET /delivery/order/{orderId}', () => {
         // The buyer sees their goods, and nothing they could act on as staff.
         expect(response.body.data.shipments[0].actions).toEqual({
             deliver: false,
-            editTracking: false
+            forceDeliver: false,
+            update: false
         });
     });
 

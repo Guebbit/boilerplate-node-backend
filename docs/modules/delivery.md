@@ -547,6 +547,11 @@ date this order was expecting, not the product's previous date.
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
 frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../theory/authorization.md#protecting-people).
 
+A forced door has its own flag beside the ordinary one: `forceShip` (the ordinary ship door is closed,
+`override:Order` opens it) and `forceDeliver` (the arrival is open, as for `deliver`, and the caller
+also holds `override:Order`; true beside `deliver`, since forcing only skips the carrier's
+confirmation). `ShipmentActions.update` is the tracking-code edit.
+
 | Event                                                 | Payload                                                    | Public webhook                 |
 | ----------------------------------------------------- | ---------------------------------------------------------- | ------------------------------ |
 | `shipment.shipped`                                    | `{orderId, shipmentId, fulfillmentOrderId, lines}`         | yes — replaces `order.shipped` |
