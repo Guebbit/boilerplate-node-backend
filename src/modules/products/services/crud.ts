@@ -44,6 +44,7 @@ type ProductCreateData = Omit<
     | 'currency'
     | 'inStock'
     | 'lowStock'
+    | 'buyable'
     | 'preorder'
     | 'backorder'
     | 'onHand'

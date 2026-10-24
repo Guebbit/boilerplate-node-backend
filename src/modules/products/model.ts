@@ -34,6 +34,7 @@ export interface ProductRecord extends Omit<
     | 'available'
     | 'inStock'
     | 'lowStock'
+    | 'buyable'
     | 'preorder'
     | 'backorder'
     | 'currency'
