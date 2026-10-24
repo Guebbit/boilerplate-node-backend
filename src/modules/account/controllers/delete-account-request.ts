@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { userService } from '@modules/users';
 import { accountService } from '../services';
-import { successResponse } from '@infrastructure/http/response';
+import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { authAccountDeleteTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
@@ -37,7 +37,10 @@ export const deleteAccountRequest = (request: Request, response: Response) => {
             }
             return accountService
                 .requestAccountDeletion(user, callerContextOf(request))
-                .then(() => {
+                .then((refusal) => {
+                    // The mailbox budget is spent: no token was minted and no mail went out.
+                    if (refusal) return rejectResponse(response, refusal.status, refusal.errors);
+
                     authAccountDeleteTotal.inc({ status: 'success' });
                     return successResponse<undefined>(
                         response,

@@ -13,6 +13,7 @@
 
 import { api, staleBearerFor } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
@@ -84,6 +85,23 @@ describe('DELETE /account — deleteAccountRequest', () => {
         expect(mockOutbox).toHaveLength(1);
         expect(mockOutbox[0].template).toBe('account.delete-request');
     });
+
+    // The link is a mail, so it spends the mailbox's daily budget; a spent one sends nothing.
+    it('answers 429 with Retry-After, and mails nothing, once the mailbox budget is spent', () =>
+        withEnvironmentOverrides({ NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX: '1' }, async () => {
+            // Its own mailbox: the budget is counted in process memory, across the file's tests.
+            const { bearer } = await authenticate('budget@example.com');
+            const first = await api().delete('/account').set('Authorization', bearer).send();
+            mockOutbox.length = 0;
+
+            const refused = await api().delete('/account').set('Authorization', bearer).send();
+
+            expect(first.status).toBe(200);
+            expect(refused.status).toBe(429);
+            expect(refused.body.errors[0].code).toBe('RATE_LIMITED');
+            expect(Number(refused.headers['retry-after'])).toBeGreaterThanOrEqual(1);
+            expect(mockOutbox).toEqual([]);
+        }));
 
     // No second factor here, so the unconditional critical guard is the only gate on this route.
     describe('with a session past the critical window', () => {

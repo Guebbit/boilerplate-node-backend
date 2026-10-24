@@ -29,7 +29,7 @@ const TRANSLATABLE_SEARCH_FIELDS = ['title', 'description'] as const;
  * locale chain, so searching in Italian finds a product whose Italian row is the only place the
  * word appears — a product with no such row is still reachable through its own column.
  *
- * @param filters - id, text, minPrice, maxPrice, page (1-based), pageSize
+ * @param filters - id, text, priceMin, priceMax, page (1-based), pageSize
  * @param scope - which rows this caller may read ({@link callerScope})
  */
 export const search = (
@@ -41,7 +41,7 @@ export const search = (
 }> => {
     const pattern = toSearchPattern(filters.text ?? filters.title);
 
-    // No free-text term: `category`/`tag`/`minPrice`/`maxPrice`/`active` still apply as declared
+    // No free-text term: `category`/`tag`/`priceMin`/`priceMax`/`active` still apply as declared
     // on the repository, unioning nothing.
     const resultPromise = pattern
         ? searchWithTranslatedText(filters, scope, pattern)

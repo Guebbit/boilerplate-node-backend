@@ -84,6 +84,11 @@ x-error-codes:
             status: 500,
             description: 'An unexpected server-side failure. Never carries library or stack detail.'
         }
+    METHOD_NOT_ALLOWED:
+        {
+            status: 405,
+            description: 'The path exists, but not with this method. The `Allow` header lists the methods it does answer.'
+        }
     PAYLOAD_TOO_LARGE:
         { status: 413, description: "The request body exceeds this deployment's size limit." }
     UNSUPPORTED_MEDIA_TYPE:
@@ -476,10 +481,9 @@ components:
                         $ref: '#/components/schemas/ErrorResponse'
         UnsupportedMediaType:
             description: >-
-                The request body declares a character set or a content encoding the body parser
-                cannot read. Refused before any route runs, like `413` above — a body whose
-                content-type simply matches no parser is NOT this: it reaches the route, which
-                answers whatever it says about a request missing every field.
+                The body's media type is not one the operation declares (`details.accepted` lists
+                them), or its charset or encoding cannot be read. Refused before any route runs,
+                like `413` above. A request with no body is never judged.
             content:
                 application/json:
                     schema:

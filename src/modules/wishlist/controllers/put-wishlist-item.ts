@@ -33,5 +33,5 @@ export const putWishlistItem = (request: Request<{ productId: string }>, respons
 
             successResponse<WishlistResponse>(response, result.data, 200, result.message);
         })
-        .catch(catchAs(response, 'putWishlistItem'));
+        .catch(catchAs(response, 'createWishlistItem'));
 };

@@ -50,7 +50,7 @@ paths:
                 be publicly visible; a hidden or soft-deleted product answers 404 exactly as it
                 would from the catalogue. A product taken off sale (`purchasable: false`) is saved
                 like any other.
-            operationId: addWishlistItem
+            operationId: createWishlistItem
             security:
                 - bearerAuth: []
             parameters:
@@ -70,7 +70,7 @@ paths:
             tags: [Wishlist]
             summary: Remove a saved product
             description: Removes the line for the product identified by `{productId}` from the authenticated user's wishlist. A line the caller does not hold is a 404 — the client's view is stale and it needs to know.
-            operationId: removeWishlistItem
+            operationId: deleteWishlistItem
             security:
                 - bearerAuth: []
             parameters:
