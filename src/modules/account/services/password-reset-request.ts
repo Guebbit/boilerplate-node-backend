@@ -97,8 +97,8 @@ const mailResetLink = (user: UserDocument, context: CallerContext): Promise<bool
  *           is skipped the same way: same 200, no mail, no new token, `false` for the metric.
  * Metric:   counted here, because the controller does not wait for the outcome. The boolean
  *           return serves tests and is never a client-visible refusal.
- * Token:    like `requestAccountDeletion` (`./deletion-request.ts`), its value never leaves
- *           its own file.
+ * Token:    like the restore link of `scheduleAccountDeletion` (`./account-deletion.ts`), its
+ *           value never leaves its own file.
  *
  * @returns `true` when a mail was queued, `false` when the address has no account or the lookup failed
  */
