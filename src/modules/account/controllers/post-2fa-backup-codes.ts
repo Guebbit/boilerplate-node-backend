@@ -16,7 +16,7 @@ import { authTwoFactorBackupCodesRegenerateTotal } from '../metrics';
 
 /**
  * POST /account/2fa/backup-codes — mints a fresh set of ten backup codes, discarding the old
- * ones. Fresh critical auth AND a valid code, same reasoning `delete2fa` gives.
+ * ones. Fresh critical auth AND a valid code, same reasoning `post2faDisable` gives.
  */
 export const post2faBackupCodes = (
     request: Request<unknown, unknown, TwoFactorCodeRequest>,

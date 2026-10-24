@@ -426,7 +426,7 @@ describe('telling the account holder their factors changed', () => {
         mockOutbox.length = 0;
 
         await api()
-            .delete('/account/2fa/methods/email')
+            .post('/account/2fa/methods/email/remove')
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 1) });
         await forgetSessionEpoch(bearer);
@@ -442,7 +442,7 @@ describe('telling the account holder their factors changed', () => {
         mockOutbox.length = 0;
 
         await api()
-            .delete('/account/2fa/methods/totp')
+            .post('/account/2fa/methods/totp/remove')
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 1) });
         await forgetSessionEpoch(bearer);
@@ -457,7 +457,7 @@ describe('telling the account holder their factors changed', () => {
         mockOutbox.length = 0;
 
         await api()
-            .delete('/account/2fa')
+            .post('/account/2fa/disable')
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 1) });
         await forgetSessionEpoch(bearer);
@@ -486,7 +486,10 @@ describe('telling the account holder their factors changed', () => {
         await enrollTotp(bearer);
         mockOutbox.length = 0;
 
-        await api().delete('/account/2fa').set('Authorization', bearer).send({ code: '000000' });
+        await api()
+            .post('/account/2fa/disable')
+            .set('Authorization', bearer)
+            .send({ code: '000000' });
         await forgetSessionEpoch(bearer);
 
         expect(mailsOf('account.two-factor-changed')).toEqual([]);
@@ -1034,7 +1037,7 @@ describe('several factors at once', () => {
         await enrollEmail(bearer, backupCodes[0]);
 
         const removal = await api()
-            .delete('/account/2fa/methods/email')
+            .post('/account/2fa/methods/email/remove')
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 1) });
         await forgetSessionEpoch(bearer);
@@ -1052,7 +1055,7 @@ describe('several factors at once', () => {
         const { secret } = await enrollTotp(bearer);
 
         await api()
-            .delete('/account/2fa/methods/totp')
+            .post('/account/2fa/methods/totp/remove')
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 1) });
         await forgetSessionEpoch(bearer);
@@ -1101,7 +1104,7 @@ describe('several factors at once', () => {
         expect(send.status).toBe(200);
 
         const removal = await api()
-            .delete('/account/2fa/methods/totp')
+            .post('/account/2fa/methods/totp/remove')
             .set('Authorization', bearer)
             .send({ code: mailedCode() });
         await forgetSessionEpoch(bearer);
@@ -1116,7 +1119,7 @@ describe('disabling 2FA', () => {
         await enrollTotp(bearer);
 
         const response = await api()
-            .delete('/account/2fa')
+            .post('/account/2fa/disable')
             .set('Authorization', bearer)
             .send({ code: '000000' });
         await forgetSessionEpoch(bearer);
@@ -1130,7 +1133,7 @@ describe('disabling 2FA', () => {
         await enrollEmail(bearer, backupCodes[0]);
 
         const disable = await api()
-            .delete('/account/2fa')
+            .post('/account/2fa/disable')
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 1) });
         await forgetSessionEpoch(bearer);

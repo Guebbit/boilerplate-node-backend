@@ -152,11 +152,11 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "arming the caller's own pending factor"
     },
-    'account DELETE /2fa/methods/:method': {
+    'account POST /2fa/methods/:method/remove': {
         requiresAuth: true,
         reason: "removing one of the caller's own second factors"
     },
-    'account DELETE /2fa': {
+    'account POST /2fa/disable': {
         requiresAuth: true,
         reason: "disabling every one of the caller's own second factors"
     },

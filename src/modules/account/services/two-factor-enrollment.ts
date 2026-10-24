@@ -289,7 +289,7 @@ const armMethod = (
 };
 
 /**
- * `DELETE /account/2fa/methods/{method}` — drops one factor and leaves the rest armed. Removing
+ * `POST /account/2fa/methods/{method}/remove` — drops one factor and leaves the rest armed. Removing
  * the last one turns 2FA off, backup codes included, exactly as {@link disableTwoFactor} would.
  *
  * @param userId - the caller

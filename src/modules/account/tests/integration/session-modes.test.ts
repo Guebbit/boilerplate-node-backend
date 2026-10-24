@@ -706,7 +706,7 @@ describe('cookie mode only', () => {
         expect(await statusOfBearer(second)).toBe(200);
 
         const disabled = await api()
-            .delete('/account/2fa')
+            .post('/account/2fa/disable')
             .set('Authorization', `Bearer ${second}`)
             .set('Origin', FRONTEND)
             .send({ code: await codeFor(secret, 1) });
@@ -725,7 +725,7 @@ describe('cookie mode only', () => {
         const second = confirm.body.data.sessionToken as string;
 
         const removed = await api()
-            .delete('/account/2fa/methods/totp')
+            .post('/account/2fa/methods/totp/remove')
             .set('Authorization', `Bearer ${second}`)
             .set('Origin', FRONTEND)
             .send({ code: await codeFor(secret, 1) });

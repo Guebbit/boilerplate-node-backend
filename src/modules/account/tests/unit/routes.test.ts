@@ -81,11 +81,11 @@ const AUTHENTICATED = [
     'POST /export',
     'GET /export/:id',
     'GET /2fa',
-    'DELETE /2fa',
+    'POST /2fa/disable',
     'POST /2fa/methods/:method/setup',
     'POST /2fa/methods/:method/send',
     'POST /2fa/methods/:method/confirm',
-    'DELETE /2fa/methods/:method',
+    'POST /2fa/methods/:method/remove',
     'POST /2fa/backup-codes'
 ];
 
@@ -125,11 +125,11 @@ describe('account routes — what is mounted', () => {
             'POST /login/2fa/send',
             'POST /login/2fa',
             'GET /2fa',
-            'DELETE /2fa',
+            'POST /2fa/disable',
             'POST /2fa/methods/:method/setup',
             'POST /2fa/methods/:method/send',
             'POST /2fa/methods/:method/confirm',
-            'DELETE /2fa/methods/:method',
+            'POST /2fa/methods/:method/remove',
             'POST /2fa/backup-codes',
             'GET /oauth/providers',
             'GET /oauth/links',

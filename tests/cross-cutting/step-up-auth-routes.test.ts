@@ -84,8 +84,8 @@ const STEP_UP_ROUTES: Record<string, string[]> = {
     'account POST /2fa/methods/:method/setup': [`requireFreshAuth(critical)`],
     'account POST /2fa/methods/:method/send': [`requireFreshAuth(critical)`],
     'account POST /2fa/methods/:method/confirm': [`requireFreshAuth(critical)`],
-    'account DELETE /2fa/methods/:method': [`requireFreshAuth(critical)`],
-    'account DELETE /2fa': [`requireFreshAuth(critical)`],
+    'account POST /2fa/methods/:method/remove': [`requireFreshAuth(critical)`],
+    'account POST /2fa/disable': [`requireFreshAuth(critical)`],
     // Regenerating backup codes discards the old set — the same stolen-but-fresh-session risk
     // as disabling a factor.
     'account POST /2fa/backup-codes': [`requireFreshAuth(critical)`],

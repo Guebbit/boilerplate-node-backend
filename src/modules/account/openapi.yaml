@@ -348,33 +348,6 @@ paths:
                                 $ref: '#/components/schemas/TwoFactorStatusEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-        delete:
-            tags: [Auth]
-            summary: Disable two-factor authentication
-            description: 'Drops EVERY enrolled method and every unused backup code. Requires a valid code from any enrolled method — or an unused backup code — in the body, on top of the route''s own fresh-auth requirement: disabling from a stolen-but-fresh session is otherwise the cheapest way around the whole feature. Removing one method and keeping the rest is DELETE /account/2fa/methods/{method}.'
-            operationId: disableTwoFactor
-            security:
-                - bearerAuth: []
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/TwoFactorCodeRequest'
-            responses:
-                '200':
-                    description: >-
-                        Two-factor authentication is off. The change revoked every session, this one
-                        included, and replaced it. A bearer client of a `cookie`-mode deployment
-                        has no cookie to refresh, so `data.sessionToken` carries its replacement
-                        `ses_…` id: the old one no longer works.
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/SessionRenewedEnvelope'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/2fa/methods/{method}/setup:
         post:
@@ -458,11 +431,40 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/2fa/methods/{method}:
-        delete:
+    /account/2fa/disable:
+        post:
+            tags: [Auth]
+            summary: Disable two-factor authentication
+            description: 'Drops EVERY enrolled method and every unused backup code. Requires a valid code from any enrolled method — or an unused backup code — in the body, on top of the route''s own fresh-auth requirement: disabling from a stolen-but-fresh session is otherwise the cheapest way around the whole feature. Removing one method and keeping the rest is POST /account/2fa/methods/{method}/remove.'
+            operationId: disableTwoFactor
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TwoFactorCodeRequest'
+            responses:
+                '200':
+                    description: >-
+                        Two-factor authentication is off. The change revoked every session, this one
+                        included, and replaced it. A bearer client of a `cookie`-mode deployment
+                        has no cookie to refresh, so `data.sessionToken` carries its replacement
+                        `ses_…` id: the old one no longer works.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionRenewedEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/2fa/methods/{method}/remove:
+        post:
             tags: [Auth]
             summary: Remove one second factor
-            description: Drops one method and leaves the others armed. Requires a valid code — from any enrolled method, or a backup code — for the same reason the full disable does. Removing the LAST armed method turns two-factor authentication off and discards the backup codes with it, exactly as DELETE /account/2fa would.
+            description: Drops one method and leaves the others armed. Requires a valid code — from any enrolled method, or a backup code — for the same reason the full disable does. Removing the LAST armed method turns two-factor authentication off and discards the backup codes with it, exactly as POST /account/2fa/disable would.
             operationId: removeTwoFactorMethod
             security:
                 - bearerAuth: []

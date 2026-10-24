@@ -63,7 +63,7 @@ flowchart LR
     C --> A["armed — guards every login"]
     S -.->|"abandoned"| S
     A --> D["DELETE .../methods/:method<br/><i>this one only</i>"]
-    A --> X["DELETE /account/2fa<br/><i>all of them, plus the codes</i>"]
+    A --> X["POST /account/2fa/disable<br/><i>all of them, plus the codes</i>"]
 
     classDef half fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef ok fill:#ccfbf1,stroke:#0f766e,color:#111827;
@@ -167,8 +167,8 @@ Reading your own factors is not a privileged act. Changing them is, and every mu
 | `POST /account/2fa/methods/:method/setup`   | critical fresh auth **+** a valid code once any factor is armed     |
 | `POST /account/2fa/methods/:method/send`    | critical fresh auth, `accountCodeSendLimiter`; armed delivered only |
 | `POST /account/2fa/methods/:method/confirm` | critical fresh auth                                                 |
-| `DELETE /account/2fa/methods/:method`       | critical fresh auth **+** a valid code                              |
-| `DELETE /account/2fa`                       | critical fresh auth **+** a valid code                              |
+| `POST /account/2fa/methods/:method/remove`  | critical fresh auth **+** a valid code                              |
+| `POST /account/2fa/disable`                 | critical fresh auth **+** a valid code                              |
 | `POST /account/2fa/backup-codes`            | critical fresh auth **+** a valid code                              |
 | `POST /account/login/2fa/send`              | public — `credentialLimiters`, `mfaSendLimiter`                     |
 | `POST /account/login/2fa`                   | public — `credentialLimiters`, `mfaChallengeLimiter`                |
@@ -178,10 +178,9 @@ entire point of the step. What stands in for one is the challenge — see
 [Security](../tools/security.md#the-challenge-is-a-claim-check-not-a-code) for why it is a
 single-use `verificationtokens` row rather than a JWT.
 
-::: warning Two route orderings are load-bearing
-`/login/2fa/send` is registered **above** `/login/2fa`, and `DELETE /2fa/methods/:method` **last**
-of the method routes. Express matches in registration order, so either one moved changes which
-handler answers.
+::: warning One route ordering is load-bearing
+`/login/2fa/send` is registered **above** `/login/2fa`. Express matches in registration order, so
+moving it changes which handler answers.
 :::
 
 Why a mutation needs a code on top of a fresh session, and why removing one method is held to the

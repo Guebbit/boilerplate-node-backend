@@ -51,8 +51,8 @@ import { get2fa } from './controllers/get-2fa';
 import { post2faSetup } from './controllers/post-2fa-setup';
 import { post2faConfirm } from './controllers/post-2fa-confirm';
 import { post2faMethodSend } from './controllers/post-2fa-method-send';
-import { delete2faMethod } from './controllers/delete-2fa-method';
-import { delete2fa } from './controllers/delete-2fa';
+import { post2faMethodRemove } from './controllers/post-2fa-method-remove';
+import { post2faDisable } from './controllers/post-2fa-disable';
 import { post2faBackupCodes } from './controllers/post-2fa-backup-codes';
 import { getRefreshToken } from './controllers/get-refresh-token';
 import { postLogout } from './controllers/post-logout';
@@ -330,10 +330,10 @@ router.post('/login/2fa', credentialLimiters, mfaChallengeLimiter, postLoginTwoF
 // reveals nothing a step-up would protect, and the profile page needs it on every visit.
 router.get('/2fa', isAuth, get2fa);
 
-// DELETE /account/2fa — drop every factor. Critical fresh auth AND a valid code in the body:
+// POST /account/2fa/disable — drop every factor. Critical fresh auth AND a valid code in the body:
 // disabling from a stolen-but-fresh session is otherwise the cheapest way around the feature.
 // The wrong-code cap lives in the service (`reserveMfaAttempt`), on the account, not in a limiter.
-router.delete('/2fa', isAuth, requireFreshAuth('critical'), delete2fa);
+router.post('/2fa/disable', isAuth, requireFreshAuth('critical'), post2faDisable);
 
 // POST /account/2fa/methods/:method/setup — start (or restart) one method's enrollment. Critical
 // tier: a restart disarms a factor that was already working.
@@ -353,9 +353,13 @@ router.post(
 // POST /account/2fa/methods/:method/confirm — arm the pending method. Critical, same reasoning.
 router.post('/2fa/methods/:method/confirm', isAuth, requireFreshAuth('critical'), post2faConfirm);
 
-// DELETE /account/2fa/methods/:method — drop one factor, keep the rest. Registered LAST of the
-// three so the two longer paths above are matched first.
-router.delete('/2fa/methods/:method', isAuth, requireFreshAuth('critical'), delete2faMethod);
+// POST /account/2fa/methods/:method/remove — drop one factor, keep the rest.
+router.post(
+    '/2fa/methods/:method/remove',
+    isAuth,
+    requireFreshAuth('critical'),
+    post2faMethodRemove
+);
 
 // POST /account/2fa/backup-codes — mint a fresh set of ten, discarding the old ones. Critical
 // tier, same reasoning as disable: the old set stops being a stolen-but-fresh session's shortcut

@@ -1,6 +1,6 @@
 /**
  * @module
- * `DELETE /account/2fa/methods/{method}` controller — thin HTTP adapter over
+ * `POST /account/2fa/methods/{method}/remove` controller — thin HTTP adapter over
  * `twoFactorService.removeTwoFactorMethod`.
  */
 
@@ -17,11 +17,11 @@ import { authTwoFactorDisableTotal } from '../metrics';
 import { AMR, withProofs } from '../domain/session-proof';
 
 /**
- * DELETE /account/2fa/methods/{method} — drops one factor and leaves the rest armed. Fresh
+ * POST /account/2fa/methods/{method}/remove — drops one factor and leaves the rest armed. Fresh
  * critical auth AND a valid code, same reasoning as the full disable: a stolen-but-fresh session
  * must not be able to peel factors off one at a time either.
  */
-export const delete2faMethod = (
+export const post2faMethodRemove = (
     request: Request<{ method: string }, unknown, TwoFactorCodeRequest>,
     response: Response
 ) => {
@@ -65,5 +65,5 @@ export const delete2faMethod = (
                     });
                 })
         )
-        .catch(catchAs(response, 'delete2faMethod'));
+        .catch(catchAs(response, 'post2faMethodRemove'));
 };

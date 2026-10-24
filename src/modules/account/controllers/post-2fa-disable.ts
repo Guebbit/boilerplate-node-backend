@@ -1,6 +1,6 @@
 /**
  * @module
- * `DELETE /account/2fa` controller — thin HTTP adapter over `twoFactorService.disableTwoFactor`.
+ * `POST /account/2fa/disable` controller — thin HTTP adapter over `twoFactorService.disableTwoFactor`.
  */
 
 import type { Request, Response } from 'express';
@@ -16,11 +16,11 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { AMR, withProofs } from '../domain/session-proof';
 
 /**
- * DELETE /account/2fa — drops every armed factor and the backup codes with them. Requires fresh
+ * POST /account/2fa/disable — drops every armed factor and the backup codes with them. Requires fresh
  * critical auth (the route guard) AND a valid code or backup code in the body: disabling from a
  * stolen-but-fresh session is otherwise the cheapest way around the whole feature.
  */
-export const delete2fa = (
+export const post2faDisable = (
     request: Request<unknown, unknown, TwoFactorCodeRequest>,
     response: Response
 ) => {
@@ -60,5 +60,5 @@ export const delete2fa = (
                     });
                 })
         )
-        .catch(catchAs(response, 'delete2fa'));
+        .catch(catchAs(response, 'post2faDisable'));
 };

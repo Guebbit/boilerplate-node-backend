@@ -1204,14 +1204,16 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login~12fa~1send'
     /account/2fa:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa'
-    /account/2fa/methods/{method}:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}'
     /account/2fa/methods/{method}/setup:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1setup'
     /account/2fa/methods/{method}/send:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1send'
     /account/2fa/methods/{method}/confirm:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1confirm'
+    /account/2fa/disable:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1disable'
+    /account/2fa/methods/{method}/remove:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1remove'
     /account/2fa/backup-codes:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1backup-codes'
     /account/oauth/providers:
