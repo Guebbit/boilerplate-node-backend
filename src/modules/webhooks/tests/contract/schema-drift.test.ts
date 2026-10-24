@@ -4,10 +4,8 @@
  * `allOf`, because two sibling schemas each declaring `additionalProperties: false` is a JSON
  * Schema trap ajv can't see through — see the comment on `WebhookSubscriptionCreated` in
  * `../../openapi.yaml`. `unevaluatedProperties` would let the composition stay closed without the
- * restatement, but this repo's contract tests run on plain Ajv (draft-07 mode, via
- * `openapi-response-validator`), which does not implement that keyword — verified by inspecting
- * `node_modules/openapi-response-validator/dist/index.js`'s `new Ajv(...)` call, which passes no
- * 2019-09/2020-12 dialect.
+ * restatement, but the judge of this repo's contract tests is the orval-generated Zod schemas
+ * (`tests/support/response-contract.ts`), which cannot compose two closed siblings either.
  *
  * So the two property lists exist twice, by hand, with nothing else keeping them in sync. This
  * test is that: it reads the module's own `openapi.yaml` fragment, never the generated root

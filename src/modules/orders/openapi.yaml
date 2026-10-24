@@ -29,7 +29,7 @@ x-personal-data:
         schema:
             type: array
             items:
-                $ref: '#/components/schemas/Order'
+                $ref: '#/components/schemas/ExportOrder'
     # The whole timeline of the account's own orders, staff reasons included: the export is the
     # buyer's data, not the buyer's screen. An `actor` appears only when it is the account itself;
     # which staff member wrote a row stays in the audit log (CJEU Pankki S, C-579/21).
@@ -810,14 +810,54 @@ components:
                         $ref: '#/components/schemas/OrderTimelineEntry'
 
         # `POST /account/export`'s row for one timeline entry: the entry plus the order it belongs to.
+        # Flat for the same reason as `ExportOrder`; the drift test allows only `orderId` to differ.
         OrderTimelineExportEntry:
-            allOf:
-                - $ref: '#/components/schemas/OrderTimelineEntry'
-                - type: object
-                  required: [orderId]
-                  properties:
-                      orderId:
-                          $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+            type: object
+            additionalProperties: false
+            required: [id, at, type, audience, data, orderId]
+            properties:
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                at:
+                    type: string
+                    format: date-time
+                type:
+                    $ref: '#/components/schemas/OrderTimelineType'
+                audience:
+                    type: string
+                    enum: [buyer, staff]
+                    description: >-
+                        Who the row is for, decided per `type` by the server. `staff` rows are
+                        private (an override's reason, a hold, a provider's refusal): a buyer's
+                        timeline never contains one, so a client only tells staff which of their
+                        rows the buyer cannot see. The account export carries both.
+                actor:
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                    description: >-
+                        The account that made the change. Staff view only, and absent for the system
+                        or once that account was erased. In the account export it is present only
+                        when it is the exporting account itself, never a staff member's id.
+                text:
+                    type: string
+                    description: >-
+                        Free text staff wrote with the change — an override's reason. Unset after
+                        `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`; the row stays.
+                data:
+                    type: object
+                    additionalProperties: true
+                    description: >-
+                        What the type needs to say, as ids, codes and numbers — never another
+                        module's free text. `status_overridden`: `mode` (`status` or `forced`),
+                        `from`, `to`. `paid`: `method`. `delivered`: `withdrawUntil`. `cancelled`:
+                        `by`, `cause` (why: `customer`, `operator`, `withdrawal`, `reservation_expired`,
+                        `erasure` or `payment_mismatch`; `by` is shared by the
+                        system's causes), `refund` (whether the cancel returned the money). Shipment and hold rows: `shipmentId` or `fulfillmentOrderId`,
+                        `trackingCode`, `reason` (a hold's reason code). Refund rows: `refundId`,
+                        `amount`, `currency`, `reason`, and `failureReason` on a failure. Return
+                        rows: `returnId`. Document rows: `number`.
 
         CancelOrderRequest:
             type: object
@@ -998,22 +1038,17 @@ components:
             required: [fullName, street, city, zip, country]
             properties:
                 fullName:
-                    type: string
-                    maxLength: 100
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressFullName'
                 street:
-                    type: string
-                    maxLength: 200
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressStreet'
                 city:
-                    type: string
-                    maxLength: 100
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressCity'
                 zip:
-                    type: string
-                    maxLength: 20
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressZip'
                 country:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
                 phone:
-                    type: string
-                    maxLength: 32
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressPhone'
 
         # `Product`, without `onHand`/`reserved`/`available`, and without an image — see
         # `OrderLineCurrent`. An order line is a purchase-time SNAPSHOT — the price and title a
@@ -1381,7 +1416,8 @@ components:
                     taxTotal,
                     shippingNetAmount,
                     shippingTaxAmount,
-                    taxSummary
+                    taxSummary,
+                    actions
                 ]
             properties:
                 id:
@@ -1533,8 +1569,8 @@ components:
                 # Computed per CALLER, not stored: what this requester may do to this order right
                 # now. Present on every read of orders — the single read, the list rows and the
                 # writes — so a client that replaces its cached record from a write does not lose
-                # the block and collapse its own controls. Absent from the account export, which
-                # is the buyer's data and not a screen (an `actions` block is never exported).
+                # the block and collapse its own controls. The account export's `ExportOrder`
+                # leaves it out.
                 # See docs/theory/tactical-ddd.md.
                 actions:
                     $ref: '#/components/schemas/OrderActions'
@@ -1567,6 +1603,212 @@ components:
                 deletedAt:
                     type: string
                     format: date-time
+
+        # `Order` as `POST /account/export` carries it: the buyer's data and not a screen, so no
+        # `actions` block (what a caller may do next is a per-caller projection, never exported).
+        # Restated flat, not `allOf` on `Order`: two closed siblings can never validate together,
+        # and the zod generator cannot compose them either. `tests/contract/export-schema-drift.test.ts`
+        # keeps the two property lists in step.
+        ExportOrder:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    id,
+                    email,
+                    items,
+                    totalItems,
+                    totalQuantity,
+                    totalPrice,
+                    status,
+                    paymentStatus,
+                    fulfillmentStatus,
+                    returnStatus,
+                    currency,
+                    orderNumber,
+                    netTotal,
+                    taxTotal,
+                    shippingNetAmount,
+                    shippingTaxAmount,
+                    taxSummary
+                ]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                # Absent once the account that placed this order has been erased. The order
+                # survives (it is the invoice); the foreign key does not, because the account it
+                # named no longer exists.
+                userId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OrderItem'
+                totalItems:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                        Number of distinct line items in this order. Not to be confused with
+                        `PaginationMeta.totalItems`, which counts orders matching a search.
+                    example: 2
+                totalQuantity:
+                    type: integer
+                    minimum: 0
+                    description: Sum of `quantity` across every line item.
+                    example: 5
+                totalPrice:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.
+                    example: 149.97
+                # Frozen from `NODE_DEFAULT_CURRENCY` the moment the order was placed — a later
+                # change to the shop's own setting must not rewrite what an old order actually
+                # charged.
+                currency:
+                    type: string
+                    readOnly: true
+                    description: ISO-4217 currency code this order was priced in (e.g. EUR).
+                # Both derived at serialization from the lines' frozen `taxRate` — never stored.
+                # See `src/modules/orders/domain/tax.ts`.
+                netTotal:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Sum of every line's `netAmount` — the goods total excluding VAT, GOODS
+                        ONLY. Shipping's own net amount is `shippingNetAmount`, not folded in here.
+                taxTotal:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Every VAT collected on this order: the lines' own `taxAmount`, plus the VAT
+                        on `shippingCost` — apportioned pro-rata across the lines by value and
+                        taxed at each line's own rate, since delivery is taxed as ancillary to what
+                        it delivers.
+                shippingNetAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Shipping's own net amount, summed across every line it was apportioned
+                        onto — `netTotal` stays goods-only, this is the rest of the split. Zero on
+                        an order with no delivery method or free shipping.
+                shippingTaxAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Shipping's own tax amount, summed across every line it was apportioned
+                        onto — already folded into `taxTotal`, published separately so an invoice
+                        can print it as its own line. Zero on an order with no delivery method or
+                        free shipping.
+                taxSummary:
+                    type: array
+                    readOnly: true
+                    items:
+                        $ref: '#/components/schemas/OrderTaxSummaryRow'
+                    description: >-
+                        One row per distinct VAT rate charged on this order, sorted ascending.
+                        Reconciles exactly: summed `netAmount` is `netTotal` + `shippingNetAmount`,
+                        summed `taxAmount` is `taxTotal`, and summed `grossAmount` is `totalPrice`.
+                        Empty on an order with no lines.
+                notes:
+                    type: string
+                    description: Optional order notes
+                # Absent on an admin-created order (no checkout), or an all-digital basket — nothing
+                # ships, so no method applies.
+                # Present on every other order: a physical line makes a shipping method required.
+                shippingMethod:
+                    type: string
+                    description: The shipping method's id as the checkout froze it (e.g. standard, express, pickup).
+                shippingCost:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: What that method cost at checkout time — a later rate change cannot re-price history.
+                # Where the goods go — present only when a line ships to an address. Absent under
+                # the same conditions as `shippingMethod` above, when the chosen method itself
+                # needs no address (`requiresAddress: false`, e.g. pickup), on an all-digital
+                # order: nothing travels, so nothing is frozen here, and once the order is
+                # anonymised. `billingAddress` is the one every checkout order carries.
+                shippingAddress:
+                    $ref: '#/components/schemas/OrderAddress'
+                # Who the order is invoiced to — the address the invoice prints as the buyer's
+                # (EU VAT Directive Art. 226). Present on every order a checkout places: the
+                # shipping address when the buyer chose "same as shipping", otherwise the book
+                # entry they named, otherwise their default. Absent on an admin-created order
+                # (`POST /orders` runs no checkout), and once the order is anonymised.
+                billingAddress:
+                    $ref: '#/components/schemas/OrderAddress'
+                # Absent on order creation that isn't a checkout (the admin `POST /orders` path
+                # names no method).
+                paymentMethod:
+                    $ref: '#/components/schemas/PaymentMethodId'
+                # When this order's stock hold ends — `NODE_RESERVATION_TTL_MINUTES` for `card`,
+                # `NODE_BANK_TRANSFER_HOLD_HOURS` for `bank_transfer`. Past this with no payment,
+                # the sweep releases the stock and cancels the order. Absent once paid or
+                # cancelled: the hold is over either way.
+                payBy:
+                    type: string
+                    format: date-time
+                # `{year}-{sequence}`, assigned once at order-creation time — never recomputed.
+                # Not a tax invoice number: this order is a receipt, not an invoice (no national
+                # e-invoicing system is involved) — see `docs/modules/orders.md`. Gaps are
+                # acceptable, the same way Shopify's `#1001` skips a number a failed write burned.
+                orderNumber:
+                    type: string
+                    readOnly: true
+                    example: '2026-000041'
+                status:
+                    $ref: '#/components/schemas/OrderStatus'
+                # Three read-only projections beside `status`, so a client never infers "was this
+                # refunded?" or "did a return come back?" from `status` — which `delivered` keeps
+                # terminal on purpose. Each says where one object stands: the money, the goods, and
+                # any return. See docs/modules/orders.md#the-status-projections.
+                paymentStatus:
+                    $ref: '#/components/schemas/OrderPaymentStatus'
+                fulfillmentStatus:
+                    $ref: '#/components/schemas/OrderFulfillmentStatus'
+                returnStatus:
+                    $ref: '#/components/schemas/OrderReturnStatus'
+                withdrawUntil:
+                    type: string
+                    format: date-time
+                    readOnly: true
+                    description: >-
+                        The end of the last day a withdrawal is announced to be valid (UTC), frozen
+                        when the period started — delivery for goods, payment for digital content.
+                        A client prints its date only. The shop accepts a withdrawal one day past
+                        it. Absent before the period starts: the right already exists, the window
+                        has no end yet.
+                # When the order reached `paid`: the buyer's own fact, and the date a sale is
+                # counted on. Absent while unpaid. An offline payment's is when the admin recorded
+                # it, not when the money arrived.
+                paidAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                # Unlike a product or a user, an order carries no `active` flag, so this is the
+                # only thing that distinguishes a hidden order from a live one. A non-admin never
+                # sees a record where it is set — `visibleScope` filters them out — so it appears
+                # only on admin reads.
+                deletedAt:
+                    type: string
+                    format: date-time
+
     parameters:
         # Shared by every module that acts on one of an order's `{orderId}` routes (`dependsOn: orders`);
         # each use restates its own `description` beside the `$ref` (OpenAPI 3.1 allows it).
