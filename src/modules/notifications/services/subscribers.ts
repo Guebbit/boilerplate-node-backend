@@ -88,7 +88,7 @@ export const onFulfillmentOrderHoldNoticed = (
           ]);
 
 /**
- * A waiting preorder's buyer was told its date moved or passed: the same message in their inbox, so
+ * A waiting preorder's buyer was told its date moved or will be missed: the same message in their inbox, so
  * it is still there when the email is not. It only informs: the buyer is asked nothing. An erased
  * account has no inbox to write to, and nothing here invents one.
  */
