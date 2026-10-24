@@ -6,6 +6,7 @@
  * runs the real cascade, so a future "erase everything" change that reaches a tax record fails here.
  */
 
+import { refundOrderPayment } from '@modules/payments/tests/factories';
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { resetDomainEvents } from '@kernel/events';
@@ -62,7 +63,7 @@ describe('a hard delete of an account that has bought, been refunded and written
         await eventually(() =>
             invoiceModel.countDocuments({ orderId }).then((count) => count >= 1)
         );
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'));
         await eventually(() =>
             creditNoteModel.countDocuments({ orderId }).then((count) => count >= 1)
         );

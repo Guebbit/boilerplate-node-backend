@@ -26,7 +26,8 @@ import {
     GetSalesStats200Response,
     ListAuditEntries200Response,
     ListOrderCreditNotes200Response,
-    RefundPaymentByOrder200Response,
+    RefundPaymentByOrder201Response,
+    GetPayment200Response,
     ReceiveReturn200Response,
     ShipFulfillmentOrder201Response,
     Signup201Response,
@@ -291,13 +292,18 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
     await drain();
 
     // The moderator returns the money of the order they bought themselves.
-    const refunded = bodyOf(
+    const refund = bodyOf(
         await api()
-            .post(`/payments/orders/${order.id}/refund`)
+            .post(`/payments/${intent.id}/refunds`)
             .set('Authorization', moderator)
             .set('Idempotency-Key', 'journey-own-order-refund')
             .send({}),
-        RefundPaymentByOrder200Response
+        RefundPaymentByOrder201Response
+    ).data;
+    expect(refund).toMatchObject({ amount: 25 });
+    const refunded = bodyOf(
+        await api().get(`/payments/${intent.id}`).set('Authorization', moderator),
+        GetPayment200Response
     ).data;
     expect(refunded).toMatchObject({ amount: 25, amountRefunded: 25 });
 

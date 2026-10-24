@@ -1,6 +1,6 @@
 /**
  * @module
- * Giving money back — the operator action (`refundByOrder`) and the `order.cancelled` listener's
+ * Giving money back — the operator action (`refundPayment`) and the `order.cancelled` listener's
  * compensation (`refundForOrder`), both through `performRefund`. Nothing else in this module may
  * move money out.
  *
@@ -659,13 +659,13 @@ const performCardRefund = (
  * ever gets a record opened and left `pending` ({@link leaveForOperator}), whoever asked.
  *
  * @param orderId - the order whose payment is being returned
- * @param context - present only for a request with a caller (`refundByOrder`, `refundForReturn`);
+ * @param context - present only for a request with a caller (`refundPayment`, `refundForReturn`);
  *  the `order.cancelled` listener (`refundForOrder`) has none
  * @param request - the amount and the reason; omitted, it is everything left, for a cancellation
  * @returns the payment as it now stands — always still `succeeded`, whatever was returned (its
  *   `displayStatus` says how much) — and whether the record was left open for an operator; or
  *   `null` when there was nothing to return
- * @internal The step beneath `refundByOrder`, `refundForOrder` and `refundForReturn`, which carry
+ * @internal The step beneath `refundPayment`, `refundForOrder` and `refundForReturn`, which carry
  *   the scope and permission checks; it never leaves the barrel.
  */
 export const performRefund = (
@@ -730,13 +730,11 @@ const notRefundable = (): ResponseReject =>
  * The operator's refund of a payment that exists: refuse a body that cannot stand, otherwise
  * refund and answer with the payment as it now stands. On a hand-paid payment that is the record
  * left `pending`: `settleRefundByHand` is what says the money went back.
- * @param orderId - the order whose payment is refunded
  * @param payment - the payment, read through the caller's scope
  * @param body - the amount to return, or none for what is left
  * @param context - the operator, audited on the refund
  */
 const refundFoundPayment = (
-    orderId: string,
     payment: PaymentDocument,
     body: { amount?: number },
     context: CallerContext
@@ -748,38 +746,40 @@ const refundFoundPayment = (
     if (payment.status !== REFUNDABLE_PAYMENT_STATUS || remainingOf(payment) <= 0)
         return Promise.resolve(notRefundable());
 
-    return performRefund(orderId, context, { amount: body.amount, reason: 'goodwill' }).then(
-        (refunded) =>
-            refunded
-                ? generateSuccess(
-                      refunded.payment,
-                      200,
-                      t(refunded.leftOpen ? 'payments.refund-left-open' : 'payments.refund-success')
-                  )
-                : notRefundable()
+    return performRefund(String(payment.orderId), context, {
+        amount: body.amount,
+        reason: 'goodwill'
+    }).then((refunded) =>
+        refunded
+            ? generateSuccess(
+                  refunded.payment,
+                  200,
+                  t(refunded.leftOpen ? 'payments.refund-left-open' : 'payments.refund-success')
+              )
+            : notRefundable()
     );
 };
 
 /**
- * `POST /payments/orders/:orderId/refund` — the operator returning money on its own, separate
- * from cancelling. Admin-only at the route.
+ * `POST /payments/:id/refunds` — the operator returning money on its own, separate from
+ * cancelling. Admin-only at the route.
  *
- * @param orderId - the order whose payment is being returned
+ * @param paymentId - the payment whose money is being returned
  * @param authContext - the caller, for the read that distinguishes 404 from 409
  * @param context - the caller context to audit the refund against
  * @param body - the optional `amount` (absent = everything left) and its `currency`
  * @returns the payment as it now stands, or a refusal naming which case it was
  */
-export const refundByOrder = (
-    orderId: string,
+export const refundPayment = (
+    paymentId: string,
     authContext: AuthContext | undefined,
     context: CallerContext,
     body: { amount?: number; currency?: string } = {}
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository
-        .findByOrderId(orderId, callerScope(authContext))
+        .findByIdScoped(paymentId, callerScope(authContext))
         .then((payment) =>
-            payment ? refundFoundPayment(orderId, payment, body, context) : paymentNotFound()
+            payment ? refundFoundPayment(payment, body, context) : paymentNotFound()
         );
 
 /**

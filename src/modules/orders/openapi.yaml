@@ -827,7 +827,7 @@ components:
                     description: >-
                         `false` cancels and releases the stock without returning the money — a
                         replacement going out, a correction, or a refund handled separately through
-                        `POST /payments/orders/{orderId}/refund`.
+                        `POST /payments/{id}/refunds`.
 
         StatusOverrideRequest:
             type: object

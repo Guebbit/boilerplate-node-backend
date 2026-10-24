@@ -5,6 +5,7 @@
  * through the services' public door.
  */
 
+import { refundOrderPayment } from '../factories';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -70,12 +71,9 @@ describe('the operator refunding a cash payment', () => {
     it('opens a pending record and settles nothing, however privileged the caller', async () => {
         const { orderId } = await cashOrder();
 
-        const refunded = await paymentService.refundByOrder(
-            orderId,
-            asAdmin(),
-            callerContextAs('admin'),
-            { amount: 30 }
-        );
+        const refunded = await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
+            amount: 30
+        });
 
         expect(refunded.success).toBe(true);
         const payment = await paymentOf(orderId);
@@ -111,7 +109,7 @@ describe('the cancel listener on a cash payment', () => {
 
     it('still opens the rest when an operator refund of part of it is already waiting', async () => {
         const { orderId } = await cashOrder();
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
             amount: 30
         });
 
@@ -129,10 +127,10 @@ describe('the cancel listener on a cash payment', () => {
 describe('settleRefundByHand', () => {
     it('settles one named record: the event, the audit row and the flags all follow', async () => {
         const { orderId } = await cashOrder();
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
             amount: 30
         });
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), {
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), {
             amount: 20
         });
         const open = await paymentOf(orderId);
@@ -161,7 +159,7 @@ describe('settleRefundByHand', () => {
 
     it('answers PAYMENT_REFUND_NOT_OPEN to a record that is already settled', async () => {
         const { orderId } = await cashOrder();
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'));
         const open = await paymentOf(orderId);
         const refundId = String(open.refunds[0]._id);
         await settle(String(open._id), refundId);
@@ -181,7 +179,7 @@ describe('settleRefundByHand', () => {
         await payByCard(order, user);
         jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
         await expect(
-            paymentService.refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'))
+            refundOrderPayment(String(order._id), asAdmin(), callerContextAs('admin'))
         ).rejects.toThrow('down');
         const payment = await paymentOf(String(order._id));
 
@@ -204,7 +202,7 @@ describe('settleRefundByHand', () => {
 
     it('offers the record to settle to whoever holds create:Refund', async () => {
         const { orderId } = await cashOrder();
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'));
 
         const asOperator = await paymentService.getForOrder(orderId, asAdmin());
         const asMod = await paymentService.getForOrder(orderId, asModerator());

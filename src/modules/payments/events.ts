@@ -33,7 +33,7 @@ declare module '@kernel/events' {
 
         /**
          * One refund settled — emitted from `./services/refunds.ts`'s `settleRefund`, on the same
-         * at-most-once write, whether an operator asked for it (`refundByOrder`) or the automatic
+         * at-most-once write, whether an operator asked for it (`refundPayment`) or the automatic
          * `order.cancelled` listener did. A payment can raise it more than once: each partial
          * refund is its own fact. `invoicing` is the listener that issues a credit note from it —
          * see `docs/modules/invoicing.md`. Absent while a hand-paid refund waits for an operator

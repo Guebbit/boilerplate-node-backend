@@ -50,7 +50,9 @@ flowchart TD
   (`tests/support/response-contract.ts`) fails a 201 without it.
 - A retried create under its `Idempotency-Key` replays the `Location` with the body.
 - A sub-collection create is a create too: `POST /delivery/fulfillment-orders/{id}/shipments`
-  answers 201 with `Location` naming the shipment.
+  answers 201 with `Location` naming the shipment, and `POST /payments/{id}/refunds` answers 201
+  with the new `Refund` and `Location: /payments/{id}/refunds/{refundId}`. The payment's running
+  totals are one `GET /payments/{id}` away.
 - **A 201 means something was created** (RFC 9110 §15.3.2). An intent that only refreshes the
   order's one payment row, or a cart "add" that only grows a line, answers **200**.
 - Anything the contract does not declare is a 422 (`additionalProperties: false`), never a column.

@@ -341,7 +341,7 @@ becomes the offline one.
 **Only an operator can say a `manual` refund actually happened.** There is no provider to ask, so
 money that left the system by hand can only be confirmed returned by a person. Every way a refund
 opens on a hand-paid payment (a cancel, a late transfer on a cancelled order, an operator's
-`refundByOrder`, a received return, a buyer's withdrawal of the rest) only opens a `pending` record
+`refundPayment`, a received return, a buyer's withdrawal of the rest) only opens a `pending` record
 and writes a `payment.refund_owed_by_hand` audit row naming the order, the record, the amount and
 the reason; the actor is the caller, or the system when none is behind it. Nobody settles it on the
 spot, whoever asked: goods arriving or a buyer withdrawing is not cash going back.
@@ -407,7 +407,7 @@ sequenceDiagram
 - **A refusal stays open.** The record is `failed`, with a closed `failureReason` (staff only; see
   [the staff Payments page](#the-staff-payments-page)), and keeps its share of `amountRefunded`, so nothing is opened beside it. `retryOpenRefunds` (run by
   `npm run job sweep:payment-effects`) and the next cancel or operator call both finish it.
-- **The default is everything left.** `POST /payments/orders/{orderId}/refund` with no body returns
+- **The default is everything left.** `POST /payments/{id}/refunds` with no body returns
   all that is still refundable; with an `amount` it returns that part. An `amount` over what is
   left, nothing left included, is a 422 (`PAYMENT_REFUND_EXCEEDS_REMAINING`); with no `amount`,
   nothing left is a 409 (`PAYMENT_NOT_REFUNDABLE`).

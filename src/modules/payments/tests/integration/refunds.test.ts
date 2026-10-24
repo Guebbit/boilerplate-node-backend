@@ -6,6 +6,7 @@
  * Real Mongo throughout — the guarantees are the conditional writes.
  */
 
+import { refundOrderPayment } from '../factories';
 import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
@@ -68,7 +69,7 @@ const paymentOf = async (orderId: string) => {
 
 /** Refund `amount` of the order's payment as an operator. */
 const refund = (orderId: string, body: { amount?: number; currency?: string } = {}) =>
-    paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'), body);
+    refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'), body);
 
 describe('a partial refund', () => {
     it('records the refund and keeps the payment succeeded, with the rest still refundable', async () => {
@@ -544,7 +545,7 @@ describe('the request of a refund', () => {
             const auditSpy = observePort(auditPort.emitAuditEvent);
             jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(new Error('down'));
             await expect(
-                paymentService.refundByOrder(orderId, asAdmin(), own, { amount: 30 })
+                refundOrderPayment(orderId, asAdmin(), own, { amount: 30 })
             ).rejects.toThrow('down');
 
             await paymentService.retryOpenRefunds();

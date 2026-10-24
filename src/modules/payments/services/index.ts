@@ -6,7 +6,7 @@
  * Starts:    only a `pending` order's owner can start paying.
  * The gate:   the order's move to `paid`, not the charge. The provider answers first, and a
  *             slipped-away order is refunded on the spot, so money moved iff the order says `paid`.
- * Refunds:    the `order.cancelled` listener, `refundByOrder` and `refundForReturn` are each made
+ * Refunds:    the `order.cancelled` listener, `refundPayment` and `refundForReturn` are each made
  *             at-most-once by `addRefund`'s conditional write on `amountRefunded`.
  * Authority:  the provider's own word, arriving by webhook. The browser's is a hint that lets the
  *             happy path feel synchronous.
@@ -21,13 +21,20 @@ import {
     applyWebhookDelivery,
     applyWebhookSettlement
 } from './settlement';
-import { refundByOrder, refundForReturn, settleRefundByHand } from './refunds';
+import { refundPayment, refundForReturn, settleRefundByHand } from './refunds';
 import { retryOpenRefunds, reconcileStalePayments } from './effects';
 import { recordOfflinePayment } from './offline';
 import { openTransferPayment } from './transfer';
 import { mailPaymentReceived, mailRefundIssued } from './notify';
 import { callerScope, payerScope, buyerOrderScope, readsAllPayments } from './scope';
-import { getById, getForOrder, presentWithActions, withActions } from './view';
+import {
+    getById,
+    getForOrder,
+    getRefund,
+    newestRefund,
+    presentWithActions,
+    withActions
+} from './view';
 import {
     detachUserId,
     findOwnPayments,
@@ -47,7 +54,7 @@ export type { PaymentMethodInfo } from '../config';
  * `settlePayment` and `performRefund` are NOT published: each is the choreography beneath a door
  * that carries the guards (scope, own-money rule, order gate), so a caller going round the door
  * would skip them. `confirmPayment`/`syncPayment`/`applyWebhookSettlement` and
- * `refundByOrder`/`refundForReturn` are the doors. `refundForOrder` and `cancelOpenIntentForOrder` act for the `order.cancelled` listener alone, so they stay off the object too.
+ * `refundPayment`/`refundForReturn` are the doors. `refundForOrder` and `cancelOpenIntentForOrder` act for the `order.cancelled` listener alone, so they stay off the object too.
  */
 
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
@@ -59,7 +66,9 @@ export const paymentService = {
     applyWebhookSettlement,
     getById,
     getForOrder,
-    refundByOrder,
+    getRefund,
+    newestRefund,
+    refundPayment,
     refundForReturn,
     settleRefundByHand,
     retryOpenRefunds,

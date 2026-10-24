@@ -206,7 +206,7 @@ paths:
             summary: List refunds (staff)
             description: >-
                 One row per refund across every payment, newest first, for the Refunds tab. Read
-                only: a refund is opened and settled through `POST /payments/orders/{orderId}/refund`
+                only: a refund is opened and settled through `POST /payments/{id}/refunds`
                 and the cancel path. Needs `display:Payment`.
             operationId: listRefunds
             security:
@@ -343,19 +343,19 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /payments/orders/{orderId}/refund:
+    /payments/{id}/refunds:
         post:
             tags: [Payments]
-            summary: Refund an order's payment
+            summary: Refund a payment
             description: >-
                 Returns money without touching the order's status — the operator action for a
                 goodwill refund, and the second half of "cancel and refund" when a client sends both.
                 Needs `create:Refund`. Refunding one's own order is allowed and the audit row
                 is flagged `ownOrder`. Without a body it returns everything still refundable; with an `amount`
                 it returns that part, and the payment stays `succeeded` until the parts add up to
-                what was paid. Each call is one `Refund` record on the payment. Answers 200 with
-                the payment as it now stands: `refunds` carries the new record, `amountRefunded`
-                the running total. The reservation of the amount is conditional on the payment
+                what was paid. Each call is one `Refund` record on the payment. Answers 201 with
+                the new `Refund` record and its address in `Location`; read the payment again
+                (`GET /payments/{id}`) for the running total. The reservation of the amount is conditional on the payment
                 still having that much left, so a double submit cannot return the money twice — the
                 second call answers 409 (nothing left, which includes a refund still open: a card
                 refund the provider has not confirmed belongs to the refund sweep) or 422 (asks for
@@ -375,8 +375,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
-                  description: The order whose payment is being returned
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/RequiredIdempotencyKeyHeader'
             requestBody:
                 required: false
@@ -385,12 +384,14 @@ paths:
                         schema:
                             $ref: '#/components/schemas/RefundPaymentRequest'
             responses:
-                '200':
-                    description: The payment — still `succeeded` after a refund; `displayStatus` says how much of it went back
+                '201':
+                    description: The refund record just opened. The payment stays `succeeded`; its `displayStatus` says how much of it went back
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PaymentEnvelope'
+                                $ref: '#/components/schemas/RefundEnvelope'
                 # `IDEMPOTENCY_KEY_REQUIRED`: the `Idempotency-Key` header is missing.
                 '400': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/BadRequest' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
@@ -402,6 +403,38 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /payments/{id}/refunds/{refundId}:
+        get:
+            tags: [Payments]
+            summary: Get a refund
+            description: >-
+                One refund record of a payment, which is where `Location` points after
+                `POST /payments/{id}/refunds`. Scoped like `GET /payments/{id}`: the payer's own, or
+                any with `display:Payment`; another account's payment, or a record the payment does
+                not hold, is the same 404. The provider's refund id and a failed refund's
+                `failureReason` are sent to `display:Payment` callers only.
+            operationId: getRefund
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                - name: refundId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The refund record
+            responses:
+                '200':
+                    description: The refund
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RefundEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /payments/{id}/refunds/{refundId}/settle:
         post:
             tags: [Payments]
@@ -409,7 +442,7 @@ paths:
             description: >-
                 An operator confirming that money already handed back outside the application
                 (cash given back, a bank transfer sent) was returned, on a refund left `pending` by
-                `POST /payments/orders/{orderId}/refund`, a cancellation, a received return or a
+                `POST /payments/{id}/refunds`, a cancellation, a received return or a
                 withdrawal. Nothing is sent anywhere: the refund record settles with
                 `refundedByHand`, `payment.refunded` fires as for any refund (the credit note is
                 issued, a return waiting on it closes), and the audit row is
@@ -1176,7 +1209,7 @@ components:
                 refund:
                     type: boolean
                     description: >-
-                        Whether `POST /payments/orders/{orderId}/refund` would be accepted: the caller
+                        Whether `POST /payments/{id}/refunds` would be accepted: the caller
                         holds `create:Refund`, the payment is `succeeded` and something is left to
                         refund. False once nothing is left (fully refunded, or the rest already asked
                         back, a refund still open included), which is what greys the control out
@@ -1227,6 +1260,20 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/Payment'
+
+        RefundEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Refund'
 
         CreatePaymentRequest:
             type: object

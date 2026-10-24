@@ -11,7 +11,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { RefundStatus, type Payment, type AuthContext } from '@types';
+import { RefundStatus, type Payment, type Refund, type AuthContext } from '@types';
 import { orderService, isPayable } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentRepository } from '../repository';
@@ -65,6 +65,37 @@ export const getById = (
                 ? presentWithActions(payment, authContext).then((wire) => generateSuccess(wire))
                 : paymentNotFound()
         );
+
+/**
+ * One refund record of a payment, addressed through that payment.
+ *
+ * @param paymentId - the payment carrying the refund
+ * @param refundId - the refund record
+ * @param authContext - the caller; scoped exactly like {@link getById}
+ * @returns the refund on the wire, or the one 404 for a missing payment, a missing record or another's payment
+ */
+export const getRefund = (
+    paymentId: string,
+    refundId: string,
+    authContext?: AuthContext
+): Promise<ResponseSuccess<Refund> | ResponseReject> =>
+    paymentRepository.findByIdScoped(paymentId, callerScope(authContext)).then((payment) => {
+        const refund = payment
+            ? presentPayment(payment, readsAllPayments(authContext)).refunds.find(
+                  (record) => record.id === refundId
+              )
+            : undefined;
+        return refund ? generateSuccess(refund) : paymentNotFound();
+    });
+
+/**
+ * The record a refund just opened: the newest one on the payment, as the caller may see it.
+ *
+ * @param payment - the payment a successful refund answered with
+ * @param authContext - the caller, for the staff-only fields
+ */
+export const newestRefund = (payment: PaymentDocument, authContext?: AuthContext) =>
+    presentPayment(payment, readsAllPayments(authContext)).refunds.at(-1);
 
 /**
  * Whether the caller is the account that made this payment and may spend a basket at all.

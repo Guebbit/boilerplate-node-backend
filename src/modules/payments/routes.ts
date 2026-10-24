@@ -47,6 +47,7 @@ import { postPaymentConfirm } from './controllers/post-payment-confirm';
 import { postPaymentSync } from './controllers/post-payment-sync';
 import { postPaymentWebhook } from './controllers/post-payment-webhook';
 import { getPayment } from './controllers/get-payment';
+import { getRefund } from './controllers/get-refund';
 import { getPaymentByOrder } from './controllers/get-payment-by-order';
 import { getOrderByReference } from './controllers/get-order-by-reference';
 import { postPaymentRefund } from './controllers/post-payment-refund';
@@ -103,7 +104,7 @@ router.get('/orders/:orderId', getPaymentByOrder);
 // A literal segment, not `/order/:something`: it names no order yet, that's the whole point of it.
 router.get('/order-by-reference', requirePermission('create', 'Payment'), getOrderByReference);
 
-// POST /payments/orders/:orderId/refund — the operator returns the money, order untouched. The key
+// POST /payments/:id/refunds — the operator returns the money, order untouched. The key
 // is REQUIRED: a retried refund would otherwise return the money twice.
 /*
  * No `requireFreshAuth` here: `create:Refund` carries `stepUp: critical` in
@@ -112,7 +113,7 @@ router.get('/order-by-reference', requirePermission('create', 'Payment'), getOrd
  * second route reaching the same key would otherwise have to remember.
  */
 router.post(
-    '/orders/:orderId/refund',
+    '/:id/refunds',
     requirePermission('create', 'Refund'),
     requireIdempotencyKey,
     postPaymentRefund
@@ -122,6 +123,9 @@ router.post(
 // `/attention`, `/order-by-reference`), which a bare `/:id` would otherwise swallow. No permission
 // guard: the read is scoped in the service, a stranger's payment is the same 404 as a missing one.
 router.get('/:id', getPayment);
+
+// GET /payments/:id/refunds/:refundId — one refund record, scoped exactly like the payment read.
+router.get('/:id/refunds/:refundId', getRefund);
 
 // POST /payments/:id/refunds/:refundId/settle — the operator confirming hand-paid money went back.
 // Same `create:Refund` key (and so the same `stepUp`) as the refund that opened the record; the

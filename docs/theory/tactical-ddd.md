@@ -278,7 +278,7 @@ trusted. An operator can cancel without refunding, which is the replacement-goin
 compensated; suppressing it for the no-refund case would make `order.cancelled` mean "cancelled and
 refunded", which is not what it says.
 
-Returning money on its own is a separate route, `POST /payments/orders/{orderId}/refund`, because it
+Returning money on its own is a separate route, `POST /payments/{id}/refunds`, because it
 is a separate act: a goodwill refund leaves the order where it is. It lives in `payments` rather
 than `orders` for a structural reason — `payments` already depends on `orders`, so an order module
 reaching back for a refund would close a cycle `npm run check` refuses.

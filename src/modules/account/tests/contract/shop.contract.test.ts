@@ -5,6 +5,7 @@
  * the /account contract so removing the shop takes exactly this file with it.
  */
 
+import { refundOrderPayment } from '@modules/payments/tests/factories';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
@@ -95,7 +96,7 @@ describe('POST /account/export', () => {
         await eventually(() =>
             invoicingService.findInvoiceForOrder(orderId).then((row) => row !== null)
         );
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
+        await refundOrderPayment(orderId, asAdmin(), callerContextAs('admin'));
         await eventually(() =>
             invoicingService.findCreditNotesForOrder(orderId).then((rows) => rows.length > 0)
         );

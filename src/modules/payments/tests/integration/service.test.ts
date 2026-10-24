@@ -7,6 +7,7 @@
  * guarantees are the conditional writes; the provider is the real `fake` one.
  */
 
+import { refundOrderPayment } from '../factories';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
@@ -375,7 +376,7 @@ describe('a refund on one’s own order', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
         const offered = await paymentService.getForOrder(String(order._id), own);
-        const refunded = await paymentService.refundByOrder(
+        const refunded = await refundOrderPayment(
             String(order._id),
             own,
             callerContextAs('moderator', user.id)
@@ -395,11 +396,7 @@ describe('a refund on one’s own order', () => {
         const { order } = await paidOrder();
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        await paymentService.refundByOrder(
-            String(order._id),
-            asModerator(),
-            callerContextAs('moderator')
-        );
+        await refundOrderPayment(String(order._id), asModerator(), callerContextAs('moderator'));
 
         expect(auditSpy).not.toHaveBeenCalledWith(
             expect.objectContaining({ metadata: expect.objectContaining({ ownOrder: true }) })
@@ -1381,12 +1378,12 @@ describe('applyWebhookDelivery', () => {
     });
 });
 
-describe('refundByOrder', () => {
+describe('refundPayment', () => {
     it('returns the money and leaves the order where it is', async () => {
         // The whole point of the standalone action: a goodwill refund is not a cancellation.
         const { order } = await paidOrder();
 
-        const result = await paymentService.refundByOrder(
+        const result = await refundOrderPayment(
             String(order._id),
             asAdmin(),
             callerContextAs('admin')
@@ -1401,9 +1398,9 @@ describe('refundByOrder', () => {
 
     it('refuses the second attempt with 409 rather than paying twice', async () => {
         const { order } = await paidOrder();
-        await paymentService.refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
+        await refundOrderPayment(String(order._id), asAdmin(), callerContextAs('admin'));
 
-        const result = await paymentService.refundByOrder(
+        const result = await refundOrderPayment(
             String(order._id),
             asAdmin(),
             callerContextAs('admin')
@@ -1418,7 +1415,7 @@ describe('refundByOrder', () => {
         const { user, order } = await orderFor();
         await paymentService.createIntent(String(order._id), auth(user));
 
-        const result = await paymentService.refundByOrder(
+        const result = await refundOrderPayment(
             String(order._id),
             asAdmin(),
             callerContextAs('admin')
@@ -1430,7 +1427,7 @@ describe('refundByOrder', () => {
     it('answers 404 when the order never had a payment', async () => {
         const { order } = await orderFor();
 
-        const result = await paymentService.refundByOrder(
+        const result = await refundOrderPayment(
             String(order._id),
             asAdmin(),
             callerContextAs('admin')
@@ -1443,7 +1440,7 @@ describe('refundByOrder', () => {
         const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
         const { order } = await paidOrder();
 
-        await paymentService.refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
+        await refundOrderPayment(String(order._id), asAdmin(), callerContextAs('admin'));
 
         expect(refundSpy).toHaveBeenCalledTimes(1);
         refundSpy.mockRestore();
@@ -1461,7 +1458,7 @@ describe('refundByOrder', () => {
             .mockRejectedValueOnce(new Error('payment provider unreachable'));
 
         await expect(
-            paymentService.refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'))
+            refundOrderPayment(String(order._id), asAdmin(), callerContextAs('admin'))
         ).rejects.toThrow('payment provider unreachable');
         const stored = await paymentRepository.findByOrderId(String(order._id));
         expect(stored!.status).toBe('succeeded');
@@ -1469,7 +1466,7 @@ describe('refundByOrder', () => {
 
         // The failed record keeps the money reserved, so a click is not a second send: the sweep
         // owns the retry, with the same idempotency key.
-        const asked = await paymentService.refundByOrder(
+        const asked = await refundOrderPayment(
             String(order._id),
             asAdmin(),
             callerContextAs('admin')
@@ -1758,7 +1755,7 @@ describe('recordOfflinePayment — refunding it back', () => {
         const refundId = String(opened!.refunds[0]._id);
 
         // The cancel's record already holds everything: asking again is a 409, not a settlement.
-        const again = await paymentService.refundByOrder(
+        const again = await refundOrderPayment(
             String(order._id),
             asAdmin(),
             callerContextAs('admin')
@@ -1857,7 +1854,7 @@ describe('getForOrder — what the caller may do', () => {
         );
 
         const before = await paymentService.getForOrder(String(order._id), asAdmin());
-        await paymentService.refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
+        await refundOrderPayment(String(order._id), asAdmin(), callerContextAs('admin'));
         const after = await paymentService.getForOrder(String(order._id), asAdmin());
 
         expect((before as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
