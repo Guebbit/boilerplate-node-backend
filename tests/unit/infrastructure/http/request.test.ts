@@ -724,16 +724,16 @@ describe('callerContextOf', () => {
 
     it('reads analytics consent off the header for an anonymous caller, decoding boolean spellings', () => {
         expect(
-            callerContextOf(makeCallerRequest({ headers: { 'x-analytics-consent': 'true' } }))
+            callerContextOf(makeCallerRequest({ headers: { 'analytics-consent': 'true' } }))
                 .analyticsConsent
         ).toBe(true);
         expect(
-            callerContextOf(makeCallerRequest({ headers: { 'x-analytics-consent': 'false' } }))
+            callerContextOf(makeCallerRequest({ headers: { 'analytics-consent': 'false' } }))
                 .analyticsConsent
         ).toBe(false);
         // Anything unrecognised is `false`, matching an absent header.
         expect(
-            callerContextOf(makeCallerRequest({ headers: { 'x-analytics-consent': 'maybe' } }))
+            callerContextOf(makeCallerRequest({ headers: { 'analytics-consent': 'maybe' } }))
                 .analyticsConsent
         ).toBe(false);
     });
@@ -741,7 +741,7 @@ describe('callerContextOf', () => {
     it('prefers the stored consent over the header once the account has granted it', () => {
         const context = callerContextOf(
             makeCallerRequest({
-                headers: { 'x-analytics-consent': 'false' },
+                headers: { 'analytics-consent': 'false' },
                 authContext: {
                     id: 'user-1',
                     email: 'a@b.c',
@@ -764,7 +764,7 @@ describe('callerContextOf', () => {
     it('keeps a stored "no" against a header that says yes', () => {
         const context = callerContextOf(
             makeCallerRequest({
-                headers: { 'x-analytics-consent': 'true' },
+                headers: { 'analytics-consent': 'true' },
                 authContext: {
                     id: 'user-1',
                     email: 'a@b.c',
@@ -787,7 +787,7 @@ describe('callerContextOf', () => {
     it('lets the header speak for an account that has never answered', () => {
         const context = callerContextOf(
             makeCallerRequest({
-                headers: { 'x-analytics-consent': 'true' },
+                headers: { 'analytics-consent': 'true' },
                 authContext: {
                     id: 'user-1',
                     email: 'a@b.c',

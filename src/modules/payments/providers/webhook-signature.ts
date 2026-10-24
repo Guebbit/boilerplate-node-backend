@@ -13,7 +13,7 @@ import { constantTimeEqual } from '@infrastructure/security/constant-time';
 import { paymentWebhookSecrets } from '../config';
 
 /** Where the signature travels. Lower-case: Node normalises incoming header names. */
-export const WEBHOOK_SIGNATURE_HEADER = 'x-payment-signature';
+export const WEBHOOK_SIGNATURE_HEADER = 'payment-signature';
 
 /**
  * How far out of date a delivery may be and still be acted on. Replays older than this are

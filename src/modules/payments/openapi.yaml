@@ -648,7 +648,7 @@ paths:
             operationId: receivePaymentWebhook
             security: []
             parameters:
-                - name: x-payment-signature
+                - name: Payment-Signature
                   in: header
                   required: true
                   schema:

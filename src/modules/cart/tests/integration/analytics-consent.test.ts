@@ -31,7 +31,7 @@ setupTestDb();
  * port was handed for `cart_item_added`.
  *
  * @param consent - the stored answer (`undefined` = never asked)
- * @param header - the `X-Analytics-Consent` the browser forwards, if any
+ * @param header - the `Analytics-Consent` the browser forwards, if any
  */
 const addToCart = async (consent: boolean | undefined, header?: string) => {
     const user = await createUser({
@@ -46,7 +46,7 @@ const addToCart = async (consent: boolean | undefined, header?: string) => {
 
     const request = api().post('/cart').set('Authorization', bearer);
     const response = await (
-        header === undefined ? request : request.set('X-Analytics-Consent', header)
+        header === undefined ? request : request.set('Analytics-Consent', header)
     ).send({ productId: String(product._id), quantity: 1 });
 
     expect(response.status).toBe(201);

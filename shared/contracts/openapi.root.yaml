@@ -265,7 +265,7 @@ components:
         # Optional at the contract level: absent while the provider is `none`, required by the
         # server once a real one is selected.
         AntibotChallengeTokenHeader:
-            name: x-antibot-challenge-token
+            name: Antibot-Challenge-Token
             in: header
             required: false
             schema:

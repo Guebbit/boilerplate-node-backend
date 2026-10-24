@@ -92,13 +92,13 @@ describe('redactSensitiveFields', () => {
         const redacted = redactSensitiveFields({
             passwordConfirm: 'a',
             newSecret: 'b',
-            'x-antibot-challenge-token': 'c'
+            'antibot-challenge-token': 'c'
         });
 
         expect(redacted).toEqual({
             passwordConfirm: '[REDACTED]',
             newSecret: '[REDACTED]',
-            'x-antibot-challenge-token': '[REDACTED]'
+            'antibot-challenge-token': '[REDACTED]'
         });
     });
 

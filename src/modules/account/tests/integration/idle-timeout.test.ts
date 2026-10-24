@@ -105,7 +105,7 @@ describe.each(MODES)('the staff idle timeout in %s mode', (mode) => {
         await api()
             .get('/account')
             .set('Authorization', bearer)
-            .set('X-Session-Passive', 'true')
+            .set('Session-Passive', 'true')
             .expect(200);
 
         await new Promise((resolve) => setTimeout(resolve, 100));

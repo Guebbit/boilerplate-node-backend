@@ -11,7 +11,7 @@ import { bodyOf } from './body-of';
 import { setEnvironment } from './environment';
 
 /** The header a guarded call carries its solved challenge in. */
-const CHALLENGE_HEADER = 'x-antibot-challenge-token';
+const CHALLENGE_HEADER = 'antibot-challenge-token';
 
 /**
  * Turns the ALTCHA human check on for this case, at a cost a test can pay in milliseconds.

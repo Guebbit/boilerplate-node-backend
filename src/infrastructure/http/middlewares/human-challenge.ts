@@ -16,7 +16,7 @@ import {
 import { ERROR_CODES } from '@api/error-codes';
 
 /** The header a provider token travels in — a header, so one gate fits any request shape. */
-const TOKEN_HEADER = 'x-antibot-challenge-token';
+const TOKEN_HEADER = 'antibot-challenge-token';
 
 /** Answers the shared error envelope and logs it — see `antibot-log.ts`. */
 const refuse = (request: Request, response: Response): void => {
@@ -29,7 +29,7 @@ const refuse = (request: Request, response: Response): void => {
 };
 
 /**
- * Reads `x-antibot-challenge-token`, asks the active provider about it, and either calls `next()`
+ * Reads `antibot-challenge-token`, asks the active provider about it, and either calls `next()`
  * or refuses. A missing header is a refusal: a caller with no token has solved no challenge,
  * which is exactly what a stripped-down script looks like.
  */

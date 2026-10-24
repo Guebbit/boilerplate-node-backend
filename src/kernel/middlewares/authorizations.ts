@@ -163,11 +163,11 @@ const applySession = (
 
 /**
  * What this request tells the resolver beyond its credential: a client marks a poll or a
- * keep-alive `X-Session-Passive: true` so it is not counted as the person acting. The header can
+ * keep-alive `Session-Passive: true` so it is not counted as the person acting. The header can
  * only ever make a session look MORE idle, so there is nothing to forge.
  */
 const resolveOptionsOf = (request: Request): ResolveOptions => ({
-    passive: request.header('X-Session-Passive') === 'true'
+    passive: request.header('Session-Passive') === 'true'
 });
 
 /**

@@ -1064,7 +1064,7 @@ describe('GET /account/sessions', () => {
                 .get('/account/sessions')
                 .set('Authorization', bearer)
                 .set('Cookie', jwtCookie)
-                .set('X-Session-Passive', 'true');
+                .set('Session-Passive', 'true');
 
         const before = await listed();
         expect(before.body.data.sessions[0].lastUsedAt).toBeUndefined();

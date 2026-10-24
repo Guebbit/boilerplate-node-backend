@@ -177,14 +177,14 @@ export const installSecurity = (app: Express): void => {
                 // `src/infrastructure/http/preconditions.ts`.
                 'If-Match',
                 // Read by humanChallengeGate (human-challenge.ts) once a provider is active.
-                'x-antibot-challenge-token',
+                'antibot-challenge-token',
                 // Read by callerContextOf (infrastructure/http/request.ts) for every request's
                 // analytics-consent flag.
-                'x-analytics-consent',
+                'analytics-consent',
                 // Marks a poll or keep-alive as not the person acting (`kernel/middlewares/
                 // authorizations.ts`, declared at `/account/session/touch`); a browser sending it
                 // would otherwise fail the preflight.
-                'X-Session-Passive'
+                'Session-Passive'
             ],
             // What a browser client may read off a response: the rate-limit answer (draft-7
             // headers, see `rate-limit.ts`) is what lets it back off instead of retrying blind.
