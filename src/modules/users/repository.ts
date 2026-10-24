@@ -192,6 +192,9 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findInactiveUnwarned: (cutoff: Date) => Promise<UserDocument[]>;
     findWarnedStillInactive: (warnedBefore: Date) => Promise<UserDocument[]>;
     findReaperSoftDeletedPastGrace: (cutoff: Date) => Promise<UserDocument[]>;
+    findScheduledDeletionsDue: (now: Date) => Promise<UserDocument[]>;
+    restoreScheduledDeletion: (id: string, now: Date) => Promise<boolean>;
+    claimScheduledErasure: (id: string, now: Date, session: ClientSession) => Promise<boolean>;
 } = {
     reencrypt: reencryptOf(userModel),
     ...createRepository<UserDocument, UserWire>(userModel, {
@@ -825,5 +828,46 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                 deletedBy: 'reaper',
                 deletedAt: { $lt: cutoff }
             })
+            .exec(),
+
+    /** Every owner-scheduled account whose grace has run out — the purge job's read. */
+    findScheduledDeletionsDue: (now: Date) =>
+        userModel.find({ deletedBy: 'owner', purgeAt: { $lte: now } }).exec(),
+
+    /**
+     * Undo an owner-scheduled deletion, conditionally: only a row still inside its grace is
+     * restored. The mirror of {@link claimScheduledErasure} (`purgeAt > now` here, `<= now` there),
+     * so the two can never both match one row. `timestamps: false`: restoring is not a profile edit.
+     *
+     * @returns whether THIS call restored the account
+     */
+    restoreScheduledDeletion: (id: string, now: Date) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(id), deletedBy: 'owner', purgeAt: { $gt: now } },
+                { $unset: { deletedAt: '', deletedBy: '', purgeAt: '' } },
+                { timestamps: false }
+            )
             .exec()
+            .then(({ modifiedCount }) => modifiedCount === 1),
+
+    /**
+     * The first write of the purge transaction: a conditional touch of a row whose grace has run
+     * out. A restore that committed first leaves nothing to match, and one that commits after is a
+     * write conflict, so a restored account is never erased. The touch rewrites `purgeAt` to `now`
+     * (Mongoose drops a `__v` bump): the row is deleted in the same transaction, and any real
+     * write takes the claim.
+     *
+     * @param session - the purge's transaction
+     * @returns whether THIS transaction holds the row
+     */
+    claimScheduledErasure: (id: string, now: Date, session: ClientSession) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(id), deletedBy: 'owner', purgeAt: { $lte: now } },
+                { $set: { purgeAt: now } },
+                { timestamps: false, session }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount === 1)
 };

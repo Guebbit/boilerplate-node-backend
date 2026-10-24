@@ -42,6 +42,10 @@ export type UserOverrides = Omit<
     purchaseHoldResetAt?: Date;
     /** When the shop's rule flagged the account for staff review, with a real `Date`. */
     purchaseHoldFlaggedAt?: Date;
+    /** Who locked the account when it was not an admin; with `owner`, `purgeAt` says when it is erased. */
+    deletedBy?: 'reaper' | 'owner';
+    /** When an owner-scheduled erasure falls due. Never on the wire. */
+    purgeAt?: Date;
     /** Plaintext. Hashed by the model's pre-save hook, never by a fixture. */
     password?: string;
     /** Enrolled second factors — the contract exposes only `twoFactorEnabledAt`. */

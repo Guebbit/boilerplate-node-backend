@@ -73,11 +73,19 @@ export interface UserRecord extends Omit<
     inactivityMinimisedAt?: Date;
 
     /**
-     * Who soft-deleted the account, when it was not a person: `reaper` marks
-     * `reap:inactive-accounts`'s own soft delete, the only thing its hard-delete
-     * stage may later erase. Cleared by a restore. Never on the wire.
+     * Who soft-deleted the account, when it was not an admin: `reaper` marks
+     * `reap:inactive-accounts`'s own soft delete, the only thing its hard-delete stage may later
+     * erase; `owner` marks the account holder's own `DELETE /account`, which carries a
+     * {@link purgeAt}. Cleared by a restore. Never on the wire.
      */
-    deletedBy?: 'reaper';
+    deletedBy?: 'reaper' | 'owner';
+
+    /**
+     * When the owner-scheduled erasure falls due. Stored, not derived, so changing the grace knob
+     * never moves a date already promised. Present only with `deletedBy: 'owner'`; cleared by a
+     * restore.
+     */
+    purgeAt?: Date;
 
     /** Every second factor this account has enrolled or half-enrolled — see {@link TwoFactorMethodRecord}. */
     twoFactorMethods: TwoFactorMethodRecord[];
@@ -475,7 +483,10 @@ export const userSchema = new Schema<UserDocument, UserModel>(
         },
         deletedBy: {
             type: String,
-            enum: ['reaper']
+            enum: ['reaper', 'owner']
+        },
+        purgeAt: {
+            type: Date
         },
         /* A purchase hold; see {@link PurchaseHoldRecord}. A sub-document, so absent reads as `undefined`. */
         purchaseHold: {
@@ -690,6 +701,14 @@ userSchema.index(
     }
 );
 /*
+ * The purge job's read: owner-scheduled rows only, so the index stays as small as the set of
+ * accounts in their grace.
+ */
+userSchema.index(
+    { purgeAt: 1 },
+    { name: 'users_purge_at', partialFilterExpression: { purgeAt: { $exists: true } } }
+);
+/*
  * `deletedAt` is deliberately not indexed — nothing searches on it. The admin listing filters
  * `active` instead, and the one login query that mentions it also matches on the near-unique,
  * indexed `email`.
@@ -723,6 +742,7 @@ const WIRE_OMITTED_FIELDS = [
     'lastApiKeyUseAt',
     'inactivityMinimisedAt',
     'deletedBy',
+    'purgeAt',
     'twoFactorMethods',
     'authenticatorEnabledAt',
     'twoFactorBackupCodes',

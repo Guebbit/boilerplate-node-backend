@@ -31,7 +31,11 @@ import {
     redeemedOwner,
     eraseOwnAccount,
     softDeleteInactive,
-    eraseInactive
+    eraseInactive,
+    scheduleOwnDeletion,
+    restoreOwnAccount,
+    eraseScheduledDeletion,
+    findDueScheduledDeletions
 } from './own-account';
 import {
     findAuthenticatableById,
@@ -83,7 +87,7 @@ import {
     findReaperSoftDeletedPastGrace
 } from './reaper';
 
-export { isAuthenticatable } from '../authenticatable';
+export { isAuthenticatable, isRestorable } from '../authenticatable';
 export type { TwoFactorSecretRing } from './reencrypt';
 export type { RedeemedOwner } from './own-account';
 export type { ActivePurchaseHold } from './purchase-hold';
@@ -119,6 +123,10 @@ export const userService = {
     eraseOwnAccount,
     softDeleteInactive,
     eraseInactive,
+    scheduleOwnDeletion,
+    restoreOwnAccount,
+    eraseScheduledDeletion,
+    findDueScheduledDeletions,
     findByEmail,
     emailTaken,
     findAuthenticatableById,

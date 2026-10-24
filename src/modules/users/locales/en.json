@@ -10,6 +10,7 @@
         "already-active": "This user is already active.",
         "already-inactive": "This user is already deactivated.",
         "purchase-hold-not-set": "This user has no purchase hold or review flag to lift.",
+        "erasure-not-due": "No erasure is due for this account: it was not scheduled by its owner, or its grace has not run out.",
         "not-reaper-deleted": "Only an account the inactivity reaper deleted can be erased by it.",
         "not-warned": "This account was never warned about its inactivity, so the reaper cannot delete it.",
         "inactive-staff-account": "An account that holds a staff role is never deleted by the inactivity reaper.",

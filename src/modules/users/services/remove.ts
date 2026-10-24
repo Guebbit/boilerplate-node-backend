@@ -71,6 +71,42 @@ const runAfterErase = (userId: string, deferred: readonly AfterErase[]): Promise
     ).then(() => undefined);
 
 /**
+ * The hard delete: cascade, commit, then the work the erasers deferred, the image and the audit row.
+ *
+ * @internal Beneath `remove` and the purge door; unpublished for the same reason `remove` is.
+ *
+ * @param claim - the first write of the transaction, when the erasure must be won against a
+ * concurrent writer (the scheduled purge against a restore). Resolving `false` abandons the
+ * erasure with 409 and nothing deleted.
+ */
+export const erase = (
+    user: UserDocument,
+    context?: CallerContext,
+    claim?: (session: ClientSession) => Promise<boolean>
+): Promise<ResponseSuccess<undefined> | ResponseReject> =>
+    withTransaction((session) =>
+        (claim ? claim(session) : Promise.resolve(true)).then((won) =>
+            won ? runErasureCascade(user, session) : undefined
+        )
+    ).then((deferred) => {
+        if (!deferred) return generateReject(409, [t('users.erasure-not-due')]);
+        return runAfterErase(user.id, deferred)
+            .then(() => imageStore.remove(user.imageUrl))
+            .then(() => {
+                recordAudit(context, {
+                    action: context?.caller.system
+                        ? usersAuditActions.SYSTEM_USER_ERASED
+                        : usersAuditActions.ADMIN_USER_ERASED,
+                    outcome: 'success',
+                    targetType: 'user',
+                    targetId: user.id,
+                    metadata: { hardDelete: true }
+                });
+            })
+            .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')));
+    });
+
+/**
  * Remove a user document (soft or hard delete). Soft delete stamps `deletedAt` once;
  * `restoreById` undoes it. A hard delete runs the erasure cascade, `access`'s hook included, so
  * every membership the account holds (a tenant seat AND a platform one) goes in the same
@@ -92,22 +128,7 @@ export const remove = (
     hardDelete = false,
     context?: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> => {
-    if (hardDelete)
-        return withTransaction((session) => runErasureCascade(user, session))
-            .then((deferred) => runAfterErase(user.id, deferred))
-            .then(() => imageStore.remove(user.imageUrl))
-            .then(() => {
-                recordAudit(context, {
-                    action: context?.caller.system
-                        ? usersAuditActions.SYSTEM_USER_ERASED
-                        : usersAuditActions.ADMIN_USER_ERASED,
-                    outcome: 'success',
-                    targetType: 'user',
-                    targetId: user.id,
-                    metadata: { hardDelete: true }
-                });
-            })
-            .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')));
+    if (hardDelete) return erase(user, context);
 
     // Already deleted: nothing to do. DELETE must be safe to retry; undoing it is `restoreById`.
     if (user.deletedAt) return Promise.resolve(generateSuccess(user, 200, t('users.soft-deleted')));

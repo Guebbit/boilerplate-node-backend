@@ -18,7 +18,9 @@ import type { CallerContext } from '@types';
 import { accessService } from '@modules/access';
 import type { UserDocument } from '../model';
 import { update } from './update';
-import { remove } from './remove';
+import { remove, erase } from './remove';
+import { userRepository } from '../repository';
+import { markSessionsEnded } from './credentials';
 
 /**
  * What the owner may write on their own profile: everything an admin edit carries except `active`.
@@ -117,3 +119,63 @@ export const eraseInactive = (
     user.deletedBy === 'reaper'
         ? remove(user, true, context)
         : Promise.resolve(generateReject(409, [t('users.not-reaper-deleted')]));
+
+/**
+ * Lock the caller's own account and promise its erasure at `purgeAt`: one save that stamps
+ * `deletedAt`, `deletedBy: 'owner'` and `purgeAt` and moves the session epoch, so every token the
+ * account holds dies with it. It does not go through {@link remove}, which would audit an admin
+ * action; the account's caller records the owner's own.
+ *
+ * @param user - the loaded account, the caller's own
+ * @param requestedAt - when the owner asked; becomes `deletedAt`
+ * @param purgeAt - when the erasure falls due, decided by the caller (the grace rule is `account`'s)
+ */
+export const scheduleOwnDeletion = (
+    user: UserDocument,
+    requestedAt: Date,
+    purgeAt: Date
+): Promise<UserDocument> => {
+    user.deletedAt = requestedAt;
+    user.deletedBy = 'owner';
+    user.purgeAt = purgeAt;
+    markSessionsEnded(user, requestedAt);
+    return userRepository.save(user);
+};
+
+/**
+ * Bring back an account whose owner scheduled its deletion, if the grace has not run out. The
+ * state itself is the proof: callers hold it through a spent link or a passed sign-in. Sessions
+ * stay dead; the owner signs in afresh.
+ *
+ * @param user - the account to restore
+ * @param now - the moment to judge `purgeAt` against
+ * @returns whether THIS call restored it; `false` once the purge is due, or if another restore won
+ */
+export const restoreOwnAccount = (user: UserDocument, now: Date = new Date()): Promise<boolean> =>
+    userRepository.restoreScheduledDeletion(user.id, now);
+
+/**
+ * Hard-delete an account whose owner-scheduled grace has run out: the purge job's door. The first
+ * write of the transaction is a claim on `purgeAt <= now`, so a restore that got there first
+ * wins and this refuses with 409. The context is the job's system one, so the trail says
+ * `SYSTEM_USER_ERASED`, not an admin erase.
+ *
+ * @param user - an account the due read returned
+ * @param context - the purge job's system context
+ * @param now - the moment `purgeAt` is judged against; app time, never the database's clock
+ */
+export const eraseScheduledDeletion = (
+    user: UserDocument,
+    context: CallerContext,
+    now: Date = new Date()
+): ReturnType<typeof erase> =>
+    erase(user, context, (session) => userRepository.claimScheduledErasure(user.id, now, session));
+
+/**
+ * Every owner-scheduled account whose grace has run out: the purge job's list. The repository is
+ * not published, so the job reads through here.
+ *
+ * @param now - the moment `purgeAt` is judged against
+ */
+export const findDueScheduledDeletions = (now: Date = new Date()): Promise<UserDocument[]> =>
+    userRepository.findScheduledDeletionsDue(now);
