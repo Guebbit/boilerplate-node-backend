@@ -120,7 +120,7 @@ flowchart TD
 | Whose days       | the shop's: `NODE_SHOP_TIMEZONE`, a named IANA zone (a fixed offset is refused, since it ignores summer time) |
 | Week             | starts Monday                                                                                                 |
 | `from`, `to`     | shop-local calendar days, both inclusive, as `YYYY-MM-DD`                                                     |
-| Bounds           | at most two years and 400 buckets, else 422                                                                   |
+| Bounds           | at most 731 days and 400 buckets, else 422; `GET /stats/limits` states both, so a form never keeps a copy     |
 
 Bucket edges and window bounds both come from the same zone: `$dateTrunc` cuts buckets with Mongo's
 own tz database, and the bounds use `Intl` through `zonedStartOfDay`. A test on the real binary

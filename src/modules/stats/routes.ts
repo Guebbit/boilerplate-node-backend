@@ -18,7 +18,8 @@ import {
     getPipelineStats,
     getProductSalesSeries,
     getProductStats,
-    getSalesStats
+    getSalesStats,
+    getStatsLimits
 } from './controllers/get-stats';
 
 /** Express router for the sales numbers. */
@@ -36,3 +37,4 @@ router.get('/payments', privateNoCache, getPaymentMixStats);
 router.get('/operations', privateNoCache, getOperationsStats);
 router.get('/customers', privateNoCache, getCustomerStats);
 router.get('/pipeline', privateNoCache, getPipelineStats);
+router.get('/limits', privateNoCache, getStatsLimits);

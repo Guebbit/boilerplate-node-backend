@@ -199,7 +199,7 @@ Public sitemap files for search engines: `GET /sitemap/index.xml`, `GET /sitemap
 
 > The domain behind these routes: [`stats`](../modules/stats.md) · routes and middleware: `src/modules/stats/routes.ts`
 
-Staff-only sales numbers (`read:Stats`), never cached: `GET /stats/sales`, `/products`, `/products/{productId}`, `/categories`, `/payments`, `/operations`, `/customers` and `/pipeline`.
+Staff-only sales numbers (`read:Stats`), never cached: `GET /stats/sales`, `/products`, `/products/{productId}`, `/categories`, `/payments`, `/operations`, `/customers`, `/pipeline` and `/limits` (the two ceilings a period may not pass).
 
 ## Stock alerts
 
