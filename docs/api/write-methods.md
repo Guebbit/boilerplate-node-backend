@@ -119,19 +119,17 @@ Logging each request is allowed.
 
 **A PUT with no body sets a flag or a membership.** When the URI is the whole statement, the
 body is empty: `PUT /wishlist/{productId}` (this product is saved), `PUT
-/stock-alerts/{productId}` (this request exists), `PUT /account/addresses/{id}/default` (this
-address is the default). Sent twice, nothing changes — the GitHub-stars pattern
-(`PUT`/`DELETE /user/starred/{owner}/{repo}`).
+/account/addresses/{id}/default` (this address is the default). Sent twice, nothing changes —
+the GitHub-stars pattern (`PUT`/`DELETE /user/starred/{owner}/{repo}`).
+
+**Naming a body-less PUT.** Spectral bans a `put*` operation id. A PUT that only states a
+membership is `create*` and its DELETE `delete*` (`createWishlistItem`, `deleteWishlistItem`); one
+that carries a value is `update*` or `replace*` (`updateCartItemById`).
 
 **Create by PUT only where the client names the thing.** A PUT on an id that does not exist is a
-404. The exception is a membership or line the caller owns by construction — a cart line, a
-wishlist entry, a stock alert: `PUT /cart/{productId}` creates the line and answers **201**, or
-updates it and answers 200 (RFC 9110 §9.3.4); the body-less ones answer 201 the first time and 200
-after.
-
-**Naming a create-by-PUT.** Spectral bans a `put*` operation id. A body-less create-by-PUT is
-`create*` (`createWishlistItem`, `createStockAlert`) and its DELETE `delete*`; one that carries a
-value is `update*` or `replace*` (`updateCartItemById`).
+404. The one exception is a URI the caller owns by construction — a cart line, `PUT
+/cart/{productId}`: it creates the line and answers **201**, or updates it and answers 200
+(RFC 9110 §9.3.4).
 
 **Offer a PUT only when the body can be the whole resource.** A route that sets two fields of a
 bigger record is a PATCH alone (`PATCH /feedback/{id}`), never a PUT that clears the rest.
@@ -353,7 +351,7 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
 | --- | --- | --- |
 | `PUT /account` | `email` is stored as `pendingEmail` | an address is proven before it replaces the old one |
 | `POST /account/signup` | a refused address still gets a 201 and the same `Location: /account`, and nothing is created | antibot: the refusal must look like a success |
-| `PUT /cart/{productId}`, `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /wishlist/{productId}`, `PUT /stock-alerts/{productId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
+| `PUT /cart/{productId}`, `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /wishlist/{productId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
 | `POST /cart` | adds to an existing line instead of creating a second one; 201 only when the line is new | "add to cart" — Shopify, commercetools, WooCommerce and Magento all grow the line |
 | `POST /payments/intent`, `POST /payments/order/{id}/offline` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |
 | `PUT`/`PATCH /locales/{locale}/apps/{app}/entries` | the app is a path segment | a PUT replaces exactly what the GET on the same URI lists |

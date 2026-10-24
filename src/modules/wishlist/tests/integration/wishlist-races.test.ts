@@ -44,9 +44,7 @@ describe('RW1 — concurrent saves of the SAME product', () => {
         expectNoServerErrors(results);
         // Idempotence is the CONTRACT here, not a tolerated outcome: every participant is a save
         // that succeeded, because saving what is already saved is the state each one asked for.
-        // Exactly one of them created the line (201); the rest found it (200).
-        expect(countStatus(results, 201)).toBe(1);
-        expect(countStatus(results, 200)).toBe(RACE_SIZE - 1);
+        expect(countStatus(results, 200)).toBe(RACE_SIZE);
 
         expect(await wishlistModel.countDocuments({ userId: user._id })).toBe(1);
         const wishlist = await wishlistModel.findOne({ userId: user._id });
@@ -74,7 +72,7 @@ describe('RW1 — concurrent saves of DIFFERENT products', () => {
         );
 
         expectNoServerErrors(results);
-        expect(countStatus(results, 201)).toBe(RACE_SIZE);
+        expect(countStatus(results, 200)).toBe(RACE_SIZE);
 
         expect(await wishlistModel.countDocuments({ userId: user._id })).toBe(1);
         const wishlist = await wishlistModel.findOne({ userId: user._id });
@@ -93,7 +91,7 @@ describe('RW2 — the FIRST save, raced', () => {
      * double-clicks. The 409 count is therefore asserted by value, the same discipline
      * `tests/support/race.ts` applies to 429.
      */
-    it('answers one participant 201, the rest 200, and creates exactly one wishlist', async () => {
+    it('answers every participant 200 and creates exactly one wishlist', async () => {
         const { user, bearer } = await authenticateAs();
         const product = await createProduct();
 
@@ -107,8 +105,7 @@ describe('RW2 — the FIRST save, raced', () => {
 
         expectNoServerErrors(results);
         expect(countStatus(results, 409)).toBe(0);
-        expect(countStatus(results, 201)).toBe(1);
-        expect(countStatus(results, 200)).toBe(RACE_SIZE - 1);
+        expect(countStatus(results, 200)).toBe(RACE_SIZE);
         expect(await wishlistModel.countDocuments({ userId: user._id })).toBe(1);
     });
 });

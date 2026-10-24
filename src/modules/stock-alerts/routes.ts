@@ -7,7 +7,7 @@
 import { Router } from 'express';
 import { getAuth, isAuth } from '@kernel/middlewares/authorizations';
 import { getStockAlerts } from './controllers/get-stock-alerts';
-import { putStockAlert } from './controllers/put-stock-alert';
+import { postStockAlert } from './controllers/post-stock-alert';
 import { deleteStockAlert } from './controllers/delete-stock-alert';
 
 /** Express router for back-in-stock requests (ask, cancel, list). */
@@ -19,8 +19,8 @@ router.use(getAuth, isAuth);
 // GET /stock-alerts
 router.get('/', getStockAlerts);
 
-// PUT /stock-alerts/:productId — ask. The URI is the whole statement; repeating it is the same request.
-router.put('/:productId', putStockAlert);
+// POST /stock-alerts/:productId — ask. Repeating it is the same request.
+router.post('/:productId', postStockAlert);
 
 // DELETE /stock-alerts/:productId — cancel before it is answered.
 router.delete('/:productId', deleteStockAlert);

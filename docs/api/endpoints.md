@@ -55,7 +55,7 @@ Per-user, server-side cart. Items are scoped to the authenticated user. `POST /c
 
 > The domain behind these routes: [`wishlist`](../modules/wishlist.md) · routes and middleware: `src/modules/wishlist/routes.ts`
 
-Per-user saved products — ids only, joined client-side like the cart's lines. `PUT /wishlist/:productId` saves one (no body; 201 when it saved it, 200 when it was already saved) and `DELETE` on the same URI removes it. `POST /wishlist/:productId/move-to-cart` is the exit: the saved line becomes a cart line (quantity 1, incremented if already present) and leaves the wishlist.
+Per-user saved products — ids only, joined client-side like the cart's lines. `PUT /wishlist/:productId` saves one (idempotent, no body) and `DELETE` on the same URI removes it. `POST /wishlist/:productId/move-to-cart` is the exit: the saved line becomes a cart line (quantity 1, incremented if already present) and leaves the wishlist.
 
 ## Orders
 
@@ -205,7 +205,7 @@ Staff-only sales numbers (`read:Stats`), never cached: `GET /stats/sales`, `/pro
 
 > The domain behind these routes: [`stock-alerts`](../modules/stock-alerts.md) · routes and middleware: `src/modules/stock-alerts/routes.ts`
 
-A signed-in caller asks to be told once when a product they cannot order can be again: `GET /stock-alerts` lists their requests, `PUT /stock-alerts/{productId}` makes one (201, or 200 when it was already there), `DELETE /stock-alerts/{productId}` cancels it.
+A signed-in caller asks to be told once when a product they cannot order can be again: `GET /stock-alerts` lists their requests, `POST /stock-alerts/{productId}` makes one, `DELETE /stock-alerts/{productId}` cancels it.
 
 ## Realtime
 

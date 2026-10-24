@@ -230,7 +230,7 @@ describe('the module subscriptions', () => {
             const { user: asker, bearer } = await authenticateAs();
             const product = await createProduct({ title: 'Red lamp', onHand: 0 });
             const productId = String(product._id);
-            await api().put(`/stock-alerts/${productId}`).set('Authorization', bearer);
+            await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
 
             await inventoryService.receive(productId, 2, undefined, testCallerContext);
             await settleOutboxNudges();

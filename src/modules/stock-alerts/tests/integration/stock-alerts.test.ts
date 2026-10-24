@@ -55,16 +55,15 @@ const sentEvents = () =>
         .exec()
         .then((rows) => rows.map(({ payload }) => payload));
 
-describe('PUT /stock-alerts/:productId', () => {
+describe('POST /stock-alerts/:productId', () => {
     it('records a request for a product that cannot be ordered, and asking twice is the same request', async () => {
         const { bearer } = await shopper();
         const productId = await soldOut();
 
-        const first = await api().put(`/stock-alerts/${productId}`).set('Authorization', bearer);
-        const second = await api().put(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        const first = await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        const second = await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
 
-        expect(first.status).toBe(201);
-        expect(first.headers.location).toBe(`/stock-alerts/${productId}`);
+        expect(first.status).toBe(200);
         expect(second.status).toBe(200);
         expect(second.body.data.items).toHaveLength(1);
         expect(second.body.data.items[0].productId).toBe(productId);
@@ -97,7 +96,7 @@ describe('PUT /stock-alerts/:productId', () => {
         const product = await make();
 
         const response = await api()
-            .put(`/stock-alerts/${String(product._id)}`)
+            .post(`/stock-alerts/${String(product._id)}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(409);
@@ -113,7 +112,7 @@ describe('PUT /stock-alerts/:productId', () => {
         const product = await createProduct({ onHand: 0, ...overrides });
 
         const response = await api()
-            .put(`/stock-alerts/${String(product._id)}`)
+            .post(`/stock-alerts/${String(product._id)}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
@@ -125,7 +124,7 @@ describe('DELETE /stock-alerts/:productId and GET /stock-alerts', () => {
     it('cancels the caller’s own request, and a request they do not hold is a 404', async () => {
         const { bearer } = await shopper();
         const productId = await soldOut();
-        await api().put(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
 
         const cancelled = await api()
             .delete(`/stock-alerts/${productId}`)
@@ -143,9 +142,9 @@ describe('DELETE /stock-alerts/:productId and GET /stock-alerts', () => {
         const first = await soldOut();
         const second = await soldOut();
         const others = await soldOut();
-        await api().put(`/stock-alerts/${first}`).set('Authorization', mine.bearer);
-        await api().put(`/stock-alerts/${second}`).set('Authorization', mine.bearer);
-        await api().put(`/stock-alerts/${others}`).set('Authorization', theirs.bearer);
+        await api().post(`/stock-alerts/${first}`).set('Authorization', mine.bearer);
+        await api().post(`/stock-alerts/${second}`).set('Authorization', mine.bearer);
+        await api().post(`/stock-alerts/${others}`).set('Authorization', theirs.bearer);
 
         const listed = await api().get('/stock-alerts').set('Authorization', mine.bearer);
 
@@ -159,7 +158,7 @@ describe('the signal', () => {
     it('answers a waiting request with one mail, one event and no request left, once', async () => {
         const { bearer } = await shopper();
         const productId = await soldOut();
-        await api().put(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
 
         await inventoryService.receive(productId, 3, undefined, testCallerContext);
         await settleOutboxNudges();
@@ -175,7 +174,7 @@ describe('the signal', () => {
     it('gives a request cancelled before the signal nothing', async () => {
         const { bearer } = await shopper();
         const productId = await soldOut();
-        await api().put(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
         await api().delete(`/stock-alerts/${productId}`).set('Authorization', bearer);
 
         await inventoryService.receive(productId, 3, undefined, testCallerContext);
@@ -188,7 +187,7 @@ describe('the signal', () => {
     it('does not mail a request twice when the signal is delivered twice', async () => {
         const { bearer } = await shopper();
         const productId = await soldOut();
-        await api().put(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
 
         await stockAlertService.onBuyableAgain(productId);
         await stockAlertService.onBuyableAgain(productId);
@@ -201,7 +200,7 @@ describe('the signal', () => {
         const { bearer } = await shopper();
         const productId = await soldOut();
         await inventoryService.setBackorderLimit(productId, 5);
-        await api().put(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
         const editor = await authenticateAsRole('editor');
 
         await api()
@@ -232,7 +231,7 @@ describe('the hourly sweep', () => {
     it('answers a request once a release date passes, and a second run sends nothing', async () => {
         const { bearer } = await shopper();
         const productId = await unreleased();
-        await api().put(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
         await letTheDatePass(productId);
 
         const first = await stockAlertService.sweepBuyable(new Date());
@@ -248,7 +247,7 @@ describe('the hourly sweep', () => {
     it('leaves a request for a product that still cannot be ordered', async () => {
         const { bearer } = await shopper();
         const waiting = await unreleased();
-        await api().put(`/stock-alerts/${waiting}`).set('Authorization', bearer);
+        await api().post(`/stock-alerts/${waiting}`).set('Authorization', bearer);
 
         const answered = await stockAlertService.sweepBuyable(new Date());
 
@@ -262,7 +261,7 @@ describe('what leaves with a product or an account', () => {
     it('removes the requests of a deleted product', async () => {
         const { bearer } = await shopper();
         const productId = await soldOut();
-        await api().put(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
         const admin = await authenticateAsRole('admin');
 
         await api()
@@ -276,7 +275,7 @@ describe('what leaves with a product or an account', () => {
     it('exports the caller’s requests and erases them with the account', async () => {
         const { user, bearer } = await shopper();
         const productId = await soldOut();
-        await api().put(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
 
         const exported = await stockAlertService.exportRows(user.id);
         await withTransaction((session) => stockAlertService.removeByUserId(user.id, session));

@@ -236,7 +236,7 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "removing a product from the caller's own wishlist"
     },
-    'stock-alerts PUT /:productId': {
+    'stock-alerts POST /:productId': {
         requiresAuth: true,
         reason: "asking to be told when a product is back, on the caller's own account"
     },
