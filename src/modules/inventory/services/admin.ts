@@ -20,6 +20,7 @@ import { stockLevelRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
 import { applyTransition, refreshStockCache } from './transition';
 import { allocateWithin } from './allocate';
+import { presentInventoryLevel } from '../presenter';
 
 /**
  * One product's counters, read back after a write.
@@ -29,19 +30,9 @@ import { allocateWithin } from './allocate';
  * @returns its level, or `null` if the product has no level row (never received, or gone)
  */
 const levelFor = (productId: string, title: string): Promise<InventoryLevel | null> =>
-    stockLevelRepository.findByProductId(productId).then((level) =>
-        level
-            ? {
-                  productId: String(level.productId),
-                  title,
-                  onHand: level.onHand,
-                  reserved: level.reserved,
-                  available: level.available,
-                  backorderLimit: level.backorderLimit,
-                  backordered: level.backordered
-              }
-            : null
-    );
+    stockLevelRepository
+        .findByProductId(productId)
+        .then((level) => (level ? presentInventoryLevel(level, title) : null));
 
 /**
  * A delivery (or a stocktake that finds units) and the owed units it serves, as ONE transaction: the units arrive and are allocated
