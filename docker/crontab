@@ -25,6 +25,8 @@
 7 2 * * * cd /app && npm run job reap:previous-emails
 # Deletes built data exports (file and row) past NODE_ACCOUNT_EXPORT_TTL_DAYS; the account can ask again.
 9 2 * * * cd /app && npm run job reap:account-exports
+# Erases, cascade included, every account whose owner asked to delete it and whose grace (NODE_ACCOUNT_DELETION_GRACE_DAYS) has run out, then mails the goodbye.
+13 * * * * cd /app && npm run job reap:scheduled-deletions
 # Unsets a fulfillment order's hold note once it has not changed for its retention window.
 11 2 * * * cd /app && npm run job reap:delivery
 # Tells the buyer of a preorder whose expected date is a day away or gone, with the goods still not here, that it will miss the date, once. It asks nothing and cancels nothing.

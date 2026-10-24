@@ -1196,8 +1196,8 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change~1confirm'
     /account/email-change/undo:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change~1undo'
-    /account/delete-confirm:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1delete-confirm'
+    /account/restore:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1restore'
     /account/login:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login'
     /account/signup:

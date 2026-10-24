@@ -153,3 +153,11 @@ describe('findDueScheduledDeletions', () => {
         expect(due.map(({ email }) => email)).toEqual(['due-a@example.com']);
     });
 });
+
+describe('the inactivity reaper', () => {
+    it('never lists an owner-scheduled account, however old', async () => {
+        await scheduled('ignored@example.com', daysFromNow(-1));
+
+        expect(await userService.findReaperSoftDeletedPastGrace(new Date())).toEqual([]);
+    });
+});

@@ -1,5 +1,4 @@
 import { findLiveToken, spendLiveToken } from '@modules/account/services/tokens';
-import { removeOwnAccount } from '@modules/account/services/self-delete';
 /**
  * @module
  * The self-service account surface — profile update, password change, session revocation, email
@@ -33,7 +32,6 @@ import { accountAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
 import { MISSING_ID } from '@tests/ids';
 import { accessService } from '@modules/access';
-import { userService } from '@modules/users';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { logger } from '@infrastructure/adapters/logger';
 import { imageStore } from '@infrastructure/adapters/image-store';
@@ -839,29 +837,38 @@ describe('getOwnProfile', () => {
     });
 });
 
-describe('removeOwnAccount', () => {
-    it('hard-deletes the account and reports it', async () => {
+describe('scheduleAccountDeletion', () => {
+    it('reports the request: audit row, analytics event and no erasure yet', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUser();
 
-        const result = await removeOwnAccount(userService.redeemedOwner(user), testCallerContext);
+        const schedule = await accountService.scheduleAccountDeletion(user, testCallerContext);
 
-        expect(result.success).toBe(true);
-        expect(await userRepository.findById(user.id)).toBeNull();
+        expect(schedule.purgeAt.getTime()).toBeGreaterThan(schedule.requestedAt.getTime());
+        expect(await userRepository.findById(user.id)).not.toBeNull();
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
-                action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,
+                action: accountAuditActions.AUTH_ACCOUNT_DELETE_SCHEDULED,
                 actorUserId: user.id,
                 outcome: 'success'
             })
         );
         expect(analyticsSpy).toHaveBeenCalledWith(
             expect.objectContaining({
-                event: accountAnalyticsEvents.ACCOUNT_DELETED,
+                event: accountAnalyticsEvents.ACCOUNT_DELETION_SCHEDULED,
                 distinctId: user.id
             })
         );
+    });
+
+    it('stores exactly one restore token, the plaintext of which is only in the mail', async () => {
+        const user = await createUser();
+
+        await accountService.scheduleAccountDeletion(user, testCallerContext);
+
+        const tokens = await readTokens(user.id);
+        expect(tokens.filter(({ type }) => type === 'account-restore')).toHaveLength(1);
     });
 });
 
@@ -1145,30 +1152,6 @@ describe('what a completed reset leaves behind', () => {
     });
 });
 
-describe('requestAccountDeletion', () => {
-    it('issues a delete token and audits the request', async () => {
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-        const user = await createUser();
-
-        await accountService.requestAccountDeletion(user, testCallerContext);
-
-        /*
-         * The token value is deliberately NOT returned — it goes straight into the mail
-         * this function publishes, so a caller cannot hold a live delete credential. What is
-         * observable is that exactly one was stored.
-         */
-        const tokens = await readTokens(user.id);
-        expect(tokens.filter(({ type }) => type === 'delete')).toHaveLength(1);
-        expect(auditSpy).toHaveBeenCalledWith(
-            expect.objectContaining({
-                action: accountAuditActions.AUTH_ACCOUNT_DELETE_REQUESTED,
-                actorUserId: user.id,
-                outcome: 'success'
-            })
-        );
-    });
-});
-
 /**
  * What makes a one-time token LIVE, asserted where the rule now lives.
  *
@@ -1188,9 +1171,9 @@ describe('findLiveToken', () => {
 
     it('refuses a token of another type, so one link cannot be spent as another', async () => {
         const user = await createUser();
-        await plantToken(user.id, 'delete', 'delete-token', { ttlMs: 3_600_000 });
+        await plantToken(user.id, 'account-restore', 'restore-token', { ttlMs: 3_600_000 });
 
-        await expect(findLiveToken('password', 'delete-token')).resolves.toBeUndefined();
+        await expect(findLiveToken('password', 'restore-token')).resolves.toBeUndefined();
     });
 
     it('refuses an expired token', async () => {

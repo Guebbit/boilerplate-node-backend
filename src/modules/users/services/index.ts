@@ -28,8 +28,6 @@ import {
 } from './purchase-hold';
 import {
     updateOwnProfile,
-    redeemedOwner,
-    eraseOwnAccount,
     softDeleteInactive,
     eraseInactive,
     scheduleOwnDeletion,
@@ -89,15 +87,15 @@ import {
 
 export { isAuthenticatable, isRestorable } from '../authenticatable';
 export type { TwoFactorSecretRing } from './reencrypt';
-export type { RedeemedOwner } from './own-account';
 export type { ActivePurchaseHold } from './purchase-hold';
 
 /**
  * The service's public surface — the controllers call through this, never the bare functions.
- * `updateById`, `activate`, `deactivate` and `removeById` load by id and ask the staff-role question first. The four
+ * `updateById`, `activate`, `deactivate` and `removeById` load by id and ask the staff-role question first. The
  * named doors take an already-loaded document for the one caller that holds the record and the
- * right to change it: the owner (`updateOwnProfile`, and `eraseOwnAccount`, which asks for the spent deletion link's proof, `redeemedOwner`) and the inactivity reaper
- * (`softDeleteInactive`, `eraseInactive`). The raw `update` and `remove` beneath them are not here.
+ * right to change it: the owner (`updateOwnProfile`, `scheduleOwnDeletion`, `restoreOwnAccount`), the
+ * scheduled purge (`eraseScheduledDeletion`) and the inactivity reaper (`softDeleteInactive`,
+ * `eraseInactive`). The raw `update` and `remove` beneath them are not here.
  */
 export const userService = {
     userAuditChanges,
@@ -119,8 +117,6 @@ export const userService = {
     takeAutomaticPurchaseHold,
     flagPurchaseHoldReview,
     updateOwnProfile,
-    redeemedOwner,
-    eraseOwnAccount,
     softDeleteInactive,
     eraseInactive,
     scheduleOwnDeletion,

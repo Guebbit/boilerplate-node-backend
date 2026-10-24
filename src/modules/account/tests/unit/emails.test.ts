@@ -13,8 +13,9 @@ import {
     resetConfirmEmail,
     passwordChangedEmail,
     emailChangeNoticeEmail,
-    deleteRequestEmail,
-    deleteConfirmEmail,
+    deletionScheduledEmail,
+    accountRestoredEmail,
+    accountDeletedEmail,
     signInMethodChangedEmail,
     twoFactorChangedEmail,
     twoFactorLockedEmail,
@@ -28,6 +29,16 @@ import { setEnvironment } from '@tests/environment';
 const NAME = 'Ada Lovelace';
 const TOKEN = 'a1b2c3d4e5f6';
 
+/** When the erasure falls due, in the scheduled-deletion mail. */
+const PURGE_AT = new Date('2026-11-05T00:00:00Z');
+
+/** {@link deletionScheduledEmail} with the due date pinned, shaped like the other link builders. */
+const scheduledWithDate = (locale: string, name: string, token: string) =>
+    deletionScheduledEmail(locale, name, token, PURGE_AT);
+
+/** {@link accountRestoredEmail} for the staff variant, whose every slot is filled. */
+const restoredByStaff = (locale: string, name: string) => accountRestoredEmail(locale, name, true);
+
 /**
  * The four that exist to deliver a link, paired with the `accountFrontendLink` kind each must
  * delegate to. `setupRequestEmail` shares `resetRequestEmail`'s kind deliberately — both spend a
@@ -38,13 +49,14 @@ const LINK_EMAILS = [
     ['verifyRequestEmail', verifyRequestEmail, 'account.verify-request', 'verify'],
     ['resetRequestEmail', resetRequestEmail, 'account.reset-request', 'reset'],
     ['setupRequestEmail', setupRequestEmail, 'account.setup-request', 'reset'],
-    ['deleteRequestEmail', deleteRequestEmail, 'account.delete-request', 'delete']
+    ['deletionScheduledEmail', scheduledWithDate, 'account.deletion-scheduled', 'restore']
 ] as const;
 
 /** The ones that report something that happened and carry no link. */
 const CONFIRM_EMAILS = [
     ['resetConfirmEmail', resetConfirmEmail, 'account.reset-confirm'],
-    ['deleteConfirmEmail', deleteConfirmEmail, 'account.delete-confirm'],
+    ['accountDeletedEmail', accountDeletedEmail, 'account.deleted'],
+    ['accountRestoredEmail', restoredByStaff, 'account.restored'],
     ['exportFailedEmail', exportFailedEmail, 'account.export-failed']
 ] as const;
 
@@ -92,11 +104,11 @@ describe('account emails — the action links', () => {
     );
 
     it('sends each token to its own kind, never another flow"s', () => {
-        // The consequence worth naming: a reset token delivered on the delete page, or the other
+        // The consequence worth naming: a reset token delivered on the restore page, or the other
         // way round, is an account action performed by someone who asked for a different one.
         const verify = verifyRequestEmail('en', NAME, TOKEN).data.linkUrl as string;
         const reset = resetRequestEmail('en', NAME, TOKEN).data.linkUrl as string;
-        const remove = deleteRequestEmail('en', NAME, TOKEN).data.linkUrl as string;
+        const remove = scheduledWithDate('en', NAME, TOKEN).data.linkUrl as string;
 
         expect(new Set([verify, reset, remove]).size).toBe(3);
     });

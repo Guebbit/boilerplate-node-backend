@@ -18,9 +18,9 @@
             "success": "Password changed, login with the new password."
         },
         "delete": {
-            "email-sent": "A confirmation email has been sent. Click the link to confirm account deletion.",
-            "token-not-found": "Invalid or expired token, please try again.",
-            "success": "Account permanently deleted."
+            "scheduled": "Your account is locked and will be erased on the date shown, unless you restore it before.",
+            "restored": "Your account is restored. Sign in to use it again.",
+            "token-not-found": "Invalid or expired token, please try again."
         },
         "update": {
             "success": "Profile updated.",
@@ -125,15 +125,22 @@
                 "body": "Your password was changed.",
                 "advice": "If this was not you, reset your password now with \"Forgot password\" on the sign-in page. A reset signs every device out and revokes your API keys."
             },
-            "delete-request": {
-                "subject": "Confirm account deletion",
-                "meta-title": "Account deletion requested",
+            "deletion-scheduled": {
+                "subject": "Your account is scheduled for deletion",
+                "meta-title": "Account deletion scheduled",
                 "greeting": "Hello, {{name}}!",
-                "intro": "We received a request to permanently delete your account.",
-                "link-label": "Confirm deletion",
-                "ignore": "If you did not request this, you can safely ignore this email."
+                "intro": "We received a request to delete your account. It is locked now and will be permanently erased on {{date}}.",
+                "link-label": "Restore my account",
+                "ignore": "Changed your mind, or not you? Restore the account with this link, then change your password. If you want it gone, do nothing."
             },
-            "delete-confirm": {
+            "restored": {
+                "subject": "Your account is restored",
+                "meta-title": "Account restored",
+                "greeting": "Hello, {{name}}!",
+                "body": "The deletion of your account was cancelled. Nothing was erased and you can sign in again.",
+                "staff-note": "Our team restored it. If you did not ask for that, delete the account again from your profile."
+            },
+            "deleted": {
                 "subject": "Your account has been deleted",
                 "meta-title": "Account deleted",
                 "greeting": "Hello, {{name}}!",

@@ -114,7 +114,7 @@ export const erase = (
  * happen.
  *
  * @internal The step beneath `removeById` (which refuses a staff account the caller may not
- * manage) and the three named doors (`eraseOwnAccount`, `softDeleteInactive`, `eraseInactive`).
+ * manage) and the named doors (`softDeleteInactive`, `eraseInactive`, and `erase` for the purge).
  * Unpublished, a sibling could erase an administrator with no check.
  *
  * @param context - who did this. Absent for a caller with no request behind it that also has no

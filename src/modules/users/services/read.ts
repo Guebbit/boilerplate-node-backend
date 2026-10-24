@@ -99,6 +99,6 @@ export const toUserContracts = (rows: readonly UserWire[], caller: Caller): Prom
  * Returns the document if found, or undefined if no match.
  */
 export const findByEmail = (email: string): Promise<UserDocument | undefined | null> =>
-    // Credentials included: both callers (reset-request, delete-request) immediately push a
+    // Credentials included: the callers (reset-request, setup-request) immediately push a
     // token onto the document, which `select: false` would otherwise leave undefined.
     userRepository.findOneWithCredentials({ email });

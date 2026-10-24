@@ -77,6 +77,15 @@ export const REVOCATION = {
         callerKeeps: false,
         modes: 'both'
     },
+    // `users` moves the epoch in `scheduleOwnDeletion`'s save. Nobody is announced to: the owner
+    // asked for this, and the keys it suspends come back with the account.
+    'deletion-scheduled': {
+        epoch: 'with-write',
+        pending: true,
+        announce: false,
+        callerKeeps: false,
+        modes: 'both'
+    },
     'refresh-reuse': {
         epoch: 'own',
         pending: false,

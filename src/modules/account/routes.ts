@@ -65,8 +65,8 @@ import { postEmailChangeConfirm } from './controllers/post-email-change-confirm'
 import { postEmailChangeUndo } from './controllers/post-email-change-undo';
 import { postAccountExport } from './controllers/post-account-export';
 import { getAccountExport } from './controllers/get-account-export';
-import { deleteAccountRequest } from './controllers/delete-account-request';
-import { deleteAccountConfirm } from './controllers/delete-account-confirm';
+import { deleteAccount } from './controllers/delete-account';
+import { postAccountRestore } from './controllers/post-account-restore';
 import { getOAuthProviders } from './controllers/get-oauth-providers';
 import { getSessionConfig } from './controllers/get-session-config';
 import { postSessionTouch } from './controllers/post-session-touch';
@@ -179,19 +179,19 @@ router.delete('/email-change', isAuth, cancelPendingEmail);
 // reason: each success publishes mail. `isAuth` runs first so the identity budget is per account.
 router.post('/email-change/resend', isAuth, sessionCredentialLimiters, postPendingEmailResend);
 
-// DELETE /account — request account deletion (requires auth). Critical: destruction. An account
-// with a second factor must also have proved a code in that fresh session.
+// DELETE /account — lock the account and schedule its erasure (requires auth). Critical:
+// destruction. An account with a second factor must also have proved a code in that fresh session.
 router.delete(
     '/',
     isAuth,
     requireFreshAuthWhen(callerHasTwoFactor, 'critical', OTP_PROOF),
     requireFreshAuth('critical'),
-    deleteAccountRequest
+    deleteAccount
 );
 
-// DELETE /account/delete-confirm — confirm account deletion with token. Public, the token is the
-// credential: `credentialLimiters` bound the guesses like `/email-verification/confirm`.
-router.delete('/delete-confirm', credentialLimiters, deleteAccountConfirm);
+// POST /account/restore — cancel the scheduled deletion with the mailed token. Public, the token is
+// the credential: `credentialLimiters` bound the guesses like `/email-verification/confirm`.
+router.post('/restore', credentialLimiters, postAccountRestore);
 
 // POST /account/login — authenticate and get tokens. `loginChallengeGate` (rung 3, off by
 // default) only engages once `credentialLimiters`' identity budget is mostly spent — never on an

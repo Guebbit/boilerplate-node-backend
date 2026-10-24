@@ -220,12 +220,12 @@ describe('issueToken', () => {
 
         await issueToken(user.id, 'password', 3_600_000);
         await issueToken(user.id, 'password', 3_600_000);
-        await issueToken(user.id, 'delete', 3_600_000);
-        await issueToken(user.id, 'delete', 3_600_000);
+        await issueToken(user.id, 'mfa-challenge', 3_600_000);
+        await issueToken(user.id, 'mfa-challenge', 3_600_000);
 
         const rows = await tokenRowsOf(user.id);
         expect(rows.filter((row) => row.type === 'password')).toHaveLength(1);
-        expect(rows.filter((row) => row.type === 'delete')).toHaveLength(2);
+        expect(rows.filter((row) => row.type === 'mfa-challenge')).toHaveLength(2);
     });
 });
 

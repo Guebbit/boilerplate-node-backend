@@ -242,12 +242,12 @@ up-to-24-hours between the two.
 
 ### How long each link and challenge lives
 
-| What                                   | Lives                                                                                                                      |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| the new address's confirmation link    | 24 hours                                                                                                                   |
-| the old address's undo link            | 7 days                                                                                                                     |
-| the account-deletion confirmation link | 1 hour (`deletion-request.ts`)                                                                                             |
-| a login's two-factor challenge         | 5 minutes, 10 when a delivered factor (email) is armed, since the code must cross a mail queue (`two-factor-challenge.ts`) |
+| What                                | Lives                                                                                                                      |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| the new address's confirmation link | 24 hours                                                                                                                   |
+| the old address's undo link         | 7 days                                                                                                                     |
+| the account restore link            | until `purgeAt` (`account-deletion.ts`)                                                                                    |
+| a login's two-factor challenge      | 5 minutes, 10 when a delivered factor (email) is armed, since the code must cross a mail queue (`two-factor-challenge.ts`) |
 
 ## Data export {#data-export}
 

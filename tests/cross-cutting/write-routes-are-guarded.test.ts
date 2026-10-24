@@ -90,11 +90,11 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     },
     'account DELETE /': {
         requiresAuth: true,
-        reason: "requesting deletion of the caller's own account"
+        reason: "locking the caller's own account and scheduling its erasure"
     },
-    'account DELETE /delete-confirm': {
+    'account POST /restore': {
         requiresAuth: false,
-        reason: 'the emailed confirmation token is the credential'
+        reason: 'the emailed restore token is the credential'
     },
     'account POST /login': {
         requiresAuth: false,

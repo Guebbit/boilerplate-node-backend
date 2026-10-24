@@ -153,3 +153,24 @@ describe('keys end with the sessions that may be compromised', () => {
         expect(await credentialOf(secret)).toBeDefined();
     });
 });
+
+describe('keys wait out a scheduled account deletion', () => {
+    it('are refused while the account is locked, and work again once it is restored', async () => {
+        const { user, bearer, secret } = await adminWithKey();
+
+        const scheduled = await api().delete('/account').set('Authorization', bearer);
+        await settleOutboxNudges();
+
+        // Suspended, not revoked: nothing announced, the resolver just refuses a locked minter.
+        expect(scheduled.status).toBe(202);
+        expect(await credentialOf(secret)).toBeUndefined();
+
+        await plantToken(user.id, 'account-restore', 'restore-brings-keys-back');
+        const restored = await api()
+            .post('/account/restore')
+            .send({ token: 'restore-brings-keys-back' });
+
+        expect(restored.status).toBe(200);
+        expect(await credentialOf(secret)).toBeDefined();
+    });
+});

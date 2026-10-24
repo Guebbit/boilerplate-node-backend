@@ -1,29 +1,23 @@
 /**
  * @module
- * Two-step account deletion — `DELETE /account` mails a confirmation link, `DELETE
- * /account/delete-confirm` spends it — driven through the real Express app, so the status each
- * request answers with is what a caller actually receives, not what a mocked collaborator was
- * called with.
+ * Self-deletion with a grace, over HTTP: `DELETE /account` locks the account at once and answers
+ * 202, `POST /account/restore` spends the mailed link inside the grace. The status each request
+ * answers with is what a caller actually receives, not what a mocked collaborator saw.
  *
- * `requestAccountDeletion`/`removeOwnAccount`'s own audit/analytics/token-issuance behaviour is
- * `self-service.test.ts`'s claim; mail content is `emails.test.ts`'s. This file is the HTTP
- * layer, and the property that matters most here: "no such account" and "mail sent" answer
- * identically, which is what enumeration prevention actually means.
+ * The audit and analytics rows, the mail copy and the purge itself have suites of their own.
  */
 
 import { api, staleBearerFor } from '@tests/http';
+import { cookieHeader } from '@tests/cookies';
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironmentOverrides } from '@tests/environment';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
-import { userRepository } from '@modules/users/tests/factories';
-import { userService } from '@modules/users';
-import { ACCOUNT_DELETE_TOKEN_TYPE } from '@modules/account/services';
-import { plantToken } from '../factories';
+import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
+import { ACCOUNT_RESTORE_TOKEN_TYPE } from '@modules/account/services';
+import { deletionPurgeAt } from '../../config';
+import { plantToken, tokenTypesOf } from '../factories';
 
 /**
- * Every mail the app queued, newest last — same convention as `two-factor.test.ts`. Named
- * `mock*` because `jest.mock` is hoisted above the imports and may only close over identifiers
- * with that prefix.
+ * Every mail the app queued, newest last. Named `mock*` because `jest.mock` is hoisted above the
+ * imports and may only close over identifiers with that prefix.
  */
 const mockOutbox: { template: string; data: Record<string, unknown> }[] = [];
 
@@ -37,77 +31,81 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     })
 }));
 
-/**
- * Every `userService` function delegates to the real implementation, `findByEmail` included —
- * this test only ever overrides ONE call of it, with `mockResolvedValueOnce`, to reach the
- * enumeration-prevention branch. `getAuth` re-reads the caller by ID on every request (see
- * `session/resolver.ts`), so a genuinely deleted account 401s before the controller runs at all —
- * there is no black-box way to hold a live session with no matching row behind it. What IS real is
- * the gap between that read and the controller's OWN read a moment later: a concurrent hard delete
- * (another tab, an admin) landing in between. `findByEmail` is the narrowest seam that reaches, and
- * everything downstream of it — routing, `isAuth`, the real response — still runs unmocked.
- */
-jest.mock('@modules/users', () => {
-    const actual = jest.requireActual<typeof import('@modules/users')>('@modules/users');
-    return {
-        ...actual,
-        userService: { ...actual.userService, findByEmail: jest.fn(actual.userService.findByEmail) }
-    };
-});
-
-const mockFindByEmail = userService.findByEmail as jest.MockedFunction<
-    typeof userService.findByEmail
->;
-
 setupTestDb();
 
 beforeEach(() => {
     mockOutbox.length = 0;
 });
 
-/** A signed-in account and its bearer — fresh enough for `requireFreshAuth(CRITICAL)`. */
+/** A signed-in account: its bearer (fresh enough for `critical`) and its refresh cookie. */
 const authenticate = async (email = 'doomed@example.com') => {
-    const user = await createUser({ email });
+    const user = await createUser({ email, verifiedAt: new Date() });
     const login = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
 
-    return { user, bearer: `Bearer ${login.body.data.token as string}` as const };
+    return {
+        user,
+        bearer: `Bearer ${login.body.data.token as string}` as const,
+        cookie: cookieHeader(login, '__Host-session')
+    };
 };
 
-describe('DELETE /account — deleteAccountRequest', () => {
-    it("mails a deletion link and returns 200 for the caller's own account", async () => {
-        const { bearer } = await authenticate();
+/** The token in the restore link of the scheduled-deletion mail the app queued. */
+const mailedRestoreToken = (): string => {
+    const mail = mockOutbox.find(({ template }) => template === 'account.deletion-scheduled');
+    const link = new URL(String(mail?.data.linkUrl));
+    return new URLSearchParams(link.hash.slice(1)).get('token') ?? '';
+};
+
+describe('DELETE /account', () => {
+    it('answers 202 with the two dates, locks the account and mails the restore link', async () => {
+        const { user, bearer } = await authenticate();
 
         const response = await api().delete('/account').set('Authorization', bearer).send();
 
-        expect(response.status).toBe(200);
-        expect(mockOutbox).toHaveLength(1);
-        expect(mockOutbox[0].template).toBe('account.delete-request');
+        expect(response.status).toBe(202);
+        const { requestedAt, purgeAt } = response.body.data as {
+            requestedAt: string;
+            purgeAt: string;
+        };
+        expect(purgeAt).toBe(deletionPurgeAt(new Date(requestedAt)).toISOString());
+        const stored = await userRepository.findById(user.id);
+        expect(stored?.deletedBy).toBe('owner');
+        expect(stored?.purgeAt?.toISOString()).toBe(purgeAt);
+        expect(mockOutbox.map(({ template }) => template)).toEqual(['account.deletion-scheduled']);
+        expect(mailedRestoreToken()).not.toBe('');
     });
 
-    // The link is a mail, so it spends the mailbox's daily budget; a spent one sends nothing.
-    it('answers 429 with Retry-After, and mails nothing, once the mailbox budget is spent', () =>
-        withEnvironmentOverrides({ NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX: '1' }, async () => {
-            // Its own mailbox: the budget is counted in process memory, across the file's tests.
-            const { bearer } = await authenticate('budget@example.com');
-            const first = await api().delete('/account').set('Authorization', bearer).send();
-            mockOutbox.length = 0;
+    it('clears the session cookies and ends every session at once', async () => {
+        const { user, bearer, cookie } = await authenticate();
 
-            const refused = await api().delete('/account').set('Authorization', bearer).send();
+        const response = await api().delete('/account').set('Authorization', bearer).send();
 
-            expect(first.status).toBe(200);
-            expect(refused.status).toBe(429);
-            expect(refused.body.errors[0].code).toBe('RATE_LIMITED');
-            expect(Number(refused.headers['retry-after'])).toBeGreaterThanOrEqual(1);
-            expect(mockOutbox).toEqual([]);
-        }));
+        const cookies = response.get('Set-Cookie') ?? [];
+        expect(cookies.some((entry) => entry.startsWith('__Host-session='))).toBe(true);
+        const profile = await api().get('/account').set('Authorization', bearer);
+        const refresh = await api().post('/account/refresh').set('Cookie', cookie);
+        expect([profile.status, refresh.status]).toEqual([401, 401]);
+        const login = await api()
+            .post('/account/login')
+            .send({ email: user.email, password: PLAIN_PASSWORD });
+        expect(login.status).toBe(401);
+    });
 
-    // No second factor here, so the unconditional critical guard is the only gate on this route.
+    it('purges the pending links but keeps the way back', async () => {
+        const { user, bearer } = await authenticate();
+        await plantToken(user.id, 'password', 'pending-reset');
+
+        await api().delete('/account').set('Authorization', bearer).send();
+
+        expect(await tokenTypesOf(user.id)).toEqual([ACCOUNT_RESTORE_TOKEN_TYPE]);
+    });
+
     describe('with a session past the critical window', () => {
         afterEach(() => jest.useRealTimers());
 
-        it('answers 401 REAUTH_REQUIRED and mails nothing', async () => {
+        it('answers 401 REAUTH_REQUIRED, mails nothing and locks nothing', async () => {
             const user = await createUser({ email: 'stale@example.com' });
             const bearer = await staleBearerFor(user, 'critical');
 
@@ -116,58 +114,69 @@ describe('DELETE /account — deleteAccountRequest', () => {
             expect(response.status).toBe(401);
             expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
             expect(mockOutbox).toEqual([]);
+            const stored = await userRepository.findById(user.id);
+            expect(stored?.deletedAt).toBeUndefined();
         });
-    });
-
-    it('answers the same 200, and sends no mail, when the lookup misses (enumeration prevention)', async () => {
-        const known = await authenticate('known@example.com');
-        const knownResponse = await api()
-            .delete('/account')
-            .set('Authorization', known.bearer)
-            .send();
-        mockOutbox.length = 0;
-
-        const { bearer } = await authenticate();
-        mockFindByEmail.mockResolvedValueOnce(undefined);
-        const response = await api().delete('/account').set('Authorization', bearer).send();
-
-        // Everything a client can read, except the RateLimit headers, which count per caller.
-        expect(response.status).toBe(knownResponse.status);
-        expect(response.body).toEqual(knownResponse.body);
-        expect(response.headers['set-cookie']).toEqual(knownResponse.headers['set-cookie']);
-        expect(response.headers.etag).toEqual(knownResponse.headers.etag);
-        expect(mockOutbox).toEqual([]);
     });
 });
 
-describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
-    it('spends a live token, hard-deletes the account, clears the session cookies, and returns 200', async () => {
-        const user = await createUser({ email: 'confirmed-gone@example.com' });
-        await plantToken(user.id, ACCOUNT_DELETE_TOKEN_TYPE, 'live-delete-token', {
-            ttlMs: 3_600_000
-        });
+/** Schedules a deletion over HTTP and returns the account and the mailed token. */
+const scheduled = async (email = 'regret@example.com') => {
+    const { user, bearer } = await authenticate(email);
+    await api().delete('/account').set('Authorization', bearer).send();
+    return { user, token: mailedRestoreToken() };
+};
 
-        const response = await api()
-            .delete('/account/delete-confirm')
-            .send({ token: 'live-delete-token' });
+describe('POST /account/restore', () => {
+    it('cancels the deletion, mails the confirmation and signs nobody in', async () => {
+        const { user, token } = await scheduled();
+        mockOutbox.length = 0;
+
+        const response = await api().post('/account/restore').send({ token });
 
         expect(response.status).toBe(200);
-        expect(await userRepository.findById(user.id)).toBeNull();
-        // The two flags/expiry mechanics of a clear are `cookies.test.ts`'s own unit coverage;
-        // this only asks whether the confirm route actually reaches them.
-        const cookies = response.get('Set-Cookie') ?? [];
-        expect(cookies.some((cookie) => cookie.startsWith('__Host-session='))).toBe(true);
-        expect(cookies.some((cookie) => cookie.startsWith('isAuth='))).toBe(true);
+        expect(response.get('Set-Cookie')).toBeUndefined();
+        const stored = await userRepository.findById(user.id);
+        expect(stored?.deletedAt).toBeUndefined();
+        expect(stored?.purgeAt).toBeUndefined();
+        expect(mockOutbox.map(({ template }) => template)).toEqual(['account.restored']);
+        const login = await api()
+            .post('/account/login')
+            .send({ email: user.email, password: PLAIN_PASSWORD });
+        expect(login.status).toBe(200);
     });
 
-    it('refuses a token that was never issued, and leaves the account in place', async () => {
-        const user = await createUser({ email: 'safe@example.com' });
+    it('refuses the same link a second time', async () => {
+        const { token } = await scheduled('twice@example.com');
+        await api().post('/account/restore').send({ token });
 
-        const response = await api()
-            .delete('/account/delete-confirm')
-            .send({ token: 'never-issued' });
+        const again = await api().post('/account/restore').send({ token });
+
+        expect(again.status).toBe(422);
+    });
+
+    it('refuses an unknown token and an expired one, alike', async () => {
+        const user = await createUser({ email: 'expired@example.com' });
+        await plantToken(user.id, ACCOUNT_RESTORE_TOKEN_TYPE, 'stale', { ttlMs: -1000 });
+
+        const unknown = await api().post('/account/restore').send({ token: 'never-issued' });
+        const expired = await api().post('/account/restore').send({ token: 'stale' });
+
+        expect([unknown.status, expired.status]).toEqual([422, 422]);
+        expect(expired.body).toEqual(unknown.body);
+    });
+
+    it('leaves an account whose grace has run out locked, even with a live link', async () => {
+        const { user, token } = await scheduled('late@example.com');
+        await userRepository.updateMany(
+            { _id: user.id },
+            { $set: { purgeAt: new Date(Date.now() - 1000) } }
+        );
+
+        const response = await api().post('/account/restore').send({ token });
 
         expect(response.status).toBe(422);
-        expect(await userRepository.findById(user.id)).not.toBeNull();
+        const stored = await userRepository.findById(user.id);
+        expect(stored?.deletedBy).toBe('owner');
     });
 });

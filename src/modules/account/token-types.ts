@@ -14,8 +14,12 @@ import { DAY_MS } from '@domain-primitives/time';
  */
 export const PASSWORD_RESET_TOKEN_TYPE = 'password';
 
-/** The `type` an account-deletion confirmation link carries. */
-export const ACCOUNT_DELETE_TOKEN_TYPE = 'delete';
+/**
+ * The `type` of the link that cancels a scheduled self-deletion. Its lifetime is the time left
+ * until `purgeAt`. Absent from the pending set in `./services/revocation` on purpose: a password
+ * reset must not take away the way back from a deletion the owner did not ask for.
+ */
+export const ACCOUNT_RESTORE_TOKEN_TYPE = 'account-restore';
 
 /** The `type` of a signup or re-send verification link — proves the address the account ALREADY has. */
 export const EMAIL_VERIFY_TOKEN_TYPE = 'verify';
@@ -59,7 +63,7 @@ export const EMAIL_CHANGE_UNDO_TTL_MS = 7 * DAY_MS;
  */
 export const VERIFICATION_TOKEN_TYPES = [
     PASSWORD_RESET_TOKEN_TYPE,
-    ACCOUNT_DELETE_TOKEN_TYPE,
+    ACCOUNT_RESTORE_TOKEN_TYPE,
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
     EMAIL_CHANGE_UNDO_TOKEN_TYPE,
@@ -74,12 +78,13 @@ export type VerificationTokenType = (typeof VERIFICATION_TOKEN_TYPES)[number];
  * The kinds an account holds at most ONE live link of: issuing a new one replaces the old. The
  * schema's partial unique index covers exactly these, so replacing is one atomic upsert and two
  * simultaneous requests cannot leave two working links. A second connect attempt replaces the first.
- * A delete confirmation and an MFA challenge are not here: several may be in flight at once.
+ * An MFA challenge is not here: several may be in flight at once.
  */
 export const ONE_LIVE_TOKEN_TYPES: readonly VerificationTokenType[] = [
     PASSWORD_RESET_TOKEN_TYPE,
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
     EMAIL_CHANGE_UNDO_TOKEN_TYPE,
-    OAUTH_LINK_TOKEN_TYPE
+    OAUTH_LINK_TOKEN_TYPE,
+    ACCOUNT_RESTORE_TOKEN_TYPE
 ];

@@ -107,10 +107,10 @@ describe('verificationTokenSchema', () => {
             unique: true,
             partialFilterExpression: { type: { $in: [...ONE_LIVE_TOKEN_TYPES] } }
         });
-        // The kinds that allow several are the complement — a delete confirmation and a challenge.
+        // The kinds that allow several are the complement — a login challenge.
         expect(
             VERIFICATION_TOKEN_TYPES.filter((type) => !ONE_LIVE_TOKEN_TYPES.includes(type))
-        ).toEqual(['delete', 'mfa-challenge']);
+        ).toEqual(['mfa-challenge']);
     });
 
     it('never serializes the digest', () => {

@@ -1,8 +1,9 @@
 /**
  * @module
- * The doors `account` reaches the user record through for the four things it does that the admin
- * doors (`updateById`, `removeById`) cannot serve: the owner editing their own profile, the owner
- * erasing their own account, and the inactivity reaper's two deletes.
+ * The doors `account` reaches the user record through for what the admin doors (`updateById`,
+ * `removeById`) cannot serve: the owner editing their own profile, the owner's scheduled deletion
+ * (lock, restore, and the purge once its grace has run out), and the inactivity reaper's two
+ * deletes.
  *
  * Each door narrows the raw `update` / `remove` it wraps. Those two skip the ban check and the
  * staff protection the admin doors enforce, so they stay `@internal` and only these reach them.
@@ -41,40 +42,6 @@ export const updateOwnProfile = (
     data: OwnProfileData,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => update(user, data, context);
-
-/** Marks a {@link RedeemedOwner}. Never exported: the type is how a signature asks for the proof. */
-declare const redeemedOwnership: unique symbol;
-
-/**
- * An account whose owner has just proved they hold it, by spending the one-time deletion link. The
- * route that erases an account is anonymous, so this spent link is the only thing that says the
- * person asking is the person it belongs to; a signature that takes this type, and not a bare
- * document, makes a caller say so out loud.
- */
-export type RedeemedOwner = UserDocument & { readonly [redeemedOwnership]: true };
-
-/**
- * Vouch that the owner of `user` redeemed their deletion link in this request. Call it right after
- * the link is spent and nowhere else: it checks nothing, it only names what the caller is claiming,
- * so a test fixture and a reviewer can both see the claim.
- *
- * @param user - the account the spent link belonged to
- */
-export const redeemedOwner = (user: UserDocument): RedeemedOwner =>
-    // The brand exists only in the type system: the document is the same object at run time.
-    user as RedeemedOwner;
-
-/**
- * Hard-delete the caller's own account. The route is anonymous (a one-time emailed token proves
- * ownership), so no rank check can apply: a staff member erasing themselves is allowed.
- *
- * @param owner - the account, vouched for by its spent deletion link ({@link redeemedOwner})
- * @param context - who did this; absent when no request is behind it
- */
-export const eraseOwnAccount = (
-    owner: RedeemedOwner,
-    context?: CallerContext
-): ReturnType<typeof remove> => remove(owner, true, context);
 
 /**
  * Soft-delete an account the inactivity reaper found idle past its warning. The reaper hands a

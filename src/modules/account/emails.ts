@@ -381,30 +381,88 @@ export const passwordChangedEmail = (locale: string, name: string): EmailContent
     });
 };
 
-/** Account deletion: the email carrying the one-time confirmation link. */
-export const deleteRequestEmail = (locale: string, name: string, token: string): EmailContent => {
+/**
+ * A date as the reader prints it: long, in their language, naming UTC (a date with no zone reads as
+ * the server's, and `purgeAt` is 00:00 UTC at the latest).
+ * https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
+ * @param locale - the recipient's language
+ * @param date - the instant to print
+ */
+const longUtcDate = (locale: string, date: Date): string =>
+    new Intl.DateTimeFormat(locale, {
+        // Field by field: `dateStyle` refuses a `timeZoneName`.
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        timeZone: 'UTC',
+        timeZoneName: 'short'
+    }).format(date);
+
+/**
+ * Account deletion scheduled: the account is locked, the date it is erased on, and the link that
+ * cancels it. A security notice (a hijacked session could have asked for this), so it points at the
+ * restore-then-change-password path.
+ *
+ * @param locale - the recipient's language
+ * @param name - the display name, or `''` (see {@link greetableName})
+ * @param token - the plaintext `account-restore` token, for the link only
+ * @param purgeAt - when the erasure falls due
+ */
+export const deletionScheduledEmail = (
+    locale: string,
+    name: string,
+    token: string,
+    purgeAt: Date
+): EmailContent => {
     return accountMail({
-        template: 'account.delete-request',
+        template: 'account.deletion-scheduled',
         locale,
         name,
         body: (t) => ({
-            intro: t('account.email.delete-request.intro'),
-            linkLabel: t('account.email.delete-request.link-label'),
-            linkUrl: accountFrontendLink('delete', { locale, token }),
-            ignore: t('account.email.delete-request.ignore')
-        })
+            intro: t('account.email.deletion-scheduled.intro', {
+                date: longUtcDate(locale, purgeAt)
+            }),
+            linkLabel: t('account.email.deletion-scheduled.link-label'),
+            linkUrl: accountFrontendLink('restore', { locale, token }),
+            ignore: t('account.email.deletion-scheduled.ignore')
+        }),
+        security: true
     });
 };
 
-/** Account deletion: the goodbye, sent after the row is gone. */
-export const deleteConfirmEmail = (locale: string, name: string): EmailContent => {
+/**
+ * Account restored: the deletion was cancelled. The staff variant adds one line, so an owner who
+ * never asked staff for this knows to delete the account again.
+ *
+ * @param byStaff - whether staff, not the owner, cancelled the deletion
+ */
+export const accountRestoredEmail = (
+    locale: string,
+    name: string,
+    byStaff: boolean
+): EmailContent => {
     return accountMail({
-        template: 'account.delete-confirm',
+        template: 'account.restored',
         locale,
         name,
         body: (t) => ({
-            body: t('account.email.delete-confirm.body'),
-            farewell: t('account.email.delete-confirm.farewell')
+            body: t('account.email.restored.body'),
+            // Always a string: the template prints it only when it is not empty.
+            staffNote: byStaff ? t('account.email.restored.staff-note') : ''
+        }),
+        security: true
+    });
+};
+
+/** Account deleted: the goodbye, sent after the row is gone. */
+export const accountDeletedEmail = (locale: string, name: string): EmailContent => {
+    return accountMail({
+        template: 'account.deleted',
+        locale,
+        name,
+        body: (t) => ({
+            body: t('account.email.deleted.body'),
+            farewell: t('account.email.deleted.farewell')
         })
     });
 };

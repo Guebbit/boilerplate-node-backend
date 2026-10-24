@@ -155,17 +155,29 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Account]
-            summary: Request account deletion
-            description: Initiates the account-deletion flow for the authenticated user. A one-time confirmation token is sent to the user's email address. The token must then be submitted to `/account/delete-confirm` to complete the deletion. Each request mails the account's address, so it spends that mailbox's daily budget, and once that is spent it answers `429` with `Retry-After`, and no token is minted and no mail is sent. Needs a critically fresh session; an account with a second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with `details.methods`).
+            summary: Delete the account (locked at once, erased after a grace)
+            description: >-
+                Locks the authenticated user's account at once and schedules its erasure. Every
+                session dies with the call (the session cookie is cleared) and the account can no
+                longer sign in, so the answer is the last thing the caller sees. The account is
+                erased `NODE_ACCOUNT_DELETION_GRACE_DAYS` days later (30 by default, never more
+                than one calendar month: GDPR Art. 12(3)), at `purgeAt`. Until then it can be
+                brought back by the link in the mail this call sends (`POST /account/restore`),
+                by signing in (`POST /account/login` offers the restore), or by staff
+                (`POST /users/{id}/restore`). Needs a critically fresh session; an account with a
+                second factor armed also needs an `otp` proof in it (`401 REAUTH_REQUIRED` with
+                `details.methods`).
             operationId: requestAccountDelete
             security:
                 - bearerAuth: []
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '202':
+                    description: The account is locked and its erasure is scheduled
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountDeletionEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                # The confirmation link is a mail, so it spends the per-mailbox budget first; a
-                # refused request mints no token and sends nothing.
-                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/email-change:
@@ -736,23 +748,29 @@ paths:
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/delete-confirm:
-        delete:
+    /account/restore:
+        post:
             tags: [Account]
-            summary: Confirm account deletion
-            description: Completes the account-deletion flow. Validates the one-time token issued by `DELETE /account` and, if valid, permanently removes the user account. Answers 429 once an address (or its network block) has sent too many wrong tokens, like the other one-time-token confirms.
-            operationId: confirmAccountDelete
+            summary: Cancel a scheduled account deletion with the mailed link
+            description: >-
+                Spends the one-time restore token mailed by `DELETE /account` and brings the account
+                back, provided its `purgeAt` has not passed. Public: the token is the credential.
+                Restoring does NOT sign the person in: holding the mailbox is not a login, the same
+                rule as a password reset. Unknown, expired and already-spent tokens answer alike
+                (`422`). Answers 429 once an address (or its network block) has sent too many wrong
+                tokens, like the other one-time-token confirms.
+            operationId: restoreAccount
             security: []
             requestBody:
                 required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/AccountDeleteConfirmRequest'
+                            $ref: '#/components/schemas/AccountRestoreRequest'
             responses:
                 '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `credentialLimiters` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -1945,7 +1963,7 @@ components:
                 passwordConfirm:
                     $ref: '#/components/schemas/Password'
 
-        AccountDeleteConfirmRequest:
+        AccountRestoreRequest:
             type: object
             additionalProperties: false
             required: [token]
@@ -1954,7 +1972,37 @@ components:
                     type: string
                     maxLength: 128
                     minLength: 1
-                    description: One-time account deletion token (NOT a JWT).
+                    description: One-time account restore token (NOT a JWT).
+
+        AccountDeletion:
+            type: object
+            additionalProperties: false
+            required: [requestedAt, purgeAt]
+            properties:
+                requestedAt:
+                    type: string
+                    format: date-time
+                    description: When the deletion was asked for, and the account locked.
+                purgeAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When the account is erased unless restored before. At most one calendar
+                        month after `requestedAt`, at 00:00 UTC at the latest.
+
+        AccountDeletionEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AccountDeletion'
 
         # Self-service profile update. Deliberately narrower than `UpdateUserRequest`: no
         # `admin`, no `active`, no `password` — role and account state are the admin

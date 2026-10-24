@@ -15,7 +15,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/email-verification/confirm — spends a one-time verification token, marks the email verified.
- * Public deliberately (like `reset-confirm`/`delete-confirm`): the token in the body is the
+ * Public deliberately (like `password/reset/confirm` and `restore`): the token in the body is the
  * credential, not a login. `accountService.confirmEmailVerification` owns the find-then-spend.
  */
 export const postVerifyConfirm = (

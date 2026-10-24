@@ -124,12 +124,13 @@ export const authEmailChangeUndoTotal = new Counter({
 });
 
 /**
- * Account deletion request attempts.
+ * Account deletions by outcome: `scheduled` (the owner asked), `cancelled` (restored inside the
+ * grace), `purged` (erased by the job), `failure` (the job could not erase one).
  * A churn signal, and one with regulatory weight (GDPR erasure requests).
  */
 export const authAccountDeleteTotal = new Counter({
     name: 'auth_account_delete_total',
-    help: 'Total account-deletion request attempts.',
+    help: 'Total account deletions, labelled by outcome (scheduled, cancelled, purged, failure).',
     labelNames: ['status'] as const,
     registers: [metricsRegistry]
 });
@@ -237,7 +238,7 @@ for (const flow of [
     'email_verify',
     'email_change',
     'email_change_undo',
-    'account_delete'
+    'account_restore'
 ])
     authOneTimeTokenRejectedTotal.inc({ flow }, 0);
 
