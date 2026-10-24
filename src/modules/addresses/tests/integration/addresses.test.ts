@@ -169,7 +169,7 @@ describe('the address-book cap', () => {
             const result = await addressService.create(user.id, { ...HOME, label: 'd' });
 
             expect(asReject(result).status).toBe(409);
-            expect(asReject(result).errors[0].code).toBe('ADDRESS_BOOK_FULL');
+            expect(asReject(result).errors[0].code).toBe('ADDRESS_BOOK_LIMIT_REACHED');
             expect(await labelsOf(user.id)).toEqual(['a', 'b', 'c']);
         }));
 
