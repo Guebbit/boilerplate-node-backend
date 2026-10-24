@@ -2,15 +2,14 @@
  * @module
  * The wishlist route table.
  *
- * A wishlist is somebody's, so the whole router is authenticated and none of it is admin. The one
- * thing that can silently break is ORDER: `/:productId/move-to-cart` must be declared before the
- * bare `/:productId` routes, or a move-to-cart is read as a product id called "move-to-cart".
+ * A wishlist is somebody's, so the whole router is authenticated and none of it is admin. A saved
+ * product is a line of it, written through `/items` (docs/api/write-methods.md#a-line-is-written-through-its-parent).
  */
 
 import { Router } from 'express';
 import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { getWishlist } from './controllers/get-wishlist';
-import { putWishlistItem } from './controllers/put-wishlist-item';
+import { postWishlistItems } from './controllers/post-wishlist-items';
 import { deleteWishlistItem } from './controllers/delete-wishlist-item';
 import { postMoveToCart } from './controllers/post-move-to-cart';
 
@@ -23,12 +22,12 @@ router.use(getAuth, isAuth);
 // GET /wishlist
 router.get('/', getWishlist);
 
-// POST /wishlist/:productId/move-to-cart — must come before the bare /:productId routes.
+// POST /wishlist/items — save a product. Saving what is saved is a no-op.
+router.post('/items', postWishlistItems);
+
+// POST /wishlist/items/:productId/move-to-cart
 // `update:Cart`: the move writes the caller's own basket.
-router.post('/:productId/move-to-cart', requirePermission('update', 'Cart'), postMoveToCart);
+router.post('/items/:productId/move-to-cart', requirePermission('update', 'Cart'), postMoveToCart);
 
-// PUT /wishlist/:productId — save a product. The URI is the whole statement; repeating it is a no-op.
-router.put('/:productId', putWishlistItem);
-
-// DELETE /wishlist/:productId — remove one saved product
-router.delete('/:productId', deleteWishlistItem);
+// DELETE /wishlist/items/:productId — remove one saved product
+router.delete('/items/:productId', deleteWishlistItem);

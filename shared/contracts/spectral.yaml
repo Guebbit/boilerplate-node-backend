@@ -53,9 +53,8 @@ rules:
     # operationId matching the prefix, under any method but the right one, name not on the
     # allowlist — so a match here always means a real drift, not a rule bug.
     #
-    # Allowlisted, both idempotent single-field PUTs whose one editable property is set outright
+    # Allowlisted, an idempotent single-field PUT whose one editable property is set outright
     # rather than merged, so PUT is the correct verb even though the name reads as "update":
-    #   - updateCartItemById: aliased to the upsert endpoint, setting a cart line's quantity.
     #   - updateLocaleEntry: the entry's key is not editable, so `value` is its whole surface.
     verb-replace-is-put:
         description: 'operationId matching ^replace must be a PUT operation — see the allowlist above this rule if a genuine exception is needed.'
@@ -68,7 +67,7 @@ rules:
     verb-update-is-patch:
         description: 'operationId matching ^update must be a PATCH operation — see the allowlist above this rule if a genuine exception is needed.'
         severity: error
-        given: "$.paths[*][?(@property != 'patch' && @.operationId && @.operationId.match(/^update/) && @.operationId != 'updateCartItemById' && @.operationId != 'updateLocaleEntry')]"
+        given: "$.paths[*][?(@property != 'patch' && @.operationId && @.operationId.match(/^update/) && @.operationId != 'updateLocaleEntry')]"
         then:
             field: operationId
             function: falsy

@@ -62,7 +62,8 @@ export const placeOrder = async (
     lines: BasketLine[],
     body: Record<string, unknown> = {}
 ) => {
-    for (const line of lines) await api().post('/cart').set('Authorization', bearer).send(line);
+    for (const line of lines)
+        await api().post('/cart/items').set('Authorization', bearer).send(line);
     await api()
         .put('/cart/shipping-method')
         .set('Authorization', bearer)

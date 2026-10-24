@@ -44,18 +44,18 @@ const addToCart = async (consent: boolean | undefined, header?: string) => {
     const bearer = await loginBearer(user.email);
     const emit = observePort(analyticsPort.emitAnalyticsEvent);
 
-    const request = api().post('/cart').set('Authorization', bearer);
+    const request = api().post('/cart/items').set('Authorization', bearer);
     const response = await (
         header === undefined ? request : request.set('Analytics-Consent', header)
     ).send({ productId: String(product._id), quantity: 1 });
 
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(200);
     return emit.mock.calls
         .map(([event]) => event)
         .find((event) => event.event === cartAnalyticsEvents.CART_ITEM_ADDED);
 };
 
-describe('POST /cart — the consent a cart_item_added event carries', () => {
+describe('POST /cart/items — the consent a cart_item_added event carries', () => {
     it('is granted for an account that opted in', async () => {
         const event = await addToCart(true);
 

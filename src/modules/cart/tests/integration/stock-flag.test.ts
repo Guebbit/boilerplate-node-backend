@@ -152,7 +152,7 @@ describe('GET /cart’s line availability', () => {
 const shortCartBody = async (onHand: number, bearer: string) => {
     const product = await createProduct({ onHand });
     await api()
-        .post('/cart')
+        .post('/cart/items')
         .set('Authorization', bearer)
         .send({ productId: String(product._id), quantity: 999 });
 

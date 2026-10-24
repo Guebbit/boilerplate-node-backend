@@ -3,7 +3,7 @@
  * A wishlist is its own collection keyed by `userId`, exactly like the cart — a user response
  * can't leak a list it doesn't carry, and touching one reads/writes a small document, not the
  * whole user. A line is `{ productId }` and nothing else — no quantity, deliberately: the moment
- * an amount matters it belongs in the cart (`POST /wishlist/{productId}/move-to-cart`), and one
+ * an amount matters it belongs in the cart (`POST /wishlist/items/{productId}/move-to-cart`), and one
  * field fewer is what makes `$addToSet` the whole idempotence story below.
  *
  * See: docs/modules/wishlist.md

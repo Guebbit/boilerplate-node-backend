@@ -32,7 +32,7 @@ export interface MergePlan {
 }
 
 /**
- * Decide what one guest line adds to the cart: what `POST /cart` would add, no more.
+ * Decide what one guest line adds to the cart: what `POST /cart/items` would add, no more.
  *
  * Stock plays no part. A sold-out or short product is added like any other and flagged by the
  * caller through `fitsStock`; lowering the line to what is for sale would let a caller read exact

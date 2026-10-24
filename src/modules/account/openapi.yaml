@@ -960,7 +960,7 @@ paths:
             tags: [Auth]
             summary: Disconnect a linked sign-in provider
             description: >-
-                Removes the link between the account and `provider`, so that provider can no longer sign in to it, and mails the owner that a sign-in method was removed. Nothing re-links it by email match, so reconnecting is `POST /account/oauth/links/{provider}` from a signed-in session. Needs a fresh session (`401 REAUTH_REQUIRED`). There is no guard on removing the last sign-in method, by decision (forgot-password recovers an account that was left with none). Answers 404 when `provider` is not linked.
+                Removes the link between the account and `provider`, so that provider can no longer sign in to it, and mails the owner that a sign-in method was removed. Nothing re-links it by email match, so reconnecting is `POST /account/oauth/links/{provider}` from a signed-in session. Needs a fresh session (`401 REAUTH_REQUIRED`). There is no guard on removing the last sign-in method, by decision (forgot-password recovers an account that was left with none). Answers 404 when `provider` is not linked. A link is a line of the caller's links list, so the answer is that list as it now stands (200 + the links left).
             operationId: unlinkOAuthProvider
             security:
                 - bearerAuth: []
@@ -973,7 +973,12 @@ paths:
                       maxLength: 32
                   description: One of the `provider` names `GET /account/oauth/links` lists.
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '200':
+                    description: The links the account still has
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OAuthLinksEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }

@@ -101,10 +101,10 @@ describe('POST /account/export', () => {
             invoicingService.findCreditNotesForOrder(orderId).then((rows) => rows.length > 0)
         );
         const added = await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 2 });
-        expect(added.status).toBe(201);
+        expect(added.status).toBe(200);
 
         const response = await requestAndDownloadExport(bearer);
 
@@ -179,7 +179,7 @@ describe('the address book at checkout', () => {
         await api().post('/account/addresses').set('Authorization', bearer).send(HOME);
         const product = await createProduct({ onHand: 5 });
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 1 });
 
