@@ -131,7 +131,7 @@ export const orderOf = async (bearer: string, orderId: string) =>
  */
 export const paymentOf = async (bearer: string, orderId: string) =>
     bodyOf(
-        await api().get(`/payments/order/${orderId}`).set('Authorization', bearer),
+        await api().get(`/payments/orders/${orderId}`).set('Authorization', bearer),
         GetPaymentByOrder200Response
     ).data;
 

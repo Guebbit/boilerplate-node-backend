@@ -1,6 +1,6 @@
 /**
  * @module
- * An operator's standalone refund (`POST /payments/order/:orderId/refund`) fans out a
+ * An operator's standalone refund (`POST /payments/orders/:orderId/refund`) fans out a
  * `payment.refunded` webhook delivery, carrying the amount and currency actually returned —
  * proved through the real registry indirection, same shape as
  * `./refund-retry-webhooks.test.ts`: `payments` never imports `webhooks`, so this is the only way

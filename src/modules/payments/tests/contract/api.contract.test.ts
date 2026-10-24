@@ -192,7 +192,7 @@ describe('POST /payments/intent', () => {
             .set('Authorization', bearer)
             .send({ orderId: String(order._id) });
         const readBack = await api()
-            .get(`/payments/order/${String(order._id)}`)
+            .get(`/payments/orders/${String(order._id)}`)
             .set('Authorization', bearer);
 
         expect(intent.body.data).not.toHaveProperty('providerRef');
@@ -534,12 +534,12 @@ describe('POST /payments/webhook', () => {
     });
 });
 
-describe('GET /payments/order/{orderId}', () => {
+describe('GET /payments/orders/{orderId}', () => {
     it('matches the contract for the caller`s own payment', async () => {
         const { bearer, order } = await authenticateWithIntent();
 
         const response = await api()
-            .get(`/payments/order/${String(order._id)}`)
+            .get(`/payments/orders/${String(order._id)}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -551,7 +551,7 @@ describe('GET /payments/order/{orderId}', () => {
         const { order, reference, customerBearer } = await transferOrderOf();
 
         const response = await api()
-            .get(`/payments/order/${String(order._id)}`)
+            .get(`/payments/orders/${String(order._id)}`)
             .set('Authorization', customerBearer);
 
         expect(response.status).toBe(200);
@@ -568,7 +568,7 @@ describe('GET /payments/order/{orderId}', () => {
         const { bearer, order } = await authenticateWithOrder();
 
         const response = await api()
-            .get(`/payments/order/${String(order._id)}`)
+            .get(`/payments/orders/${String(order._id)}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
@@ -578,7 +578,7 @@ describe('GET /payments/order/{orderId}', () => {
 /** A fresh `Idempotency-Key` — the refund route refuses a request without one. */
 const freshKey = (): string => randomUUID();
 
-describe('POST /payments/order/{orderId}/refund', () => {
+describe('POST /payments/orders/{orderId}/refund', () => {
     it('refuses the order`s own owner — the refund is staff-only', async () => {
         // "Own order" matters here specifically: a mis-ordered guard that checked ownership before
         // admin status would let exactly this caller through, and a stranger's order would not
@@ -586,7 +586,7 @@ describe('POST /payments/order/{orderId}/refund', () => {
         const { bearer, order, paymentId } = await paidOrder();
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/orders/${String(order._id)}/refund`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(403);
@@ -597,13 +597,13 @@ describe('POST /payments/order/{orderId}/refund', () => {
     });
 });
 
-describe('POST /payments/order/{orderId}/refund — the operator', () => {
+describe('POST /payments/orders/{orderId}/refund — the operator', () => {
     it('matches the contract, and the payment reads refunded', async () => {
         const { order, paymentId } = await paidOrder();
         const { bearer: adminBearer } = await authenticateAs('admin');
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/orders/${String(order._id)}/refund`)
             .set('Authorization', adminBearer)
             .set('Idempotency-Key', freshKey());
 
@@ -626,12 +626,12 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
         const { order } = await paidOrder();
         const { bearer: adminBearer } = await authenticateAs('admin');
         await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/orders/${String(order._id)}/refund`)
             .set('Authorization', adminBearer)
             .set('Idempotency-Key', freshKey());
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/orders/${String(order._id)}/refund`)
             .set('Authorization', adminBearer)
             .set('Idempotency-Key', freshKey());
 
@@ -642,7 +642,7 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
-            .post(`/payments/order/${MISSING_ID}/refund`)
+            .post(`/payments/orders/${MISSING_ID}/refund`)
             .set('Authorization', bearer)
             .set('Idempotency-Key', freshKey());
 
@@ -654,7 +654,7 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
         const { bearer: adminBearer } = await authenticateAs('admin');
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/orders/${String(order._id)}/refund`)
             .set('Authorization', adminBearer);
 
         expect(response.status).toBe(400);
@@ -670,7 +670,7 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
         const key = freshKey();
         const refund = () =>
             api()
-                .post(`/payments/order/${String(order._id)}/refund`)
+                .post(`/payments/orders/${String(order._id)}/refund`)
                 .set('Authorization', adminBearer)
                 .set('Idempotency-Key', key)
                 .send({ amount: 5 });
@@ -697,11 +697,11 @@ const cashRefundOwed = async () => {
     const { bearer: adminBearer, user: admin } = await authenticateAs('admin');
     const { bearer: buyerBearer, order } = await authenticateWithOrder();
     const recorded = await api()
-        .post(`/payments/order/${String(order._id)}/offline`)
+        .post(`/payments/orders/${String(order._id)}/offline`)
         .set('Authorization', adminBearer)
         .send({ method: 'cash', reference: 'till-settle' });
     const refunded = await api()
-        .post(`/payments/order/${String(order._id)}/refund`)
+        .post(`/payments/orders/${String(order._id)}/refund`)
         .set('Authorization', adminBearer)
         .set('Idempotency-Key', freshKey());
     const paymentId = String(recorded.body.data.id);
@@ -790,7 +790,7 @@ describe('the money doors ask a fresh session of an operator', () => {
         );
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/orders/${String(order._id)}/refund`)
             .set('Authorization', bearer)
             .set('Idempotency-Key', freshKey());
 
@@ -808,7 +808,7 @@ describe('the money doors ask a fresh session of an operator', () => {
         );
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/offline`)
+            .post(`/payments/orders/${String(order._id)}/offline`)
             .set('Authorization', bearer)
             .send({ method: 'cash', reference: 'stale-till' });
 
@@ -818,13 +818,13 @@ describe('the money doors ask a fresh session of an operator', () => {
     });
 });
 
-describe('POST /payments/order/{orderId}/offline', () => {
+describe('POST /payments/orders/{orderId}/offline', () => {
     it('matches the contract for recording money by hand', async () => {
         const { bearer: adminBearer } = await authenticateAs('admin');
         const { order } = await authenticateWithOrder();
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/offline`)
+            .post(`/payments/orders/${String(order._id)}/offline`)
             .set('Authorization', adminBearer)
             .send({ method: 'cash', reference: 'till-1' });
 
@@ -852,7 +852,7 @@ describe('POST /payments/order/{orderId}/offline', () => {
             .send({ orderId: String(order._id) });
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/offline`)
+            .post(`/payments/orders/${String(order._id)}/offline`)
             .set('Authorization', adminBearer)
             .send({ method: 'cash', reference: 'till-2' });
 
@@ -866,7 +866,7 @@ describe('POST /payments/order/{orderId}/offline', () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
-            .post(`/payments/order/${MISSING_ID}/offline`)
+            .post(`/payments/orders/${MISSING_ID}/offline`)
             .set('Authorization', bearer)
             .send({ method: 'cash' });
 
@@ -878,7 +878,7 @@ describe('POST /payments/order/{orderId}/offline', () => {
         const { order } = await authenticateWithOrder();
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/offline`)
+            .post(`/payments/orders/${String(order._id)}/offline`)
             .set('Authorization', bearer)
             .send({ method: 'crypto' });
 
@@ -889,12 +889,12 @@ describe('POST /payments/order/{orderId}/offline', () => {
         const { bearer } = await authenticateAs('admin');
         const { order } = await authenticateWithOrder();
         await api()
-            .post(`/payments/order/${String(order._id)}/offline`)
+            .post(`/payments/orders/${String(order._id)}/offline`)
             .set('Authorization', bearer)
             .send({ method: 'cash' });
 
         const response = await api()
-            .post(`/payments/order/${String(order._id)}/offline`)
+            .post(`/payments/orders/${String(order._id)}/offline`)
             .set('Authorization', bearer)
             .send({ method: 'cash' });
 
@@ -1024,7 +1024,7 @@ describe('the staff Payments page', () => {
         const { order } = await paidOrder();
         const { bearer: adminBearer } = await authenticateAs('admin');
         await api()
-            .post(`/payments/order/${String(order._id)}/refund`)
+            .post(`/payments/orders/${String(order._id)}/refund`)
             .set('Authorization', adminBearer)
             .set('Idempotency-Key', freshKey());
 

@@ -1,6 +1,6 @@
 /**
  * @module
- * Reading an order's fulfilment — what the order page asks (`GET /delivery/order/:orderId`), the
+ * Reading an order's fulfilment — what the order page asks (`GET /delivery/orders/:orderId`), the
  * narrow reads `returns` makes (what has shipped, what a remainder cancel would take) and the
  * account export's two sections. A fulfillment order and a shipment have no owner of their own:
  * ownership is the order's, read through the same scope every order read uses.

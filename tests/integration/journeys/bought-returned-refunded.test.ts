@@ -132,11 +132,11 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
 
     // Staff start, ship and deliver the whole order.
     bodyOf(
-        await api().post(`/delivery/order/${order.id}/start`).set('Authorization', staff),
+        await api().post(`/delivery/orders/${order.id}/start`).set('Authorization', staff),
         StartFulfilment200Response
     );
     const [fulfillmentOrder] = bodyOf(
-        await api().get(`/delivery/order/${order.id}`).set('Authorization', staff),
+        await api().get(`/delivery/orders/${order.id}`).set('Authorization', staff),
         GetFulfillmentByOrder200Response
     ).data.fulfillmentOrders;
     const shipment = bodyOf(
@@ -299,7 +299,7 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
     // The moderator returns the money of the order they bought themselves.
     const refunded = bodyOf(
         await api()
-            .post(`/payments/order/${order.id}/refund`)
+            .post(`/payments/orders/${order.id}/refund`)
             .set('Authorization', moderator)
             .set('Idempotency-Key', 'journey-own-order-refund')
             .send({}),

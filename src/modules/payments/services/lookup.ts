@@ -2,7 +2,7 @@
  * @module
  * Matching an incoming bank transfer back to the order it pays. The admin reads the RF reference
  * off the bank's own website and pastes it here; this finds the order, and `POST
- * /payments/order/{orderId}/offline` — already built for cash and phone orders — settles it. No
+ * /payments/orders/{orderId}/offline` — already built for cash and phone orders — settles it. No
  * new settlement code: this file is the one step in front of that endpoint.
  */
 

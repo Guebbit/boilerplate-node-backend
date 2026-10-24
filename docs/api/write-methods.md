@@ -372,7 +372,7 @@ anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` 
 | `POST /account/signup` | a refused address still gets a 201 and the same `Location: /account`, and nothing is created | antibot: the refusal must look like a success |
 | `PUT /cart/{productId}`, `PUT /cart/shipping-method`, `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /wishlist/{productId}`, `PUT /account/addresses/{id}/default` | no PATCH | one field, or none; a PATCH would say exactly what the PUT says |
 | `POST /cart` | adds to an existing line instead of creating a second one; 201 only when the line is new | "add to cart" — Shopify, commercetools, WooCommerce and Magento all grow the line |
-| `POST /payments/intent`, `POST /payments/order/{id}/offline` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |
+| `POST /payments/intent`, `POST /payments/orders/{id}/offline` | 200 when they refresh or convert the order's one payment row | one payment per order is a database fact |
 | `PUT`/`PATCH /locales/{locale}/apps/{app}/entries` | the app is a path segment | a PUT replaces exactly what the GET on the same URI lists |
 
 ## How it is kept true

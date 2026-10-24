@@ -1,7 +1,7 @@
 /**
  * @module
  * GET /payments/order-by-reference
- * The admin's own step before `POST /payments/order/:orderId/offline`: paste the RF code read off
+ * The admin's own step before `POST /payments/orders/:orderId/offline`: paste the RF code read off
  * the bank's website, get back the order it pays. Same authority as that endpoint — reading who
  * owes what by reference is no less than recording that it arrived.
  */

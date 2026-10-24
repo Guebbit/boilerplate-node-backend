@@ -761,7 +761,7 @@ const refundFoundPayment = (
 };
 
 /**
- * `POST /payments/order/:orderId/refund` — the operator returning money on its own, separate
+ * `POST /payments/orders/:orderId/refund` — the operator returning money on its own, separate
  * from cancelling. Admin-only at the route.
  *
  * @param orderId - the order whose payment is being returned

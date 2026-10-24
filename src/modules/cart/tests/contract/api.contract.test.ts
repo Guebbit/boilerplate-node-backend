@@ -996,7 +996,7 @@ describe('POST /cart/checkout', () => {
                     expect(response.body.data.payBy).toEqual(expect.any(String));
                     expect(response.body.data).not.toHaveProperty('transferInstructions');
                     const payment = await api()
-                        .get(`/payments/order/${String(response.body.data.id)}`)
+                        .get(`/payments/orders/${String(response.body.data.id)}`)
                         .set('Authorization', bearer);
                     expect(payment.status).toBe(200);
                     expect(payment.body.data.nextAction).toEqual({

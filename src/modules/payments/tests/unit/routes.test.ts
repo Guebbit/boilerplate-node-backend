@@ -40,11 +40,11 @@ describe('payment routes', () => {
             'GET /refunds',
             'GET /attention',
             'POST /intent',
-            'GET /order/:orderId',
+            'GET /orders/:orderId',
             'GET /order-by-reference',
-            'POST /order/:orderId/refund',
+            'POST /orders/:orderId/refund',
             'POST /:id/refunds/:refundId/settle',
-            'POST /order/:orderId/offline',
+            'POST /orders/:orderId/offline',
             'POST /:id/confirm',
             'POST /:id/sync'
         ]);
@@ -100,9 +100,9 @@ describe('payment routes', () => {
             'GET /refunds',
             'GET /attention',
             'GET /order-by-reference',
-            'POST /order/:orderId/refund',
+            'POST /orders/:orderId/refund',
             'POST /:id/refunds/:refundId/settle',
-            'POST /order/:orderId/offline'
+            'POST /orders/:orderId/offline'
         ]);
     });
 
@@ -144,16 +144,16 @@ describe('payment routes', () => {
     });
 
     it('declares the refund and the offline record before the bare /:id routes', () => {
-        // `/order/:orderId/refund` and `/order/:orderId/offline` are three segments and
+        // `/orders/:orderId/refund` and `/orders/:orderId/offline` are three segments and
         // `/:id/confirm` is two, so they cannot collide today. The ordering is the convention this
         // module states, and asserting it stops a two-segment admin route added later from being
         // shadowed.
         const paths = routeSignatures(router);
 
-        expect(paths.indexOf('POST /order/:orderId/refund')).toBeLessThan(
+        expect(paths.indexOf('POST /orders/:orderId/refund')).toBeLessThan(
             paths.indexOf('POST /:id/confirm')
         );
-        expect(paths.indexOf('POST /order/:orderId/offline')).toBeLessThan(
+        expect(paths.indexOf('POST /orders/:orderId/offline')).toBeLessThan(
             paths.indexOf('POST /:id/confirm')
         );
     });

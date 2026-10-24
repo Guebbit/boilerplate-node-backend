@@ -162,7 +162,7 @@ export const markPaid = (
 
 /**
  * Report that fulfilment started on a paid order. `delivery`'s own door for this move —
- * `POST /delivery/order/{id}/start` — is the one caller; the admin override
+ * `POST /delivery/orders/{id}/start` — is the one caller; the admin override
  * (`orders/services/override.ts`'s `overrideStatus`) reaches `processing` too, but does not call
  * this function — `applyOverride` writes that move itself.
  * @param orderId - the order fulfilment started on

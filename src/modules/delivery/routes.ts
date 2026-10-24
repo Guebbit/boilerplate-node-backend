@@ -47,8 +47,8 @@ export const router = Router();
 // GET /delivery/methods — public: what shipping costs is pre-purchase information
 router.get('/methods', getShippingMethods);
 
-// GET /delivery/order/:orderId — the fulfillment orders and shipments behind one of the caller's orders
-router.get('/order/:orderId', getAuth, isAuth, getOrderFulfillment);
+// GET /delivery/orders/:orderId — the fulfillment orders and shipments behind one of the caller's orders
+router.get('/orders/:orderId', getAuth, isAuth, getOrderFulfillment);
 
 // GET /delivery/fulfillment-orders and /summary — the preorder board's reads. `read:Order`, the
 // key of the orders they are about, which every signed-in account holds: the service narrows the
@@ -93,10 +93,10 @@ router.get(
     getRestockDateImpact
 );
 
-// POST /delivery/order/:orderId/start — begins fulfilment; moves the order paid -> processing.
+// POST /delivery/orders/:orderId/start — begins fulfilment; moves the order paid -> processing.
 // No `forced` variant, so no step-up guard: the admin override is the other reachable path here.
 router.post(
-    '/order/:orderId/start',
+    '/orders/:orderId/start',
     getAuth,
     isAuth,
     requirePermission('start', 'Shipment'),

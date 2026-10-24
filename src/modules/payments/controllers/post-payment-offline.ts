@@ -1,6 +1,6 @@
 /**
  * @module
- * POST /payments/order/:orderId/offline
+ * POST /payments/orders/:orderId/offline
  * An admin recording money the card provider never saw. Admin-only at the route
  * (`create:Payment`); the audit and analytics events fire from the service once settlement
  * actually lands, same as the confirm.
@@ -15,7 +15,7 @@ import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 
-/** Handles `POST /payments/order/:orderId/offline`. */
+/** Handles `POST /payments/orders/:orderId/offline`. */
 export const postPaymentOffline = (request: Request<{ orderId?: string }>, response: Response) => {
     const orderId = requireId(request, response, {
         notFound: 'payments.order-not-found',

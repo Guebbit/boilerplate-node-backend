@@ -149,7 +149,7 @@ actor into a second table would let the two disagree, so it rides on the edge it
 `system` is not a privilege level above `admin`. It is **narrower**: the moves an operator may never
 make by hand, because something outside the application has to have happened first. Money landing
 is one; fulfilment starting (`paid → processing`) is the other, recorded through `delivery`'s own
-start action (`POST /delivery/order/{orderId}/start`) — see "Action endpoints execute" below.
+start action (`POST /delivery/orders/{orderId}/start`) — see "Action endpoints execute" below.
 
 ### What the table prevents
 
@@ -278,7 +278,7 @@ trusted. An operator can cancel without refunding, which is the replacement-goin
 compensated; suppressing it for the no-refund case would make `order.cancelled` mean "cancelled and
 refunded", which is not what it says.
 
-Returning money on its own is a separate route, `POST /payments/order/{orderId}/refund`, because it
+Returning money on its own is a separate route, `POST /payments/orders/{orderId}/refund`, because it
 is a separate act: a goodwill refund leaves the order where it is. It lives in `payments` rather
 than `orders` for a structural reason — `payments` already depends on `orders`, so an order module
 reaching back for a refund would close a cycle `npm run check` refuses.
@@ -318,7 +318,7 @@ flowchart LR
     REQ["GET /orders, GET /orders/{id}<br/><i>caller: customer | admin</i>"] --> L["domain/lifecycle.ts<br/>orderActionsFor(status, actor)"]
     L --> C["services/actions.ts<br/>the caller half: keys, buyer"]
     C --> A["actions: { cancel, pay, delete, hardDelete, restore, … }"]
-    REQ2["GET /payments/order/{orderId}"] --> PA["actions: { pay, refund }"]
+    REQ2["GET /payments/orders/{orderId}"] --> PA["actions: { pay, refund }"]
     A --> UI["client renders controls"]
     PA --> UI
 

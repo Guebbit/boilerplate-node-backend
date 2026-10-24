@@ -95,14 +95,14 @@ router.post(
     postPaymentIntent
 );
 
-// GET /payments/order/:orderId — the payment behind an order
-router.get('/order/:orderId', getPaymentByOrder);
+// GET /payments/orders/:orderId — the payment behind an order
+router.get('/orders/:orderId', getPaymentByOrder);
 
 // GET /payments/order-by-reference — the admin's RF-code lookup, same authority as offline below.
 // A literal segment, not `/order/:something`: it names no order yet, that's the whole point of it.
 router.get('/order-by-reference', requirePermission('create', 'Payment'), getOrderByReference);
 
-// POST /payments/order/:orderId/refund — the operator returns the money, order untouched. The key
+// POST /payments/orders/:orderId/refund — the operator returns the money, order untouched. The key
 // is REQUIRED: a retried refund would otherwise return the money twice.
 /*
  * No `requireFreshAuth` here: `create:Refund` carries `stepUp: critical` in
@@ -111,7 +111,7 @@ router.get('/order-by-reference', requirePermission('create', 'Payment'), getOrd
  * second route reaching the same key would otherwise have to remember.
  */
 router.post(
-    '/order/:orderId/refund',
+    '/orders/:orderId/refund',
     requirePermission('create', 'Refund'),
     requireIdempotencyKey,
     postPaymentRefund
@@ -127,10 +127,10 @@ router.post(
     postPaymentRefundSettle
 );
 
-// POST /payments/order/:orderId/offline — the admin recording money by hand. Same `stepUp`
+// POST /payments/orders/:orderId/offline — the admin recording money by hand. Same `stepUp`
 // arrangement as the refund: `create:Payment` carries it in `shared/authorization-keys.yaml`.
 router.post(
-    '/order/:orderId/offline',
+    '/orders/:orderId/offline',
     requirePermission('create', 'Payment'),
     idempotencyKey,
     postPaymentOffline

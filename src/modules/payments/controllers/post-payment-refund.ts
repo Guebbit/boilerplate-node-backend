@@ -1,6 +1,6 @@
 /**
  * @module
- * POST /payments/order/:orderId/refund
+ * POST /payments/orders/:orderId/refund
  * Return an order's money, all of it or a part, without touching its status — the operator's
  * standalone refund.
  * Admin-only at the route; "cancel and refund" is a client sending this and the order cancel,
@@ -16,7 +16,7 @@ import { RefundPaymentByOrderBody } from '@api/schemas.zod';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 
-/** Handles `POST /payments/order/:orderId/refund`. */
+/** Handles `POST /payments/orders/:orderId/refund`. */
 export const postPaymentRefund = (request: Request<{ orderId?: string }>, response: Response) => {
     const orderId = requireId(request, response, {
         notFound: 'payments.not-found',

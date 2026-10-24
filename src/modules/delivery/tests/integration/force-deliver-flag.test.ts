@@ -29,7 +29,7 @@ const shipmentActionsFor = (
     bearer: string
 ): Promise<ShipmentActions | undefined> =>
     api()
-        .get(`/delivery/order/${orderId}`)
+        .get(`/delivery/orders/${orderId}`)
         .set('Authorization', bearer)
         .then(
             (response) =>

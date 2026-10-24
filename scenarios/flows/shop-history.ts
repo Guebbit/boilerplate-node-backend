@@ -501,7 +501,7 @@ export const driveShopHistory = async (
 
     /*
      * Paid, then cancelled by the operator: `payments` hears `ORDER_CANCELLED` and returns it.
-     * The subject is the ORDER's id, not the payment's, because `GET /payments/order/{orderId}`
+     * The subject is the ORDER's id, not the payment's, because `GET /payments/orders/{orderId}`
      * is the only way to read a payment back — a payment id would name a row nothing can fetch.
      */
     subjects['payment.refunded'] = dated(await checkoutAndPay(customer, DOG_FOOD(1)));

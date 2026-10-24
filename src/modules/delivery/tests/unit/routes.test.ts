@@ -23,12 +23,12 @@ describe('delivery routes', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /methods',
-            'GET /order/:orderId',
+            'GET /orders/:orderId',
             'GET /fulfillment-orders',
             'GET /fulfillment-orders/summary',
             'GET /fulfillment-orders/release-date-impact',
             'GET /fulfillment-orders/restock-date-impact',
-            'POST /order/:orderId/start',
+            'POST /orders/:orderId/start',
             'POST /fulfillment-orders/:id/shipments',
             'POST /fulfillment-orders/:id/fulfill',
             'POST /fulfillment-orders/:id/hold',
@@ -48,14 +48,14 @@ describe('delivery routes', () => {
     it('requires a session to read the fulfilment behind an order', () => {
         // The fulfilment is tied to one caller's order. The ownership check itself lives in the
         // service; this is the gate that guarantees there is a caller to check.
-        const guards = guardsOn(router, 'GET /order/:orderId');
+        const guards = guardsOn(router, 'GET /orders/:orderId');
 
         expect(guards).toContain('isAuth');
         expect(guards).not.toContain('requirePermissionGuard');
     });
 
     it('restricts starting fulfilment to an operator holding start:Shipment', () => {
-        expect(guardsOn(router, 'POST /order/:orderId/start')).toContain('requirePermissionGuard');
+        expect(guardsOn(router, 'POST /orders/:orderId/start')).toContain('requirePermissionGuard');
     });
 
     it.each(WRITES)('restricts %s to an operator', (signature) => {

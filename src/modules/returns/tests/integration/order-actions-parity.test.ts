@@ -138,7 +138,7 @@ const ACTS: Act[] = [
         name: 'start',
         flag: (actions) => actions.start,
         door: (caller, orderId) =>
-            api().post(`/delivery/order/${orderId}/start`).set('Authorization', caller.bearer)
+            api().post(`/delivery/orders/${orderId}/start`).set('Authorization', caller.bearer)
     },
     {
         name: 'withdraw',
@@ -175,7 +175,7 @@ const ACTS: Act[] = [
         flag: (actions) => actions.recordPayment,
         door: (caller, orderId) =>
             api()
-                .post(`/payments/order/${orderId}/offline`)
+                .post(`/payments/orders/${orderId}/offline`)
                 .set('Authorization', caller.bearer)
                 .send({ method: 'cash', reference: 'till' })
     }

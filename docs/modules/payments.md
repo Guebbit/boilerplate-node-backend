@@ -137,7 +137,7 @@ cancel lifecycle itself (`statusesLeadingTo`, `orders/domain/lifecycle.ts`) has 
 Two different questions, asked at two different moments, both owned by `orders`:
 
 - **The pre-check** — `orders.isPayable(order.status)` — gates every door that could open a new
-  payment: `POST /payments/intent`, `POST /payments/order/{orderId}/offline`, and `getForOrder`'s
+  payment: `POST /payments/intent`, `POST /payments/orders/{orderId}/offline`, and `getForOrder`'s
   `PaymentActions.pay`. `pending` only; a `paid` order answers `false` even though `system` may
   still write a `paid → paid` echo underneath it (the payment webhook's own retries) — that echo is
   not a fresh offer to pay. This module never compares a status literal to decide whether to open a
@@ -301,7 +301,7 @@ payment, because a confirm is itself a new attempt: card A refused, then card B 
 `payment.failed` rows. A confirm that loses the race to the webhook answers the payment as the
 winner left it, not the copy it read first.
 
-`POST /payments/order/{orderId}/offline` (below) is a fourth way to reach `succeeded`, alongside
+`POST /payments/orders/{orderId}/offline` (below) is a fourth way to reach `succeeded`, alongside
 confirm, sync and the webhook — it calls the exact same `settlePayment`, so nothing about this
 diagram's terminal states or their guards changes for it.
 
@@ -313,7 +313,7 @@ way — cash at the counter, a phone order paid by bank transfer — on a still-
 ```mermaid
 sequenceDiagram
     actor Admin
-    participant API as POST /payments/order/:orderId/offline
+    participant API as POST /payments/orders/:orderId/offline
     participant Pay as payments
     participant Set as settlePayment
     Admin->>API: method, reference?, receivedAt?
@@ -407,7 +407,7 @@ sequenceDiagram
 - **A refusal stays open.** The record is `failed`, with a closed `failureReason` (staff only; see
   [the staff Payments page](#the-staff-payments-page)), and keeps its share of `amountRefunded`, so nothing is opened beside it. `retryOpenRefunds` (run by
   `npm run job sweep:payment-effects`) and the next cancel or operator call both finish it.
-- **The default is everything left.** `POST /payments/order/{orderId}/refund` with no body returns
+- **The default is everything left.** `POST /payments/orders/{orderId}/refund` with no body returns
   all that is still refundable; with an `amount` it returns that part. An `amount` over what is
   left, nothing left included, is a 422 (`PAYMENT_REFUND_EXCEEDS_REMAINING`); with no `amount`,
   nothing left is a 409 (`PAYMENT_NOT_REFUNDABLE`).
@@ -455,7 +455,7 @@ payment carries everything the buyer and the operator need, and the order carrie
 ```mermaid
 stateDiagram-v2
     [*] --> requires_action: order.created, paymentMethod = bank_transfer<br/>RF reference + payBy, hand-recorded
-    requires_action --> succeeded: admin records the transfer<br/>POST /payments/order/:orderId/offline
+    requires_action --> succeeded: admin records the transfer<br/>POST /payments/orders/:orderId/offline
     requires_action --> requires_confirmation: the buyer pays by card instead<br/>(same row, reference kept)
     requires_action --> cancelled: order cancelled, or payBy passed with no money
     cancelled --> succeeded: a late transfer is recorded<br/>(the order is gone: the refund record stays open)
@@ -526,7 +526,7 @@ flowchart LR
   one and is not reachable through this lookup; an admin finds it by id through the normal order
   search instead. No raw-id fallback: a raw order id is not a reference and answers 404.
 - **No new settlement code.** The admin screen calls the lookup, then the existing `POST
-/payments/order/{orderId}/offline` — the same `pending → paid` move, stock commit, and events any
+/payments/orders/{orderId}/offline` — the same `pending → paid` move, stock commit, and events any
   other offline record already goes through.
 - **A transfer that arrives after its order was cancelled is recorded, not refused.** The lookup
   still finds the order (its cancelled payment is kept), and `POST .../offline` takes the money onto
@@ -586,7 +586,7 @@ flowchart LR
 ## The staff Payments page
 
 Four reads behind one admin page, all `display:Payment` (support, manager, moderator, admin) and never
-shared-cached. A payer reads their own payment through `GET /payments/order/{orderId}` only.
+shared-cached. A payer reads their own payment through `GET /payments/orders/{orderId}` only.
 
 | Read                                     | Answers                                                                                                                                                                 |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

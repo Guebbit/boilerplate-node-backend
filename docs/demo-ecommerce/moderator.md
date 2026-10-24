@@ -70,13 +70,13 @@ the note as if the buyer reads it, because they do. → [`orders`](../modules/or
 
 `create:Payment` is also what lets this role record money that arrived outside the checkout
 flow — cash at the counter, a bank transfer once its reference is matched — through
-`POST /payments/order/{orderId}/offline`. It settles the order exactly as a card payment would: the
+`POST /payments/orders/{orderId}/offline`. It settles the order exactly as a card payment would: the
 order moves to `paid`, stock commits, the confirmation fires.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    A["money arrives<br/><i>cash, or a transfer with its reference</i>"] --> B["you record it<br/><i>POST /payments/order/{orderId}/offline</i>"]
+    A["money arrives<br/><i>cash, or a transfer with its reference</i>"] --> B["you record it<br/><i>POST /payments/orders/{orderId}/offline</i>"]
     B --> C["the order is paid<br/><i>stock commits, the confirmation fires</i>"]
 
     classDef you fill:#dbeafe,stroke:#2563eb,color:#111827;

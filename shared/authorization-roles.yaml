@@ -67,7 +67,7 @@ roles:
           # The sales numbers are the manager's job; they can already see every payment.
           - StatsDisplay
           - InventoryDisplay
-          # A manager may start fulfilment on a paid order — POST /delivery/order/{id}/start.
+          # A manager may start fulfilment on a paid order — POST /delivery/orders/{id}/start.
           - DeliveryStart
           # The returns queue: read it, decide a request, and record goods arriving.
           - ReturnDisplay

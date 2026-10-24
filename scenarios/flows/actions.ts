@@ -191,19 +191,19 @@ export const recordOfflinePayment = (
     orderId: string,
     method: string
 ): Promise<void> =>
-    owner.call('POST', `/payments/order/${orderId}/offline`, { method }).then(() => undefined);
+    owner.call('POST', `/payments/orders/${orderId}/offline`, { method }).then(() => undefined);
 
 /**
  * Move a paid order into `processing`, as an operator would: the warehouse's own door,
- * `POST /delivery/order/{id}/start`. Going through it means a seeded order carries the ordinary
+ * `POST /delivery/orders/{id}/start`. Going through it means a seeded order carries the ordinary
  * history, not an override's status-correction audit rows.
  *
  * @param owner - a caller holding `delivery.any.start`
  */
 export const startProcessing = (owner: Caller, orderId: string): Promise<void> =>
-    owner.call('POST', `/delivery/order/${orderId}/start`).then(() => undefined);
+    owner.call('POST', `/delivery/orders/${orderId}/start`).then(() => undefined);
 
-/** The part of `GET /delivery/order/{id}` the flows read: what can ship and what is out. */
+/** The part of `GET /delivery/orders/{id}` the flows read: what can ship and what is out. */
 interface FulfillmentData {
     fulfillmentOrders: {
         id: string;
@@ -216,7 +216,7 @@ interface FulfillmentData {
 
 /** The order's fulfillment orders and shipments, as staff read them. */
 const readFulfillment = (owner: Caller, orderId: string): Promise<FulfillmentData> =>
-    owner.call<FulfillmentData>('GET', `/delivery/order/${orderId}`);
+    owner.call<FulfillmentData>('GET', `/delivery/orders/${orderId}`);
 
 /**
  * Run `step` over `items` one after another — each is an HTTP call whose order matters, and the
@@ -310,7 +310,7 @@ export const cancelRemainder = (caller: Caller, orderId: string): Promise<string
     caller
         .call<{ fulfillmentOrders: { id: string; lines: { remaining: number }[] }[] }>(
             'GET',
-            `/delivery/order/${orderId}`
+            `/delivery/orders/${orderId}`
         )
         .then(({ fulfillmentOrders }) => {
             const open = fulfillmentOrders.find(({ lines }) =>

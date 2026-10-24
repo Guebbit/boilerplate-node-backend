@@ -827,7 +827,7 @@ components:
                     description: >-
                         `false` cancels and releases the stock without returning the money — a
                         replacement going out, a correction, or a refund handled separately through
-                        `POST /payments/order/{orderId}/refund`.
+                        `POST /payments/orders/{orderId}/refund`.
 
         StatusOverrideRequest:
             type: object
@@ -1256,14 +1256,14 @@ components:
                 recordPayment:
                     type: boolean
                     description: >-
-                        Whether `POST /payments/order/{orderId}/offline` would be accepted for this
+                        Whether `POST /payments/orders/{orderId}/offline` would be accepted for this
                         caller: an operator recording money that arrived another way. True while
                         the order is still awaiting payment and the caller holds the key that records
                         one. A buyer's own step is `pay`; a buyer who is staff may also record.
                 start:
                     type: boolean
                     description: >-
-                        Whether `POST /delivery/order/{id}/start` would be accepted for this
+                        Whether `POST /delivery/orders/{id}/start` would be accepted for this
                         caller. `paid → processing` is `system`-only in the lifecycle, reached
                         only by reporting the fact through `delivery`'s own door.
                 override:
