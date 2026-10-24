@@ -128,24 +128,18 @@ components:
                 metadata:
                     type: object
                     additionalProperties: true
-                    description: What the action carried. The keys below are the ones every consumer may rely on; an action may add its own.
-                    properties:
-                        ownOrder:
-                            type: boolean
-                            description: Set (`true`) when staff acted on an order they placed themselves. Absent otherwise.
-                        changes:
-                            type: object
-                            description: An `*.updated` action's non-personal fields that moved, by field name.
-                            additionalProperties:
-                                type: object
-                                required: [from, to]
-                                properties:
-                                    from: { description: 'The value before; `null` when it was unset.' }
-                                    to: { description: 'The value after; `null` when it was cleared.' }
-                        changedFields:
-                            type: array
-                            description: An `*.updated` action's free-text and personal fields that moved, by NAME only. The audit trail is never scrubbed on erasure, so their values never enter it.
-                            items: { type: string }
+                    description: |
+                        What the action carried. Open on purpose: each action adds its own keys, and a
+                        declared-properties object would be validated closed by the generated schema.
+                        Keys with a fixed meaning across actions:
+
+                        - `ownOrder` (boolean): `true` when staff acted on an order they placed
+                          themselves; absent otherwise. Filter with `GET /audit?ownOrder=`.
+                        - `changes` (object): an `*.updated` action's non-personal fields that moved,
+                          `{ <field>: { from, to } }`, `null` meaning unset.
+                        - `changedFields` (string[]): an `*.updated` action's free-text and personal
+                          fields that moved, by NAME only. The trail is never scrubbed on erasure, so
+                          their values never enter it.
                 timestamp: { type: string, format: date-time }
                 level:
                     type: string
