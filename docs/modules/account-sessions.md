@@ -33,7 +33,8 @@ One variable, `NODE_SESSION_MODE`, read through `session/config.ts`. Documented 
   The old rows age out by their own date.
 - **The frontend follows on its own.** It reads `GET /account/session-config` at boot and picks its
   transport: the access-token interceptor in `jwt` mode, `credentials: 'include'` and no interceptor
-  in `cookie` mode.
+  in `cookie` mode. The same answer carries each tier's lifetime (`lifetimeSeconds`) and the staff
+  cap (`staffLifetimeSeconds`), so the cookie list prints the deployment's numbers, not its own.
 - **The staff idle timeout and lifetime cap apply in both modes**, judged from the session row's clocks. See [sessions](../theory/sessions.md#the-staff-idle-timeout).
 
 A client with no cookie jar logs in with `transport: "bearer"` in the body (`cookie` mode only;

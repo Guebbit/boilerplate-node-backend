@@ -31,7 +31,9 @@ describe('GET /shop', () => {
                 zip: '20100',
                 country: 'IT'
             },
-            returnPostagePayer: 'consumer'
+            returnPostagePayer: 'consumer',
+            termsVersion: '1',
+            backorderPromiseDays: 30
         });
     });
 
@@ -54,6 +56,13 @@ describe('GET /shop', () => {
                 });
             }
         ));
+
+    it('reports the Terms version in force', () =>
+        withEnvironmentOverrides({ NODE_TERMS_VERSION: '2026-10' }, async () => {
+            const response = await api().get('/shop');
+
+            expect(response.body.data).toMatchObject({ termsVersion: '2026-10' });
+        }));
 
     it('never publishes the shop time zone', async () => {
         const response = await api().get('/shop');

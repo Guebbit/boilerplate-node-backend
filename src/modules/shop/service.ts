@@ -9,6 +9,7 @@
 
 import { ConfigError } from '@infrastructure/config/define';
 import type { ReturnPostagePayer, Shop, ShopAddress } from '@types';
+import { termsVersion } from '@modules/account';
 import { shopConfig } from './config';
 
 /**
@@ -161,8 +162,15 @@ export const shipToCountries = (): string[] => {
 export const shopCurrency = (): string => shopConfig().NODE_DEFAULT_CURRENCY;
 
 /**
- * What `GET /shop` answers: the seller's identity, the currency, where the shop ships and where
- * returns go. Everything a visitor is entitled to before a sale (CRD Art. 6(1), e-Commerce
+ * Days a buyer is promised when a backorder names no restock date (CRD Art. 18(1), FTC 435.2). A
+ * legal value, not a setting: orders freeze it into `promisedAt`, and every screen that says
+ * "ships within N days" reads it from `GET /shop`.
+ */
+export const BACKORDER_PROMISE_DAYS = 30;
+
+/**
+ * What `GET /shop` answers: the seller's identity, the currency, where the shop ships, where
+ * returns go, the Terms version and the backorder promise. Everything a visitor is entitled to before a sale (CRD Art. 6(1), e-Commerce
  * Directive Art. 5). Not published: the time zone, and the bank details (those travel per order).
  * @returns the public shop record
  * @throws {ConfigError} when a required variable is unset (only possible under `NODE_ENV=test`)
@@ -172,5 +180,7 @@ export const getShop = (): Shop => ({
     currency: shopCurrency(),
     shipToCountries: shipToCountries(),
     returnAddress: returnAddress(),
-    returnPostagePayer: returnPostagePayer()
+    returnPostagePayer: returnPostagePayer(),
+    termsVersion: termsVersion(),
+    backorderPromiseDays: BACKORDER_PROMISE_DAYS
 });

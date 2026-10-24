@@ -16,6 +16,7 @@ const product: Product = {
     currency: 'EUR',
     inStock: true,
     lowStock: false,
+    buyable: true,
     onHand: 12,
     reserved: 2,
     available: 10
@@ -55,7 +56,8 @@ describe('redactStock', () => {
             price: 10,
             currency: 'EUR',
             inStock: true,
-            lowStock: false
+            lowStock: false,
+            buyable: true
         });
     });
 

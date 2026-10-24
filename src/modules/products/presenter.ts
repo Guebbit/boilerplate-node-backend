@@ -10,7 +10,8 @@ import type { Product } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { availableStock, preorderAllowanceLeft, stockFlags } from './domain/stock';
 import { isPreorder } from './domain/preorder';
-import { isBackorder, type BackorderFacts } from './domain/backorder';
+import { isBackorder } from './domain/backorder';
+import { isBuyable, type BuyableFacts } from './domain/buyable';
 import { lowStockThreshold } from './config';
 import type { ProductDocument } from './model';
 import { shopCurrency } from '@modules/shop';
@@ -18,19 +19,15 @@ import { shopCurrency } from '@modules/shop';
 /**
  * The block of a product's response that is derived, never stored: `available` (the shelf, or for
  * a preorder what is left of its allowance), the `inStock` /
- * `lowStock` flags, `preorder`, `backorder` and the live `currency`. One place, because the document's own
+ * `lowStock` flags, `preorder`, `backorder`, `buyable` and the live `currency`. One place, because the document's own
  * serialisation and a presented document must agree on every one of them.
  *
  * @param facts - the stock counters, the preorder allowance and what decides a preorder
  * @returns the derived fields of a `Product`
  */
-export const derivedStockFields = (
-    facts: BackorderFacts & {
-        onHand?: number;
-        reserved?: number;
-    }
-) => {
-    const preorder = isPreorder(facts, new Date());
+export const derivedStockFields = (facts: BuyableFacts) => {
+    const now = new Date();
+    const preorder = isPreorder(facts, now);
     // A preorder sells against its allowance, not the shelf: nothing exists yet. The day the
     // allowance is full the product reads sold out, whatever the cached shelf says.
     const available = preorder
@@ -44,7 +41,8 @@ export const derivedStockFields = (
         // A preorder waits for stock that does not exist yet: it is not "running low".
         ...(preorder ? { lowStock: false } : {}),
         preorder,
-        backorder: isBackorder(facts, new Date()),
+        backorder: isBackorder(facts, now),
+        buyable: isBuyable(facts, now),
         currency: shopCurrency()
     };
 };

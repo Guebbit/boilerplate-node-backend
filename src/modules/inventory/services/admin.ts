@@ -15,6 +15,7 @@ import { nudgeOutbox } from '@kernel/outbox';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { StockMovementReason, type InventoryLevel, type CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { auditChanges } from '@infrastructure/observability/audit-changes';
 import { ERROR_CODES } from '@api/error-codes';
 import { stockLevelRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
@@ -236,12 +237,27 @@ export const setBackorderLimit = (
 
         return (
             stockLevelRepository
-                .setBackorderLimit(productId, backorderLimit)
-                // The catalogue's copy carries the allowance, which is what a preorder's `available`
-                // counts down from: bring it into step with the new limit.
-                .then(() => refreshStockCache(productId))
-                .then(() => levelFor(productId, product.title))
-                .then((level) => {
+                .findByProductId(productId)
+                // The write is atomic and returns no previous value: read it first for the diff.
+                .then((before) =>
+                    stockLevelRepository
+                        .setBackorderLimit(productId, backorderLimit)
+                        .then(() =>
+                            auditChanges(
+                                { backorderLimit: before?.backorderLimit },
+                                { backorderLimit },
+                                { valued: ['backorderLimit'], named: [] }
+                            )
+                        )
+                )
+                .then((metadata) =>
+                    // The catalogue's copy carries the allowance, which is what a preorder's
+                    // `available` counts down from: bring it into step with the new limit.
+                    refreshStockCache(productId)
+                        .then(() => levelFor(productId, product.title))
+                        .then((level) => ({ level, metadata }))
+                )
+                .then(({ level, metadata }) => {
                     if (!level) return generateReject(404, [t('inventory.product-not-found')]);
 
                     recordAudit(context, {
@@ -249,7 +265,7 @@ export const setBackorderLimit = (
                         outcome: 'success',
                         targetType: 'product',
                         targetId: productId,
-                        metadata: { backorderLimit }
+                        metadata
                     });
 
                     return generateSuccess(level, 200, t('inventory.backorder-limit-success'));

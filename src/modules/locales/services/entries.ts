@@ -23,6 +23,7 @@ import {
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { auditChanges } from '@infrastructure/observability/audit-changes';
 import { localeAuditActions } from '../audit';
 import { normalizeTag, type LocaleEntryDocument } from '../model';
 import { localeEntryRepository, localeRepository } from '../repository';
@@ -169,6 +170,9 @@ export const updateEntry = (
     return findEntryInLanguage(entryId, tag, app).then((entry) => {
         if (!entry) return entryNotFound();
 
+        // Read before the save overwrites the value. The text itself never enters the trail.
+        const moved = auditChanges(entry, payload, { valued: [], named: ['value'] });
+
         return localeEntryRepository
             .saveEntryValue(entry, payload.value)
             .then(({ entry: saved }) => {
@@ -180,7 +184,7 @@ export const updateEntry = (
                     // The key, not the new text. An audit trail records that the Spanish product
                     // title changed and who changed it; storing the copy itself would make the trail
                     // a second, unmanaged copy of the dictionary.
-                    metadata: { locale: tag, app, key: saved.key }
+                    metadata: { locale: tag, app, key: saved.key, ...moved }
                 });
 
                 refreshOverlay();

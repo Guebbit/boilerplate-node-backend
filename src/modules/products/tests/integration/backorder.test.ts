@@ -39,6 +39,7 @@ describe('GET /products/:id', () => {
 
         expect(response.body.data).toMatchObject({
             backorder: true,
+            buyable: true,
             inStock: false,
             preorder: false,
             allowBackorder: true,
@@ -59,7 +60,11 @@ describe('GET /products/:id', () => {
 
         const response = await api().get(`/products/${id}`);
 
-        expect(response.body.data).toMatchObject({ backorder: false, inStock: false });
+        expect(response.body.data).toMatchObject({
+            backorder: false,
+            inStock: false,
+            buyable: false
+        });
     });
 
     it('is a preorder, not a backorder, before its release date', async () => {

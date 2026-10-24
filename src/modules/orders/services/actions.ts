@@ -9,7 +9,7 @@
 
 import { callerForSubject } from '@kernel/permissions';
 import { holds } from '@kernel/ability';
-import type { AuthContext, Order, OrderActions } from '@types';
+import type { AuthContext, ExportOrder, Order, OrderActions } from '@types';
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
 import { OrderStatus } from '@types';
@@ -226,11 +226,11 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
  * @returns the same page, every row carrying its `actions`
  */
 export const withListActions = (
-    page: { items: Order[]; meta: PaginatedMeta },
+    page: { items: ExportOrder[]; meta: PaginatedMeta },
     authContext: AuthContext | undefined
 ): Promise<{ items: Order[]; meta: PaginatedMeta }> =>
     page.items.length === 0
-        ? Promise.resolve(page)
+        ? Promise.resolve({ items: [], meta: page.meta })
         : orderRepository
               .findAll(
                   { _id: { $in: page.items.map((item) => toObjectId(item.id)) } },
@@ -241,11 +241,13 @@ export const withListActions = (
                       documents.map((document) => [String(document._id), document])
                   );
                   return {
-                      items: page.items.map((item) => {
+                      // A row whose document vanished between the two reads is gone: it is dropped,
+                      // since an `Order` always carries its `actions`.
+                      items: page.items.flatMap((item) => {
                           const document = byId.get(item.id);
                           return document
-                              ? { ...item, actions: orderActionsOf(document, authContext) }
-                              : item;
+                              ? [{ ...item, actions: orderActionsOf(document, authContext) }]
+                              : [];
                       }),
                       meta: page.meta
                   };

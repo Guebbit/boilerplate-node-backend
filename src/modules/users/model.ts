@@ -404,7 +404,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
             type: Date
         },
         /*
-         * When the account accepted the terms, and which text (`NODE_TERMS_VERSION` then). Set by
+         * When the account accepted the terms, and which text (`termsVersion` of `GET /shop` then). Set by
          * a signup and by a first sign-in through a provider; left unset for every other creation
          * path (the admin `/users` route, fixtures), which show nobody the terms.
          */

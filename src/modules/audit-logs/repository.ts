@@ -27,6 +27,8 @@ export interface AuditLogSearchFilters {
     /** Exclusive lower bound on `timestamp`, matching the buffer's `> since` behaviour. */
     since?: Date;
     target?: string;
+    /** `true` keeps entries flagged `metadata.ownOrder`, `false` the rest; absent keeps both. */
+    ownOrder?: boolean;
     page?: unknown;
     pageSize?: unknown;
 }
@@ -66,6 +68,18 @@ export const AUDIT_SORT: Record<string, 1 | -1> = { timestamp: -1, _id: -1 };
  */
 const sinceScope = (since?: Date): Record<string, unknown> =>
     since ? { timestamp: { $gt: since } } : {};
+
+/**
+ * `ownOrder` as a scope fragment: the flag is only ever written as `true`, so "not flagged" is
+ * "anything else", absent included.
+ *
+ * @param ownOrder - `true` flagged only, `false` unflagged only, `undefined` both
+ */
+const ownOrderScope = (ownOrder?: boolean): Record<string, unknown> => {
+    if (ownOrder === undefined) return {};
+
+    return { 'metadata.ownOrder': ownOrder ? true : { $ne: true } };
+};
 
 /**
  * Where the next page of an actor's own entries starts, newest first. `timestamp` alone is not
@@ -141,5 +155,6 @@ export const auditLogRepository = {
     create: base.create,
     search: base.search,
     sinceScope,
+    ownOrderScope,
     ownEntriesPage
 };

@@ -111,6 +111,7 @@ flowchart TD
     returns --> orders
     returns --> payments
     returns --> shop
+    shop --> account
     sitemap --> locales
     sitemap --> products
     stats --> invoicing
@@ -139,8 +140,8 @@ flowchart TD
 | --------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `orders`        | access, inventory, products, shop, users                                | cart, delivery, invoicing, payments, returns, stats                   |
 | `cart`          | addresses, delivery, inventory, orders, payments, products, shop, users | notifications, wishlist                                               |
+| `shop`          | account                                                                 | cart, delivery, invoicing, orders, payments, products, returns, stats |
 | `products`      | shop                                                                    | cart, delivery, inventory, orders, sitemap, stock-alerts, wishlist    |
-| `shop`          | —                                                                       | cart, delivery, invoicing, orders, payments, products, returns, stats |
 | `users`         | access                                                                  | account, api-keys, cart, example, orders, stock-alerts, webhooks      |
 | `access`        | —                                                                       | account, api-keys, audit-logs, orders, payments, returns, users       |
 | `delivery`      | inventory, orders, products, shop                                       | cart, notifications, returns                                          |
@@ -148,9 +149,9 @@ flowchart TD
 | `returns`       | access, delivery, inventory, orders, payments, shop                     | stats                                                                 |
 | `inventory`     | products                                                                | cart, delivery, orders, returns                                       |
 | `stats`         | invoicing, orders, payments, returns, shop                              | —                                                                     |
+| `account`       | access, users                                                           | api-keys, shop                                                        |
 | `invoicing`     | orders, payments, shop                                                  | stats                                                                 |
 | `notifications` | cart, delivery, stock-alerts, wishlist                                  | —                                                                     |
-| `account`       | access, users                                                           | api-keys                                                              |
 | `api-keys`      | access, account, users                                                  | —                                                                     |
 | `stock-alerts`  | products, users                                                         | notifications                                                         |
 | `wishlist`      | cart, products                                                          | notifications                                                         |

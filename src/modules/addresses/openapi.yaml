@@ -226,17 +226,17 @@ components:
                     type: string
                     description: The caller's own name for the entry — "home", "office".
                 fullName:
-                    type: string
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressFullName'
                 street:
-                    type: string
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressStreet'
                 city:
-                    type: string
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressCity'
                 zip:
-                    type: string
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressZip'
                 country:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
                 phone:
-                    type: string
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressPhone'
                 default:
                     type: boolean
 
@@ -250,27 +250,17 @@ components:
                     maxLength: 50
                     minLength: 1
                 fullName:
-                    type: string
-                    maxLength: 100
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressFullName'
                 street:
-                    type: string
-                    maxLength: 200
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressStreet'
                 city:
-                    type: string
-                    maxLength: 100
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressCity'
                 zip:
-                    type: string
-                    maxLength: 20
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressZip'
                 country:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
                 phone:
-                    type: string
-                    maxLength: 32
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressPhone'
                 # `true` claims the default slot, absent means "first entry becomes default, later
                 # ones do not". Only a create names it — afterwards the default is the book's
                 # pointer, moved by `PUT /account/addresses/{addressId}/default`.
@@ -291,27 +281,19 @@ components:
                     maxLength: 50
                     minLength: 1
                 fullName:
-                    type: string
-                    maxLength: 100
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressFullName'
                 street:
-                    type: string
-                    maxLength: 200
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressStreet'
                 city:
-                    type: string
-                    maxLength: 100
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressCity'
                 zip:
-                    type: string
-                    maxLength: 20
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressZip'
                 country:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
                 phone:
-                    type: [string, 'null']
-                    maxLength: 32
-                    minLength: 1
+                    oneOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressPhone'
+                        - type: 'null'
 
         # PUT /account/addresses/{addressId} — RFC 9110 §9.3.4: the body IS the new resource, so
         # every writable field this resource has must be nameable and the identity fields are
@@ -326,27 +308,19 @@ components:
                     maxLength: 50
                     minLength: 1
                 fullName:
-                    type: string
-                    maxLength: 100
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressFullName'
                 street:
-                    type: string
-                    maxLength: 200
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressStreet'
                 city:
-                    type: string
-                    maxLength: 100
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressCity'
                 zip:
-                    type: string
-                    maxLength: 20
-                    minLength: 1
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressZip'
                 country:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
                 phone:
-                    type: [string, 'null']
-                    maxLength: 32
-                    minLength: 1
+                    oneOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AddressPhone'
+                        - type: 'null'
 
         AddressesResponse:
             type: object

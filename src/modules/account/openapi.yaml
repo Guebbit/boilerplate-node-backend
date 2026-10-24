@@ -1852,12 +1852,30 @@ components:
         SessionConfig:
             type: object
             additionalProperties: false
-            required: [mode]
+            required: [mode, lifetimeSeconds]
             properties:
                 mode:
                     type: string
                     enum: [jwt, cookie]
                     description: The deployment's `NODE_SESSION_MODE`.
+                lifetimeSeconds:
+                    type: object
+                    additionalProperties: false
+                    required: [short, medium, long]
+                    description: >-
+                        How long a session lasts per "remember me" tier, in seconds
+                        (`NODE_SESSION_TIME_*`). `short` is what an unticked box gets; `long` is
+                        what the box offers today. A client prints these instead of a number of its own.
+                    properties:
+                        short: { type: integer, minimum: 1 }
+                        medium: { type: integer, minimum: 1 }
+                        long: { type: integer, minimum: 1 }
+                staffLifetimeSeconds:
+                    type: integer
+                    minimum: 1
+                    description: >-
+                        The longest a staff or admin session lives from sign-in, whatever the tier
+                        (`NODE_SESSION_LIFETIME_STAFF`). Absent when the cap is off.
 
         SessionTransport:
             type: string

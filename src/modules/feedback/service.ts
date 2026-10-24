@@ -35,6 +35,7 @@ import {
 import type { Lean } from '@infrastructure/persistence/create-repository';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { auditChanges } from '@infrastructure/observability/audit-changes';
 import { feedbackAuditActions } from './audit';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
@@ -204,13 +205,19 @@ const updateStatusById = (
 ): Promise<ResponseSuccess<FeedbackRequestDocument> | ResponseReject> =>
     feedbackRequestRepository.findById(id).then((feedback) => {
         if (!feedback) return generateReject(404, [t('generic.error-not-found')]);
+        // Read before `updateStatus` assigns onto the document. The notes are free text: by name only.
+        const metadata = auditChanges(feedback, payload, {
+            valued: ['status'],
+            named: ['adminNotes']
+        });
+
         return updateStatus(feedback, payload).then((result) => {
             recordAudit(context, {
                 action: feedbackAuditActions.ADMIN_FEEDBACK_STATUS_UPDATED,
                 outcome: 'success',
                 targetType: 'feedback',
                 targetId: id,
-                metadata: { status: payload.status }
+                metadata
             });
             return result;
         });

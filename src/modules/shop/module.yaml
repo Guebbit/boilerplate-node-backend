@@ -1,7 +1,8 @@
 summary: 'The shop itself: who it is, where it is, where goods come back to, what it ships to, and the one currency it trades in.'
 subdomain: supporting
 group: shop
-dependsOn: []
+dependsOn:
+    - account # termsVersion: which text of the Terms is in force, printed by GET /shop
 noAudit: "Reads the deployer's own configuration and writes nothing, so there is no subject an audit row could name."
 frontend:
     counterparts: []

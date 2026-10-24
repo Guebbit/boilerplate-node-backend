@@ -242,6 +242,23 @@ describe('search', () => {
 });
 
 describe('updateById', () => {
+    it('audits which text fields moved, by name only', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const { user, context } = await aCustomer();
+        const mine = await createExample({ userId: user.id, title: 'Old', body: 'Same' });
+
+        await exampleService.updateById(
+            String(mine._id),
+            { title: ' New ', body: 'Same' },
+            context
+        );
+
+        const row = auditSpy.mock.calls
+            .map(([entry]) => entry)
+            .find((entry) => entry.action === exampleAuditActions.EXAMPLE_UPDATED);
+        expect(row?.metadata).toEqual({ changedFields: ['title'] });
+    });
+
     it('edits the caller’s own example and trims what it writes', async () => {
         const { user, context } = await aCustomer();
         const mine = await createExample({ userId: user.id });

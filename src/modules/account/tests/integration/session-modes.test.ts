@@ -239,11 +239,15 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         setEnvironment({ NODE_SESSION_MODE: mode });
     });
 
-    it('answers what mode it is, with no credential at all', async () => {
+    it('answers what mode it is and how long a session lasts, with no credential at all', async () => {
         const response = await api().get('/account/session-config');
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({ mode });
+        expect(response.body.data).toEqual({
+            mode,
+            lifetimeSeconds: { short: 86_400, medium: 604_800, long: 2_592_000 },
+            staffLifetimeSeconds: 86_400
+        });
     });
 
     it('starts a session the next request is authenticated by', async () => {

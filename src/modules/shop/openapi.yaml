@@ -16,8 +16,8 @@ paths:
             description: >-
                 Everything a visitor is entitled to know before a sale: the seller's legal identity
                 (Consumer Rights Directive Art. 6(1), e-Commerce Directive Art. 5), the one currency
-                every price is quoted in, the countries the shop ships to, and where returned goods
-                go. Public and cheap to read; it never changes without a redeploy. Not published:
+                every price is quoted in, the countries the shop ships to, where returned goods
+                go, the version of the Terms in force and the backorder promise in days. Public and cheap to read; it never changes without a redeploy. Not published:
                 the shop's time zone, and the bank-transfer details, which travel on each order.
             operationId: getShop
             security: []
@@ -75,7 +75,9 @@ components:
                     currency,
                     shipToCountries,
                     returnAddress,
-                    returnPostagePayer
+                    returnPostagePayer,
+                    termsVersion,
+                    backorderPromiseDays
                 ]
             properties:
                 legalName:
@@ -117,6 +119,17 @@ components:
                     $ref: '#/components/schemas/ShopAddress'
                 returnPostagePayer:
                     $ref: '#/components/schemas/ReturnPostagePayer'
+                termsVersion:
+                    type: string
+                    description: >-
+                        Which text of the Terms is in force (`NODE_TERMS_VERSION`, `1` by default).
+                        An account stores the version it accepted beside the date (`User.termsVersion`).
+                backorderPromiseDays:
+                    type: integer
+                    minimum: 1
+                    description: >-
+                        Days a buyer is promised when a backorder names no restock date: "ships
+                        within N days". A legal value the server fixes (CRD Art. 18(1)), not a setting.
 
         ShopEnvelope:
             type: object

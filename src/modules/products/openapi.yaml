@@ -561,7 +561,7 @@ components:
         ProductAdmin:
             type: object
             additionalProperties: false
-            required: [id, title, price, currency, inStock, lowStock, translations]
+            required: [id, title, price, currency, inStock, lowStock, buyable, translations]
             description: >-
                 A product with every language it has a row for, not just the caller's resolved
                 one — what the editor's form needs to populate its tabs. `title`/`description`
@@ -625,6 +625,14 @@ components:
                     $ref: '#/components/schemas/RestockDate'
                 # Derived, never stored: `active && purchasable && releaseDate > now`. Turns false by
                 # itself when the date passes, so nothing has to run on the release day.
+                buyable:
+                    type: boolean
+                    readOnly: true
+                    description: >-
+                        A shopper can order it right now: visible, on sale, and something to order
+                        (shelf units, room in a preorder's allowance, or an open backorder). The one
+                        answer behind the add-to-cart button and "notify me", so a client never
+                        re-derives it from the other flags.
                 preorder:
                     type: boolean
                     readOnly: true
@@ -1321,7 +1329,7 @@ components:
         Product:
             type: object
             additionalProperties: false
-            required: [id, title, price, currency, inStock, lowStock]
+            required: [id, title, price, currency, inStock, lowStock, buyable]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -1416,6 +1424,14 @@ components:
                     $ref: '#/components/schemas/RestockDate'
                 # Derived, never stored: `active && purchasable && releaseDate > now`. Turns false by
                 # itself when the date passes, so nothing has to run on the release day.
+                buyable:
+                    type: boolean
+                    readOnly: true
+                    description: >-
+                        A shopper can order it right now: visible, on sale, and something to order
+                        (shelf units, room in a preorder's allowance, or an open backorder). The one
+                        answer behind the add-to-cart button and "notify me", so a client never
+                        re-derives it from the other flags.
                 preorder:
                     type: boolean
                     readOnly: true

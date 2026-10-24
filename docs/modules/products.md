@@ -96,9 +96,10 @@ buyer pays, what VAT is charged, what shipping weighs, the buyer's right of with
 the product is published or on sale, so "who removed the withdrawal right on Tuesday" and "lower,
 sell, restore" are readable from the audit trail instead of rebuilt from frozen order lines.
 Free text and the picture are recorded by name only, as `metadata.changedFields` (`title`,
-`description`, `image`): the trail never copies catalogue prose. The rule is the same for every
-non-text field, so a field added later is covered by default. A value sent unchanged, or a field
-left out, writes nothing.
+`description`, `image`): the trail never copies catalogue prose. Both come from the shared `auditChanges`
+(`infrastructure/observability/audit-changes.ts`), which audits an explicit allowlist: a field added
+later is invisible until someone files it under "by value" or "by name". A value sent unchanged, or
+a field left out, writes nothing.
 
 Deletion is soft by default: it stamps `deletedAt` (and leaves `active` alone), with a restore route, because an order that
 embedded a product still has to render months later. An admin can still ask for a hard delete

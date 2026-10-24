@@ -457,7 +457,7 @@ describe('setBackorderLimit', () => {
             expect.objectContaining({
                 action: inventoryAuditActions.ADMIN_BACKORDER_LIMIT_SET,
                 targetId: productId,
-                metadata: { backorderLimit: 8 }
+                metadata: { changes: { backorderLimit: { from: 5, to: 8 } } }
             })
         );
         const ledger = await inventoryService.listMovements({ productId });
