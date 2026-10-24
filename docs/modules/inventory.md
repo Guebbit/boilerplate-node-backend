@@ -56,7 +56,7 @@ to a stock count is a transition here.**
 
 A new product's stock level arrives as `product.created` through the outbox, which delivers at
 least once. `openLevel` inserts the row at zero and books nothing, so a redelivery finds it and
-changes nothing. A product has no stock until a receipt gives it some: `POST /inventory/receipts` is
+changes nothing. A product has no stock until a receipt gives it some: `POST /inventory/levels/{productId}/receive` is
 the only transition that creates units, so every unit has a ledger row and a caller holding
 `create:StockMovement`.
 
@@ -69,7 +69,7 @@ the only transition that creates units, so every unit has a ledger row and a cal
 | `releaseLinesForOrder`      | a remainder cancel ([`returns`](./returns.md), through `orders`)                                | only the cancelled units come back                                                                                                         |
 | `releaseForOrder`           | order cancelled, or the sweep (a stale hold timed out)                                          | units come back                                                                                                                            |
 | `releaseCommittedForOrder`  | a PAID order cancelled before dispatch                                                          | the claim is given up; the units never left the shelf                                                                                      |
-| `receive` (with allocation) | a delivery lands, `POST /inventory/receipts`                                                    | the units arrive, then go to the paid [preorders](./inventory-reservations.md#preorders) waiting, oldest payment first, in one transaction |
+| `receive` (with allocation) | a delivery lands, `POST /inventory/levels/{productId}/receive`                                  | the units arrive, then go to the paid [preorders](./inventory-reservations.md#preorders) waiting, oldest payment first, in one transaction |
 | `restockReturnedLines`      | goods a customer sent back are received ([`returns`](./returns.md))                             | the returned lines go back on `onHand`, one `restock` movement each — no reservation claimed; the return's own once-only move is the guard |
 
 ::: warning Exactly-once, by construction

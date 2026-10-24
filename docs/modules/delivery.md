@@ -216,7 +216,7 @@ sequenceDiagram
     participant I as inventory
     participant O as outbox
     participant D as delivery
-    A->>I: POST /inventory/receipts
+    A->>I: POST /inventory/levels/{productId}/receive
     I->>I: receive, then allocate oldest payment first (one transaction)
     I->>O: inventory.backorder_allocated {orderId, productId, waiting}
     O->>D: at least once

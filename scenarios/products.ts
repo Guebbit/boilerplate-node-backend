@@ -393,7 +393,7 @@ export const productFixtures = [...namedProducts, ...fillerProductRows];
  * How many units each product's OPENING RECEIPT brings in — not a seeded column.
  *
  * Every row above seeds at the schema's `onHand: 0`, and `scenarios/flows/shop-history.ts` puts
- * these on the shelf through `POST /inventory/receipts` before the first checkout, so the demo's
+ * these on the shelf through `POST /inventory/levels/{productId}/receive` before the first checkout, so the demo's
  * stock is stock the application itself received and every unit is accounted for by a movement
  * row. `scratchPostOutOfStock` is absent on purpose: a product that never took delivery.
  */

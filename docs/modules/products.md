@@ -83,7 +83,7 @@ representation, so a client never has to guess from an absent number. A cached p
 keyed by the caller's reach, so one reader's counters are never served to another.
 
 **A new product has no stock.** `POST /products` takes no `onHand` (a body naming one is refused
-`422`): stock is not a product field, and units enter only through `POST /inventory/receipts`, which
+`422`): stock is not a product field, and units enter only through `POST /inventory/levels/{productId}/receive`, which
 leaves a ledger row and needs `create:StockMovement`. The product form of a caller who holds that key
 creates the product and then receives the opening count with an `Idempotency-Key`; if the second
 call fails the product stays at zero, a valid state, and the page says to add stock from Inventory.

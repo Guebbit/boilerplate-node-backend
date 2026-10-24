@@ -50,15 +50,20 @@ router.put(
 // GET /inventory/movements — the ledger, newest first
 router.get('/movements', requirePermission('read', 'StockLevel'), getStockMovements);
 
-// POST /inventory/receipts — a supplier delivery lands. `create:StockMovement`: the key stock never
+// POST /inventory/levels/:productId/receive — a supplier delivery lands. `create:StockMovement`: the key stock never
 // moves without — see `shared/authorization-keys.yaml`. `idempotencyKey`: a retried receipt must
 // replay, not count the delivery twice.
-router.post('/receipts', requirePermission('create', 'StockMovement'), idempotencyKey, postReceipt);
+router.post(
+    '/levels/:productId/receive',
+    requirePermission('create', 'StockMovement'),
+    idempotencyKey,
+    postReceipt
+);
 
-// POST /inventory/adjustments — a stocktake correction, signed. Same replay guard as receipts:
+// POST /inventory/levels/:productId/adjust — a stocktake correction, signed. Same replay guard as receipts:
 // a retried delta applied twice is a wrong stock count.
 router.post(
-    '/adjustments',
+    '/levels/:productId/adjust',
     requirePermission('create', 'StockMovement'),
     idempotencyKey,
     postAdjustment

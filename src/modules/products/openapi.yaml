@@ -106,7 +106,7 @@ paths:
                 one entry per locale — the fallback locale (`NODE_FALLBACK_LOCALE`) MUST be
                 present and non-null, since a product with nothing to fall back to cannot exist.
                 See `PATCH /products/{id}` for the three-way table a locale entry follows. A new
-                product starts with no stock: units enter only through `POST /inventory/receipts`, the
+                product starts with no stock: units enter only through `POST /inventory/levels/{productId}/receive`, the
                 one transition that creates them, which needs `create:StockMovement` and leaves a ledger
                 row. A client that wants an opening count creates the product, then receives it.
             operationId: createProduct

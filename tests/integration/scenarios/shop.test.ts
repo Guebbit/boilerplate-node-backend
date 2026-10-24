@@ -516,7 +516,7 @@ describe('the history reads as a history', () => {
 
     it('accounts for every unit of stock with a movement the app wrote', async () => {
         // Nothing seeds `onHand`: the catalogue starts empty and takes delivery through
-        // `POST /inventory/receipts`, so a product with stock and no receipt cannot exist. Rather
+        // `POST /inventory/levels/{productId}/receive`, so a product with stock and no receipt cannot exist. Rather
         // than trust the mirror alone, this reconciles it against the ledger it was copied FROM —
         // `stockmovements`'s own docblock: summing `onHandDelta` over a product's rows reproduces
         // the counter, which is the module's stated source of truth

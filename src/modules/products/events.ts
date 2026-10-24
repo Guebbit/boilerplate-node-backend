@@ -40,7 +40,7 @@ declare module '@kernel/events' {
          * A product was created. The document is written with `onHand: 0`, and `inventory` (which
          * already imports this module, so an import back here would cycle) is the one and only
          * listener: it opens the product's stock level at zero. Stock never rides this event: units
-         * enter only through `POST /inventory/receipts`, which moves the counter and writes the
+         * enter only through `POST /inventory/levels/{productId}/receive`, which moves the counter and writes the
          * ledger row together. Never repeat this for an UPDATE: a past `product.stock_moved`
          * event reacted to a counter a separate write had already changed, so a listener failure
          * left a moved counter with no ledger row explaining it.

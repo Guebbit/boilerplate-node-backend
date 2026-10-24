@@ -327,8 +327,6 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
         kind: () => 'return',
         fulfillmentOrderId: () => undefined
     },
-    receiveStock: { productId: (world) => world.productId },
-    adjustStock: { productId: (world) => world.productId },
     changePassword: {
         currentPassword: () => PLAIN_PASSWORD,
         passwordConfirm: (_world, payload) => payload.password

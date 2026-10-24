@@ -43,7 +43,7 @@ has lapsed. There is no endpoint for it: a manual run is `npm run job reap:previ
 
 Standard CRUD for the product catalogue. Read endpoints are public and Redis-cached. Write endpoints need `create:Product`, `update:Product` or `delete:Product` respectively, and invalidate the cache on change. Both single-item and bulk operations are supported.
 
-Stock is read-only on this surface. `onHand`, `reserved` and `available` are serialized on every product, and no product body accepts a counter: an absolute stock write on a form overwrites whatever sold while it was open, so a product's stock, an opening count included, is `POST /inventory/receipts` or `POST /inventory/adjustments`, both signed and both audited.
+Stock is read-only on this surface. `onHand`, `reserved` and `available` are serialized on every product, and no product body accepts a counter: an absolute stock write on a form overwrites whatever sold while it was open, so a product's stock, an opening count included, is `POST /inventory/levels/{productId}/receive` or `POST /inventory/levels/{productId}/adjust`, both signed and both audited.
 
 ## Cart
 

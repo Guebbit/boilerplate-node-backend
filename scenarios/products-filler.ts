@@ -206,7 +206,7 @@ export interface FillerProduct {
     /**
      * What the opening receipt brings in, NOT a seeded column — `./products` writes every row at
      * `onHand: 0` and `scenarios/flows/shop-history.ts` puts this on the shelf through
-     * `POST /inventory/receipts`, so the shop's stock is stock the app itself received.
+     * `POST /inventory/levels/{productId}/receive`, so the shop's stock is stock the app itself received.
      */
     openingStock: number;
     categories: string[];

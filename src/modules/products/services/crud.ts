@@ -383,8 +383,8 @@ const applyUpdate = (
      * An absolute write would be wrong here: setting a count to 40 says nothing about what
      * happened, so the ledger would have to guess by subtracting the old value, and two concurrent
      * edits could each overwrite the other's sale. Counters move only through signed, conditional
-     * transitions in `@modules/inventory` (`POST /inventory/receipts`,
-     * `POST /inventory/adjustments`), each of which says what happened and can't lose a sale.
+     * transitions in `@modules/inventory` (`POST /inventory/levels/{productId}/receive`,
+     * `POST /inventory/levels/{productId}/adjust`), each of which says what happened and can't lose a sale.
      */
     if (data.description !== undefined) product.description = data.description;
     if (data.active !== undefined) product.active = data.active;

@@ -51,7 +51,7 @@ says, and `available` is identical in both models at every moment.
 | `releaseForOrder`          | the sweep                                                                                                                  | `reserved` −n                   | `expire`        |
 | `releaseCommittedForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing (a paid, unshipped order)                         | `reserved` −n                   | `release`       |
 | `reserveForOrder`          | checkout, for a [preorder](#preorders) line, or the owed part of a [backorder](#backorders) line                           | `backordered` +n                | `backorder`     |
-| `receive`                  | `POST /inventory/receipts`, for the paid claims waiting (every write that raises `available` does this)                    | `backordered` −n, `reserved` +n | `allocate`      |
+| `receive`                  | `POST /inventory/levels/{productId}/receive`, for the paid claims waiting (every write that raises `available` does this)  | `backordered` −n, `reserved` +n | `allocate`      |
 
 **`releaseCommittedForOrder` is never merged into `releaseForOrder`**, on purpose: the sweep only
 ever releases a stale HOLD, and folding the paid case into that same function would let it put a
@@ -82,7 +82,7 @@ not synced inside the transaction (that write cannot roll back), and the caller 
 `refreshStockCacheForOrder` after the commit (which never rejects: a failed read there only leaves the catalogue copy stale until the next stock change).
 
 Two more `reason` values exist and belong to no reservation at all: `receive`
-(`POST /inventory/receipts`) and `adjust` (`POST /inventory/adjustments`), which move `onHand`
+(`POST /inventory/levels/{productId}/receive`) and `adjust` (`POST /inventory/levels/{productId}/adjust`), which move `onHand`
 directly.
 
 ## Preorders
@@ -115,13 +115,13 @@ flowchart LR
     A -->|"shipLinesForOrder"| S["shipped<br/><i>onHand −n · reserved −n</i>"]
 ```
 
-| Moment                  | What happens to a preorder line                                                                             |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
-| before payment          | today's windows: 15 minutes by card, a week by bank transfer, then the sweep gives the allowance back       |
-| payment                 | `held → committed`, no expiry; `committedAt` is stamped by the same claim, so it is the payment's instant   |
-| stock arrives           | `POST /inventory/receipts` receives and **allocates in the same transaction**, oldest `committedAt` first   |
-| a short delivery        | the order gets what exists; the rest stays a claim and keeps waiting                                        |
-| cancelled while waiting | the allowance comes back (`backordered` −n); `restock` is never used, it would add stock that never existed |
+| Moment                  | What happens to a preorder line                                                                                             |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| before payment          | today's windows: 15 minutes by card, a week by bank transfer, then the sweep gives the allowance back                       |
+| payment                 | `held → committed`, no expiry; `committedAt` is stamped by the same claim, so it is the payment's instant                   |
+| stock arrives           | `POST /inventory/levels/{productId}/receive` receives and **allocates in the same transaction**, oldest `committedAt` first |
+| a short delivery        | the order gets what exists; the rest stays a claim and keeps waiting                                                        |
+| cancelled while waiting | the allowance comes back (`backordered` −n); `restock` is never used, it would add stock that never existed                 |
 
 Allocation turns the claim into an ordinary hold on a real unit: `backordered` falls and `reserved`
 rises by the same number, so `available` drops by what was allocated and the units never look

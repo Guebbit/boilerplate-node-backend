@@ -223,7 +223,7 @@ const plannedDemand = (): Map<string, number> => {
 };
 
 /**
- * Put every product's opening stock on the shelf — `POST /inventory/receipts`, before anyone can
+ * Put every product's opening stock on the shelf — `POST /inventory/levels/{productId}/receive`, before anyone can
  * buy anything, since the catalogue seeds at `onHand: 0`.
  *
  * Each receipt is the catalogue's own opening figure PLUS what the flows are about to buy, so a

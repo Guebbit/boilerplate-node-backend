@@ -18,8 +18,8 @@ describe('inventory routes', () => {
             'GET /preorders',
             'PUT /levels/:productId/backorder-limit',
             'GET /movements',
-            'POST /receipts',
-            'POST /adjustments',
+            'POST /levels/:productId/receive',
+            'POST /levels/:productId/adjust',
             'POST /reservations/sweep'
         ]);
     });
@@ -29,8 +29,8 @@ describe('inventory routes', () => {
         'GET /preorders',
         'PUT /levels/:productId/backorder-limit',
         'GET /movements',
-        'POST /receipts',
-        'POST /adjustments',
+        'POST /levels/:productId/receive',
+        'POST /levels/:productId/adjust',
         'POST /reservations/sweep'
     ])('%s is reachable only by an authenticated admin', (signature) => {
         const guards = guardsOn(router, signature);

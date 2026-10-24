@@ -1374,10 +1374,10 @@ paths:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1preorders'
     /inventory/movements:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1movements'
-    /inventory/receipts:
-        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1receipts'
-    /inventory/adjustments:
-        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1adjustments'
+    /inventory/levels/{productId}/receive:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1levels~1{productId}~1receive'
+    /inventory/levels/{productId}/adjust:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1levels~1{productId}~1adjust'
     /inventory/reservations/sweep:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1reservations~1sweep'
 

@@ -51,7 +51,7 @@ export const CARD = {
  */
 export const receiveStock = (owner: Caller, productId: string, quantity: number): Promise<void> =>
     owner
-        .call('POST', '/inventory/receipts', { productId, quantity, note: 'Opening stock' })
+        .call('POST', `/inventory/levels/${productId}/receive`, { quantity, note: 'Opening stock' })
         .then(() => undefined);
 
 /**
