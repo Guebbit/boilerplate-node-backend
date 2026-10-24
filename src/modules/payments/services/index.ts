@@ -21,13 +21,13 @@ import {
     applyWebhookDelivery,
     applyWebhookSettlement
 } from './settlement';
-import { refundByOrder, refundForReturn } from './refunds';
+import { refundByOrder, refundForReturn, settleRefundByHand } from './refunds';
 import { retryOpenRefunds, reconcileStalePayments } from './effects';
 import { recordOfflinePayment } from './offline';
 import { openTransferPayment } from './transfer';
 import { mailPaymentReceived, mailRefundIssued } from './notify';
 import { callerScope, payerScope, buyerOrderScope, readsAllPayments } from './scope';
-import { getForOrder, withActions } from './view';
+import { getForOrder, presentWithActions, withActions } from './view';
 import {
     detachUserId,
     findOwnPayments,
@@ -60,6 +60,7 @@ export const paymentService = {
     getForOrder,
     refundByOrder,
     refundForReturn,
+    settleRefundByHand,
     retryOpenRefunds,
     reconcileStalePayments,
     recordOfflinePayment,
@@ -77,6 +78,7 @@ export const paymentService = {
     mailPaymentReceived,
     mailRefundIssued,
     withActions,
+    presentWithActions,
     callerScope,
     payerScope,
     buyerOrderScope,

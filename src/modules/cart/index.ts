@@ -14,3 +14,5 @@ export * from './events';
 export * from './domain';
 
 export type * from './model';
+
+export type * from './presenter';

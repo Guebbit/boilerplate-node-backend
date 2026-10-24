@@ -8,6 +8,7 @@
 import { expectedDateOf, judgeMove, judgeSlip, needsDueNotice, slippedDays } from '../../domain';
 
 const DAY = 86_400_000;
+const HOUR = 3_600_000;
 const AGREED = new Date('2026-12-01T00:00:00Z');
 
 /** A date `days` after the agreed one. */
@@ -107,20 +108,21 @@ describe('needsDueNotice', () => {
 
     it.each([
         ['a date that passed and was never noticed', { expectedAt: afterAgreed(10) }, true],
+        ['a date exactly now', { expectedAt: now }, true],
+        // The sweep looks one day ahead, so the buyer hears before the date is missed.
+        ['a date 23 hours ahead', { expectedAt: new Date(now.getTime() + 23 * HOUR) }, true],
+        ['a date 25 hours ahead', { expectedAt: new Date(now.getTime() + 25 * HOUR) }, false],
+        ['a date still far ahead', { expectedAt: afterAgreed(30) }, false],
         [
-            'a date that passed after the last notice',
-            { expectedAt: afterAgreed(10), lastNoticeAt: afterAgreed(2) },
-            true
-        ],
-        [
-            'a date that passed but was noticed since',
-            { expectedAt: afterAgreed(10), lastNoticeAt: afterAgreed(12) },
+            'a date already told about',
+            { expectedAt: afterAgreed(10), dueNoticeFor: afterAgreed(10) },
             false
         ],
-        ['a date exactly now', { expectedAt: now }, true],
-        // The sweep never writes ahead of the date: the buyer is told when it has come and gone.
-        ['a date still ahead', { expectedAt: afterAgreed(30) }, false],
-        ['a date a day ahead', { expectedAt: afterAgreed(20) }, false],
+        [
+            'a date moved later than the one told about',
+            { expectedAt: afterAgreed(15), dueNoticeFor: afterAgreed(10) },
+            true
+        ],
         ['no expected date at all', {}, false]
     ])('%s', (_name, facts, expected) => {
         expect(needsDueNotice(facts, now)).toBe(expected);

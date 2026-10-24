@@ -20,8 +20,9 @@ import {
     WEBHOOK_DELIVERY_SORT
 } from '../repository';
 import type { WebhookDelivery } from '@types';
-import type { WebhookDeliveryDocument } from '../model';
 import { attemptDelivery } from './attempt';
+import { deliveryActions, standingOn } from './actions';
+import { presentWebhookDelivery } from '../presenters';
 import { webhooksAuditActions } from '../audit';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -32,6 +33,12 @@ export interface DeliveryListFilters {
     page?: unknown;
     pageSize?: unknown;
 }
+
+/**
+ * A delivery row's subscription id as a string. A lean row carries the stored ObjectId although
+ * the wire type says string, so the conversion is real, not decoration.
+ */
+const subscriptionIdOf = (row: { subscriptionId: unknown }): string => String(row.subscriptionId);
 
 /**
  * List this tenant's delivery log, newest first.
@@ -45,16 +52,30 @@ export const list = (
     context: TenantCallerContext,
     filters: DeliveryListFilters
 ): Promise<PaginatedResult<WebhookDelivery>> =>
-    webhookDeliveryRepository.search(
-        {
-            subscription: filters.subscriptionId,
-            status: filters.status,
-            page: filters.page,
-            pageSize: filters.pageSize
-        },
-        { tenant: context.caller.tenantId },
-        WEBHOOK_DELIVERY_SORT
-    );
+    webhookDeliveryRepository
+        .search(
+            {
+                subscription: filters.subscriptionId,
+                status: filters.status,
+                page: filters.page,
+                pageSize: filters.pageSize
+            },
+            { tenant: context.caller.tenantId },
+            WEBHOOK_DELIVERY_SORT
+        )
+        .then(({ items, meta }) => {
+            const standing = standingOn(context.caller);
+            // One read for the page: which of its subscriptions are switched on.
+            return webhookSubscriptionRepository
+                .findEnabledIdsAmong([...new Set(items.map((row) => subscriptionIdOf(row)))])
+                .then((enabled) => ({
+                    items: items.map((row) => ({
+                        ...row,
+                        actions: deliveryActions(enabled.has(subscriptionIdOf(row)), standing)
+                    })),
+                    meta
+                }));
+        });
 
 /** The 409 both "somebody else holds the lease" cases below answer with. */
 const rejectInProgress = (): ResponseReject =>
@@ -82,12 +103,13 @@ const rejectInProgress = (): ResponseReject =>
  * double-send.
  *
  * @returns a 404 outside this tenant's log, or when the subscription itself no longer exists; a
- *   409 when a live worker (or another replay) already holds the row's lease
+ *   409 `WEBHOOK_SUBSCRIPTION_DISABLED` while the subscription is switched off; a 409
+ *   `WEBHOOK_DELIVERY_IN_PROGRESS` when a live worker (or another replay) holds the row's lease
  */
 export const replay = async (
     id: string,
     context: TenantCallerContext
-): Promise<ResponseSuccess<WebhookDeliveryDocument> | ResponseReject> => {
+): Promise<ResponseSuccess<WebhookDelivery> | ResponseReject> => {
     const delivery = await webhookDeliveryRepository.findByIdInTenant(id, context.caller.tenantId);
     if (!delivery) return generateReject(404, [t('generic.error-not-found')]);
 
@@ -95,6 +117,14 @@ export const replay = async (
         String(delivery.subscriptionId)
     );
     if (!subscription) return generateReject(404, [t('webhooks.subscription-not-found')]);
+    // Before the claim, for the same reason as the 404 above: a refusal must leave the row alone.
+    if (subscription.disabledAt)
+        return generateReject(409, [
+            {
+                code: ERROR_CODES.WEBHOOK_SUBSCRIPTION_DISABLED,
+                message: t('webhooks.subscription-disabled')
+            }
+        ]);
 
     const claimed = await webhookDeliveryRepository.claimForReplay(id);
     if (!claimed) return rejectInProgress();
@@ -108,5 +138,15 @@ export const replay = async (
         targetType: 'webhook_delivery',
         targetId: id
     });
-    return generateSuccess(updated);
+    // Read again rather than assumed: a failed replay that exhausts the chain can trip the
+    // auto-disable guard, and the row's `actions.replay` must say so.
+    const enabled = await webhookSubscriptionRepository.findEnabledIdsAmong([
+        String(updated.subscriptionId)
+    ]);
+    return generateSuccess(
+        presentWebhookDelivery(
+            updated,
+            deliveryActions(enabled.has(String(updated.subscriptionId)), standingOn(context.caller))
+        )
+    );
 };

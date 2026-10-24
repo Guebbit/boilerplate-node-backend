@@ -13,7 +13,7 @@ import type { Document, Model, Types } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { WebhookDeliveryStatus } from '@types';
 import { getWebhookDeliveryRetentionDays } from './config';
-import { liveRingEntries } from './secrets';
+import { liveRingEntries, retiringRingSecrets } from './secrets';
 
 /**
  * One secret in a subscription's ring — see `./secrets` for encryption at rest and rotation.
@@ -33,9 +33,17 @@ export interface WebhookSubscriptionDocument extends Document {
     url: string;
     description?: string;
     eventTypes: string[];
-    enabled: boolean;
     consecutiveFailures: number;
+    /**
+     * When the subscription was switched off, for any reason. Absent while it is enabled: there
+     * is no stored `enabled`, so the two can never disagree (the wire `enabled` is derived).
+     */
     disabledAt?: Date;
+    /**
+     * Set together with {@link disabledAt}, and only by the failure guard (`repository.ts#disable`)
+     * — what tells an auto-disable from a pause by hand.
+     */
+    autoDisabledAt?: Date;
     /**
      * When the CURRENT failure streak began — the first failure after a success (or after
      * creation), cleared on the next success. `domain#shouldAutoDisable`'s time floor reads this;
@@ -90,11 +98,6 @@ export const webhookSubscriptionSchema = new Schema<
                 message: 'A subscription must name at least one event type.'
             }
         },
-        enabled: {
-            type: Boolean,
-            required: true,
-            default: true
-        },
         consecutiveFailures: {
             type: Number,
             required: true,
@@ -104,6 +107,9 @@ export const webhookSubscriptionSchema = new Schema<
             type: Date
         },
         disabledAt: {
+            type: Date
+        },
+        autoDisabledAt: {
             type: Date
         },
         // `_id: false` PLUS an explicit `id`: `./secrets.ts`'s `mintRingSecret` mints the id itself
@@ -131,23 +137,28 @@ export const webhookSubscriptionSchema = new Schema<
 // `publish` and the admin list both ask.
 webhookSubscriptionSchema.index({ tenant: 1, createdAt: -1 });
 
-// Which enabled subscriptions listen for event X — `publish`'s fan-out read.
-webhookSubscriptionSchema.index({ enabled: 1, eventTypes: 1 });
+// Which enabled subscriptions (no `disabledAt`) listen for event X — `publish`'s fan-out read.
+webhookSubscriptionSchema.index({ disabledAt: 1, eventTypes: 1 });
 
 /**
  * Wire shape: `_id` → `id`, `secrets` collapses to `secretIds` (the live ring's ids, never its
- * ciphertext or plaintext) — a subscription response must never be the thing an attacker reads to
- * forge a delivery.
+ * ciphertext or plaintext) plus `retiringSecrets` (which of them stop signing, and when) — a
+ * subscription response must never be the thing an attacker reads to forge a delivery. `enabled`
+ * is derived here from `disabledAt`.
  *
  * `secrets` is read and deleted INSIDE `after`, rather than named in `omit`: `omit` runs before
  * `after` (see `applySerialization`), so a field named there is already gone by the time `after`
- * could derive anything from it.
+ * could derive anything from it. The transform, not a presenter, because the list reads lean rows
+ * through `normalize` and never meets a presenter.
  */
 export const applyWebhookSubscriptionTransform = applySerialization(webhookSubscriptionSchema, {
     omit: ['tenant', 'ownerUserId', 'failingSince'],
     after: (serialized) => {
-        const secrets = serialized.secrets as WebhookSecretRingEntry[] | undefined;
-        serialized.secretIds = liveRingEntries(secrets ?? []).map((entry) => entry.id);
+        // `as`: the transform sees an untyped record; `secrets` is this schema's own array field.
+        const secrets = (serialized.secrets as WebhookSecretRingEntry[] | undefined) ?? [];
+        serialized.secretIds = liveRingEntries(secrets).map((entry) => entry.id);
+        serialized.retiringSecrets = retiringRingSecrets(secrets);
+        serialized.enabled = !serialized.disabledAt;
         delete serialized.secrets;
     }
 });

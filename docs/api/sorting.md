@@ -28,7 +28,7 @@ case-insensitively (`Apple` before `banana`).
 ## Who can be sorted, by what
 
 The list is an **enum per resource** in that module's `openapi.yaml` (`ProductSort`, `UserSort`,
-`OrderSort`, `PaymentSort`, `FeedbackRequestSort`, `ExampleSort`). It is a whitelist on purpose: an unindexed or derived field
+`OrderSort`, `PaymentSort`, `FeedbackRequestSort`, `ExampleSort`, `WebhookSubscriptionSort`). It is a whitelist on purpose: an unindexed or derived field
 would let a stranger ask for a collection scan.
 
 | Resource | Sortable fields |
@@ -39,6 +39,7 @@ would let a stranger ask for a collection scan.
 | Payments | `createdAt` · `amount` · `payBy` (a payment with no bank-transfer deadline counts as the earliest) |
 | Feedback | `createdAt` · `status` · `email` |
 | Examples | `createdAt` · `title` · `status` |
+| Webhook subscriptions | `createdAt` · `url` |
 
 ## How it flows
 

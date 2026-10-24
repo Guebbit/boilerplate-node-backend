@@ -148,7 +148,7 @@ describe('listPayments by displayStatus', () => {
 });
 
 describe('listPayments rows carry the actions of the caller', () => {
-    it('offers a refund only on money that arrived and is not all returned, and never pay', async () => {
+    it('offers a refund only on money that arrived and is not all returned, hand settlement only on a pending hand-paid record, and never pay', async () => {
         const open = await seedPayment();
         const declined = await seedPayment({ status: 'declined' });
         const returned = await seedPayment({
@@ -156,13 +156,46 @@ describe('listPayments rows carry the actions of the caller', () => {
             refunds: [refundRecord({ amount: 50 })]
         });
 
+        const waiting = refundRecord({ amount: 20, status: 'pending' });
+        const byHand = await seedPayment({
+            provider: 'manual',
+            providerRef: undefined,
+            method: 'cash',
+            amountRefunded: 20,
+            refunds: [waiting]
+        });
+
         const { items } = await paymentService.listPayments({}, asAdmin());
         const actionsOf = (row: { payment: PaymentDocument }) =>
             items.find((item) => item.id === idOf(row))?.actions;
 
-        expect(actionsOf(open)).toEqual({ pay: false, refund: true });
-        expect(actionsOf(declined)).toEqual({ pay: false, refund: false });
-        expect(actionsOf(returned)).toEqual({ pay: false, refund: false });
+        expect(actionsOf(open)).toEqual({
+            pay: false,
+            sync: false,
+            refund: true,
+            settleByHand: []
+        });
+        expect(actionsOf(declined)).toEqual({
+            pay: false,
+            sync: false,
+            refund: false,
+            settleByHand: []
+        });
+        expect(actionsOf(returned)).toEqual({
+            pay: false,
+            sync: false,
+            refund: false,
+            settleByHand: []
+        });
+        // Only the pending record of a hand-paid payment is the operator's to mark returned.
+        const storedPayment = await paymentModel.findById(idOf(byHand));
+        const [stored] = storedPayment?.refunds ?? [];
+        expect(actionsOf(byHand)).toEqual({
+            pay: false,
+            sync: false,
+            refund: true,
+            settleByHand: [String(stored._id)]
+        });
     });
 });
 
@@ -414,7 +447,13 @@ describe('listAttention', () => {
             })
         ]);
 
-        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
+        const owed = await paymentModel.findOne({ orderId: order._id });
+        await paymentService.settleRefundByHand(
+            String(owed!._id),
+            String(owed!.refunds[0]._id),
+            asAdmin(),
+            callerContextAs('admin')
+        );
         expect(await attentionRows()).toEqual([]);
     });
 });

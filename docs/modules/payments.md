@@ -66,8 +66,8 @@ the record before the provider is asked. If the database fails before that, the 
 and the relay delivers the event again. After it, a provider refusal is logged and the event is
 answered: the refund sweep (`retryOpenRefunds`) finishes the open record with the same idempotency
 key, for as long as it takes. A hand-paid order opens its record too and waits for an operator:
-it shows on the needs-attention list as `manual_refund_owed`, and the operator's own refund
-settles it by hand.
+it shows on the needs-attention list as `manual_refund_owed`, and `settleRefundByHand` (the
+operator confirming the money went back) is what settles it.
 
 **`settlePayment` is the one place where the money and the goods agree.** It moves the order to
 `paid` in the same transaction, and `markPaid` commits the order's held units there rather than
@@ -339,12 +339,31 @@ attempt that never got that far (`requires_confirmation`, `declined`) is simply 
 becomes the offline one.
 
 **Only an operator can say a `manual` refund actually happened.** There is no provider to ask, so
-money that left the system by hand can only be confirmed returned by a person: the automatic
-listener (a customer's own cancel) leaves the payment `succeeded` and writes an unattended
-`payment.refund_owed_by_hand` audit row instead of guessing; `refundByOrder` — gated by `create:Refund`,
-with the same fresh-session tier as recording one — is the only door that may set
-`refundedByHand: true`. A cancelled hand-paid order therefore shows `succeeded` until an
-operator confirms it, not "refunded" for money nobody actually moved.
+money that left the system by hand can only be confirmed returned by a person. Every way a refund
+opens on a hand-paid payment (a cancel, a late transfer on a cancelled order, an operator's
+`refundByOrder`, a received return, a buyer's withdrawal of the rest) only opens a `pending` record
+and writes a `payment.refund_owed_by_hand` audit row naming the order, the record, the amount and
+the reason; the actor is the caller, or the system when none is behind it. Nobody settles it on the
+spot, whoever asked: goods arriving or a buyer withdrawing is not cash going back.
+
+`settleRefundByHand` (`POST /payments/{id}/refunds/{refundId}/settle`, `create:Refund`, the same
+fresh-session tier as recording a payment) is the only door that sets `refundedByHand: true`. It
+names one record, so a payment carrying several open refunds (a cancelled remainder and two
+returns) settles each separately, and a return stays `received` until its own money is confirmed
+back. It audits `admin.payment.refund_settled_by_hand`; the `payment.refunded` event is the same as
+for a provider refund. `PaymentActions.settleByHand` lists the ids a caller may settle. A refund two
+operators settle at once settles once; the loser answers 409 `PAYMENT_REFUND_NOT_OPEN`, and a card
+refund answers `PAYMENT_REFUND_NOT_BY_HAND`. A cancelled hand-paid order therefore shows
+`succeeded` until an operator confirms it, not "refunded" for money nobody actually moved.
+
+**The `actions` on every payment.** Each response that carries a payment, the answer to every
+write included, carries `PaymentActions`: `pay` (confirm, or take a waiting transfer over with a
+card when a provider is configured), `sync` (finish an in-flight payment at the provider; narrower
+than its route on purpose, and never true together with `pay`), `refund` (`create:Refund`, a
+`succeeded` payment, and something left: a refund still open counts as taken, so a card refund
+awaiting the sweep is not offered again) and `settleByHand`. `confirm`, `sync` and `intent` read the
+order for `pay`; `offline` and `refund` only ever return a `succeeded` payment, where `pay` is false
+whatever the order says, so they read nothing.
 
 <a id="refund-records"></a>
 
@@ -360,7 +379,7 @@ sequenceDiagram
     participant D as database
     participant V as provider
     C->>P: refund(orderId, amount?)
-    P->>D: settle any refund still open (same idempotency key)
+    P->>D: card: settle any refund still open (same idempotency key)
     P->>D: open a record + raise amountRefunded (conditional on the value read)
     P->>V: refund(part, idempotencyKey)
     alt provider answers
@@ -396,6 +415,9 @@ sequenceDiagram
   are received) opens a refund with `reason: return` and the return's `returnId`, clamped to what the
   payment has left. `payment.refunded` carries the `returnId`, so `returns` closes the return when
   the refund lands — including later, when the sweep completes one the provider first refused.
+- **A late payment is named.** Money that lands after the order could no longer be paid (its hold
+  expired or it was cancelled) is refunded with `reason: late_payment`, not `cancellation`, so staff
+  can tell a lost sale from a cancellation. The buyer is mailed it like any refund outside a return.
 - **A refund can pay for a cancelled remainder.** The same door takes `reason: cancellation` for the
   unshipped part of an order that shipped in part ([`returns`](./returns.md#cancelling-what-has-not-shipped)).
   The `returnId` names the cancellation, which is closed at birth, so nothing waits on it; and because
@@ -464,7 +486,7 @@ stateDiagram-v2
   stored `expiresAt`. See [Inventory Reservations](./inventory-reservations.md#the-sweep).
 - **A week-long hold is free to take, so an account is capped, for every method.**
   `cart` owns the cap: `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` (default 2) counts that account's own unpaid (`pending`)
-  orders, a `processing` card included; a third checkout is refused with `CART_OPEN_ORDER_LIMIT`,
+  orders, a `processing` card included; a third checkout is refused with `CART_OPEN_ORDER_LIMIT_REACHED`,
   naming the open orders, before anything is written.
 - **Nothing asks a provider about it.** The reconcile sweep skips hand-recorded rows, and the
   browser's `POST /payments/{id}/sync` answers the payment as it stands: only an operator recording

@@ -25,7 +25,8 @@ import { cartAuditActions } from '../audit';
 import { basketWeight, needsShipping } from '../domain';
 import { cartRepository, QUANTITY_LIMIT } from '../repository';
 import { cartLineMax } from '../config';
-import { readCartLines, toCartView, isJoined, type CartLine, type CartView } from './view';
+import { readCartLines, toCartView, isJoined, type CartLine } from './view';
+import type { CartView } from '../presenter';
 import { ERROR_CODES } from '@api/error-codes';
 import { shippingMethodNotFound } from './errors';
 
@@ -68,8 +69,8 @@ const quantityLimit = (): ResponseReject =>
  *
  * The catalogue gate — may this product be in a cart — lives here, not in a controller, so every
  * single-product caller (`POST /cart`, `PUT /cart/{productId}`, wishlist move-to-cart) inherits it
- * via `findPublicById`. `./reorder` applies the same predicate itself because it SKIPS unavailable
- * lines rather than refusing. Stock is deliberately excluded here — checked only at checkout,
+ * via `findPublicById`. `./reorder` goes through the merge's rule instead, because it reports an unavailable
+ * line rather than refusing. Stock is deliberately excluded here — checked only at checkout,
  * where units are actually held.
  *
  * The envelope's status says whether a line was created (201) or an existing one written (200), so

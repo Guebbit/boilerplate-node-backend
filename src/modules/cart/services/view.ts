@@ -14,7 +14,7 @@ import { inventoryService, type StockPosition } from '@modules/inventory';
 import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import type { Lean } from '@infrastructure/persistence/create-repository';
-import type { CartItem, CartResponseItem, CartShipping } from '@types';
+import type { CartItem, CartShipping } from '@types';
 import {
     SHIPPING_METHODS,
     methodFitsWeight,
@@ -23,6 +23,8 @@ import {
 } from '@modules/delivery';
 import type { CartDocument } from '../model';
 import { basketWeight, lineAvailability, needsShipping } from '../domain';
+import { presentCart, type CartView } from '../presenter';
+import { cartLineMax } from '../config';
 import { availabilityProductOf, backorderIdsOf, preorderIdsOf } from './preorder';
 import { shopCurrency } from '@modules/shop';
 
@@ -40,26 +42,6 @@ export interface CartLine extends CartItem {
 
 /** A cart line whose reference resolved — what an order may be built from. */
 export type JoinedCartLine = CartLine & { product: Lean<ProductDocument> };
-
-/**
- * The cart as `openapi.yaml` declares it: `CartResponse`, built rather than serialized.
- *
- * Every cart endpoint answers with this — the reads directly, the mutations as their payload —
- * which is why no controller has to re-read the cart after changing it.
- */
-export interface CartView {
-    items: CartResponseItem[];
-    summary: {
-        itemsCount: number;
-        totalQuantity: number;
-        itemsTotal: number;
-        shippingCost: number;
-        totalPrice: number;
-        currency: string;
-    };
-    /** What this basket needs from shipping, and what it may choose from — see {@link shippingFor}. */
-    shipping: CartShipping;
-}
 
 /** Narrow a line to one whose product actually exists. */
 export const isJoined = (line: CartLine): line is JoinedCartLine => line.product !== null;
@@ -162,8 +144,8 @@ const buildView = (
     const { required, options } = shippingOptionsFor(joined);
     const selected = effectiveShippingChoice(cart?.shippingMethodId, options);
     const shippingCost = options.find((option) => option.id === selected)?.price ?? 0;
-    return {
-        items: lines.map(({ productId, quantity: lineQuantity, product }) => ({
+    return presentCart({
+        lines: lines.map(({ productId, quantity: lineQuantity, product }) => ({
             productId,
             quantity: lineQuantity,
             availability: lineAvailability({
@@ -173,18 +155,17 @@ const buildView = (
                 quantity: lineQuantity
             })
         })),
-        summary: {
-            itemsCount: count,
-            totalQuantity: quantity,
-            itemsTotal: price,
-            shippingCost,
-            // The order and the payment intent total in minor units; adding the two decimals here
-            // would show 5.5600000000000005 for a basket that is charged 5.56.
-            totalPrice: orderTotal({ items: lines, shippingCost, currency }),
-            currency
-        },
-        shipping: { required, selected, options }
-    };
+        count,
+        quantity,
+        itemsTotal: price,
+        shippingCost,
+        // The order and the payment intent total in minor units; adding the two decimals here
+        // would show 5.5600000000000005 for a basket that is charged 5.56.
+        totalPrice: orderTotal({ items: lines, shippingCost, currency }),
+        currency,
+        shipping: { required, selected, options },
+        lineMax: cartLineMax()
+    });
 };
 
 /**

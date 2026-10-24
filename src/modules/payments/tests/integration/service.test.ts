@@ -1454,7 +1454,7 @@ describe('refundByOrder', () => {
      * `succeeded` rather than answering 500 with the refund already counted — a retry here
      * really is a retry, not a 409 "already refunded" over money that never actually came back.
      */
-    it('a rejected attempt leaves the payment succeeded, so a retry can still return the money', async () => {
+    it('a rejected attempt leaves the payment succeeded and the record open for the sweep', async () => {
         const { order } = await paidOrder();
         const refundSpy = jest
             .spyOn(fakePaymentProvider, 'refund')
@@ -1463,20 +1463,20 @@ describe('refundByOrder', () => {
         await expect(
             paymentService.refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'))
         ).rejects.toThrow('payment provider unreachable');
-        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
-            'succeeded'
-        );
+        const stored = await paymentRepository.findByOrderId(String(order._id));
+        expect(stored!.status).toBe('succeeded');
+        expect(stored!.refunds[0].status).toBe('failed');
 
-        const retried = await paymentService.refundByOrder(
+        // The failed record keeps the money reserved, so a click is not a second send: the sweep
+        // owns the retry, with the same idempotency key.
+        const asked = await paymentService.refundByOrder(
             String(order._id),
             asAdmin(),
             callerContextAs('admin')
         );
 
-        expect(retried.success).toBe(true);
-        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
-            'succeeded'
-        );
+        expect(asReject(asked).errors[0].code).toBe('PAYMENT_NOT_REFUNDABLE');
+        expect(refundSpy).toHaveBeenCalledTimes(1);
         refundSpy.mockRestore();
     });
 });
@@ -1744,7 +1744,7 @@ describe('recordOfflinePayment — refunding it back', () => {
         refundSpy.mockRestore();
     });
 
-    it('only the admin refund endpoint can set refundedByHand, after that', async () => {
+    it('only settleRefundByHand sets refundedByHand — the operator refund only opens a record', async () => {
         const { user, order } = await orderFor();
         await paymentService.recordOfflinePayment(
             String(order._id),
@@ -1752,14 +1752,31 @@ describe('recordOfflinePayment — refunding it back', () => {
             callerContextAs('admin')
         );
         await orderService.cancelOnRequestById(String(order._id), auth(user));
+        // The cancel's refund listener runs off the outbox, after the cancel's own response.
+        await settleOutboxNudges();
+        const opened = await paymentRepository.findByOrderId(String(order._id));
+        const refundId = String(opened!.refunds[0]._id);
 
-        const refunded = await paymentService.refundByOrder(
+        // The cancel's record already holds everything: asking again is a 409, not a settlement.
+        const again = await paymentService.refundByOrder(
             String(order._id),
             asAdmin(),
             callerContextAs('admin')
         );
+        expect(asReject(again).errors[0].code).toBe('PAYMENT_NOT_REFUNDABLE');
+        expect(await paymentRepository.findByOrderId(String(order._id))).toMatchObject({
+            status: 'succeeded',
+            refundedByHand: undefined
+        });
 
-        expect(refunded.success).toBe(true);
+        const settled = await paymentService.settleRefundByHand(
+            String(opened!._id),
+            refundId,
+            asAdmin(),
+            callerContextAs('admin')
+        );
+
+        expect(settled.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment).toMatchObject({ status: 'succeeded', refundedByHand: true });
     });
@@ -1905,6 +1922,36 @@ describe('getForOrder — what the caller may do', () => {
         const asStaff = await paymentService.getForOrder(String(order._id), asModerator());
 
         expect([asPayer.data?.actions?.pay, asStaff.data?.actions?.pay]).toEqual([true, false]);
+    });
+
+    // The next step of an in-flight payment is `sync`, never a second method: the two are one or the other.
+    it('offers `sync` to the payer of an in-flight payment, and `pay` only while it is confirmable', async () => {
+        const { user, order } = await orderFor();
+        const intent = await paymentService.createIntent(String(order._id), auth(user));
+        const id = String(intent.success && intent.data.id);
+        const before = await paymentService.getForOrder(String(order._id), auth(user));
+
+        await paymentService.confirmPayment(
+            id,
+            'pm_card_authentication_required',
+            auth(user),
+            testCallerContext
+        );
+        const inFlight = await paymentService.getForOrder(String(order._id), auth(user));
+        const asStaff = await paymentService.getForOrder(String(order._id), asModerator());
+
+        expect([before.data?.actions?.pay, before.data?.actions?.sync]).toEqual([true, false]);
+        expect([inFlight.data?.actions?.pay, inFlight.data?.actions?.sync]).toEqual([false, true]);
+        // Finishing at the provider is the payer's step: staff reading it are not offered it.
+        expect(asStaff.data?.actions?.sync).toBe(false);
+    });
+
+    it('withholds `sync` once the payment settled', async () => {
+        const { user, order } = await paidOrder();
+
+        const read = await paymentService.getForOrder(String(order._id), auth(user));
+
+        expect(read.data?.actions).toMatchObject({ pay: false, sync: false });
     });
 
     it('withholds `pay` from a customer who is not the payer, key or no key', async () => {

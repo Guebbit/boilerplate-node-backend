@@ -6,20 +6,39 @@
  * and the delivery reads answer with these alone.
  */
 
-import type { WebhookSubscription, WebhookDelivery } from '@types';
+import type {
+    WebhookSubscription,
+    WebhookSubscriptionActions,
+    WebhookDelivery,
+    WebhookDeliveryActions
+} from '@types';
+import type { StoredWebhookSubscription } from './repository';
 import type { WebhookSubscriptionDocument, WebhookDeliveryDocument } from './model';
 
 /**
- * `.toJSON()` applies the model's `_id` → `id` transform; the document is typed as stored, not as
- * the wire shape `WebhookSubscription` promises.
+ * `.toJSON()` applies the model's transform (`_id` → `id`, the ring collapsed to `secretIds`, the
+ * derived `enabled`); the document is typed as stored, not as the wire shape. The caller's
+ * `actions` arrive finished, from `services/actions.ts`.
+ *
+ * @param document - the stored subscription
+ * @param actions - what this caller may do to it
  */
 export const presentWebhookSubscription = (
-    document: WebhookSubscriptionDocument
-): WebhookSubscription => document.toJSON() as WebhookSubscription;
+    document: WebhookSubscriptionDocument,
+    actions: WebhookSubscriptionActions
+): WebhookSubscription => ({
+    ...(document.toJSON() as StoredWebhookSubscription),
+    actions
+});
 
 /**
  * `.toJSON()` applies the model's `_id` → `id` transform; the document is typed as stored, not as
- * the wire shape `WebhookDelivery` promises.
+ * the wire shape `WebhookDelivery` promises. The caller's `actions` arrive finished.
+ *
+ * @param document - the stored delivery
+ * @param actions - what this caller may do to it
  */
-export const presentWebhookDelivery = (document: WebhookDeliveryDocument): WebhookDelivery =>
-    document.toJSON() as WebhookDelivery;
+export const presentWebhookDelivery = (
+    document: WebhookDeliveryDocument,
+    actions: WebhookDeliveryActions
+): WebhookDelivery => ({ ...(document.toJSON() as Omit<WebhookDelivery, 'actions'>), actions });

@@ -91,7 +91,6 @@
             "direction": "direzione",
             "displayStatus": "stato di visualizzazione",
             "email": "email",
-            "enabled": "abilitato",
             "entries": "voci",
             "event": "evento",
             "eventTypes": "tipi di evento",

@@ -152,6 +152,13 @@ describe('POST /payments/intent', () => {
         expect(response.status).toBe(201);
         expect(response.body.data.amount).toBe(20);
         expect(response.body.data.status).toBe('requires_confirmation');
+        // The answer is what the payment form keeps: it must say the next step is `pay`.
+        expect(response.body.data.actions).toEqual({
+            pay: true,
+            sync: false,
+            refund: false,
+            settleByHand: []
+        });
     });
 
     // A 201 says a payment was created (RFC 9110 §15.3.2). Asking again refreshes the one
@@ -225,6 +232,12 @@ describe('POST /payments/{id}/confirm', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('succeeded');
+        expect(response.body.data.actions).toEqual({
+            pay: false,
+            sync: false,
+            refund: false,
+            settleByHand: []
+        });
     });
 
     it('matches the error contract for a declined card', async () => {
@@ -291,6 +304,8 @@ describe('POST /payments/{id}/confirm', () => {
         // answer the challenge.
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('requires_action');
+        // The answer replaces the stored payment: without `sync` the Finish button would vanish.
+        expect(response.body.data.actions).toMatchObject({ pay: false, sync: true });
     });
 });
 
@@ -308,6 +323,7 @@ describe('POST /payments/{id}/sync', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('succeeded');
+        expect(response.body.data.actions).toMatchObject({ pay: false, sync: false });
     });
 
     it('answers an already-succeeded payment as it stands, without asking the provider again', async () => {
@@ -598,6 +614,12 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
         const payment = await paymentRepository.findById(paymentId);
         expect(payment!.amountRefunded).toBe(payment!.amount);
         expect(payment!.refunds).toHaveLength(1);
+        expect(response.body.data.actions).toEqual({
+            pay: false,
+            sync: false,
+            refund: false,
+            settleByHand: []
+        });
     });
 
     it('matches the error contract for a second refund — money comes back once', async () => {
@@ -670,6 +692,93 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
  * kernel's, not the route's: it is only seen by sending a stale-but-usable session through the
  * real mount. A stolen access token is what this stops.
  */
+/** A cash-paid order with its refund opened by an operator and left `pending`. */
+const cashRefundOwed = async () => {
+    const { bearer: adminBearer, user: admin } = await authenticateAs('admin');
+    const { bearer: buyerBearer, order } = await authenticateWithOrder();
+    const recorded = await api()
+        .post(`/payments/order/${String(order._id)}/offline`)
+        .set('Authorization', adminBearer)
+        .send({ method: 'cash', reference: 'till-settle' });
+    const refunded = await api()
+        .post(`/payments/order/${String(order._id)}/refund`)
+        .set('Authorization', adminBearer)
+        .set('Idempotency-Key', freshKey());
+    const paymentId = String(recorded.body.data.id);
+    return { admin, adminBearer, buyerBearer, order, paymentId, refunded: refunded.body.data };
+};
+
+describe('POST /payments/{id}/refunds/{refundId}/settle', () => {
+    it('leaves the refund pending and offers it to settle, then confirms it by hand', async () => {
+        const { adminBearer, paymentId, refunded } = await cashRefundOwed();
+
+        // The operator refund of a cash payment only opens the record.
+        expect(refunded.refundedByHand).toBeUndefined();
+        expect(refunded.refunds[0].status).toBe('pending');
+        expect(refunded.actions).toMatchObject({ refund: false });
+        expect(refunded.actions.settleByHand).toEqual([refunded.refunds[0].id]);
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/settle`)
+            .set('Authorization', adminBearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.refundedByHand).toBe(true);
+        expect(response.body.data.refunds[0].status).toBe('succeeded');
+        expect(response.body.data.displayStatus).toBe('refunded');
+        expect(response.body.data.actions.settleByHand).toEqual([]);
+    });
+
+    it('answers 409 PAYMENT_REFUND_NOT_OPEN to the second operator', async () => {
+        const { adminBearer, paymentId, refunded } = await cashRefundOwed();
+        const path = `/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/settle`;
+        await api().post(path).set('Authorization', adminBearer);
+
+        const response = await api().post(path).set('Authorization', adminBearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('PAYMENT_REFUND_NOT_OPEN');
+    });
+
+    it('answers 404 for a refund the payment does not carry, and for a payment that does not exist', async () => {
+        const { adminBearer, paymentId } = await cashRefundOwed();
+
+        const noRefund = await api()
+            .post(`/payments/${paymentId}/refunds/${MISSING_ID}/settle`)
+            .set('Authorization', adminBearer);
+        const noPayment = await api()
+            .post(`/payments/${MISSING_ID}/refunds/${MISSING_ID}/settle`)
+            .set('Authorization', adminBearer);
+
+        expect(noRefund.status).toBe(404);
+        expect(noPayment.status).toBe(404);
+    });
+
+    it('refuses the buyer: only an operator holding create:Refund may say money went back', async () => {
+        const { paymentId, refunded, buyerBearer } = await cashRefundOwed();
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/settle`)
+            .set('Authorization', buyerBearer);
+
+        expect(response.status).toBe(403);
+    });
+
+    it('answers a stale session 401 REAUTH_REQUIRED and settles nothing', async () => {
+        const { admin, paymentId, refunded } = await cashRefundOwed();
+        const bearer = await staleBearerFor(admin, 'critical');
+
+        const response = await api()
+            .post(`/payments/${paymentId}/refunds/${String(refunded.refunds[0].id)}/settle`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+        const payment = await paymentRepository.findById(paymentId);
+        expect(payment!.refunds[0].status).toBe('pending');
+    });
+});
+
 describe('the money doors ask a fresh session of an operator', () => {
     afterEach(() => jest.useRealTimers());
 
@@ -724,6 +833,13 @@ describe('POST /payments/order/{orderId}/offline', () => {
         expect(response.body.data.status).toBe('succeeded');
         expect(response.body.data.provider).toBe('manual');
         expect(response.body.data.method).toBe('cash');
+        // A succeeded payment answers `actions` without an order read: `pay` is false regardless.
+        expect(response.body.data.actions).toEqual({
+            pay: false,
+            sync: false,
+            refund: true,
+            settleByHand: []
+        });
     });
 
     // The row of a card intent nobody paid is converted, not inserted, so nothing was created.

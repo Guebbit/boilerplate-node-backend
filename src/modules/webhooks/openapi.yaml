@@ -10,6 +10,10 @@ tags:
 
 x-error-codes:
     WEBHOOK_DELIVERY_IN_PROGRESS: { status: 409, description: 'A retry of this delivery is already in flight.' }
+    WEBHOOK_SUBSCRIPTION_LIMIT_REACHED: { status: 409, description: 'This shop already holds the most webhook subscriptions it may; delete one first.' }
+    WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED: { status: 409, description: 'The subscription is already enabled.' }
+    WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED: { status: 409, description: 'The subscription is already disabled.' }
+    WEBHOOK_SUBSCRIPTION_DISABLED: { status: 409, description: 'The delivery belongs to a subscription that is disabled, so nothing can be sent until it is enabled.' }
 
 paths:
     /webhooks/subscriptions:
@@ -17,8 +21,9 @@ paths:
             tags: [Webhooks]
             summary: List this shop's webhook subscriptions
             description: |
-                Never returns a secret — the ring's plaintext exists only in the response of the
-                call that minted it (`POST` here, or `POST .../{id}/rotate-secret`).
+                Newest first unless `sort` says otherwise. Never returns a secret — the ring's
+                plaintext exists only in the response of the call that minted it (`POST` here, or
+                `POST .../{id}/rotate-secret`).
             operationId: listWebhookSubscriptions
             security:
                 - bearerAuth: []
@@ -26,11 +31,24 @@ paths:
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: sort
+                  in: query
+                  required: false
+                  # JSON:API grammar: `?sort=-createdAt,url` — comma-separated, `-` for descending.
+                  style: form
+                  explode: false
+                  schema:
+                      $ref: '#/components/schemas/WebhookSubscriptionSort'
                 - name: enabled
                   in: query
                   required: false
                   schema: { type: boolean }
-                  description: Filter by whether the subscription is currently active.
+                  description: Filter by whether the subscription is currently enabled (`true`) or switched off for any reason (`false`).
+                - name: autoDisabled
+                  in: query
+                  required: false
+                  schema: { type: boolean }
+                  description: Filter by who switched it off. `true` keeps only the subscriptions the failure guard disabled (`autoDisabledAt` set); `false` keeps the rest, enabled ones and pauses by hand. Combine with `enabled=false` to list the pauses by hand.
             responses:
                 '200':
                     description: Subscription list
@@ -75,17 +93,43 @@ paths:
                                 $ref: '#/components/schemas/WebhookSubscriptionCreatedEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # The shop is at its subscription cap — `errors[].code` is
+                # `WEBHOOK_SUBSCRIPTION_LIMIT_REACHED`. Deleting one lets the same request through.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /webhooks/subscriptions/{id}:
+        get:
+            tags: [Webhooks]
+            summary: Get one webhook subscription
+            description: |
+                The same shape the list rows carry (and never a secret). 404 for an id outside this
+                shop's subscriptions, whether it never existed or belongs to another shop.
+            operationId: getWebhookSubscription
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The subscription
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WebhookSubscriptionEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [Webhooks]
             summary: Replace a webhook subscription
             description: |
-                Full replace of url/description/eventTypes/enabled — an omitted `description` is
-                cleared. Never touches the secret ring; rotate or drop a secret through its own
-                action route below.
+                Full replace of url/description/eventTypes — an omitted `description` is cleared.
+                Never touches the secret ring or whether the subscription is on; rotate or drop a
+                secret, enable or disable it, through its own action route below.
             operationId: replaceWebhookSubscription
             security:
                 - bearerAuth: []
@@ -114,8 +158,9 @@ paths:
             tags: [Webhooks]
             summary: Update a webhook subscription
             description: |
-                Partial update of url/description/eventTypes/enabled. Never touches the secret
-                ring; rotate or drop a secret through its own action route below.
+                Partial update of url/description/eventTypes. Never touches the secret ring or
+                whether the subscription is on; rotate or drop a secret, enable or disable it,
+                through its own action route below.
             operationId: updateWebhookSubscription
             security:
                 - bearerAuth: []
@@ -160,6 +205,65 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /webhooks/subscriptions/{id}/enable:
+        post:
+            tags: [Webhooks]
+            summary: Enable a webhook subscription
+            description: |
+                Turns a subscription back on, whether it was switched off by hand or by the
+                auto-disable guard: clears `disabledAt` and `autoDisabledAt` and resets the failure
+                streak, so the guard starts counting from zero. Refused with 409
+                `WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED` when it is already on — the streak of a
+                healthy subscription is never reset by a repeated call.
+            operationId: enableWebhookSubscription
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The subscription, now enabled
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WebhookSubscriptionEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # `errors[].code` is `WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED`.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /webhooks/subscriptions/{id}/disable:
+        post:
+            tags: [Webhooks]
+            summary: Disable a webhook subscription
+            description: |
+                Pauses a subscription by hand: sets `disabledAt` (and leaves `autoDisabledAt`
+                absent, which is how a pause is told from the guard's work). Nothing is sent to it
+                while it is off, and an event that fires meanwhile is not queued for it. Refused with 409
+                `WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED` when it is already off.
+            operationId: disableWebhookSubscription
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The subscription, now disabled
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WebhookSubscriptionEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # `errors[].code` is `WEBHOOK_SUBSCRIPTION_ALREADY_DISABLED`.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /webhooks/subscriptions/{id}/rotate-secret:
         post:
             tags: [Webhooks]
@@ -169,11 +273,11 @@ paths:
                 ring then carries two active secrets, and deliveries sign with both (two
                 space-separated `v1,` values in `webhook-signature`) until the old one is dropped
                 through `DELETE .../secrets/{secretId}` or its overlap window ends (24 hours by
-                default, `NODE_WEBHOOK_SECRET_OVERLAP_HOURS`), after which it stops signing and
-                disappears from `secretIds`. A ring holds at most two: rotating again drops the
-                oldest. Its own route rather than a flag on
+                default, `NODE_WEBHOOK_SECRET_OVERLAP_HOURS`; `retiringSecrets` names the exact
+                instant), after which it stops signing and disappears from `secretIds`. A ring holds at
+                most two: rotating again drops the oldest. Its own route rather than a flag on
                 `PATCH`'s body: a command, not state, so it does not share a route with
-                url/description/eventTypes/enabled.
+                url/description/eventTypes.
             operationId: rotateWebhookSubscriptionSecret
             security:
                 - bearerAuth: []
@@ -228,7 +332,7 @@ paths:
         get:
             tags: [Webhooks]
             summary: The delivery log
-            description: Every attempt, newest first, optionally filtered by subscription and status.
+            description: Every attempt, newest first, optionally filtered by subscription and status. The order is fixed - this is a log.
             operationId: listWebhookDeliveries
             security:
                 - bearerAuth: []
@@ -268,7 +372,8 @@ paths:
                 row: `attempt` advances exactly like a real queued attempt would (one step forward
                 on a failure with backoff tiers left, unchanged on success or exhaustion), and
                 `status`/`responseCode`/`durationMs`/`error` reflect this replay. The single
-                most-requested support action, per the design doc.
+                most-requested support action, per the design doc. Refused while the subscription is
+                disabled (`actions.replay` is false): enable it first.
             operationId: replayWebhookDelivery
             security:
                 - bearerAuth: []
@@ -285,8 +390,9 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A live worker (or another replay) already holds this row's delivery lease —
-                # `errors[].code` is `WEBHOOK_DELIVERY_IN_PROGRESS`.
+                # A live worker (or another replay) already holds this row's delivery lease
+                # (`errors[].code` is `WEBHOOK_DELIVERY_IN_PROGRESS`), or the subscription is
+                # disabled (`WEBHOOK_SUBSCRIPTION_DISABLED`).
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -326,7 +432,7 @@ components:
         WebhookSubscription:
             type: object
             additionalProperties: false
-            required: [id, url, eventTypes, enabled, consecutiveFailures, secretIds, createdAt, updatedAt]
+            required: [id, url, eventTypes, enabled, consecutiveFailures, secretIds, retiringSecrets, actions, createdAt, updatedAt]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -343,23 +449,71 @@ components:
                     description: Names from `GET /webhooks/events` this subscription receives, or `*` for every event.
                 enabled:
                     type: boolean
+                    description: Read-only, derived — true while `disabledAt` is absent. Change it with `POST .../enable` or `POST .../disable`.
                 consecutiveFailures:
                     type: integer
                     minimum: 0
                 disabledAt:
                     type: string
                     format: date-time
-                    description: Set once `consecutiveFailures` crosses the auto-disable threshold.
+                    description: When the subscription was switched off, by hand or by the auto-disable guard. Absent while it is enabled.
+                autoDisabledAt:
+                    type: string
+                    format: date-time
+                    description: Set (together with `disabledAt`) only when the auto-disable guard switched it off after sustained failures; absent for a pause by hand.
                 secretIds:
                     type: array
                     items: { type: string }
                     description: The ring's secret ids, oldest first — never the plaintext.
+                retiringSecrets:
+                    type: array
+                    items: { $ref: '#/components/schemas/WebhookRetiringSecret' }
+                    description: The ring entries that are still signing but have been superseded, with when each stops. Empty when the ring holds one secret.
+                actions:
+                    $ref: '#/components/schemas/WebhookSubscriptionActions'
                 createdAt:
                     type: string
                     format: date-time
                 updatedAt:
                     type: string
                     format: date-time
+
+        WebhookRetiringSecret:
+            type: object
+            additionalProperties: false
+            required: [id, retiresAt]
+            properties:
+                id:
+                    type: string
+                    description: A ring entry's id, one of `secretIds`.
+                retiresAt:
+                    type: string
+                    format: date-time
+                    description: When this secret stops signing deliveries — the end of its overlap window (`NODE_WEBHOOK_SECRET_OVERLAP_HOURS` after its successor was minted), unless it is dropped sooner.
+
+        WebhookSubscriptionActions:
+            type: object
+            additionalProperties: false
+            required: [update, delete, enable, disable, rotateSecret, removeSecret]
+            properties:
+                update:
+                    type: boolean
+                    description: Whether `PUT` or `PATCH /webhooks/subscriptions/{id}` would be accepted.
+                delete:
+                    type: boolean
+                    description: Whether `DELETE /webhooks/subscriptions/{id}` would be accepted.
+                enable:
+                    type: boolean
+                    description: Whether `POST /webhooks/subscriptions/{id}/enable` would be accepted — false while it is already enabled.
+                disable:
+                    type: boolean
+                    description: Whether `POST /webhooks/subscriptions/{id}/disable` would be accepted — false while it is already disabled.
+                rotateSecret:
+                    type: boolean
+                    description: Whether `POST /webhooks/subscriptions/{id}/rotate-secret` would be accepted.
+                removeSecret:
+                    type: boolean
+                    description: Whether `DELETE /webhooks/subscriptions/{id}/secrets/{secretId}` would be accepted — false while the ring holds a single secret.
 
         WebhookSubscriptionCreated:
             # Flat, not `allOf: [WebhookSubscription, {...}]`: two sibling schemas each declaring
@@ -368,7 +522,7 @@ components:
             # reads as "additional" and the whole document fails. Restated flat instead.
             type: object
             additionalProperties: false
-            required: [id, url, eventTypes, enabled, consecutiveFailures, secretIds, createdAt, updatedAt]
+            required: [id, url, eventTypes, enabled, consecutiveFailures, secretIds, retiringSecrets, actions, createdAt, updatedAt]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -390,9 +544,17 @@ components:
                 disabledAt:
                     type: string
                     format: date-time
+                autoDisabledAt:
+                    type: string
+                    format: date-time
                 secretIds:
                     type: array
                     items: { type: string }
+                retiringSecrets:
+                    type: array
+                    items: { $ref: '#/components/schemas/WebhookRetiringSecret' }
+                actions:
+                    $ref: '#/components/schemas/WebhookSubscriptionActions'
                 createdAt:
                     type: string
                     format: date-time
@@ -406,6 +568,16 @@ components:
                     type: string
                     description: A rotated-in secret's plaintext, present only in the response of `POST .../rotate-secret`.
 
+        # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
+        # descending; earlier entries rank first; ties end on the id.
+        WebhookSubscriptionSort:
+            type: array
+            minItems: 1
+            maxItems: 2
+            items:
+                type: string
+                enum: [createdAt, -createdAt, url, -url]
+
         WebhookDeliveryStatus:
             type: string
             enum: [pending, in-flight, succeeded, exhausted]
@@ -413,7 +585,7 @@ components:
         WebhookDelivery:
             type: object
             additionalProperties: false
-            required: [id, subscriptionId, eventId, eventType, attempt, status, createdAt, updatedAt]
+            required: [id, subscriptionId, eventId, eventType, attempt, status, actions, createdAt, updatedAt]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -437,12 +609,23 @@ components:
                 nextAttemptAt:
                     type: string
                     format: date-time
+                actions:
+                    $ref: '#/components/schemas/WebhookDeliveryActions'
                 createdAt:
                     type: string
                     format: date-time
                 updatedAt:
                     type: string
                     format: date-time
+
+        WebhookDeliveryActions:
+            type: object
+            additionalProperties: false
+            required: [replay]
+            properties:
+                replay:
+                    type: boolean
+                    description: Whether `POST /webhooks/deliveries/{id}/replay` would be accepted — false while the delivery's subscription is disabled or gone.
 
         WebhookEventCatalogueEntry:
             type: object
@@ -478,7 +661,7 @@ components:
         ReplaceWebhookSubscriptionRequest:
             type: object
             additionalProperties: false
-            required: [url, eventTypes, enabled]
+            required: [url, eventTypes]
             properties:
                 url:
                     type: string
@@ -497,9 +680,6 @@ components:
                     items: { type: string, minLength: 1, maxLength: 100 }
                     minItems: 1
                     description: A name from `GET /webhooks/events`, or `*` for every event. Any other name is a 422 naming `eventTypes`.
-                enabled:
-                    type: boolean
-                    description: Setting this true re-arms a subscription the auto-disable guard turned off, and clears `disabledAt`.
 
         UpdateWebhookSubscriptionRequest:
             type: object
@@ -521,9 +701,6 @@ components:
                     items: { type: string, minLength: 1, maxLength: 100 }
                     minItems: 1
                     description: A name from `GET /webhooks/events`, or `*` for every event. Any other name is a 422 naming `eventTypes`.
-                enabled:
-                    type: boolean
-                    description: Setting this true re-arms a subscription the auto-disable guard turned off, and clears `disabledAt`.
 
         WebhookSubscriptionsResponse:
             type: object

@@ -1,15 +1,16 @@
 /**
  * @module
  * Controllers for `PUT /webhooks/subscriptions/:id` (replace) and `PATCH .../:id` (merge), built
- * on the shared `createUpdateController` factory. Neither verb touches the secret ring — that
- * lives on its own action routes, `rotate-subscription-secret.ts`/`remove-subscription-secret.ts`.
+ * on the shared `createUpdateController` factory. Neither verb touches the secret ring or whether
+ * the subscription is on — those live on their own action routes (rotate, remove a secret, enable,
+ * disable), each with its own controller.
  */
 
 import { createUpdateController } from '@infrastructure/surfaces/create-update-controller';
 import { ReplaceWebhookSubscriptionBody, UpdateWebhookSubscriptionBody } from '@api/schemas.zod';
 import { tenantCallerContextOf } from '@infrastructure/http/request';
 import { webhooksService } from '../services';
-import { presentWebhookSubscription } from '../presenters';
+import { viewSubscription } from '../services/actions';
 
 /**
  * `PUT` and `PATCH /webhooks/subscriptions/:id` — one handler pair over
@@ -24,5 +25,6 @@ export const { replace: replaceWebhookSubscription, update: updateWebhookSubscri
         patchSchema: UpdateWebhookSubscriptionBody,
         update: (id, changes, request) =>
             webhooksService.updateSubscription(id, changes, tenantCallerContextOf(request)),
-        present: (subscription) => presentWebhookSubscription(subscription)
+        present: (subscription, request) =>
+            viewSubscription(subscription, tenantCallerContextOf(request).caller)
     });

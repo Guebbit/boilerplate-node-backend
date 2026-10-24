@@ -269,7 +269,7 @@ something moved, and a redelivery finds the date already expected. A product tha
 no release date makes the whole group undated (it cannot leave before that product), and an undated
 group has no `expectedAt` at all: a cleared date removes it, so a redelivered event finds nothing to
 move and tells nobody twice. The fulfillment order carries the state: `agreedAt`, `expectedAt`,
-`lastNoticeAt` and `cancelReason`.
+`lastNoticeAt`, `dueNoticeFor` and `cancelReason`.
 
 ```mermaid
 stateDiagram-v2
@@ -278,8 +278,8 @@ stateDiagram-v2
     Waiting --> Waiting: date moved earlier<br/>(no email)
     Waiting --> Told: date moved later or cleared<br/>(email, silence keeps waiting)
     Told --> Told: another move<br/>(another email)
-    Told --> Late: the date passes, no stock<br/>(one more email, from the sweep)
-    Waiting --> Late: the date passes, no stock
+    Told --> Late: the date is a day away, no stock<br/>(one more email, from the sweep)
+    Waiting --> Late: the date is a day away, no stock
     Waiting --> Allocated: stock arrives
     Told --> Allocated: stock arrives
     Late --> Allocated: stock arrives
@@ -319,12 +319,15 @@ an inbox row, `notifications.fulfillment-delayed`.
 
 `npm run job sweep:preorders` (02:20 UTC, under a lease; [scheduled jobs](../reference/ops.md#scheduled-jobs))
 does one thing, and only to fulfillment orders still `on_hold` for stock: a fulfillment order whose
-**current** `expectedAt` has passed, with no stock and no notice since, tells its buyer once: "we
-have not been able to send it, there is no new date yet, you can cancel any time". It is keyed on
-`expectedAt`, not `agreedAt`: after a moved date the agreed one is long gone and only the expected
-one can still be missed. `lastNoticeAt` is what stops a daily repeat, and a date that moves later is
-a new date that can pass again. A backorder promised the 30-day default is told like any other,
-the day after day 30.
+**current** `expectedAt` is a day away or already gone (`expectedAt <= now + 1 day`), with no stock
+and no notice for that date, tells its buyer once that it will miss the date: "the stock has not
+reached us, there is no new date yet, you can cancel any time". The sweep is daily, so looking a day
+ahead is what lets the email land before the date, not after it. It is keyed on `expectedAt`, not
+`agreedAt`: after a moved date the agreed one is long gone and only the expected one can still be
+missed. `dueNoticeFor` is what stops a daily repeat: it stores the `expectedAt` the notice was sent
+for, so a date that moves is a new date and is told about again (timestamps cannot say that, since
+a moved-date notice also stamps `lastNoticeAt`). A backorder promised the 30-day default is told like
+any other, on day 29 of 30.
 
 The sweep cancels nothing and expires nothing. Units already allocated but not shipped (`open`) are
 left alone: goods on the shelf are a short, definite delay, and the buyer can already cancel any
@@ -517,7 +520,7 @@ Each act writes its rows to the order's [timeline](./orders.md#the-timeline) in 
 | `fulfillment_released` | staff, or an allocation of stock, release it (staff only)      | fulfillment order id                                         |
 | `remainder_cancelled`  | `returns` cancels what had not shipped                         | fulfillment order id                                         |
 | `release_date_moved`   | a product's date moved and this order's expected date followed | fulfillment order id, `from` and `to` (ISO, or `null`)       |
-| `delay_notice_sent`    | the buyer was told: the date moved, or it passed               | fulfillment order id, `reason`, `expectedAt`                 |
+| `delay_notice_sent`    | the buyer was told: the date moved, or it will be missed       | fulfillment order id, `reason`, `expectedAt`                 |
 
 A whole-order cancel writes no `remainder_cancelled`: the order's own `cancelled` row says it. The
 shipment row comes first, then the order's own move that it caused (`shipped`, `delivered`). A

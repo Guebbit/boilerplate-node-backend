@@ -22,10 +22,10 @@ export const deliveryJobs: readonly JobDeclaration[] = [
     },
     {
         name: 'sweep:preorders',
-        // Once a day: a date passes on a calendar day, and the sweep is idempotent.
+        // Once a day: the sweep looks a day ahead, and is idempotent.
         schedule: '20 2 * * *',
         summary:
-            'Tells the buyer of a preorder whose expected date passed with the goods still not here, once. It asks nothing and cancels nothing.',
+            'Tells the buyer of a preorder whose expected date is a day away or gone, with the goods still not here, that it will miss the date, once. It asks nothing and cancels nothing.',
         run: () =>
             runPreorderSweep()
                 .then((result) => {

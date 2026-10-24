@@ -12,17 +12,18 @@ import { webhooksService } from '../services';
 
 /**
  * GET /webhooks/subscriptions
- * This tenant's subscriptions, newest first. Never returns a secret.
+ * This tenant's subscriptions, newest first unless `sort` says otherwise. Never returns a secret.
  */
 export const listWebhookSubscriptions = createListController({
     entity: 'webhookSubscriptions',
     // `page`/`pageSize` swapped for the infra pair so an absent one stays absent for
-    // `normalizePagination` to default; `enabled` is pre-decoded by `readInput`'s `booleans`.
+    // `normalizePagination` to default; `enabled` is pre-decoded by `readInput`'s `booleans`, and
+    // `sort` split on commas by its `csvLists`.
     schema: ListWebhookSubscriptionsQueryParams.extend({
         page: pageSchema,
         pageSize: pageSizeSchema
     }).partial(),
-    input: { booleans: ['enabled'] },
+    input: { booleans: ['enabled', 'autoDisabled'], csvLists: ['sort'] },
     runList: (parsed, request): Promise<WebhookSubscriptionsResponse> =>
         webhooksService.listSubscriptions(tenantCallerContextOf(request), parsed)
 });
