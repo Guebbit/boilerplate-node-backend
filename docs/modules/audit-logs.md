@@ -131,6 +131,40 @@ is returned as a keyed digest (`hmac:…`): the operator can correlate "this add
 incidents" and never read the address. An operator watching an installation needs the incidents,
 and holding no shop key was never meant to include reading a shop's customers.
 
+## What an update records
+
+Every `*.updated` audit row says what the edit moved, through one pure helper,
+`auditChanges(before, data, { valued, named })` in `infrastructure/observability/audit-changes.ts`.
+The trail is append-only and never scrubbed on erasure, so the rule is an allowlist, not a diff of
+everything:
+
+| Form           | Where in `metadata` | For which fields                                               |
+| -------------- | ------------------- | -------------------------------------------------------------- |
+| `{ from, to }` | `changes.<field>`   | non-personal fields: prices, flags, preferences, display names |
+| the name only  | `changedFields[]`   | free text, personal data, bearer secrets                       |
+| nothing        |                     | every field on neither list                                    |
+
+The caller snapshots "before" ahead of any in-place assignment. Where the write is atomic and
+returns no previous value (the backorder limit), it reads first.
+
+| Action                                       | By value                                                 | By name                                |
+| -------------------------------------------- | -------------------------------------------------------- | -------------------------------------- |
+| `admin.product.updated`                      | prices, VAT, flags, weight, SKU, categories, tags, dates | title, description, image              |
+| `admin.webhook_subscription.updated`         | event filter                                             | url, description                       |
+| `admin.user.updated`, `auth.profile.updated` | locale, analytics consent                                | username, email, phone, website, image |
+| `order.updated`                              |                                                          | email                                  |
+| `admin.feedback.status_updated`              | status                                                   | admin notes                            |
+| `admin.locale.updated`                       | name, native name, direction, active                     |                                        |
+| `admin.locale_entry.updated`                 |                                                          | value (the key rides along)            |
+| `admin.backorder.limit.set`                  | backorder limit                                          |                                        |
+| `example.updated`                            |                                                          | title, body                            |
+
+`admin.translation.updated` already lists the locales it upserted and deleted; the text itself is
+free text and stays out.
+
+`GET /audit` also filters on `ownOrder` (`true` keeps the entries flagged `metadata.ownOrder`,
+`false` the rest) so staff can separate actions on their own orders from actions on customers'.
+
 ## Who can do what
 
 Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.

@@ -20,6 +20,7 @@ import { localeRepository } from '../repository';
 import { isKnownApp } from '../apps';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { auditChanges } from '@infrastructure/observability/audit-changes';
 import { localeAuditActions } from '../audit';
 import { refreshOverlayNow } from './overlay';
 import { translatableCacheTags } from './translatables';
@@ -107,6 +108,17 @@ export const updateLanguage = (
             if (fallbackRefusal) return fallbackRefusal;
         }
 
+        // Read before the assignments below. Display names are not personal data: shown by value.
+        const metadata = auditChanges(
+            language,
+            {
+                ...payload,
+                name: payload.name?.trim(),
+                nativeName: payload.nativeName?.trim()
+            },
+            { valued: ['name', 'nativeName', 'direction', 'active'], named: [] }
+        );
+
         if (payload.name !== undefined) language.name = payload.name.trim();
         if (payload.nativeName !== undefined) language.nativeName = payload.nativeName.trim();
         if (payload.direction !== undefined) language.direction = payload.direction;
@@ -128,10 +140,9 @@ export const updateLanguage = (
                     outcome: 'success',
                     targetType: 'locale',
                     targetId: tag,
-                    // The visibility flag is the field worth having in the trail on its own: it is
-                    // what makes a half-finished translation public, and the only edit here that
-                    // changes what an anonymous caller can see.
-                    metadata: { active: saved.active }
+                    // `active` is the field worth having in the trail: it is what makes a
+                    // half-finished translation public.
+                    metadata
                 });
 
                 // The negotiation reads an in-memory list of the served languages, refreshed by

@@ -774,8 +774,8 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(paid!, asWarehouse());
 
-        expect(body.actions!.start).toBe(true);
-        expect(body.actions!.override).toEqual([]);
+        expect(body.actions.start).toBe(true);
+        expect(body.actions.override).toEqual([]);
     });
 
     it("never offers `start` once already `processing` — an echo write isn't a fresh offer", async () => {
@@ -792,7 +792,7 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(processing!, asWarehouse());
 
-        expect(body.actions!.start).toBe(false);
+        expect(body.actions.start).toBe(false);
     });
 
     it('withdraws the cancel once anything has shipped, but keeps the withdrawal', async () => {
@@ -839,7 +839,7 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(paid!, asAdmin());
 
-        expect(body.actions!.override).toEqual(['processing', 'shipped', 'delivered']);
+        expect(body.actions.override).toEqual(['processing', 'shipped', 'delivered']);
     });
 
     it("never offers the warehouse `override:Order`'s destinations", async () => {
@@ -849,7 +849,7 @@ describe('withActions', () => {
 
         const body = await orderService.withActions(paid!, asWarehouse());
 
-        expect(body.actions!.override).toEqual([]);
+        expect(body.actions.override).toEqual([]);
     });
 
     it('carries the serialized order, not the document', async () => {

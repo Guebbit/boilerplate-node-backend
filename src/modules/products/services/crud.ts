@@ -14,6 +14,12 @@ import {
 } from '@infrastructure/http/response';
 import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
+import {
+    auditChanges,
+    type AuditChanges,
+    type AuditedFields,
+    type FieldChange
+} from '@infrastructure/observability/audit-changes';
 import { rearmPrecondition } from '@infrastructure/persistence/versioning';
 import type { ClientSession } from 'mongoose';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
@@ -205,12 +211,6 @@ export const finishCreate = (
     );
 };
 
-/** One field that moved: what it was and what it is now. `null` is "unset". */
-interface FieldChange<TValue> {
-    from: TValue | null;
-    to: TValue | null;
-}
-
 /**
  * The scalar fields an update is audited for as `{ from, to }`: what a buyer pays (`price`, VAT),
  * what a basket costs to ship (`weight`, `requiresShipping`), the legal right of withdrawal
@@ -232,19 +232,20 @@ const AUDITED_SCALARS = [
 /** The lists audited the same way: set-like catalogue labels, compared in order. */
 const AUDITED_LISTS = ['categories', 'tags'] as const;
 
-/** Free text and the picture: audited by NAME only, so the trail never copies catalogue prose. */
+/** Free text: audited by NAME only, so the trail never copies catalogue prose. */
 const AUDITED_BY_NAME = ['title', 'description'] as const;
 
-/** The fields an update actually moved, for the audit row. */
-type ProductChanges = Partial<
-    Record<
-        | (typeof AUDITED_SCALARS)[number]
-        | (typeof AUDITED_LISTS)[number]
-        | 'releaseDate'
-        | 'restockDate',
-        FieldChange<unknown>
-    >
->;
+/** The fields the shared diff covers; the two dates and the image are diffed by hand below. */
+const PRODUCT_AUDITED_FIELDS: AuditedFields<ProductAuditedKey> = {
+    valued: [...AUDITED_SCALARS, ...AUDITED_LISTS],
+    named: AUDITED_BY_NAME
+};
+
+/** The product keys {@link PRODUCT_AUDITED_FIELDS} covers. */
+type ProductAuditedKey =
+    | (typeof AUDITED_SCALARS)[number]
+    | (typeof AUDITED_LISTS)[number]
+    | (typeof AUDITED_BY_NAME)[number];
 
 /** What a transactional update leaves for after the commit. */
 export interface ProductUpdateOutcome {
@@ -253,13 +254,13 @@ export interface ProductUpdateOutcome {
     /** The image url it replaced, to delete once the commit is durable. */
     oldImageUrl: string | undefined;
     /** What moved, as `{ from, to }`; empty when nothing audited did. */
-    changes: ProductChanges;
+    changes: Record<string, FieldChange>;
     /** The free-text fields and the image that changed, by name only. */
     changedFields: string[];
 }
 
 /**
- * Whether two values of an audited field differ, treating an unset field and `null` alike.
+ * Whether two values differ, treating an unset field and `null` alike.
  *
  * @param before - the stored value
  * @param after - the requested value
@@ -268,39 +269,21 @@ const differs = (before: unknown, after: unknown): boolean =>
     JSON.stringify(before ?? null) !== JSON.stringify(after ?? null);
 
 /**
- * The fields an update would move, with their old and new values: every non-text field, so a new
- * one is covered by default (the shape Stripe's `previous_attributes` gives). A value sent
- * unchanged, or a field left out, writes nothing.
- *
- * @param product - the fetched document, BEFORE the change is applied
- * @param data - the changes
- * @returns only the fields whose value actually differs
- */
-const fieldChangesOf = (product: ProductDocument, data: ProductUpdateData): ProductChanges => {
-    const changes: ProductChanges = {};
-    for (const field of AUDITED_SCALARS) {
-        const requested = data[field];
-        if (requested !== undefined && differs(product[field], requested))
-            changes[field] = { from: product[field] ?? null, to: requested };
-    }
-    for (const field of AUDITED_LISTS) {
-        const requested = data[field];
-        if (requested === undefined) continue;
-        const after = sanitizeStringArray(requested);
-        if (differs(product[field], after)) changes[field] = { from: product[field], to: after };
-    }
-    return changes;
-};
-
-/**
- * The free-text fields an update changes, by name.
+ * The audited fields an update would move. The lists are sanitised first, so the diff compares
+ * what will be stored, not what was typed.
  *
  * @param product - the fetched document, BEFORE the change is applied
  * @param data - the changes
  */
-const changedTextOf = (product: ProductDocument, data: ProductUpdateData): string[] =>
-    AUDITED_BY_NAME.filter(
-        (field) => data[field] !== undefined && differs(product[field], data[field])
+const auditedChangesOf = (product: ProductDocument, data: ProductUpdateData): AuditChanges =>
+    auditChanges(
+        product,
+        {
+            ...data,
+            ...(data.categories ? { categories: sanitizeStringArray(data.categories) } : {}),
+            ...(data.tags ? { tags: sanitizeStringArray(data.tags) } : {})
+        },
+        PRODUCT_AUDITED_FIELDS
     );
 
 /** What moved when one of a product's two dates did: ISO strings, absent for none. */
@@ -367,8 +350,9 @@ const applyUpdate = (
     session: ClientSession
 ): Promise<ProductUpdateOutcome> => {
     // Read before the fields below overwrite what it compares against.
-    const changes = fieldChangesOf(product, data);
-    const changedFields = changedTextOf(product, data);
+    const audited = auditedChangesOf(product, data);
+    const changes: Record<string, FieldChange> = { ...audited.changes };
+    const changedFields = [...(audited.changedFields ?? [])];
     const imageBefore = product.imageUrl;
     // What a shopper could do before the edit, to tell whether it made the product orderable.
     const wasBuyable = isBuyable(product, new Date());
