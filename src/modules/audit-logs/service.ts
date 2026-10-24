@@ -16,7 +16,7 @@ import type { AuditLogDocument } from './model';
 import type { AuditEntryItem } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { auditSinkFailuresTotal } from './metrics';
-import { correlationDigest } from '@infrastructure/security/pseudonymise';
+import { presentIncidentEntry } from './presenter';
 
 /**
  * Store an emitted audit entry. This is the {@link AuditSink} implementation that
@@ -111,13 +111,7 @@ const searchIncidents = (
             { $and: [INCIDENT_SCOPE, auditLogRepository.sinceScope(filters.since)] },
             AUDIT_SORT
         )
-        .then((page) => ({
-            ...page,
-            items: page.items.map((item) => ({
-                ...item,
-                ...(item.ip === undefined ? {} : { ip: correlationDigest(item.ip) })
-            }))
-        }));
+        .then((page) => ({ ...page, items: page.items.map((item) => presentIncidentEntry(item)) }));
 
 /** Entries read per query when an export walks an account's whole trail. */
 export const OWN_ENTRIES_PAGE = 500;
