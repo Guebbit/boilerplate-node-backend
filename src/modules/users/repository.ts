@@ -210,7 +210,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findWarnedStillInactive: (warnedBefore: Date) => Promise<UserDocument[]>;
     findReaperSoftDeletedPastGrace: (cutoff: Date) => Promise<UserDocument[]>;
     findScheduledDeletionsDue: (now: Date) => Promise<UserDocument[]>;
-    restoreScheduledDeletion: (id: string, now: Date) => Promise<boolean>;
+    restoreScheduledDeletion: (id: string, now: Date, session?: ClientSession) => Promise<boolean>;
     claimScheduledErasure: (id: string, now: Date, session: ClientSession) => Promise<boolean>;
 } = {
     reencrypt: reencryptOf(userModel),
@@ -873,14 +873,16 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * restored. The mirror of {@link claimScheduledErasure} (`purgeAt > now` here, `<= now` there),
      * so the two can never both match one row. `timestamps: false`: restoring is not a profile edit.
      *
+     * @param session - the caller's transaction, when the restore must commit with other writes
      * @returns whether THIS call restored the account
      */
-    restoreScheduledDeletion: (id: string, now: Date) =>
+    restoreScheduledDeletion: (id: string, now: Date, session?: ClientSession) =>
         userModel
             .updateOne(
                 { _id: toObjectId(id), deletedBy: 'owner', purgeAt: { $gt: now } },
                 { $unset: { deletedAt: '', deletedBy: '', purgeAt: '' } },
-                { timestamps: false }
+                // `session`: the caller's transaction, so the cancel commits with its announcement.
+                { timestamps: false, session }
             )
             .exec()
             .then(({ modifiedCount }) => modifiedCount === 1),

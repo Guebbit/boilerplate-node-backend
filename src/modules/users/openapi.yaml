@@ -5,6 +5,7 @@ info:
 
 x-error-codes:
     USER_NOT_DELETED: { status: 409, description: 'The account is not soft-deleted, so there is nothing to restore.' }
+    USER_ERASURE_DUE: { status: 409, description: 'The account owner asked for its deletion and the grace has run out, so it is erased by the next purge run and can no longer be restored.' }
     USER_ALREADY_ACTIVE: { status: 409, description: 'The account is active already: `POST /users/{id}/activate` has nothing to do.' }
     USER_ALREADY_INACTIVE: { status: 409, description: 'The account is deactivated already: `POST /users/{id}/deactivate` has nothing to do.' }
     USER_PURCHASE_HOLD_NOT_SET: { status: 409, description: 'The account has no purchase hold and no review flag, so there is nothing to lift.' }
@@ -398,7 +399,7 @@ paths:
         post:
             tags: [Users]
             summary: Restore user
-            description: Undoes the soft delete of the user identified by `{id}`. Answers 409 when the user is not soft-deleted, so a restore can never be mistaken for an ordinary read.
+            description: Undoes the soft delete of the user identified by `{id}`, which includes an account whose owner asked to delete it and whose `purgeAt` has not passed (the owner is told by mail; the account is then no longer scheduled for erasure). Answers 409 `USER_NOT_DELETED` when the user is not soft-deleted, so a restore can never be mistaken for an ordinary read, and 409 `USER_ERASURE_DUE` past `purgeAt`.
             operationId: restoreUserById
             security:
                 - bearerAuth: []

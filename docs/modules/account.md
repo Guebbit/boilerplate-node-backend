@@ -27,6 +27,7 @@ flowchart LR
     account --> access
     account --> users
     users -. "user.deactivated" .-> account
+    users -. "user.deletion-cancelled" .-> account
     users -. "user.setup-requested" .-> account
     account -. "account.authenticator-removed" .-> api_keys
     account -. "account.sessions-revoked" .-> api_keys

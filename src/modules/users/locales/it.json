@@ -10,6 +10,7 @@
         "already-active": "Questo utente è già attivo.",
         "already-inactive": "Questo utente è già disattivato.",
         "purchase-hold-not-set": "Questo utente non ha alcun blocco acquisti o segnalazione da rimuovere.",
+        "erasure-due": "Il titolare ha chiesto di eliminare questo account e il periodo di tolleranza è scaduto: verrà cancellato alla prossima esecuzione e non può più essere ripristinato.",
         "erasure-not-due": "Nessuna cancellazione è dovuta per questo account: non è stata programmata dal titolare, oppure il periodo di tolleranza non è ancora scaduto.",
         "not-reaper-deleted": "Solo un account eliminato dal processo di inattività può essere cancellato da esso.",
         "not-warned": "Questo account non è mai stato avvisato dell'inattività, quindi il processo non può eliminarlo.",

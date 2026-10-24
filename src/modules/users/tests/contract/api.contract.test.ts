@@ -438,6 +438,23 @@ describe('POST /users/{id}/restore', () => {
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('USER_NOT_DELETED');
     });
+
+    it('answers 409 USER_ERASURE_DUE for an owner-scheduled deletion past its purgeAt', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const user = await createUser({
+            deletedAt: new Date(Date.now() - 31 * 86_400_000),
+            deletedBy: 'owner',
+            purgeAt: new Date(Date.now() - 1000)
+        });
+
+        const response = await api()
+            .post(`/users/${String(user._id)}/restore`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('USER_ERASURE_DUE');
+        expect((await userRepository.findById(String(user._id)))!.deletedBy).toBe('owner');
+    });
 });
 
 /** A status change is an action endpoint, not a field of PUT/PATCH; a repeat is a 409 with a code. */

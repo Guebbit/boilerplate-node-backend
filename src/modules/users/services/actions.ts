@@ -19,7 +19,7 @@ import { hasPurchaseHoldToClear } from './purchase-hold';
  */
 export type ActionsSubject = Pick<
     UserWire,
-    'id' | 'active' | 'deletedAt' | 'purchaseHold' | 'purchaseHoldFlaggedAt'
+    'id' | 'active' | 'deletedAt' | 'purgeAt' | 'purchaseHold' | 'purchaseHoldFlaggedAt'
 >;
 
 /**
@@ -32,11 +32,13 @@ export type ActionsSubject = Pick<
  * @param user - the account being described
  * @param ownerHoldsRole - whether it holds a staff role, in the shop or over the installation
  * @param caller - `request.caller`
+ * @param now - the moment a scheduled erasure is judged against
  */
 export const userActionsFor = (
     user: ActionsSubject,
     ownerHoldsRole: boolean,
-    caller: Caller
+    caller: Caller,
+    now: Date = new Date()
 ): UserActions => {
     const held = heldRules(caller);
     const holdsAssignRole = held.has('assign:Role');
@@ -55,7 +57,8 @@ export const userActionsFor = (
         assignRole: mayUpdate && holdsAssignRole,
         delete: mayDelete && !deleted,
         hardDelete: mayDelete,
-        restore: mayDelete && deleted,
+        // An owner-scheduled row past `purgeAt` waits only for the purge job: no restore.
+        restore: mayDelete && deleted && !(user.purgeAt && user.purgeAt <= now),
         setPurchaseHold: mayBan,
         liftPurchaseHold: mayBan && hasPurchaseHoldToClear(user),
         activate: mayBan && !active,

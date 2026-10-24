@@ -27,6 +27,7 @@ export interface UserRecord extends Omit<
     | 'createdAt'
     | 'updatedAt'
     | 'deletedAt'
+    | 'purgeAt'
     | 'twoFactorEnabledAt'
     | 'verifiedAt'
     | 'analyticsConsentAt'
@@ -742,7 +743,6 @@ const WIRE_OMITTED_FIELDS = [
     'lastApiKeyUseAt',
     'inactivityMinimisedAt',
     'deletedBy',
-    'purgeAt',
     'twoFactorMethods',
     'authenticatorEnabledAt',
     'twoFactorBackupCodes',

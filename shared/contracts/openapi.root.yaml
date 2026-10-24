@@ -899,6 +899,16 @@ components:
                 # in a separately deployed client is how the two come to disagree.
                 actions:
                     $ref: '#/components/schemas/UserActions'
+                # Present only while the account's OWNER has asked for its deletion and the grace has
+                # not run out: the account is locked until then and erased at this instant.
+                # Staff-facing (the owner cannot sign in to read it; sign-in and the mail carry it).
+                purgeAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When the account is erased, after its owner asked to delete it. Present only
+                        on such a row, and `deletedAt` is then the request time. Staff may restore it
+                        until then (`POST /users/{id}/restore`).
                 # Staff-facing, so only on the `/users` reads (never on `/account`): the shop's rule
                 # flagged this account for a person to look at. It stays until a staff member sets or
                 # lifts a hold, even after the automatic hold ended by itself. The data export

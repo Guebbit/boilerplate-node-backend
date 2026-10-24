@@ -13,6 +13,7 @@ import {
 } from '@infrastructure/http/response';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { withTransaction } from '@infrastructure/runtime/database';
+import { announceInTransaction } from '@kernel/outbox';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
@@ -23,6 +24,7 @@ import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { personalDataErasers } from '../erasure-registry';
 import { usersAuditActions } from '../audit';
+import { USER_DELETION_CANCELLED } from '../events';
 import { markSessionsEnded } from './credentials';
 
 /**
@@ -153,7 +155,50 @@ export const remove = (
 };
 
 /**
- * Undo a soft delete. The account's sessions stay revoked: the owner logs in again.
+ * Cancel a deletion the account's owner asked for, if its grace has not run out. The clear is
+ * conditional on `purgeAt > now`, the mirror of the purge's claim, so it can never both match;
+ * `user.deletion-cancelled` commits with it, and `account` drops the restore link and tells the
+ * owner.
+ *
+ * @param user - the loaded account, soft-deleted by its owner
+ * @param context - the staff caller
+ * @returns the restored user, or 409 `USER_ERASURE_DUE` once the grace has run out
+ */
+const restoreScheduled = (
+    user: UserDocument,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    const now = new Date();
+    const due = generateReject(409, [
+        { code: ERROR_CODES.USER_ERASURE_DUE, message: t('users.erasure-due') }
+    ]);
+    if (!user.purgeAt || user.purgeAt <= now) return Promise.resolve(due);
+
+    return announceInTransaction(
+        (session) =>
+            userRepository
+                .restoreScheduledDeletion(user.id, now, session)
+                .then((restored) => (restored ? user.id : null)),
+        (id) => ({ name: USER_DELETION_CANCELLED, payload: { userId: id }, aggregateId: id })
+    ).then((id) => {
+        if (id === null) return due;
+
+        recordAudit(context, {
+            action: usersAuditActions.ADMIN_USER_RESTORED,
+            outcome: 'success',
+            targetType: 'user',
+            targetId: user.id,
+            metadata: { scheduledErasure: true }
+        });
+        return userRepository
+            .findById(user.id)
+            .then((restored) => generateSuccess(restored ?? user, 200, t('users.restored')));
+    });
+};
+
+/**
+ * Undo a soft delete. The account's sessions stay revoked: the owner logs in again. An account its
+ * owner asked to delete is restored too, while its grace runs ({@link restoreScheduled}).
  *
  * @param id - the user to restore
  * @param context - the caller: records `ADMIN_USER_RESTORED`, and is judged against the account
@@ -173,6 +218,8 @@ export const restoreById = (
                 return generateReject(409, [
                     { code: ERROR_CODES.USER_NOT_DELETED, message: t('users.not-deleted') }
                 ]);
+            if (user.deletedBy === 'owner') return restoreScheduled(user, context);
+
             user.deletedAt = undefined;
             user.deletedBy = undefined;
             return userRepository.save(user).then((saved) => {

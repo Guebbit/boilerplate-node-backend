@@ -9,6 +9,7 @@
 
 import { userService, type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
+import { systemCallerContext } from '@kernel/permissions';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { t } from '@infrastructure/i18n';
@@ -179,3 +180,18 @@ export const restoreAccountByLink = (
               )
             : refuseLink(context, 'account_restore', 'account.delete.token-not-found')
     );
+
+/**
+ * Staff cancelled a deletion through `users`: drop the restore link, which has nothing left to
+ * restore, and tell the owner. Driven by the `user.deletion-cancelled` event; an account erased
+ * before the event is handled has nobody left to tell.
+ *
+ * @param userId - the restored account
+ */
+export const handleRestoredByStaff = (userId: string): Promise<void> =>
+    removeTokens(userId, [ACCOUNT_RESTORE_TOKEN_TYPE])
+        .then(() => userService.getById(userId))
+        .then((user) => {
+            // The staff member is in `users`' own audit row; this trail records the cancellation.
+            if (user) announceRestored(user, 'staff', systemCallerContext('User'));
+        });

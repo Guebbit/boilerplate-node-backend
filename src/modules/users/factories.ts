@@ -34,7 +34,12 @@ export const PLAIN_PASSWORD = 'Fx7$qLwZ9m!';
  */
 export type UserOverrides = Omit<
     OverridesFor<User>,
-    'verifiedAt' | 'analyticsConsentAt' | 'purchaseHold' | 'purchaseHoldFlaggedAt' | 'role'
+    | 'verifiedAt'
+    | 'analyticsConsentAt'
+    | 'purchaseHold'
+    | 'purchaseHoldFlaggedAt'
+    | 'purgeAt'
+    | 'role'
 > & {
     /** A purchase hold, with real `Date`s; the contract's ISO strings are what a read answers. */
     purchaseHold?: PurchaseHoldRecord;
