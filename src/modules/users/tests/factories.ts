@@ -14,6 +14,9 @@ import { userRepository } from '../repository';
 import { isAudienceName } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { makeUser } from '../factories';
+import { eraseScheduledDeletion } from '../services/own-account';
+import { systemCallerContext } from '@kernel/permissions';
+import { DAY_MS } from '@domain-primitives/time';
 import type { UserOverrides } from '../factories';
 import { seedMembership } from '@modules/access/tests/factories';
 
@@ -85,3 +88,25 @@ export const createAdminUser = (overrides: UserOverrides = {}): Promise<UserDocu
         },
         'admin'
     ).then((user) => seedMembership(user.id, null, 'platform', 'operator').then(() => user));
+
+/**
+ * Erase an account the way the purge job does: mark it owner-scheduled with its grace run out,
+ * then take the real {@link eraseScheduledDeletion} door, cascade included. For a test about what
+ * an erasure leaves behind; the account is stored as locked first, as it would be in production.
+ *
+ * @param user - a stored account
+ * @returns the door's answer
+ */
+export const eraseAsScheduled = (user: UserDocument): ReturnType<typeof eraseScheduledDeletion> =>
+    userRepository
+        .updateMany(
+            { _id: user.id },
+            {
+                $set: {
+                    deletedAt: new Date(Date.now() - 31 * DAY_MS),
+                    deletedBy: 'owner',
+                    purgeAt: new Date(Date.now() - DAY_MS)
+                }
+            }
+        )
+        .then(() => eraseScheduledDeletion(user, systemCallerContext('User')));

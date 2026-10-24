@@ -24,7 +24,7 @@ const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail
 /** Waits for a mail queued from an outbox-event listener: the relay delivers it after the commit. */
 const mailQueued = () =>
     eventually(() => settleOutboxNudges().then(() => mockEnqueueEmail.mock.calls.length > 0));
-import { createUser } from '@modules/users/tests/factories';
+import { createUser, eraseAsScheduled } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { cartService } from '@modules/cart/services';
@@ -1668,7 +1668,7 @@ describe('deleteByUserId', () => {
         const product = await createProduct();
         await cartService.setItemById(user.id, String(product._id), 2);
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        await eraseAsScheduled(user);
 
         await expect(cartRepository.findByUserId(user.id)).resolves.toBeNull();
     });

@@ -19,7 +19,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
 import { asReject } from '@tests/response';
 import { testCallerContext } from '@tests/callers';
-import { createUser, userRepository } from '@modules/users/tests/factories';
+import { createUser, eraseAsScheduled, userRepository } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
 import { createNotification } from '@modules/notifications/tests/factories';
 import type { PersonalDataSection } from '@kernel/registry';
@@ -763,7 +763,7 @@ describe('erasing the account', () => {
         setPersonalDataSections(originalSections);
         const stored = await userService.getById(user.id);
 
-        const removed = await userService.eraseOwnAccount(userService.redeemedOwner(stored!));
+        const removed = await eraseAsScheduled(stored!);
 
         expect(removed.success).toBe(true);
         await expect(accountExportRepository.findById(result.data.id)).resolves.toBeNull();

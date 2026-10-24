@@ -5,10 +5,9 @@
  * was missed when its hold times out).
  */
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser, userRepository } from '@modules/users/tests/factories';
+import { createUser, eraseAsScheduled, userRepository } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem, readOrder } from '@modules/orders/tests/factories';
-import { userService } from '@modules/users';
 import { resetDomainEvents } from '@kernel/events';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { OrderStatus } from '@types';
@@ -33,7 +32,7 @@ describe('erasing an account whose unpaid order cannot be cancelled', () => {
         const product = await createProduct({ onHand: 10 });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
 
-        const result = await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        const result = await eraseAsScheduled(user);
 
         expect(result.success).toBe(true);
         expect(await userRepository.findById(user.id)).toBeNull();

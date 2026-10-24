@@ -6,7 +6,7 @@
  * wiring: a direct call to the hook would pass even if `orders/module.ts` stopped registering it.
  */
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/factories';
+import { createUser, eraseAsScheduled } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
 import {
     createOrder,
@@ -70,7 +70,7 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
         const { order, product } = await heldOrderFor(user);
         expect(await countersOf(product._id)).toMatchObject({ onHand: 10, reserved: 3 });
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        await eraseAsScheduled(user);
 
         expect((await readOrder(String(order._id)))!.status).toBe(OrderStatus.cancelled);
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
@@ -80,7 +80,7 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
         const user = await createUser();
         const { order, product } = await heldOrderFor(user);
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        await eraseAsScheduled(user);
 
         const { items } = await inventoryService.listMovements({
             productId: String(product._id)
@@ -97,7 +97,7 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
         const user = await createUser();
         const { order } = await heldOrderFor(user);
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        await eraseAsScheduled(user);
 
         const reloaded = await readOrder(String(order._id));
         expect(reloaded!.userId).toBeUndefined();
@@ -109,7 +109,7 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
         const first = await heldOrderFor(user, 1);
         const second = await heldOrderFor(user, 2);
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        await eraseAsScheduled(user);
 
         expect((await readOrder(String(first.order._id)))!.status).toBe(OrderStatus.cancelled);
         expect((await readOrder(String(second.order._id)))!.status).toBe(OrderStatus.cancelled);
@@ -121,7 +121,7 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
         const user = await createUser();
         await heldOrderFor(user);
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        await eraseAsScheduled(user);
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
@@ -131,7 +131,7 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
         await heldOrderFor(user);
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        await eraseAsScheduled(user);
 
         expect(analyticsSpy).toHaveBeenCalledWith(
             expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_CANCELLED })
@@ -149,7 +149,7 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
         });
         await markOrderPaidAt(String(order._id), new Date());
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        await eraseAsScheduled(user);
 
         const reloaded = await readOrder(String(order._id));
         expect(reloaded!.status).toBe(OrderStatus.paid);
@@ -162,7 +162,7 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         await forceOrderStatus(String(order._id), OrderStatus.cancelled);
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        await eraseAsScheduled(user);
 
         expect((await readOrder(String(order._id)))!.status).toBe(OrderStatus.cancelled);
     });
@@ -172,7 +172,7 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
         const other = await createUser({ email: 'other@example.com' });
         const { order, product } = await heldOrderFor(other);
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(erased));
+        await eraseAsScheduled(erased);
 
         expect((await readOrder(String(order._id)))!.status).toBe(OrderStatus.pending);
         expect(await countersOf(product._id)).toMatchObject({ reserved: 3 });
