@@ -513,6 +513,27 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /payments/{id}:
+        get:
+            tags: [Payments]
+            summary: Get a payment
+            description: One payment by its own id, which is where `Location` points after `POST /payments`. The payer reads their own; a caller holding `display:Payment` reads anyone's. Another account's payment is the same 404 as a missing one. The provider's `clientSecret` is never part of a read, only of the answer to `POST /payments`.
+            operationId: getPayment
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The payment
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /payments/{id}/confirm:
         post:
             tags: [Payments]

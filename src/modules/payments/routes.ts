@@ -46,6 +46,7 @@ import { postPayment } from './controllers/post-payment';
 import { postPaymentConfirm } from './controllers/post-payment-confirm';
 import { postPaymentSync } from './controllers/post-payment-sync';
 import { postPaymentWebhook } from './controllers/post-payment-webhook';
+import { getPayment } from './controllers/get-payment';
 import { getPaymentByOrder } from './controllers/get-payment-by-order';
 import { getOrderByReference } from './controllers/get-order-by-reference';
 import { postPaymentRefund } from './controllers/post-payment-refund';
@@ -116,6 +117,11 @@ router.post(
     requireIdempotencyKey,
     postPaymentRefund
 );
+
+// GET /payments/:id — one payment by its own id. Declared after every literal GET above (`/refunds`,
+// `/attention`, `/order-by-reference`), which a bare `/:id` would otherwise swallow. No permission
+// guard: the read is scoped in the service, a stranger's payment is the same 404 as a missing one.
+router.get('/:id', getPayment);
 
 // POST /payments/:id/refunds/:refundId/settle — the operator confirming hand-paid money went back.
 // Same `create:Refund` key (and so the same `stepUp`) as the refund that opened the record; the

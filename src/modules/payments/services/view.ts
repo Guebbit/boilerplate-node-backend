@@ -48,6 +48,25 @@ export const getForOrder = (
         );
 
 /**
+ * One payment by its own id — the address `Location` names after `POST /payments`.
+ *
+ * @param paymentId - the payment
+ * @param authContext - the caller; sees only their own, `display:Payment` sees anyone's
+ * @returns the payment with its `actions`, or the same 404 whether it is missing or another's
+ */
+export const getById = (
+    paymentId: string,
+    authContext?: AuthContext
+): Promise<ResponseSuccess<Payment> | ResponseReject> =>
+    paymentRepository
+        .findByIdScoped(paymentId, callerScope(authContext))
+        .then((payment) =>
+            payment
+                ? presentWithActions(payment, authContext).then((wire) => generateSuccess(wire))
+                : paymentNotFound()
+        );
+
+/**
  * Whether the caller is the account that made this payment and may spend a basket at all.
  *
  * @param payment - the payment being served

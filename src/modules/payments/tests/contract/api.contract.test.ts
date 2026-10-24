@@ -575,6 +575,53 @@ describe('GET /payments/orders/{orderId}', () => {
     });
 });
 
+describe('GET /payments/{id}', () => {
+    it('matches the contract for the payer, and never carries the clientSecret', async () => {
+        const { bearer, paymentId } = await authenticateWithIntent();
+
+        const response = await api().get(`/payments/${paymentId}`).set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.id).toBe(paymentId);
+        expect(response.body.data).not.toHaveProperty('clientSecret');
+    });
+
+    it('hides another shopper`s payment behind the same 404 as a missing one', async () => {
+        const { paymentId } = await authenticateWithIntent();
+        const stranger = await authenticateAsRole('customer');
+
+        const response = await api()
+            .get(`/payments/${paymentId}`)
+            .set('Authorization', stranger.bearer);
+        const missing = await api()
+            .get(`/payments/${MISSING_ID}`)
+            .set('Authorization', stranger.bearer);
+
+        expect(response.status).toBe(404);
+        expect(missing.status).toBe(404);
+    });
+
+    it('lets a caller holding display:Payment read anyone`s', async () => {
+        const { paymentId } = await authenticateWithIntent();
+        const admin = await authenticateAs('admin');
+
+        const response = await api()
+            .get(`/payments/${paymentId}`)
+            .set('Authorization', admin.bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.id).toBe(paymentId);
+    });
+
+    it('answers 404 for an id that is not one', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().get('/payments/not-an-id').set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+});
+
 /** A fresh `Idempotency-Key` — the refund route refuses a request without one. */
 const freshKey = (): string => randomUUID();
 

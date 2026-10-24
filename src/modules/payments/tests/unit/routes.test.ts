@@ -43,6 +43,7 @@ describe('payment routes', () => {
             'GET /orders/:orderId',
             'GET /order-by-reference',
             'POST /orders/:orderId/refund',
+            'GET /:id',
             'POST /:id/refunds/:refundId/settle',
             'POST /orders/:orderId/offline',
             'POST /:id/confirm',

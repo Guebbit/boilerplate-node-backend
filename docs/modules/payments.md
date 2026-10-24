@@ -586,7 +586,8 @@ flowchart LR
 ## The staff Payments page
 
 Four reads behind one admin page, all `display:Payment` (support, manager, moderator, admin) and never
-shared-cached. A payer reads their own payment through `GET /payments/orders/{orderId}` only.
+shared-cached. A payer reads their own payment through `GET /payments/orders/{orderId}` or, by its own id (the
+`Location` of `POST /payments`), `GET /payments/{id}`; a stranger's is the same 404 as a missing one.
 
 | Read                                     | Answers                                                                                                                                                                 |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
