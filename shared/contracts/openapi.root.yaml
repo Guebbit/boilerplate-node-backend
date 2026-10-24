@@ -1200,6 +1200,8 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1restore'
     /account/login:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login'
+    /account/login/restore:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login~1restore'
     /account/signup:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1signup'
     /account/password/reset:

@@ -23,8 +23,12 @@ import { MFA_CHALLENGE_TOKEN_TYPE } from '../token-types';
 import { armedEntries, audited, deliverArmedCode, summarize } from './two-factor-outcomes';
 import { verifyArmedFactor, settleVerdict } from './two-factor-lockout';
 
-/** How long an MFA login challenge lives when every armed factor is read off a device — long enough to type six digits, no more. */
-const MFA_CHALLENGE_TTL_MS = 300_000;
+/**
+ * How long an MFA login challenge lives when every armed factor is read off a device — long
+ * enough to type six digits, no more. Exported for the deletion-restore claim check, which lives
+ * as long.
+ */
+export const MFA_CHALLENGE_TTL_MS = 300_000;
 
 /**
  * The same, for an account with a DELIVERED factor armed. Double, because the window now has to

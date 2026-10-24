@@ -16,7 +16,7 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { userService, type UserDocument } from '@modules/users';
+import { userService, isAuthenticatable, isRestorable, type UserDocument } from '@modules/users';
 import { withOwnAccount } from './caller';
 
 /**
@@ -28,7 +28,8 @@ import { withOwnAccount } from './caller';
 const DUMMY_PASSWORD_HASH = hashPasswordSync(randomBytes(32).toString('hex'));
 
 /**
- * Login user by email/password.
+ * Login user by email/password. The account returned may be in the grace of its own deletion
+ * (`isRestorable`): the caller then offers the restore instead of minting a session.
  */
 export const login = (
     email?: string,
@@ -55,7 +56,10 @@ export const login = (
                 // attacker tell "no such account" from "wrong password" by response time alone.
                 return verifyPassword(password ?? '', user?.password ?? DUMMY_PASSWORD_HASH).then(
                     (doMatch) => {
-                        if (!user || !doMatch)
+                        // The lookup also returns an account in its deletion grace; one whose
+                        // grace ran out since the query is neither, and is refused like a wrong
+                        // password.
+                        if (!user || !doMatch || !(isAuthenticatable(user) || isRestorable(user)))
                             return generateReject(401, [t('account.login.wrong-data')]);
                         return generateSuccess<UserDocument>(user);
                     }

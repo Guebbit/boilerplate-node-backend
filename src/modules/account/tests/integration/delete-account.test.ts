@@ -8,7 +8,7 @@
  */
 
 import { api, staleBearerFor } from '@tests/http';
-import { cookieHeader } from '@tests/cookies';
+import { cookieHeader, setCookie } from '@tests/cookies';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
 import { ACCOUNT_RESTORE_TOKEN_TYPE } from '@modules/account/services';
@@ -77,7 +77,7 @@ describe('DELETE /account', () => {
         expect(mailedRestoreToken()).not.toBe('');
     });
 
-    it('clears the session cookies and ends every session at once', async () => {
+    it('clears the session cookies and ends every session at once, offering the restore at sign-in', async () => {
         const { user, bearer, cookie } = await authenticate();
 
         const response = await api().delete('/account').set('Authorization', bearer).send();
@@ -90,7 +90,9 @@ describe('DELETE /account', () => {
         const login = await api()
             .post('/account/login')
             .send({ email: user.email, password: PLAIN_PASSWORD });
-        expect(login.status).toBe(401);
+        // Signing in offers the restore and issues nothing.
+        expect(login.body.data.deletionPending).toBe(true);
+        expect(setCookie(login, '__Host-session')).toBeUndefined();
     });
 
     it('purges the pending links but keeps the way back', async () => {

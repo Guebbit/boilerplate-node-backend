@@ -136,6 +136,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'the second step of a 2FA login — the challenge token is the credential, not a session'
     },
+    'account POST /login/restore': {
+        requiresAuth: false,
+        reason: 'the last step of a sign-in during the deletion grace — the claim check is the credential, not a session'
+    },
     'account POST /login/2fa/send': {
         requiresAuth: false,
         reason: 'delivering a login code — same footing as the step it belongs to, the challenge token is the credential'

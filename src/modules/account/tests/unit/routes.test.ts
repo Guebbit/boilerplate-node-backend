@@ -49,6 +49,7 @@ const RATE_LIMITED = [
     'POST /email-change/confirm',
     'POST /email-change/undo',
     'POST /login/2fa',
+    'POST /login/restore',
     'POST /login/2fa/send',
     'GET /oauth/:provider',
     'GET /oauth/:provider/callback'
@@ -125,6 +126,7 @@ describe('account routes — what is mounted', () => {
             'GET /export/:id',
             'POST /login/2fa/send',
             'POST /login/2fa',
+            'POST /login/restore',
             'GET /2fa',
             'POST /2fa/disable',
             'POST /2fa/methods/:method/setup',

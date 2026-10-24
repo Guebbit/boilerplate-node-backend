@@ -133,6 +133,18 @@ export const TRUSTED_AUTHENTICATABLE_FILTER = {
     deletedAt: AUTHENTICATABLE_FILTER.deletedAt
 };
 
+/**
+ * Who may be offered a sign-in: {@link TRUSTED_AUTHENTICATABLE_FILTER}'s accounts, plus an
+ * owner-scheduled deletion still inside its grace (it is offered the restore, never a session).
+ * The `$or` operators are ours, so they are marked `trusted()` like the filter above.
+ *
+ * @param now - the moment `purgeAt` is judged against
+ */
+const trustedSignInFilter = (now: Date) => ({
+    active: TRUSTED_AUTHENTICATABLE_FILTER.active,
+    $or: [{ deletedAt: null }, { deletedBy: 'owner' as const, purgeAt: trusted({ $gt: now }) }]
+});
+
 /** An `$unset` document that clears every field of the code in a slot. */
 const clearedCode = (slot: DeliveredCodeSlot): Record<string, ''> =>
     Object.fromEntries(DELIVERED_CODE_FIELDS.map((name) => [codeSlotPath(slot, name), '']));
@@ -154,7 +166,12 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     emailOrPendingEmailTaken: (email: string, excludingId: string) => Promise<boolean>;
     emailTaken: (email: string) => Promise<boolean>;
     findAuthenticatableById: (id: string) => Promise<UserDocument | null>;
-    findAuthenticatableByEmail: (email: string) => Promise<UserDocument | null>;
+    findForSignInByEmail: (email: string, now: Date) => Promise<UserDocument | null>;
+    findForSignInByOAuthIdentity: (
+        provider: string,
+        providerId: string,
+        now: Date
+    ) => Promise<UserDocument | null>;
     clearLapsedPreviousEmail: (keepUserIds: readonly string[]) => Promise<number>;
     linkOAuthAccount: (userId: string, account: OAuthAccount) => Promise<boolean>;
     unlinkOAuthAccount: (userId: string, provider: string) => Promise<boolean>;
@@ -287,14 +304,31 @@ export const userRepository: Repository<UserDocument, UserWire> & {
         userModel.findOne({ _id: id, ...AUTHENTICATABLE_FILTER }).exec(),
 
     /**
-     * Fetch a user by email, but only if the account may still authenticate — same
-     * `AUTHENTICATABLE_FILTER` as `findAuthenticatableById`. WITH credential fields
+     * Fetch the account a sign-in by email may be about: one that may authenticate, or one whose
+     * owner scheduled its deletion and is still inside the grace ({@link trustedSignInFilter}).
+     * The caller tells them apart with `isAuthenticatable` / `isRestorable`. WITH credential fields
      * (`select: false`), since the caller is always about to compare a password hash.
      * `login` (`account/services/login.ts`) is the only caller.
      */
-    findAuthenticatableByEmail: (email: string) =>
+    findForSignInByEmail: (email: string, now: Date) =>
         userModel
-            .findOne({ email, ...TRUSTED_AUTHENTICATABLE_FILTER })
+            .findOne({ email, ...trustedSignInFilter(now) })
+            .setOptions(EXTERNAL_KEY_QUERY)
+            .select(CREDENTIAL_FIELDS)
+            .exec(),
+
+    /**
+     * The account already linked to a federated identity, under the same sign-in filter as
+     * {@link findForSignInByEmail}, credential fields included: the caller may build a 2FA
+     * challenge off `twoFactorMethods` right after.
+     */
+    findForSignInByOAuthIdentity: (provider: string, providerId: string, now: Date) =>
+        userModel
+            .findOne({
+                'oauthAccounts.provider': provider,
+                'oauthAccounts.providerId': providerId,
+                ...trustedSignInFilter(now)
+            })
             .setOptions(EXTERNAL_KEY_QUERY)
             .select(CREDENTIAL_FIELDS)
             .exec(),

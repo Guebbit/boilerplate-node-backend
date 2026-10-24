@@ -4,6 +4,8 @@
         "session-touched": "Sessione aggiornata.",
         "login": {
             "wrong-data": "Email o password non validi.",
+            "deletion-pending": "Questo account è in programma per l'eliminazione. Ripristinalo per accedere.",
+            "restore-challenge-invalid": "Questo tentativo di ripristino è scaduto. Accedi di nuovo.",
             "second-factor-required": "Autenticazione a due fattori richiesta.",
             "success": "Autenticazione riuscita."
         },

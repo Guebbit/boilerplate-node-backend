@@ -30,6 +30,7 @@ import * as accountDeletion from './account-deletion';
 import * as password from './password';
 import * as passwordReset from './password-reset';
 import * as emailChange from './email-change';
+import * as deletionSignIn from './deletion-sign-in';
 import * as purgeDeletions from './purge-deletions';
 import * as profile from './profile';
 import * as verification from './verification';
@@ -98,6 +99,8 @@ export const accountService = {
     confirmEmailChange: verification.confirmEmailChange,
     undoEmailChangeByToken: verification.undoEmailChangeByToken,
     restoreAccountByLink: accountDeletion.restoreAccountByLink,
+    buildDeletionPending: deletionSignIn.buildDeletionPending,
+    restoreAtSignIn: deletionSignIn.restoreAtSignIn,
     purgeScheduledDeletions: purgeDeletions.purgeScheduledDeletions,
     completeEmailVerification: verification.completeEmailVerification,
     completeEmailChange: verification.completeEmailChange,

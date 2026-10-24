@@ -4,6 +4,8 @@
         "session-touched": "Session refreshed.",
         "login": {
             "wrong-data": "Invalid email or password.",
+            "deletion-pending": "This account is scheduled for deletion. Restore it to sign in.",
+            "restore-challenge-invalid": "This restore attempt has expired. Please sign in again.",
             "second-factor-required": "Two-factor authentication required.",
             "success": "Authentication successful."
         },

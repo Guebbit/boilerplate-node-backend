@@ -44,6 +44,14 @@ export const EMAIL_CHANGE_UNDO_TOKEN_TYPE = 'email-change-undo';
 export const MFA_CHALLENGE_TOKEN_TYPE = 'mfa-challenge';
 
 /**
+ * The `type` of the claim check a sign-in hands an account in its deletion grace: proof that the
+ * password (and the second factor, when armed) checked out, redeemable once at
+ * `POST /account/login/restore`. Same shape and lifetime as {@link MFA_CHALLENGE_TOKEN_TYPE}, and
+ * like it several may be in flight at once.
+ */
+export const DELETION_RESTORE_TOKEN_TYPE = 'deletion-restore';
+
+/**
  * The `type` of the short-lived token a signed-in account holds while it is out at a provider
  * connecting a sign-in method. It is the callback's proof WHICH account is connecting: the browser
  * returns from the provider with cookies only, and a bare provider identity must never link itself
@@ -68,6 +76,7 @@ export const VERIFICATION_TOKEN_TYPES = [
     EMAIL_CHANGE_TOKEN_TYPE,
     EMAIL_CHANGE_UNDO_TOKEN_TYPE,
     MFA_CHALLENGE_TOKEN_TYPE,
+    DELETION_RESTORE_TOKEN_TYPE,
     OAUTH_LINK_TOKEN_TYPE
 ] as const;
 

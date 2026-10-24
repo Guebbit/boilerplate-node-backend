@@ -67,6 +67,7 @@ import { postAccountExport } from './controllers/post-account-export';
 import { getAccountExport } from './controllers/get-account-export';
 import { deleteAccount } from './controllers/delete-account';
 import { postAccountRestore } from './controllers/post-account-restore';
+import { postLoginRestore } from './controllers/post-login-restore';
 import { getOAuthProviders } from './controllers/get-oauth-providers';
 import { getSessionConfig } from './controllers/get-session-config';
 import { postSessionTouch } from './controllers/post-session-touch';
@@ -329,6 +330,11 @@ router.post('/login/2fa/send', credentialLimiters, mfaSendLimiter, postLoginTwoF
 // itself: the challenge token is the credential. `mfaChallengeLimiter` bounds guesses against
 // ONE challenge; `credentialLimiters` is defense in depth on top of it.
 router.post('/login/2fa', credentialLimiters, mfaChallengeLimiter, postLoginTwoFactor);
+
+// POST /account/login/restore — redeem the deletion-grace claim check: cancels the deletion and
+// starts the session. Public, the claim check is the credential: `credentialLimiters` bound the
+// guesses like the other challenge answers.
+router.post('/login/restore', credentialLimiters, postLoginRestore);
 
 // GET /account/2fa — the caller's own factors. Plain `isAuth`: reading your own 2FA status
 // reveals nothing a step-up would protect, and the profile page needs it on every visit.

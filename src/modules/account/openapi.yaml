@@ -774,6 +774,41 @@ paths:
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /account/login/restore:
+        post:
+            tags: [Auth]
+            summary: Restore an account in its deletion grace and sign in
+            description: >-
+                The last step of a sign-in by an account whose owner asked to delete it
+                (`DELETE /account`) and whose `purgeAt` has not passed. Submits the `DeletionPending`
+                claim check that `POST /account/login` (or `POST /account/login/2fa`) answered:
+                it cancels the deletion, then starts the session exactly as `POST /account/login`
+                does, `remember` and `transport` included. A client that does not want the account
+                back simply never calls it, and the account is erased at `purgeAt`. Omit `challenge`
+                for an OAuth-originated sign-in: that claim check never reached the client and is
+                read from the httpOnly cookie the callback set. An unknown, expired or spent
+                challenge answers 401.
+            operationId: loginRestore
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LoginRestoreRequest'
+            responses:
+                '200':
+                    description: The account is restored, and this is its new session
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthTokensEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `credentialLimiters` sits in front of this route — see routes.ts.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /account/session-config:
         get:
             tags: [Auth]
@@ -809,7 +844,10 @@ paths:
                 request asked for `transport: bearer`, which sets no cookie and returns the
                 `ses_…` id as `sessionToken` instead. When the account has two-factor
                 authentication enabled the response is a short-lived challenge to submit to
-                `POST /account/login/2fa` instead.
+                `POST /account/login/2fa` instead. When the account is inside the grace of its
+                own deletion (`DELETE /account`) and has no second factor, the response is a
+                `DeletionPending` claim check to submit to `POST /account/login/restore`: the
+                account is not restored, and no session exists, until that call.
             operationId: login
             security: []
             requestBody:
@@ -820,7 +858,7 @@ paths:
                             $ref: '#/components/schemas/LoginRequest'
             responses:
                 '200':
-                    description: Auth tokens, or a two-factor challenge
+                    description: Auth tokens, a two-factor challenge, or the offer to restore an account in its deletion grace
                     content:
                         application/json:
                             schema:
@@ -835,7 +873,7 @@ paths:
         post:
             tags: [Auth]
             summary: Complete a two-factor login
-            description: The second step of a login for an account with two-factor authentication enabled — submits the challenge from `POST /account/login` and a 6-digit code (or an unused backup code). On success, starts the session exactly as `POST /account/login` does for an account with no second factor, `transport` included.
+            description: The second step of a login for an account with two-factor authentication enabled — submits the challenge from `POST /account/login` and a 6-digit code (or an unused backup code). On success, starts the session exactly as `POST /account/login` does for an account with no second factor, `transport` included. For an account inside the grace of its own deletion the second factor passing answers a `DeletionPending` claim check instead of a session, so two-factor is asked once and `POST /account/login/restore` finishes.
             operationId: loginTwoFactor
             security: []
             requestBody:
@@ -846,11 +884,11 @@ paths:
                             $ref: '#/components/schemas/LoginTwoFactorRequest'
             responses:
                 '200':
-                    description: Auth tokens
+                    description: Auth tokens, or the offer to restore an account in its deletion grace
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AuthTokensEnvelope'
+                                $ref: '#/components/schemas/LoginTwoFactorResponseEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # A wrong code is a 422, same reasoning as /account/reauth: a 401 here would read
                 # as an expired challenge and send a caller back to /account/login for no reason.
@@ -1037,7 +1075,7 @@ paths:
         get:
             tags: [Auth]
             summary: Complete an OAuth login
-            description: 'Browser-navigated only: where `provider` sends the browser back after consent. Validates `state`, exchanges the code, finds-or-creates the account, and redirects to the frontend with the session cookies set — or with `?error=<code>` on failure. When the account has two-factor authentication armed, no session is minted: the redirect instead carries `?mfaRequired=1&expiresAt=...&methods=...&defaultMethod=...` (the same fields MfaChallenge carries, minus the token itself), and the challenge token travels in a short-lived httpOnly cookie that POST /account/login/2fa and .../2fa/send read when their body omits `challenge`. Either success redirect also carries `?continue=<path>` when `GET /account/oauth/{provider}` saved one and it is still a valid same-origin path; every redirect, a failure''s included, carries `?locale=<tag>` likewise. A provider whose verified email matches an existing account links nothing and signs nobody in: the redirect carries `?error=account_exists`, and the owner connects the provider from a signed-in session (`POST /account/oauth/links/{provider}`). When that existing account never proved its own address, the redirect carries `?error=account_unverified` instead: the owner resets the password, which proves the mailbox, and signs in the way the account allows. That signed-in connect round trip comes back to this same callback, mints no session and redirects with `?linked=<provider>`, or `?error=already_linked` (the provider account belongs to another account) or `?error=link_expired` (the minutes the attempt lives ran out).'
+            description: 'Browser-navigated only: where `provider` sends the browser back after consent. Validates `state`, exchanges the code, finds-or-creates the account, and redirects to the frontend with the session cookies set — or with `?error=<code>` on failure. When the account has two-factor authentication armed, no session is minted: the redirect instead carries `?mfaRequired=1&expiresAt=...&methods=...&defaultMethod=...` (the same fields MfaChallenge carries, minus the token itself), and the challenge token travels in a short-lived httpOnly cookie that POST /account/login/2fa and .../2fa/send read when their body omits `challenge`. When the account is inside the grace of its own deletion and has no second factor, no session is minted either: the redirect carries `?deletionPending=1&purgeAt=...&expiresAt=...` and the claim check travels in a short-lived httpOnly cookie that `POST /account/login/restore` reads when its body omits `challenge`. Either success redirect also carries `?continue=<path>` when `GET /account/oauth/{provider}` saved one and it is still a valid same-origin path; every redirect, a failure''s included, carries `?locale=<tag>` likewise. A provider whose verified email matches an existing account links nothing and signs nobody in: the redirect carries `?error=account_exists`, and the owner connects the provider from a signed-in session (`POST /account/oauth/links/{provider}`). When that existing account never proved its own address, the redirect carries `?error=account_unverified` instead: the owner resets the password, which proves the mailbox, and signs in the way the account allows. That signed-in connect round trip comes back to this same callback, mints no session and redirects with `?linked=<provider>`, or `?error=already_linked` (the provider account belongs to another account) or `?error=link_expired` (the minutes the attempt lives ran out).'
             operationId: completeOAuthLogin
             security: []
             parameters:
@@ -1494,11 +1532,67 @@ components:
                     type: string
                     description: Which of `methods` to offer first — the cheapest one for the user, which is a device method when there is one.
 
+        DeletionPending:
+            type: object
+            additionalProperties: false
+            required: [deletionPending, challenge, expiresAt, purgeAt]
+            properties:
+                deletionPending:
+                    type: boolean
+                    enum: [true]
+                    description: Always true. The credentials checked out, but the account is inside the grace of its own deletion, so no session is issued until the owner chooses to restore it.
+                challenge:
+                    type: string
+                    description: A claim check recording how the sign-in was proven (password, and the second factor when armed). Submit it to `POST /account/login/restore`.
+                expiresAt:
+                    type: string
+                    format: date-time
+                    description: When the challenge stops being accepted. Signing in again earns a new one.
+                purgeAt:
+                    type: string
+                    format: date-time
+                    description: When the account is erased unless restored before.
+
         LoginOutcome:
             oneOf:
                 - $ref: '#/components/schemas/AuthTokens'
                 - $ref: '#/components/schemas/MfaChallenge'
-            description: Either a full session (AuthTokens) or a step-up challenge (MfaChallenge) when the account has two-factor authentication enabled.
+                - $ref: '#/components/schemas/DeletionPending'
+            description: A full session (AuthTokens), a step-up challenge (MfaChallenge) when the account has two-factor authentication enabled, or the offer to restore an account inside the grace of its own deletion (DeletionPending).
+
+        LoginTwoFactorOutcome:
+            oneOf:
+                - $ref: '#/components/schemas/AuthTokens'
+                - $ref: '#/components/schemas/DeletionPending'
+            description: A full session (AuthTokens), or the offer to restore an account inside the grace of its own deletion (DeletionPending) once its second factor passed.
+
+        LoginTwoFactorResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/LoginTwoFactorOutcome'
+
+        LoginRestoreRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                challenge:
+                    type: string
+                    maxLength: 128
+                    minLength: 1
+                    description: The `DeletionPending` challenge. Omit it for an OAuth-originated sign-in — that challenge was never sent to the client, and this endpoint reads it from the httpOnly cookie the callback set instead.
+                remember:
+                    $ref: '#/components/schemas/RememberTier'
+                transport:
+                    $ref: '#/components/schemas/SessionTransport'
 
         LoginResponseEnvelope:
             type: object
