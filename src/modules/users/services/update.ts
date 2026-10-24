@@ -24,6 +24,7 @@ import { phoneAad, type UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { usersAuditActions } from '../audit';
 import { enqueueIfPending } from './image';
+import { userAuditChanges } from './audit-changes';
 import { roleRefusalReject } from './role-refusal';
 
 /**
@@ -297,17 +298,22 @@ const applyUpdate = (
     data: UpdateByIdData,
     context: CallerContext,
     role: RoleChange
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    update(user, data, context, role).then((result) => {
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    // Read before `update` assigns onto the document.
+    const metadata = userAuditChanges(user, data);
+
+    return update(user, data, context, role).then((result) => {
         if (result.success)
             recordAudit(context, {
                 action: usersAuditActions.ADMIN_USER_UPDATED,
                 outcome: 'success',
                 targetType: 'user',
-                targetId: String(user._id)
+                targetId: String(user._id),
+                metadata
             });
         return result;
     });
+};
 
 /**
  * Update an existing user by ID: load the document, clear the staff-role protection, then

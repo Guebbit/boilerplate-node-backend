@@ -66,6 +66,7 @@ import {
 import { clearLapsedPreviousEmail, clearDeliveredCode } from './credentials';
 import { reencryptUserPhones, reencryptTwoFactorSecrets } from './reencrypt';
 import { exportSignInMethods } from './sign-in-methods';
+import { userAuditChanges } from './audit-changes';
 import {
     registerSelfService,
     registerFromOAuth,
@@ -95,6 +96,7 @@ export type { ActivePurchaseHold } from './purchase-hold';
  * (`softDeleteInactive`, `eraseInactive`). The raw `update` and `remove` beneath them are not here.
  */
 export const userService = {
+    userAuditChanges,
     search,
     getById,
     create,

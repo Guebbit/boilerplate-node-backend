@@ -19,6 +19,7 @@ import { productService, canSeeStock } from '@modules/products';
 import { userService } from '@modules/users';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { auditChanges } from '@infrastructure/observability/audit-changes';
 import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { orderRepository } from '../repository';
@@ -205,13 +206,17 @@ export const updateById = (
         // at the `.catch()` that has to tell them apart.
         if (!order) return generateReject(404, [t('orders.not-found')]);
 
+        // Read before `update` assigns onto the document. The email is personal data: by name only.
+        const metadata = auditChanges(order, data, { valued: [], named: ['email'] });
+
         return update(order, data).then((result) => {
             if (result.success)
                 recordAudit(context, {
                     action: ordersAuditActions.ORDER_UPDATED,
                     outcome: 'success',
                     targetType: 'order',
-                    targetId: id
+                    targetId: id,
+                    metadata
                 });
             return result;
         });

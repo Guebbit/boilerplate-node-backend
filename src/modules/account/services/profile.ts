@@ -152,16 +152,27 @@ export const updateProfile = (
     // Credentials included by default: the update saves this same document. The shape was checked
     // once, at the edge (`update-account.ts`'s factory), so nothing here parses it again.
     withOwnAccount(userId, (user) =>
-        applyEmailChangeRequest(user, changes.email).then((emailOutcome) =>
-            writeProfile(user, changes, emailOutcome, context)
-        )
+        applyEmailChangeRequest(user, changes.email).then((emailOutcome) => {
+            // Read before the write assigns onto the document. `email` counts only when this call
+            // is what asked for the change.
+            const metadata = userService.userAuditChanges(user, {
+                ...changes,
+                email: emailOutcome.requested ? changes.email : undefined
+            });
+
+            return writeProfile(user, changes, emailOutcome, context).then((result) => {
+                if (result.success)
+                    recordAudit(context, {
+                        action: accountAuditActions.AUTH_PROFILE_UPDATED,
+                        outcome: 'success',
+                        metadata
+                    });
+                return result;
+            });
+        })
     )
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
         .then((result) => {
             if (!result.success) return result;
-            recordAudit(context, {
-                action: accountAuditActions.AUTH_PROFILE_UPDATED,
-                outcome: 'success'
-            });
             return generateSuccess(result.data, 200, t('account.update.success'));
         });
