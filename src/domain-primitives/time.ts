@@ -25,6 +25,23 @@ export const endOfUtcDay = (instant: Date): Date =>
     );
 
 /**
+ * The same date one calendar month later, at 00:00 UTC, clamped to that month's last day.
+ *
+ * This is how the EDPB counts "within one month" (Guidelines 01/2022 v2 ¶160, Reg. 1182/71):
+ * 5 March runs until 5 April, 31 August until 30 September. Midnight UTC means no time zone sees
+ * the deadline pass late.
+ * @param instant - the moment the month starts counting from
+ * @returns midnight UTC of the same day next month, or of its last day when that day is missing
+ */
+export const oneCalendarMonthLaterUtc = (instant: Date): Date => {
+    // Date.UTC: a month of 12 rolls into the next year; day 0 of month+2 is the last day of month+1.
+    const year = instant.getUTCFullYear();
+    const month = instant.getUTCMonth();
+    const lastDayOfNextMonth = new Date(Date.UTC(year, month + 2, 0)).getUTCDate();
+    return new Date(Date.UTC(year, month + 1, Math.min(instant.getUTCDate(), lastDayOfNextMonth)));
+};
+
+/**
  * The calendar day an instant falls in, on the wall clock of `timeZone`, as `YYYY-MM-DD`.
  *
  * Why not `toISOString().slice(0, 10)`: 00:30 on the 5th in Rome is still the 4th in UTC, and a
