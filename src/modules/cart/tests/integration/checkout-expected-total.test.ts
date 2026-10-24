@@ -26,10 +26,10 @@ const shopperWith = async (price: number, quantity = 2) => {
     await giveAddress(user.id);
     const product = await createProduct({ price, onHand: 10 });
     await api()
-        .post('/cart')
+        .post('/cart/items')
         .set('Authorization', bearer)
         .send({ productId: String(product._id), quantity })
-        .expect(201);
+        .expect(200);
     await api()
         .put('/cart/shipping-method')
         .set('Authorization', bearer)
@@ -108,7 +108,7 @@ describe('POST /cart/checkout and the total the buyer was shown', () => {
         const { bearer, product } = await shopperWith(10);
         const shown = await shownTotal(bearer);
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 1 });
 

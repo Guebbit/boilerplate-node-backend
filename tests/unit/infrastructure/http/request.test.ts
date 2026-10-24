@@ -102,7 +102,7 @@ describe('readInput', () => {
 
         it('ignores sources the surface does not read', () => {
             // `path` reads params only, so a query the caller sent is not merely lower precedence —
-            // it is invisible. That is what makes `DELETE /cart/{productId}` unable to take an id
+            // it is invisible. That is what makes `DELETE /cart/items/{productId}` unable to take an id
             // from anywhere but its path.
             const request = makeRequest({
                 params: { productId: 'params' },

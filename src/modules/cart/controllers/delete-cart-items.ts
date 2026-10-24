@@ -1,9 +1,8 @@
 /**
  * @module
- * `DELETE /cart/all` controller — thin HTTP adapter over `cartService.remove`. Bodyless and on
- * its own URL so the destructive spelling has to be asked for by name: were it `DELETE /cart`
- * falling back to "clear everything" on an absent body, a body stripped in transit would destroy
- * the whole cart instead of failing.
+ * `DELETE /cart/items` controller — thin HTTP adapter over `cartService.remove`. Bodyless and on
+ * the line collection's own URL: the destructive spelling has to be asked for by name, and the
+ * 415 guard refuses any body, so nothing stripped in transit can turn a one-line delete into this.
  */
 
 import type { Request, Response } from 'express';
@@ -14,7 +13,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import type { CartResponse } from '@types';
 
 /**
- * DELETE /cart/all
+ * DELETE /cart/items
  * Remove ALL items in the user cart.
  */
 export const clearCart = (request: Request, response: Response) => {

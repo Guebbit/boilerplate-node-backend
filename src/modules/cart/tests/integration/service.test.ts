@@ -485,6 +485,80 @@ describe('setItemById', () => {
         }));
 });
 
+describe('updateItemQuantity', () => {
+    it('rewrites the quantity of a line the cart holds', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartService.addItemById(user.id, String(product._id), 5);
+
+        const result = await cartService.updateItemQuantity(
+            user.id,
+            String(product._id),
+            2,
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+        await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(2);
+    });
+
+    it('creates nothing for a line the cart does not hold: 404, cart untouched', async () => {
+        const user = await createUser();
+        const held = await createProduct();
+        const other = await createProduct();
+        await cartService.addItemById(user.id, String(held._id), 1);
+
+        const result = await cartService.updateItemQuantity(
+            user.id,
+            String(other._id),
+            4,
+            testCallerContext
+        );
+
+        expect(asReject(result).status).toBe(404);
+        expect(asReject(result).errors[0]?.message).toBe(t('cart.item-not-found'));
+        await expect(storedQuantity(user.id, String(other._id))).resolves.toBeUndefined();
+        await expect(storedQuantity(user.id, String(held._id))).resolves.toBe(1);
+    });
+
+    it('creates no cart at all for a user who has none', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+
+        await cartService.updateItemQuantity(user.id, String(product._id), 1, testCallerContext);
+
+        expect(await cartRepository.findByUserId(user.id)).toBeNull();
+    });
+
+    it('leaves the version alone when the quantity is already the one asked for', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartService.addItemById(user.id, String(product._id), 3);
+        const before = await cartRepository.findByUserId(user.id);
+
+        await cartService.updateItemQuantity(user.id, String(product._id), 3, testCallerContext);
+
+        const after = await cartRepository.findByUserId(user.id);
+        expect(after?.__v).toBe(before?.__v);
+    });
+
+    it('refuses a quantity past the per-line ceiling', () =>
+        withEnvironmentOverrides({ NODE_CART_LINE_MAX: '10' }, async () => {
+            const user = await createUser();
+            const product = await createProduct();
+            await cartService.addItemById(user.id, String(product._id), 1);
+
+            const result = await cartService.updateItemQuantity(
+                user.id,
+                String(product._id),
+                11,
+                testCallerContext
+            );
+
+            expect(asReject(result).status).toBe(422);
+        }));
+});
+
 describe('addItemById', () => {
     it('adds a line that was not in the cart', async () => {
         const user = await createUser();

@@ -1,24 +1,24 @@
 /**
  * @module
- * `PUT /cart/:productId` controller — thin HTTP adapter over `cartService.updateItemQuantity`.
+ * `PATCH /cart/items/:productId` controller — thin HTTP adapter over `cartService.updateItemQuantity`.
  */
 
 import type { Request, Response } from 'express';
 import { UpdateCartItemByIdBody } from '@api/schemas.zod';
 import { cartService } from '../services';
-import { createdOrOk } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import type { CartResponse, UpdateCartItemByIdRequest } from '@types';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
- * PUT /cart/:productId
- * Set the quantity of a specific cart item. Returns the updated cart — 201 when it created the
- * line (RFC 9110 §9.3.4), 200 when it wrote one already there. Shares `POST /cart`'s 404 for a
+ * PATCH /cart/items/:productId
+ * Set the quantity of a line the cart holds. Returns the updated cart. A change never creates:
+ * a line the cart does not hold is 404 `cart.item-not-found`. Shares `POST /cart/items`' 404 for a
  * product the storefront wouldn't show, from the same place: `upsertCartItem`.
  */
-export const putCartItem = (
+export const patchCartItem = (
     request: Request<{ productId?: string }, unknown, UpdateCartItemByIdRequest>,
     response: Response
 ) => {
@@ -29,7 +29,7 @@ export const putCartItem = (
     const productId = requireId(request, response, {
         notFound: 'products.not-found',
         name: 'productId',
-        surface: 'write'
+        surface: 'path'
     });
     if (!productId) return;
 
@@ -43,7 +43,7 @@ export const putCartItem = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            createdOrOk<CartResponse>(response, result.data, result.status, `/cart/${productId}`);
+            successResponse<CartResponse>(response, result.data);
         })
         .catch(catchAs(response, 'updateCartItemById'));
 };

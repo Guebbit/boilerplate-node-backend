@@ -3,13 +3,11 @@
  * The cart route table. Every route is authenticated at the router level and needs
  * `update:Cart` (shoppers only: staff and administrators own no basket); `/checkout` also
  * needs `checkout:Cart`, since an unproven address must not be able to spend, see
- * `shared/authorization-keys.yaml`. Mostly guards ORDER: `/summary`, `/checkout`,
- * `/reorder/:orderId`, `/all` and `/shipping-method` compete with `/:productId`, and Express takes
- * the first match — declared the other way round, `DELETE /cart/all` becomes a product lookup for
- * id "all".
+ * `shared/authorization-keys.yaml`. A line is written under `/items`, so no root parameter route
+ * competes with a literal segment.
  */
 
-import { routeTable, routeSignatures, guardsOn, chainOf } from '@tests/routes';
+import { routeSignatures, guardsOn, chainOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -27,26 +25,16 @@ const ALL = [
     'POST /merge',
     'POST /reorder/:orderId',
     'GET /',
-    'POST /',
-    'DELETE /all',
-    'DELETE /',
+    'POST /items',
+    'DELETE /items',
     'PUT /shipping-method',
-    'PUT /:productId',
-    'DELETE /:productId'
+    'PATCH /items/:productId',
+    'DELETE /items/:productId'
 ];
 
 describe('cart routes — what is mounted', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
         expect(routeSignatures(router)).toEqual(ALL);
-    });
-
-    it('declares the literal segments before /:productId', () => {
-        const paths = routeTable(router).map(({ path }) => path);
-
-        expect(paths.indexOf('/summary')).toBeLessThan(paths.indexOf('/:productId'));
-        expect(paths.indexOf('/checkout')).toBeLessThan(paths.indexOf('/:productId'));
-        expect(paths.indexOf('/all')).toBeLessThan(paths.indexOf('/:productId'));
-        expect(paths.indexOf('/shipping-method')).toBeLessThan(paths.indexOf('/:productId'));
     });
 });
 

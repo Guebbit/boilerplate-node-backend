@@ -640,3 +640,37 @@ describe('POST /account/oauth/links/:provider', () => {
         expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
     });
 });
+
+describe('DELETE /account/oauth/links/:provider', () => {
+    // A link is a line of the caller's links list, so the answer is that list as it now stands.
+    it('answers 200 with the links the account still has', async () => {
+        const user = await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
+        for (const provider of ['fake', 'google'])
+            await userRepository.linkOAuthAccount(user.id, {
+                provider,
+                providerId: `${provider}-subject`,
+                connectedAt: new Date()
+            });
+        const { bearer } = await signInAs('owner@example.com');
+
+        const response = await api()
+            .delete('/account/oauth/links/fake')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(
+            response.body.data.links.map(({ provider }: { provider: string }) => provider)
+        ).toEqual(['google']);
+    });
+
+    it('answers 404 for a provider that was never linked', async () => {
+        await createUser({ email: 'owner@example.com', verifiedAt: new Date() });
+        const { bearer } = await signInAs('owner@example.com');
+
+        const response = await api()
+            .delete('/account/oauth/links/fake')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+});

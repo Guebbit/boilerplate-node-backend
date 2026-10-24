@@ -57,7 +57,11 @@ it('lets go in stages, with a way back until the last', async () => {
     const silent = await newShopper();
     const warnedThenBack = await newShopper();
     for (const shopper of [minimisedThenBack, silent, warnedThenBack]) {
-        await api().put(`/wishlist/${productId}`).set('Authorization', shopper.bearer).expect(200);
+        await api()
+            .post('/wishlist/items')
+            .set('Authorization', shopper.bearer)
+            .send({ productId })
+            .expect(200);
         await placeOrder(shopper.bearer, [{ productId, quantity: 1 }]);
     }
     /** The staff member signs in again, because every account ages with the clock. */

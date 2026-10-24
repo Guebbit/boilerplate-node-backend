@@ -384,8 +384,7 @@ components:
             description: >-
                 Where the created resource lives, as a path on this API (RFC 9110 §9.3.3). A create
                 that answers 201 always sends it, so a client follows the link instead of composing
-                one. Some created things have no `GET` of their own (a feedback ticket, a payment, an
-                API key) — the link is still their address for `PUT`, `PATCH` and `DELETE`.
+                one. A `GET` on it reads what was created.
             schema:
                 type: string
 
@@ -1220,8 +1219,6 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password~1reset~1confirm'
     /account/refresh:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1refresh'
-    /account/tokens/expired:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1tokens~1expired'
     /account/export:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1export'
     /account/login/2fa:
@@ -1280,8 +1277,6 @@ paths:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products'
     /products/categories:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1categories'
-    /products/settings:
-        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1settings'
     /products/{id}:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}'
     /products/{id}/admin:
@@ -1296,10 +1291,10 @@ paths:
     # ---------- cart ----------
     /cart:
         $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart'
-    /cart/all:
-        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1all'
-    /cart/{productId}:
-        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1{productId}'
+    /cart/items:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1items'
+    /cart/items/{productId}:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1items~1{productId}'
     /cart/shipping-method:
         $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1shipping-method'
     /cart/summary:
@@ -1312,10 +1307,12 @@ paths:
     # ---------- wishlist ----------
     /wishlist:
         $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist'
-    /wishlist/{productId}:
-        $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist~1{productId}'
-    /wishlist/{productId}/move-to-cart:
-        $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist~1{productId}~1move-to-cart'
+    /wishlist/items:
+        $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist~1items'
+    /wishlist/items/{productId}:
+        $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist~1items~1{productId}'
+    /wishlist/items/{productId}/move-to-cart:
+        $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist~1items~1{productId}~1move-to-cart'
 
     # ---------- orders ----------
     /orders:

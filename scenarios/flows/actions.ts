@@ -80,7 +80,7 @@ const ensureAddress = (caller: Caller): Promise<void> =>
 /**
  * Fill the caller's cart and check it out — the whole customer half of an order.
  *
- * The cart is filled line by line because that is what `POST /cart` takes; the lines land in one
+ * The cart is filled line by line because that is what `POST /cart/items` takes; the lines land in one
  * order either way, since a cart belongs to one account and this awaits each add.
  *
  * Defaults to `pickup`: every demo product is physical, so checkout refuses a basket with no
@@ -102,7 +102,7 @@ export const checkout = async (
     options: { shippingMethodId?: string; paymentMethod?: string } = {}
 ): Promise<string> => {
     await ensureAddress(caller);
-    for (const line of lines) await caller.call('POST', '/cart', line);
+    for (const line of lines) await caller.call('POST', '/cart/items', line);
 
     const { shippingMethodId = 'pickup', ...rest } = options;
     await caller.call('PUT', '/cart/shipping-method', { shippingMethodId });

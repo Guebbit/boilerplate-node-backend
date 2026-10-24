@@ -1,6 +1,6 @@
 /**
  * @module
- * `DELETE /wishlist/:productId` controller — thin HTTP adapter over `wishlistService.remove`.
+ * `DELETE /wishlist/items/:productId` controller — thin HTTP adapter over `wishlistService.remove`.
  */
 
 import type { Request, Response } from 'express';
@@ -12,7 +12,7 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 import type { WishlistResponse } from '@types';
 
 /**
- * DELETE /wishlist/:productId
+ * DELETE /wishlist/items/:productId
  * Remove one saved product. A line the caller cannot see is a 404 — their view is stale and
  * they need to know, the same contract the cart's remove keeps.
  */

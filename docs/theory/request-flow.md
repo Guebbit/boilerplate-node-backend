@@ -205,8 +205,8 @@ produced the change-set.
   entries bulk import (`PUT`/`PATCH /locales/{locale}/apps/{app}/entries`) are hand-written.
   Their bodies differ by verb where it matters: a PATCH locale entry merges field by field (a
   `null` clears one), a PUT states each locale whole.
-- **PUT-only resources** — `PUT /locales/{locale}/apps/{app}/entries/{entryId}`, `PUT /cart/{productId}`,
-  `PUT /cart/shipping-method`, `PUT /wishlist/{productId}`, `PUT /account/addresses/{id}/default` —
+- **PUT-only resources** — `PUT /locales/{locale}/apps/{app}/entries/{entryId}`,
+  `PUT /cart/shipping-method`, `PUT /account/addresses/{id}/default` —
   have no PATCH.
 
 ```mermaid
@@ -287,7 +287,7 @@ flowchart TD
   storage-neutral bound (OWASP API4:2023, bound every string input) that fits an ObjectId, a ULID
   and a UUID, so the paired twin and the frontend's response validation keep working. The ObjectId
   rule is this backend's alone and never reaches the contract.
-- **Why not 404 everywhere.** A 404 on `POST /cart` reads like a mistyped path, it cannot name the
+- **Why not 404 everywhere.** A 404 on `POST /cart/items` reads like a mistyped path, it cannot name the
   field (one body can carry several ids), and `quantity: -1` is already a 422 naming its field.
 
 `tests/integration/malformed-ids.test.ts` walks every id site `openapi.yaml` declares and holds it

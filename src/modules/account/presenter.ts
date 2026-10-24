@@ -7,7 +7,7 @@
  * A session's credential never reaches the wire: the family id is the handle a client revokes by.
  */
 
-import type { AccountExportRequest, ExportSession, Session } from '@types';
+import type { AccountExportRequest, ExportSession, OAuthLinks, Session } from '@types';
 import type { AccountExportRow, SessionRow } from './repository';
 
 /**
@@ -56,4 +56,19 @@ export const presentExportSession = (row: SessionRow): ExportSession =>
 export const presentExportRequest = (row: Pick<AccountExportRow, '_id'>): AccountExportRequest => ({
     id: String(row._id),
     status: 'building'
+});
+
+/**
+ * The caller's connected sign-in providers as `GET /account/oauth/links` and
+ * `DELETE /account/oauth/links/{provider}` answer them.
+ *
+ * @param links - one entry per linked provider, as `listOAuthLinks` returns them
+ */
+export const presentOAuthLinks = (
+    links: { provider: string; connectedAt: Date }[]
+): OAuthLinks => ({
+    links: links.map(({ provider, connectedAt }) => ({
+        provider,
+        connectedAt: connectedAt.toISOString()
+    }))
 });

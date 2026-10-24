@@ -319,6 +319,8 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
     },
     // The generated quantity is the contract's hard ceiling (999); the shop's per-line cap refuses it.
     updateCartItemById: { quantity: () => 1 },
+    createWishlistItem: { productId: (world) => world.productId },
+    createStockAlert: { productId: (world) => world.productId },
     createPayment: { orderId: (world) => world.orderId },
     createReturn: {
         orderId: (world) => world.orderId,

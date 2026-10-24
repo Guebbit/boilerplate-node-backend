@@ -52,7 +52,7 @@ marketing: it then needs an unsubscribe and ePrivacy Art. 13 consent), and the r
 when it is answered. Signed-in only: there is no guest double opt-in to run, and
 [account erase](./account.md) covers the rows through `personalData`.
 
-**The button only exists while the product cannot be ordered.** `POST /stock-alerts/{productId}` is
+**The button only exists while the product cannot be ordered.** `POST /stock-alerts` (the product in the body) is
 refused with `STOCK_ALERT_PRODUCT_BUYABLE` when the product can be ordered now: shelf units, a
 backorder open under its cap and date, or a preorder with allowance left. One rule, `isBuyable`,
 decides it here and decides when to fire.

@@ -232,15 +232,15 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'the undo token mailed to the old address is the credential'
     },
-    'wishlist PUT /:productId': {
+    'wishlist POST /items': {
         requiresAuth: true,
         reason: "saving a product to the caller's own wishlist"
     },
-    'wishlist DELETE /:productId': {
+    'wishlist DELETE /items/:productId': {
         requiresAuth: true,
         reason: "removing a product from the caller's own wishlist"
     },
-    'stock-alerts POST /:productId': {
+    'stock-alerts POST /': {
         requiresAuth: true,
         reason: "asking to be told when a product is back, on the caller's own account"
     },

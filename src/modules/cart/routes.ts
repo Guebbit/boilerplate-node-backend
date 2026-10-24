@@ -9,9 +9,8 @@
  * `checkout:Cart` on top of `isAuth` (`requireFreshAuth`,
  * `requirePermission('checkout', 'Cart')`): it is where this app's money actually moves. The
  * two keys are the only ones this module declares — see `shared/authorization-keys.yaml`.
- * `/all` is mounted ABOVE `/:productId`: Express matches in mount order, so a
- * `/:productId`-shaped route registered first would match the literal string `all` as a product
- * id. The same rule that mounts `/search` before `/:id` elsewhere, a different static segment.
+ * A line is written through the parent's `/items` collection (docs/api/write-methods.md#a-line-is-written-through-its-parent):
+ * 200 + the whole cart, no `Location`, no read of a line.
  */
 
 import { Router } from 'express';
@@ -23,9 +22,9 @@ import {
 } from '@kernel/middlewares/authorizations';
 import { getCart } from './controllers/get-cart';
 import { getCartSummary } from './controllers/get-cart-summary';
-import { postCart } from './controllers/post-cart';
-import { putCartItem } from './controllers/put-cart-item';
-import { clearCart } from './controllers/delete-cart-all';
+import { postCartItems } from './controllers/post-cart-items';
+import { patchCartItem } from './controllers/patch-cart-item';
+import { clearCart } from './controllers/delete-cart-items';
 import { deleteCartItem } from './controllers/delete-cart-item';
 import { postCheckout } from './controllers/post-checkout';
 import { postReorder } from './controllers/post-reorder';
@@ -74,21 +73,17 @@ router.post('/reorder/:orderId', postReorder);
 // GET /cart
 router.get('/', getCart);
 
-// POST /cart — add/set item
-router.post('/', postCart);
+// POST /cart/items — add a line, or grow the one already there
+router.post('/items', postCartItems);
 
-// DELETE /cart/all — clear entire cart. Mounted before /:productId — see the module comment.
-router.delete('/all', clearCart);
+// DELETE /cart/items — clear every line
+router.delete('/items', clearCart);
 
-// DELETE /cart — remove single item, productId in the body. x-alias-of removeCartItem.
-router.delete('/', deleteCartItem);
-
-// PUT /cart/shipping-method — mounted ABOVE /:productId, same reasoning as /all: a /:productId
-// route registered first would swallow the literal string "shipping-method" as a product id.
+// PUT /cart/shipping-method — choose or clear the shipping method
 router.put('/shipping-method', putCartShippingMethod);
 
-// PUT /cart/:productId — set quantity
-router.put('/:productId', putCartItem);
+// PATCH /cart/items/:productId — set the quantity of a line the cart holds (never creates one)
+router.patch('/items/:productId', patchCartItem);
 
-// DELETE /cart/:productId — remove single item, canonical spelling
-router.delete('/:productId', deleteCartItem);
+// DELETE /cart/items/:productId — remove one line
+router.delete('/items/:productId', deleteCartItem);

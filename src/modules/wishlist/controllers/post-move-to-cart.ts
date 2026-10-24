@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /wishlist/:productId/move-to-cart` controller — thin HTTP adapter over
+ * `POST /wishlist/items/:productId/move-to-cart` controller — thin HTTP adapter over
  * `wishlistService.moveToCart`.
  */
 
@@ -13,7 +13,7 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 import type { WishlistResponse } from '@types';
 
 /**
- * POST /wishlist/:productId/move-to-cart
+ * POST /wishlist/items/:productId/move-to-cart
  * The wishlist's exit: one saved product becomes one cart line (quantity 1, incremented if the
  * cart already holds it), and leaves the wishlist. Cart write first, wishlist removal second —
  * see the service for why that order is the one a shopper can always repair.

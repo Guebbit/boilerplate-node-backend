@@ -84,7 +84,7 @@ const loggedInCustomer = async (): Promise<string> => {
  */
 const orderAwaitingPayment = async (productId: string, quantity: number) => {
     const bearer = await loggedInCustomer();
-    await api().post('/cart').set('Authorization', bearer).send({ productId, quantity });
+    await api().post('/cart/items').set('Authorization', bearer).send({ productId, quantity });
     await api()
         .put('/cart/shipping-method')
         .set('Authorization', bearer)
@@ -234,7 +234,7 @@ describe('P4 — more buyers than units, all at once', () => {
             Array.from({ length: RACE_SIZE }, async () => {
                 const bearer = await loggedInCustomer();
                 await api()
-                    .post('/cart')
+                    .post('/cart/items')
                     .set('Authorization', bearer)
                     .send({ productId: String(product._id), quantity: 1 });
                 await api()

@@ -158,7 +158,7 @@ const CUSTOMER_ORDERS: Line[][] = [
 /**
  * The baskets left sitting in the shop when the flows finish — `[whose, lines]`.
  *
- * Filled LAST, and through `POST /cart` like everything else here, for a reason that is not
+ * Filled LAST, and through `POST /cart/items` like everything else here, for a reason that is not
  * stylistic: a checkout empties the cart it came from, so any cart written before these flows ran
  * would be gone by the time anyone looked. Only three people have one — absence and an empty cart
  * are the same state, so "has never added anything" is most of the customer base's fixture. Never
@@ -632,7 +632,7 @@ export const driveShopHistory = async (
     /* The baskets people are still shopping with — after every checkout, which empties one. */
     for (const [who, lines] of CARTS) {
         const shopper = shopperFor(base, who);
-        for (const line of lines) await shopper.call('POST', '/cart', line);
+        for (const line of lines) await shopper.call('POST', '/cart/items', line);
     }
 
     await driveCatalogueEdits(owner);
