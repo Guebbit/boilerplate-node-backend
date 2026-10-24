@@ -558,7 +558,7 @@ mailboxes, cost something rather than nothing.
 ### Mail to one mailbox — the victim's budget
 
 Every budget above bounds a CALLER. A mail bomb is bounded by its VICTIM: signup, password reset,
-email change and both resends can each be pointed at a stranger's address, and `victim+1@x`,
+email change, both resends, a data export and an account-deletion request can each be pointed at a stranger's address, and `victim+1@x`,
 `victim+2@x`, … each look like a new address to a budget keyed on the submitted string.
 
 **One budget on the canonical mailbox, used by every flow that mails** (`account/mail-budget.ts`):
@@ -570,7 +570,7 @@ email change and both resends can each be pointed at a stranger's address, and `
   caught too.
 - **Two doors:** a middleware where the body names the address (signup, reset), and a charge inside
   the service where the server picks the recipient (verification resend, pending-email resend, an
-  email change to a new address). Both count in one store, so one budget has one tally.
+  email change to a new address, an account-deletion request). Both count in one store, so one budget has one tally.
 - **A refused charge sends nothing and saves nothing:** `429`, with `Retry-After`; an email change
   leaves `pendingEmail` as it was.
   Either door counts the refusal in `rate_limit_refusals_total` and audits it
