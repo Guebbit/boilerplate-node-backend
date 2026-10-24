@@ -46,15 +46,13 @@ describe('userService.updateById — the audit row of an admin edit', () => {
         });
     });
 
-    it('writes nothing for a value sent unchanged, a phone included', async () => {
+    it('writes nothing for a value sent unchanged, or a phone cleared that was never set', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ username: 'same', email: 'b@example.com' });
-        await userService.updateById(user.id, { phone: '+1 555 0100' }, callerContextAs('admin'));
-        auditSpy.mockClear();
 
         await userService.updateById(
             user.id,
-            { username: 'same', phone: '+1 555 0100' },
+            { username: 'same', phone: null },
             callerContextAs('admin')
         );
 

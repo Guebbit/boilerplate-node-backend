@@ -5,13 +5,12 @@
  * the audit collection is append-only and never scrubbed on erasure.
  */
 
-import { decryptPii } from '@infrastructure/security/pii-encryption';
 import {
     auditChanges,
     type AuditChanges,
     type AuditedFields
 } from '@infrastructure/observability/audit-changes';
-import { phoneAad, type UserDocument } from '../model';
+import type { UserDocument } from '../model';
 
 /** The fields either edit can move, as the request names them. */
 type UserAuditedKey =
@@ -49,8 +48,10 @@ export const userAuditChanges = (
         {
             username: user.username,
             email: user.email,
-            // Stored encrypted; compared as the person typed it.
-            phone: user.phone ? decryptPii(user.phone, phoneAad(user.id), 'user phone') : undefined,
+            // Stored encrypted with a random IV, so two equal numbers never compare equal and
+            // decrypting just to diff would make an audit row able to fail an edit. Presence
+            // stands in: sending a number counts as a change, clearing an unset one does not.
+            phone: user.phone ? '<set>' : undefined,
             website: user.website,
             imageUrl: user.imageUrl,
             locale: user.locale,
