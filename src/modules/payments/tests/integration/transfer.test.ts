@@ -22,7 +22,7 @@ import { paymentRepository } from '@modules/payments/repository';
 import { presentPayment } from '@modules/payments/presenter';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { asCustomer, callerContextAs, testCallerContext } from '@tests/callers';
+import { asAdmin, asCustomer, callerContextAs, testCallerContext } from '@tests/callers';
 import { asReject, asSuccess } from '@tests/response';
 import { OrderStatus } from '@types';
 import { registerAuditSink, type AuditEntry } from '@infrastructure/observability/audit';
@@ -256,14 +256,19 @@ describe('a transfer that lands after its order was cancelled', () => {
         const audited: AuditEntry[] = [];
         registerAuditSink((entry) => audited.push(entry));
 
-        const found = await paymentService.getOrderByReference(reference);
+        const found = await paymentService.listPayments(
+            { transferReference: reference },
+            asAdmin()
+        );
         const recorded = await paymentService.recordOfflinePayment(
             String(order._id),
             { method: 'bank_transfer', reference: 'late statement line' },
             callerContextAs('admin')
         );
 
-        expect(String(asSuccess(found).data._id)).toBe(String(order._id));
+        expect(found.items.map((row: { orderId: unknown }) => String(row.orderId))).toEqual([
+            String(order._id)
+        ]);
         // The money is real: it is recorded, not refused, and the answer is the payment itself.
         expect(recorded.success).toBe(true);
         const payment = await paymentOf(String(order._id));

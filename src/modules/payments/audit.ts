@@ -45,11 +45,6 @@ export const paymentsAuditActions = {
      * prefix, and this is a money discrepancy to reconcile rather than an attack signal.
      */
     PAYMENT_AMOUNT_MISMATCH: 'payment.amount_mismatch',
-    /**
-     * Staff read a whole order — email, both addresses, phone — by its payment reference. The
-     * order's own `admin.order.viewed` belongs to `orders`, and one string has one owner.
-     */
-    ADMIN_ORDER_LOOKED_UP: 'admin.order.looked_up',
     /** A provider webhook whose signature did not verify: a forgery, so it is also counted. */
     SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE: 'security.payment_webhook.invalid_signature'
 } as const;

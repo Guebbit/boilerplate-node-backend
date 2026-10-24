@@ -4,9 +4,8 @@
  * is authenticated at the router level — money is somebody's — while the provider's webhook and
  * `GET /methods` sit ABOVE it: the webhook's caller is a machine that authenticates by signing the
  * body, and which methods are offered is pre-purchase information nobody need sign in to read.
- * Exactly three routes are additionally admin-only: the refund, the offline record, and the
- * RF-reference lookup that precedes it — a self-service withdrawal or a self-reported "I paid" if
- * left open to any caller, versus an intent or confirm locked to admins being a checkout nobody
+ * Exactly two routes are additionally admin-only besides the staff reads: the refund and the
+ * offline record — a self-service withdrawal or a self-reported "I paid" if left open to any caller, versus an intent or confirm locked to admins being a checkout nobody
  * can complete.
  */
 
@@ -41,7 +40,6 @@ describe('payment routes', () => {
             'GET /attention',
             'POST /',
             'GET /orders/:orderId',
-            'GET /order-by-reference',
             'POST /:id/refunds',
             'GET /:id',
             'GET /:id/refunds/:refundId',
@@ -83,7 +81,7 @@ describe('payment routes', () => {
         expect(routeSignatures(router).indexOf(WEBHOOK)).toBe(0);
     });
 
-    it('admin-guards the staff reads, the refund and its hand settlement, the offline record and the reference lookup, and nothing else', () => {
+    it('admin-guards the staff reads, the refund and its hand settlement, and the offline record, and nothing else', () => {
         // The three routes an operator drives instead of a customer's own checkout — money moving
         // back out, a claim that money moved in some way the provider never saw, or finding the
         // order that claim is about. The shopper's keys are excluded: `update:Cart` and
@@ -101,7 +99,6 @@ describe('payment routes', () => {
             'POST /search',
             'GET /refunds',
             'GET /attention',
-            'GET /order-by-reference',
             'POST /:id/refunds',
             'POST /:id/refunds/:refundId/settle',
             'POST /orders/:orderId/offline'

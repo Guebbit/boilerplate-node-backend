@@ -1027,42 +1027,76 @@ describe('POST /payments/orders/{orderId}/offline', () => {
     });
 });
 
-describe('GET /payments/order-by-reference', () => {
-    it('matches the contract for the order a reference names', async () => {
+describe('GET /payments?transferReference=', () => {
+    it('matches the contract for the payment a reference names, spaced and lowercase included', async () => {
         const { bearer } = await authenticateAs('admin');
         const { order, reference } = await transferOrderOf();
+        const typed = reference.replaceAll(/(.{4})/g, '$1 ').toLowerCase();
 
         const response = await api()
-            .get('/payments/order-by-reference')
-            .query({ ref: reference })
+            .get('/payments')
+            .query({ transferReference: typed })
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.id).toBe(String(order._id));
+        expect(response.body.data.items.map((row: { orderId: string }) => row.orderId)).toEqual([
+            String(order._id)
+        ]);
     });
 
-    it('matches the error contract for a reference that fails its check digits', async () => {
+    it('answers an empty list for a reference that fails its check digits', async () => {
         const { bearer } = await authenticateAs('admin');
         const { reference } = await transferOrderOf();
         const lastChar = reference.at(-1)!;
         const typo = `${reference.slice(0, -1)}${lastChar === '0' ? '1' : '0'}`;
 
         const response = await api()
-            .get('/payments/order-by-reference')
-            .query({ ref: typo })
+            .get('/payments')
+            .query({ transferReference: typo })
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toEqual([]);
     });
 
-    it('matches the error contract for a request that names no reference at all', async () => {
+    it('answers the same for POST /payments/search', async () => {
         const { bearer } = await authenticateAs('admin');
+        const { order, reference } = await transferOrderOf();
+
+        const response = await api()
+            .post('/payments/search')
+            .set('Authorization', bearer)
+            .send({ transferReference: reference });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items.map((row: { orderId: string }) => row.orderId)).toEqual([
+            String(order._id)
+        ]);
+    });
+
+    it('refuses a caller without display:Payment', async () => {
+        const { reference } = await transferOrderOf();
+        const { bearer } = await authenticateAsRole('customer');
+
+        const response = await api()
+            .get('/payments')
+            .query({ transferReference: reference })
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+    });
+
+    it('is gone at the old lookup address', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const { reference } = await transferOrderOf();
 
         const response = await api()
             .get('/payments/order-by-reference')
+            .query({ ref: reference })
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(422);
+        // `/payments/{id}` now answers the segment, as a payment id that is not one.
+        expect(response.status).toBe(404);
     });
 });
 

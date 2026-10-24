@@ -15,10 +15,14 @@ import type {
     SearchPaymentsRequest
 } from '@types';
 import { PaymentAttentionKind } from '@types';
-import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import {
+    buildPaginatedMeta,
+    normalizePagination,
+    type PaginatedMeta
+} from '@infrastructure/persistence/search';
 import { orderService } from '@modules/orders';
 import { paymentAttentionMinutes } from '../config';
-import { displayStatusFilter } from '../domain';
+import { displayStatusFilter, parseReference } from '../domain';
 import type { PaymentDocument } from '../model';
 import { paymentRepository, type RefundFilters, type RefundRow } from '../repository';
 import { callerScope } from './scope';
@@ -48,16 +52,30 @@ const staffRow = (
 /**
  * One page of payments, filtered and sorted, with each row's order number and email.
  *
+ * A `transferReference` is matched in its canonical form (spacing and case tolerated), and a code
+ * that is not a valid RF reference finds nothing: an empty page, so nothing tells a staff member
+ * that an almost-right code was close.
+ *
  * @param filters - the validated search
  * @param authContext - the caller (already known to hold `display:Payment`)
  */
 export const listPayments = (
     filters: SearchPaymentsRequest,
     authContext?: AuthContext
-): Promise<{ items: Payment[]; meta: PaginatedMeta }> =>
-    paymentRepository
+): Promise<{ items: Payment[]; meta: PaginatedMeta }> => {
+    const canonical =
+        filters.transferReference === undefined
+            ? undefined
+            : (parseReference(filters.transferReference) ?? null);
+    if (canonical === null)
+        return Promise.resolve({
+            items: [],
+            meta: buildPaginatedMeta(normalizePagination(filters), 0)
+        });
+
+    return paymentRepository
         .searchStaff(
-            filters,
+            canonical === undefined ? filters : { ...filters, transferReference: canonical },
             filters.displayStatus ? displayStatusFilter(filters.displayStatus) : undefined,
             callerScope(authContext)
         )
@@ -72,6 +90,7 @@ export const listPayments = (
                 };
             })
         );
+};
 
 /**
  * One refund as a list row.

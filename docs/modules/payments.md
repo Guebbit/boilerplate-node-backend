@@ -510,7 +510,7 @@ admin reads it back off the bank's own website:
 flowchart LR
     C["Customer pays, writes the code<br/>RF18 5390 0754 in the transfer"] --> B["Bank website<br/>shows the incoming transfer"]
     B --> A["Admin reads the code,<br/>pastes it into the app"]
-    A --> L["GET /payments/order-by-reference<br/>finds the payment, answers its order"]
+    A --> L["GET /payments?transferReference=<br/>finds the payment, whose orderId is the order"]
     L --> P["POST .../offline<br/>marks it paid — settlePayment, as usual"]
 ```
 
@@ -523,18 +523,21 @@ flowchart LR
   rather than a rarely-firing safety net. `parseReference` reads one back.
 - **Minted once, when the payment opens, never recomputed.** It is deterministic in the order id,
   so a redelivered `order.created` could not mint a different one anyway. A `card` order never has
-  one and is not reachable through this lookup; an admin finds it by id through the normal order
-  search instead. No raw-id fallback: a raw order id is not a reference and answers 404.
-- **No new settlement code.** The admin screen calls the lookup, then the existing `POST
+  one and is not reachable through this filter; an admin finds it by id through the normal order
+  search instead. No raw-id fallback: a raw order id is not a reference and finds nothing.
+- **No new settlement code.** The admin screen filters the payments list by the code, then the existing `POST
 /payments/orders/{orderId}/offline` — the same `pending → paid` move, stock commit, and events any
   other offline record already goes through.
-- **A transfer that arrives after its order was cancelled is recorded, not refused.** The lookup
-  still finds the order (its cancelled payment is kept), and `POST .../offline` takes the money onto
+- **A transfer that arrives after its order was cancelled is recorded, not refused.** The filter
+  still finds the payment (its cancelled payment is kept), and `POST .../offline` takes the money onto
   that payment. The order cannot be paid any more, so the settlement owes the money straight back:
   the payment reads `succeeded`, its refund record stays open (a hand-paid refund is returned by
   the operator, off-system, and marked done), and the order stays cancelled with no stock touched.
-- **A malformed and an unmatched reference answer the same 404.** Distinguishing them would tell a
-  guesser which half of a code they got right.
+- **A malformed and an unmatched reference answer the same empty list.** The filter reads the code
+  in its canonical form first (spacing and case tolerated), and a code that is not a valid RF
+  reference never reaches the database. Distinguishing the two would tell a guesser which half of
+  a code they got right. The guard is the list's own `display:Payment`, and a staff read of the
+  list is not an audited order read: the answer is a payment row, not the order.
 
 ## Libraries
 

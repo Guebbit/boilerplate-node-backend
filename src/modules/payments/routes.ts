@@ -6,8 +6,8 @@
  * would only stop deliveries arriving, not make it safer), and `GET /methods`, which is
  * pre-purchase information exactly like `GET /delivery/methods`.
  *
- * Admin-only:    the refund, the offline record, and the RF-reference lookup that precedes it — a
- *                self-service withdrawal, or a self-reported "I paid", if left open to any caller,
+ * Admin-only:    the refund and the offline record — a self-service withdrawal, or a
+ *                self-reported "I paid", if left open to any caller,
  *                versus an intent or confirm locked to admins being a checkout nobody can
  *                complete.
  * Fresh session: every route that moves money requires `requireFreshAuth('critical')` —
@@ -49,7 +49,6 @@ import { postPaymentWebhook } from './controllers/post-payment-webhook';
 import { getPayment } from './controllers/get-payment';
 import { getRefund } from './controllers/get-refund';
 import { getPaymentByOrder } from './controllers/get-payment-by-order';
-import { getOrderByReference } from './controllers/get-order-by-reference';
 import { postPaymentRefund } from './controllers/post-payment-refund';
 import { postPaymentRefundSettle } from './controllers/post-payment-refund-settle';
 import { postPaymentOffline } from './controllers/post-payment-offline';
@@ -100,10 +99,6 @@ router.post(
 // GET /payments/orders/:orderId — the payment behind an order
 router.get('/orders/:orderId', getPaymentByOrder);
 
-// GET /payments/order-by-reference — the admin's RF-code lookup, same authority as offline below.
-// A literal segment, not `/order/:something`: it names no order yet, that's the whole point of it.
-router.get('/order-by-reference', requirePermission('create', 'Payment'), getOrderByReference);
-
 // POST /payments/:id/refunds — the operator returns the money, order untouched. The key
 // is REQUIRED: a retried refund would otherwise return the money twice.
 /*
@@ -120,7 +115,7 @@ router.post(
 );
 
 // GET /payments/:id — one payment by its own id. Declared after every literal GET above (`/refunds`,
-// `/attention`, `/order-by-reference`), which a bare `/:id` would otherwise swallow. No permission
+// `/attention`), which a bare `/:id` would otherwise swallow. No permission
 // guard: the read is scoped in the service, a stranger's payment is the same 404 as a missing one.
 router.get('/:id', getPayment);
 

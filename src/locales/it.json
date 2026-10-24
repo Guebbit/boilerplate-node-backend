@@ -175,6 +175,7 @@
             "to": "a",
             "token": "token",
             "trackingCode": "codice di tracciamento",
+            "transferReference": "riferimento del bonifico",
             "translations": "traduzioni",
             "transport": "trasporto",
             "until": "Fine del blocco",

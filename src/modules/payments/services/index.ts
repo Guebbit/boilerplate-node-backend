@@ -41,7 +41,6 @@ import {
     findOwnPaymentsForExport,
     reapAbandonedPayments
 } from './retention';
-import { getOrderByReference } from './lookup';
 import { listPayments, listRefunds, listAttention } from './list';
 import { methodMix } from './stats';
 import { listPaymentMethods } from '../config';
@@ -74,7 +73,6 @@ export const paymentService = {
     retryOpenRefunds,
     reconcileStalePayments,
     recordOfflinePayment,
-    getOrderByReference,
     listPayments,
     listRefunds,
     listAttention,
