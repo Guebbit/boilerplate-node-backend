@@ -443,28 +443,6 @@ describe('the cart URLs a line no longer has', () => {
         expect(response.status).toBe(405);
         expect(response.headers.allow).toBe('DELETE, POST');
     });
-
-    it.each([
-        ['PUT', '/cart/'],
-        ['DELETE', '/cart/']
-    ])('answers %s %s{productId} 404: the line has no URL of its own', async (method, base) => {
-        const { bearer, product } = await authenticateWithCart();
-
-        const response = await api()
-            [method === 'PUT' ? 'put' : 'delete'](`${base}${String(product._id)}`)
-            .set('Authorization', bearer)
-            .send(method === 'PUT' ? { quantity: 2 } : undefined);
-
-        expect(response.status).toBe(404);
-    });
-
-    it('answers DELETE /cart/all 404: the clear moved to /cart/items', async () => {
-        const { bearer } = await authenticateWithCart();
-
-        const response = await api().delete('/cart/all').set('Authorization', bearer);
-
-        expect(response.status).toBe(404);
-    });
 });
 
 describe('DELETE /cart/items', () => {

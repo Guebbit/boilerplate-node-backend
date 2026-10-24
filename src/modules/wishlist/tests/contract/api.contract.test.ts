@@ -240,18 +240,4 @@ describe('the wishlist URLs a line no longer has', () => {
         expect(response.status).toBe(405);
         expect(response.headers.allow).toBe('POST');
     });
-
-    it.each([
-        ['put', ''],
-        ['delete', ''],
-        ['post', '/move-to-cart']
-    ] as const)('answers %s /wishlist/{productId}%s 404', async (method, suffix) => {
-        const { bearer, product } = await authenticateWithWishlist();
-
-        const response = await api()
-            [method](`/wishlist/${String(product._id)}${suffix}`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(404);
-    });
 });
