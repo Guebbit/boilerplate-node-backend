@@ -14,6 +14,7 @@ import { listMethods, startFulfilment } from './start';
 import {
     getForOrder,
     getShipment,
+    getFulfillmentOrder,
     shippedQuantities,
     remainderOptions,
     findShipmentsForOrders,
@@ -51,6 +52,7 @@ export const deliveryService = {
     listMethods,
     getForOrder,
     getShipment,
+    getFulfillmentOrder,
     startFulfilment,
     shipFulfillmentOrder,
     deliverShipment,

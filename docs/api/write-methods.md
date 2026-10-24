@@ -107,7 +107,11 @@ The item reads, and what each is scoped by:
 | `GET /account/addresses/{addressId}`                   | the caller's own book                              |
 | `GET /account/sessions/{sessionId}`                    | the caller's own live sessions                     |
 | `GET /locales/{locale}/apps/{app}/entries/{entryId}`   | `update:Locale`, the editing screen's key          |
-| `GET /delivery/shipments/{id}`                         | `update:Shipment`, the key that corrects one       |
+| `GET /delivery/shipments/{id}`                         | the order's scope: the buyer's own, or `display:Order` |
+| `GET /delivery/fulfillment-orders/{id}`                | the order's scope: the buyer's own, or `display:Order` |
+| `GET /notifications/{id}`                              | the caller's own inbox                             |
+| `GET /webhooks/deliveries/{id}`                        | this shop's delivery log, `read:WebhookSubscription` |
+| `GET /inventory/levels/{productId}`                    | `read:StockLevel`, the stock board's key           |
 
 A row the caller may not see, an unknown id and a malformed one are the same 404.
 

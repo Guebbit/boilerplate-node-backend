@@ -14,12 +14,18 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { orderService } from '@modules/orders';
-import type { AuthContext, OrderFulfillment, Shipment } from '@types';
+import type { AuthContext, FulfillmentOrder, OrderFulfillment, Shipment } from '@types';
 import { remainderLines, remainingOfLine } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { fulfillmentOrderRepository, shipmentRepository } from '../repository';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
-import { standingOn, fulfillmentOrderActions, shipmentActions, viewShipment } from './actions';
+import {
+    standingOn,
+    fulfillmentOrderActions,
+    shipmentActions,
+    viewFulfillmentOrder,
+    viewShipment
+} from './actions';
 import { ensureFulfillmentOrders } from './ensure';
 import { presentFulfillmentOrder, presentShipment } from '../presenter';
 
@@ -68,11 +74,12 @@ export const getForOrder = (
 
 /**
  * One shipment by its own id — the item read of the shipments `getForOrder` lists, at the address
- * `PATCH /delivery/shipments/:id` writes. Staff's door: the route holds the shipment key.
+ * `PATCH /delivery/shipments/:id` writes. Scoped like the order it belongs to: a buyer reads their
+ * own, `display:Order` reads any; someone else's is the same 404 as a missing one.
  *
  * @param shipmentId - the shipment
- * @param authContext - the caller, for the record's own `actions`
- * @returns the shipment, or the 404 a missing one earns
+ * @param authContext - the caller, for the scope and the record's own `actions`
+ * @returns the shipment, or the 404 a missing or unseen one earns
  */
 export const getShipment = (
     shipmentId: string,
@@ -82,11 +89,35 @@ export const getShipment = (
         if (!found) return generateReject(404, [t('delivery.shipment-not-found')]);
 
         return orderService
-            .getById(String(found.orderId))
+            .getById(String(found.orderId), orderService.callerScope(authContext))
             .then((order) =>
                 order
                     ? generateSuccess(viewShipment(found, order, authContext))
-                    : generateReject(404, [t('delivery.order-not-found')])
+                    : generateReject(404, [t('delivery.shipment-not-found')])
+            );
+    });
+
+/**
+ * One fulfillment order by its own id — the item read of what its four actions answer, scoped
+ * like the order behind it (a buyer's own, or any with `display:Order`).
+ *
+ * @param fulfillmentOrderId - the fulfillment order
+ * @param authContext - the caller, for the scope and the record's own `actions`
+ * @returns the fulfillment order, or the 404 a missing or unseen one earns
+ */
+export const getFulfillmentOrder = (
+    fulfillmentOrderId: string,
+    authContext?: AuthContext
+): Promise<ResponseSuccess<FulfillmentOrder> | ResponseReject> =>
+    fulfillmentOrderRepository.findById(fulfillmentOrderId).then((found) => {
+        if (!found) return generateReject(404, [t('delivery.fulfillment-order-not-found')]);
+
+        return orderService
+            .getById(String(found.orderId), orderService.callerScope(authContext))
+            .then((order) =>
+                order
+                    ? generateSuccess(viewFulfillmentOrder(found, order, authContext))
+                    : generateReject(404, [t('delivery.fulfillment-order-not-found')])
             );
     });
 

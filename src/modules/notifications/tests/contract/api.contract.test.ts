@@ -97,6 +97,51 @@ describe('POST /notifications/dismiss-all', () => {
     });
 });
 
+describe('GET /notifications/{id}', () => {
+    it('reads one of the caller’s own notifications', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const row = await createNotification({ userId: user.id });
+
+        const response = await api()
+            .get(`/notifications/${String(row._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({ id: String(row._id) });
+    });
+
+    it('answers 404, never 403, for someone else’s notification', async () => {
+        const { bearer } = await authenticateAs('user');
+        const other = await createUser({ email: 'other@example.com', username: 'other' });
+        const row = await createNotification({ userId: other.id });
+
+        const response = await api()
+            .get(`/notifications/${String(row._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('answers 404 for an unknown id and a malformed one', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const unknown = await api()
+            .get(`/notifications/${MISSING_ID}`)
+            .set('Authorization', bearer);
+        const malformed = await api()
+            .get(`/notifications/${MALFORMED_ID}`)
+            .set('Authorization', bearer);
+
+        expect([unknown.status, malformed.status]).toEqual([404, 404]);
+    });
+
+    it('refuses an anonymous caller with 401', async () => {
+        const response = await api().get(`/notifications/${MISSING_ID}`);
+
+        expect(response.status).toBe(401);
+    });
+});
+
 describe('DELETE /notifications/{id}', () => {
     it('matches the contract when deleting one’s own notification', async () => {
         const { bearer, user } = await authenticateAs('user');

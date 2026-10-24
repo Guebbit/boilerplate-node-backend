@@ -622,6 +622,65 @@ describe('GET /webhooks/deliveries', () => {
     });
 });
 
+/** One exhausted delivery filed under `tenant` for `subscriptionId`. */
+const fileDelivery = (tenant: string, subscriptionId: string) =>
+    webhookDeliveryRepository.create({
+        tenant,
+        subscriptionId: new Types.ObjectId(subscriptionId),
+        eventId: `evt_item_${subscriptionId}`,
+        eventType: 'order.paid',
+        payload: {},
+        attempt: 1,
+        status: 'exhausted'
+    });
+
+describe('GET /webhooks/deliveries/:id', () => {
+    it('reads one delivery of the caller’s shop, with its replay action', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        const id = await createSubscription(bearer);
+        const { tenant } = (await webhookSubscriptionRepository.findById(id))!;
+        const delivery = await fileDelivery(tenant, id);
+
+        const response = await api()
+            .get(`/webhooks/deliveries/${String(delivery._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({
+            id: String(delivery._id),
+            status: 'exhausted',
+            actions: { replay: true }
+        });
+    });
+
+    it('answers 404 for another shop’s delivery, an unknown id and a malformed one', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        const id = await createSubscription(bearer);
+        const foreign = await fileDelivery('another-shop', id);
+
+        const statuses = await Promise.all(
+            [String(foreign._id), '000000000000000000000000', 'not-an-id'].map((target) =>
+                api()
+                    .get(`/webhooks/deliveries/${target}`)
+                    .set('Authorization', bearer)
+                    .then((response) => response.status)
+            )
+        );
+
+        expect(statuses).toEqual([404, 404, 404]);
+    });
+
+    it('refuses a caller without read:WebhookSubscription with 403', async () => {
+        const { bearer } = await authenticateAsRole('customer');
+
+        const response = await api()
+            .get('/webhooks/deliveries/000000000000000000000000')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+    });
+});
+
 describe('POST /webhooks/deliveries/:id/replay', () => {
     /*
      * A real replay: it makes one outbound attempt, to a `.test` host that never resolves — so the

@@ -362,6 +362,29 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /webhooks/deliveries/{id}:
+        get:
+            tags: [Webhooks]
+            summary: Get one delivery
+            description: One row of this shop's delivery log, the same shape the list gives it, with `actions.replay`. Another shop's delivery, an unknown id and a malformed one are the same 404.
+            operationId: getWebhookDelivery
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The delivery
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WebhookDeliveryEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /webhooks/deliveries/{id}/replay:
         post:
             tags: [Webhooks]

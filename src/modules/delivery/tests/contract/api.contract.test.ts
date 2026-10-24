@@ -409,9 +409,8 @@ describe('POST /delivery/fulfillment-orders/{id}/hold and /release', () => {
 });
 
 describe('GET /delivery/shipments/{id}', () => {
-    it('reads a shipment for the staff who may correct it', async () => {
-        const { order } = await authenticateWithShipment();
-        const { bearer } = await authenticateAs('admin');
+    it('reads the buyer’s own shipment', async () => {
+        const { bearer, order } = await authenticateWithShipment();
         const [shipment] = await shipmentsOf(String(order._id));
 
         const response = await api()
@@ -423,6 +422,30 @@ describe('GET /delivery/shipments/{id}', () => {
             id: String(shipment._id),
             trackingCode: 'TRK-CONTRACT1'
         });
+    });
+
+    it('lets staff holding display:Order read any shipment', async () => {
+        const { order } = await authenticateWithShipment();
+        const { bearer } = await authenticateAs('admin');
+        const [shipment] = await shipmentsOf(String(order._id));
+
+        const response = await api()
+            .get(`/delivery/shipments/${String(shipment._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+    });
+
+    it('answers 404, never 403, for another buyer’s shipment', async () => {
+        const { order } = await authenticateWithShipment();
+        const { bearer: other } = await authenticateAsRole('customer');
+        const [shipment] = await shipmentsOf(String(order._id));
+
+        const response = await api()
+            .get(`/delivery/shipments/${String(shipment._id)}`)
+            .set('Authorization', other);
+
+        expect(response.status).toBe(404);
     });
 
     it('answers 404 for an unknown id and a malformed one', async () => {
@@ -438,15 +461,67 @@ describe('GET /delivery/shipments/{id}', () => {
         expect([unknown.status, malformed.status]).toEqual([404, 404]);
     });
 
-    it('refuses the buyer with 403, who reads shipments through their order', async () => {
-        const { bearer: customer, order } = await authenticateWithShipment();
-        const [shipment] = await shipmentsOf(String(order._id));
+    it('refuses an anonymous caller with 401', async () => {
+        const response = await api().get(`/delivery/shipments/${MISSING_ID}`);
+
+        expect(response.status).toBe(401);
+    });
+});
+
+describe('GET /delivery/fulfillment-orders/{id}', () => {
+    it('reads the buyer’s own fulfillment order', async () => {
+        const { bearer, order } = await authenticateWithShipment();
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
 
         const response = await api()
-            .get(`/delivery/shipments/${String(shipment._id)}`)
-            .set('Authorization', customer);
+            .get(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}`)
+            .set('Authorization', bearer);
 
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({ id: String(fulfillmentOrder._id) });
+    });
+
+    it('lets staff holding display:Order read any fulfillment order', async () => {
+        const { order } = await authenticateWithShipment();
+        const { bearer } = await authenticateAs('admin');
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+
+        const response = await api()
+            .get(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+    });
+
+    it('answers 404, never 403, for another buyer’s fulfillment order', async () => {
+        const { order } = await authenticateWithShipment();
+        const { bearer: other } = await authenticateAsRole('customer');
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+
+        const response = await api()
+            .get(`/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}`)
+            .set('Authorization', other);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('answers 404 for an unknown id and a malformed one', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const unknown = await api()
+            .get(`/delivery/fulfillment-orders/${MISSING_ID}`)
+            .set('Authorization', bearer);
+        const malformed = await api()
+            .get('/delivery/fulfillment-orders/not-an-id')
+            .set('Authorization', bearer);
+
+        expect([unknown.status, malformed.status]).toEqual([404, 404]);
+    });
+
+    it('refuses an anonymous caller with 401', async () => {
+        const response = await api().get(`/delivery/fulfillment-orders/${MISSING_ID}`);
+
+        expect(response.status).toBe(401);
     });
 });
 

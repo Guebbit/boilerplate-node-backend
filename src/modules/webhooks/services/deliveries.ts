@@ -77,6 +77,35 @@ export const list = (
                 }));
         });
 
+/**
+ * One delivery of this tenant's log, shaped like a list row. Another shop's delivery and an
+ * unknown id are the same 404.
+ *
+ * @param id - the delivery
+ * @param context - the caller, whose tenant narrows the lookup and whose keys shape `actions`
+ */
+export const get = (
+    id: string,
+    context: TenantCallerContext
+): Promise<ResponseSuccess<WebhookDelivery> | ResponseReject> =>
+    webhookDeliveryRepository.findByIdInTenant(id, context.caller.tenantId).then((delivery) => {
+        if (!delivery) return generateReject(404, [t('generic.error-not-found')]);
+
+        return webhookSubscriptionRepository
+            .findEnabledIdsAmong([subscriptionIdOf(delivery)])
+            .then((enabled) =>
+                generateSuccess(
+                    presentWebhookDelivery(
+                        delivery,
+                        deliveryActions(
+                            enabled.has(subscriptionIdOf(delivery)),
+                            standingOn(context.caller)
+                        )
+                    )
+                )
+            );
+    });
+
 /** The 409 both "somebody else holds the lease" cases below answer with. */
 const rejectInProgress = (): ResponseReject =>
     generateReject(409, [

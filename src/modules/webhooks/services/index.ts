@@ -31,6 +31,7 @@ export const webhooksService = {
     removeSubscriptionSecret: subscriptions.removeSecret,
     removeSubscription: subscriptions.remove,
     listDeliveries: deliveries.list,
+    getDelivery: deliveries.get,
     replayDelivery: deliveries.replay,
     subscribeToWebhookEvents,
     sweepDueWebhookDeliveries,

@@ -296,6 +296,30 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /delivery/fulfillment-orders/{id}:
+        get:
+            tags: [Delivery]
+            summary: Get a fulfillment order
+            description: >-
+                One fulfillment order by its own id, the record `ship`, `fulfill`, `hold` and `release` act on, with the same `actions` they answer. Scoped like the order it belongs to (`read:Order`): a buyer reads their own, staff holding `display:Order` read any. Someone else's, an unknown id and a malformed one are the same 404.
+            operationId: getFulfillmentOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The fulfillment order
+            responses:
+                '200':
+                    description: The fulfillment order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FulfillmentOrderEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /delivery/fulfillment-orders/{id}/shipments:
         post:
             tags: [Delivery]
@@ -434,7 +458,8 @@ paths:
         get:
             tags: [Delivery]
             summary: Get a shipment
-            description: One shipment by its own id, at the address `PATCH` corrects it. Staff's read, behind the key that corrects a shipment (`update:Shipment`); a buyer reads their shipments through `GET /delivery/orders/{orderId}`. An unknown or malformed id is a 404.
+            description: >-
+                One shipment by its own id, at the address `PATCH` corrects it. Scoped like the order it belongs to (`read:Order`): a buyer reads their own, staff holding `display:Order` read any. Someone else's shipment, an unknown id and a malformed one are the same 404.
             operationId: getShipment
             security:
                 - bearerAuth: []

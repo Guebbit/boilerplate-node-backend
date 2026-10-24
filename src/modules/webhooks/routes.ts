@@ -21,6 +21,7 @@ import { getWebhookSubscription } from './controllers/get-subscription';
 import { enableWebhookSubscription } from './controllers/enable-subscription';
 import { disableWebhookSubscription } from './controllers/disable-subscription';
 import { listWebhookDeliveries } from './controllers/list-deliveries';
+import { getWebhookDelivery } from './controllers/get-delivery';
 import { replayWebhookDelivery } from './controllers/replay-delivery';
 import { listWebhookEvents } from './controllers/list-events';
 
@@ -104,6 +105,9 @@ router.delete(
 
 // GET /webhooks/deliveries — the delivery log, newest first
 router.get('/deliveries', requirePermission('read', 'WebhookSubscription'), listWebhookDeliveries);
+
+// GET /webhooks/deliveries/:id — one delivery of the log
+router.get('/deliveries/:id', requirePermission('read', 'WebhookSubscription'), getWebhookDelivery);
 
 // POST /webhooks/deliveries/:id/replay — re-send one delivery now
 router.post(

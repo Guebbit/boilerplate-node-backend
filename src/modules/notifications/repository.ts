@@ -34,6 +34,7 @@ export const notificationRepository: Repository<
 > & {
     listByUserId: (userId: string) => Promise<NotificationDocument[]>;
     insertMany: (rows: NewNotification[]) => Promise<NotificationDocument[]>;
+    findOwned: (userId: string, id: string) => Promise<NotificationDocument | null>;
     deleteOwned: (userId: string, id: string) => Promise<boolean>;
     deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
     markAllRead: (userId: string, readAt: Date) => Promise<void>;
@@ -58,6 +59,10 @@ export const notificationRepository: Repository<
      */
     insertMany: async (rows: NewNotification[]) =>
         notificationModel.insertMany(rows, { ordered: false }),
+
+    /** One row, but only if it is the caller's: `null` covers "no such row" and "someone else's". */
+    findOwned: async (userId: string, id: string) =>
+        notificationModel.findOne({ _id: toObjectId(id), userId: toObjectId(userId) }).exec(),
 
     /**
      * Delete one row, but only if it is the caller's. `false` covers "no such row" and "someone

@@ -22,6 +22,7 @@ import { getNotifications } from './controllers/get-notifications';
 import { getNotificationsStream } from './controllers/get-notifications-stream';
 import { postReadAll } from './controllers/post-read-all';
 import { postDismissAll } from './controllers/post-dismiss-all';
+import { getNotification } from './controllers/get-notification';
 import { deleteNotification } from './controllers/delete-notification';
 
 /** Express router for notification operations, mounted at /notifications. */
@@ -47,6 +48,9 @@ router.post('/read-all', requirePermission('read', 'Notification'), postReadAll)
 
 // POST /notifications/dismiss-all — empty the inbox.
 router.post('/dismiss-all', requirePermission('delete', 'Notification'), postDismissAll);
+
+// GET /notifications/:id — one of the caller's own. Below the literal paths, so none is read as an id.
+router.get('/:id', requirePermission('read', 'Notification'), getNotification);
 
 // DELETE /notifications/:id — one of the caller's own.
 router.delete('/:id', requirePermission('delete', 'Notification'), deleteNotification);

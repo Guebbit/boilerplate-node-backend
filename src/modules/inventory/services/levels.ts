@@ -3,6 +3,13 @@
  * Level rows and the reads over them: the stock board, the low-stock gauge, the ledger.
  */
 
+import { t } from '@infrastructure/i18n';
+import {
+    generateReject,
+    generateSuccess,
+    type ResponseReject,
+    type ResponseSuccess
+} from '@infrastructure/http/response';
 import { isPreorder, productService } from '@modules/products';
 import type { InventoryLevel, PreorderLevel, StockMovement } from '@types';
 import {
@@ -147,6 +154,28 @@ export const listLevels = async (
         meta: buildPaginatedMeta(pagination, totalItems)
     };
 };
+
+/**
+ * One product's stock level — the item read of a board row, the record `receive`, `adjust` and
+ * `backorder-limit` act on. A product that is gone and one with no level row are the same 404.
+ *
+ * @param productId - the product
+ * @returns its level, or the 404
+ */
+export const getLevel = (
+    productId: string
+): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> =>
+    productService.findByIdRaw(productId).then((product) => {
+        if (!product) return generateReject(404, [t('inventory.product-not-found')]);
+
+        return stockLevelRepository
+            .findByProductId(productId)
+            .then((level) =>
+                level
+                    ? generateSuccess(presentInventoryLevel(level, product.title))
+                    : generateReject(404, [t('inventory.product-not-found')])
+            );
+    });
 
 /**
  * How many PUBLICLY VISIBLE products are at or under the low-stock threshold — the gauge

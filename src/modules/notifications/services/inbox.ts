@@ -13,7 +13,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { NOTIFICATIONS_CHANNELS } from '@types';
+import { NOTIFICATIONS_CHANNELS, type Notification } from '@types';
 import { notificationsConfig } from '../config';
 import { presentNotification, presentNotifications, type NotificationsView } from '../presenter';
 import { notificationRepository, type NewNotification } from '../repository';
@@ -22,6 +22,22 @@ import { publishToUser } from './stream';
 /** The caller's whole inbox, newest first. Empty and absent are the same state. */
 export const notificationsList = (userId: string): Promise<NotificationsView> =>
     notificationRepository.listByUserId(userId).then(presentNotifications);
+
+/**
+ * One of the caller's own notifications. 404 whether the id is unknown or someone else's, so a
+ * probe cannot tell the two apart.
+ */
+export const notificationGet = (
+    userId: string,
+    id: string
+): Promise<ResponseSuccess<Notification> | ResponseReject> =>
+    notificationRepository
+        .findOwned(userId, id)
+        .then((row) =>
+            row
+                ? generateSuccess(presentNotification(row))
+                : generateReject(404, [t('notifications.not-found')])
+        );
 
 /**
  * Enforce the cap for one user: delete everything past their newest N and tell their open tabs.

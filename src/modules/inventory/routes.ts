@@ -12,6 +12,7 @@ import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { getInventoryLevels } from './controllers/get-inventory-levels';
+import { getInventoryLevel } from './controllers/get-inventory-level';
 import { getStockMovements } from './controllers/get-stock-movements';
 import { getPreorderLevels } from './controllers/get-preorder-levels';
 import { putBackorderLimit } from './controllers/put-backorder-limit';
@@ -34,6 +35,9 @@ router.use(getAuth, isAuthOrCredential);
 
 // GET /inventory/levels — the stock board, scarcest first
 router.get('/levels', requirePermission('read', 'StockLevel'), getInventoryLevels);
+
+// GET /inventory/levels/:productId — one product's counters, the record the writes below act on
+router.get('/levels/:productId', requirePermission('read', 'StockLevel'), getInventoryLevel);
 
 // GET /inventory/preorders — the preorder board: allowance, outstanding, paid vs unpaid
 router.get('/preorders', requirePermission('read', 'StockLevel'), getPreorderLevels);
