@@ -47,6 +47,8 @@ const runErasureCascade = async (
         const afterErase = await erase(user.id, session);
         if (afterErase) deferred.push(afterErase);
     }
+    // A hold this account placed on someone else keeps its force but loses the name.
+    await userRepository.forgetHoldSetter(user.id, session);
     await userRepository.deleteOne(user, session);
     return deferred;
 };

@@ -210,6 +210,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findWarnedStillInactive: (warnedBefore: Date) => Promise<UserDocument[]>;
     findReaperSoftDeletedPastGrace: (cutoff: Date) => Promise<UserDocument[]>;
     findScheduledDeletionsDue: (now: Date) => Promise<UserDocument[]>;
+    forgetHoldSetter: (staffId: string, session: ClientSession) => Promise<void>;
     restoreScheduledDeletion: (id: string, now: Date, session?: ClientSession) => Promise<boolean>;
     claimScheduledErasure: (id: string, now: Date, session: ClientSession) => Promise<boolean>;
 } = {
@@ -863,6 +864,23 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                 deletedAt: { $lt: cutoff }
             })
             .exec(),
+
+    /**
+     * Unset `purchaseHold.setBy` on every hold one staff account placed: the hold stays in force,
+     * the person goes. The audit row keeps who placed it, for as long as the trail is kept.
+     *
+     * @param staffId - the erased staff account's id
+     * @param session - joins the clear to the erasure's transaction
+     */
+    forgetHoldSetter: (staffId: string, session: ClientSession) =>
+        userModel
+            .updateMany(
+                { 'purchaseHold.setBy': staffId },
+                { $unset: { 'purchaseHold.setBy': 1 } },
+                { session, timestamps: false }
+            )
+            .exec()
+            .then(() => undefined),
 
     /** Every owner-scheduled account whose grace has run out — the purge job's read. */
     findScheduledDeletionsDue: (now: Date) =>

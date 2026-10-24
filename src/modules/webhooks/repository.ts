@@ -11,6 +11,7 @@ import {
     type ReencryptReport
 } from '@infrastructure/security/reencrypt';
 import { randomUUID } from 'node:crypto';
+import type { ClientSession } from 'mongoose';
 import {
     createRepository,
     toObjectId,
@@ -131,6 +132,19 @@ const recordOutcome = (
         : recordFailure(subscriptionId);
 
 /**
+ * Unset the owner on every subscription one account configured: the integration stays, the person
+ * goes. The auto-disable notice then has no one to mail, which it already tolerates.
+ *
+ * @param userId - the erased account's id
+ * @param session - joins the clear to the erasure's transaction
+ */
+const forgetOwner = (userId: string, session: ClientSession): Promise<void> =>
+    webhookSubscriptionModel
+        .updateMany({ ownerUserId: userId }, { $unset: { ownerUserId: 1 } }, { session })
+        .exec()
+        .then(() => undefined);
+
+/**
  * Turn an enabled, over-threshold subscription off, and mark it as the guard's doing. Conditional
  * on `disabledAt: null` so a second exhausted delivery finalizing moments later cannot re-stamp
  * `disabledAt` over the real one, and a subscription an operator already paused is not relabelled
@@ -166,6 +180,7 @@ export const webhookSubscriptionRepository: Repository<
     findByIdInTenant: typeof findSubscriptionByIdInTenant;
     recordOutcome: typeof recordOutcome;
     disable: typeof disable;
+    forgetOwner: typeof forgetOwner;
 } = {
     reencrypt: reencryptOf(webhookSubscriptionModel),
     ...subscriptionBase,
@@ -173,7 +188,8 @@ export const webhookSubscriptionRepository: Repository<
     findEnabledIdsAmong,
     findByIdInTenant: findSubscriptionByIdInTenant,
     recordOutcome,
-    disable
+    disable,
+    forgetOwner
 };
 
 /** The shared factory's CRUD, scoped to `webhookdeliveries`. */
