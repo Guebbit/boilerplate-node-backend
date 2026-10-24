@@ -84,6 +84,11 @@ x-error-codes:
             status: 500,
             description: 'An unexpected server-side failure. Never carries library or stack detail.'
         }
+    METHOD_NOT_ALLOWED:
+        {
+            status: 405,
+            description: 'The path exists, but not with this method. The `Allow` header lists the methods it does answer.'
+        }
     PAYLOAD_TOO_LARGE:
         { status: 413, description: "The request body exceeds this deployment's size limit." }
     UNSUPPORTED_MEDIA_TYPE:

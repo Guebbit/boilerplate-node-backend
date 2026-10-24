@@ -242,6 +242,19 @@ describe('POST /feedback/search', () => {
 });
 
 describe('PATCH /feedback/{id}', () => {
+    // A triage state is two fields of a bigger record, so no PUT is offered (RFC 9110 §15.5.6).
+    it('answers a PUT 405 with the methods it does allow', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createFeedbackRequest();
+        const response = await api()
+            .put(`/feedback/${id}`)
+            .set('Authorization', bearer)
+            .send({ status: 'resolved' });
+
+        expect(response.status).toBe(405);
+        expect(response.headers.allow).toBe('DELETE, PATCH');
+    });
+
     it('matches the contract when changing status and notes together', async () => {
         const { bearer } = await authenticateAs('admin');
         const id = await createFeedbackRequest();

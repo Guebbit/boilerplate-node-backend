@@ -53,6 +53,10 @@ layout and shared parts are declared in one file under `scripts/contracts/`.
 | `asyncapi.public.yaml`   | **merged**    | the same merge over the shared sections only — one `SHARED_SECTIONS` list decides which |
 | the 4 client collections | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked |
 
+A 405 is not merged in: it answers a request that matched no operation, so it is the
+`METHOD_NOT_ALLOWED` code in the root's `x-error-codes` and a guard built from `api/operation-routes.ts`
+([Write Methods](./write-methods.md#a-known-path-with-the-wrong-method)).
+
 A hand-written restatement of the contract is a copy and copies rot, which is why the last row
 exists at all. See [The client collections](#the-client-collections-generated).
 

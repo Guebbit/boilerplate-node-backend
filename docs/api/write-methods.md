@@ -176,6 +176,24 @@ The guard is `requireDeclaredContentType`, built from `api/request-content-types
 `npm run gen:api` derives from the contract's own `requestBody` media types. A request with no
 bytes is not judged: a missing required body is the schema's own 422.
 
+## A known path with the wrong method
+
+A path the contract declares, asked with a method it does not give it, answers **405** with an
+`Allow` header (RFC 9110 §15.5.6) — never the catch-all's 404. `DELETE /feedback/{id}` is fine,
+`PUT /feedback/{id}` is a 405 naming `DELETE, PATCH`.
+
+- **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged: the CORS layer answers
+  a preflight before any route runs.
+- **A trailing slash is the same path.** `/things/` reads as `/things`.
+- **A module this build does not serve stays a 404**: its paths are in the table, but nothing is
+  mounted to ask.
+- **Not declared per operation.** The 405 belongs to a request that matched no operation, so no
+  operation's `responses` could carry it; its code, `METHOD_NOT_ALLOWED`, is in the contract's
+  `x-error-codes`.
+
+The guard is `methodNotAllowed`, built from `api/operation-routes.ts`, which `npm run gen:api`
+derives from the contract's paths and mounted right before the 404 in `src/app/routes.ts`.
+
 ## Empty, `null`, omitted
 
 | On the wire | Means | Legal on |
