@@ -815,6 +815,21 @@ describe('who sees which return', () => {
         expect(page.items.map(({ id }) => id)).toEqual([returnId]);
     });
 
+    it('orders by the requested field, and by newest first without one', async () => {
+        const first = await requestedReturn();
+        const second = await requestedReturn();
+        await returnService.approveReturn(second.returnId, callerContextAs('admin'));
+
+        const newest = await returnService.listReturns({}, asManager());
+        const oldest = await returnService.listReturns({ sort: ['createdAt'] }, asManager());
+        const byStatus = await returnService.listReturns({ sort: ['-status'] }, asManager());
+
+        expect(newest.items.map(({ id }) => id)).toEqual([second.returnId, first.returnId]);
+        expect(oldest.items.map(({ id }) => id)).toEqual([first.returnId, second.returnId]);
+        // `requested` sorts after `approved` alphabetically, so descending puts the request first.
+        expect(byStatus.items.map(({ id }) => id)).toEqual([first.returnId, second.returnId]);
+    });
+
     it('reads one return for its own buyer and for staff, but 404s a stranger', async () => {
         const { user, returnId } = await requestedReturn();
         const stranger = await createUser({ email: 'stranger@example.com' });
