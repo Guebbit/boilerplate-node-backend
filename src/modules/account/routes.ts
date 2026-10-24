@@ -286,8 +286,8 @@ router.post('/logout-all', isAuth, requireFreshAuth('sensitive'), postLogoutEver
 // GET /account/sessions — list live refresh tokens as sessions (requires auth)
 router.get('/sessions', isAuth, getSessions);
 
-// POST /account/session/touch — counts the session as active and answers its idle clock.
-router.post('/session/touch', isAuth, postSessionTouch);
+// POST /account/sessions/current/touch — counts the session as active and answers its idle clock.
+router.post('/sessions/current/touch', isAuth, postSessionTouch);
 
 // DELETE /account/sessions/:sessionId — revoke one session (requires auth). Sensitive, same
 // reasoning as logout-all.

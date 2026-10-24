@@ -556,7 +556,7 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/session/touch:
+    /account/sessions/current/touch:
         post:
             tags: [Account]
             summary: Count the caller's own session as active, and read its idle clock

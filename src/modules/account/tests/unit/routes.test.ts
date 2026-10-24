@@ -114,7 +114,7 @@ describe('account routes — what is mounted', () => {
             'POST /logout',
             'POST /logout-all',
             'GET /sessions',
-            'POST /session/touch',
+            'POST /sessions/current/touch',
             'DELETE /sessions/:sessionId',
             'POST /verify-request',
             'POST /verify-confirm',

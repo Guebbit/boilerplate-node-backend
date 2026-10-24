@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /account/session/touch` controller — counts the caller's session as active and answers its
+ * `POST /account/sessions/current/touch` controller — counts the caller's session as active and answers its
  * idle clock, so a client can show a "still there?" prompt from server numbers.
  */
 
@@ -12,7 +12,7 @@ import type { SessionActivity } from '@types';
 import { idleLimitMilliseconds } from '../session/idle';
 
 /**
- * POST /account/session/touch
+ * POST /account/sessions/current/touch
  * By the time this runs `getAuth` has already counted the request as activity (it is not marked
  * passive), so there is nothing to write: the answer is the clock as it now stands.
  */

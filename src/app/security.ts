@@ -182,7 +182,7 @@ export const installSecurity = (app: Express): void => {
                 // analytics-consent flag.
                 'analytics-consent',
                 // Marks a poll or keep-alive as not the person acting (`kernel/middlewares/
-                // authorizations.ts`, declared at `/account/session/touch`); a browser sending it
+                // authorizations.ts`, declared at `/account/sessions/current/touch`); a browser sending it
                 // would otherwise fail the preflight.
                 'Session-Passive'
             ],

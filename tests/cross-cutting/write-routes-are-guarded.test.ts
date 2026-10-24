@@ -168,7 +168,7 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'minting an access token — the refresh-token cookie is the credential, not a login'
     },
-    'account POST /session/touch': {
+    'account POST /sessions/current/touch': {
         requiresAuth: true,
         reason: "counts the caller's own session as active; nobody else's is reachable"
     },
