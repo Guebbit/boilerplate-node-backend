@@ -255,6 +255,7 @@ const NEEDS_STATE_OR_SIGNATURE: Record<string, string> = {
     confirmEmailVerification: 'the token is issued by the verification mail',
     confirmPasswordReset: 'the token is issued by the reset mail',
     confirmEmailChange: 'the token is issued by the change-confirmation mail',
+    restoreAccount: 'the token is issued by the deletion-scheduled mail',
     undoEmailChange: 'the token is issued by the change notice mailed to the old address',
     confirmTwoFactorMethod: 'a setup for that method must be under way',
     regenerateBackupCodes: 'two-factor must already be enabled on the account',
