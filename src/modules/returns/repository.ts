@@ -54,7 +54,8 @@ export const returnRepository: Repository<ReturnDocument, Return> & {
         transform: applyReturnTransform,
         searchable: {
             objectIds: { orderId: 'orderId' },
-            exact: { status: 'status', reason: 'reason' }
+            exact: { status: 'status', reason: 'reason' },
+            sortable: { createdAt: 'createdAt', status: 'status' }
         }
     }),
 

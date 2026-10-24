@@ -27,11 +27,25 @@ import {
 import type { WebhookSubscription, WebhookDelivery } from '@types';
 import { setAndUnset } from '@infrastructure/persistence/changes';
 
-/** The shared factory's CRUD, scoped to `webhooksubscriptions`. No `searchable`: the admin list has no filters. */
-const subscriptionBase = createRepository<WebhookSubscriptionDocument, WebhookSubscription>(
+/**
+ * A stored subscription as the wire carries it, minus `actions`: those depend on the caller, so
+ * `services/actions.ts` adds them to a row after the read.
+ */
+export type StoredWebhookSubscription = Omit<WebhookSubscription, 'actions'>;
+
+/**
+ * The shared factory's CRUD, scoped to `webhooksubscriptions`. The list filters by `disabled`
+ * (is `disabledAt` set) and `autoDisabled` (is `autoDisabledAt` set), and sorts by creation date
+ * or url.
+ */
+const subscriptionBase = createRepository<WebhookSubscriptionDocument, StoredWebhookSubscription>(
     webhookSubscriptionModel,
     {
-        transform: applyWebhookSubscriptionTransform
+        transform: applyWebhookSubscriptionTransform,
+        searchable: {
+            presence: { disabled: 'disabledAt', autoDisabled: 'autoDisabledAt' },
+            sortable: { createdAt: 'createdAt', url: 'url' }
+        }
     }
 );
 
@@ -42,7 +56,21 @@ const subscriptionBase = createRepository<WebhookSubscriptionDocument, WebhookSu
  * guard), and an index on a field matched by set-membership/wildcard logic can't help Mongo anyway.
  */
 const findEnabled = (): Promise<WebhookSubscriptionDocument[]> =>
-    webhookSubscriptionModel.find({ enabled: true }).exec();
+    webhookSubscriptionModel.find({ disabledAt: null }).exec();
+
+/**
+ * Which of these subscriptions are enabled — one `$in` read for a whole page of deliveries, so a
+ * row's `replay` flag costs no query of its own.
+ *
+ * @param ids - subscription ids, as strings
+ * @returns the ids among them that exist and are switched on
+ */
+const findEnabledIdsAmong = (ids: readonly string[]): Promise<Set<string>> =>
+    webhookSubscriptionModel
+        .find({ _id: { $in: ids.map((id) => toObjectId(id)) }, disabledAt: null }, { _id: 1 })
+        .lean()
+        .exec()
+        .then((rows) => new Set(rows.map(({ _id }) => String(_id))));
 
 /**
  * One subscription by id, narrowed to `tenant` at the query itself — a wrong-tenant id and an
@@ -103,17 +131,21 @@ const recordOutcome = (
         : recordFailure(subscriptionId);
 
 /**
- * Turn an enabled, over-threshold subscription off. Conditional on `enabled: true` so a second
- * exhausted delivery finalizing moments later cannot re-stamp `disabledAt` over the real one.
+ * Turn an enabled, over-threshold subscription off, and mark it as the guard's doing. Conditional
+ * on `disabledAt: null` so a second exhausted delivery finalizing moments later cannot re-stamp
+ * `disabledAt` over the real one, and a subscription an operator already paused is not relabelled
+ * as an auto-disable.
  */
-const disable = (subscriptionId: string): Promise<WebhookSubscriptionDocument | null> =>
-    webhookSubscriptionModel
+const disable = (subscriptionId: string): Promise<WebhookSubscriptionDocument | null> => {
+    const now = new Date();
+    return webhookSubscriptionModel
         .findOneAndUpdate(
-            { _id: toObjectId(subscriptionId), enabled: true },
-            { $set: { enabled: false, disabledAt: new Date() } },
+            { _id: toObjectId(subscriptionId), disabledAt: null },
+            { $set: { disabledAt: now, autoDisabledAt: now } },
             { returnDocument: 'after' }
         )
         .exec();
+};
 
 /*
  * Explicit annotation, not inferred: Mongoose's `Query` generics are large enough that TypeScript
@@ -123,13 +155,14 @@ const disable = (subscriptionId: string): Promise<WebhookSubscriptionDocument | 
  */
 export const webhookSubscriptionRepository: Repository<
     WebhookSubscriptionDocument,
-    WebhookSubscription
+    StoredWebhookSubscription
 > & {
     reencrypt: (
         spec: ReencryptSpec<WebhookSubscriptionDocument>,
         dryRun?: boolean
     ) => Promise<ReencryptReport>;
     findEnabled: typeof findEnabled;
+    findEnabledIdsAmong: typeof findEnabledIdsAmong;
     findByIdInTenant: typeof findSubscriptionByIdInTenant;
     recordOutcome: typeof recordOutcome;
     disable: typeof disable;
@@ -137,6 +170,7 @@ export const webhookSubscriptionRepository: Repository<
     reencrypt: reencryptOf(webhookSubscriptionModel),
     ...subscriptionBase,
     findEnabled,
+    findEnabledIdsAmong,
     findByIdInTenant: findSubscriptionByIdInTenant,
     recordOutcome,
     disable

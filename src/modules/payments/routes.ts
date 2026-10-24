@@ -49,6 +49,7 @@ import { postPaymentWebhook } from './controllers/post-payment-webhook';
 import { getPaymentByOrder } from './controllers/get-payment-by-order';
 import { getOrderByReference } from './controllers/get-order-by-reference';
 import { postPaymentRefund } from './controllers/post-payment-refund';
+import { postPaymentRefundSettle } from './controllers/post-payment-refund-settle';
 import { postPaymentOffline } from './controllers/post-payment-offline';
 import { getPaymentMethods } from './controllers/get-payment-methods';
 import { getPayments } from './controllers/get-payments';
@@ -114,6 +115,16 @@ router.post(
     requirePermission('create', 'Refund'),
     requireIdempotencyKey,
     postPaymentRefund
+);
+
+// POST /payments/:id/refunds/:refundId/settle — the operator confirming hand-paid money went back.
+// Same `create:Refund` key (and so the same `stepUp`) as the refund that opened the record; the
+// key is optional because settling twice is refused by the record itself (409), never repeated.
+router.post(
+    '/:id/refunds/:refundId/settle',
+    requirePermission('create', 'Refund'),
+    idempotencyKey,
+    postPaymentRefundSettle
 );
 
 // POST /payments/order/:orderId/offline — the admin recording money by hand. Same `stepUp`

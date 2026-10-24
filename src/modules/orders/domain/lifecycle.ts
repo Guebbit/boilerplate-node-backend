@@ -250,7 +250,7 @@ export const statusesLeadingTo = (to: OrderStatus, actor: OrderActor): readonly 
  * `start:Shipment` without `update:Order`, and `actor` alone cannot tell them apart from
  * a customer), so `services/scope.ts`'s `withActions` computes those and merges them in.
  */
-type StatusDerivedActions = Pick<OrderActions, 'transitions' | 'cancel' | 'pay'>;
+type StatusDerivedActions = Pick<OrderActions, 'cancel' | 'pay'>;
 
 /**
  * What `actor` may do to an order in `status`, as far as the status/actor pairing alone answers —
@@ -259,15 +259,11 @@ type StatusDerivedActions = Pick<OrderActions, 'transitions' | 'cancel' | 'pay'>
  * @param actor - who is asking
  * @returns the caller's options for this order
  */
-export const orderActionsFor = (status: OrderStatus, actor: OrderActor): StatusDerivedActions => {
-    // Both fields off ONE reading, so they cannot describe different orders.
-    const transitions = statusesReachableFrom(status, actor);
-    return {
-        transitions: [...transitions],
-        cancel: transitions.includes(OrderStatus.cancelled),
-        // Asked as `system`, and so absent from `transitions`: paying is a move no request makes.
-        // A client needs the answer anyway — it is what decides whether to offer the card form on
-        // an order that has no payment record yet.
-        pay: isPayable(status)
-    };
-};
+export const orderActionsFor = (status: OrderStatus, actor: OrderActor): StatusDerivedActions => ({
+    // `canTransition` allows a write that changes nothing; "may I cancel this" is not that.
+    cancel: status !== OrderStatus.cancelled && canTransition(status, OrderStatus.cancelled, actor),
+    // Asked outside the request table: paying is a move no request makes. A client needs the
+    // answer anyway — it is what decides whether to offer the card form on an order that has no
+    // payment record yet.
+    pay: isPayable(status)
+});

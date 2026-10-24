@@ -83,7 +83,8 @@ export const shipmentActions = (
     standing: Standing
 ): ShipmentActions => {
     const open = standing.staff && shipment.status === 'shipped' && canRecordArrival(order.status);
-    return { deliver: open, editTracking: open };
+    // The forced arrival has the same state gate as the ordinary one; it adds the override key.
+    return { deliver: open, forceDeliver: open && standing.override, update: open };
 };
 
 /**

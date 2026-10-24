@@ -1,8 +1,8 @@
 /**
  * @module
- * Telling a preorder's buyer that their date moved or passed — the one place the notice is built,
+ * Telling a preorder's buyer that their date moved or will be missed — the one place the notice is built,
  * for the two things that start it: an admin moving the release date and the daily sweep finding a
- * date that passed. Both write the fulfillment order's new state and the event in one transaction;
+ * date that will be missed. Both write the fulfillment order's new state and the event in one transaction;
  * the email follows the commit.
  *
  * See: docs/modules/delivery.md#preorders-and-a-moved-date
@@ -54,8 +54,8 @@ const payloadOf = (
 /**
  * Record a notice on a fulfillment order and announce it, inside the caller's transaction.
  *
- * The notice stamps `lastNoticeAt`, which is what stops the sweep repeating itself, and moves or
- * clears the expected date. It asks the buyer nothing: silence keeps them waiting. The write is
+ * The notice stamps `lastNoticeAt`, and a due one also `dueNoticeFor`, which is what stops the
+ * sweep repeating itself. It moves or clears the expected date. It asks the buyer nothing: silence keeps them waiting. The write is
  * conditional on the revision the caller read, so a ship or an allocation racing it wins and the
  * notice is simply not sent.
  *
@@ -76,6 +76,10 @@ export const recordNotice = async (
 
     const patch: FulfillmentOrderPatch = {
         lastNoticeAt: now,
+        // The sweep's dedupe: this very date is told about once, a moved one again.
+        ...(input.reason === 'due' && fulfillmentOrder.expectedAt
+            ? { dueNoticeFor: fulfillmentOrder.expectedAt }
+            : {}),
         ...(input.expectedAt ? { expectedAt: input.expectedAt } : {}),
         // A cleared date leaves no `expectedAt`, so a redelivery finds nothing to move.
         ...(input.expectedAt === null ? { unset: ['expectedAt' as const] } : {})

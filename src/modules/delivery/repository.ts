@@ -14,7 +14,7 @@ import {
     applyShipmentTransform
 } from './model';
 import type { FulfillmentOrderDocument, ShipmentDocument } from './model';
-import type { FulfillmentOrderDraft, WaitCause } from './domain';
+import { DUE_NOTICE_LEAD_MS, type FulfillmentOrderDraft, type WaitCause } from './domain';
 import { FulfillmentHoldReason, FulfillmentOrderStatus, PreorderFulfillmentState } from '@types';
 import {
     createRepository,
@@ -139,6 +139,7 @@ export type FulfillmentOrderPatch = Partial<
         | 'holdMessage'
         | 'expectedAt'
         | 'lastNoticeAt'
+        | 'dueNoticeFor'
         | 'cancelReason'
     >
 > & {
@@ -299,8 +300,9 @@ export const fulfillmentOrderRepository: Repository<
             .exec(),
 
     /**
-     * The waiting fulfillment orders whose expected date has passed, for the sweep to judge against
-     * their last notice (a date alone cannot say whether the buyer was already told).
+     * The waiting fulfillment orders whose expected date is a day away or gone, for the sweep to
+     * judge against the date it last told them about (a date alone cannot say whether the buyer was
+     * already told).
      * @param now - the instant of the sweep
      */
     findDatePassed: (now) =>
@@ -308,7 +310,7 @@ export const fulfillmentOrderRepository: Repository<
             .find({
                 status: FulfillmentOrderStatus.on_hold,
                 holdReason: FulfillmentHoldReason.awaiting_stock,
-                expectedAt: { $lte: now }
+                expectedAt: { $lte: new Date(now.getTime() + DUE_NOTICE_LEAD_MS) }
             })
             .exec(),
 

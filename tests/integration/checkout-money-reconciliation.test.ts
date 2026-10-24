@@ -118,7 +118,7 @@ const priceThroughHttp = async (
         .send({ orderId: checkout.body.data.id })
         .expect(201);
     // Each basket leaves an unpaid order, and a shopper may hold only so many open at once
-    // (`CART_OPEN_ORDER_LIMIT`): cancel it so the next basket can be placed by the same shopper.
+    // (`CART_OPEN_ORDER_LIMIT_REACHED`): cancel it so the next basket can be placed by the same shopper.
     // A shopper's OWN cancels pause their checkout (purchase hold), so a shopper reused across
     // baskets is cancelled for by someone else.
     await api()

@@ -361,7 +361,7 @@ describe('POST /orders/{id}/restore', () => {
         expect((await orderRepository.findById(String(order._id)))!.deletedAt).toBeUndefined();
     });
 
-    it('answers 409 for an order that is not deleted', async () => {
+    it('answers 409 ORDER_NOT_DELETED for an order that is not deleted', async () => {
         const { bearer } = await authenticateAs('admin');
         const order = await seedOrderFor(await createUser());
 
@@ -370,6 +370,29 @@ describe('POST /orders/{id}/restore', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('ORDER_NOT_DELETED');
+    });
+
+    it('is offered by `actions.restore` on the list row of a hidden order, and only there', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const hidden = await seedOrderFor(await createUser(), OrderStatus.cancelled);
+        const live = await seedOrderFor(
+            await createUser({ email: 'live@example.com' }),
+            OrderStatus.cancelled
+        );
+        await api()
+            .delete(`/orders/${String(hidden._id)}`)
+            .set('Authorization', bearer);
+
+        const list = await api().get('/orders').set('Authorization', bearer);
+
+        const rows = new Map(
+            (list.body.data.items as { id: string; actions: Record<string, boolean> }[]).map(
+                (row) => [row.id, row.actions]
+            )
+        );
+        expect(rows.get(String(hidden._id))).toMatchObject({ restore: true, delete: false });
+        expect(rows.get(String(live._id))).toMatchObject({ restore: false, delete: true });
     });
 });
 

@@ -6,6 +6,9 @@
         "ring-cannot-be-empty": "A subscription must keep at least one active secret.",
         "subscription-not-found": "The subscription for this delivery no longer exists.",
         "delivery-in-progress": "This delivery is already being attempted right now. Try again shortly.",
+        "already-enabled": "This subscription is already enabled.",
+        "already-disabled": "This subscription is already disabled.",
+        "subscription-disabled": "This subscription is disabled, so the delivery cannot be replayed. Enable it first.",
         "email-disabled": {
             "subject": "A webhook subscription was disabled",
             "meta-title": "Webhook subscription disabled",

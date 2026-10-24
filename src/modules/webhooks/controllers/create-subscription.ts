@@ -10,7 +10,7 @@ import { createdResponse } from '@infrastructure/http/response';
 import { tenantCallerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { webhooksService } from '../services';
-import { presentWebhookSubscription } from '../presenters';
+import { viewSubscription } from '../services/actions';
 
 /**
  * POST /webhooks/subscriptions
@@ -26,11 +26,12 @@ export const createWebhookSubscription = (
     const body = parseBody(CreateWebhookSubscriptionBody, request.body, response);
     if (!body) return;
 
+    const context = tenantCallerContextOf(request);
     return webhooksService
-        .createSubscription(body, tenantCallerContextOf(request))
+        .createSubscription(body, context)
         .then((result) => {
             if (refused(response, result)) return;
-            const subscription = presentWebhookSubscription(result.data.subscription);
+            const subscription = viewSubscription(result.data.subscription, context.caller);
             return createdResponse<WebhookSubscriptionCreated>(
                 response,
                 { ...subscription, secret: result.data.secret },

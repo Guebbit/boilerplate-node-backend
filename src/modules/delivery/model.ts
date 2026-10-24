@@ -64,8 +64,10 @@ export interface FulfillmentOrderDocument extends Document {
     agreedAt?: Date;
     /** When it is now expected to ship. */
     expectedAt?: Date;
-    /** When the buyer was last told the date moved or passed: what stops a daily repeat. */
+    /** When the buyer was last told the date moved or would be missed. */
     lastNoticeAt?: Date;
+    /** The `expectedAt` the sweep's due notice was sent for: what stops a daily repeat. */
+    dueNoticeFor?: Date;
     /** Who cancelled what was left, once something was. */
     cancelReason?: FulfillmentCancelReason;
     /**
@@ -143,6 +145,7 @@ export const fulfillmentOrderSchema = new Schema<FulfillmentOrderDocument>(
         agreedAt: { type: Date },
         expectedAt: { type: Date },
         lastNoticeAt: { type: Date },
+        dueNoticeFor: { type: Date },
         cancelReason: { type: String, enum: Object.values(FulfillmentCancelReason) },
         revision: { type: Number, required: true, default: 0 }
     },
@@ -158,7 +161,7 @@ fulfillmentOrderSchema.index(
     { name: 'fulfillmentorders_status_holdReason_linesProductId' }
 );
 
-// The daily sweep's read: a date that passed.
+// The daily sweep's read: a date a day away or gone.
 fulfillmentOrderSchema.index(
     { status: 1, holdReason: 1, expectedAt: 1 },
     { name: 'fulfillmentorders_status_holdReason_expectedAt' }

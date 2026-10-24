@@ -11,7 +11,8 @@ import {
     mintRingSecret,
     activeRingSecrets,
     liveRingEntries,
-    removeRingSecret
+    removeRingSecret,
+    retiringRingSecrets
 } from '@modules/webhooks/secrets';
 import type { WebhookSecretRingEntry } from '@modules/webhooks/model';
 
@@ -97,6 +98,30 @@ describe('the overlap window', () => {
         expect(liveRingEntries([only.entry], new Date(t0.getTime() + 1000 * hour))).toEqual([
             only.entry
         ]);
+    });
+});
+
+describe('retiringRingSecrets', () => {
+    const hour = 3_600_000;
+    const t0 = new Date('2026-10-06T00:00:00.000Z');
+
+    it('names a superseded secret and the end of its window: its successor’s mint time plus 24 hours', () => {
+        const old = mintedAt(t0);
+        const fresh = mintedAt(new Date(t0.getTime() + hour));
+
+        expect(
+            retiringRingSecrets([old.entry, fresh.entry], new Date(t0.getTime() + 2 * hour))
+        ).toEqual([{ id: old.entry.id, retiresAt: new Date(t0.getTime() + 25 * hour) }]);
+    });
+
+    it('lists nothing for a ring of one, and nothing once the window has ended', () => {
+        const old = mintedAt(t0);
+        const fresh = mintedAt(new Date(t0.getTime() + hour));
+
+        expect(retiringRingSecrets([old.entry], t0)).toEqual([]);
+        expect(
+            retiringRingSecrets([old.entry, fresh.entry], new Date(t0.getTime() + 25 * hour))
+        ).toEqual([]);
     });
 });
 

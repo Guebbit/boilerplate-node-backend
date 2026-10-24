@@ -31,7 +31,6 @@ beforeEach(async () => {
         tenant: 'shop',
         url: 'https://example.test/inbox',
         eventTypes: ['payment.succeeded'],
-        enabled: true,
         consecutiveFailures: 0,
         secrets: [entry]
     });

@@ -210,6 +210,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `orders`         | `ORDER_UPDATED`                              | `order.updated`                              | `order`                |
 | `payments`       | `ADMIN_ORDER_LOOKED_UP`                      | `admin.order.looked_up`                      | `order`                |
 | `payments`       | `ADMIN_PAYMENT_REFUND_REQUESTED`             | `admin.payment.refund_requested`             | `order`                |
+| `payments`       | `ADMIN_PAYMENT_REFUND_SETTLED_BY_HAND`       | `admin.payment.refund_settled_by_hand`       | `order`                |
 | `payments`       | `ADMIN_PAYMENT_REFUNDED`                     | `admin.payment.refunded`                     | `order`                |
 | `payments`       | `PAYMENT_AMOUNT_MISMATCH`                    | `payment.amount_mismatch`                    | `payment`              |
 | `payments`       | `PAYMENT_CONFIRMED`                          | `payment.confirmed`                          | —                      |
@@ -243,6 +244,8 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `webhooks`       | `ADMIN_WEBHOOK_DELIVERY_REPLAYED`            | `admin.webhook_delivery.replayed`            | `webhook_delivery`     |
 | `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_CREATED`         | `admin.webhook_subscription.created`         | `webhook_subscription` |
 | `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_DELETED`         | `admin.webhook_subscription.deleted`         | `webhook_subscription` |
+| `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_DISABLED`        | `admin.webhook_subscription.disabled`        | `webhook_subscription` |
+| `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_ENABLED`         | `admin.webhook_subscription.enabled`         | `webhook_subscription` |
 | `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_SECRET_REMOVED`  | `admin.webhook_subscription.secret_removed`  | `webhook_subscription` |
 | `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_SECRET_ROTATED`  | `admin.webhook_subscription.secret_rotated`  | `webhook_subscription` |
 | `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED`         | `admin.webhook_subscription.updated`         | `webhook_subscription` |

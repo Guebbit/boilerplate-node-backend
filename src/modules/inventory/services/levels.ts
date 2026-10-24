@@ -13,6 +13,7 @@ import {
 import { lowStockThreshold } from '../config';
 import { stockLevelRepository, stockMovementRepository } from '../repository';
 import { roomOn } from '../domain';
+import { presentInventoryLevel, presentPreorderLevel } from '../presenter';
 import type { PaginationInput } from '@infrastructure/persistence/search';
 import type { LevelFilters, MovementFilters, StockPosition } from './types';
 
@@ -100,24 +101,14 @@ export const listPreorders = async (
     return {
         items: items.map((item) => {
             const product = byId.get(item.productId);
-            // The cap only promises something while the product is sold against it.
-            const sellsAgainstCap =
-                product !== undefined &&
-                (isPreorder(product, now) || product.allowBackorder === true);
-            return {
-                ...item,
-                title: product?.title ?? item.productId,
-                ...(product?.releaseDate ? { releaseDate: product.releaseDate.toISOString() } : {}),
-                ...(sellsAgainstCap
-                    ? {
-                          // `null` is the contract's way to say there is no cap, so no number is left.
-                          left:
-                              item.backorderLimit === null
-                                  ? null
-                                  : Math.max(0, item.backorderLimit - item.backordered)
-                      }
-                    : {})
-            };
+            return presentPreorderLevel(item, {
+                title: product?.title,
+                releaseDate: product?.releaseDate,
+                // The cap only promises something while the product is sold against it.
+                sellsAgainstCap:
+                    product !== undefined &&
+                    (isPreorder(product, now) || product.allowBackorder === true)
+            });
         }),
         meta: buildPaginatedMeta(pagination, totalItems)
     };
@@ -150,10 +141,9 @@ export const listLevels = async (
     const titleOf = new Map(products.map((product) => [String(product._id), product.title]));
 
     return {
-        items: items.map((item) => ({
-            ...item,
-            title: titleOf.get(item.productId) ?? item.productId
-        })),
+        items: items.map((item) =>
+            presentInventoryLevel(item, titleOf.get(item.productId) ?? item.productId)
+        ),
         meta: buildPaginatedMeta(pagination, totalItems)
     };
 };

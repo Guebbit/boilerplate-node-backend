@@ -6,7 +6,7 @@
  * No mocks, no database.
  */
 
-import { lineAvailability, type AvailabilityFacts } from '../../domain';
+import { isBuyable, lineAvailability, type AvailabilityFacts } from '../../domain';
 
 /** A product that is shown, on sale and not deleted: the base every case bends one field of. */
 const LIVE = { active: true, purchasable: true };
@@ -162,4 +162,17 @@ describe('lineAvailability', () => {
 
         expect(values).not.toContain('insufficient_stock');
     });
+});
+
+describe('isBuyable', () => {
+    it.each(['in_stock', 'preorder', 'backorder'] as const)('lets %s become an order', (state) => {
+        expect(isBuyable(state)).toBe(true);
+    });
+
+    it.each(['insufficient_stock', 'out_of_stock', 'unavailable', 'removed'] as const)(
+        'refuses %s',
+        (state) => {
+            expect(isBuyable(state)).toBe(false);
+        }
+    );
 });

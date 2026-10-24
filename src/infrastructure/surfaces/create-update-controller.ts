@@ -50,12 +50,8 @@ export type UpdateIdSource =
           idParam?: never;
       };
 
-/** What makes one entity's update different from another's. */
-export type UpdateControllerSpec<
-    TReplace extends ZodObject,
-    TPatch extends ZodObject,
-    TRow
-> = UpdateIdSource & {
+/** What makes one entity's PATCH different from another's. */
+export type PatchControllerSpec<TPatch extends ZodObject, TRow> = UpdateIdSource & {
     /** The entity, lower-case and singular — `'user'`. Names both handlers. */
     entity: string;
     /**
@@ -64,8 +60,6 @@ export type UpdateControllerSpec<
      * answers a `412` its contract does not declare.
      */
     versioned: boolean;
-    /** The PUT body's schema — every writable field, required ones genuinely required. */
-    replaceSchema: TReplace;
     /** The PATCH body's schema — every writable field optional, nullable where clearing it is legal. */
     patchSchema: TPatch;
     /** The fields a multipart body carries as strings — the same declaration `readInput` takes. */
@@ -85,6 +79,16 @@ export type UpdateControllerSpec<
      * with, so an update never hands out a field a read would not.
      */
     present: (row: TRow, request: Request) => unknown;
+};
+
+/** What makes one entity's update different from another's: its PATCH, plus its PUT. */
+export type UpdateControllerSpec<
+    TReplace extends ZodObject,
+    TPatch extends ZodObject,
+    TRow
+> = PatchControllerSpec<TPatch, TRow> & {
+    /** The PUT body's schema — every writable field, required ones genuinely required. */
+    replaceSchema: TReplace;
     /**
      * PUT only, after the omitted fields are filled: clear what the schema alone cannot name — the
      * stored keys of a keyed map the body left out (a product's `translations` locales), each set
@@ -126,6 +130,78 @@ const idOf = (source: UpdateIdSource, request: Request, response: Response): str
         : requireId(request, response, { notFound: source.notFoundKey, name: source.idParam });
 
 /**
+ * The one pipeline both verbs run: id → decode → validate → (PUT only) fill and complete →
+ * `update()` (under the request's `If-Match`, if any, on a versioned resource) → respond with the
+ * new `ETag`. `schema`, `fills` and `complete` are the only things that differ between the verbs.
+ *
+ * @param spec - the things that differ per entity
+ * @returns a builder: the named operation's handler for one verb's schema, fills and completion
+ */
+const pipelineOf =
+    <TPatch extends ZodObject, TRow>(spec: PatchControllerSpec<TPatch, TRow>) =>
+    (
+        operation: string,
+        schema: ZodObject,
+        fills: readonly string[],
+        complete?: (id: string, changes: TPatch['_output']) => Promise<TPatch['_output']>
+    ) =>
+    (request: Request, response: Response): Promise<void> => {
+        const { versioned, input, update, present } = spec;
+
+        // A malformed path id answers as an unknown one, before the body is even read.
+        const id = idOf(spec, request, response);
+        if (!id) return Promise.resolve();
+
+        // `create` is `readInput`'s body-only surface: the id was resolved above, and a path
+        // param merged into this object would fail the body's strict schema.
+        const body = parseBody(
+            schema,
+            readInput(request, { ...input, surface: 'create' }),
+            response
+        );
+        if (body === undefined) return Promise.resolve();
+
+        // The PATCH schema's output type is the contract of `update()`; a filled PUT body is
+        // the same shape, since every field it adds is one the PUT schema itself accepts null for.
+        const changes = fillOmittedWithNull(body, fills) as TPatch['_output'];
+
+        return (
+            (complete ? complete(id, changes) : Promise.resolve(changes))
+                // On a versioned resource an `If-Match` fences the row's write; without one, or on
+                // an unversioned resource, this is just `update()`.
+                .then((completed) =>
+                    versioned
+                        ? withIfMatch(request, id, () => update(id, completed, request))
+                        : update(id, completed, request)
+                )
+                .then((result) => {
+                    // Sends the error envelope (404, 409, 422) and stops here if refused.
+                    if (refused(response, result)) return;
+                    // The saved row's new tag, so the caller's next edit needs no re-read.
+                    setEtag(response, result.data);
+                    return Promise.resolve(present(result.data, request)).then((shaped) => {
+                        successResponse(response, shaped, 200, result.message);
+                    });
+                })
+                .catch(catchAs(response, operation))
+        );
+    };
+
+/**
+ * Build a PATCH-only update controller, for a resource whose body cannot be the whole thing
+ * (a triage state of a bigger record): no PUT is offered, so nothing can clear the rest.
+ *
+ * @param spec - the things that differ per entity
+ * @returns the named express PATCH handler
+ */
+export const createPatchController = <TPatch extends ZodObject, TRow>(
+    spec: PatchControllerSpec<TPatch, TRow>
+): ((request: Request, response: Response) => Promise<void>) => {
+    const operation = operationName('update', spec.entity);
+    return namedHandler(operation, pipelineOf(spec)(operation, spec.patchSchema, []));
+};
+
+/**
  * Build a module's update controller: one PUT (replace) handler and one PATCH (merge) handler,
  * sharing everything but which schema validates the body and whether omitted fields are filled.
  *
@@ -138,83 +214,21 @@ export const createUpdateController = <TReplace extends ZodObject, TPatch extend
     replace: (request: Request, response: Response) => Promise<void>;
     update: (request: Request, response: Response) => Promise<void>;
 } => {
-    const {
-        entity,
-        versioned,
-        replaceSchema,
-        patchSchema,
-        input,
-        update,
-        present,
-        completeReplace,
-        keptWhenOmitted = []
-    } = spec;
+    const { replaceSchema, completeReplace, keptWhenOmitted = [] } = spec;
 
     // Derived once per controller, not per request — the schema never changes.
     const replaceFills = clearableFields(replaceSchema).filter(
         (field) => !keptWhenOmitted.includes(field)
     );
+    const pipeline = pipelineOf(spec);
 
-    /**
-     * The one pipeline both verbs run: id → decode → validate → (PUT only) fill and complete →
-     * `update()` (under the request's `If-Match`, if any, on a versioned resource) → respond with the new `ETag`.
-     * `schema`, `fills` and `complete` are the only things that differ between the verbs.
-     */
-    const run =
-        (
-            operation: string,
-            schema: ZodObject,
-            fills: readonly string[],
-            complete?: UpdateControllerSpec<TReplace, TPatch, TRow>['completeReplace']
-        ) =>
-        (request: Request, response: Response): Promise<void> => {
-            // A malformed path id answers as an unknown one, before the body is even read.
-            const id = idOf(spec, request, response);
-            if (!id) return Promise.resolve();
-
-            // `create` is `readInput`'s body-only surface: the id was resolved above, and a path
-            // param merged into this object would fail the body's strict schema.
-            const body = parseBody(
-                schema,
-                readInput(request, { ...input, surface: 'create' }),
-                response
-            );
-            if (body === undefined) return Promise.resolve();
-
-            // The PATCH schema's output type is the contract of `update()`; a filled PUT body is
-            // the same shape, since every field it adds is one the PUT schema itself accepts null for.
-            const changes = fillOmittedWithNull(body, fills) as TPatch['_output'];
-
-            return (
-                (complete ? complete(id, changes) : Promise.resolve(changes))
-                    // On a versioned resource an `If-Match` fences the row's write; without one, or on
-                    // an unversioned resource, this is just `update()`.
-                    .then((completed) =>
-                        versioned
-                            ? withIfMatch(request, id, () => update(id, completed, request))
-                            : update(id, completed, request)
-                    )
-                    .then((result) => {
-                        // Sends the error envelope (404, 409, 422) and stops here if refused.
-                        if (refused(response, result)) return;
-                        // The saved row's new tag, so the caller's next edit needs no re-read.
-                        setEtag(response, result.data);
-                        return Promise.resolve(present(result.data, request)).then((shaped) => {
-                            successResponse(response, shaped, 200, result.message);
-                        });
-                    })
-                    .catch(catchAs(response, operation))
-            );
-        };
-
-    const replaceOperation = operationName('replace', entity);
-    const updateOperation = operationName('update', entity);
+    const replaceOperation = operationName('replace', spec.entity);
 
     return {
         replace: namedHandler(
             replaceOperation,
-            run(replaceOperation, replaceSchema, replaceFills, completeReplace)
+            pipeline(replaceOperation, replaceSchema, replaceFills, completeReplace)
         ),
-        update: namedHandler(updateOperation, run(updateOperation, patchSchema, []))
+        update: createPatchController(spec)
     };
 };

@@ -25,6 +25,7 @@ import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, callerContextAs, testCallerContext } from '@tests/callers';
 import { asReject, asSuccess } from '@tests/response';
 import { OrderStatus } from '@types';
+import { registerAuditSink, type AuditEntry } from '@infrastructure/observability/audit';
 import { transferOrder } from '../factories';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -183,6 +184,17 @@ describe('what the buyer may still do', () => {
 
         expect(asSuccess(read).data.actions?.pay).toBe(true);
     });
+
+    // The take-over goes through `POST /payments/intent`, which answers 409 without a provider.
+    it('withholds the card form when the deployment has no card provider to take it over with', () =>
+        withEnvironmentOverrides({ NODE_PAYMENT_PROVIDER: undefined }, async () => {
+            const user = await createUser();
+            const { order } = await transferOrder({ user });
+
+            const read = await paymentService.getForOrder(String(order._id), asCustomer(user.id));
+
+            expect(asSuccess(read).data.actions?.pay).toBe(false);
+        }));
 });
 
 describe('recording the money', () => {
@@ -241,6 +253,8 @@ describe('a transfer that lands after its order was cancelled', () => {
     it('is still matched by its reference, recorded onto the closed payment, and owed straight back', async () => {
         const { order, reference } = await transferOrder({ price: 20 });
         await lapse(String(order._id));
+        const audited: AuditEntry[] = [];
+        registerAuditSink((entry) => audited.push(entry));
 
         const found = await paymentService.getOrderByReference(reference);
         const recorded = await paymentService.recordOfflinePayment(
@@ -257,6 +271,15 @@ describe('a transfer that lands after its order was cancelled', () => {
         // A hand-paid refund is returned by an operator off-system: the record stays open.
         expect(payment?.refunds).toHaveLength(1);
         expect(payment?.refunds[0].status).not.toBe('succeeded');
+        // And it is owed by hand: one audit row naming the record, written by the recording operator.
+        const owed = audited.filter(({ action }) => action === 'payment.refund_owed_by_hand');
+        expect(owed).toHaveLength(1);
+        expect(owed[0].metadata).toMatchObject({
+            refundId: String(payment?.refunds[0]._id),
+            amount: 20,
+            reason: 'late_payment'
+        });
+        expect(owed[0].actorUserId).toBeDefined();
         // The order is not revived and nothing was committed to a shelf.
         expect(await orderStatusOf(String(order._id))).toBe('cancelled');
     });

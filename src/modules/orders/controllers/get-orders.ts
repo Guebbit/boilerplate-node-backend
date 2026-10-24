@@ -55,9 +55,7 @@ export const getOrders = createSearchController({
     schema: searchOrdersQuerySchema,
     extendInput: honourUserIdFilter,
     runSearch: (parsed, request) =>
-        orderService.search(
-            parsed,
-            orderService.callerScope(request.authContext),
-            callerContextOf(request)
-        )
+        orderService
+            .search(parsed, orderService.callerScope(request.authContext), callerContextOf(request))
+            .then((page) => orderService.withListActions(page, request.authContext))
 });

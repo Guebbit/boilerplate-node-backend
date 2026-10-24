@@ -6,6 +6,9 @@
         "ring-cannot-be-empty": "Una sottoscrizione deve mantenere almeno un secret attivo.",
         "subscription-not-found": "La sottoscrizione di questa consegna non esiste più.",
         "delivery-in-progress": "Questa consegna è già in corso di tentativo. Riprova a breve.",
+        "already-enabled": "Questa sottoscrizione è già abilitata.",
+        "already-disabled": "Questa sottoscrizione è già disabilitata.",
+        "subscription-disabled": "Questa sottoscrizione è disabilitata, quindi la consegna non può essere rinviata. Abilitala prima.",
         "email-disabled": {
             "subject": "Una sottoscrizione webhook è stata disabilitata",
             "meta-title": "Sottoscrizione webhook disabilitata",

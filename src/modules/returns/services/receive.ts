@@ -183,7 +183,8 @@ const claimAndRestock = (
 
 /**
  * Pay the customer back and finish the return. A provider refusal is logged and left: the refund
- * is on the payment as `failed`, the sweep retries it, and the return closes when it lands.
+ * is on the payment as `failed`, the sweep retries it, and the return closes when it lands. A
+ * hand-paid refund is only opened: the return closes when an operator confirms it.
  *
  * @param received - the return, just received
  * @param shipping - the delivery cost inside the refund, so the credit note can rate it apart
@@ -216,7 +217,9 @@ const refundAndClose = (
             )
             // `null` means there was nothing to return — no succeeded payment, or nothing left of it —
             // which is as finished as a paid-back refund: there is no money left to wait for.
-            .then(() => finish())
+            // A refund left open is hand-paid money: the return waits in `received`, and the
+            // `PAYMENT_REFUNDED` listener closes it once an operator confirms the money went back.
+            .then((outcome) => (outcome?.leftOpen ? received : finish()))
             .catch((error: unknown) => {
                 // Stryker disable all
                 logger.error({

@@ -52,6 +52,37 @@ describe('GET /api-keys', () => {
             expect(item.secret).toBeUndefined();
         }
     });
+
+    it('says what each credential is doing and the latest expiry a mint accepts', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+        await api()
+            .post('/api-keys')
+            .set('Authorization', bearer)
+            .send({
+                name: 'status check',
+                permissions: ['read:WebhookSubscription'],
+                expiresAt: IN_A_WEEK()
+            });
+
+        const response = await api().get('/api-keys').set('Authorization', bearer);
+
+        expect(response.body.data.items[0].status).toBe('active');
+        expect(new Date(response.body.data.maxExpiresAt).getTime()).toBeGreaterThan(
+            Date.now() + 364 * 24 * 3_600_000
+        );
+    });
+
+    it('takes a comma-separated sort and refuses a field outside the enum', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+
+        const sorted = await api()
+            .get('/api-keys?sort=-lastUsedAt,expiresAt')
+            .set('Authorization', bearer);
+        const refused = await api().get('/api-keys?sort=name').set('Authorization', bearer);
+
+        expect(sorted.status).toBe(200);
+        expect(refused.status).toBe(422);
+    });
 });
 
 describe('POST /api-keys', () => {

@@ -356,7 +356,7 @@ paths:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/TextParam'
             responses:
                 '200':
-                    description: A page of entries
+                    description: A page of entries, ascending by key (a dictionary, so no `sort`)
                     content:
                         application/json:
                             schema:
@@ -395,7 +395,7 @@ paths:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/TextParam'
             responses:
                 '200':
-                    description: A page of entries
+                    description: A page of entries, ascending by key (a dictionary, so no `sort`)
                     content:
                         application/json:
                             schema:

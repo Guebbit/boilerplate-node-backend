@@ -41,7 +41,7 @@ flowchart LR
 shop's own staff.
 
 This module owns the tenant-facing door onto the same collection: `GET /audit`, gated on
-`read:AuditLog` — held by `manager`, `moderator` and `admin` in `shared/authorization-roles.yaml`.
+`read:AuditLog` — held by `admin` only in `shared/authorization-roles.yaml`.
 Same rows, same shape, different audience: `observability`'s route answers "what happened across
 every shop", this module's own route answers "what happened in mine". Enabling this module without
 `observability` gives a working `GET /audit` and no platform-wide view — a legitimate build, just a
@@ -139,7 +139,7 @@ Every rule this module declares and who holds it, role by role. The rule is what
 
 | Rule            | Set            | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                      |
 | --------------- | -------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ------------------------------------------------------------------------- |
-| `read:AuditLog` | `AuditDisplay` | —       | —            | —          | ✅        | —           | —         | —        | ✅          | ✅      | —          | ✅         | Read the audit trail. There is no write key — nothing edits an audit row. |
+| `read:AuditLog` | `AuditDisplay` | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | ✅         | Read the audit trail. There is no write key — nothing edits an audit row. |
 
 ✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
 Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in

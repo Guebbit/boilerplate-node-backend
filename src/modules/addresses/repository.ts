@@ -33,7 +33,7 @@ import { addressBookMax } from './config';
  * What {@link addressBookRepository.addEntry} resolves to when the book already holds
  * `NODE_ADDRESS_BOOK_MAX` entries — nothing was written.
  */
-export const ADDRESS_BOOK_FULL = 'address-book-full';
+export const ADDRESS_BOOK_LIMIT_REACHED = 'address-book-limit-reached';
 
 /**
  * The one-update pipeline that appends an entry and keeps "exactly one default".
@@ -124,7 +124,7 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
         userId: string,
         entry: AddressInput,
         attemptsLeft?: number
-    ) => Promise<AddressBookDocument | typeof ADDRESS_BOOK_FULL>;
+    ) => Promise<AddressBookDocument | typeof ADDRESS_BOOK_LIMIT_REACHED>;
     updateEntry: (
         userId: string,
         addressId: string,
@@ -199,7 +199,8 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
                     .findOne({ userId: owner })
                     .exec()
                     .then((book) => {
-                        if (book && book.items.length >= addressBookMax()) return ADDRESS_BOOK_FULL;
+                        if (book && book.items.length >= addressBookMax())
+                            return ADDRESS_BOOK_LIMIT_REACHED;
                         if (attemptsLeft <= 1)
                             throw new Error('addresses: exhausted retries adding an entry', {
                                 cause: error

@@ -25,7 +25,8 @@ import { mailOrderPlaced, mailBuyer, mailBuyerOfOrder } from './notify';
 import { mailOrderCancelled } from './cancel-mail';
 import { considerPurchaseHold } from './purchase-hold';
 import { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
-import { callerScope, cancelScope, actorOf, ownerScope, ownLiveScope, withActions } from './scope';
+import { callerScope, cancelScope, actorOf, ownerScope, ownLiveScope } from './scope';
+import { withActions, withListActions } from './actions';
 import { freezeOrderLines } from './snapshot';
 import { reencryptOrders } from './reencrypt';
 import {
@@ -41,7 +42,8 @@ import {
     markDelivered,
     markFulfilmentComplete,
     markPaymentStatus,
-    markReturnStatus
+    markReturnStatus,
+    markMoneyReceived
 } from './status';
 import {
     readOrder,
@@ -133,6 +135,7 @@ export const orderService = {
     markFulfilmentComplete,
     markPaymentStatus,
     markReturnStatus,
+    markMoneyReceived,
     readOrder,
     recordFulfillmentProgress,
     recordForcedFulfilment,
@@ -157,5 +160,6 @@ export const orderService = {
     withdrawById,
     expireReservationById,
     cancelForPaymentMismatchById,
-    withActions
+    withActions,
+    withListActions
 };

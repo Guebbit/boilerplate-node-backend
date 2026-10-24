@@ -73,12 +73,13 @@ describe('POST /account/refresh', () => {
         expect(after.some((row) => row.supersededAt)).toBe(false);
     });
 
-    it('is not a GET: a GET reaches no route', async () => {
+    it('is not a GET: a GET is refused 405, naming POST', async () => {
         const { cookie } = await login();
 
         const response = await api().get('/account/refresh').set('Cookie', cookie);
 
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(405);
+        expect(response.headers.allow).toBe('POST');
     });
 });
 

@@ -48,6 +48,7 @@ export {
     expectedDateOf,
     expectedDateOfWaiting,
     needsDueNotice,
+    DUE_NOTICE_LEAD_MS,
     slippedDays,
     boardStateOf,
     isLate

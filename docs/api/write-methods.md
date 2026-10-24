@@ -49,15 +49,16 @@ flowchart TD
   contract declares it `required` on every 201, and the shared response check
   (`tests/support/response-contract.ts`) fails a 201 without it.
 - A retried create under its `Idempotency-Key` replays the `Location` with the body.
+- A sub-collection create is a create too: `POST /delivery/fulfillment-orders/{id}/shipments`
+  answers 201 with `Location` naming the shipment.
 - **A 201 means something was created** (RFC 9110 §15.3.2). An intent that only refreshes the
   order's one payment row, or a cart "add" that only grows a line, answers **200**.
 - Anything the contract does not declare is a 422 (`additionalProperties: false`), never a column.
 
 ### Action → 200
 
-- `POST /orders/{id}/cancel`, `/restore`, `/status-override`, `POST
-  /delivery/fulfillment-orders/{id}/shipments`, `/rotate-secret`: a state change on a thing that
-  already exists. 200, with the thing as it now stands.
+- `POST /orders/{id}/cancel`, `/restore`, `/status-override`, `/rotate-secret`: a state change on a
+  thing that already exists. 200, with the thing as it now stands.
 - An action may create a record on the side (a shipment, a stock movement). It still answers the
   thing the caller acts on next.
 
@@ -74,6 +75,23 @@ allowed", with 409 where Google says 400).
   `USER_PURCHASE_HOLD_NOT_SET`.
 - `DELETE` of a resource stays idempotent (RFC 9110 §9.2.2): a retried delete answers as the first did.
 - The caller's `actions` flag for the move is `false` in that state, so a screen never offers it.
+
+#### An action whose target state is already reached
+
+`POST …/enable` on an enabled subscription, `POST …/disable` on a disabled one: **409**, with
+`<RESOURCE>_ALREADY_<STATE>` (`WEBHOOK_SUBSCRIPTION_ALREADY_ENABLED`) and a plain message. Not
+200, because an action may carry an effect a repeat must not re-run (enabling resets the failure
+streak). Not 400, which Google's [AIP-216](https://google.aip.dev/216) uses: the lifecycle rule is
+"a refusal that depends on the current state is 409 + code" (RFC 9110 §15.5.10). A `DELETE` stays
+idempotent (RFC 9110 §9.2.2): deleting what is gone is not an action's refusal.
+
+### An item write has an item read
+
+A resource that can be changed by id can be read by id. Without `GET /x/{id}` a detail or edit page
+has to find its record in a list: past the page size it never finds it, and it cannot tell "gone"
+from "not loaded". The read is scoped like the list's rows (a row the caller may not see is a 404,
+never a 403 that confirms it exists), and answers the same shape the list rows carry. Webhook
+subscriptions are the example: `GET /webhooks/subscriptions/{id}`.
 
 ### Search → 200
 
@@ -118,10 +136,17 @@ body is empty: `PUT /wishlist/{productId}` (this product is saved), `PUT
 /account/addresses/{id}/default` (this address is the default). Sent twice, nothing changes —
 the GitHub-stars pattern (`PUT`/`DELETE /user/starred/{owner}/{repo}`).
 
+**Naming a body-less PUT.** Spectral bans a `put*` operation id. A PUT that only states a
+membership is `create*` and its DELETE `delete*` (`createWishlistItem`, `deleteWishlistItem`); one
+that carries a value is `update*` or `replace*` (`updateCartItemById`).
+
 **Create by PUT only where the client names the thing.** A PUT on an id that does not exist is a
 404. The one exception is a URI the caller owns by construction — a cart line, `PUT
 /cart/{productId}`: it creates the line and answers **201**, or updates it and answers 200
 (RFC 9110 §9.3.4).
+
+**Offer a PUT only when the body can be the whole resource.** A route that sets two fields of a
+bigger record is a PATCH alone (`PATCH /feedback/{id}`), never a PUT that clears the rest.
 
 **A server may transform.** RFC 9110 lets the stored state differ from the body. Here that is one
 case: `PUT /account`'s `email` becomes `pendingEmail` until the new address is proven.
@@ -163,6 +188,24 @@ The guard is `requireDeclaredContentType`, built from `api/request-content-types
 `npm run gen:api` derives from the contract's own `requestBody` media types. A request with no
 bytes is not judged: a missing required body is the schema's own 422.
 
+## A known path with the wrong method
+
+A path the contract declares, asked with a method it does not give it, answers **405** with an
+`Allow` header (RFC 9110 §15.5.6) — never the catch-all's 404. `DELETE /feedback/{id}` is fine,
+`PUT /feedback/{id}` is a 405 naming `DELETE, PATCH`.
+
+- **`Allow` is sorted**, with HEAD beside GET. `OPTIONS` is never judged: the CORS layer answers
+  a preflight before any route runs.
+- **A trailing slash is the same path.** `/things/` reads as `/things`.
+- **A module this build does not serve stays a 404**: its paths are in the table, but nothing is
+  mounted to ask.
+- **Not declared per operation.** The 405 belongs to a request that matched no operation, so no
+  operation's `responses` could carry it; its code, `METHOD_NOT_ALLOWED`, is in the contract's
+  `x-error-codes`.
+
+The guard is `methodNotAllowed`, built from `api/operation-routes.ts`, which `npm run gen:api`
+derives from the contract's paths and mounted right before the 404 in `src/app/routes.ts`.
+
 ## Empty, `null`, omitted
 
 | On the wire | Means | Legal on |
@@ -195,7 +238,7 @@ A create body declares no `'null'` type — there is nothing to clear yet, so `n
 | 200 | an update, an action, a search, an idempotent refresh |
 | 201 | a create — something new exists, and `Location` says where |
 | 404 | the target does not exist (or the caller may not know it does) |
-| 409 | the write conflicts with the current state — a duplicate, a lifecycle refusal |
+| 409 | the write conflicts with the current state — a duplicate, a lifecycle refusal, an action whose target state is already reached, a cap reached (`WEBHOOK_SUBSCRIPTION_LIMIT_REACHED`: deleting a record would let the same request through) |
 | 412 | an `If-Match` that no longer matches — see [Conditional writes](#conditional-writes-etag-and-if-match) |
 | 415 | a body in a type the operation does not declare |
 | 422 | the body breaks the contract or a domain rule |
@@ -247,9 +290,9 @@ and the bundler adds the header parameter, the 412 and the response header from 
 | the caller's account | `GET /account` | `PUT`, `PATCH /account` |
 | example | `GET /examples/{id}` | `PUT`, `PATCH`, `DELETE /examples/{id}` |
 
-Not versioned: a resource with no item read to take a tag from (feedback, webhook subscriptions,
-locales, an address inside its book) and anything with its own concurrency rule (cart lines,
-stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
+Not versioned: a resource with no item read to take a tag from (feedback, locales, an address
+inside its book), a resource that has an item read but no `If-Match` (webhook subscriptions) and
+anything with its own concurrency rule (cart lines, stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declared.
 
 ### What the tag is
 

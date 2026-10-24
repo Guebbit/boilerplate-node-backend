@@ -43,6 +43,7 @@ describe('payment routes', () => {
             'GET /order/:orderId',
             'GET /order-by-reference',
             'POST /order/:orderId/refund',
+            'POST /:id/refunds/:refundId/settle',
             'POST /order/:orderId/offline',
             'POST /:id/confirm',
             'POST /:id/sync'
@@ -80,7 +81,7 @@ describe('payment routes', () => {
         expect(routeSignatures(router).indexOf(WEBHOOK)).toBe(0);
     });
 
-    it('admin-guards the staff reads, the refund, the offline record and the reference lookup, and nothing else', () => {
+    it('admin-guards the staff reads, the refund and its hand settlement, the offline record and the reference lookup, and nothing else', () => {
         // The three routes an operator drives instead of a customer's own checkout — money moving
         // back out, a claim that money moved in some way the provider never saw, or finding the
         // order that claim is about. The shopper's keys are excluded: `update:Cart` and
@@ -100,6 +101,7 @@ describe('payment routes', () => {
             'GET /attention',
             'GET /order-by-reference',
             'POST /order/:orderId/refund',
+            'POST /:id/refunds/:refundId/settle',
             'POST /order/:orderId/offline'
         ]);
     });

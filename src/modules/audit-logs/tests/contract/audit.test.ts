@@ -23,13 +23,13 @@ const authenticateInRole = async (role: string) => {
 };
 
 describe('GET /audit', () => {
-    it('matches the contract for a moderator, filtered by actor and target', async () => {
-        const { user, bearer } = await authenticateInRole('moderator');
+    it('matches the contract for an admin, filtered by actor and target', async () => {
+        const { user, bearer } = await authenticateInRole('admin');
         await auditLogRepository.create({
             actorUserId: String(user._id),
             actorRole: 'user',
             actorScope: 'tenant',
-            actorRoleName: 'moderator',
+            actorRoleName: 'admin',
             action: 'admin.user.banned',
             outcome: 'success',
             targetType: 'user',
@@ -44,11 +44,11 @@ describe('GET /audit', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(1);
-        expect(response.body.data.items[0].actorRoleName).toBe('moderator');
+        expect(response.body.data.items[0].actorRoleName).toBe('admin');
     });
 
     it('422s a repeated scalar filter instead of silently picking one entry', async () => {
-        const { bearer } = await authenticateInRole('moderator');
+        const { bearer } = await authenticateInRole('admin');
 
         const response = await api()
             .get('/audit?since=2026-01-01T00:00:00Z&since=2026-02-01T00:00:00Z')
@@ -58,7 +58,7 @@ describe('GET /audit', () => {
     });
 
     it('422s a since filter that is not a valid timestamp', async () => {
-        const { bearer } = await authenticateInRole('moderator');
+        const { bearer } = await authenticateInRole('admin');
 
         const response = await api().get('/audit?since=not-a-date').set('Authorization', bearer);
 
@@ -66,7 +66,7 @@ describe('GET /audit', () => {
     });
 
     it('422s a since filter that is date-only, missing the required time', async () => {
-        const { bearer } = await authenticateInRole('moderator');
+        const { bearer } = await authenticateInRole('admin');
 
         const response = await api().get('/audit?since=2026-01-01').set('Authorization', bearer);
 
@@ -74,12 +74,12 @@ describe('GET /audit', () => {
     });
 
     it('422s an outcome outside success/failure instead of matching every row', async () => {
-        const { user, bearer } = await authenticateInRole('moderator');
+        const { user, bearer } = await authenticateInRole('admin');
         await auditLogRepository.create({
             actorUserId: String(user._id),
             actorRole: 'user',
             actorScope: 'tenant',
-            actorRoleName: 'moderator',
+            actorRoleName: 'admin',
             action: 'admin.user.banned',
             outcome: 'success',
             timestamp: new Date(),

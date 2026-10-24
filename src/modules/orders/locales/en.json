@@ -19,6 +19,7 @@
             "too-large": "This export would carry more than {{max}} orders. Narrow the filters and try again."
         },
         "invoiced": "This order has an issued invoice and can no longer be permanently deleted.",
+        "has-money-history": "This order has payment records and can no longer be permanently deleted.",
         "not-cancelled": "Cancel this order before deleting it permanently.",
         "email-confirm": {
             "subject": "Order received — awaiting payment",

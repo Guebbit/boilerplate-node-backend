@@ -74,7 +74,6 @@ roles:
           - ReturnManagement
           - ReturnReceiving
           - FeedbackDisplay
-          - AuditDisplay
           - WebhookDisplay
           - WebhookManagement
           - ExampleAuthoring
@@ -150,8 +149,8 @@ roles:
       scope: tenant
       title: The moderator
       description: >-
-          Accounts, and what happens to an order once it is placed. May ban an account, reverse a
-          bad charge, and read why either happened. Touches customers' accounts only, and
+          Accounts, and what happens to an order once it is placed. May ban an account and reverse a
+          bad charge. Touches customers' accounts only, and
           never a credential.
       sets:
           - UserDisplay
@@ -170,7 +169,6 @@ roles:
           - PaymentRefunding
           - ReturnDisplay
           - ReturnManagement
-          - AuditDisplay
           - ExampleAuthoring
           # Other people's examples are readable, never editable: the demo's read-only persona.
           - ExampleDisplay

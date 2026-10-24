@@ -489,6 +489,7 @@ describe('POST /products/{id}/restore', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('PRODUCT_NOT_DELETED');
     });
 });
 

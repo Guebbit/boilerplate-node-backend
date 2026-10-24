@@ -25,6 +25,18 @@ import { ERROR_CODES } from '@api/error-codes';
 const orderInvoiced = (): ResponseReject =>
     generateReject(409, [{ code: ERROR_CODES.ORDER_INVOICED, message: t('orders.invoiced') }]);
 
+/** The 409 a hard delete answers with once money was recorded on the order after its cancel. */
+const orderHasMoneyHistory = (): ResponseReject =>
+    generateReject(409, [
+        { code: ERROR_CODES.ORDER_HAS_MONEY_HISTORY, message: t('orders.has-money-history') }
+    ]);
+
+/** The 409 a restore answers with when the order is not soft-deleted. */
+const orderNotDeleted = (): ResponseReject =>
+    generateReject(409, [
+        { code: ERROR_CODES.ORDER_NOT_DELETED, message: t('orders.not-deleted') }
+    ]);
+
 /** The 404 a hard delete answers with when the order vanished between the read and the write. */
 const orderMissing = (): ResponseReject => generateReject(404, [t('orders.not-found')]);
 
@@ -37,12 +49,14 @@ const orderNotCancelled = (): ResponseReject =>
 /**
  * Why a hard delete is refused for this order, or `undefined` when it may go.
  *
- * Paid is answered first: an invoice outranks "still open" as the reason to keep the row.
+ * Paid is answered first: an invoice outranks money recorded late, which outranks "still open", as
+ * the reason to keep the row.
  * @param order - the order as it is now
  */
 const hardDeleteRefusal = (order: OrderDocument): ResponseReject | undefined => {
     if (hardDeletable(order)) return undefined;
-    return order.paidAt ? orderInvoiced() : orderNotCancelled();
+    if (order.paidAt) return orderInvoiced();
+    return order.moneyReceivedAt ? orderHasMoneyHistory() : orderNotCancelled();
 };
 
 /**
@@ -72,7 +86,9 @@ const hardDeleteCancelled = (order: OrderDocument): Promise<ResponseReject | und
  *
  * Both refused (`ORDER_NOT_CANCELLED`) while the order is still open; a hard delete also outright once `paidAt` is stamped: `invoicing` freezes an invoice from that exact
  * transition, and a legal invoice document must survive the order it was issued for — the same
- * reason `docs/modules/invoicing.md` gives for the module never hard-deleting one of its own.
+ * reason `docs/modules/invoicing.md` gives for the module never hard-deleting one of its own. Money
+ * recorded after the cancel (`moneyReceivedAt`) refuses it too (`ORDER_HAS_MONEY_HISTORY`): a
+ * payment and a refund still point at the order.
  * `paidAt` alone answers this, with no need to ask `invoicing` whether the freeze actually landed
  * (see `services/scope.ts`'s `invoice` flag): a paid order is worth keeping either way.
  *
@@ -131,7 +147,7 @@ export const remove = (
  *
  * @param id - the order to restore
  * @param context - records `ORDER_RESTORED`; omit for a caller with no request behind it
- * @returns the restored order; 404 when there is none, 409 when it is not soft-deleted
+ * @returns the restored order; 404 when there is none, 409 `ORDER_NOT_DELETED` when it is not soft-deleted
  */
 export const restoreById = (
     id: string,
@@ -140,7 +156,7 @@ export const restoreById = (
     orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, [t('orders.not-found')]);
 
-        if (!order.deletedAt) return generateReject(409, [t('orders.not-deleted')]);
+        if (!order.deletedAt) return orderNotDeleted();
         order.deletedAt = undefined;
         return orderRepository.save(order).then((saved) => {
             recordAudit(context, {
