@@ -178,7 +178,7 @@ has no `actions` and no review flag: a person's own record has no one to protect
 "Reachable" is `access`'s one pure rule, `mayChangeAccount`: an account that holds no staff role, or
 is the caller's own, or the caller holds `assign:Role`. The service's `canChangeAccount` asks the
 same function after a lookup, so the flag and the refusal cannot disagree. `ban:User` is the key of
-every ban-class move: deactivating is a ban today, and [support](./support.md) keeps none of it.
+every ban-class move: deactivating is a ban today, and [support](../demo-ecommerce/support.md) keeps none of it.
 
 ```mermaid
 flowchart LR
