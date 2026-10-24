@@ -1,7 +1,7 @@
 /**
  * @module
- * The scheduled jobs `account` owns: the inactivity reaper, the previous-email sweep and the
- * expired-export sweep.
+ * The scheduled jobs `account` owns: the inactivity reaper, the previous-email sweep, the
+ * expired-export sweep and the purge of accounts whose self-deletion grace has run out.
  *
  * See: docs/reference/ops.md#scheduled-jobs
  */
@@ -12,6 +12,7 @@ import { accountConfig } from './config';
 import { reapInactiveAccounts, type InactiveReapCounts } from './services/reap-inactive';
 import { reapLapsedPreviousEmails } from './services/previous-email-cleanup';
 import { reapExpiredExports } from './services/export-rows';
+import { purgeScheduledDeletions } from './services/purge-deletions';
 
 /**
  * Minimise, then (opt in) warn and delete, accounts that have gone quiet. Both dials at 0 means
@@ -30,7 +31,7 @@ const reapInactive = (): Promise<InactiveReapCounts> => {
     return reapInactiveAccounts({ inactiveDays, minimiseDays });
 };
 
-/** The jobs `account` owns, in the order they run each night. */
+/** The jobs `account` owns: the nightly sweeps in the order they run, then the hourly purge. */
 export const accountJobs: readonly JobDeclaration[] = [
     {
         name: 'reap:inactive-accounts',
@@ -65,5 +66,16 @@ export const accountJobs: readonly JobDeclaration[] = [
                 logger.info({ message: 'Account exports reaped.', rows, strayFiles: files });
                 return { rows, files };
             })
+    },
+    {
+        name: 'reap:scheduled-deletions',
+        schedule: '13 * * * *',
+        summary:
+            'Erases, cascade included, every account whose owner asked to delete it and whose grace (NODE_ACCOUNT_DELETION_GRACE_DAYS) has run out, then mails the goodbye.',
+        run: purgeScheduledDeletions,
+        // Erase hooks come from the manifests and the goodbye mail renders translated copy.
+        // Leased: it hard-deletes accounts, so "exactly one runner" earns its keep.
+        needs: { subscriptions: true, i18n: true },
+        lease: { ttlMs: 15 * 60 * 1000 }
     }
 ];

@@ -118,6 +118,52 @@ An account that comes back and goes quiet again is minimised again.
 What this leaves forever: an email and a password hash, for an account nobody uses. Small, with a
 clear purpose, and what Amazon does. A controller who wants more turns full deletion on.
 
+## Self-deletion: a grace under one month
+
+`DELETE /account` does not delete anything at once, and it does not wait for a click either. It
+**locks** the account now and **erases** it later, at a date it states in the answer. The big players
+do the same (Microsoft Graph keeps a deleted user restorable for 30 days, Google Workspace 20, Discord
+about 14); a hijacked session or a mistake is undone before anything is lost.
+
+| Question                       | Answer                                                                                                                                                           |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| How long has the shop to act?  | Art. 12(3): "without undue delay and in any event within one month of receipt"                                                                                   |
+| How is a month counted?        | Reg. 1182/71, as the EDPB reads it (Guidelines 01/2022 v2, para 160): 5 March runs until 5 April (Ex. 32); 31 August until 30 September (Ex. 33)                 |
+| Does the immediate lock count? | **No.** The lock is a restriction (Art. 4(3), Art. 18), not the erasure that was asked for. The `202` and the mail are the "information on action taken" at once |
+| So what discharges Art. 17?    | Only the purge. `purgeAt` is capped at one calendar month, at 00:00 UTC of that date, so no time zone sees it pass late and the hourly job fits inside           |
+| Why `min(N days, one month)`?  | 30 or 31 days overrun a month whenever February is in the window (31 January + 30 days is 2 March), so both bounds apply                                         |
+
+```mermaid
+stateDiagram-v2
+  [*] --> Active
+  Active --> Scheduled: DELETE /account (fresh re-login + 2FA) · 202 · sessions die · mail with restore link
+  Scheduled --> Active: POST /account/restore (link) · sign in, then POST /account/login/restore · staff POST /users/{id}/restore
+  Scheduled --> Erased: purge job, purgeAt ≤ now (hourly)
+  Erased --> [*]
+```
+
+The grace is `NODE_ACCOUNT_DELETION_GRACE_DAYS` (30 by default, 1 to 31). `purgeAt` is **stored**, not
+derived, so changing the knob never moves a date already promised (the AIP-164 `purge_time`).
+
+| While the account is locked | What happens                                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| sessions, refresh           | dead at once (the session epoch moves in the same save)                                                                  |
+| API keys                    | suspended, back on restore, erased at the purge                                                                          |
+| cart, wishlist              | kept intact, restored or erased with the account                                                                         |
+| orders in flight            | untouched; transactional mails continue (Art. 6(1)(b)); the purge cancels the never-paid ones and detaches the paid ones |
+| optional mails              | none (stock alerts, the example notice)                                                                                  |
+| password reset              | still works; it does not restore by itself                                                                               |
+| signup with the same email  | refused until the purge                                                                                                  |
+
+Three ways back, all conditional on `purgeAt > now`: the mailed link, signing in (the answer is a
+`DeletionPending` claim check, redeemed at `POST /account/login/restore`), and staff
+(`POST /users/{id}/restore`, the same `delete:User` key as any restore, with a confirm in the admin).
+The purge's first write is a claim on `purgeAt <= now`, so a restore and a purge can never both match.
+
+**Backups.** A snapshot restore must re-apply `auth.account_delete.scheduled` and `.cancelled` since
+the snapshot, or the purge erases an account the person restored:
+[Erasures after a restore](../tools/backups.md#erasures-after-a-restore).
+
 ## The previous email after a change
 
 A confirmed email change keeps the old address in `previousEmail`, for one purpose: the 7-day undo

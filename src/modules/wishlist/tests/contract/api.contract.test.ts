@@ -18,9 +18,9 @@ setupTestDb();
  * An id no ObjectId can be built from.
  *
  * `Id` is a storage-neutral string in the contract, so every id-taking route makes its own
- * Mongo-shaped check and answers a malformed path id as it answers an unknown one: 404. That is a
- * declared response, and a declared response nothing sends is a contract nobody is holding the
- * API to.
+ * Mongo-shaped check. In a path it answers as an unknown id does: 404. In the body of
+ * `POST /wishlist/items` it is a malformed field: 422. Both are declared responses, and a
+ * declared response nothing sends is a contract nobody is holding the API to.
  */
 const MALFORMED_ID = 'not-an-object-id';
 
@@ -29,12 +29,13 @@ const authenticateWithWishlist = async () => {
     const { bearer } = await authenticateAs('user');
     const product = await createProduct();
     const response = await api()
-        .put(`/wishlist/${String(product._id)}`)
-        .set('Authorization', bearer);
+        .post('/wishlist/items')
+        .set('Authorization', bearer)
+        .send({ productId: String(product._id) });
 
     if (response.status !== 200)
         throw new Error(
-            `wishlist setup failed: PUT /wishlist/{productId} returned ${response.status} — ${JSON.stringify(response.body)}`
+            `wishlist setup failed: POST /wishlist/items returned ${response.status} — ${JSON.stringify(response.body)}`
         );
 
     return { bearer, product };
@@ -60,14 +61,15 @@ describe('GET /wishlist', () => {
     });
 });
 
-describe('PUT /wishlist/{productId}', () => {
+describe('POST /wishlist/items', () => {
     it('matches the contract when saving a product', async () => {
         const { bearer } = await authenticateAs('user');
         const product = await createProduct();
 
         const response = await api()
-            .put(`/wishlist/${String(product._id)}`)
-            .set('Authorization', bearer);
+            .post('/wishlist/items')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id) });
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toEqual([
@@ -75,13 +77,27 @@ describe('PUT /wishlist/{productId}', () => {
         ]);
     });
 
-    // RFC 9110 §9.3.4: the URI is the whole statement, so sending it twice leaves the same state.
+    // A saved product is a line of the wishlist: no 201, no Location, nothing to GET.
+    it('answers 200 with no Location, however the line came to be', async () => {
+        const { bearer } = await authenticateAs('user');
+        const product = await createProduct();
+
+        const response = await api()
+            .post('/wishlist/items')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id) });
+
+        expect(response.status).toBe(200);
+        expect(response.headers.location).toBeUndefined();
+    });
+
     it('is idempotent — saving what is saved answers the same 200 and the same list', async () => {
         const { bearer, product } = await authenticateWithWishlist();
 
         const response = await api()
-            .put(`/wishlist/${String(product._id)}`)
-            .set('Authorization', bearer);
+            .post('/wishlist/items')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id) });
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toEqual([
@@ -89,27 +105,40 @@ describe('PUT /wishlist/{productId}', () => {
         ]);
     });
 
-    it('matches the error contract for a malformed product id', async () => {
+    it('matches the error contract for a malformed product id: 422, it is a body field', async () => {
         const { bearer } = await authenticateAs('user');
-        const response = await api().put(`/wishlist/${MALFORMED_ID}`).set('Authorization', bearer);
+        const response = await api()
+            .post('/wishlist/items')
+            .set('Authorization', bearer)
+            .send({ productId: MALFORMED_ID });
 
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(422);
+    });
+
+    it('matches the error contract for a missing productId', async () => {
+        const { bearer } = await authenticateAs('user');
+        const response = await api().post('/wishlist/items').set('Authorization', bearer).send({});
+
+        expect(response.status).toBe(422);
     });
 
     it('matches the error contract for a product that does not exist', async () => {
         const { bearer } = await authenticateAs('user');
-        const response = await api().put(`/wishlist/${MISSING_ID}`).set('Authorization', bearer);
+        const response = await api()
+            .post('/wishlist/items')
+            .set('Authorization', bearer)
+            .send({ productId: MISSING_ID });
 
         expect(response.status).toBe(404);
     });
 });
 
-describe('DELETE /wishlist/{productId}', () => {
+describe('DELETE /wishlist/items/{productId}', () => {
     it('matches the contract when removing a saved product', async () => {
         const { bearer, product } = await authenticateWithWishlist();
 
         const response = await api()
-            .delete(`/wishlist/${String(product._id)}`)
+            .delete(`/wishlist/items/${String(product._id)}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -124,11 +153,12 @@ describe('DELETE /wishlist/{productId}', () => {
             const { bearer } = await authenticateAsRole(role);
             const product = await createProduct();
             await api()
-                .put(`/wishlist/${String(product._id)}`)
-                .set('Authorization', bearer);
+                .post('/wishlist/items')
+                .set('Authorization', bearer)
+                .send({ productId: String(product._id) });
 
             const response = await api()
-                .post(`/wishlist/${String(product._id)}/move-to-cart`)
+                .post(`/wishlist/items/${String(product._id)}/move-to-cart`)
                 .set('Authorization', bearer);
             const wishlist = await api().get('/wishlist').set('Authorization', bearer);
 
@@ -140,7 +170,9 @@ describe('DELETE /wishlist/{productId}', () => {
     it('matches the error contract for a product that was never saved', async () => {
         const { bearer } = await authenticateAs('user');
 
-        const response = await api().delete(`/wishlist/${MISSING_ID}`).set('Authorization', bearer);
+        const response = await api()
+            .delete(`/wishlist/items/${MISSING_ID}`)
+            .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
     });
@@ -149,19 +181,19 @@ describe('DELETE /wishlist/{productId}', () => {
         const { bearer } = await authenticateAs('user');
 
         const response = await api()
-            .delete(`/wishlist/${MALFORMED_ID}`)
+            .delete(`/wishlist/items/${MALFORMED_ID}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
     });
 });
 
-describe('POST /wishlist/{productId}/move-to-cart', () => {
+describe('POST /wishlist/items/{productId}/move-to-cart', () => {
     it('moves the line and the two views agree', async () => {
         const { bearer, product } = await authenticateWithWishlist();
 
         const response = await api()
-            .post(`/wishlist/${String(product._id)}/move-to-cart`)
+            .post(`/wishlist/items/${String(product._id)}/move-to-cart`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -182,7 +214,7 @@ describe('POST /wishlist/{productId}/move-to-cart', () => {
         const { bearer } = await authenticateAs('user');
 
         const response = await api()
-            .post(`/wishlist/${MISSING_ID}/move-to-cart`)
+            .post(`/wishlist/items/${MISSING_ID}/move-to-cart`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
@@ -192,9 +224,20 @@ describe('POST /wishlist/{productId}/move-to-cart', () => {
         const { bearer } = await authenticateAs('user');
 
         const response = await api()
-            .post(`/wishlist/${MALFORMED_ID}/move-to-cart`)
+            .post(`/wishlist/items/${MALFORMED_ID}/move-to-cart`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
+    });
+});
+
+describe('the wishlist URLs a line no longer has', () => {
+    it('answers a GET of the line collection 405, since the wishlist is the read', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().get('/wishlist/items').set('Authorization', bearer);
+
+        expect(response.status).toBe(405);
+        expect(response.headers.allow).toBe('POST');
     });
 });

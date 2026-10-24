@@ -98,10 +98,13 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
         AddAddress201Response
     ).data;
     await api()
-        .post('/cart')
+        .post('/cart/items')
         .set('Authorization', shopper)
         .send({ productId: dogFoodId, quantity: 2 });
-    await api().post('/cart').set('Authorization', shopper).send({ productId: toyId, quantity: 1 });
+    await api()
+        .post('/cart/items')
+        .set('Authorization', shopper)
+        .send({ productId: toyId, quantity: 1 });
     await api()
         .put('/cart/shipping-method')
         .set('Authorization', shopper)
@@ -267,7 +270,7 @@ it('records a staff buyer’s refund of their own order as theirs', async () => 
         AddAddress201Response
     ).data;
     await api()
-        .post('/cart')
+        .post('/cart/items')
         .set('Authorization', moderator)
         .send({ productId: String(product._id), quantity: 1 });
     await api()

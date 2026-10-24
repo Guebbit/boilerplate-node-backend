@@ -74,6 +74,14 @@ export default {
     reencrypt: webhooksService.reencryptWebhookSecrets,
     // `ownerUserId` on a subscription points at whoever configured the shop's integration — an
     // operator, not a `POST /account/export` subject. A pointer, never a copy: nothing here
-    // duplicates personal data that `users` already owns, and no email is stored at all.
-    personalData: 'none'
+    // duplicates personal data that `users` already owns, and no email is stored at all. The
+    // pointer is forgotten when that account is erased; `collect` resolves nothing, so the
+    // section appears in no export (the precedent is `account`'s `accountExports`).
+    personalData: [
+        {
+            section: 'webhookOwnership',
+            collect: () => Promise.resolve(undefined),
+            erase: webhooksService.forgetOwner
+        }
+    ]
 } satisfies AppModule;

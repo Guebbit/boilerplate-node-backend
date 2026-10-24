@@ -133,6 +133,18 @@ export const TRUSTED_AUTHENTICATABLE_FILTER = {
     deletedAt: AUTHENTICATABLE_FILTER.deletedAt
 };
 
+/**
+ * Who may be offered a sign-in: {@link TRUSTED_AUTHENTICATABLE_FILTER}'s accounts, plus an
+ * owner-scheduled deletion still inside its grace (it is offered the restore, never a session).
+ * The `$or` operators are ours, so they are marked `trusted()` like the filter above.
+ *
+ * @param now - the moment `purgeAt` is judged against
+ */
+const trustedSignInFilter = (now: Date) => ({
+    active: TRUSTED_AUTHENTICATABLE_FILTER.active,
+    $or: [{ deletedAt: null }, { deletedBy: 'owner' as const, purgeAt: trusted({ $gt: now }) }]
+});
+
 /** An `$unset` document that clears every field of the code in a slot. */
 const clearedCode = (slot: DeliveredCodeSlot): Record<string, ''> =>
     Object.fromEntries(DELIVERED_CODE_FIELDS.map((name) => [codeSlotPath(slot, name), '']));
@@ -154,7 +166,12 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     emailOrPendingEmailTaken: (email: string, excludingId: string) => Promise<boolean>;
     emailTaken: (email: string) => Promise<boolean>;
     findAuthenticatableById: (id: string) => Promise<UserDocument | null>;
-    findAuthenticatableByEmail: (email: string) => Promise<UserDocument | null>;
+    findForSignInByEmail: (email: string, now: Date) => Promise<UserDocument | null>;
+    findForSignInByOAuthIdentity: (
+        provider: string,
+        providerId: string,
+        now: Date
+    ) => Promise<UserDocument | null>;
     clearLapsedPreviousEmail: (keepUserIds: readonly string[]) => Promise<number>;
     linkOAuthAccount: (userId: string, account: OAuthAccount) => Promise<boolean>;
     unlinkOAuthAccount: (userId: string, provider: string) => Promise<boolean>;
@@ -192,6 +209,10 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findInactiveUnwarned: (cutoff: Date) => Promise<UserDocument[]>;
     findWarnedStillInactive: (warnedBefore: Date) => Promise<UserDocument[]>;
     findReaperSoftDeletedPastGrace: (cutoff: Date) => Promise<UserDocument[]>;
+    findScheduledDeletionsDue: (now: Date) => Promise<UserDocument[]>;
+    forgetHoldSetter: (staffId: string, session: ClientSession) => Promise<void>;
+    restoreScheduledDeletion: (id: string, now: Date, session?: ClientSession) => Promise<boolean>;
+    claimScheduledErasure: (id: string, now: Date, session: ClientSession) => Promise<boolean>;
 } = {
     reencrypt: reencryptOf(userModel),
     ...createRepository<UserDocument, UserWire>(userModel, {
@@ -284,14 +305,31 @@ export const userRepository: Repository<UserDocument, UserWire> & {
         userModel.findOne({ _id: id, ...AUTHENTICATABLE_FILTER }).exec(),
 
     /**
-     * Fetch a user by email, but only if the account may still authenticate — same
-     * `AUTHENTICATABLE_FILTER` as `findAuthenticatableById`. WITH credential fields
+     * Fetch the account a sign-in by email may be about: one that may authenticate, or one whose
+     * owner scheduled its deletion and is still inside the grace ({@link trustedSignInFilter}).
+     * The caller tells them apart with `isAuthenticatable` / `isRestorable`. WITH credential fields
      * (`select: false`), since the caller is always about to compare a password hash.
      * `login` (`account/services/login.ts`) is the only caller.
      */
-    findAuthenticatableByEmail: (email: string) =>
+    findForSignInByEmail: (email: string, now: Date) =>
         userModel
-            .findOne({ email, ...TRUSTED_AUTHENTICATABLE_FILTER })
+            .findOne({ email, ...trustedSignInFilter(now) })
+            .setOptions(EXTERNAL_KEY_QUERY)
+            .select(CREDENTIAL_FIELDS)
+            .exec(),
+
+    /**
+     * The account already linked to a federated identity, under the same sign-in filter as
+     * {@link findForSignInByEmail}, credential fields included: the caller may build a 2FA
+     * challenge off `twoFactorMethods` right after.
+     */
+    findForSignInByOAuthIdentity: (provider: string, providerId: string, now: Date) =>
+        userModel
+            .findOne({
+                'oauthAccounts.provider': provider,
+                'oauthAccounts.providerId': providerId,
+                ...trustedSignInFilter(now)
+            })
             .setOptions(EXTERNAL_KEY_QUERY)
             .select(CREDENTIAL_FIELDS)
             .exec(),
@@ -825,5 +863,65 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                 deletedBy: 'reaper',
                 deletedAt: { $lt: cutoff }
             })
+            .exec(),
+
+    /**
+     * Unset `purchaseHold.setBy` on every hold one staff account placed: the hold stays in force,
+     * the person goes. The audit row keeps who placed it, for as long as the trail is kept.
+     *
+     * @param staffId - the erased staff account's id
+     * @param session - joins the clear to the erasure's transaction
+     */
+    forgetHoldSetter: (staffId: string, session: ClientSession) =>
+        userModel
+            .updateMany(
+                { 'purchaseHold.setBy': staffId },
+                { $unset: { 'purchaseHold.setBy': 1 } },
+                { session, timestamps: false }
+            )
             .exec()
+            .then(() => undefined),
+
+    /** Every owner-scheduled account whose grace has run out — the purge job's read. */
+    findScheduledDeletionsDue: (now: Date) =>
+        userModel.find({ deletedBy: 'owner', purgeAt: { $lte: now } }).exec(),
+
+    /**
+     * Undo an owner-scheduled deletion, conditionally: only a row still inside its grace is
+     * restored. The mirror of {@link claimScheduledErasure} (`purgeAt > now` here, `<= now` there),
+     * so the two can never both match one row. `timestamps: false`: restoring is not a profile edit.
+     *
+     * @param session - the caller's transaction, when the restore must commit with other writes
+     * @returns whether THIS call restored the account
+     */
+    restoreScheduledDeletion: (id: string, now: Date, session?: ClientSession) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(id), deletedBy: 'owner', purgeAt: { $gt: now } },
+                { $unset: { deletedAt: '', deletedBy: '', purgeAt: '' } },
+                // `session`: the caller's transaction, so the cancel commits with its announcement.
+                { timestamps: false, session }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount === 1),
+
+    /**
+     * The first write of the purge transaction: a conditional touch of a row whose grace has run
+     * out. A restore that committed first leaves nothing to match, and one that commits after is a
+     * write conflict, so a restored account is never erased. The touch rewrites `purgeAt` to `now`
+     * (Mongoose drops a `__v` bump): the row is deleted in the same transaction, and any real
+     * write takes the claim.
+     *
+     * @param session - the purge's transaction
+     * @returns whether THIS transaction holds the row
+     */
+    claimScheduledErasure: (id: string, now: Date, session: ClientSession) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(id), deletedBy: 'owner', purgeAt: { $lte: now } },
+                { $set: { purgeAt: now } },
+                { timestamps: false, session }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount === 1)
 };

@@ -14,7 +14,7 @@ export const probes: Probe[] = [
         name: 'Probe: save a product the storefront will not show',
         why: `The visibility gate on the way IN. A hidden product is perfectly real and its id is perfectly well-formed, so the contract can describe the 404 but not a request that earns one — and a stale tab is all it takes to send this. Saving it would plant a line that renders as a hole on the wishlist page: a row pointing at a product the scoping rules then refuse to return.`,
         method: 'POST',
-        path: '/wishlist',
+        path: '/wishlist/items',
         auth: 'bearer',
         body: {
             productId: '{{seedInactiveProductId}}'
@@ -24,21 +24,21 @@ export const probes: Probe[] = [
         name: 'Probe: move a product that was never saved',
         why: `The wishlist's exit, asked for a line the caller does not hold. It answers 404 rather than succeeding quietly, because a client moving something it cannot see has a stale view and needs to know — and because a silent success would report a cart write that never happened.`,
         method: 'POST',
-        path: '/wishlist/{{seedSoftDeletedProductId}}/move-to-cart',
+        path: '/wishlist/items/{{seedSoftDeletedProductId}}/move-to-cart',
         auth: 'bearer'
     },
     {
         name: 'Probe: unsave a product that was never saved',
         why: `The same contract from the delete side. Worth its own request because the two share no code path: removal decides from the repository's filter matching nothing, where the move decides from reading the list first.`,
         method: 'DELETE',
-        path: '/wishlist/000000000000000000000000',
+        path: '/wishlist/items/000000000000000000000000',
         auth: 'bearer'
     },
     {
         name: 'Probe: an id no ObjectId can be built from',
         why: `404, the same answer as an absent id. \`Id\` is a plain string in the contract — a backend is free to use ULIDs — so the Mongo-shaped check lives in the controller, and a path id it cannot build is refused like one that names nothing.`,
         method: 'DELETE',
-        path: '/wishlist/not-an-object-id',
+        path: '/wishlist/items/not-an-object-id',
         auth: 'bearer'
     }
 ];

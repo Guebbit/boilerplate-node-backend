@@ -4,6 +4,8 @@
         "session-touched": "Sessione aggiornata.",
         "login": {
             "wrong-data": "Email o password non validi.",
+            "deletion-pending": "Questo account è in programma per l'eliminazione. Ripristinalo per accedere.",
+            "restore-challenge-invalid": "Questo tentativo di ripristino è scaduto. Accedi di nuovo.",
             "second-factor-required": "Autenticazione a due fattori richiesta.",
             "success": "Autenticazione riuscita."
         },
@@ -18,9 +20,9 @@
             "success": "Password modificata, accedi con la nuova password."
         },
         "delete": {
-            "email-sent": "È stata inviata un'email di conferma. Clicca sul link per confermare l'eliminazione dell'account.",
-            "token-not-found": "Token non valido o scaduto, riprova.",
-            "success": "Account eliminato definitivamente."
+            "scheduled": "Il tuo account è bloccato e verrà cancellato alla data indicata, a meno che tu non lo ripristini prima.",
+            "restored": "Il tuo account è stato ripristinato. Accedi per usarlo di nuovo.",
+            "token-not-found": "Token non valido o scaduto, riprova."
         },
         "update": {
             "success": "Profilo aggiornato.",
@@ -125,15 +127,22 @@
                 "body": "La tua password è stata cambiata.",
                 "advice": "Se non sei stato tu, reimposta subito la password con \"Password dimenticata\" nella pagina di accesso. Una reimpostazione disconnette tutti i dispositivi e revoca le tue chiavi API."
             },
-            "delete-request": {
-                "subject": "Conferma l'eliminazione dell'account",
-                "meta-title": "Eliminazione dell'account richiesta",
+            "deletion-scheduled": {
+                "subject": "Il tuo account è in programma per l'eliminazione",
+                "meta-title": "Eliminazione dell'account programmata",
                 "greeting": "Ciao, {{name}}!",
-                "intro": "Abbiamo ricevuto una richiesta di eliminazione definitiva del tuo account.",
-                "link-label": "Conferma l'eliminazione",
-                "ignore": "Se non hai richiesto tu questa operazione, puoi ignorare questa email."
+                "intro": "Abbiamo ricevuto una richiesta di eliminazione del tuo account. Ora è bloccato e verrà cancellato definitivamente il {{date}}.",
+                "link-label": "Ripristina il mio account",
+                "ignore": "Hai cambiato idea, o non sei stato tu? Ripristina l'account con questo link, poi cambia la password. Se vuoi che sparisca, non fare nulla."
             },
-            "delete-confirm": {
+            "restored": {
+                "subject": "Il tuo account è stato ripristinato",
+                "meta-title": "Account ripristinato",
+                "greeting": "Ciao, {{name}}!",
+                "body": "L'eliminazione del tuo account è stata annullata. Non è stato cancellato nulla e puoi accedere di nuovo.",
+                "staff-note": "Lo ha ripristinato il nostro team. Se non lo hai chiesto tu, elimina di nuovo l'account dal tuo profilo."
+            },
+            "deleted": {
                 "subject": "Il tuo account è stato eliminato",
                 "meta-title": "Account eliminato",
                 "greeting": "Ciao, {{name}}!",

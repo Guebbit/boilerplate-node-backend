@@ -11,13 +11,14 @@
 
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale } from '@infrastructure/i18n';
-import { userService } from '@modules/users';
+import { userService, isAuthenticatable } from '@modules/users';
 import { examplePublishedEmail } from '../emails';
 
 /**
  * Mail the owner of a just-published example, in their own language.
  *
- * A vanished owner (erased between the edit and this listener) means nobody to tell, not an error.
+ * A vanished owner (erased between the edit and this listener) means nobody to tell, not an error;
+ * a locked one (banned, or in the grace of its own deletion) is not mailed an optional notice.
  * A rejection here is logged by the event bus and never reaches the request that published.
  * The event rides the outbox, and a retry re-runs every handler, so the mail can repeat.
  *
@@ -25,7 +26,8 @@ import { examplePublishedEmail } from '../emails';
  */
 export const mailOwnerOfPublished = (payload: { userId: string; title: string }): Promise<void> =>
     userService.getById(payload.userId).then((owner) => {
-        if (!owner) return;
+        // A locked account (banned, or its owner asked to delete it) gets no optional notice.
+        if (!owner || !isAuthenticatable(owner)) return;
         const mail = examplePublishedEmail(
             owner.locale ?? getDefaultLocale(),
             owner.username,

@@ -104,6 +104,7 @@ export const presentUser = (document: UserWire, role: string | null, actions: Us
     carryVersion(document, {
         ...sharedFields(document, role),
         actions,
+        ...(document.purgeAt ? { purgeAt: document.purgeAt.toISOString() } : {}),
         ...(document.purchaseHoldFlaggedAt === undefined
             ? {}
             : { purchaseHoldFlaggedAt: document.purchaseHoldFlaggedAt.toISOString() })

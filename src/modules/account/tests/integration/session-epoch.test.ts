@@ -193,13 +193,7 @@ describe('the events that move the epoch', () => {
 
     it('a completed password reset purges pending one-time tokens and challenges, not just sessions', async () => {
         const user = await createUser({ verifiedAt: new Date() });
-        for (const type of [
-            'password',
-            'verify',
-            'email-change',
-            'delete',
-            'mfa-challenge'
-        ] as const)
+        for (const type of ['password', 'verify', 'email-change', 'mfa-challenge'] as const)
             await plantToken(user.id, type, `pending-${type}`, { ttlMs: 3_600_000 });
 
         const response = await api().post('/account/password/reset/confirm').send({

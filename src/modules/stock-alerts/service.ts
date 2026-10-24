@@ -21,7 +21,7 @@ import {
 } from '@infrastructure/http/response';
 import { announceInTransaction } from '@kernel/outbox';
 import { isBuyable, productService } from '@modules/products';
-import { userService } from '@modules/users';
+import { userService, isAuthenticatable } from '@modules/users';
 import { ERROR_CODES } from '@api/error-codes';
 import type { StockAlertsResponse } from '@types';
 import { backInStockEmail } from './emails';
@@ -139,8 +139,8 @@ const answerOne = (
     });
 
 /**
- * Mail one buyer that a product is back. An erased account has no address left, and a mail that
- * fails is logged: the request is already gone and the inbox row stands.
+ * Mail one buyer that a product is back. An erased account has no address left, a locked one
+ * (banned, or in the grace of its own deletion) is not mailed, and a mail that fails is logged: the request is already gone and the inbox row stands.
  *
  * @param userId - the buyer
  * @param productId - the product
@@ -154,7 +154,8 @@ const mailBuyer = (
     userService
         .getById(userId)
         .then((user) => {
-            if (!user) return;
+            // A locked account (banned, or its owner asked to delete it) gets no optional notice.
+            if (!user || !isAuthenticatable(user)) return;
             const locale = user.locale ?? getDefaultLocale();
             const mail = backInStockEmail(locale, user.username, {
                 title: titleFor(titles, locale),

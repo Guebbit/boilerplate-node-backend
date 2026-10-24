@@ -1,7 +1,7 @@
 /**
  * @module
  * Contract tests for the account-lifecycle operations `api.contract.test.ts` does not reach: the
- * two-step deletion, the password-reset request, logging out everywhere, the breach check while
+ * scheduled deletion and its restore, the password-reset request, logging out everywhere, the breach check while
  * typing, and the expired-token sweep. Each success is driven for real — the mailed token read
  * back out of the queue — so the body checked against the spec is the one a client receives.
  */
@@ -55,26 +55,27 @@ const mailedToken = (template: string): string => {
     return decodeURIComponent(token);
 };
 
-describe('DELETE /account and DELETE /account/delete-confirm', () => {
-    it('matches the contract for the request, then for the confirm, which removes the account', async () => {
+describe('DELETE /account and POST /account/restore', () => {
+    it('matches the contract for the request, then for the restore, which cancels the deletion', async () => {
         const { user, bearer } = await authenticateAs('user');
 
         const request = await api().delete('/account').set('Authorization', bearer);
 
-        expect(request.status).toBe(200);
+        expect(request.status).toBe(202);
+        const locked = await userRepository.findById(String(user._id));
+        expect(locked?.deletedBy).toBe('owner');
 
-        const confirm = await api()
-            .delete('/account/delete-confirm')
-            .send({ token: mailedToken('account.delete-request') });
+        const restore = await api()
+            .post('/account/restore')
+            .send({ token: mailedToken('account.deletion-scheduled') });
 
-        expect(confirm.status).toBe(200);
-        await expect(userRepository.findById(String(user._id))).resolves.toBeNull();
+        expect(restore.status).toBe(200);
+        const restored = await userRepository.findById(String(user._id));
+        expect(restored?.deletedAt).toBeUndefined();
     });
 
     it('matches the error contract for a token nobody was sent', async () => {
-        const response = await api()
-            .delete('/account/delete-confirm')
-            .send({ token: 'never-issued' });
+        const response = await api().post('/account/restore').send({ token: 'never-issued' });
 
         expect(response.status).toBe(422);
     });

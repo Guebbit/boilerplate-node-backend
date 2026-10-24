@@ -35,6 +35,7 @@ flowchart LR
     webhooks --> users
     users --> access
     users -. "user.deactivated" .-> account
+    users -. "user.deletion-cancelled" .-> account
     users -. "user.setup-requested" .-> account
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -202,19 +203,21 @@ sessions died. A repeat is a conflict, not a second success: `409 USER_ALREADY_I
 
 Two writes skip the ban check and the staff protection the admin routes enforce: the raw `update`
 and `remove`. Both are `@internal` and never leave the module. `account` reaches the record through
-four named doors instead, each narrower than the write beneath it:
+named doors instead, each narrower than the write beneath it:
 
-| Door                 | Who calls it                                | What it cannot do                                                  |
-| -------------------- | ------------------------------------------- | ------------------------------------------------------------------ |
-| `updateOwnProfile`   | the owner, `PUT`/`PATCH /account`           | take `active` or `role`: a profile edit cannot ban its own account |
-| `eraseOwnAccount`    | the owner, `DELETE /account/delete-confirm` | take a bare document: it asks for the spent deletion link's proof  |
-| `softDeleteInactive` | the inactivity reaper                       | take an account never warned, or one that holds a staff role (409) |
-| `eraseInactive`      | the inactivity reaper                       | erase a row the reaper did not soft-delete itself (409)            |
+| Door                     | Who calls it                      | What it cannot do                                                                      |
+| ------------------------ | --------------------------------- | -------------------------------------------------------------------------------------- |
+| `updateOwnProfile`       | the owner, `PUT`/`PATCH /account` | take `active` or `role`: a profile edit cannot ban its own account                     |
+| `scheduleOwnDeletion`    | the owner, `DELETE /account`      | erase anything: it locks the row, stamps `purgeAt` and moves the session epoch         |
+| `restoreOwnAccount`      | the owner, by link or at sign-in  | restore a row past `purgeAt`, or one the owner did not schedule (a conditional update) |
+| `eraseScheduledDeletion` | the purge job                     | erase a row not yet due: its first write is a claim on `purgeAt <= now`, else 409      |
+| `softDeleteInactive`     | the inactivity reaper             | take an account never warned, or one that holds a staff role (409)                     |
+| `eraseInactive`          | the inactivity reaper             | erase a row the reaper did not soft-delete itself (409)                                |
 
-`eraseOwnAccount` takes a `RedeemedOwner`, which `userService.redeemedOwner(user)` mints from the
-document the deletion link just resolved. The route is anonymous, so the spent link is the only thing
-that says the person asking owns the account; the type makes a caller say so out loud, and a test or
-a reviewer can see who claims it. No rank check applies, so a staff member may erase themselves.
+The state itself is the proof: an owner-scheduled row carries `deletedBy: 'owner'` and a `purgeAt`,
+as a reaper row carries `deletedBy: 'reaper'`. No rank check applies, so a staff member may delete
+and later be erased like anyone else. The purge hands a system context, so the trail says
+`system.user.erased`, not an admin erase.
 
 `updateById` and `removeById` stay the doors for an admin: they load by id and ask first.
 
@@ -282,6 +285,19 @@ A module's erase hook may hand back work to run once the transaction has committ
 anything that is not a database write, so a rollback could not undo it. `orders` uses it to cancel
 the account's never-paid orders, see [When the account is erased](./orders.md#when-the-account-is-erased).
 A failing step is logged and never turns a committed erasure into an error.
+
+A third kind of soft delete is the **owner's own**: `DELETE /account` stamps `deletedAt` (the request
+time), `deletedBy: 'owner'` and `purgeAt`, and the account is erased by the `reap:scheduled-deletions`
+job once `purgeAt` passes ([the grace](../theory/data-retention.md#self-deletion-a-grace-under-one-month)).
+Staff see it in the list (`User.purgeAt`, "erases on {date}") and may restore it with
+`POST /users/{id}/restore` while `purgeAt` is ahead, the same `delete:User` key as any restore. Past
+it the answer is 409 `USER_ERASURE_DUE` and `actions.restore` is false. The restore commits with the
+outbox event `user.deletion-cancelled`; `account` drops the restore link and tells the owner staff did
+it. There is no reason field: the audit row records who.
+
+The erase cascade also forgets a staff member's name where it only pointed: `purchaseHold.setBy` on
+another buyer is unset before the row goes, and `webhooks` and `locales` do the same for the
+subscription owner and the translator. The rows stay, the person goes.
 
 ## What this module adds to the data export
 

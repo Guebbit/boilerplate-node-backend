@@ -16,7 +16,9 @@ export const accountAnalyticsEvents = {
     // answers, so it can report the one that succeeded rather than the one that was attempted.
     USER_LOGGED_OUT: 'user_logged_out',
     USER_PROFILE_VIEWED: 'user_profile_viewed',
-    ACCOUNT_DELETED: 'account_deleted'
+    // The purge fires nothing: no request, no consent behind it.
+    ACCOUNT_DELETION_SCHEDULED: 'account_deletion_scheduled',
+    ACCOUNT_RESTORED: 'account_restored'
 } as const;
 
 /** Augments the analytics port's event-name map with this module's own names. */

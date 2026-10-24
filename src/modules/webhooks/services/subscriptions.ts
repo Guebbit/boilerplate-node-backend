@@ -8,6 +8,7 @@
  * `Caller.tenantId` is null only in platform scope — see its own doc comment).
  */
 
+import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import {
@@ -485,3 +486,13 @@ export const remove = (
                 return generateSuccess(undefined);
             });
         });
+
+/**
+ * `personalData.erase` hook: forget the owner of every subscription an erased staff member
+ * configured. Same rule as the order timeline's actor: the row stays, the person goes.
+ *
+ * @param userId - the erased account's id
+ * @param session - the erasure's transaction
+ */
+export const forgetOwner = (userId: string, session: ClientSession): Promise<void> =>
+    webhookSubscriptionRepository.forgetOwner(userId, session);

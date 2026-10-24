@@ -65,6 +65,31 @@ describe('userActionsFor — the protection of staff accounts', () => {
 });
 
 describe('userActionsFor — the account’s state', () => {
+    it('offers restore on an owner-scheduled account only until its purgeAt', () => {
+        const now = new Date('2026-06-15T00:00:00Z');
+        const scheduled = (purgeAt: string): ActionsSubject => ({
+            id: 'owner',
+            deletedAt: new Date('2026-06-01T00:00:00Z'),
+            purgeAt: new Date(purgeAt)
+        });
+
+        const inside = userActionsFor(
+            scheduled('2026-06-20T00:00:00Z'),
+            false,
+            callerOf('moderator'),
+            now
+        );
+        const past = userActionsFor(
+            scheduled('2026-06-15T00:00:00Z'),
+            false,
+            callerOf('moderator'),
+            now
+        );
+
+        expect(inside.restore).toBe(true);
+        expect(past.restore).toBe(false);
+    });
+
     it('offers restore and no soft delete on a deleted account, and still allows erasure', () => {
         const actions = userActionsFor(
             { id: 'owner', deletedAt: new Date() },

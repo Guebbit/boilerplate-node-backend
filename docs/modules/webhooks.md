@@ -146,7 +146,7 @@ created it — resolved fresh, at send time, from the id the subscription points
 (`WebhookSubscriptionDocument.ownerUserId`, never a stored copy of the address; see the field's own
 docblock for the GDPR reasoning). Best-effort and fire-and-forget, the same as every other queued
 notification in this codebase; silently skipped for a subscription with no owner, or
-whose owner no longer resolves to a user.
+whose owner no longer resolves to a user. When the owner's account is erased the pointer is unset (a `personalData.erase` hook that exports nothing), so the integration keeps working and the notice has no one to mail.
 
 This is deliberately a DIFFERENT channel from what operators hear. A failed delivery never parks —
 it reschedules on its own row, and the sweep republishes — so `QueueJobsParked` never fires for a

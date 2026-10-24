@@ -10,7 +10,7 @@
 
 import { getCurrentLocale } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { userService, isAuthenticatable, type UserDocument } from '@modules/users';
+import { userService, isAuthenticatable, isRestorable, type UserDocument } from '@modules/users';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { rehostRemoteImage } from '@infrastructure/adapters/remote-image';
 import type { CallerContext } from '@types';
@@ -331,7 +331,13 @@ export const loginOrCreateFromOAuth = (
         // see 1b in docs/theory/defences/authentication.md#federated-login.
         .findByOAuthIdentity(provider, identity.providerId)
         .then((existing) => {
-            if (existing) return { user: existing, outcome: 'login' as const };
+            if (existing) {
+                // Matched by the sign-in filter, which also returns an account in its deletion
+                // grace; one whose grace ran out since the query may not sign in.
+                if (!isAuthenticatable(existing) && !isRestorable(existing))
+                    throw new OAuthAccountUnavailableError(existing.id);
+                return { user: existing, outcome: 'login' as const };
+            }
 
             // Same reason as the lookup above: `linkToExistingAccount` below may hand this
             // account straight to a 2FA challenge too.

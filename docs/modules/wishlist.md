@@ -71,13 +71,13 @@ line and a cart line never disagree about a product (see
 [line availability](./cart.md#line-availability)). A wishlist line holds no quantity, so it never
 reads `insufficient_stock`.
 
-| `availability` | The line shows            | Move to cart                                      |
-| -------------- | ------------------------- | ------------------------------------------------- |
-| `in_stock`     | normal                    | ok                                                |
-| `preorder`     | "Preorder, ships from"    | ok                                                |
-| `out_of_stock` | "Sold out"                | ok, as `POST /cart` accepts a sold-out product    |
-| `unavailable`  | "Not available right now" | ok, an off-sale product moves like a sold-out one |
-| `removed`      | "No longer available"     | refused: a hidden product is a 404                |
+| `availability` | The line shows            | Move to cart                                         |
+| -------------- | ------------------------- | ---------------------------------------------------- |
+| `in_stock`     | normal                    | ok                                                   |
+| `preorder`     | "Preorder, ships from"    | ok                                                   |
+| `out_of_stock` | "Sold out"                | ok, as `POST /cart/items` accepts a sold-out product |
+| `unavailable`  | "Not available right now" | ok, an off-sale product moves like a sold-out one    |
+| `removed`      | "No longer available"     | refused: a hidden product is a 404                   |
 
 A hidden product's line is kept and returns to a stock value when the product is shown again;
 only a delete pulls it. Saving a hidden product stays a 404, so a new add never reveals one.

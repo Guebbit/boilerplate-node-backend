@@ -223,8 +223,8 @@ describe('verificationTokenRepository.issue', () => {
 
     it('keeps every link of a many-live kind', async () => {
         const user = await createUser();
-        await plantToken(user.id, 'delete', 'a');
-        await plantToken(user.id, 'delete', 'b');
+        await plantToken(user.id, 'mfa-challenge', 'a');
+        await plantToken(user.id, 'mfa-challenge', 'b');
         await plantToken(user.id, 'mfa-challenge', 'c', { amr: ['pwd'] });
         await plantToken(user.id, 'mfa-challenge', 'd', { amr: ['google'] });
 
@@ -260,17 +260,17 @@ describe('verificationTokenRepository.findLive / spend', () => {
     it('finds a live token of the right kind by its digest, and refuses every other reading', async () => {
         const user = await createUser();
         await plantToken(user.id, 'password', 'live');
-        await plantToken(user.id, 'delete', 'stale', { ttlMs: -1000 });
+        await plantToken(user.id, 'mfa-challenge', 'stale', { ttlMs: -1000 });
         const now = new Date();
 
         const live = await verificationTokenRepository.findLive('password', hashToken('live'), now);
         const wrongKind = await verificationTokenRepository.findLive(
-            'delete',
+            'mfa-challenge',
             hashToken('live'),
             now
         );
         const expired = await verificationTokenRepository.findLive(
-            'delete',
+            'mfa-challenge',
             hashToken('stale'),
             now
         );
@@ -295,7 +295,7 @@ describe('verificationTokenRepository.findLive / spend', () => {
 
     it('will not spend a link as another kind', async () => {
         const user = await createUser();
-        await plantToken(user.id, 'delete', 'shared');
+        await plantToken(user.id, 'mfa-challenge', 'shared');
 
         await expect(
             verificationTokenRepository.spend('password', hashToken('shared'))
@@ -328,7 +328,7 @@ describe('verificationTokenRepository.lastSentAt / removeOfTypes', () => {
             sentAt
         );
         await expect(
-            verificationTokenRepository.lastSentAt(user.id, 'delete')
+            verificationTokenRepository.lastSentAt(user.id, 'mfa-challenge')
         ).resolves.toBeUndefined();
 
         await verificationTokenRepository.removeOfTypes(user.id, ['verify']);

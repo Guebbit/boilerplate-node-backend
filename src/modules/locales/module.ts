@@ -80,6 +80,13 @@ export default {
     // `translatedBy` is staff attribution on a `update:Translation` action — the caller's own
     // user id, a pointer rather than a copy of anything (`services/translations.ts` sets it from
     // `context?.caller.id`). Not an end-customer's own data either way — nothing here is ever
-    // reachable by a `POST /account/export` subject.
-    personalData: 'none'
+    // reachable by a `POST /account/export` subject. The pointer is forgotten when that account
+    // is erased; `collect` resolves nothing, so the section appears in no export.
+    personalData: [
+        {
+            section: 'translationAttribution',
+            collect: () => Promise.resolve(undefined),
+            erase: translationRepository.forgetTranslator
+        }
+    ]
 } satisfies AppModule;

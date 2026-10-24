@@ -65,8 +65,9 @@ import { postEmailChangeConfirm } from './controllers/post-email-change-confirm'
 import { postEmailChangeUndo } from './controllers/post-email-change-undo';
 import { postAccountExport } from './controllers/post-account-export';
 import { getAccountExport } from './controllers/get-account-export';
-import { deleteAccountRequest } from './controllers/delete-account-request';
-import { deleteAccountConfirm } from './controllers/delete-account-confirm';
+import { deleteAccount } from './controllers/delete-account';
+import { postAccountRestore } from './controllers/post-account-restore';
+import { postLoginRestore } from './controllers/post-login-restore';
 import { getOAuthProviders } from './controllers/get-oauth-providers';
 import { getSessionConfig } from './controllers/get-session-config';
 import { postSessionTouch } from './controllers/post-session-touch';
@@ -179,19 +180,19 @@ router.delete('/email-change', isAuth, cancelPendingEmail);
 // reason: each success publishes mail. `isAuth` runs first so the identity budget is per account.
 router.post('/email-change/resend', isAuth, sessionCredentialLimiters, postPendingEmailResend);
 
-// DELETE /account — request account deletion (requires auth). Critical: destruction. An account
-// with a second factor must also have proved a code in that fresh session.
+// DELETE /account — lock the account and schedule its erasure (requires auth). Critical:
+// destruction. An account with a second factor must also have proved a code in that fresh session.
 router.delete(
     '/',
     isAuth,
     requireFreshAuthWhen(callerHasTwoFactor, 'critical', OTP_PROOF),
     requireFreshAuth('critical'),
-    deleteAccountRequest
+    deleteAccount
 );
 
-// DELETE /account/delete-confirm — confirm account deletion with token. Public, the token is the
-// credential: `credentialLimiters` bound the guesses like `/email-verification/confirm`.
-router.delete('/delete-confirm', credentialLimiters, deleteAccountConfirm);
+// POST /account/restore — cancel the scheduled deletion with the mailed token. Public, the token is
+// the credential: `credentialLimiters` bound the guesses like `/email-verification/confirm`.
+router.post('/restore', credentialLimiters, postAccountRestore);
 
 // POST /account/login — authenticate and get tokens. `loginChallengeGate` (rung 3, off by
 // default) only engages once `credentialLimiters`' identity budget is mostly spent — never on an
@@ -329,6 +330,11 @@ router.post('/login/2fa/send', credentialLimiters, mfaSendLimiter, postLoginTwoF
 // itself: the challenge token is the credential. `mfaChallengeLimiter` bounds guesses against
 // ONE challenge; `credentialLimiters` is defense in depth on top of it.
 router.post('/login/2fa', credentialLimiters, mfaChallengeLimiter, postLoginTwoFactor);
+
+// POST /account/login/restore — redeem the deletion-grace claim check: cancels the deletion and
+// starts the session. Public, the claim check is the credential: `credentialLimiters` bound the
+// guesses like the other challenge answers.
+router.post('/login/restore', credentialLimiters, postLoginRestore);
 
 // GET /account/2fa — the caller's own factors. Plain `isAuth`: reading your own 2FA status
 // reveals nothing a step-up would protect, and the profile page needs it on every visit.

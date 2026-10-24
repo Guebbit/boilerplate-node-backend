@@ -30,6 +30,7 @@ export const webhooksService = {
     rotateSubscriptionSecret: subscriptions.rotateSecret,
     removeSubscriptionSecret: subscriptions.removeSecret,
     removeSubscription: subscriptions.remove,
+    forgetOwner: subscriptions.forgetOwner,
     listDeliveries: deliveries.list,
     getDelivery: deliveries.get,
     replayDelivery: deliveries.replay,

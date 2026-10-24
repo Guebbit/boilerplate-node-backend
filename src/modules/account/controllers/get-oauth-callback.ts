@@ -32,10 +32,12 @@ import {
     OAUTH_LOCALE_COOKIE
 } from '../oauth/state';
 import { createMfaChallengeCookie } from '../oauth/mfa-redirect';
+import { createDeletionChallengeCookie } from '../oauth/deletion-redirect';
 import {
     oauthCallbackUrl,
     oauthFrontendCallbackUrl,
-    oauthFrontendMfaCallbackUrl
+    oauthFrontendMfaCallbackUrl,
+    oauthFrontendDeletionCallbackUrl
 } from '../oauth/config';
 import {
     accountService,
@@ -47,6 +49,7 @@ import {
     OAuthIdentityTakenError,
     OAuthLinkExpiredError
 } from '../services';
+import { isRestorable } from '@modules/users';
 import { issueSession } from '../session/session';
 import { recordLoginSuccess } from '../session/login-observability';
 import { rememberDevice } from '../session/device-cookie';
@@ -227,6 +230,29 @@ export const getOAuthCallback = (request: Request, response: Response) => {
              * docs/theory/defences/authentication.md#federated-login.
              */
             if (!user.twoFactorEnabledAt) {
+                // Deletion grace: no session and no login yet. The claim check rides a cookie, the
+                // dates ride the redirect; the frontend offers the restore.
+                if (isRestorable(user)) {
+                    return accountService
+                        .buildDeletionPending(user, [provider.name])
+                        .then((pending) => {
+                            createDeletionChallengeCookie(
+                                response,
+                                pending.challenge,
+                                pending.expiresAt
+                            );
+                            authOauthTotal.inc({
+                                provider: providerName,
+                                status: 'deletion_pending'
+                            });
+                            clearOAuthCookies(response);
+                            response.redirect(
+                                302,
+                                oauthFrontendDeletionCallbackUrl(pending, continueTo, savedLocale())
+                            );
+                        });
+                }
+
                 return issueSession(request, response, user.id, {
                     amr: [provider.name],
                     provedAt

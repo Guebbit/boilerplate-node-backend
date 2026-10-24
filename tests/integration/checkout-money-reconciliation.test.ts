@@ -98,10 +98,10 @@ const priceThroughHttp = async (
     for (const { price, quantity } of lines) {
         const product = await createProduct({ price, onHand: quantity + 5 });
         await api()
-            .post('/cart')
+            .post('/cart/items')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity })
-            .expect(201);
+            .expect(200);
     }
     await api()
         .put('/cart/shipping-method')

@@ -54,7 +54,7 @@ or return is sent from an outbox-event listener — see [outbox.md](outbox.md#cu
 - **Queue enabled** → the email job is published to the `worker.email.send` queue. The `email.worker.ts` consumer picks it up and calls `sendTemplatedEmail()` in the background.
 - **Queue disabled, or the publish failed** → falls back to calling `sendTemplatedEmail()` directly, at the cost of request latency.
 
-Callers include `account/services/mail.ts` (reset, verification, deletion links),
+Callers include `account/services/mail.ts` (reset, verification, restore links),
 `orders/services/notify.ts` and `cancel-mail.ts`, `payments/services/notify.ts`,
 `delivery/services/notify.ts`, `returns/services/notify.ts` and `feedback/service.ts`. `grep -rn enqueueEmail src` is the live list.
 

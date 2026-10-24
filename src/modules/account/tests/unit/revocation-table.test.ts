@@ -20,6 +20,7 @@ describe('the revocation table', () => {
     it('purges the pending one-time links and challenges for exactly the credential changes', () => {
         expect(CAUSES.filter((cause) => REVOCATION[cause].pending).toSorted()).toEqual([
             'deactivation',
+            'deletion-scheduled',
             'email-change-undo',
             'password-change',
             'password-reset'

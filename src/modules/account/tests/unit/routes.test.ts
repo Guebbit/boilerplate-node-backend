@@ -23,9 +23,8 @@ import { router } from '@modules/account/routes';
 
 /** Routes whose credential is a token in the URL or a cookie, not an access token. */
 const TOKEN_BEARING = [
-    'DELETE /delete-confirm',
+    'POST /restore',
     'POST /password/reset/confirm',
-    'DELETE /delete-confirm',
     'POST /email-verification/confirm',
     'POST /email-change/confirm',
     'POST /email-change/undo',
@@ -41,7 +40,7 @@ const TOKEN_BEARING = [
 const RATE_LIMITED = [
     'POST /login',
     'POST /password/reset/confirm',
-    'DELETE /delete-confirm',
+    'POST /restore',
     'POST /password',
     'POST /reauth',
     'POST /email-verification/resend',
@@ -50,6 +49,7 @@ const RATE_LIMITED = [
     'POST /email-change/confirm',
     'POST /email-change/undo',
     'POST /login/2fa',
+    'POST /login/restore',
     'POST /login/2fa/send',
     'GET /oauth/:provider',
     'GET /oauth/:provider/callback'
@@ -99,7 +99,7 @@ describe('account routes — what is mounted', () => {
             'DELETE /email-change',
             'POST /email-change/resend',
             'DELETE /',
-            'DELETE /delete-confirm',
+            'POST /restore',
             'POST /login',
             'POST /signup',
             'POST /password/reset',
@@ -126,6 +126,7 @@ describe('account routes — what is mounted', () => {
             'GET /export/:id',
             'POST /login/2fa/send',
             'POST /login/2fa',
+            'POST /login/restore',
             'GET /2fa',
             'POST /2fa/disable',
             'POST /2fa/methods/:method/setup',

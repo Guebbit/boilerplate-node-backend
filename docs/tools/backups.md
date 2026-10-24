@@ -268,7 +268,7 @@ guidance) lets a backup keep them until it ages out, **if** they stay "beyond us
 re-applied after a restore**. This repo's promise is exactly that: [Data retention](../theory/data-retention.md#backups-and-erasure).
 
 The erasure events (`admin.user.erased`, `system.user.erased`, and `auth.account_delete.completed` for a
-self-deletion) are rows in `auditlogs`, **inside the database being restored**: the restored copy only
+self-deletion, which the purge job writes) are rows in `auditlogs`, **inside the database being restored**: the restored copy only
 knows erasures from before the snapshot. So take the list **first**:
 
 - **The database still answers** (a bad migration, a corruption): query it by date, from the snapshot to now.
@@ -295,7 +295,13 @@ knows erasures from before the snapshot. So take the list **first**:
 than 90 days needs Loki for the older part.
 
 After the restore, erase each listed user again (admin `DELETE /users/{id}?hardDelete=true`, a self-deletion
-the same way). **If neither source survives**, write it in the incident log, as the
+the same way).
+
+**Scheduled deletions need the same care in both directions.** An account locked by `DELETE /account` carries
+a `purgeAt`, and the purge job erases it once that passes. Re-apply `auth.account_delete.scheduled` and
+`auth.account_delete.cancelled` since the snapshot too (`metadata.via` says how it was cancelled): a restored
+snapshot that still shows the account as scheduled would let the job erase an account the person had since
+restored, and one that shows it active would forget a deletion they had asked for. **If neither source survives**, write it in the incident log, as the
 [Art. 33 runbook](../theory/data-protection.md#breach-runbook-art-33-72-hours) already asks: the erasures
 that could not be re-applied, and why. There is no automatic re-application, on purpose.
 

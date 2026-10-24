@@ -9,12 +9,15 @@ import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
+import type { OAuthLinks } from '@types';
 import { accountService } from '../services';
+import { presentOAuthLinks } from '../presenter';
 
 /**
  * DELETE /account/oauth/links/{provider}
  * Disconnects one provider from the caller's account; 404 when it was not linked. The route
- * mounts a fresh-session guard: removing a way in is an identity change.
+ * mounts a fresh-session guard: removing a way in is an identity change. A link is a line of the
+ * caller's links list, so the answer is that list as it now stands.
  */
 export const deleteOAuthLink = (request: Request<{ provider: string }>, response: Response) =>
     accountService
@@ -28,6 +31,15 @@ export const deleteOAuthLink = (request: Request<{ provider: string }>, response
                 rejectResponse(response, 404, [t('account.oauth.link-not-found')]);
                 return;
             }
-            successResponse<undefined>(response, undefined, 200, t('account.oauth.link-removed'));
+            return accountService
+                .listOAuthLinks(request.authContext!.id)
+                .then((links) =>
+                    successResponse<OAuthLinks>(
+                        response,
+                        presentOAuthLinks(links),
+                        200,
+                        t('account.oauth.link-removed')
+                    )
+                );
         })
         .catch(catchAs(response, 'deleteOAuthLink'));

@@ -9,7 +9,7 @@
 
 import { refundOrderPayment } from '../factories';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/factories';
+import { createUser, eraseAsScheduled } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
 import {
     createOrder,
@@ -20,7 +20,6 @@ import {
 import { resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
-import { userService } from '@modules/users';
 import { inventoryService } from '@modules/inventory';
 import { paymentService } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
@@ -477,7 +476,7 @@ describe('refund on cancel', () => {
         const { providerRef } = (await paymentRepository.findByOrderId(String(order._id)))!;
         const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(user));
+        await eraseAsScheduled(user);
         // The cancel's listeners run off the outbox relay, after the erasure returns.
         await settleOutboxNudges();
 

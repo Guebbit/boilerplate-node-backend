@@ -215,6 +215,22 @@ const viaBan: Trigger = async () => {
     };
 };
 
+/** deletion-scheduled: the real door, `DELETE /account` on a fresh session. */
+const viaDeletion: Trigger = async () => {
+    const { user, victim } = await accountWithVictim('deleting@example.com');
+    const caller = await loginAs(user.email);
+    return {
+        userId: user.id,
+        victim: victim.bearer,
+        fire: () =>
+            api()
+                .delete('/account')
+                .set('Authorization', caller.bearer)
+                .set('Cookie', caller.cookie)
+                .then(() => undefined)
+    };
+};
+
 /** refresh-reuse: the real door. */
 const viaRefreshReuse: Trigger = async () => {
     const { user, victim } = await accountWithVictim('reuse@example.com');
@@ -240,6 +256,7 @@ const TRIGGERS: Record<RevocationCause, Trigger> = {
     'email-change-undo': viaEmailUndo,
     'two-factor-change': viaTwoFactorConfirm,
     deactivation: viaBan,
+    'deletion-scheduled': viaDeletion,
     'refresh-reuse': viaRefreshReuse
 };
 

@@ -128,8 +128,9 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `account`        | `AUTH_2FA_CODE_SENT`                         | `auth.two_factor.code_sent`                  | —                      |
 | `account`        | `AUTH_2FA_DISABLED`                          | `auth.two_factor.disabled`                   | —                      |
 | `account`        | `AUTH_2FA_ENROLLED`                          | `auth.two_factor.enrolled`                   | —                      |
+| `account`        | `AUTH_ACCOUNT_DELETE_CANCELLED`              | `auth.account_delete.cancelled`              | —                      |
 | `account`        | `AUTH_ACCOUNT_DELETE_COMPLETED`              | `auth.account_delete.completed`              | —                      |
-| `account`        | `AUTH_ACCOUNT_DELETE_REQUESTED`              | `auth.account_delete.requested`              | —                      |
+| `account`        | `AUTH_ACCOUNT_DELETE_SCHEDULED`              | `auth.account_delete.scheduled`              | —                      |
 | `account`        | `AUTH_DATA_EXPORT_DOWNLOADED`                | `auth.data_export.downloaded`                | `account_export`       |
 | `account`        | `AUTH_DATA_EXPORT_REQUESTED`                 | `auth.data_export.requested`                 | `account_export`       |
 | `account`        | `AUTH_EMAIL_CHANGE_CANCELLED`                | `auth.email_change.cancelled`                | —                      |

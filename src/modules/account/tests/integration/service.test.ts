@@ -458,13 +458,13 @@ describe('issueToken', () => {
 
     it('keeps both tokens when two of a many-live kind are issued concurrently', async () => {
         // The invariant: each issue is its own row, so two writers cannot lose each other's token.
-        // Concretely: two "delete my account" clicks, and one of the two emailed links silently
+        // Concretely: two login challenges, and one of them silently
         // does not work, if one write could overwrite the other.
         const user = await createUser({ email: 'concurrent@example.com' });
 
         const [first, second] = await Promise.all([
-            issueToken(user.id, 'delete', 60_000),
-            issueToken(user.id, 'delete', 60_000)
+            issueToken(user.id, 'mfa-challenge', 60_000),
+            issueToken(user.id, 'mfa-challenge', 60_000)
         ]);
 
         const rows = await tokenRowsOf(user.id);

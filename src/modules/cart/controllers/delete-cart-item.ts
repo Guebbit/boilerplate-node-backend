@@ -1,39 +1,31 @@
 /**
  * @module
- * `DELETE /cart/:productId` and `DELETE /cart` controller — thin HTTP adapter over
- * `cartService.removeItemById`. One controller for both spellings: `productId` arrives as a
- * path segment on the canonical route, or as a required body field on the alias
- * (`x-alias-of: removeCartItem`). See docs/theory/request-input.md.
+ * `DELETE /cart/items/:productId` controller — thin HTTP adapter over
+ * `cartService.removeItemById`.
  */
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { cartService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
-import type { CartResponse, RemoveCartItemRequest } from '@types';
+import type { CartResponse } from '@types';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
- * DELETE /cart/:productId — canonical, path segment.
- * DELETE /cart — alias, `productId` required in the body.
+ * DELETE /cart/items/:productId
  * Remove a specific product from the cart. Returns the updated cart.
  * Service returns 404 if the item is not in the cart.
  */
-export const deleteCartItem = (
-    request: Request<{ productId?: string }, unknown, RemoveCartItemRequest>,
-    response: Response
-) => {
+export const deleteCartItem = (request: Request<{ productId?: string }>, response: Response) => {
     const userId = request.authContext!.id;
-    // `write` reads params before body, no query — neither route declares one. The path segment
-    // wins on the canonical route (a malformed one answers the same 404 copy as a line not in the cart);
-    // the alias has no path segment, so the body is the only source that can ever supply one (a
-    // malformed one is a 422 naming `productId`).
+    // The path segment is the only source; a malformed one answers the same 404 copy as a line
+    // not in the cart.
     const productId = requireId(request, response, {
         notFound: 'cart.item-not-found',
         name: 'productId',
-        surface: 'write'
+        surface: 'path'
     });
     if (!productId) return;
 

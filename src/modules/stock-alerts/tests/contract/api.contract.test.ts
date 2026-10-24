@@ -30,7 +30,7 @@ describe('GET /stock-alerts', () => {
     it('matches the contract for a caller with one', async () => {
         const { bearer } = await authenticateAsRole('customer');
         const productId = await soldOut();
-        await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        await api().post('/stock-alerts').set('Authorization', bearer).send({ productId });
 
         const response = await api().get('/stock-alerts').set('Authorization', bearer);
 
@@ -45,13 +45,19 @@ describe('GET /stock-alerts', () => {
     });
 });
 
-describe('POST /stock-alerts/{productId}', () => {
+describe('POST /stock-alerts', () => {
     it('matches the contract when asking about a sold-out product, twice alike', async () => {
         const { bearer } = await authenticateAsRole('customer');
         const productId = await soldOut();
 
-        const first = await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
-        const second = await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        const first = await api()
+            .post('/stock-alerts')
+            .set('Authorization', bearer)
+            .send({ productId });
+        const second = await api()
+            .post('/stock-alerts')
+            .set('Authorization', bearer)
+            .send({ productId });
 
         expect([first.status, second.status]).toEqual([200, 200]);
         expect(second.body.data.items).toHaveLength(1);
@@ -62,8 +68,9 @@ describe('POST /stock-alerts/{productId}', () => {
         const product = await createProduct({ onHand: 5 });
 
         const response = await api()
-            .post(`/stock-alerts/${String(product._id)}`)
-            .set('Authorization', bearer);
+            .post('/stock-alerts')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id) });
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('STOCK_ALERT_PRODUCT_BUYABLE');
@@ -73,16 +80,40 @@ describe('POST /stock-alerts/{productId}', () => {
         const { bearer } = await authenticateAsRole('customer');
 
         const response = await api()
-            .post(`/stock-alerts/${MISSING_ID}`)
-            .set('Authorization', bearer);
+            .post('/stock-alerts')
+            .set('Authorization', bearer)
+            .send({ productId: MISSING_ID });
 
         expect(response.status).toBe(404);
     });
 
+    it('matches the error contract for a malformed or missing productId: 422', async () => {
+        const { bearer } = await authenticateAsRole('customer');
+
+        const malformed = await api()
+            .post('/stock-alerts')
+            .set('Authorization', bearer)
+            .send({ productId: 'not-an-object-id' });
+        const missing = await api().post('/stock-alerts').set('Authorization', bearer).send({});
+
+        expect([malformed.status, missing.status]).toEqual([422, 422]);
+    });
+
     it('refuses a caller who is not signed in', async () => {
-        const response = await api().post(`/stock-alerts/${MISSING_ID}`);
+        const response = await api().post('/stock-alerts').send({ productId: MISSING_ID });
 
         expect(response.status).toBe(401);
+    });
+
+    it('answers a POST on the old product URL 405, naming the one method the URL keeps', async () => {
+        const { bearer } = await authenticateAsRole('customer');
+
+        const response = await api()
+            .post(`/stock-alerts/${MISSING_ID}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(405);
+        expect(response.headers.allow).toBe('DELETE');
     });
 });
 
@@ -90,7 +121,7 @@ describe('DELETE /stock-alerts/{productId}', () => {
     it('matches the contract when cancelling the caller’s own request', async () => {
         const { bearer } = await authenticateAsRole('customer');
         const productId = await soldOut();
-        await api().post(`/stock-alerts/${productId}`).set('Authorization', bearer);
+        await api().post('/stock-alerts').set('Authorization', bearer).send({ productId });
 
         const response = await api()
             .delete(`/stock-alerts/${productId}`)

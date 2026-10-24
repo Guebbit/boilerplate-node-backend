@@ -3,14 +3,15 @@
  * turns a resolved template into a URL, so the four kinds' env vars and default templates live
  * here, not in infrastructure.
  */
-import { accountFrontendLink } from '@modules/account/config';
+import { accountConfig, accountFrontendLink, deletionPurgeAt } from '@modules/account/config';
 import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 
 withoutEnvironmentInThisFile([
     'NODE_FRONTEND_URL',
     'NODE_FRONTEND_LINK_VERIFY',
     'NODE_FRONTEND_LINK_RESET',
-    'NODE_FRONTEND_LINK_DELETE',
+    'NODE_FRONTEND_LINK_RESTORE',
+    'NODE_ACCOUNT_DELETION_GRACE_DAYS',
     'NODE_FRONTEND_LINK_EMAIL_CHANGE'
 ]);
 
@@ -29,9 +30,9 @@ describe('accountFrontendLink — the default template per kind', () => {
         );
     });
 
-    it('builds the delete link', () => {
-        expect(accountFrontendLink('delete', { locale: 'en', token: TOKEN })).toBe(
-            `http://localhost:8080/en/account-delete/confirm#token=${TOKEN}`
+    it('builds the restore link', () => {
+        expect(accountFrontendLink('restore', { locale: 'en', token: TOKEN })).toBe(
+            `http://localhost:8080/en/account-restore#token=${TOKEN}`
         );
     });
 
@@ -42,7 +43,7 @@ describe('accountFrontendLink — the default template per kind', () => {
     });
 
     it('gives every kind a distinct path, so one token can never be mistaken for another flow', () => {
-        const urls = (['verify', 'reset', 'delete', 'email-change'] as const).map((kind) =>
+        const urls = (['verify', 'reset', 'restore', 'email-change'] as const).map((kind) =>
             accountFrontendLink(kind, { locale: 'en', token: TOKEN })
         );
 
@@ -59,6 +60,41 @@ describe('accountFrontendLink — per-kind override', () => {
         );
         expect(accountFrontendLink('verify', { locale: 'en', token: TOKEN })).toBe(
             `http://localhost:8080/en/verify-email/confirm#token=${TOKEN}`
+        );
+    });
+});
+
+describe('NODE_ACCOUNT_DELETION_GRACE_DAYS', () => {
+    it('defaults to 30 days', () => {
+        expect(accountConfig().NODE_ACCOUNT_DELETION_GRACE_DAYS).toBe(30);
+    });
+
+    it.each(['0', '32'])('refuses %s, outside 1-31', (value) => {
+        setEnvironment({ NODE_ACCOUNT_DELETION_GRACE_DAYS: value });
+        expect(() => accountConfig()).toThrow();
+    });
+});
+
+describe('deletionPurgeAt', () => {
+    it('is the grace when that is the shorter bound: 5 March + 30 days', () => {
+        expect(deletionPurgeAt(new Date('2026-03-05T10:00:00Z')).toISOString()).toBe(
+            '2026-04-04T10:00:00.000Z'
+        );
+    });
+
+    it('is one calendar month when February is in the window: 30 January lands on 28 February', () => {
+        expect(deletionPurgeAt(new Date('2026-01-30T10:00:00Z')).toISOString()).toBe(
+            '2026-02-28T00:00:00.000Z'
+        );
+    });
+
+    it('never passes the month, even with the longest grace', () => {
+        setEnvironment({ NODE_ACCOUNT_DELETION_GRACE_DAYS: '31' });
+        expect(deletionPurgeAt(new Date('2026-04-30T23:00:00Z')).toISOString()).toBe(
+            '2026-05-30T00:00:00.000Z'
+        );
+        expect(deletionPurgeAt(new Date('2026-03-05T10:00:00Z')).toISOString()).toBe(
+            '2026-04-05T00:00:00.000Z'
         );
     });
 });

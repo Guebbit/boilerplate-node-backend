@@ -5,7 +5,7 @@
  * Lives in cart, not in the browser, for two reasons: a line the catalogue refuses has to become
  * a notification that stays until the user deletes it (`notifications` listens for
  * `cart.merge_refused`), and the answer — what each line became, and whether it is short — needs
- * the stock read and the cart's own cap in one place. A browser-side loop of `POST /cart` calls
+ * the stock read and the cart's own cap in one place. A browser-side loop of `POST /cart/items` calls
  * could do neither.
  *
  * See: docs/modules/cart.md#merging-a-guest-cart
@@ -18,7 +18,7 @@ import { planMergeLine } from '../domain';
 import { CART_MERGE_REFUSED } from '../events';
 import type { CartDocument } from '../model';
 import { cartLineMax } from '../config';
-import { cartRepository, QUANTITY_LIMIT } from '../repository';
+import { cartRepository, QUANTITY_LIMIT, NO_LINE } from '../repository';
 import { cartGetForBadge, trackLineWrite } from './items';
 import { isListed, readShelf, shelfAvailability, type Shelf } from './shelf';
 import type { CartView } from '../presenter';
@@ -51,7 +51,8 @@ const writeAdd = (
     context: CallerContext
 ): Promise<{ cart: CartDocument | null; raced: boolean }> =>
     cartRepository.upsertLine(userId, productId, quantity, 'add').then((write) => {
-        if (write === QUANTITY_LIMIT)
+        // `NO_LINE` is `'update'` mode's answer; an add never meets it, but the type does.
+        if (write === QUANTITY_LIMIT || write === NO_LINE)
             return cartRepository.findByUserId(userId).then((cart) => ({ cart, raced: true }));
         trackLineWrite(context, productId, quantity, write.created);
         return { cart: write.cart, raced: false };
@@ -155,7 +156,7 @@ const announceRemoved = (userId: string, results: MergeLineResult[]): Promise<un
 };
 
 /**
- * `POST /cart/merge`. Quantities add up exactly as `POST /cart` would — a product in both carts
+ * `POST /cart/merge`. Quantities add up exactly as `POST /cart/items` would — a product in both carts
  * ends at the sum, capped at the line maximum — and only a product the catalogue does not show is
  * refused. Stock lowers nothing: a short line keeps its quantity and comes back with its
  * `availability`, read from the stock ledger and the catalogue. Lowering a short line would let a caller read

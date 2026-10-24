@@ -24,3 +24,18 @@ export const AUTHENTICATABLE_FILTER = { active: { $ne: false }, deletedAt: null 
  */
 export const isAuthenticatable = (user: Pick<UserDocument, 'active' | 'deletedAt'>): boolean =>
     user.active !== false && !user.deletedAt;
+
+/**
+ * Whether an account locked by its owner's own deletion can still be brought back: scheduled by the
+ * owner, grace not yet run out, and not banned. A banned account stays refused whatever it
+ * scheduled, and one past `purgeAt` waits only for the purge job.
+ *
+ * @param user - the loaded account
+ * @param now - the moment to judge against
+ * @returns whether restoring it is still on offer
+ */
+export const isRestorable = (
+    user: Pick<UserDocument, 'active' | 'deletedBy' | 'purgeAt'>,
+    now: Date = new Date()
+): boolean =>
+    user.active !== false && user.deletedBy === 'owner' && !!user.purgeAt && user.purgeAt > now;

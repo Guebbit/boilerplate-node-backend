@@ -27,7 +27,7 @@ x-error-codes:
     CART_SHIPPING_NOT_APPLICABLE: { status: 409, description: 'The chosen shipping method does not apply to an all-digital cart.' }
     CART_TOTAL_CHANGED: { status: 409, description: 'The total the buyer was shown is not the total this checkout would charge — a price, a shipping cost or the cart itself changed. `errors[].details` carries `expected` (what the request named) and `actual` (what the order would cost now), each `{ amount, currency }` in minor units; show the new total and let the buyer confirm.' }
     CART_SHIP_TO_COUNTRY_NOT_SUPPORTED: { status: 422, description: 'The address''s country is outside this deployment''s configured ship-to list.' }
-    EMAIL_NOT_VERIFIED: { status: 403, description: 'Checkout requires a verified email address — see `POST /account/verify-email`.' }
+    EMAIL_NOT_VERIFIED: { status: 403, description: 'Checkout requires a verified email address — see `POST /account/email-verification/resend`.' }
     REORDER_UNAVAILABLE: { status: 409, description: 'The past order named for reorder no longer has any purchasable lines.' }
 
 # This module's section of the account data export (`POST /account/export`): the bundler
@@ -58,15 +58,18 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /cart/items:
         post:
             tags: [Cart]
             summary: Add to cart
             description: >-
                 "Add to cart": a product with no line in the caller's cart gets one, and a line
                 already there GROWS by `quantity` — pressing the button twice makes two (Shopify's
-                `/cart/add`, commercetools' `addLineItem`). Answers 201 with the cart and the
-                line's `Location` when a line was created, 200 when an existing one grew; the line
-                may not pass the per-line cap (422). To SET a quantity, `PUT /cart/{productId}`.
+                `/cart/add`, commercetools' `addLineItem`). A line is written through its parent, so
+                the answer is always 200 with the whole cart: no `Location`, no read of a line. The
+                line may not pass the per-line cap (422). To SET a quantity,
+                `PATCH /cart/items/{productId}`.
             operationId: addCartItem
             security:
                 - bearerAuth: []
@@ -77,16 +80,8 @@ paths:
                         schema:
                             $ref: '#/components/schemas/AddCartItemRequest'
             responses:
-                '201':
-                    description: The product had no line; the cart now holds one
-                    headers:
-                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
                 '200':
-                    description: The product already had a line, which grew
+                    description: The cart after the add; a new line was pushed, or the existing one grew
                     content:
                         application/json:
                             schema:
@@ -99,38 +94,8 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Cart]
-            summary: Remove item from cart
-            description: Removes the cart line for the product identified by `productId` in the body from the authenticated user's cart. Alternate spelling of `DELETE /cart/{productId}`, for a caller that would rather carry the id in the body. To empty the cart entirely, use `DELETE /cart/all` instead — a stripped or malformed body here 422s rather than falling back to clearing everything. Returns the updated cart.
-            operationId: removeCartItemByBody
-            x-alias-of: removeCartItem
-            security:
-                - bearerAuth: []
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/RemoveCartItemRequest'
-            responses:
-                '200':
-                    description: Updated cart
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # Well-formed product id that matches no cart line. 422 covers the malformed case.
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A missing or malformed `productId` in the body — the controller answers before querying.
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
-    /cart/all:
-        delete:
-            tags: [Cart]
             summary: Clear cart
-            description: Empties the authenticated user's cart entirely. Bodyless on purpose — the destructive spelling gets its own URL instead of being what `DELETE /cart` falls back to when a body goes missing, so a body stripped in transit 422s there instead of silently landing here.
+            description: Empties the authenticated user's cart entirely. Bodyless on purpose — the destructive spelling gets its own URL, and any body on it is refused (415), so a body can never turn a one-line delete into this. Returns the (empty) cart; clearing an already-empty cart is the state the caller asked for, so also 200.
             operationId: clearCart
             security:
                 - bearerAuth: []
@@ -145,11 +110,11 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /cart/{productId}:
-        put:
+    /cart/items/{productId}:
+        patch:
             tags: [Cart]
             summary: Set cart item quantity
-            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path — the quantity, not an increment; `POST /cart` is the door that adds. Answers 201 when it created the line (RFC 9110 §9.3.4) and 200 when it wrote one already there; repeating it changes nothing. Returns the updated cart.
+            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path — the quantity, not an increment; `POST /cart/items` is the door that adds. A change never creates, so a product the cart holds no line for is 404 `cart.item-not-found`, and a held line whose product the storefront no longer shows is 404 `products.not-found`. Repeating it changes nothing. Returns the updated cart.
             operationId: updateCartItemById
             security:
                 - bearerAuth: []
@@ -161,15 +126,10 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdateCartItemByIdRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateCartItemByIdRequest'
             responses:
-                '201':
-                    description: The product had no line; the cart now holds one
-                    headers:
-                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/CartResponseEnvelope'
                 '200':
                     description: Updated cart
                     content:
@@ -179,6 +139,7 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '415': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/UnsupportedMediaType' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
@@ -331,7 +292,7 @@ paths:
             summary: Merge a guest cart into the cart
             description: >-
                 Adds every line of a cart built while signed out, in one call, by the same rule as
-                `POST /cart`: a product already in the cart GROWS by the line's quantity, a new one
+                `POST /cart/items`: a product already in the cart GROWS by the line's quantity, a new one
                 gets a line. The answer holds the cart as it now stands and ONE RESULT PER SUBMITTED
                 LINE, in request order, saying what the line asked for (`requested`), what the cart
                 holds for that product now (`resulting`) and, when the two differ or the line did
@@ -450,8 +411,8 @@ components:
             maximum: 999
             description: >-
                 Bounded at both ends, and this bound is on the STORED line, not only the request:
-                `PUT /cart/{productId}` sets a line to exactly this value, which already fits;
-                a caller that instead adds to an existing line (`POST /cart`, the wishlist's
+                `PATCH /cart/items/{productId}` sets a line to exactly this value, which already fits;
+                a caller that instead adds to an existing line (`POST /cart/items`, the wishlist's
                 move-to-cart) is refused past it with 422 `CART_QUANTITY_LIMIT` rather than
                 silently overflowing. The ceiling is not a stock check — stock is verified at
                 checkout, which refuses with `CART_INSUFFICIENT_STOCK` and is the real boundary.
@@ -478,7 +439,7 @@ components:
                     type: array
                     minItems: 1
                     maxItems: 100
-                    description: The guest cart's lines. A product listed twice is two lines, summed like two `POST /cart`s.
+                    description: The guest cart's lines. A product listed twice is two lines, summed like two `POST /cart/items`s.
                     items:
                         $ref: '#/components/schemas/AddCartItemRequest'
 
@@ -603,14 +564,6 @@ components:
             properties:
                 quantity:
                     $ref: '#/components/schemas/CartQuantity'
-
-        RemoveCartItemRequest:
-            type: object
-            additionalProperties: false
-            required: [productId]
-            properties:
-                productId:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
 
         SetCartShippingMethodRequest:
             type: object
@@ -785,7 +738,7 @@ components:
                 # stock is for callers holding `read:StockLevel`, the same level of
                 # disclosure as checkout's `CART_INSUFFICIENT_STOCK`. Read from the stock
                 # ledger and the catalogue by the cart view, the merge and checkout
-                # through one rule; `POST /cart` and `PUT` do not refuse a line for stock
+                # through one rule; `POST /cart/items` and `PATCH` do not refuse a line for stock
                 # or for being off sale, so a client polling `GET /cart` is how it learns
                 # a line has gone short or unavailable.
                 availability:
@@ -795,7 +748,7 @@ components:
                     description: >-
                         Whether the line can hold one more unit: `quantity` is below the shop's
                         per-line ceiling (`NODE_CART_LINE_MAX`). Stock plays no part, as for
-                        `POST /cart`. A client disables its "+" on `false` instead of copying
+                        `POST /cart/items`. A client disables its "+" on `false` instead of copying
                         the ceiling.
 
         CartShippingOption:

@@ -40,7 +40,7 @@ Liveness and readiness are separate: `/livez` and `/readyz`, see [Health Checks]
 | `webhook_deliveries_overdue`                              | pending deliveries more than 10 min past due                                    |
 | `security_events_total`                                   | forged or guessed credentials, by `security.*` action                           |
 | `auth_stale_credentials_total`                            | expired or revoked credentials presented, by kind                               |
-| `auth_one_time_token_rejected_total`                      | refused reset/verify/email-change/delete links, by flow                         |
+| `auth_one_time_token_rejected_total`                      | refused reset/verify/email-change/restore links, by flow                        |
 | `auth_refresh_token_reuse_detected_total`                 | refresh tokens replayed after rotation                                          |
 | `audit_sink_failures_total`                               | audit entries that could not be persisted                                       |
 | `account_export_failed_total`                             | data exports whose build failed                                                 |

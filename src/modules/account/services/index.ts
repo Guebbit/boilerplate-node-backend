@@ -26,11 +26,12 @@ import * as login from './login';
 import * as logout from './logout';
 import * as refresh from './refresh';
 import * as passwordResetRequest from './password-reset-request';
-import * as deletionRequest from './deletion-request';
+import * as accountDeletion from './account-deletion';
 import * as password from './password';
 import * as passwordReset from './password-reset';
 import * as emailChange from './email-change';
-import * as selfDelete from './self-delete';
+import * as deletionSignIn from './deletion-sign-in';
+import * as purgeDeletions from './purge-deletions';
 import * as profile from './profile';
 import * as verification from './verification';
 import * as tokens from './tokens';
@@ -47,7 +48,7 @@ import * as mail from './mail';
 
 export {
     PASSWORD_RESET_TOKEN_TYPE,
-    ACCOUNT_DELETE_TOKEN_TYPE,
+    ACCOUNT_RESTORE_TOKEN_TYPE,
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
     EMAIL_CHANGE_UNDO_TOKEN_TYPE
@@ -75,7 +76,7 @@ export const accountService = {
     signup: signup.signup,
     login: login.login,
     logoutEverywhere: logout.logoutEverywhere,
-    requestAccountDeletion: deletionRequest.requestAccountDeletion,
+    scheduleAccountDeletion: accountDeletion.scheduleAccountDeletion,
     requestPasswordReset: passwordResetRequest.requestPasswordReset,
     requestAccountSetup: passwordResetRequest.requestAccountSetup,
     sessionRevoke: logout.sessionRevoke,
@@ -97,7 +98,10 @@ export const accountService = {
     confirmEmailVerification: verification.confirmEmailVerification,
     confirmEmailChange: verification.confirmEmailChange,
     undoEmailChangeByToken: verification.undoEmailChangeByToken,
-    confirmAccountDeletion: selfDelete.confirmAccountDeletion,
+    restoreAccountByLink: accountDeletion.restoreAccountByLink,
+    buildDeletionPending: deletionSignIn.buildDeletionPending,
+    restoreAtSignIn: deletionSignIn.restoreAtSignIn,
+    purgeScheduledDeletions: purgeDeletions.purgeScheduledDeletions,
     completeEmailVerification: verification.completeEmailVerification,
     completeEmailChange: verification.completeEmailChange,
     undoEmailChange: verification.undoEmailChange,

@@ -25,7 +25,7 @@ language is kept per context rather than shared.
 | **Session**          | Proof of who is asking, one row in `sessions`. In `jwt` mode an access token to spend and a refresh token to renew it; in `cookie` mode one opaque session id, with no refresh token. |
 | **Access token**     | Short-lived bearer of identity. Never stored — if it is valid it is trusted.                                                                                                          |
 | **Refresh token**    | `jwt` mode only. Long-lived, revocable, its digest kept in the session row. Losing it is what logging out means.                                                                      |
-| **Account deletion** | Two steps — a request that issues a token, and a confirm that destroys the record. Never one call.                                                                                    |
+| **Account deletion** | A request that locks the account and promises its erasure at `purgeAt`, then a purge job that destroys the record. Cancelled by a link, a sign-in or staff until then.                |
 
 ## `access`
 

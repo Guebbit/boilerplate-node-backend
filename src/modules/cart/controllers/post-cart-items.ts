@@ -1,25 +1,26 @@
 /**
  * @module
- * `POST /cart` controller — thin HTTP adapter over `cartService.addItem`.
+ * `POST /cart/items` controller — thin HTTP adapter over `cartService.addItem`.
  */
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { AddCartItemBody } from '@api/schemas.zod';
 import { cartService } from '../services';
-import { createdOrOk } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import type { CartResponse, AddCartItemRequest } from '@types';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
- * POST /cart
- * "Add to cart": a product with no line gets one (201); a line already there grows by the quantity
- * (200) — pressing the button twice makes two. `PUT /cart/{productId}` is the door that sets.
- * Eligibility (can this product be in a cart at all) is decided by the service, not here — the
- * same rule must hold for `PUT /cart/{productId}` and the wishlist's move-to-cart.
+ * POST /cart/items
+ * "Add to cart": a product with no line gets one; a line already there grows by the quantity —
+ * pressing the button twice makes two. Either way the answer is 200 + the whole cart: a line is
+ * written through its parent and has no URL of its own. `PATCH /cart/items/{productId}` is the
+ * door that sets. Eligibility (can this product be in a cart at all) is decided by the service,
+ * not here — the same rule must hold for the PATCH and the wishlist's move-to-cart.
  */
-export const postCart = (
+export const postCartItems = (
     request: Request<unknown, unknown, AddCartItemRequest>,
     response: Response
 ) => {
@@ -36,14 +37,7 @@ export const postCart = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            // 201 when the product got a line, 200 when the line it already had grew.
-            createdOrOk<CartResponse>(
-                response,
-                result.data,
-                result.status,
-                `/cart/${productId}`,
-                t('cart.product-added')
-            );
+            successResponse<CartResponse>(response, result.data, 200, t('cart.product-added'));
         })
         .catch(catchAs(response, 'addCartItem'));
 };

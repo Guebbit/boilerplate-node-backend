@@ -90,11 +90,11 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     },
     'account DELETE /': {
         requiresAuth: true,
-        reason: "requesting deletion of the caller's own account"
+        reason: "locking the caller's own account and scheduling its erasure"
     },
-    'account DELETE /delete-confirm': {
+    'account POST /restore': {
         requiresAuth: false,
-        reason: 'the emailed confirmation token is the credential'
+        reason: 'the emailed restore token is the credential'
     },
     'account POST /login': {
         requiresAuth: false,
@@ -135,6 +135,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     'account POST /login/2fa': {
         requiresAuth: false,
         reason: 'the second step of a 2FA login — the challenge token is the credential, not a session'
+    },
+    'account POST /login/restore': {
+        requiresAuth: false,
+        reason: 'the last step of a sign-in during the deletion grace — the claim check is the credential, not a session'
     },
     'account POST /login/2fa/send': {
         requiresAuth: false,
@@ -228,15 +232,15 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'the undo token mailed to the old address is the credential'
     },
-    'wishlist PUT /:productId': {
+    'wishlist POST /items': {
         requiresAuth: true,
         reason: "saving a product to the caller's own wishlist"
     },
-    'wishlist DELETE /:productId': {
+    'wishlist DELETE /items/:productId': {
         requiresAuth: true,
         reason: "removing a product from the caller's own wishlist"
     },
-    'stock-alerts POST /:productId': {
+    'stock-alerts POST /': {
         requiresAuth: true,
         reason: "asking to be told when a product is back, on the caller's own account"
     },

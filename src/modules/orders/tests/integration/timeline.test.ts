@@ -8,13 +8,12 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import { registerCheckoutModules } from '@tests/checkout-modules';
-import { createUser } from '@modules/users/tests/factories';
+import { createUser, eraseAsScheduled } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, seedOrder, toOrderItem, timelineOf } from '@modules/orders/tests/factories';
 import { asAdmin, asCustomer, callerContextAs } from '@tests/callers';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { resetDomainEvents } from '@kernel/events';
-import { userService } from '@modules/users';
 import { OrderStatus } from '@types';
 import { orderService } from '../../services';
 import { withdrawUntilFrom } from '../../domain';
@@ -208,7 +207,7 @@ describe('what the law lets go', () => {
             callerContextAs('admin', staff.id)
         );
 
-        await userService.eraseOwnAccount(userService.redeemedOwner(staff));
+        await eraseAsScheduled(staff);
 
         const [row] = await timelineOf(String(order._id));
         expect(row.type).toBe('status_overridden');
