@@ -795,7 +795,7 @@ components:
                     type: [string, 'null']
                     format: date-time
                 # Set only by `PUT`/`PATCH /account` requesting a new address, cleared once
-                # `POST /account/email-change-confirm` proves it or `DELETE /account/pending-email`
+                # `POST /account/email-change/confirm` proves it or `DELETE /account/email-change`
                 # cancels it explicitly — resending the CURRENT address is a no-op, not a cancel.
                 # Inlined rather than `$ref`ing `Email`: that schema is shared with WRITABLE
                 # request bodies, and `readOnly` belongs to this field's use here, not to every one
@@ -1139,10 +1139,10 @@ paths:
     # ---------- account ----------
     /account:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account'
-    /account/pending-email:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1pending-email'
-    /account/pending-email/resend:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1pending-email~1resend'
+    /account/email-change:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change'
+    /account/email-change/resend:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change~1resend'
     /account/abilities:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1abilities'
     /account/password:
@@ -1163,28 +1163,26 @@ paths:
         $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses~1{addressId}'
     /account/addresses/{addressId}/default:
         $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses~1{addressId}~1default'
-    /account/verify-request:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1verify-request'
-    /account/verify-confirm:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1verify-confirm'
-    /account/email-change-confirm:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change-confirm'
-    /account/email-change-undo:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change-undo'
+    /account/email-verification/resend:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-verification~1resend'
+    /account/email-verification/confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-verification~1confirm'
+    /account/email-change/confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change~1confirm'
+    /account/email-change/undo:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change~1undo'
     /account/delete-confirm:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1delete-confirm'
     /account/login:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login'
     /account/signup:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1signup'
-    /account/reset:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1reset'
-    /account/reset-confirm:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1reset-confirm'
+    /account/password/reset:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password~1reset'
+    /account/password/reset/confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password~1reset~1confirm'
     /account/refresh:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1refresh'
-    /account/logout-all:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1logout-all'
     /account/tokens/expired:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1tokens~1expired'
     /account/export:

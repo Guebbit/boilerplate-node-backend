@@ -80,11 +80,11 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     },
     'account PUT /': { requiresAuth: true, reason: "editing the caller's own profile" },
     'account PATCH /': { requiresAuth: true, reason: "editing the caller's own profile" },
-    'account DELETE /pending-email': {
+    'account DELETE /email-change': {
         requiresAuth: true,
         reason: "cancelling a pending change to the caller's own profile"
     },
-    'account POST /pending-email/resend': {
+    'account POST /email-change/resend': {
         requiresAuth: true,
         reason: "re-sending the link for a pending change to the caller's own profile"
     },
@@ -104,11 +104,11 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'registration — there is no session yet'
     },
-    'account POST /reset': {
+    'account POST /password/reset': {
         requiresAuth: false,
         reason: 'password-reset request — the caller has no session to prove'
     },
-    'account POST /reset-confirm': {
+    'account POST /password/reset/confirm': {
         requiresAuth: false,
         reason: 'the emailed reset token is the credential'
     },
@@ -176,7 +176,7 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'revoking THIS session — the refresh-token cookie is the credential, not a login'
     },
-    'account POST /logout-all': {
+    'account DELETE /sessions': {
         requiresAuth: true,
         reason: "revoking all of the caller's own sessions"
     },
@@ -212,19 +212,19 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "removing an entry from the caller's own address book"
     },
-    'account POST /verify-request': {
+    'account POST /email-verification/resend': {
         requiresAuth: true,
         reason: "re-sending the caller's own verification email"
     },
-    'account POST /verify-confirm': {
+    'account POST /email-verification/confirm': {
         requiresAuth: false,
         reason: 'the emailed verification token is the credential'
     },
-    'account POST /email-change-confirm': {
+    'account POST /email-change/confirm': {
         requiresAuth: false,
         reason: 'the emailed email-change token is the credential'
     },
-    'account POST /email-change-undo': {
+    'account POST /email-change/undo': {
         requiresAuth: false,
         reason: 'the undo token mailed to the old address is the credential'
     },

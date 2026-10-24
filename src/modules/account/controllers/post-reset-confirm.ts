@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /account/reset-confirm` controller — spends the one-time reset token and sets the new
+ * `POST /account/password/reset/confirm` controller — spends the one-time reset token and sets the new
  * password.
  */
 
@@ -16,7 +16,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { authPasswordResetConfirmTotal } from '../metrics';
 
 /**
- * POST /account/reset-confirm
+ * POST /account/password/reset/confirm
  * Validate a one-time reset token and set the new password.
  */
 export const postResetConfirm = (

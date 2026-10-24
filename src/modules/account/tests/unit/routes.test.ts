@@ -24,31 +24,31 @@ import { router } from '@modules/account/routes';
 /** Routes whose credential is a token in the URL or a cookie, not an access token. */
 const TOKEN_BEARING = [
     'DELETE /delete-confirm',
-    'POST /reset-confirm',
+    'POST /password/reset/confirm',
     'DELETE /delete-confirm',
-    'POST /verify-confirm',
-    'POST /email-change-confirm',
-    'POST /email-change-undo',
+    'POST /email-verification/confirm',
+    'POST /email-change/confirm',
+    'POST /email-change/undo',
     'POST /refresh',
     'POST /logout'
 ];
 
 /**
- * Routes that must carry all three `credentialLimiters` budgets. `POST /signup` and `POST /reset`
+ * Routes that must carry all three `credentialLimiters` budgets. `POST /signup` and `POST /password/reset`
  * are deliberately NOT here — see `account routes — signup and reset rate limiting` below for why
  * they carry `signupLimiters`/`resetRequestLimiters` instead.
  */
 const RATE_LIMITED = [
     'POST /login',
-    'POST /reset-confirm',
+    'POST /password/reset/confirm',
     'DELETE /delete-confirm',
     'POST /password',
     'POST /reauth',
-    'POST /verify-request',
-    'POST /pending-email/resend',
-    'POST /verify-confirm',
-    'POST /email-change-confirm',
-    'POST /email-change-undo',
+    'POST /email-verification/resend',
+    'POST /email-change/resend',
+    'POST /email-verification/confirm',
+    'POST /email-change/confirm',
+    'POST /email-change/undo',
     'POST /login/2fa',
     'POST /login/2fa/send',
     'GET /oauth/:provider',
@@ -59,8 +59,8 @@ const RATE_LIMITED = [
 const SESSION_KEYED = new Set([
     'POST /password',
     'POST /reauth',
-    'POST /verify-request',
-    'POST /pending-email/resend'
+    'POST /email-verification/resend',
+    'POST /email-change/resend'
 ]);
 
 /** Routes that act on the caller's own account and therefore demand a live session. */
@@ -73,11 +73,11 @@ const AUTHENTICATED = [
     'POST /reauth',
     'GET /reauth',
     'POST /reauth/methods/:method/send',
-    'POST /logout-all',
+    'DELETE /sessions',
     'GET /sessions',
     'DELETE /sessions/:sessionId',
-    'POST /verify-request',
-    'POST /pending-email/resend',
+    'POST /email-verification/resend',
+    'POST /email-change/resend',
     'POST /export',
     'GET /export/:id',
     'GET /2fa',
@@ -95,14 +95,14 @@ describe('account routes — what is mounted', () => {
             'GET /',
             'PUT /',
             'PATCH /',
-            'DELETE /pending-email',
-            'POST /pending-email/resend',
+            'DELETE /email-change',
+            'POST /email-change/resend',
             'DELETE /',
             'DELETE /delete-confirm',
             'POST /login',
             'POST /signup',
-            'POST /reset',
-            'POST /reset-confirm',
+            'POST /password/reset',
+            'POST /password/reset/confirm',
             'POST /password',
             'POST /password/check',
             'GET /reauth',
@@ -112,14 +112,14 @@ describe('account routes — what is mounted', () => {
             'GET /abilities',
             'POST /refresh',
             'POST /logout',
-            'POST /logout-all',
+            'DELETE /sessions',
             'GET /sessions',
             'POST /sessions/current/touch',
             'DELETE /sessions/:sessionId',
-            'POST /verify-request',
-            'POST /verify-confirm',
-            'POST /email-change-confirm',
-            'POST /email-change-undo',
+            'POST /email-verification/resend',
+            'POST /email-verification/confirm',
+            'POST /email-change/confirm',
+            'POST /email-change/undo',
             'POST /export',
             'GET /export/:id',
             'POST /login/2fa/send',
@@ -165,7 +165,7 @@ describe('account routes — authorization', () => {
         expect(guardsOn(router, signature)).not.toContain('isAuth');
     });
 
-    it.each(['POST /login', 'POST /signup', 'POST /reset'])(
+    it.each(['POST /login', 'POST /signup', 'POST /password/reset'])(
         '%s stays public, because it is how a session begins',
         (signature) => {
             expect(guardsOn(router, signature)).not.toContain('isAuth');
@@ -236,7 +236,7 @@ describe('account routes — signup and reset rate limiting', () => {
      */
     it.each([
         ['POST /signup', ['signup-identity', 'signup-address', 'signup-block']],
-        ['POST /reset', ['reset-identity', 'reset-address', 'reset-block']]
+        ['POST /password/reset', ['reset-identity', 'reset-address', 'reset-block']]
     ])('%s carries ALL THREE budgets, and no credentialLimiters', (signature, labels) => {
         const chain = chainOf(router, signature);
         const [prefix] = labels[0].split('-', 1);
@@ -251,7 +251,7 @@ describe('account routes — the per-mailbox mail budget', () => {
     // bounds the victim; it runs after the caller's own budgets and before the challenge gate.
     it.each([
         ['POST /signup', 'signup-block'],
-        ['POST /reset', 'reset-block']
+        ['POST /password/reset', 'reset-block']
     ])(
         '%s charges the named mailbox, after its own budgets and before the gate',
         (signature, lastLabel) => {
@@ -269,7 +269,7 @@ describe('account routes — the per-mailbox mail budget', () => {
         const unexpected = routeSignatures(router).filter(
             (signature) =>
                 signature !== 'POST /signup' &&
-                signature !== 'POST /reset' &&
+                signature !== 'POST /password/reset' &&
                 chainOf(router, signature).includes('mailRecipientLimiter')
         );
 
@@ -280,7 +280,7 @@ describe('account routes — the per-mailbox mail budget', () => {
 describe('account routes — human-challenge gate (rung 3)', () => {
     it.each([
         ['POST /signup', 'signup-block'],
-        ['POST /reset', 'reset-block']
+        ['POST /password/reset', 'reset-block']
     ])('%s carries humanChallengeGate, after its own rate-limit budget', (signature, lastLabel) => {
         const chain = chainOf(router, signature);
 
@@ -294,7 +294,7 @@ describe('account routes — human-challenge gate (rung 3)', () => {
         const unexpected = routeSignatures(router).filter(
             (signature) =>
                 signature !== 'POST /signup' &&
-                signature !== 'POST /reset' &&
+                signature !== 'POST /password/reset' &&
                 chainOf(router, signature).includes('humanChallengeGate')
         );
 

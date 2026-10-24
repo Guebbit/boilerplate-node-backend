@@ -80,7 +80,7 @@ it('adds up across money, stock, documents, stats, audit and mail', async () => 
     );
     const verification = await waitForMail(SHOPPER.email, 'account.verify-request');
     bodyOf(
-        await api().post('/account/verify-confirm').send({ token: verification.token }),
+        await api().post('/account/email-verification/confirm').send({ token: verification.token }),
         ConfirmEmailVerification200Response
     );
     const shopper = await loginBearer(SHOPPER.email, SHOPPER.password);

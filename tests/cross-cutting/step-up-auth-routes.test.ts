@@ -70,7 +70,7 @@ const STEP_UP_ROUTES: Record<string, string[]> = {
     'account POST /password': [`requireFreshAuthWhen(sensitive)`],
     'account PUT /': [`requireFreshAuthWhen(sensitive)`, `requireFreshAuthWhen(sensitive)`],
     'account PATCH /': [`requireFreshAuthWhen(sensitive)`, `requireFreshAuthWhen(sensitive)`],
-    'account POST /logout-all': [`requireFreshAuth(sensitive)`],
+    'account DELETE /sessions': [`requireFreshAuth(sensitive)`],
     // Disconnecting a provider removes a way into the account: an identity change, sensitive tier.
     'account POST /oauth/links/:provider': [`requireFreshAuth(sensitive)`],
     'account DELETE /oauth/links/:provider': [`requireFreshAuth(sensitive)`],

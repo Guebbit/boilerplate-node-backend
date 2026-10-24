@@ -69,7 +69,7 @@ process.env.NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX ??= '1000';
 process.env.NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX ??= '1000';
 
 /**
- * `signupLimiters` and `resetRequestLimiters` (`POST /account/signup`, `POST /account/reset`)
+ * `signupLimiters` and `resetRequestLimiters` (`POST /account/signup`, `POST /account/password/reset`)
  * spend on success for the same reason `submissionLimiter` does — a Sybil signup and a
  * mail-bombing reset request both get a 2xx — so every one of their six budgets needs the same
  * raise, or a suite that signs up or requests a reset more than a handful of times from one

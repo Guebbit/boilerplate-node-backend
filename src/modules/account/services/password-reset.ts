@@ -126,7 +126,7 @@ const resetWith = (
     });
 
 /**
- * `POST /account/reset-confirm` — the whole reset, in the order that never burns a link for a
+ * `POST /account/password/reset/confirm` — the whole reset, in the order that never burns a link for a
  * password that was going to be refused: shape and match, then the live token is FOUND, then the
  * breach check, and only then is the token SPENT. The spend is the atomic delete that settles two
  * simultaneous uses of one link, so it stays last; everything before it is a read.

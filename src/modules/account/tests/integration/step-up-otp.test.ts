@@ -86,7 +86,7 @@ const emailOf = (userId: string): Promise<string | undefined> =>
     userRepository.findByIdWithCredentials(userId).then((stored) => stored?.email);
 
 /** Spend an undo token. */
-const undo = (token: string) => api().post('/account/email-change-undo').send({ token });
+const undo = (token: string) => api().post('/account/email-change/undo').send({ token });
 
 /** Request an email change as a session that may. */
 const requestChange = (bearer: string, email = 'new@example.com') =>
@@ -259,7 +259,7 @@ const requested = async () => {
 describe('undoing an email change', () => {
     it('mails the old address a link that works once the change is confirmed, and restores it', async () => {
         const { user, undoToken, confirmToken } = await requested();
-        await api().post('/account/email-change-confirm').send({ token: confirmToken });
+        await api().post('/account/email-change/confirm').send({ token: confirmToken });
         expect(await emailOf(user.id)).toBe('new@example.com');
 
         const response = await undo(undoToken);
@@ -277,7 +277,7 @@ describe('undoing an email change', () => {
 
         const response = await undo(undoToken);
         const confirm = await api()
-            .post('/account/email-change-confirm')
+            .post('/account/email-change/confirm')
             .send({ token: confirmToken });
 
         const stored = await userRepository.findByIdWithCredentials(user.id);
@@ -298,7 +298,7 @@ describe('undoing an email change', () => {
         const { user, undoToken } = await requested();
         await plantToken(user.id, 'password', 'reset-after-the-change', { ttlMs: 3_600_000 });
 
-        const reset = await api().post('/account/reset-confirm').send({
+        const reset = await api().post('/account/password/reset/confirm').send({
             token: 'reset-after-the-change',
             password: REPLACEMENT_PASSWORD,
             passwordConfirm: REPLACEMENT_PASSWORD
@@ -310,7 +310,7 @@ describe('undoing an email change', () => {
 
     it('answers 409 when the previous address was meanwhile taken by another account', async () => {
         const { user, undoToken, confirmToken } = await requested();
-        await api().post('/account/email-change-confirm').send({ token: confirmToken });
+        await api().post('/account/email-change/confirm').send({ token: confirmToken });
         await createUser({ email: 'old@example.com', username: 'squatter' });
 
         const response = await undo(undoToken);

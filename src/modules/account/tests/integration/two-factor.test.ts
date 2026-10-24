@@ -1369,7 +1369,7 @@ describe('the per-account wrong-code lock', () => {
         );
         await plantToken(user.id, 'password', 'reset-clears-the-lock', { ttlMs: 60 * 60 * 1000 });
 
-        const response = await api().post('/account/reset-confirm').send({
+        const response = await api().post('/account/password/reset/confirm').send({
             token: 'reset-clears-the-lock',
             password: REPLACEMENT_PASSWORD,
             passwordConfirm: REPLACEMENT_PASSWORD

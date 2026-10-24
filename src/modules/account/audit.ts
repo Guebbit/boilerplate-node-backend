@@ -23,11 +23,11 @@ export const accountAuditActions = {
     AUTH_EMAIL_CHANGE_REQUESTED: 'auth.email_change.requested',
     /** `pendingEmail` swapped into `email` and every refresh token revoked. */
     AUTH_EMAIL_CHANGE_COMPLETED: 'auth.email_change.completed',
-    /** `DELETE /account/pending-email` discarded a pending change without proving it. */
+    /** `DELETE /account/email-change` discarded a pending change without proving it. */
     AUTH_EMAIL_CHANGE_CANCELLED: 'auth.email_change.cancelled',
-    /** `POST /account/email-change-undo` reverted (or cancelled) a change from the old address's link. */
+    /** `POST /account/email-change/undo` reverted (or cancelled) a change from the old address's link. */
     AUTH_EMAIL_CHANGE_UNDONE: 'auth.email_change.undone',
-    /** `POST /account/pending-email/resend` mailed the pending address a fresh link. */
+    /** `POST /account/email-change/resend` mailed the pending address a fresh link. */
     AUTH_EMAIL_CHANGE_RESENT: 'auth.email_change.resent',
     AUTH_TOKEN_REFRESHED: 'auth.token.refreshed',
     /*

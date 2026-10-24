@@ -83,7 +83,7 @@ const adminWithKey = async () => {
 
 /** Spends a reset link the way the mailed page does. */
 const resetWith = (token: string) =>
-    api().post('/account/reset-confirm').send({
+    api().post('/account/password/reset/confirm').send({
         token,
         password: REPLACEMENT_PASSWORD,
         passwordConfirm: REPLACEMENT_PASSWORD
@@ -121,7 +121,7 @@ describe('account.sessions-revoked through the outbox', () => {
         const { bearer, secret } = await adminWithKey();
         jest.spyOn(apiKeyRepository, 'revokeMany').mockRejectedValueOnce(new Error('db blip'));
 
-        const response = await api().post('/account/logout-all').set('Authorization', bearer);
+        const response = await api().delete('/account/sessions').set('Authorization', bearer);
         await settleOutboxNudges();
 
         expect(response.status).toBe(200);

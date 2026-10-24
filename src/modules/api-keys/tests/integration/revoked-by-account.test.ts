@@ -73,7 +73,7 @@ describe('keys end with the sessions that may be compromised', () => {
         const { bearer, secret } = await adminWithKey();
         expect(await credentialOf(secret)).toBeDefined();
 
-        const response = await api().post('/account/logout-all').set('Authorization', bearer);
+        const response = await api().delete('/account/sessions').set('Authorization', bearer);
 
         // The event rides the outbox: the relay delivers it right after the commit.
         await settleOutboxNudges();
@@ -86,7 +86,7 @@ describe('keys end with the sessions that may be compromised', () => {
         const { user, secret } = await adminWithKey();
         await plantToken(user.id, 'password', 'reset-revokes-keys', { ttlMs: 3_600_000 });
 
-        const response = await api().post('/account/reset-confirm').send({
+        const response = await api().post('/account/password/reset/confirm').send({
             token: 'reset-revokes-keys',
             password: REPLACEMENT_PASSWORD,
             passwordConfirm: REPLACEMENT_PASSWORD
@@ -108,7 +108,7 @@ describe('keys end with the sessions that may be compromised', () => {
         await plantToken(user.id, 'email-change-undo', 'undo-revokes-keys', { ttlMs: 3_600_000 });
 
         const response = await api()
-            .post('/account/email-change-undo')
+            .post('/account/email-change/undo')
             .send({ token: 'undo-revokes-keys' });
         await settleOutboxNudges();
 

@@ -115,7 +115,7 @@ const viaPasswordReset: Trigger = async () => {
         victim: victim.bearer,
         fire: () =>
             api()
-                .post('/account/reset-confirm')
+                .post('/account/password/reset/confirm')
                 .send({
                     token: 'reset-me',
                     password: REPLACEMENT_PASSWORD,
@@ -134,7 +134,7 @@ const viaLogoutAll: Trigger = async () => {
         victim: victim.bearer,
         fire: () =>
             api()
-                .post('/account/logout-all')
+                .delete('/account/sessions')
                 .set('Authorization', caller.bearer)
                 .set('Cookie', caller.cookie)
                 .then(() => undefined)
@@ -154,7 +154,7 @@ const viaEmailConfirm: Trigger = async () => {
         victim: victim.bearer,
         fire: () =>
             api()
-                .post('/account/email-change-confirm')
+                .post('/account/email-change/confirm')
                 .send({ token: 'confirm-me' })
                 .then(() => undefined)
     };
@@ -173,7 +173,7 @@ const viaEmailUndo: Trigger = async () => {
         victim: victim.bearer,
         fire: () =>
             api()
-                .post('/account/email-change-undo')
+                .post('/account/email-change/undo')
                 .send({ token: 'undo-me' })
                 .then(() => undefined)
     };

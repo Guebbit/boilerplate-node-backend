@@ -283,7 +283,7 @@ describe('the step-up window', () => {
         const staleBearer = await bearerForCookie(jwtCookie);
 
         const response = await api()
-            .post('/account/logout-all')
+            .delete('/account/sessions')
             .set('Authorization', staleBearer)
             .send();
 

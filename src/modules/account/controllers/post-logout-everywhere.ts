@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /account/logout-all` controller — thin HTTP adapter over `accountService.logoutEverywhere`.
+ * `DELETE /account/sessions` controller — thin HTTP adapter over `accountService.logoutEverywhere`.
  */
 
 import type { Request, Response } from 'express';
@@ -12,7 +12,7 @@ import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/logout-all
+ * DELETE /account/sessions
  * User logout from EVERY device.
  * Remove the refresh cookie and ALL refresh tokens in the DB, and move the session epoch so access tokens
  * already handed out stop working too. The caller is signed out as well: no re-mint here.

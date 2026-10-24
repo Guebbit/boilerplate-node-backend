@@ -104,7 +104,7 @@ export const restorePreviousEmail = (user: UserDocument): Promise<UserDocument> 
 
 /**
  * Discard a pending email change without proving the new address — its own explicit action
- * (`DELETE /account/pending-email`), distinct from {@link applyEmailChange}'s swap-on-proof. A
+ * (`DELETE /account/email-change`), distinct from {@link applyEmailChange}'s swap-on-proof. A
  * no-op when nothing is pending, so the caller does not need to check first.
  */
 export const cancelPendingEmail = (user: UserDocument): Promise<UserDocument> => {

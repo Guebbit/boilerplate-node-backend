@@ -293,7 +293,7 @@ const banOneCustomer = (owner: Caller): Promise<void> =>
     owner.call('POST', `/users/${SEED_CUSTOMER_IDS.marcus}/deactivate`).then(() => undefined);
 
 /**
- * Every caller signs out of every device — `POST /account/logout-all`.
+ * Every caller signs out of every device — `DELETE /account/sessions`.
  *
  * Not housekeeping: a login writes a refresh token onto the user document, and twelve accounts
  * signed in at build time would ship twelve phantom sessions in the demo dataset. They are an
@@ -302,7 +302,7 @@ const banOneCustomer = (owner: Caller): Promise<void> =>
  * finds.
  */
 const signOutEveryone = (callers: Caller[]): Promise<void> =>
-    Promise.all(callers.map((caller) => caller.call('POST', '/account/logout-all'))).then(
+    Promise.all(callers.map((caller) => caller.call('DELETE', '/account/sessions'))).then(
         () => undefined
     );
 

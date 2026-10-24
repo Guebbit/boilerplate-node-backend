@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /account/verify-confirm` controller — spends a one-time verification token and marks the
+ * `POST /account/email-verification/confirm` controller — spends a one-time verification token and marks the
  * account's email verified.
  */
 
@@ -14,7 +14,7 @@ import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/verify-confirm — spends a one-time verification token, marks the email verified.
+ * POST /account/email-verification/confirm — spends a one-time verification token, marks the email verified.
  * Public deliberately (like `reset-confirm`/`delete-confirm`): the token in the body is the
  * credential, not a login. `accountService.confirmEmailVerification` owns the find-then-spend.
  */

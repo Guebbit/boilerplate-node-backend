@@ -150,11 +150,11 @@ flowchart TB
     C -->|"any other"| W["pendingEmail set"]
     W --> N["notice → OLD address<br/><i>carries the 7-day undo link</i>"]
     W --> V["verification link → NEW address<br/><i>email-change token · 24h</i>"]
-    V --> F["POST /account/email-change-confirm"]
+    V --> F["POST /account/email-change/confirm"]
     F --> S["pendingEmail → email<br/>verified = true<br/>refresh tokens revoked"]
-    N --> U["POST /account/email-change-undo<br/><i>cancels, or restores the old address and ends every session</i>"]
-    D["DELETE /account/pending-email"] --> X["pendingEmail cleared<br/><i>no mail, no token</i>"]
-    Q["POST /account/pending-email/resend"] --> V2["fresh link → NEW address only<br/><i>the old link dies · 60 s cooldown</i>"]
+    N --> U["POST /account/email-change/undo<br/><i>cancels, or restores the old address and ends every session</i>"]
+    D["DELETE /account/email-change"] --> X["pendingEmail cleared<br/><i>no mail, no token</i>"]
+    Q["POST /account/email-change/resend"] --> V2["fresh link → NEW address only<br/><i>the old link dies · 60 s cooldown</i>"]
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef warn fill:#fee2e2,stroke:#dc2626,color:#111827;
@@ -195,13 +195,13 @@ Three things in the flow above are decisions rather than mechanics:
 - **Cancelling is its own explicit action, not a side effect of re-typing the current address.**
   `PUT /account`'s `email` is required — every replace, including a phone-only edit, names it — so
   treating "same address" as "cancel" would let a routine save silently drop a pending change
-  the caller never asked to drop. `DELETE /account/pending-email` is the only thing that cancels
+  the caller never asked to drop. `DELETE /account/email-change` is the only thing that cancels
   one.
 - **Resending is its own action too, and it mails the new address only.** Sending the pending
   address again through `PUT`/`PATCH /account` is a no-op (a double-submitted save must not mail
-  twice), so `POST /account/pending-email/resend` is the explicit way to ask for the link again.
+  twice), so `POST /account/email-change/resend` is the explicit way to ask for the link again.
   The old address was told once, when the change was requested; telling it on every resend would
-  read like a takeover alert. It uses `POST /account/verify-request`'s cooldown and budget and
+  read like a takeover alert. It uses `POST /account/email-verification/resend`'s cooldown and budget and
   answers `200 { resendAfter }` like it, so the button counts down from the server's number; when
   nothing is pending it mails nothing and answers `resendAfter` 0.
 - **A new change request is paced, and so is a reset request.** A genuine change to a different

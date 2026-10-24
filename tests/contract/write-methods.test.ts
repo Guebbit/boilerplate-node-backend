@@ -43,7 +43,7 @@ const EMPTY_STRING_CASES: readonly WriteCase[] = [
     ['patch', `/users/${MISSING_ID}`, { role: '' }],
     ['patch', `/users/${MISSING_ID}`, { username: 'ab' }],
     ['post', '/account/login/2fa', { challenge: '', code: '123456' }],
-    ['post', '/account/reset-confirm', { token: '', password: 'Sup3r-secret-Passw0rd!' }],
+    ['post', '/account/password/reset/confirm', { token: '', password: 'Sup3r-secret-Passw0rd!' }],
     ['post', '/feedback/contact', { name: '', email: 'a@b.co', subject: 's', message: 'm' }],
     ['patch', `/products/${MISSING_ID}`, { tags: [''] }],
     ['patch', `/products/${MISSING_ID}`, { categories: [''] }],

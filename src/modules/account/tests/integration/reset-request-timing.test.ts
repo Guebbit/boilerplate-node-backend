@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /account/reset` answers at once, whatever the lookup behind it costs: a response that
+ * `POST /account/password/reset` answers at once, whatever the lookup behind it costs: a response that
  * waited for a token write and a mail enqueue only a registered address has would tell a stranger
  * which addresses those are. A failure behind it is logged, since nothing else will show it.
  */
@@ -35,7 +35,7 @@ beforeEach(() => {
 
 afterEach(() => jest.restoreAllMocks());
 
-describe('POST /account/reset timing', () => {
+describe('POST /account/password/reset timing', () => {
     it('answers before a slow repository does, and still mails once it finishes', async () => {
         const user = await createUser({ email: 'slow@example.com' });
         const lookup = userService.findByEmail.bind(userService);
@@ -50,7 +50,7 @@ describe('POST /account/reset timing', () => {
                 })
         );
 
-        const response = await api().post('/account/reset').send({ email: user.email });
+        const response = await api().post('/account/password/reset').send({ email: user.email });
 
         expect(response.status).toBe(200);
         // The repository is still thinking: the answer did not wait for it.
@@ -73,7 +73,9 @@ describe('POST /account/reset timing', () => {
                 })
         );
 
-        const response = await api().post('/account/reset').send({ email: 'nobody@example.com' });
+        const response = await api()
+            .post('/account/password/reset')
+            .send({ email: 'nobody@example.com' });
 
         expect(response.status).toBe(200);
         expect(released).toBe(false);
@@ -83,7 +85,9 @@ describe('POST /account/reset timing', () => {
         jest.spyOn(userService, 'findByEmail').mockRejectedValue(new Error('database is gone'));
         const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
 
-        const response = await api().post('/account/reset').send({ email: 'anyone@example.com' });
+        const response = await api()
+            .post('/account/password/reset')
+            .send({ email: 'anyone@example.com' });
         await eventually(() => logged.mock.calls.length > 0);
 
         expect(response.status).toBe(200);

@@ -1,6 +1,6 @@
 /**
  * @module
- * `POST /account/email-change-undo` controller — spends the one-time undo link mailed to the OLD
+ * `POST /account/email-change/undo` controller — spends the one-time undo link mailed to the OLD
  * address and puts the account back as it was.
  */
 
@@ -15,7 +15,7 @@ import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/email-change-undo — spends an `email-change-undo` token and reverts the change.
+ * POST /account/email-change/undo — spends an `email-change-undo` token and reverts the change.
  * Public, like `email-change-confirm`: the token in the body is the credential. A confirmation or
  * verify token never matches this type, so the links cannot do each other's work.
  */
