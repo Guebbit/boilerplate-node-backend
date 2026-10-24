@@ -485,6 +485,7 @@ describe('productService.restoreById', () => {
         const result = await productService.restoreById(product._id.toString());
 
         expect((result as ResponseReject).status).toBe(409);
+        expect((result as ResponseReject).errors[0]).toMatchObject({ code: 'PRODUCT_NOT_DELETED' });
     });
 
     it('answers 404 for a product that does not exist', async () => {
