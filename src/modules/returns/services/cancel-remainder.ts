@@ -28,7 +28,7 @@ import { deliveryService, ActRefusal } from '@modules/delivery';
 import { inventoryService } from '@modules/inventory';
 import { isBuyer, orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { paymentService } from '@modules/payments';
+import { paymentService, RefundLeftOpenError } from '@modules/payments';
 import { FulfillmentCancelReason } from '@types';
 import type { AuthContext, CallerContext } from '@types';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
@@ -198,7 +198,10 @@ const refund = (order: OrderDocument, done: Cancelled, context: CallerContext): 
         .catch((error: unknown) => {
             // Stryker disable all
             logger.error({
-                message: `Returns: the refund for cancellation ${String(done.created._id)} is not settled yet — the payment sweep retries it`,
+                message:
+                    error instanceof RefundLeftOpenError
+                        ? `Returns: the refund for cancellation ${String(done.created._id)} is not settled yet — the payment sweep retries it`
+                        : `Returns: the refund for cancellation ${String(done.created._id)} could not be recorded — no sweep will retry it, a person must refund it`,
                 error
             });
             // Stryker restore all

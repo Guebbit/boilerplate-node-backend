@@ -36,3 +36,17 @@ export const paymentNotFound = (): ResponseReject => generateReject(404, [t('pay
 /** The 404 for an order a payment act names that does not exist, or that the caller may not see. */
 export const orderNotFound = (): ResponseReject =>
     generateReject(404, [t('payments.order-not-found')]);
+
+/**
+ * The provider refused (or never answered) a refund the application had already recorded. The
+ * record is now `failed`: open, held in `amountRefunded`, and retried by the refund sweep with the
+ * same idempotency key. A caller that only needs the money to move eventually may log this and go
+ * on; any other error means the record may not exist, or its state is unknown.
+ */
+export class RefundLeftOpenError extends Error {
+    /** @param cause - what the provider call rejected with; its wording becomes this error's */
+    constructor(cause: unknown) {
+        super(cause instanceof Error ? cause.message : String(cause), { cause });
+        this.name = 'RefundLeftOpenError';
+    }
+}

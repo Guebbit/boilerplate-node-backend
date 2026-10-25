@@ -57,7 +57,7 @@ import type { PaymentDocument, RefundLine, RefundRecord, RefundSettlement } from
 import { isHandRecorded, OPEN_REFUND_STATUSES, REFUNDABLE_PAYMENT_STATUS } from '../domain';
 import { callerScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
-import { paymentNotFound } from './errors';
+import { paymentNotFound, RefundLeftOpenError } from './errors';
 
 /** What one refund is asked to do. */
 export interface RefundRequest {
@@ -514,8 +514,8 @@ const recordRefundFailure = (
 
 /**
  * Ask the provider to return one refund's money, and record its answer. A refusal marks the record
- * `failed` and rethrows; the record stays open for the refund sweep, and the caller (the
- * `order.cancelled` listener) logs it instead of rethrowing.
+ * `failed` and throws {@link RefundLeftOpenError}; the record stays open for the refund sweep, and
+ * the caller (the `order.cancelled` listener) logs it instead of rethrowing.
  *
  * @param payment - the payment (never `manual`, never without a `providerRef`)
  * @param refund - the record to send
@@ -539,7 +539,7 @@ const sendToProvider = (
                 settleRefund(payment, refund, { providerRefundRef: refundRef }, context),
             (error: unknown) =>
                 recordRefundFailure(payment, refund, failureReasonOf(error, refund)).then(() => {
-                    throw error;
+                    throw new RefundLeftOpenError(error);
                 })
         );
 
@@ -578,23 +578,48 @@ const attemptRefund = (
 };
 
 /**
- * Finish every refund a payment still has open — the same records, the same idempotency keys, so a
+ * Carry one record through, treating the provider's refusal as that record's own business: it is
+ * already `failed` and open for the sweep, so it must not stop the records behind it.
+ *
+ * @param payment - the payment as the previous record left it
+ * @param refund - the record to carry through
+ * @param context - present only for the admin request
+ * @returns the payment after the refund settled, or `null` when it did not settle here
+ */
+const attemptKeepingGoing = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    context: CallerContext | undefined
+): Promise<PaymentDocument | null> =>
+    attemptRefund(payment, refund, context).catch((error: unknown) => {
+        if (error instanceof RefundLeftOpenError) return null;
+        throw error;
+    });
+
+/**
+ * Finish the refunds a payment still has open — the same records, the same idempotency keys, so a
  * provider that already returned the money answers with the refund it already made.
+ *
+ * A record the provider refuses stays open and the next one is still tried; any other error (the
+ * database, say) stops the walk, as nothing after it can be trusted to land either.
  *
  * @param payment - the payment
  * @param context - present only for the admin request
+ * @param statuses - which records to send: the sweep sends every open one; a request sends only
+ *   those never attempted (`pending`), as a `failed` one is the sweep's to retry
  * @returns the payment after the last one, and whether any settled here
  */
 export const settleOpenRefunds = async (
     payment: PaymentDocument,
-    context?: CallerContext
+    context?: CallerContext,
+    statuses: readonly RefundStatus[] = OPEN_REFUND_STATUSES
 ): Promise<{ payment: PaymentDocument; settled: boolean }> => {
     let current = payment;
     let settled = false;
 
     for (const refund of payment.refunds) {
-        if (refund.status === 'succeeded') continue;
-        const after = await attemptRefund(current, refund, context);
+        if (!statuses.includes(refund.status)) continue;
+        const after = await attemptKeepingGoing(current, refund, context);
         if (!after) continue;
         current = after;
         settled = true;
@@ -625,7 +650,9 @@ const settledElsewhere = (orderId: string, refund: RefundRecord): Promise<Paymen
         );
 
 /**
- * The card half of {@link performRefund}: finish what is open, then open and send the rest.
+ * The card half of {@link performRefund}: send what was never attempted, then open and send the
+ * rest. A `failed` record is left alone: it is the sweep's, and re-sending it here would throw
+ * before the new record exists.
  *
  * @param orderId - the order whose payment is being returned
  * @param payment - the `succeeded`, not-yet-fully-refunded provider payment
@@ -639,17 +666,19 @@ const performCardRefund = (
     context: CallerContext | undefined,
     request: RefundRequest
 ): Promise<PaymentDocument | null> =>
-    settleOpenRefunds(payment, context).then(({ payment: current, settled }) => {
-        if (remainingOf(current) <= 0) return settled ? current : null;
+    settleOpenRefunds(payment, context, [RefundStatus.pending]).then(
+        ({ payment: current, settled }) => {
+            if (remainingOf(current) <= 0) return settled ? current : null;
 
-        return openRefund(current, request, context?.caller.id).then((opened) => {
-            if (!opened) return null;
-            auditRefundRequested(opened.payment, opened.refund, context);
-            return attemptRefund(opened.payment, opened.refund, context).then(
-                (after) => after ?? settledElsewhere(orderId, opened.refund)
-            );
-        });
-    });
+            return openRefund(current, request, context?.caller.id).then((opened) => {
+                if (!opened) return null;
+                auditRefundRequested(opened.payment, opened.refund, context);
+                return attemptRefund(opened.payment, opened.refund, context).then(
+                    (after) => after ?? settledElsewhere(orderId, opened.refund)
+                );
+            });
+        }
+    );
 
 /**
  * Refund an order's payment — the operator action, and the listener's compensation.
@@ -848,21 +877,13 @@ export const settleRefundByHand = (
     });
 
 /**
- * Whether a payment holds a refund still waiting to settle — `pending` at the provider, `failed`
- * for the sweep, or left for an operator by hand.
- * @param payment - the payment
- */
-const hasOpenRefund = (payment: PaymentDocument): boolean =>
-    payment.refunds.some((refund) => OPEN_REFUND_STATUSES.includes(refund.status));
-
-/**
  * The `order.cancelled` listener's refund: give the money back if any was taken. The event is the
  * only promise of it, delivered by the outbox until this resolves.
  *
  * Idempotent: a redelivery, or a cancel of a never-paid order, finds nothing left to return and
  * does nothing. Once a refund record is open, that record is the durable promise —
  * {@link retryOpenRefunds} finishes it, forever and with the same idempotency key — so a provider
- * refusal is logged and not rethrown. A throw BEFORE the record exists (the database is down)
+ * refusal ({@link RefundLeftOpenError}) is logged and not rethrown. A throw BEFORE the record exists (the database is down)
  * still rejects, and the outbox delivers the event again.
  *
  * A hand-paid order opens its record and waits for an operator (`leaveForOperator`).
@@ -874,17 +895,15 @@ const hasOpenRefund = (payment: PaymentDocument): boolean =>
 export const refundForOrder = (orderId: string): Promise<void> =>
     performRefund(orderId)
         .then(() => undefined)
-        .catch((error: unknown) =>
-            paymentRepository.findByOrderId(orderId).then((payment) => {
-                if (!payment || !hasOpenRefund(payment)) throw error;
-                // Stryker disable all
-                logger.error({
-                    message: `Payments: the refund for order ${orderId} was refused — its record is open, and the refund sweep tries again`,
-                    error
-                });
-                // Stryker restore all
-            })
-        );
+        .catch((error: unknown) => {
+            if (!(error instanceof RefundLeftOpenError)) throw error;
+            // Stryker disable all
+            logger.error({
+                message: `Payments: the refund for order ${orderId} was refused — its record is open, and the refund sweep tries again`,
+                error
+            });
+            // Stryker restore all
+        });
 
 /**
  * May this caller return money for a return? Three kinds of caller: the system actor; staff who

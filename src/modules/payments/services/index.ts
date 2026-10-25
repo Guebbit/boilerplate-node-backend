@@ -45,6 +45,7 @@ import { listPayments, listRefunds, listAttention } from './list';
 import { methodMix } from './stats';
 import { listPaymentMethods } from '../config';
 
+export { RefundLeftOpenError } from './errors';
 export type { OfflinePaymentInput } from './offline';
 export type { MixRow } from './stats';
 export type { PaymentMethodInfo } from '../config';

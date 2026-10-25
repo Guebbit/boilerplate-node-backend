@@ -30,7 +30,7 @@ import { asReject } from '@tests/response';
 import { observePort } from '@tests/ports';
 import * as auditPort from '@infrastructure/observability/audit';
 import { asCustomer, asAdmin, callerContextAs } from '@tests/callers';
-import { payByCard } from '@modules/payments/tests/factories';
+import { payByCard, refundForOrder } from '@modules/payments/tests/factories';
 
 /* Replaced, not spied on — see `tests/support/ports.ts` for why. */
 jest.mock('@infrastructure/observability/audit', () =>
@@ -372,6 +372,71 @@ describe('a refund the provider refuses', () => {
             expect(payment.status).toBe('succeeded');
             expect(payment.refunds).toHaveLength(1);
             expect(payment.refunds[0].status).toBe('succeeded');
+        }));
+});
+
+/** Makes the fake provider refuse every refund of exactly `amount`, and take any other. */
+const refuseRefundsOf = (amount: number) => {
+    const providerRefund = fakePaymentProvider.refund.bind(fakePaymentProvider);
+    return jest
+        .spyOn(fakePaymentProvider, 'refund')
+        .mockImplementation((ref, charge, options) =>
+            charge.amount === amount
+                ? Promise.reject(new Error('card refused'))
+                : providerRefund(ref, charge, options)
+        );
+};
+
+describe('a refund after one the provider keeps refusing', () => {
+    it('is opened and sent by a cancel, and the refused one is left to the sweep', async () => {
+        const { orderId } = await paidOrder();
+        const spy = refuseRefundsOf(20);
+        await expect(refund(orderId, { amount: 20 })).rejects.toThrow('card refused');
+
+        await refundForOrder(orderId);
+
+        const payment = await paymentOf(orderId);
+        expect(payment.refunds.map((entry) => [entry.amount, entry.status])).toEqual([
+            [20, 'failed'],
+            [80, 'succeeded']
+        ]);
+        expect(payment.amountRefunded).toBe(100);
+        // The request sent only the new record: the retry of the refused one is the sweep's job.
+        expect(spy.mock.calls.map(([, charge]) => charge.amount)).toEqual([20, 80]);
+    });
+
+    it('lets two returns during an outage both open a record, both finished by the sweep', () =>
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
+            const { orderId } = await paidOrder();
+            const down = jest
+                .spyOn(fakePaymentProvider, 'refund')
+                .mockRejectedValue(new Error('outage'));
+            const input = { lines: [], shipping: 0 };
+
+            await expect(
+                paymentService.refundForReturn(
+                    orderId,
+                    { ...input, returnId: 'return-a', amount: 30 },
+                    callerContextAs('admin')
+                )
+            ).rejects.toThrow('outage');
+            await expect(
+                paymentService.refundForReturn(
+                    orderId,
+                    { ...input, returnId: 'return-b', amount: 40 },
+                    callerContextAs('admin')
+                )
+            ).rejects.toThrow('outage');
+
+            const during = await paymentOf(orderId);
+            expect(during.refunds.map((entry) => [entry.returnId, entry.status])).toEqual([
+                ['return-a', 'failed'],
+                ['return-b', 'failed']
+            ]);
+            down.mockRestore();
+            expect(await paymentService.retryOpenRefunds()).toBe(1);
+            const after = await paymentOf(orderId);
+            expect(after.refunds.map((entry) => entry.status)).toEqual(['succeeded', 'succeeded']);
         }));
 });
 

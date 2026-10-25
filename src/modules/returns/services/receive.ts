@@ -32,7 +32,7 @@ import { cheapestStandardShipping } from '@modules/delivery';
 import { ownOrderFlag } from '@modules/access';
 import { buyerIdOf, orderService, sumLineItems } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { paymentService } from '@modules/payments';
+import { paymentService, RefundLeftOpenError } from '@modules/payments';
 import type { CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository } from '../repository';
@@ -223,7 +223,10 @@ const refundAndClose = (
             .catch((error: unknown) => {
                 // Stryker disable all
                 logger.error({
-                    message: `Returns: the refund for return ${String(received._id)} is not settled yet — the payment sweep retries it, and the return closes when it lands`,
+                    message:
+                        error instanceof RefundLeftOpenError
+                            ? `Returns: the refund for return ${String(received._id)} is not settled yet — the payment sweep retries it, and the return closes when it lands`
+                            : `Returns: the refund for return ${String(received._id)} could not be recorded — no sweep will retry it, a person must refund it`,
                     error
                 });
                 // Stryker restore all
