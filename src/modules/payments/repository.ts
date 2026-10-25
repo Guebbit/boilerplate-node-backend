@@ -591,7 +591,11 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     }
                 },
                 {
-                    $set: { 'refunds.$.status': 'failed', 'refunds.$.failureReason': failureReason }
+                    $set: {
+                        'refunds.$.status': 'failed',
+                        'refunds.$.failureReason': failureReason
+                    },
+                    $inc: { 'refunds.$.attempts': 1 }
                 },
                 { returnDocument: 'after', ...(session ? { session } : {}) }
             )

@@ -71,6 +71,11 @@ export interface RefundRecord {
      * logged, never stored: it can carry anything.
      */
     failureReason?: RefundFailureReason;
+    /**
+     * How many times the provider has refused this record. Internal: it decides whether a refusal
+     * is news (the first, or a new reason) or a repeat of the last, and is never published.
+     */
+    attempts?: number;
     /** When the money was confirmed back, or (for a hand-paid one) reported back. */
     settledAt?: Date;
     createdAt: Date;
@@ -180,6 +185,7 @@ const refundSchema = new Schema<RefundRecord>(
         shipping: moneyPath({ nonNegative: true }),
         providerRefundRef: { type: String },
         failureReason: { type: String, enum: Object.values(RefundFailureReason) },
+        attempts: { type: Number, min: 0 },
         settledAt: { type: Date }
     },
     { timestamps: { createdAt: true, updatedAt: false } }
@@ -279,13 +285,14 @@ paymentSchema.index(
 
 /**
  * The keys of an embedded refund the serializer strips. `providerRefundRef` and `failureReason` are
- * put back for staff by `presenter.ts`; the rest never reach any client.
+ * put back for staff by `presenter.ts`; the rest (`attempts` included) never reach any client.
  */
 const REFUND_INTERNAL_KEYS = [
     '_id',
     'providerRefundRef',
     'idempotencyKey',
     'failureReason',
+    'attempts',
     'lines',
     'shipping'
 ] as const;

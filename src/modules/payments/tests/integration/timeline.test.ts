@@ -15,6 +15,8 @@ import { resetDomainEvents } from '@kernel/events';
 import { orderService } from '@modules/orders';
 import { paymentService } from '@modules/payments/services';
 import { recordDecline } from '@modules/payments/services/announce';
+import { paymentRepository } from '@modules/payments/repository';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { PaymentProviderError } from '@modules/payments/providers';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
@@ -139,6 +141,33 @@ describe('a refund', () => {
         expect(rows[1].data).toMatchObject({ failureReason: 'insufficient_funds' });
         expect(JSON.stringify(rows)).not.toContain('raw provider text');
     });
+
+    it('writes one failure row for a refund the sweep keeps retrying, and a new one for a new reason', () =>
+        withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' }, async () => {
+            const { orderId } = await paidOrder();
+            jest.spyOn(fakePaymentProvider, 'refund')
+                .mockRejectedValueOnce(new PaymentProviderError('insufficient_funds', 'x'))
+                .mockRejectedValueOnce(new PaymentProviderError('insufficient_funds', 'x'))
+                .mockRejectedValueOnce(new PaymentProviderError('insufficient_funds', 'x'))
+                .mockRejectedValueOnce(new PaymentProviderError('declined', 'x'));
+            await expect(refund(orderId, 30)).rejects.toThrow('x');
+
+            await paymentService.retryOpenRefunds();
+            await paymentService.retryOpenRefunds();
+            const repeated = await timelineOf(orderId, 'refund');
+            expect(repeated.map(({ type }) => type)).toEqual(['refund_issued', 'refund_failed']);
+
+            await paymentService.retryOpenRefunds();
+            const changed = await timelineOf(orderId, 'refund');
+            expect(changed.map(({ type }) => type)).toEqual([
+                'refund_issued',
+                'refund_failed',
+                'refund_failed'
+            ]);
+            expect(changed[2].data).toMatchObject({ failureReason: 'declined' });
+            const stored = await paymentRepository.findByOrderId(orderId);
+            expect(stored?.refunds[0].attempts).toBe(4);
+        }));
 
     it('hides the failed attempt from the buyer and shows it to staff', async () => {
         const { user, orderId } = await paidOrder();

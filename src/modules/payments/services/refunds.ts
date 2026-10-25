@@ -482,12 +482,23 @@ const settleRefund = (
     });
 
 /**
- * Record that the provider refused a refund: the record goes `failed` and the order's timeline
- * says so, in one transaction. Only an open record can fail, so a late error never walks back a
- * refund that already succeeded, and writes no row.
+ * Whether a refusal is worth a timeline row: the first one, or one for a different reason than the
+ * last. The sweep retries a stuck refund every few minutes, and a row each time would bury the rest.
+ *
+ * @param refund - the record as it was read before this refusal
+ * @param failureReason - the closed code for what the provider said now
+ */
+const isNewFailure = (refund: RefundRecord, failureReason: RefundFailureReason): boolean =>
+    (refund.attempts ?? 0) === 0 || refund.failureReason !== failureReason;
+
+/**
+ * Record that the provider refused a refund: the record goes `failed` (counting the attempt) and,
+ * when the refusal is news ({@link isNewFailure}), the order's timeline says so, in one
+ * transaction. Only an open record can fail, so a late error never walks back a refund that
+ * already succeeded, and writes no row.
  *
  * @param payment - the payment
- * @param refund - the record the provider refused
+ * @param refund - the record the provider refused, as it was read
  * @param failureReason - the closed code for what it said
  */
 const recordRefundFailure = (
@@ -499,7 +510,7 @@ const recordRefundFailure = (
         paymentRepository
             .failRefund(String(payment._id), String(refund._id), failureReason, session)
             .then((failed) =>
-                failed
+                failed && isNewFailure(refund, failureReason)
                     ? orderService.appendTimeline(
                           String(payment.orderId),
                           {
