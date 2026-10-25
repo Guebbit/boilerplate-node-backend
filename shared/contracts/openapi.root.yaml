@@ -407,10 +407,12 @@ components:
                 type: string
 
         Retry-After:
-            required: true
+            required: false
             description: >-
-                How long to wait before trying again, in whole seconds (RFC 9110 §10.2.3). A `429`
-                carries the time until the budget resets; a `503` carries a rough hint, not a promise.
+                How long to wait before trying again, in whole seconds (RFC 9110 §10.2.3). A `503`
+                always carries a rough hint, not a promise. A `429` carries the time until the budget
+                resets where the refusal knows it; one that does not (a spent per-account allowance)
+                sends none, and the wait is then in the error `details`.
             schema:
                 type: integer
                 minimum: 0
