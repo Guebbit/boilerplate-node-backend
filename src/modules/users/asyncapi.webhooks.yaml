@@ -1,0 +1,68 @@
+# The users module's webhook events: `user.*`.
+#
+# A FRAGMENT, not a document: it refs `#/servers/subscriberEndpoint` and
+# `#/components/schemas/WebhookHeaders`, which `webhooks/asyncapi.yaml` declares. The bundler
+# merges it into the `webhooks` section only while that module exists
+# (`scripts/contracts/asyncapi-webhook-events.ts`). Each event is the Standard Webhooks envelope
+# `{ type, timestamp, data }`, ids only: a recipient got the person's data through the API, so it
+# holds the `userId` (GDPR Art. 19, `docs/theory/data-protection.md`). The module's `publicEvents`
+# (`module.ts`) is what fires it.
+channels:
+    user.erased:
+        address: user.erased
+        description: An account was erased.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            UserErasedEvent:
+                $ref: '#/components/messages/UserErasedEvent'
+operations:
+    webhookUserErased:
+        action: send
+        channel:
+            $ref: '#/channels/user.erased'
+        summary: An account's row was hard-deleted.
+        description: >-
+            Fired once per erasure, in the erasure's own transaction: an admin hard delete, the purge
+            after the self-deletion grace, or the inactivity erase. Never at the lock or the start of
+            the grace, never for a soft delete. The payload is the id alone, so the delivery log never
+            holds a fresh copy of an erased person's address. A recipient drops what it holds under
+            that `userId`.
+        messages:
+            - $ref: '#/channels/user.erased/messages/UserErasedEvent'
+components:
+    messages:
+        UserErasedEvent:
+            name: UserErasedEvent
+            title: User erased
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/UserErasedEnvelope'
+    schemas:
+        UserIdPayload:
+            type: object
+            required:
+                - userId
+            properties:
+                userId:
+                    type: string
+            additionalProperties: false
+        UserErasedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: UserErasedEventType
+                    type: string
+                    enum:
+                        - user.erased
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/UserIdPayload'
+            additionalProperties: false

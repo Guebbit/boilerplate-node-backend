@@ -298,6 +298,19 @@ it the answer is 409 `USER_ERASURE_DUE` and `actions.restore` is false. The rest
 outbox event `user.deletion-cancelled`; `account` drops the restore link and tells the owner staff did
 it. There is no reason field: the audit row records who.
 
+## Webhook events
+
+Erasing a person tells connected tools (GDPR Art. 19): the `user.erased` webhook, `data: { userId }`.
+Ids only, so the delivery log never holds a fresh copy of an erased person's address.
+
+| Fires on                                                                         | Does not fire on                                         |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| admin hard delete, the purge after the grace, the inactivity erase (same commit) | the lock, the grace starting, a soft delete              |
+|                                                                                  | a restore that wins the claim (the erasure is abandoned) |
+
+A recipient that syncs customers stores our `userId` and drops what it holds under it. The
+catalogue and the delivery pipeline are [`webhooks`](./webhooks.md).
+
 The erase cascade also forgets a staff member's name where it only pointed: `purchaseHold.setBy` on
 another buyer is unset before the row goes, and `webhooks` and `locales` do the same for the
 subscription owner and the translator. The rows stay, the person goes.

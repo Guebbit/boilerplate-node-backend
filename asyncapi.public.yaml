@@ -8,6 +8,7 @@
 #          src/modules/payments/asyncapi.webhooks.yaml
 #          src/modules/returns/asyncapi.webhooks.yaml
 #          src/modules/example/asyncapi.webhooks.yaml
+#          src/modules/users/asyncapi.webhooks.yaml
 asyncapi: 3.0.0
 id: 'urn:boilerplate-node-backend:asyncapi:contracts'
 info:
@@ -179,6 +180,14 @@ channels:
         messages:
             ExamplePublishedEvent:
                 $ref: '#/components/messages/ExamplePublishedEvent'
+    user.erased:
+        address: user.erased
+        description: An account was erased.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            UserErasedEvent:
+                $ref: '#/components/messages/UserErasedEvent'
     notifications.created:
         address: notifications.created
         servers:
@@ -339,6 +348,15 @@ operations:
             One-to-one with the `example.published` domain event — see `example/services/crud.ts`. Fired each time an example moves to `published`, including after being archived and brought back.
         messages:
             - $ref: '#/channels/example.published/messages/ExamplePublishedEvent'
+    webhookUserErased:
+        action: send
+        channel:
+            $ref: '#/channels/user.erased'
+        summary: An account's row was hard-deleted.
+        description: >-
+            Fired once per erasure, in the erasure's own transaction: an admin hard delete, the purge after the self-deletion grace, or the inactivity erase. Never at the lock or the start of the grace, never for a soft delete. The payload is the id alone, so the delivery log never holds a fresh copy of an erased person's address. A recipient drops what it holds under that `userId`.
+        messages:
+            - $ref: '#/channels/user.erased/messages/UserErasedEvent'
     sseNotificationCreated:
         action: send
         channel:
@@ -464,6 +482,13 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/ExamplePublishedEnvelope'
+        UserErasedEvent:
+            name: UserErasedEvent
+            title: User erased
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/UserErasedEnvelope'
         NotificationCreatedEvent:
             name: NotificationCreatedEvent
             title: A notification was written
@@ -910,6 +935,32 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/ExamplePublishedPayload'
+            additionalProperties: false
+        UserIdPayload:
+            type: object
+            required:
+                - userId
+            properties:
+                userId:
+                    type: string
+            additionalProperties: false
+        UserErasedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: UserErasedEventType
+                    type: string
+                    enum:
+                        - user.erased
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/UserIdPayload'
             additionalProperties: false
         CartLineRemovedParamsPayload:
             title: CartLineRemovedParamsPayload
