@@ -1,5 +1,5 @@
 /**
- * A request the global rate limiter refuses still carries `x-request-id`. The id middleware is
+ * A request the global rate limiter refuses still carries `x-request-id`, and is `no-store`. The id middleware is
  * mounted by `createApp` before `installSecurity` for exactly this: the access log sits after the
  * limiter, so the header is the only thing a refused caller (and a support ticket) has to quote.
  *
@@ -40,5 +40,15 @@ describe('a rate-limited request', () => {
         expect(refused.headers['x-request-id']).toMatch(
             /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i
         );
+    });
+
+    it('answers 429 as no-store, though no route ran to set a cache header', async () => {
+        const app = await appWithGlobalLimit();
+
+        await supertest(app).get('/anything');
+        const refused = await supertest(app).get('/anything');
+
+        expect(refused.status).toBe(429);
+        expect(refused.headers['cache-control']).toBe('no-store');
     });
 });

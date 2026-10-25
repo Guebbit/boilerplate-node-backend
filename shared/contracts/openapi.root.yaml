@@ -54,7 +54,7 @@ x-error-codes:
     FORBIDDEN:
         {
             status: 403,
-            description: "The caller is authenticated but lacks the permission this route requires. A key's own `deniedCode` can replace this default with a more specific one."
+            description: "The server understood the request and refuses it, whoever the caller is: the caller lacks the permission this route requires (a key's own `deniedCode` can replace this default with a more specific one), or a human-challenge token is missing or refused (`ANTIBOT_VERIFICATION_FAILED`)."
         }
     ROLE_MANAGEMENT_REQUIRED:
         {

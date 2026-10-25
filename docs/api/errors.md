@@ -79,7 +79,8 @@ An error is never an attachment: `Content-Disposition` is removed, so an export 
 does not reach the browser as a file download.
 
 A replay through [`Idempotency-Key`](../tools/idempotency.md#what-a-failure-stores) sends the stored
-media type and these headers back with the stored body.
+media type and these headers back with the stored body. `Cache-Control` is not among them: a replay
+leaves through the same route, so it gets the route default, `no-store`.
 
 ## Negotiation
 

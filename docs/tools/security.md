@@ -695,7 +695,8 @@ account exists.
 Every 401 carries a `WWW-Authenticate` challenge (RFC 9110 §15.5.2): `rejectResponse` adds
 `Bearer realm="api"` by default, and a guard that knows more sets its own first
 (`error="invalid_token"` for an `sk_` key, `error="insufficient_user_authentication"` for a
-step-up). The app's own clients read `errors[].code` and never the header. See
+step-up). The app's own clients read `errors[].code` and never the header. A failed human check
+is not a 401: it is a 403 `ANTIBOT_VERIFICATION_FAILED`, so no client reads it as a logout. See
 [Error Responses](../api/errors.md#headers-on-an-error).
 
 An [api-key](#machine-to-machine-credentials) follows the same rule from a third direction: it IS
