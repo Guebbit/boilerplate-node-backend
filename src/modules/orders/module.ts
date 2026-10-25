@@ -25,7 +25,7 @@ import { orderService } from './services';
 // Also registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
 // ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Reached directly, never through this
 // module's own barrel — see CLAUDE.md's module-barrel rule.
-import { ORDER_CANCELLED, ORDER_CREATED, ORDER_STATUS_CHANGED } from './events';
+import { ORDER_CANCELLED, ORDER_CREATED, ORDER_REDACTED, ORDER_STATUS_CHANGED } from './events';
 import { ordersConfig } from './config';
 import { ordersRateLimits } from './rate-limits';
 import { ordersJobs } from './jobs';
@@ -56,6 +56,12 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
         toPublicEvent: (payload: DomainEventMap[typeof ORDER_CANCELLED]) => ({
             eventType: 'order.cancelled',
             // The refund flag is a policy for `payments`; a subscriber hears `payment.refunded`.
+            data: { orderId: payload.orderId }
+        })
+    },
+    [ORDER_REDACTED]: {
+        toPublicEvent: (payload: DomainEventMap[typeof ORDER_REDACTED]) => ({
+            eventType: 'order.redacted',
             data: { orderId: payload.orderId }
         })
     }

@@ -18,7 +18,14 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { declaredWebhookEvents } from '@tests/webhook-events';
 import { resetDomainEvents, emitDomainEvent } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
-import { ORDER_CREATED, ORDER_STATUS_CHANGED, ORDER_CANCELLED } from '@modules/orders';
+import {
+    ORDER_CREATED,
+    ORDER_STATUS_CHANGED,
+    ORDER_CANCELLED,
+    ORDER_REDACTED
+} from '@modules/orders';
+import { USER_ERASED, USER_PROFILE_CHANGED } from '@modules/users';
+import usersModule from '@modules/users/module';
 import { PAYMENT_SUCCEEDED, PAYMENT_FAILED, PAYMENT_REFUNDED } from '@modules/payments';
 import ordersModule from '@modules/orders/module';
 import paymentsModule from '@modules/payments/module';
@@ -43,7 +50,7 @@ const ORDER_ID = '507f1f77bcf86cd799439011';
 const PAYMENT_ID = '507f1f77bcf86cd799439012';
 
 /** The modules this test registers, whose fragments name the events that must fire. */
-const REGISTERED_OWNERS = ['orders', 'payments', 'returns', 'example'] as const;
+const REGISTERED_OWNERS = ['orders', 'payments', 'returns', 'example', 'users'] as const;
 
 /** Every event those modules' `asyncapi.webhooks.yaml` fragments declare. */
 const declaredCatalogue = (): string[] => declaredWebhookEvents(REGISTERED_OWNERS);
@@ -70,6 +77,7 @@ describe('every public webhook event has exactly one producer, and no producer n
             paymentsModule,
             returnsModule,
             exampleModule,
+            usersModule,
             webhooksModule
         ]);
     });
@@ -99,6 +107,9 @@ describe('every public webhook event has exactly one producer, and no producer n
             refund: true,
             cause: 'customer'
         });
+        await emitDomainEvent(ORDER_REDACTED, { orderId: ORDER_ID });
+        await emitDomainEvent(USER_ERASED, { userId: ORDER_ID });
+        await emitDomainEvent(USER_PROFILE_CHANGED, { userId: ORDER_ID, changed: ['email'] });
         await emitDomainEvent(PAYMENT_SUCCEEDED, { paymentId: PAYMENT_ID, orderId: ORDER_ID });
         await emitDomainEvent(PAYMENT_FAILED, { paymentId: PAYMENT_ID, orderId: ORDER_ID });
         await emitDomainEvent(PAYMENT_REFUNDED, {

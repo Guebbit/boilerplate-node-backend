@@ -16,11 +16,13 @@ import {
     markOrderPaidAt
 } from '@modules/orders/tests/factories';
 import { orderRepository } from '../../repository';
+import { orderModel } from '../../model';
 import { versionOf } from '@infrastructure/persistence/versioning';
 import { orderService } from '@modules/orders/services';
 import { userService } from '@modules/users';
 import { callerContextAs } from '@tests/callers';
 import { resetDomainEvents } from '@kernel/events';
+import { outboxEventModel } from '@kernel/outbox';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { OrderStatus } from '@types';
 import { setEnvironment } from '@tests/environment';
@@ -297,5 +299,74 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
 
         // `anonymizeAfter` is unset by the first sweep, so a second run finds nothing due.
         await expect(orderService.anonymizeDueOrders()).resolves.toBe(0);
+    });
+});
+
+/** The order ids of every `order.redacted` row, plain. */
+const redactedIds = () =>
+    outboxEventModel
+        .find({ name: 'order.redacted' })
+        .lean()
+        .exec()
+        .then((rows) => rows.map((row) => row.aggregateId).toSorted());
+
+describe('orders — order.redacted outbox event', () => {
+    it('is written once per scrubbed order, and for no order that is not yet due', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const due = await createOrder(user, [toOrderItem(product, 1)]);
+        const later = await createOrder(user, [toOrderItem(product, 1)]);
+        await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
+        // The second order's window is still open.
+        await orderModel.updateOne(
+            { _id: later._id },
+            { $set: { anonymizeAfter: new Date(Date.now() + 86_400_000) } },
+            { timestamps: false }
+        );
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
+
+        expect(await redactedIds()).toEqual([String(due._id)]);
+    });
+
+    it('is not written again by a rerun', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await createOrder(user, [toOrderItem(product, 1)]);
+        await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
+        await orderService.anonymizeDueOrders();
+
+        await orderService.anonymizeDueOrders();
+
+        expect(await redactedIds()).toHaveLength(1);
+    });
+
+    it('is written for an order whose clock runs on an account that still exists (minimised, not erased)', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        await orderModel.updateOne(
+            { _id: order._id },
+            { $set: { anonymizeAfter: new Date(Date.now() - 1000) } },
+            { timestamps: false }
+        );
+
+        await orderService.anonymizeDueOrders();
+
+        expect(await redactedIds()).toEqual([String(order._id)]);
+        expect((await orderRepository.findById(String(order._id)))!.userId).toBeDefined();
+    });
+
+    it('announces every order scrubbed in one sweep', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        const orders = await Promise.all(
+            Array.from({ length: 3 }, () => createOrder(user, [toOrderItem(product, 1)]))
+        );
+        await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
+
+        await expect(orderService.anonymizeDueOrders()).resolves.toBe(3);
+
+        expect(await redactedIds()).toEqual(orders.map((order) => String(order._id)).toSorted());
     });
 });
